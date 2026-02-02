@@ -30,6 +30,7 @@ dependencies = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.8.0",
+    "pre-commit>=3.0.0",
 ]
 
 [tool.hatch.metadata]
@@ -60,6 +61,8 @@ lint = "ruff check backend"
 lint-fix = "ruff check backend --fix"
 format = "ruff format backend"
 format-check = "ruff format backend --check"
+pre-commit = "pre-commit run --all-files"
+pre-commit-install = "pre-commit install"
 
 [tool.hatch.envs.dev.env]
 PYTHONPATH = "./backend"

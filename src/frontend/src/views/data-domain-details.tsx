@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+// Label - unused
+// import { Label } from '@/components/ui/label';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 // Preview handled in EntityMetadataPanel
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +29,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useDomains } from '@/hooks/use-domains';
 import { TeamFormDialog } from '@/components/teams/team-form-dialog';
-import { Team, TeamSummary, MemberType } from '@/types/team';
+import { Team, TeamSummary } from '@/types/team';
 
 // Helper to check API response (can be moved to a shared util if used in many places)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -60,7 +61,7 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value, icon, children, class
 );
 
 // Column definitions for child domains table
-const createChildDomainsColumns = (navigate: (path: string) => void): ColumnDef<any>[] => [
+const createChildDomainsColumns = (_navigate: (path: string) => void): ColumnDef<any>[] => [
   {
     accessorKey: "name",
     header: "Name",
@@ -85,7 +86,7 @@ const createChildDomainsColumns = (navigate: (path: string) => void): ColumnDef<
 ];
 
 // Column definitions for teams table
-const createTeamsColumns = (navigate: (path: string) => void, onEdit: (teamId: string) => void): ColumnDef<TeamSummary>[] => [
+const createTeamsColumns = (_navigate: (path: string) => void, onEdit: (teamId: string) => void): ColumnDef<TeamSummary>[] => [
   {
     accessorKey: "name",
     header: "Team Name",
@@ -264,9 +265,9 @@ export default function DataDomainDetailsView() {
 
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [addingDoc, setAddingDoc] = useState(false);
-  const [docTitle, setDocTitle] = useState('');
-  const [docDesc, setDocDesc] = useState('');
-  const [docFile, setDocFile] = useState<File | null>(null);
+  const [_docTitle, setDocTitle] = useState('');
+  const [_docDesc, setDocDesc] = useState('');
+  const [_docFile, setDocFile] = useState<File | null>(null);
 
   const fetchDomainHierarchyConceptIris = useCallback(async (domainId: string): Promise<string[]> => {
     const conceptIris: string[] = [];
@@ -402,7 +403,7 @@ export default function DataDomainDetailsView() {
   // Load all domains for parent selection in edit dialog
   const { domains, refetch: refetchDomains } = useDomains();
 
-  const truncate = (text?: string | null, maxLen: number = 80) => {
+  const _truncate = (text?: string | null, maxLen: number = 80) => {
     if (!text) return '';
     return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
   };

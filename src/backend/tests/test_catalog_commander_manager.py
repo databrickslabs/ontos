@@ -19,9 +19,17 @@ class TestCatalogCommanderManagerSchemaInference:
         return client
 
     @pytest.fixture
-    def catalog_manager(self, mock_workspace_client):
-        """Create CatalogCommanderManager with mocked client."""
-        return CatalogCommanderManager(mock_workspace_client)
+    def mock_obo_client(self):
+        """Create a mock OBO workspace client."""
+        client = Mock()
+        client.api_client = Mock()
+        client.tables = Mock()
+        return client
+
+    @pytest.fixture
+    def catalog_manager(self, mock_workspace_client, mock_obo_client):
+        """Create CatalogCommanderManager with mocked clients."""
+        return CatalogCommanderManager(mock_workspace_client, mock_obo_client)
 
     @pytest.fixture
     def sample_uc_table_data(self):

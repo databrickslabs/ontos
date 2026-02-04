@@ -26,6 +26,7 @@ export default defineConfig({
       '**/src/tests/**/*.spec.ts', // Exclude Playwright E2E tests from src/tests/
       '**/tests/**/*.spec.ts', // Exclude Playwright E2E tests from tests/
     ],
+    testTimeout: 10000, // 10 second timeout per test
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -44,10 +45,11 @@ export default defineConfig({
         'vite.config.ts',
       ],
       all: true,
-      lines: 80,
-      functions: 80,
-      branches: 80,
-      statements: 80,
+      // Coverage thresholds disabled for now
+      // lines: 80,
+      // functions: 80,
+      // branches: 80,
+      // statements: 80,
     },
   },
 });

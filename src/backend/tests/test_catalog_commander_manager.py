@@ -19,9 +19,17 @@ class TestCatalogCommanderManagerSchemaInference:
         return client
 
     @pytest.fixture
-    def catalog_manager(self, mock_workspace_client):
-        """Create CatalogCommanderManager with mocked client."""
-        return CatalogCommanderManager(mock_workspace_client)
+    def mock_obo_client(self):
+        """Create a mock OBO workspace client."""
+        client = Mock()
+        client.api_client = Mock()
+        client.tables = Mock()
+        return client
+
+    @pytest.fixture
+    def catalog_manager(self, mock_workspace_client, mock_obo_client):
+        """Create CatalogCommanderManager with mocked clients."""
+        return CatalogCommanderManager(mock_workspace_client, mock_obo_client)
 
     @pytest.fixture
     def sample_uc_table_data(self):
@@ -29,7 +37,7 @@ class TestCatalogCommanderManagerSchemaInference:
         return {
             'name': 'table_a',
             'catalog_name': 'lars_george_uc',
-            'schema_name': 'test-db',
+            'schema_name': 'test_db',
             'table_type': 'MANAGED',
             'data_source_format': 'DELTA',
             'storage_location': 's3://databricks-e2demofieldengwest/b169b504-4c54-49f2-bc3a-adf4b128f36d/tables/c39d273a-d87b-4a62-8792-0193f142fca7',
@@ -67,13 +75,13 @@ class TestCatalogCommanderManagerSchemaInference:
             ]
         }
 
-    def test_get_dataset_returns_enhanced_metadata(self, catalog_manager, mock_workspace_client, sample_uc_table_data):
+    def test_get_dataset_returns_enhanced_metadata(self, catalog_manager, mock_obo_client, sample_uc_table_data):
         """Test that get_dataset returns enhanced UC metadata."""
-        # Setup mock to return sample data
-        mock_workspace_client.tables.get.return_value = sample_uc_table_data
+        # Setup mock to return sample data - use mock_obo_client since that's what self.client refers to
+        mock_obo_client.tables.get.return_value = sample_uc_table_data
 
         # Call the method
-        result = catalog_manager.get_dataset('lars_george_uc.test-db.table_a')
+        result = catalog_manager.get_dataset('lars_george_uc.test_db.table_a')
 
         # Verify structure
         assert 'schema' in result
@@ -85,20 +93,20 @@ class TestCatalogCommanderManagerSchemaInference:
         table_info = result['table_info']
         assert table_info['name'] == 'table_a'
         assert table_info['catalog_name'] == 'lars_george_uc'
-        assert table_info['schema_name'] == 'test-db'
+        assert table_info['schema_name'] == 'test_db'
         assert table_info['table_type'] == 'MANAGED'
         assert table_info['owner'] == 'lars.george@databricks.com'
         assert table_info['comment'] == sample_uc_table_data['comment']
         assert table_info['storage_location'] == sample_uc_table_data['storage_location']
         assert table_info['properties'] == sample_uc_table_data['properties']
 
-    def test_get_dataset_returns_enhanced_schema(self, catalog_manager, mock_workspace_client, sample_uc_table_data):
+    def test_get_dataset_returns_enhanced_schema(self, catalog_manager, mock_obo_client, sample_uc_table_data):
         """Test that get_dataset returns enhanced column schema."""
-        # Setup mock to return sample data
-        mock_workspace_client.tables.get.return_value = sample_uc_table_data
+        # Setup mock to return sample data - use mock_obo_client since that's what self.client refers to
+        mock_obo_client.tables.get.return_value = sample_uc_table_data
 
         # Call the method
-        result = catalog_manager.get_dataset('lars_george_uc.test-db.table_a')
+        result = catalog_manager.get_dataset('lars_george_uc.test_db.table_a')
 
         # Verify schema structure
         schema = result['schema']
@@ -125,19 +133,19 @@ class TestCatalogCommanderManagerSchemaInference:
         assert info_col['comment'] == 'Contains additional details related to each entry, which can provide context or further information necessary for analysis or reporting.'
         assert info_col['partitioned'] == False
 
-    def test_get_dataset_handles_dict_response(self, catalog_manager, mock_workspace_client, sample_uc_table_data):
+    def test_get_dataset_handles_dict_response(self, catalog_manager, mock_obo_client, sample_uc_table_data):
         """Test that get_dataset handles dictionary response from REST API."""
         # Mock tables.get to raise exception, forcing REST API path
-        mock_workspace_client.tables.get.side_effect = Exception("SDK method not available")
-        mock_workspace_client.api_client.do.return_value = sample_uc_table_data
+        mock_obo_client.tables.get.side_effect = Exception("SDK method not available")
+        mock_obo_client.api_client.do.return_value = sample_uc_table_data
 
         # Call the method
-        result = catalog_manager.get_dataset('lars_george_uc.test-db.table_a')
+        result = catalog_manager.get_dataset('lars_george_uc.test_db.table_a')
 
         # Verify it worked with REST API response
         assert result['table_info']['name'] == 'table_a'
         assert len(result['schema']) == 2
-        mock_workspace_client.api_client.do.assert_called_once()
+        mock_obo_client.api_client.do.assert_called_once()
 
     @pytest.mark.parametrize("databricks_type,expected_logical_type", [
         ('int', 'integer'),
@@ -169,7 +177,7 @@ class TestCatalogCommanderManagerSchemaInference:
         result = catalog_manager._map_to_odcs_logical_type(databricks_type)
         assert result == expected_logical_type
 
-    def test_get_dataset_handles_partitioned_columns(self, catalog_manager, mock_workspace_client):
+    def test_get_dataset_handles_partitioned_columns(self, catalog_manager, mock_obo_client):
         """Test handling of partitioned columns."""
         table_data = {
             'name': 'partitioned_table',
@@ -194,7 +202,7 @@ class TestCatalogCommanderManagerSchemaInference:
             ]
         }
 
-        mock_workspace_client.tables.get.return_value = table_data
+        mock_obo_client.tables.get.return_value = table_data
 
         result = catalog_manager.get_dataset('test_catalog.test_schema.partitioned_table')
 
@@ -209,7 +217,7 @@ class TestCatalogCommanderManagerSchemaInference:
         assert partition_col['partitioned'] == True
         assert partition_col['partitionKeyPosition'] == 0
 
-    def test_get_dataset_handles_missing_metadata(self, catalog_manager, mock_workspace_client):
+    def test_get_dataset_handles_missing_metadata(self, catalog_manager, mock_obo_client):
         """Test handling of missing optional metadata fields."""
         minimal_table_data = {
             'name': 'minimal_table',
@@ -222,7 +230,7 @@ class TestCatalogCommanderManagerSchemaInference:
             ]
         }
 
-        mock_workspace_client.tables.get.return_value = minimal_table_data
+        mock_obo_client.tables.get.return_value = minimal_table_data
 
         result = catalog_manager.get_dataset('catalog.schema.minimal_table')
 
@@ -246,11 +254,11 @@ class TestCatalogCommanderManagerSchemaInference:
         with pytest.raises(ValueError, match="dataset_path must be in the form catalog.schema.table"):
             catalog_manager.get_dataset('too.many.parts.here')
 
-    def test_get_dataset_sdk_error_propagates(self, catalog_manager, mock_workspace_client):
+    def test_get_dataset_sdk_error_propagates(self, catalog_manager, mock_obo_client):
         """Test that SDK errors are properly propagated."""
         # Mock both SDK and REST API to fail
-        mock_workspace_client.tables.get.side_effect = Exception("SDK error")
-        mock_workspace_client.api_client.do.side_effect = Exception("REST API error")
+        mock_obo_client.tables.get.side_effect = Exception("SDK error")
+        mock_obo_client.api_client.do.side_effect = Exception("REST API error")
 
         with pytest.raises(Exception, match="REST API error"):
             catalog_manager.get_dataset('catalog.schema.table')

@@ -157,6 +157,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     businessImpact: string;
     description?: string;
     query?: string; // for SQL-based rules
+    rule?: string; // for library-based rules
+    engine?: string; // for custom rules
+    implementation?: string; // for custom rules
+    mustBe?: string;
+    mustNotBe?: string;
+    mustBeGt?: string;
+    mustBeLt?: string;
+    mustBeBetweenMin?: string;
+    mustBeBetweenMax?: string;
   }
   const [qualityRules, setQualityRules] = useState<QualityRule[]>(initial?.qualityRules || [])
 

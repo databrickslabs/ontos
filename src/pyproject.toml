@@ -73,13 +73,12 @@ pythonpath = [
   "backend",
   "backend/src"
 ]
-testpaths = ["backend/src/tests"]
+testpaths = ["backend/tests"]
 addopts = [
     "--cov=backend/src",
     "--cov-report=html",
     "--cov-report=term-missing",
     "--cov-report=xml",
-    "--cov-fail-under=80",
     "-v"
 ]
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
+// waitFor - available for future use
 import { useComments } from './use-comments';
 import * as useApiModule from './use-api';
 import * as useToastModule from './use-toast';
@@ -188,7 +189,7 @@ describe('useComments Hook', () => {
       const commentData = {
         entity_type: 'data-product',
         entity_id: '123',
-        content: 'New comment',
+        comment: 'New comment',
       };
 
       await act(async () => {
@@ -214,7 +215,7 @@ describe('useComments Hook', () => {
         await result.current.createComment({
           entity_type: 'data-product',
           entity_id: '123',
-          content: 'Test',
+          comment: 'Test',
         });
       });
 
@@ -261,7 +262,7 @@ describe('useComments Hook', () => {
           await result.current.createComment({
             entity_type: 'data-product',
             entity_id: '123',
-            content: 'Test',
+            comment: 'Test',
           });
         })
       ).rejects.toThrow('Creation failed');
@@ -295,10 +296,10 @@ describe('useComments Hook', () => {
       const { result } = renderHook(() => useComments('data-product', '123'));
 
       await act(async () => {
-        await result.current.updateComment('1', { content: 'Updated' });
+        await result.current.updateComment('1', { comment: 'Updated' });
       });
 
-      expect(mockPut).toHaveBeenCalledWith('/api/comments/1', { content: 'Updated' });
+      expect(mockPut).toHaveBeenCalledWith('/api/comments/1', { comment: 'Updated' });
       expect(mockToast).toHaveBeenCalledWith({
         title: 'Success',
         description: 'Comment updated successfully',
@@ -314,7 +315,7 @@ describe('useComments Hook', () => {
       const { result } = renderHook(() => useComments('data-product', '123'));
 
       await act(async () => {
-        await result.current.updateComment('1', { content: 'Updated' });
+        await result.current.updateComment('1', { comment: 'Updated' });
       });
 
       expect(mockGet).toHaveBeenCalled();
@@ -327,7 +328,7 @@ describe('useComments Hook', () => {
 
       await expect(
         act(async () => {
-          await result.current.updateComment('1', { content: 'Updated' });
+          await result.current.updateComment('1', { comment: 'Updated' });
         })
       ).rejects.toThrow('Update failed');
 
@@ -507,7 +508,8 @@ describe('useComments Hook', () => {
         { initialProps: { entityType: 'data-product', entityId: '123' } }
       );
 
-      const firstFetchComments = result.current.fetchComments;
+      // Capture initial function reference (not used directly but demonstrates reference capture)
+      void result.current.fetchComments;
 
       rerender({ entityType: 'data-contract', entityId: '456' });
 

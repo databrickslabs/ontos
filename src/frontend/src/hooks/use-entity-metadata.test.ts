@@ -93,11 +93,14 @@ describe('useEntityMetadata Hook', () => {
         if (url.includes('rich-texts')) {
           return Promise.resolve({ ok: true, json: async () => mockRichTexts });
         }
-        if (url.includes('links')) {
+        if (url.includes('links') && !url.includes('semantic')) {
           return Promise.resolve({ ok: true, json: async () => mockLinks });
         }
         if (url.includes('documents')) {
           return Promise.resolve({ ok: true, json: async () => mockDocuments });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.reject(new Error('Unknown URL'));
       });
@@ -147,7 +150,7 @@ describe('useEntityMetadata Hook', () => {
       renderHook(() => useEntityMetadata('data_product', 'entity-123'));
 
       await waitFor(() => {
-        expect(fetchCount).toBe(3); // rich-texts, links, documents
+        expect(fetchCount).toBe(4); // rich-texts, links, documents, attachments
       });
     });
 
@@ -158,12 +161,13 @@ describe('useEntityMetadata Hook', () => {
       renderHook(() => useEntityMetadata('data_contract', 'contract-456'));
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(fetchMock).toHaveBeenCalledTimes(4);
       });
 
       expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/rich-texts');
       expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/links');
       expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/documents');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/attachments');
     });
 
     it('sets loading state during fetch', async () => {
@@ -193,6 +197,9 @@ describe('useEntityMetadata Hook', () => {
         if (url.includes('rich-texts')) {
           return Promise.resolve({ ok: false, status: 500 });
         }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
+        }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
 
@@ -211,8 +218,11 @@ describe('useEntityMetadata Hook', () => {
 
     it('handles links fetch error', async () => {
       (global.fetch as any).mockImplementation((url: string) => {
-        if (url.includes('links')) {
+        if (url.includes('links') && !url.includes('semantic')) {
           return Promise.resolve({ ok: false, status: 404 });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
@@ -231,6 +241,9 @@ describe('useEntityMetadata Hook', () => {
       (global.fetch as any).mockImplementation((url: string) => {
         if (url.includes('documents')) {
           return Promise.resolve({ ok: false, status: 403 });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
@@ -275,7 +288,7 @@ describe('useEntityMetadata Hook', () => {
         Promise.resolve({ ok: true, json: async () => mockRichTexts })
       );
 
-      const { result, rerender } = renderHook(
+      const { result, rerender: _rerender } = renderHook(
         ({ entityType, entityId }) => useEntityMetadata(entityType, entityId),
         { initialProps: { entityType: 'data_product' as EntityKind, entityId: 'entity-123' } }
       );
@@ -307,6 +320,9 @@ describe('useEntityMetadata Hook', () => {
         if (url.includes('rich-texts')) {
           return Promise.resolve({ ok: true, json: async () => unsortedRichTexts });
         }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
+        }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
 
@@ -327,8 +343,11 @@ describe('useEntityMetadata Hook', () => {
       ];
 
       (global.fetch as any).mockImplementation((url: string) => {
-        if (url.includes('links')) {
+        if (url.includes('links') && !url.includes('semantic')) {
           return Promise.resolve({ ok: true, json: async () => unsortedLinks });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
@@ -354,6 +373,9 @@ describe('useEntityMetadata Hook', () => {
         if (url.includes('documents')) {
           return Promise.resolve({ ok: true, json: async () => unsortedDocuments });
         }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
+        }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
 
@@ -377,6 +399,9 @@ describe('useEntityMetadata Hook', () => {
       (global.fetch as any).mockImplementation((url: string) => {
         if (url.includes('rich-texts')) {
           return Promise.resolve({ ok: true, json: async () => itemsWithoutDates });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
@@ -411,7 +436,7 @@ describe('useEntityMetadata Hook', () => {
         await result.current.refresh();
       });
 
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenCalledTimes(4); // rich-texts, links, documents, attachments
     });
 
     it('updates data on refresh', async () => {
@@ -419,6 +444,9 @@ describe('useEntityMetadata Hook', () => {
       (global.fetch as any).mockImplementation((url: string) => {
         if (url.includes('rich-texts')) {
           return Promise.resolve({ ok: true, json: async () => [mockRichTexts[0]] });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
@@ -433,6 +461,9 @@ describe('useEntityMetadata Hook', () => {
       (global.fetch as any).mockImplementation((url: string) => {
         if (url.includes('rich-texts')) {
           return Promise.resolve({ ok: true, json: async () => mockRichTexts });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
@@ -533,6 +564,9 @@ describe('useEntityMetadata Hook', () => {
         if (url.includes('rich-texts')) {
           return Promise.resolve({ ok: true, json: async () => ({ invalid: 'data' }) });
         }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
+        }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
 
@@ -548,8 +582,11 @@ describe('useEntityMetadata Hook', () => {
 
     it('handles non-array response for links', async () => {
       (global.fetch as any).mockImplementation((url: string) => {
-        if (url.includes('links')) {
+        if (url.includes('links') && !url.includes('semantic')) {
           return Promise.resolve({ ok: true, json: async () => null });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });
@@ -567,6 +604,9 @@ describe('useEntityMetadata Hook', () => {
       (global.fetch as any).mockImplementation((url: string) => {
         if (url.includes('documents')) {
           return Promise.resolve({ ok: true, json: async () => 'invalid' });
+        }
+        if (url.includes('attachments')) {
+          return Promise.resolve({ ok: true, json: async () => [] });
         }
         return Promise.resolve({ ok: true, json: async () => [] });
       });

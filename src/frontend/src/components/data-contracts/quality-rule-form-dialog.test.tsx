@@ -222,7 +222,7 @@ describe('QualityRuleFormDialog', () => {
         />
       );
 
-      expect(screen.getByDisplayValue(sampleRule.name)).toBeInTheDocument();
+      expect(screen.getByDisplayValue(sampleRule.name!)).toBeInTheDocument();
       expect(screen.getByDisplayValue(sampleRule.description!)).toBeInTheDocument();
       expect(screen.getByDisplayValue(sampleRule.query!)).toBeInTheDocument();
       expect(screen.getByDisplayValue(sampleRule.rule!)).toBeInTheDocument();

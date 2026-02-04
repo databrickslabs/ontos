@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useDomains, DataDomain, __resetDomainsCache } from './use-domains';
+import { useDomains, __resetDomainsCache } from './use-domains';
+import { DataDomain } from '@/types/data-domain';
 
 // Mock fetch globally
 global.fetch = vi.fn();

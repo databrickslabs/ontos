@@ -9,13 +9,14 @@ global.fetch = vi.fn();
 describe('Permissions Store', () => {
   beforeEach(() => {
     // Reset store state before each test
-    const { result } = renderHook(() => usePermissionsStore());
     act(() => {
       usePermissionsStore.setState({
         permissions: {},
+        actualPermissions: {},
         isLoading: false,
         error: null,
         availableRoles: [],
+        requestableRoles: [],
         appliedRoleId: null,
         _isInitializing: false,
       });
@@ -239,13 +240,30 @@ describe('Permissions Store', () => {
     it('fetches all data on initialization', async () => {
       // Arrange
       const mockPermissions = { 'data-products': FeatureAccessLevel.READ_WRITE };
-      const mockRoles = [{ id: 'role-1', name: 'Admin', feature_permissions: {} }];
+      const mockActualPermissions = { 'data-products': FeatureAccessLevel.READ_WRITE };
+      const mockRoles = [{ id: 'role-1', name: 'Admin', feature_permissions: {}, assigned_groups: [] }];
+      const mockRequestableRoles: any[] = [];
       const mockOverride = { role_id: null };
 
-      (global.fetch as any)
-        .mockResolvedValueOnce({ ok: true, json: async () => mockPermissions })
-        .mockResolvedValueOnce({ ok: true, json: async () => mockRoles })
-        .mockResolvedValueOnce({ ok: true, json: async () => mockOverride });
+      // Store makes 5 parallel fetch calls
+      (global.fetch as any).mockImplementation((url: string) => {
+        if (url.includes('/api/user/permissions')) {
+          return Promise.resolve({ ok: true, json: async () => mockPermissions });
+        }
+        if (url.includes('/api/user/actual-permissions')) {
+          return Promise.resolve({ ok: true, json: async () => mockActualPermissions });
+        }
+        if (url.includes('/api/settings/roles')) {
+          return Promise.resolve({ ok: true, json: async () => mockRoles });
+        }
+        if (url.includes('/api/user/requestable-roles')) {
+          return Promise.resolve({ ok: true, json: async () => mockRequestableRoles });
+        }
+        if (url.includes('/api/user/role-override')) {
+          return Promise.resolve({ ok: true, json: async () => mockOverride });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      });
 
       const { result } = renderHook(() => usePermissionsStore());
 
@@ -280,8 +298,8 @@ describe('Permissions Store', () => {
         await Promise.all(promises);
       });
 
-      // Assert - Should only call fetch once per endpoint (3 total)
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      // Assert - Should only call fetch once per endpoint (5 total: permissions, actualPermissions, roles, requestableRoles, override)
+      expect(global.fetch).toHaveBeenCalledTimes(5);
     });
 
     it('skips initialization if already loaded', async () => {
@@ -291,7 +309,7 @@ describe('Permissions Store', () => {
       act(() => {
         usePermissionsStore.setState({
           permissions: { 'data-products': FeatureAccessLevel.READ_ONLY },
-          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {} }],
+          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {}, assigned_groups: [] }],
         });
       });
 
@@ -305,8 +323,10 @@ describe('Permissions Store', () => {
     });
 
     it('handles initialization errors', async () => {
-      // Arrange
-      (global.fetch as any).mockRejectedValue(new Error('Init error'));
+      // Arrange - Make all fetches fail
+      (global.fetch as any).mockImplementation(() => {
+        return Promise.reject(new Error('Init error'));
+      });
 
       const { result } = renderHook(() => usePermissionsStore());
 
@@ -461,6 +481,7 @@ describe('Permissions Store', () => {
               feature_permissions: {
                 'data-products': FeatureAccessLevel.ADMIN,
               },
+              assigned_groups: [],
             },
           ],
         });
@@ -519,6 +540,7 @@ describe('Permissions Store', () => {
               feature_permissions: {
                 'data-products': FeatureAccessLevel.ADMIN,
               },
+              assigned_groups: [],
             },
           ],
         });
@@ -536,12 +558,30 @@ describe('Permissions Store', () => {
     it('initializes store on first use', async () => {
       // Arrange
       const mockPermissions = { 'data-products': FeatureAccessLevel.READ_ONLY };
-      const mockRoles = [{ id: 'role-1', name: 'Test', feature_permissions: {} }];
+      const mockActualPermissions = { 'data-products': FeatureAccessLevel.READ_ONLY };
+      const mockRoles = [{ id: 'role-1', name: 'Test', feature_permissions: {}, assigned_groups: [] }];
+      const mockRequestableRoles: any[] = [];
+      const mockOverride = { role_id: null };
 
-      (global.fetch as any)
-        .mockResolvedValueOnce({ ok: true, json: async () => mockPermissions })
-        .mockResolvedValueOnce({ ok: true, json: async () => mockRoles })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ role_id: null }) });
+      // Store makes 5 parallel fetch calls
+      (global.fetch as any).mockImplementation((url: string) => {
+        if (url.includes('/api/user/permissions')) {
+          return Promise.resolve({ ok: true, json: async () => mockPermissions });
+        }
+        if (url.includes('/api/user/actual-permissions')) {
+          return Promise.resolve({ ok: true, json: async () => mockActualPermissions });
+        }
+        if (url.includes('/api/settings/roles')) {
+          return Promise.resolve({ ok: true, json: async () => mockRoles });
+        }
+        if (url.includes('/api/user/requestable-roles')) {
+          return Promise.resolve({ ok: true, json: async () => mockRequestableRoles });
+        }
+        if (url.includes('/api/user/role-override')) {
+          return Promise.resolve({ ok: true, json: async () => mockOverride });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      });
 
       // Act
       const { result } = renderHook(() => usePermissions());
@@ -561,7 +601,7 @@ describe('Permissions Store', () => {
       act(() => {
         usePermissionsStore.setState({
           permissions: { 'data-products': FeatureAccessLevel.READ_ONLY },
-          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {} }],
+          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {}, assigned_groups: [] }],
         });
       });
 

@@ -69,7 +69,8 @@ export default function LinkDatasetToContractDialog({
       if (response.error) throw new Error(response.error);
       
       // Filter to show only datasets without a contract already linked
-      const availableDatasets = (response.data || []).filter(
+      const dataArray = Array.isArray(response.data) ? response.data : [];
+      const availableDatasets = dataArray.filter(
         (d: DatasetListItem) => !d.contract_id
       );
       setDatasets(availableDatasets);

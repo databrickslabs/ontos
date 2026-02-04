@@ -14,7 +14,8 @@ test.describe('Data Product Metadata', () => {
     const table = docsSection.locator('xpath=..').locator('table');
     await expect(table).toBeVisible();
     const rows = table.locator('tbody tr');
-    await expect(rows).toHaveCountGreaterThan(0);
+    const count = await rows.count();
+    expect(count).toBeGreaterThan(0);
   });
 });
 

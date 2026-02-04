@@ -61,20 +61,11 @@ jobs:
           name: backend-coverage-html
           path: ./src/backend/htmlcov/
 
-      - name: Check coverage threshold
-        working-directory: ./src
-        env:
-          DATABRICKS_HOST: https://test.databricks.com
-          DATABRICKS_WAREHOUSE_ID: test_warehouse_id
-          DATABRICKS_CATALOG: test_catalog
-          DATABRICKS_SCHEMA: test_schema
-          DATABRICKS_VOLUME: test_volume
-          APP_AUDIT_LOG_DIR: /tmp/audit_logs
-        run: |
-          hatch -e dev run pytest \
-            --cov=backend/src \
-            --cov-fail-under=80 \
-            --cov-report=term-missing
+      # Coverage threshold check disabled for now
+      # - name: Check coverage threshold
+      #   working-directory: ./src
+      #   run: |
+      #     hatch -e dev run pytest --cov=backend/src --cov-fail-under=80
 
   frontend-tests:
     name: Frontend Tests

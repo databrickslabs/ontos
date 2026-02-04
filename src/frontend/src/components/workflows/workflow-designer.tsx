@@ -9,10 +9,10 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   useEdgesState,
-  addEdge,
-  Connection,
-  NodeChange,
-  EdgeChange,
+  // addEdge - unused
+  // Connection - unused
+  // NodeChange - unused
+  // EdgeChange - unused
   MarkerType,
   Panel,
 } from 'reactflow';
@@ -45,7 +45,7 @@ import {
 import { 
   Save, 
   ArrowLeft, 
-  Plus, 
+  // Plus - unused
   Trash2, 
   Loader2,
   Shield,
@@ -56,7 +56,7 @@ import {
   CheckCircle,
   XCircle,
   UserCheck,
-  Play,
+  // Play - unused
   ClipboardCheck,
   FileSearch,
   Globe,
@@ -80,7 +80,7 @@ import type {
   ProcessWorkflow,
   ProcessWorkflowCreate,
   ProcessWorkflowUpdate,
-  WorkflowStep,
+  // WorkflowStep - unused
   WorkflowStepCreate,
   StepType,
   TriggerType,
@@ -235,7 +235,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [isLoading, setIsLoading] = useState(!isNew);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
+  const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; has_groups: boolean }[]>([]);
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);

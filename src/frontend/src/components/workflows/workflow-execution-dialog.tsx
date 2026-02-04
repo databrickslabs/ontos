@@ -14,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   Play,
-  Code,
+  // Code - unused
   CheckCircle,
   XCircle,
   Zap,
@@ -80,7 +80,7 @@ interface ExecutionStepNodeProps {
   };
 }
 
-function ExecutionStepNode({ data }: { data: ExecutionStepNodeProps['data'] }) {
+function _ExecutionStepNode({ data }: { data: ExecutionStepNodeProps['data'] }) {
   const { step, state } = data;
   const Icon = getStepIcon(step.step_type);
   const color = getStepColor(step.step_type);
@@ -136,7 +136,7 @@ function SimpleWorkflowFlow({
   }
   
   // Build execution path - which steps were actually executed
-  const executedStepIds = new Set(
+  const _executedStepIds = new Set(
     execution.step_executions?.map(se => se.step_id) || []
   );
   
@@ -221,7 +221,7 @@ export function WorkflowExecutionDialog({
   open,
   onOpenChange,
 }: WorkflowExecutionDialogProps) {
-  const { t } = useTranslation(['common']);
+  const { t: _t } = useTranslation(['common']);
   const { get } = useApi();
   const [workflow, setWorkflow] = useState<ProcessWorkflow | null>(null);
   const [loading, setLoading] = useState(false);
@@ -253,6 +253,7 @@ export function WorkflowExecutionDialog({
     paused: { variant: 'outline', className: 'border-amber-500 text-amber-600' },
     succeeded: { variant: 'default', className: 'bg-emerald-500' },
     failed: { variant: 'destructive', className: '' },
+    cancelled: { variant: 'outline', className: 'border-gray-500 text-gray-600' },
   };
   
   const statusConfig = statusBadges[execution.status] || statusBadges.pending;

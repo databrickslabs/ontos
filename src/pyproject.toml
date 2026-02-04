@@ -10,7 +10,7 @@ readme = "../README.md"
 authors = [
     { name="Databricks", email="ontos-support@databricks.com" }
 ]
-license = "Databricks License"
+license = {text = "Databricks License"}
 requires-python = ">=3.10,<3.13"
 dynamic = ["dependencies"]
 

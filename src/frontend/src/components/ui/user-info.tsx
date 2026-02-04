@@ -163,11 +163,12 @@ export default function UserInfo() {
 
   let displayRoleName = 'Loading...';
   let highestActualLevelName = 'Loading...'; // Store the display name for the actual level
-  let _highestActualCanonicalRoleName: string | null = null; // Store the canonical name (used for future role display logic)
+  // Canonical name available for future role display features
+  // let highestActualCanonicalRoleName: string | null = null;
 
   if (!permissionsLoading) {
       highestActualLevelName = getHighestAccessLevelName(permissions);
-      _highestActualCanonicalRoleName = CANONICAL_ROLE_NAMES[highestActualLevelName]; // Get canonical name
+      // highestActualCanonicalRoleName = CANONICAL_ROLE_NAMES[highestActualLevelName];
 
       if (appliedRoleId) {
           const appliedRole = availableRoles.find(role => role.id === appliedRoleId);

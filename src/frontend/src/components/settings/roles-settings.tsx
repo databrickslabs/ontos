@@ -36,8 +36,8 @@ export default function RolesSettings() {
     const { hasPermission, fetchPermissions, fetchAvailableRoles } = usePermissions(); // Get userGroups & availableRoles
     const { userInfo } = useUserStore(); // Get user info from user store
     const userGroups = userInfo?.groups ?? []; // Extract groups, default to empty array
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _refreshNotifications = useNotificationsStore((state) => state.refreshNotifications); // Get refresh action
+    // Refresh notifications hook available for future use
+    // const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
     
     const featureId = 'settings'; // Feature ID for permissions
     const canWrite = hasPermission(featureId, FeatureAccessLevel.READ_WRITE);

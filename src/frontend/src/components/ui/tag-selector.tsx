@@ -96,15 +96,13 @@ const TagSelector: React.FC<TagSelectorProps> = ({
     fetchTags();
   }, [open, get]);
 
-  // Get display value for a tag (may be used in future features)
-  const _getTagDisplay = (tag: string | AssignedTag): string => {
-    if (typeof tag === 'string') {
-      return tag;
-    }
-    return tag.assigned_value ?
-      `${tag.fully_qualified_name}: ${tag.assigned_value}` :
-      tag.fully_qualified_name;
-  };
+  // Get display value for a tag (available for future features)
+  // const getTagDisplay = (tag: string | AssignedTag): string => {
+  //   if (typeof tag === 'string') return tag;
+  //   return tag.assigned_value ?
+  //     `${tag.fully_qualified_name}: ${tag.assigned_value}` :
+  //     tag.fully_qualified_name;
+  // };
 
   // Get tag key for comparison
   const getTagKey = (tag: string | AssignedTag): string => {

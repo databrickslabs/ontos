@@ -61,8 +61,8 @@ lint = "ruff check backend"
 lint-fix = "ruff check backend --fix"
 format = "ruff format backend"
 format-check = "ruff format backend --check"
-pre-commit = "pre-commit run --all-files"
-pre-commit-install = "pre-commit install"
+pre-commit-run = "pre-commit run --all-files"
+pre-commit-setup = "pre-commit install"
 
 [tool.hatch.envs.dev.env]
 PYTHONPATH = "./backend"

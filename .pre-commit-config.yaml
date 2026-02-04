@@ -40,3 +40,13 @@ repos:
         language: system
         files: ^src/frontend/src/.*\.(ts|tsx|css)$
         pass_filenames: false
+
+  # Frontend - TypeScript Type Check
+  - repo: local
+    hooks:
+      - id: typescript
+        name: typescript
+        entry: bash -c 'cd src/frontend && yarn type-check'
+        language: system
+        files: ^src/frontend/src/.*\.(ts|tsx)$
+        pass_filenames: false

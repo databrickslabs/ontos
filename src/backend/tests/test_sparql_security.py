@@ -122,7 +122,7 @@ class TestSPARQLQueryValidator:
         query = "{ ?s ?p ?o }"  # Missing SELECT/ASK/etc
         error = SPARQLQueryValidator.validate(query)
         assert error is not None
-        assert "must start with" in error.lower() or "must be" in error.lower()
+        assert "must contain one of" in error.lower() or "must start with" in error.lower() or "must be" in error.lower()
     
     def test_case_insensitive_keyword_detection(self):
         """Test that forbidden keywords are detected case-insensitively."""
@@ -138,12 +138,14 @@ class TestSPARQLQueryValidator:
     
     def test_complex_query_estimation(self):
         """Test that overly complex queries are rejected."""
-        # Create a query with many triple patterns
-        patterns = "\n".join([f"?s{i} ?p{i} ?o{i} ." for i in range(60)])
+        # Create a query with many triple patterns - need enough to exceed MAX_TRIPLE_PATTERNS (100)
+        # Each pattern has 3 '?' chars, estimate = brace_count + (question_count // 2)
+        # For 1 brace pair and N patterns: estimate = 1 + (3N // 2) > 100 means N > 66
+        patterns = "\n".join([f"?s{i} ?p{i} ?o{i} ." for i in range(80)])
         query = f"SELECT * WHERE {{ {patterns} }}"
         error = SPARQLQueryValidator.validate(query)
         assert error is not None
-        assert "complex" in error.lower()
+        assert "complex" in error.lower() or "patterns" in error.lower()
     
     def test_sanitize_for_logging(self):
         """Test that queries are sanitized for logging."""

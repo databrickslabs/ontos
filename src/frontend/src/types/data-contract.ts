@@ -310,6 +310,18 @@ export type SuggestedQualityCheck = {
   created_at?: string
 }
 
+// For local draft storage (UI state)
+export type DataContractDraft = {
+  name: string
+  version: string
+  status: string
+  owner: string
+  kind: string
+  apiVersion: string
+  contract_text: string
+  format: 'json' | 'yaml' | 'text'
+}
+
 // For creating new contracts
 export type DataContractCreate = {
   name: string

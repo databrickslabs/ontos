@@ -10,7 +10,7 @@ readme = "../README.md"
 authors = [
     { name="Databricks", email="ontos-support@databricks.com" }
 ]
-license = "Databricks License"
+license = {text = "Databricks License"}
 requires-python = ">=3.10,<3.13"
 dynamic = ["dependencies"]
 
@@ -73,7 +73,7 @@ pythonpath = [
   "backend",
   "backend/src"
 ]
-testpaths = ["backend/src/tests"]
+testpaths = ["backend/tests"]
 addopts = [
     "--cov=backend/src",
     "--cov-report=html",

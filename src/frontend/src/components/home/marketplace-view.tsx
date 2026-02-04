@@ -62,7 +62,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   // Exact match filter (false = include children, true = exact domain only)
   const [exactMatchesOnly, setExactMatchesOnly] = useState(false);
   const [matchSets, setMatchSets] = useState<{ ids: Set<string>; namesLower: Set<string> } | null>(null);
-  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesLoading, _setMatchesLoading] = useState(false);
   
   // Products state
   const [allProducts, setAllProducts] = useState<DataProduct[]>([]);

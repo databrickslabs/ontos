@@ -294,7 +294,8 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
             };
         });
 
-        const productNodeIds = new Set(productNodes.map(n => n.id));
+        // Track product node IDs (computed for future filtering needs)
+        new Set(productNodes.map(n => n.id));
         const initialEdges: Edge[] = [];
 
         // ODPS v1.0.0: Create a map of contractId -> {productId, outputPortId}
@@ -358,8 +359,8 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
     }, [products, navigate]);
 
     // Reinstate state hooks for controlled component
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialElements.nodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialElements.edges);
+    const [nodes, _setNodes, onNodesChange] = useNodesState(initialElements.nodes);
+    const [edges, _setEdges, onEdgesChange] = useEdgesState(initialElements.edges);
 
     const tableButtonVariant = viewMode === 'table' ? 'secondary' : 'ghost';
     const graphButtonVariant = viewMode === 'graph' ? 'secondary' : 'ghost';

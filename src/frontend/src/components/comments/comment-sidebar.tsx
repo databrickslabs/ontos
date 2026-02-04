@@ -28,13 +28,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+// Select components removed - unused
 
 interface CommentFormData {
   title: string;

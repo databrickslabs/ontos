@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import ReactFlow, {
     Node,
     Edge,
@@ -12,7 +12,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
-import EstateNode, { EstateNodeData, DynamicHandle } from './estate-node'; // Adjusted import path
+import EstateNode, { EstateNodeData } from './estate-node'; // DynamicHandle removed - unused
 
 // --- TypeScript Interfaces (Consider moving to src/types/estate.ts later) ---
 type CloudType = 'aws' | 'azure' | 'gcp';

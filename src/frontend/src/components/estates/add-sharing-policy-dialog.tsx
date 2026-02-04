@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash2, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
-  SharingPolicy, SharingRule, SharingResourceType, SharingRuleOperator, Estate // Import Estate type
+  SharingPolicy, SharingResourceType, SharingRuleOperator // SharingRule and Estate removed - unused
 } from '@/views/estate-details';
 
 // Define arrays for z.enum
@@ -54,12 +54,12 @@ interface AddSharingPolicyDialogProps {
 const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
   isOpen,
   onOpenChange,
-  estateId, // unused for now but kept for potential future use
+  estateId: _estateId, // Kept for potential future use
   onSaveSuccess,
-  currentPolicies, // unused for now but kept
+  currentPolicies: _currentPolicies, // Kept for potential validation
 }) => {
   const { toast } = useToast();
-  const { control, handleSubmit, register, formState: { errors }, reset, watch } = useForm<SharingPolicyFormData>({
+  const { control, handleSubmit, register, formState: { errors }, reset, watch: _watch } = useForm<SharingPolicyFormData>({
     resolver: zodResolver(sharingPolicySchema),
     defaultValues: {
       name: '',

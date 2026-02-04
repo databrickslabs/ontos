@@ -89,7 +89,7 @@ describe('TeamFormDialog', () => {
       name: 'Engineering',
       description: 'Engineering domain',
       owner: ['eng@example.com'],
-      tags: ['engineering'],
+      tags: null,
       parent_id: null,
       created_at: '2024-01-01',
       updated_at: '2024-01-01',
@@ -99,7 +99,7 @@ describe('TeamFormDialog', () => {
       name: 'Sales',
       description: 'Sales domain',
       owner: ['sales@example.com'],
-      tags: ['sales'],
+      tags: null,
       parent_id: null,
       created_at: '2024-01-01',
       updated_at: '2024-01-01',
@@ -112,7 +112,7 @@ describe('TeamFormDialog', () => {
     title: 'Data Engineering Team',
     description: 'Team responsible for data infrastructure',
     domain_id: 'domain-1',
-    tags: ['data', 'engineering'],
+    tags: null,
     members: [
       {
         member_type: 'user',

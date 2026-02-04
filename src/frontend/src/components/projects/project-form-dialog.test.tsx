@@ -127,11 +127,13 @@ describe('ProjectFormDialog', () => {
         name: 'New Project',
         title: 'Test Project',
         description: 'Test description',
-        tags: ['tag1'],
+        tags: null,
         teams: [],
         project_type: 'TEAM',
         created_at: '2024-01-01',
         updated_at: '2024-01-01',
+        created_by: 'test-user',
+        updated_by: 'test-user',
       };
 
       mockPost.mockResolvedValue({ data: newProject, error: null });
@@ -237,11 +239,13 @@ describe('ProjectFormDialog', () => {
       name: 'Existing Project',
       title: 'Existing Title',
       description: 'Existing description',
-      tags: ['tag1', 'tag2'],
+      tags: null,
       teams: [{ id: 'team-1', name: 'Engineering', title: 'Engineering Team', member_count: 5 }],
       project_type: 'TEAM',
       created_at: '2024-01-01',
       updated_at: '2024-01-01',
+      created_by: 'test-user',
+      updated_by: 'test-user',
     };
 
     it('renders with edit title and pre-filled form', async () => {

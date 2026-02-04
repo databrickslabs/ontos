@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { StarRating } from './star-rating';
+// StarRating commented out - not currently used in panel
+// import { StarRating } from './star-rating';
 import { StarRatingInput } from './star-rating-input';
 import { RatingSummary } from './rating-summary';
 import { Button } from '@/components/ui/button';
@@ -41,7 +42,7 @@ export function RatingPanel({
   allowSubmit = true,
   className,
 }: RatingPanelProps) {
-  const { createRating, fetchRatingAggregation, ratingAggregation, loading } = useComments();
+  const { createRating, fetchRatingAggregation, ratingAggregation, loading: _loading } = useComments();
   
   const [localAggregation, setLocalAggregation] = useState<RatingAggregation | null>(null);
   const [selectedRating, setSelectedRating] = useState<number>(0);

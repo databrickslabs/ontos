@@ -78,7 +78,7 @@ export default function RequiredActionsSection() {
       title: req.action_payload?.requester_email || 'Unknown user',
       subtitle: req.action_payload?.role_name || 'Unknown role',
       date: req.created_at,
-      payload: req.action_payload,
+      payload: req.action_payload ?? undefined,
     })),
     // Contracts
     ...approvals.contracts.map(c => ({

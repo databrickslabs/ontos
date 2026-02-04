@@ -54,15 +54,14 @@ const getHighestAccessLevelName = (userPermissions: Record<string, FeatureAccess
     }
 };
 
-// Map calculated level names to expected canonical role names
-// Adjust these names if your actual default roles are named differently
-const CANONICAL_ROLE_NAMES: Record<string, string | null> = {
-    'Admin Access': 'Admin',
-    'Read/Write Access': 'Read Write', // Or 'Editor'?
-    'Read-Only Access': 'Read Only',  // Or 'Viewer'?
-    'No Access': null, // No specific role name for no access
-    'Unknown Access': null, // No specific role name for unknown
-};
+// Map calculated level names to expected canonical role names (available for future use)
+// const CANONICAL_ROLE_NAMES: Record<string, string | null> = {
+//     'Admin Access': 'Admin',
+//     'Read/Write Access': 'Read Write',
+//     'Read-Only Access': 'Read Only',
+//     'No Access': null,
+//     'Unknown Access': null,
+// };
 
 export default function UserInfo() {
   const { t } = useTranslation('common');

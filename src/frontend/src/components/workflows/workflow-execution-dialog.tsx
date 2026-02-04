@@ -27,7 +27,7 @@ import {
 import type {
   WorkflowExecution,
   ProcessWorkflow,
-  WorkflowStep,
+  // WorkflowStep, // Available for future graph-based visualization
   ExecutionStatus,
 } from '@/types/process-workflow';
 import { 
@@ -72,15 +72,10 @@ function getStepExecutionState(
   return 'pending';
 }
 
-// Custom node component for execution view
-interface ExecutionStepNodeProps {
-  data: {
-    step: WorkflowStep;
-    state: StepExecutionState;
-  };
-}
-
-// ExecutionStepNode - kept for future graph-based visualization
+// Custom node component for execution view (kept for future graph-based visualization)
+// interface ExecutionStepNodeProps {
+//   data: { step: WorkflowStep; state: StepExecutionState; };
+// }
 // function ExecutionStepNode({ data }: { data: ExecutionStepNodeProps['data'] }) { ... }
 
 // Simple vertical flow layout

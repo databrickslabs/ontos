@@ -10,7 +10,8 @@ import { Loader2, Plus, Pencil, Trash2, AlertCircle, ChevronDown, UserPlus } fro
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import RoleFormDialog from './role-form-dialog'; // Uncomment and import
 import RequestRoleAccessDialog from './request-role-access-dialog'; // Import role access request dialog
-import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
+// useNotificationsStore import removed - not currently used
+// import { useNotificationsStore } from '@/stores/notifications-store';
 import { useUserStore } from '@/stores/user-store'; // Import user store
 
 // --- DataTable Imports ---
@@ -36,8 +37,6 @@ export default function RolesSettings() {
     const { hasPermission, fetchPermissions, fetchAvailableRoles } = usePermissions(); // Get userGroups & availableRoles
     const { userInfo } = useUserStore(); // Get user info from user store
     const userGroups = userInfo?.groups ?? []; // Extract groups, default to empty array
-    // Refresh notifications hook available for future use
-    // const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
     
     const featureId = 'settings'; // Feature ID for permissions
     const canWrite = hasPermission(featureId, FeatureAccessLevel.READ_WRITE);

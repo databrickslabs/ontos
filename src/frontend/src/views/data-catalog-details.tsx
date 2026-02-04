@@ -12,20 +12,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
-  BookOpen,
+  // BookOpen, // Available for future use
   Table as TableIcon,
   Eye,
   User,
   Calendar,
-  Database,
+  // Database, // Available for future use
   Info,
   Columns,
   GitBranch,
-  Loader2,
+  // Loader2, // Available for future use
   AlertCircle,
   Copy,
   Check,
-  ExternalLink,
+  // ExternalLink, // Available for future use
   HardDrive,
   FileType,
   Tag
@@ -57,7 +57,7 @@ import LineageGraphComponent from '@/components/data-catalog/lineage-graph';
 
 import type { 
   TableInfo, 
-  ColumnInfo,
+  // ColumnInfo, // Available for future use
   LineageGraph,
   LineageDirection,
   ImpactAnalysis
@@ -89,7 +89,7 @@ const DataCatalogDetails: React.FC = () => {
   
   // Impact state
   const [impact, setImpact] = useState<ImpactAnalysis | null>(null);
-  const [isImpactLoading, setIsImpactLoading] = useState(false);
+  const [_isImpactLoading, setIsImpactLoading] = useState(false);
   
   // Copy state
   const [copiedFqn, setCopiedFqn] = useState(false);

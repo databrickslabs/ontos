@@ -74,7 +74,7 @@ export default function DataProducts() {
   // Subscription filter state
   const [showMySubscriptions, setShowMySubscriptions] = useState(false);
   const [mySubscribedProductIds, setMySubscribedProductIds] = useState<Set<string>>(new Set());
-  const [_subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [_subscriptionsLoading, _setSubscriptionsLoading] = useState(false);
 
   const api = useApi();
   const { get, post, delete: deleteApi } = api;

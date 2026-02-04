@@ -249,7 +249,7 @@ export default function DataContractDetails() {
   const [propertyAuthDefs, setPropertyAuthDefs] = useState<Record<string, AuthoritativeDefinition[]>>({})
   const [editingPropertyAuthDef, setEditingPropertyAuthDef] = useState<{ schemaId: string; propertyId: string; index: number } | null>(null)
   const [isPropertyAuthDefFormOpen, setIsPropertyAuthDefFormOpen] = useState(false)
-  const [activePropertyForAuthDef, setActivePropertyForAuthDef] = useState<{ schemaId: string; propertyId: string } | null>(null)
+  const [_activePropertyForAuthDef, _setActivePropertyForAuthDef] = useState<{ schemaId: string; propertyId: string } | null>(null)
 
   // Dialog states for CRUD operations
   const [isDatasetLookupOpen, setIsDatasetLookupOpen] = useState(false)
@@ -1036,8 +1036,8 @@ export default function DataContractDetails() {
   }
 
   const handleAddPropertyAuthDef = async (definition: { url: string; type: string }) => {
-    if (!contractId || !activePropertyForAuthDef) return
-    const { schemaId, propertyId } = activePropertyForAuthDef
+    if (!contractId || !_activePropertyForAuthDef) return
+    const { schemaId, propertyId } = _activePropertyForAuthDef
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/properties/${encodeURIComponent(propertyId)}/authoritative-definitions`, {
         method: 'POST',
@@ -1075,33 +1075,35 @@ export default function DataContractDetails() {
     }
   }
 
-  const handleDeletePropertyAuthDef = async (schemaId: string, propertyId: string, index: number) => {
-    if (!contractId) return
-    if (!confirm('Delete this property authoritative definition?')) return
-    const defs = propertyAuthDefs[propertyId] || []
-    const defId = defs[index]?.id
-    if (!defId) return
-    try {
-      const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/properties/${encodeURIComponent(propertyId)}/authoritative-definitions/${defId}`, {
-        method: 'DELETE'
-      })
-      if (!res.ok) throw new Error('Failed to delete property authoritative definition')
-      await fetchPropertyAuthDefs(schemaId, propertyId)
-      toast({ title: 'Deleted', description: 'Property authoritative definition deleted successfully.' })
-    } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
-    }
-  }
+  // Available for future use - commented out to prevent unused variable errors
+  // const handleDeletePropertyAuthDef = async (schemaId: string, propertyId: string, index: number) => {
+  //   if (!contractId) return
+  //   if (!confirm('Delete this property authoritative definition?')) return
+  //   const defs = propertyAuthDefs[propertyId] || []
+  //   const defId = defs[index]?.id
+  //   if (!defId) return
+  //   try {
+  //     const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/properties/${encodeURIComponent(propertyId)}/authoritative-definitions/${defId}`, {
+  //       method: 'DELETE'
+  //     })
+  //     if (!res.ok) throw new Error('Failed to delete property authoritative definition')
+  //     await fetchPropertyAuthDefs(schemaId, propertyId)
+  //     toast({ title: 'Deleted', description: 'Property authoritative definition deleted successfully.' })
+  //   } catch (e) {
+  //     toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
+  //   }
+  // }
 
-  const handleManagePropertyAuthDefs = (schemaId: string, propertyId: string, propertyName: string) => {
-    // Fetch property auth defs if not already loaded
-    if (!propertyAuthDefs[propertyId]) {
-      fetchPropertyAuthDefs(schemaId, propertyId)
-    }
-    setActivePropertyForAuthDef({ schemaId, propertyId })
-    setEditingPropertyAuthDef(null)
-    setIsPropertyAuthDefFormOpen(true)
-  }
+  // Available for future use - commented out to prevent unused variable errors
+  // const handleManagePropertyAuthDefs = (schemaId: string, propertyName: string, propertyId: string) => {
+  //   // Fetch property auth defs if not already loaded
+  //   if (!propertyAuthDefs[propertyId]) {
+  //     fetchPropertyAuthDefs(schemaId, propertyId)
+  //   }
+  //   setActivePropertyForAuthDef({ schemaId, propertyId })
+  //   setEditingPropertyAuthDef(null)
+  //   setIsPropertyAuthDefFormOpen(true)
+  // }
 
   // Helper to update contract (read-modify-write pattern)
   const updateContract = async (updates: Partial<any>, showToast: boolean = true, forceUpdate: boolean = false) => {
@@ -1224,7 +1226,7 @@ export default function DataContractDetails() {
   }
 
   // Handler for inferring schema from a Dataset Instance
-  const handleInferFromDatasetInstance = async (instance: { physical_path: string }, dataset: { name: string }) => {
+  const handleInferFromDatasetInstance = async (instance: { physical_path: string }, _dataset: { name: string }) => {
     // Reuse the same logic as handleInferFromDataset using the instance's physical_path
     await handleInferFromDataset({ full_name: instance.physical_path })
     setIsDatasetInstanceLookupOpen(false)
@@ -2948,7 +2950,7 @@ export default function DataContractDetails() {
       <AuthoritativeDefinitionFormDialog
         isOpen={isPropertyAuthDefFormOpen}
         onOpenChange={setIsPropertyAuthDefFormOpen}
-        initial={editingPropertyAuthDef !== null && activePropertyForAuthDef ? propertyAuthDefs[editingPropertyAuthDef.propertyId]?.[editingPropertyAuthDef.index] : undefined}
+        initial={editingPropertyAuthDef !== null && _activePropertyForAuthDef ? propertyAuthDefs[editingPropertyAuthDef.propertyId]?.[editingPropertyAuthDef.index] : undefined}
         onSubmit={editingPropertyAuthDef !== null ? handleUpdatePropertyAuthDef : handleAddPropertyAuthDef}
         level="property"
       />

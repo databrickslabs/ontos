@@ -20,7 +20,8 @@ import { DataDomain } from '@/types/data-domain';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+// import { Loader2 } from 'lucide-react'; // Unused
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { DataDomainFormDialog } from '@/components/data-domains/data-domain-form-dialog';
@@ -150,6 +151,7 @@ interface LinkedAssetsViewProps {
 }
 
 const LinkedAssetsView: React.FC<LinkedAssetsViewProps> = ({ assets }) => {
+  const { t } = useTranslation(['common']);
   const { getDomainName } = useDomains();
   // Define columns for the linked assets table
   const columns: ColumnDef<LinkedAsset>[] = [
@@ -236,7 +238,7 @@ export default function DataDomainDetailsView() {
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
   const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
-  const [parentSemanticLinks, setParentSemanticLinks] = useState<EntitySemanticLink[]>([]);
+  const [_parentSemanticLinks, setParentSemanticLinks] = useState<EntitySemanticLink[]>([]);
   const [hierarchyConceptIris, setHierarchyConceptIris] = useState<string[]>([]);
   const [linkedAssets, setLinkedAssets] = useState<any[]>([]);
   const [domainTeams, setDomainTeams] = useState<TeamSummary[]>([]);
@@ -249,25 +251,25 @@ export default function DataDomainDetailsView() {
   interface LinkItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; url: string; created_at?: string; }
   interface DocumentItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; original_filename: string; content_type?: string | null; size_bytes?: number | null; storage_path: string; created_at?: string; }
 
-  const [richTexts, setRichTexts] = useState<RichTextItem[]>([]);
-  const [links, setLinks] = useState<LinkItem[]>([]);
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [_richTexts, setRichTexts] = useState<RichTextItem[]>([]);
+  const [_links, setLinks] = useState<LinkItem[]>([]);
+  const [_documents, setDocuments] = useState<DocumentItem[]>([]);
 
-  const [addingNote, setAddingNote] = useState(false);
-  const [noteTitle, setNoteTitle] = useState('');
-  const [noteDesc, setNoteDesc] = useState('');
-  const [noteContent, setNoteContent] = useState('');
+  const [_addingNote, _setAddingNote] = useState(false);
+  const [_noteTitle, _setNoteTitle] = useState('');
+  const [_noteDesc, _setNoteDesc] = useState('');
+  const [_noteContent, _setNoteContent] = useState('');
 
-  const [addingLink, setAddingLink] = useState(false);
-  const [linkTitle, setLinkTitle] = useState('');
-  const [linkDesc, setLinkDesc] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
+  const [_addingLink, _setAddingLink] = useState(false);
+  const [_linkTitle, _setLinkTitle] = useState('');
+  const [_linkDesc, _setLinkDesc] = useState('');
+  const [_linkUrl, _setLinkUrl] = useState('');
 
-  const [uploadingDoc, setUploadingDoc] = useState(false);
-  const [addingDoc, setAddingDoc] = useState(false);
-  const [_docTitle, setDocTitle] = useState('');
-  const [_docDesc, setDocDesc] = useState('');
-  const [_docFile, setDocFile] = useState<File | null>(null);
+  const [_uploadingDoc, _setUploadingDoc] = useState(false);
+  const [_addingDoc, _setAddingDoc] = useState(false);
+  const [_docTitle, _setDocTitle] = useState('');
+  const [_docDesc, _setDocDesc] = useState('');
+  const [_docFile, _setDocFile] = useState<File | null>(null);
 
   const fetchDomainHierarchyConceptIris = useCallback(async (domainId: string): Promise<string[]> => {
     const conceptIris: string[] = [];
@@ -403,10 +405,11 @@ export default function DataDomainDetailsView() {
   // Load all domains for parent selection in edit dialog
   const { domains, refetch: refetchDomains } = useDomains();
 
-  const _truncate = (text?: string | null, maxLen: number = 80) => {
-    if (!text) return '';
-    return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
-  };
+  // Available for future use
+  // const truncate = (text?: string | null, maxLen: number = 80) => {
+  //   if (!text) return '';
+  //   return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
+  // };
 
   const addIri = async (iri: string) => {
     if (!domainId) return

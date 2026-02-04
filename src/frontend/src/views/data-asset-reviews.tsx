@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ColumnDef } from "@tanstack/react-table";
@@ -19,7 +19,7 @@ import CreateReviewRequestDialog from '@/components/data-asset-reviews/create-re
 import { useProjectContext } from '@/stores/project-store';
 
 // Helper function to check API response (reuse if available globally)
-const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string }, name: string): T => {
+const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null }, name: string): T => {
     if (response.error) {
         throw new Error(`${name} fetch failed: ${response.error}`);
     }

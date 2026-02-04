@@ -20,7 +20,7 @@ import {
   Table as TableIcon,
   Eye,
   ArrowUpDown,
-  ChevronDown,
+  // ChevronDown, // Available for future use
   Database,
   RefreshCw,
   Tag
@@ -29,7 +29,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+// CardHeader, CardTitle, CardDescription - Available for future use
 import {
   Table,
   TableBody,

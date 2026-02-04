@@ -938,13 +938,13 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       control={control}
                                       render={({ field }) => (
                                           <Select 
-                                              onValueChange={(value) => field.onChange(value === '' ? undefined : value)} 
-                                              value={field.value || ""}
+                                              onValueChange={(value) => field.onChange(value === '_none' ? undefined : value)} 
+                                              value={field.value || "_none"}
                                               disabled={isSubmitting || projectsLoading}
                                           >
                                               <SelectTrigger><SelectValue placeholder="Select project (optional)" /></SelectTrigger>
                                               <SelectContent>
-                                                  <SelectItem value="">None</SelectItem>
+                                                  <SelectItem value="_none">None</SelectItem>
                                                   {availableProjects.map(project => (
                                                       <SelectItem key={project.id} value={project.id}>
                                                           {project.name} ({project.team_count} teams)

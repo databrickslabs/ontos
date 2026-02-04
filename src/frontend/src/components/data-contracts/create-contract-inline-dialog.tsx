@@ -172,12 +172,12 @@ export default function CreateContractInlineDialog({
           {domains && domains.length > 0 && (
             <div className="space-y-2">
               <Label htmlFor="domain">Domain</Label>
-              <Select value={domainId} onValueChange={setDomainId}>
+              <Select value={domainId || "_none"} onValueChange={(v) => setDomainId(v === "_none" ? "" : v)}>
                 <SelectTrigger id="domain">
                   <SelectValue placeholder="Select domain (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="_none">None</SelectItem>
                   {domains.map((domain) => (
                     <SelectItem key={domain.id} value={domain.id}>
                       {domain.name}

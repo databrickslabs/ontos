@@ -264,9 +264,9 @@ export const useApi = () => {
     }
   }, []);
 
-  const delete_ = useCallback(async (url: string): Promise<ApiResponse<unknown>> => {
+  const delete_ = useCallback(async <T = unknown>(url: string): Promise<ApiResponse<T>> => {
     setLoading(true);
-    let responseData: unknown = null;
+    let responseData: T = {} as T;
     let errorMsg: string | null = null;
     try {
       const response = await fetch(url, { method: 'DELETE' });
@@ -306,9 +306,17 @@ export const useApi = () => {
           }
           console.error("[useApi] DELETE error response from", url, "(", response.status, "):", errorBody);
       } else {
-          // Success (usually 204 No Content for DELETE)
-          // No data expected for successful delete, but structure requires data field
-          responseData = {}; 
+          // Success - check if there's response data (some DELETE endpoints return data)
+          const contentType = response.headers.get('Content-Type');
+          if (response.status !== 204 && contentType?.includes('application/json')) {
+            try {
+              responseData = await response.json();
+            } catch {
+              responseData = {} as T;
+            }
+          } else {
+            responseData = {} as T;
+          }
       }
 
     } catch (error) {

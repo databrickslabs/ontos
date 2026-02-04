@@ -26,8 +26,9 @@ export function useRatings() {
     }
 
     // Return pending request if one exists
-    if (pendingRequests.current[cacheKey]) {
-      return pendingRequests.current[cacheKey];
+    const pendingRequest = pendingRequests.current[cacheKey];
+    if (pendingRequest !== undefined) {
+      return pendingRequest;
     }
 
     // Mark as loading

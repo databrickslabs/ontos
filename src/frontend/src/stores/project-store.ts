@@ -25,17 +25,17 @@ interface ProjectState {
 }
 
 // Helper to check and update cache version
-const checkAndUpdateCacheVersion = async (): Promise<boolean> => {
+const checkAndUpdateCacheVersion = async (): Promise<number | null> => {
   try {
     const response = await fetch('/api/cache-version');
     if (!response.ok) {
-      return false; // Treat as stale if we can't check
+      return null; // Treat as stale if we can't check
     }
     const data = await response.json();
-    return data.version;
+    return data.version ?? null;
   } catch (error) {
     console.error('Failed to check cache version:', error);
-    return false;
+    return null;
   }
 };
 
@@ -93,7 +93,7 @@ export const useProjectStore = create<ProjectState>()(
 
           // Check cache version and invalidate stale data
           const serverVersion = await checkAndUpdateCacheVersion();
-          if (serverVersion && _cacheVersion && serverVersion !== _cacheVersion) {
+          if (serverVersion !== null && _cacheVersion !== undefined && serverVersion !== _cacheVersion) {
             console.log('Project cache is stale, clearing current project');
             setCurrentProject(null);
           }
@@ -103,7 +103,9 @@ export const useProjectStore = create<ProjectState>()(
           setAvailableProjects(data.projects || []);
           
           // Update cache version
-          set({ _cacheVersion: serverVersion });
+          if (serverVersion !== null) {
+            set({ _cacheVersion: serverVersion });
+          }
 
           // Validate current project still exists
           if (currentProject) {

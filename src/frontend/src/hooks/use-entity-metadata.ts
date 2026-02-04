@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Note: entity-metadata-panel.tsx and costs.ts also define EntityKind - keep in sync
-export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'dataset' | 'concept' | 'collection';
+export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'dataset' | 'concept' | 'collection' | 'compliance_policy';
 
 export interface RichTextItem { 
   id: string; 

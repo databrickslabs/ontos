@@ -128,7 +128,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ markdown }) => {
           const handleClick = isInternalAnchor
             ? (e: React.MouseEvent) => {
                 e.preventDefault();
-                const id = href.slice(1);
+                const id = href?.slice(1) ?? '';
                 const element = document.getElementById(id);
                 if (element) {
                   const offset = 80;

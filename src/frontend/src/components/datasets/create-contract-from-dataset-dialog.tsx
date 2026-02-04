@@ -89,8 +89,9 @@ const CreateContractFromDatasetDialog: React.FC<CreateContractFromDatasetDialogP
   const fetchInstances = async (datasetId: string) => {
     setLoadingInstances(true)
     try {
-      const response = await get(`/api/datasets/${datasetId}/instances`)
-      setInstances(Array.isArray(response.data?.instances) ? response.data.instances : [])
+      const response = await get<{ instances?: DatasetInstance[] }>(`/api/datasets/${datasetId}/instances`)
+      const data = response.data as { instances?: DatasetInstance[] } | undefined
+      setInstances(Array.isArray(data?.instances) ? data.instances : [])
     } catch (e) {
       console.error('Failed to fetch instances:', e)
       setInstances([])
@@ -165,10 +166,15 @@ const CreateContractFromDatasetDialog: React.FC<CreateContractFromDatasetDialogP
       // If inferring schema from instance, fetch the schema first
       if (inferSchema && selectedInstance?.physical_path) {
         try {
-          const schemaResponse = await get(`/api/catalogs/dataset/${encodeURIComponent(selectedInstance.physical_path)}`)
-          if (schemaResponse?.schema) {
-            const properties = Array.isArray(schemaResponse.schema)
-              ? schemaResponse.schema.map((c: any) => ({
+          interface SchemaResponseData {
+            schema?: any[];
+            table_info?: { comment?: string; table_type?: string };
+          }
+          const schemaResponse = await get<SchemaResponseData>(`/api/catalogs/dataset/${encodeURIComponent(selectedInstance.physical_path)}`)
+          const schemaData = schemaResponse.data as SchemaResponseData | undefined
+          if (schemaData?.schema) {
+            const properties = Array.isArray(schemaData.schema)
+              ? schemaData.schema.map((c: any) => ({
                   name: String(c.name || ''),
                   physicalType: String(c.physicalType || c.type || ''),
                   logicalType: String(c.logicalType || c.logical_type || 'string'),
@@ -184,8 +190,8 @@ const CreateContractFromDatasetDialog: React.FC<CreateContractFromDatasetDialogP
               name: logicalName,
               physicalName: selectedInstance.physical_path,
               properties: properties,
-              description: schemaResponse.table_info?.comment || undefined,
-              physicalType: schemaResponse.table_info?.table_type || 'table',
+              description: schemaData.table_info?.comment || undefined,
+              physicalType: schemaData.table_info?.table_type || 'table',
             }]
           }
         } catch (schemaError) {
@@ -199,13 +205,14 @@ const CreateContractFromDatasetDialog: React.FC<CreateContractFromDatasetDialogP
       }
 
       // Create the contract
-      const createResponse = await post('/api/data-contracts', contractPayload)
+      const createResponse = await post<{ id?: string }>('/api/data-contracts', contractPayload)
       
       if (createResponse.error) {
         throw new Error(createResponse.error)
       }
 
-      const contractId = createResponse.data?.id
+      const createData = createResponse.data as { id?: string } | undefined
+      const contractId = createData?.id
 
       // Link the contract to the dataset if requested
       if (linkToDataset && contractId) {

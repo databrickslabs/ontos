@@ -18,11 +18,12 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Check, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from '@/components/ui/collapsible';
+// Collapsible components commented out - not currently used
+// import {
+//   Collapsible,
+//   CollapsibleTrigger,
+//   CollapsibleContent,
+// } from '@/components/ui/collapsible';
 import { WorkflowJobRun, getJobRunStatus, getStatusColor, formatDuration } from '@/types/workflow-job-run';
 import { RelativeDate } from '@/components/common/relative-date';
 

@@ -75,7 +75,7 @@ import {
 export default function MCPTokensSettings() {
   const { t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
-  const { get, post, del } = useApi();
+  const { get, post, delete: del } = useApi();
 
   // State
   const [tokens, setTokens] = useState<MCPTokenInfo[]>([]);

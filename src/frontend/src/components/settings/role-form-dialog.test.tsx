@@ -67,7 +67,7 @@ describe('RoleFormDialog', () => {
 
   const mockFeaturesConfig: Record<string, FeatureConfig> = {
     'data-products': {
-      enabled: true,
+      name: 'Data Products',
       allowed_levels: [
         FeatureAccessLevel.NONE,
         FeatureAccessLevel.READ_ONLY,
@@ -75,7 +75,7 @@ describe('RoleFormDialog', () => {
       ],
     },
     'data-contracts': {
-      enabled: true,
+      name: 'Data Contracts',
       allowed_levels: [
         FeatureAccessLevel.NONE,
         FeatureAccessLevel.READ_ONLY,
@@ -93,9 +93,9 @@ describe('RoleFormDialog', () => {
       'data-products': FeatureAccessLevel.READ_WRITE,
       'data-contracts': FeatureAccessLevel.READ_WRITE,
     },
-    home_sections: [HomeSection.DATA_PRODUCTS],
+    home_sections: [HomeSection.DATA_CURATION],
     approval_privileges: {
-      [ApprovalEntity.DATA_PRODUCT]: true,
+      [ApprovalEntity.PRODUCTS]: true,
     },
     deployment_policy: null,
   };

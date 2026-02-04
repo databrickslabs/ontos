@@ -275,7 +275,7 @@ describe('useEntityMetadata Hook', () => {
         Promise.resolve({ ok: true, json: async () => mockRichTexts })
       );
 
-      const { result, rerender } = renderHook(
+      const { result, rerender: _rerender } = renderHook(
         ({ entityType, entityId }) => useEntityMetadata(entityType, entityId),
         { initialProps: { entityType: 'data_product' as EntityKind, entityId: 'entity-123' } }
       );

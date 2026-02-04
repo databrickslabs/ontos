@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { Breadcrumbs } from './breadcrumbs';
-import useBreadcrumbStore, { BreadcrumbSegment } from '@/stores/breadcrumb-store';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import type { BreadcrumbSegment as _BreadcrumbSegment } from '@/stores/breadcrumb-store';
 import { act } from '@testing-library/react';
 
 // Wrapper component to provide Router context

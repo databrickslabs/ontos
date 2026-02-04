@@ -1,10 +1,10 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, Page } from '@playwright/test'
 
 // This test assumes backend at http://localhost:8000 with at least one contract existing.
 // It edits the first contract found, adds schema/property semantic concepts in the wizard,
 // saves, and verifies links appear in the details view.
 
-async function navigateToFirstContract(page) {
+async function navigateToFirstContract(page: Page) {
   await page.goto('/data-contracts')
   // Rows contain contract names; click first details link
   const firstRow = page.locator('table >> tbody >> tr').first()

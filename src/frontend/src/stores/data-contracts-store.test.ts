@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+// vi - available for mocking if needed
 import { act, renderHook } from '@testing-library/react';
 import { useDataContractsStore, defaultDraft } from './data-contracts-store';
 import type { DataContractListItem } from '@/types/data-contract';

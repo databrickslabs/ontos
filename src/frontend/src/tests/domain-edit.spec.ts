@@ -14,7 +14,8 @@ test('edits a data domain from details view', async ({ page }) => {
 
   // Open edit dialog
   // The details page has multiple buttons; target the top bar Edit
-  const topBar = page.locator('div').filter({ hasText: /^Back to List/ }).first().locator('..')
+  // Note: topBar locator available for future use if needed
+  void page.locator('div').filter({ hasText: /^Back to List/ }).first().locator('..')
   await page.getByRole('button', { name: /^edit$/i }).first().click()
 
   // Ensure dialog is visible

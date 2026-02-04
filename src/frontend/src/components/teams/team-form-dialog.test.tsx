@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/utils';
 import { TeamFormDialog } from './team-form-dialog';
-import { TeamRead } from '@/types/team';
+import { TeamRead, MemberType } from '@/types/team';
 import { DataDomain } from '@/types/data-domain';
 
 // Mock i18next
@@ -115,13 +115,21 @@ describe('TeamFormDialog', () => {
     tags: null,
     members: [
       {
-        member_type: 'user',
+        id: 'member-1',
+        team_id: 'team-1',
+        member_type: MemberType.USER,
         member_identifier: 'user@example.com',
+        member_name: 'Test User',
         app_role_override: 'DataProducer',
+        created_at: '2024-01-01',
+        updated_at: '2024-01-01',
+        added_by: 'admin@example.com',
       }
     ],
     created_at: '2024-01-01',
     updated_at: '2024-01-01',
+    created_by: 'admin@example.com',
+    updated_by: 'admin@example.com',
   };
 
   beforeEach(() => {
@@ -213,6 +221,9 @@ describe('TeamFormDialog', () => {
         tags: [],
         created_at: '2024-01-01',
         updated_at: '2024-01-01',
+        created_by: 'test-user',
+        updated_by: 'test-user',
+        members: [],
       };
 
       mockPost.mockResolvedValue({ data: newTeam, error: null });

@@ -107,7 +107,8 @@ describe('TagSelector', () => {
 
   describe('Tag loading and display', () => {
     it('fetches tags when opened', async () => {
-      const user = userEvent.setup();
+      // Setup user event (not directly used in this test, but setup for potential future use)
+      userEvent.setup();
       render(<TagSelector {...defaultProps} />);
 
       fireEvent.click(screen.getByRole('combobox'));
@@ -357,7 +358,8 @@ describe('TagSelector', () => {
 
     it('prevents adding tags when max is reached', async () => {
       const onChange = vi.fn();
-      const user = userEvent.setup();
+      // Setup user event (not directly used in this test, but setup for potential future use)
+      userEvent.setup();
 
       render(
         <TagSelector

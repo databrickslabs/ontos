@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
+// waitFor - available for future use
 import { useToast, toast } from './use-toast';
 
 // Mock timers
@@ -489,7 +490,7 @@ describe('useToast Hook', () => {
       const fakeInstance = {
         id: 'fake-id',
         dismiss: () => {},
-        update: (props: any) => {
+        update: (_props: any) => {
           // This would update a non-existent toast
         },
       };

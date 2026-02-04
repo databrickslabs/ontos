@@ -9,7 +9,7 @@ global.fetch = vi.fn();
 describe('Permissions Store', () => {
   beforeEach(() => {
     // Reset store state before each test
-    const { result } = renderHook(() => usePermissionsStore());
+    const { result: _result } = renderHook(() => usePermissionsStore());
     act(() => {
       usePermissionsStore.setState({
         permissions: {},
@@ -291,7 +291,7 @@ describe('Permissions Store', () => {
       act(() => {
         usePermissionsStore.setState({
           permissions: { 'data-products': FeatureAccessLevel.READ_ONLY },
-          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {} }],
+          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {}, assigned_groups: [] }],
         });
       });
 
@@ -461,6 +461,7 @@ describe('Permissions Store', () => {
               feature_permissions: {
                 'data-products': FeatureAccessLevel.ADMIN,
               },
+              assigned_groups: [],
             },
           ],
         });
@@ -519,6 +520,7 @@ describe('Permissions Store', () => {
               feature_permissions: {
                 'data-products': FeatureAccessLevel.ADMIN,
               },
+              assigned_groups: [],
             },
           ],
         });
@@ -561,7 +563,7 @@ describe('Permissions Store', () => {
       act(() => {
         usePermissionsStore.setState({
           permissions: { 'data-products': FeatureAccessLevel.READ_ONLY },
-          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {} }],
+          availableRoles: [{ id: 'role-1', name: 'Test', feature_permissions: {}, assigned_groups: [] }],
         });
       });
 

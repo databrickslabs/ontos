@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+// fireEvent - available for future use
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/utils';
 import TagChip, { AssignedTag } from './tag-chip';

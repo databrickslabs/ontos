@@ -2,6 +2,7 @@
   "name": "ontos",
   "version": "0.5.3",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -70,6 +71,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@playwright/test": "^1.55.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/dom": "^10.4.1",
@@ -84,11 +86,19 @@
     "@vitest/ui": "^3.2.4",
     "autoprefixer": "^10.4.17",
     "dagre": "^0.8.5",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.0",
+    "globals": "^17.3.0",
     "jsdom": "^27.0.0",
     "license-checker": "^25.0.1",
     "postcss": "^8.4.35",
+    "prettier": "^3.8.1",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
+    "typescript-eslint": "^8.54.0",
     "vite": "^6.2.4",
     "vitest": "^3.2.4"
   },
@@ -109,13 +119,11 @@
     "type-check": "tsc --noEmit",
     "license-check": "license-checker --summary",
     "license-check:full": "license-checker --json --out licenses.json && license-checker --csv --out licenses.csv",
-    "license-check:production": "license-checker --production --summary"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "license-check:production": "license-checker --production --summary",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\""
   },
   "browserslist": {
     "production": [

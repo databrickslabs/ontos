@@ -1,22 +1,23 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ColumnDef } from "@tanstack/react-table";
-import { Loader2, AlertCircle, ArrowLeft, Check, X, Eye, Code, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, X, ArrowUpDown } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import {
     DataAssetReviewRequest, ReviewedAsset, ReviewRequestStatus,
-    ReviewedAssetStatus, AssetType, ReviewedAssetUpdate,
-    DataAssetReviewRequestUpdateStatus, AssetDefinition, TablePreview
+    ReviewedAssetStatus,
+    DataAssetReviewRequestUpdateStatus
 } from '@/types/data-asset-review';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+// Textarea - unused
+// import { Textarea } from '@/components/ui/textarea';
 import { DataTable } from "@/components/ui/data-table";
 import { Toaster } from "@/components/ui/toaster";
 import { RelativeDate } from '@/components/common/relative-date';

@@ -515,15 +515,15 @@ const CreateContractFromDatasetDialog: React.FC<CreateContractFromDatasetDialogP
                     Domain (Optional)
                   </Label>
                   <Select
-                    value={selectedDomain}
-                    onValueChange={setSelectedDomain}
+                    value={selectedDomain || "_none"}
+                    onValueChange={(v) => setSelectedDomain(v === "_none" ? "" : v)}
                     disabled={submitting}
                   >
                     <SelectTrigger id="domain">
                       <SelectValue placeholder="Select a domain" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No domain</SelectItem>
+                      <SelectItem value="_none">No domain</SelectItem>
                       {domains.map((domain) => (
                         <SelectItem key={domain.id} value={domain.id}>
                           {domain.name}

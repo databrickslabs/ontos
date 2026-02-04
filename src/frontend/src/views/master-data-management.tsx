@@ -16,7 +16,8 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { RelativeDate } from '@/components/common/relative-date';
 import { 
   GitCompare, Plus, Play, FileCheck, Link2, 
-  Database, AlertCircle, Loader2, CheckCircle2, 
+  Database, AlertCircle, Loader2,
+  // CheckCircle2, // Available for future use
   Clock, Trash2, Settings2, RefreshCw, Users,
   Merge, Eye
 } from 'lucide-react';
@@ -777,7 +778,7 @@ export default function MasterDataManagement() {
                                       </span>
                                     </TableCell>
                                     <TableCell>
-                                      {candidate.matched_fields?.length > 0 ? (
+                                      {candidate.matched_fields && candidate.matched_fields.length > 0 ? (
                                         <div className="flex flex-wrap gap-1">
                                           {candidate.matched_fields.slice(0, 3).map((field, idx) => (
                                             <Badge key={idx} variant="outline" className="text-xs">

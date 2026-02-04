@@ -322,8 +322,12 @@ export default function DataProductDetails() {
     setSubscriptionLoading(true);
     try {
       const response = await deleteApi<SubscriptionResponse>(`/api/data-products/${productId}/subscribe`);
-      if (response.data) {
-        setSubscriptionStatus(response.data);
+      if (!response.error) {
+        // Handle both cases: server returns SubscriptionResponse or 204 No Content
+        const subscriptionData: SubscriptionResponse = response.data && 'subscribed' in response.data 
+          ? response.data 
+          : { subscribed: false };
+        setSubscriptionStatus(subscriptionData);
         toast({ title: 'Unsubscribed', description: 'You will no longer receive notifications about this product.' });
         // Refresh subscribers count
         if (canWrite || canAdmin) {
@@ -1540,10 +1544,11 @@ export default function DataProductDetails() {
       />
 
       <CreateVersionDialog
-        open={isVersionDialogOpen}
-        onClose={() => setIsVersionDialogOpen(false)}
+        isOpen={isVersionDialogOpen}
+        onOpenChange={setIsVersionDialogOpen}
         onSubmit={submitNewVersion}
         currentVersion={product.version || '1.0.0'}
+        productTitle={product.info?.title || product.id || ''}
       />
 
       <ConceptSelectDialog

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,9 +12,9 @@ import { useApi } from '@/hooks/use-api';
 type ObjectType = 'catalog' | 'schema';
 
 export default function CreateUcObject() {
-  const { t } = useTranslation('common');
+  const { t: _t } = useTranslation('common');
   const navigate = useNavigate();
-  const { get, post } = useApi();
+  const { get: _get, post } = useApi();
   const [objectType, setObjectType] = useState<ObjectType>('catalog');
   const [catalogName, setCatalogName] = useState('');
   const [schemaName, setSchemaName] = useState('');

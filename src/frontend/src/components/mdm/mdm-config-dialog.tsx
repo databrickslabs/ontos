@@ -27,7 +27,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { MdmEntityType, MdmConfigCreate, MatchingRule, SurvivorshipRule } from '@/types/mdm';
+import { MdmEntityType, MdmConfigCreate, MatchingRule, SurvivorshipRule, MatchRuleType, SurvivorshipStrategy } from '@/types/mdm';
 
 interface DataContract {
   id: string;
@@ -168,12 +168,12 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
         } else {
           // Use sensible defaults if contract has no MDM rules
           setMatchingRules([
-            { name: 'email_match', type: 'deterministic', fields: ['email'], weight: 1.0, threshold: 1.0 },
-            { name: 'name_fuzzy', type: 'probabilistic', fields: ['customer_name'], weight: 0.8, threshold: 0.8, algorithm: 'jaro_winkler' },
+            { name: 'email_match', type: MatchRuleType.DETERMINISTIC, fields: ['email'], weight: 1.0, threshold: 1.0 },
+            { name: 'name_fuzzy', type: MatchRuleType.PROBABILISTIC, fields: ['customer_name'], weight: 0.8, threshold: 0.8, algorithm: 'jaro_winkler' },
           ]);
           setSurvivorshipRules([
-            { field: 'email', strategy: 'most_trusted' },
-            { field: 'customer_name', strategy: 'most_recent' },
+            { field: 'email', strategy: SurvivorshipStrategy.MOST_TRUSTED },
+            { field: 'customer_name', strategy: SurvivorshipStrategy.MOST_RECENT },
           ]);
           setRulesSource('default');
         }
@@ -209,7 +209,8 @@ export default function MdmConfigDialog({ isOpen, onClose, onSuccess }: MdmConfi
       }
       if (response.data) {
         console.log('[MDM Config] Created successfully:', response.data);
-        toast({ title: 'Success', description: `MDM configuration "${response.data.name}" created successfully` });
+        const configData = response.data as { name?: string };
+        toast({ title: 'Success', description: `MDM configuration "${configData.name}" created successfully` });
         onSuccess();
       } else {
         console.warn('[MDM Config] No data in response:', response);

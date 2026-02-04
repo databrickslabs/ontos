@@ -484,8 +484,9 @@ describe('Breadcrumbs Component', () => {
         </RouterWrapper>
       );
 
-      const nav = container.querySelector('nav');
-      expect(nav).toHaveClass('custom-breadcrumbs');
+      // className is applied to the outer div wrapper, not the nav element
+      const wrapper = container.querySelector('.custom-breadcrumbs');
+      expect(wrapper).toBeInTheDocument();
     });
 
     it('merges custom className with default classes', () => {
@@ -495,10 +496,11 @@ describe('Breadcrumbs Component', () => {
         </RouterWrapper>
       );
 
-      const nav = container.querySelector('nav');
-      expect(nav).toHaveClass('my-custom-class');
+      // className is applied to the outer div wrapper, not the nav element
+      const wrapper = container.querySelector('.my-custom-class');
+      expect(wrapper).toBeInTheDocument();
       // Should still have some default classes
-      expect(nav?.className).toContain('text-sm');
+      expect(wrapper?.className).toContain('flex');
     });
 
     it('accepts custom HTML attributes', () => {

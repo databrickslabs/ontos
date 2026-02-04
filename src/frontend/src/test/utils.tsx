@@ -25,14 +25,21 @@ export const renderWithRouter = (
 };
 
 /**
- * Custom render function that includes UI providers (Tooltip, etc.)
+ * Custom render function that includes UI providers (Tooltip, etc.) and Router
  */
 export const renderWithProviders = (
   ui: ReactElement,
-  renderOptions?: RenderOptions
+  {
+    route = '/',
+    ...renderOptions
+  }: RenderOptions & { route?: string } = {}
 ) => {
+  window.history.pushState({}, 'Test page', route);
+
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <TooltipProvider>{children}</TooltipProvider>
+    <BrowserRouter>
+      <TooltipProvider>{children}</TooltipProvider>
+    </BrowserRouter>
   );
 
   return render(ui, { wrapper: Wrapper, ...renderOptions });

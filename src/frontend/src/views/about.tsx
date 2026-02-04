@@ -43,7 +43,7 @@ export default function About() {
   if (customAboutContent) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <MarkdownViewer content={customAboutContent} />
+        <MarkdownViewer markdown={customAboutContent} />
         
         {/* Still show version info for transparency */}
         <div className="mt-10 p-4 border rounded-lg bg-card text-card-foreground">

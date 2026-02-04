@@ -204,6 +204,7 @@ export interface DatasetListItem {
   id: string;
   name: string;
   description?: string;
+  full_path?: string;
   
   // Lifecycle
   status: DatasetStatus;

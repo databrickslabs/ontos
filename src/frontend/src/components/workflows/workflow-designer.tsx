@@ -9,10 +9,10 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   useEdgesState,
-  addEdge,
-  Connection,
-  NodeChange,
-  EdgeChange,
+  // addEdge - unused
+  // Connection - unused
+  // NodeChange - unused
+  // EdgeChange - unused
   MarkerType,
   Panel,
 } from 'reactflow';
@@ -23,7 +23,8 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+// Card components commented out - not currently used
+// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,7 +46,7 @@ import {
 import { 
   Save, 
   ArrowLeft, 
-  Plus, 
+  // Plus - unused
   Trash2, 
   Loader2,
   Shield,
@@ -56,7 +57,7 @@ import {
   CheckCircle,
   XCircle,
   UserCheck,
-  Play,
+  // Play - unused
   ClipboardCheck,
   FileSearch,
   Globe,
@@ -80,7 +81,7 @@ import type {
   ProcessWorkflow,
   ProcessWorkflowCreate,
   ProcessWorkflowUpdate,
-  WorkflowStep,
+  // WorkflowStep - unused
   WorkflowStepCreate,
   StepType,
   TriggerType,
@@ -235,7 +236,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [isLoading, setIsLoading] = useState(!isNew);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
+  const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; has_groups: boolean }[]>([]);
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);

@@ -16,7 +16,7 @@ import {
   Loader2,
   MessageSquare,
   PanelRightClose,
-  PanelRightOpen,
+  // PanelRightOpen - unused
   Copy,
   GitCompare,
   RefreshCw,
@@ -30,7 +30,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// Tabs imports commented out - not currently used
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/stores/permissions-store';

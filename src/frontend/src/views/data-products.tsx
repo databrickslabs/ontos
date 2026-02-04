@@ -62,9 +62,9 @@ export default function DataProducts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Use the imported types for state
-  const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
-  const [owners, setOwners] = useState<DataProductOwner[]>([]);
+  // Use the imported types for state (values loaded but not directly consumed by UI)
+  const [_statuses, setStatuses] = useState<DataProductStatus[]>([]);
+  const [_owners, setOwners] = useState<DataProductOwner[]>([]);
 
   // Add state for product types (reserved for future use)
   // const [productTypes, setProductTypes] = useState<string[]>([]);
@@ -74,7 +74,7 @@ export default function DataProducts() {
   // Subscription filter state
   const [showMySubscriptions, setShowMySubscriptions] = useState(false);
   const [mySubscribedProductIds, setMySubscribedProductIds] = useState<Set<string>>(new Set());
-  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [_subscriptionsLoading, setSubscriptionsLoading] = useState(false);
 
   const api = useApi();
   const { get, post, delete: deleteApi } = api;

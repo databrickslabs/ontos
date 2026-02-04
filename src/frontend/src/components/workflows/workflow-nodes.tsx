@@ -13,20 +13,20 @@ import {
   CheckCircle,
   XCircle,
   ClipboardCheck,
-  Truck,
+  // Truck - unused
   GitBranch,
   FileSearch,
   Globe,
 } from 'lucide-react';
-import type { WorkflowStep, WorkflowTrigger, StepType } from '@/types/process-workflow';
+import type { WorkflowStep, WorkflowTrigger } from '@/types/process-workflow';
 import { 
   getTriggerTypeLabel, 
   getEntityTypeLabel,
-  getStepIcon,
-  getStepColor,
+  // getStepIcon - unused
+  // getStepColor - unused
   resolveRecipientDisplay,
-  STEP_ICONS,
-  STEP_COLORS,
+  // STEP_ICONS - unused
+  // STEP_COLORS - unused
 } from '@/lib/workflow-labels';
 
 // Base node styles - fixed width for consistent compact sizing

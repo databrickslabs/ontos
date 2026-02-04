@@ -6,7 +6,7 @@
  * Can be upgraded to @xyflow/react for more advanced features.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -16,8 +16,6 @@ import {
   ExternalLink,
   Loader2,
   AlertCircle,
-  ChevronDown,
-  ChevronRight,
   Database,
   FileSpreadsheet,
   Workflow
@@ -189,7 +187,7 @@ const LevelLayout: React.FC<LevelLayoutProps> = ({ graph, onNodeClick }) => {
   return (
     <div className="flex items-center gap-8 p-6 min-w-max">
       {/* Upstream nodes */}
-      {upstreamLevels.map((level, levelIdx) => (
+      {upstreamLevels.map((level, _levelIdx) => (
         <React.Fragment key={`up-${level.depth}`}>
           <div className="flex flex-col gap-3">
             {level.nodes.map(node => (
@@ -218,7 +216,7 @@ const LevelLayout: React.FC<LevelLayoutProps> = ({ graph, onNodeClick }) => {
       )}
       
       {/* Downstream nodes */}
-      {downstreamLevels.map((level, levelIdx) => (
+      {downstreamLevels.map((level, _levelIdx) => (
         <React.Fragment key={`down-${level.depth}`}>
           <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
           <div className="flex flex-col gap-3">

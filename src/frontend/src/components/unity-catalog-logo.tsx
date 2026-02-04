@@ -9,7 +9,7 @@ interface UnityCatalogLogoProps {
 }
 
 export function UnityCatalogLogo({ className }: UnityCatalogLogoProps) {
-  const { theme } = useTheme();
+  const { theme: _theme } = useTheme();
   const customLogoUrl = useUICustomizationStore((state) => state.customLogoUrl);
   const [logoError, setLogoError] = useState(false);
   

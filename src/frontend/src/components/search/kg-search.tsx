@@ -381,7 +381,7 @@ export default function KGSearch({
                   </div>
                 </div>
                 {n.stepIsResource && n.stepIri ? (
-                  <Button variant="ghost" size="sm" onClick={() => stepTo(n.stepIri)}>{t('search:kg.step')}</Button>
+                  <Button variant="ghost" size="sm" onClick={() => stepTo(n.stepIri!)}>{t('search:kg.step')}</Button>
                 ) : null}
               </div>
             ))}

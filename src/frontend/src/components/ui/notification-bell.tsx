@@ -376,7 +376,7 @@ export default function NotificationBell() {
                       )}
                       {(notification.data || notification.action_payload)?.run_id && (
                         <p className="text-xs text-muted-foreground">
-                          Run ID: {String((notification.data || notification.action_payload).run_id)}
+                          Run ID: {String((notification.data || notification.action_payload)?.run_id)}
                         </p>
                       )}
                     </div>

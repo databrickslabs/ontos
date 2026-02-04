@@ -8,12 +8,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { User, Users, FolderKanban, Shield, Info } from 'lucide-react';
+import { User, Users, FolderKanban, Shield } from 'lucide-react';
 import { UserProfileData, TeamRead, ProjectRead } from '@/types/profile';
 
 interface UserProfileDialogProps {

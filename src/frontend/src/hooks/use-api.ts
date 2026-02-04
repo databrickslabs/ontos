@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   data: T;
   error?: string | null;
 }

@@ -69,6 +69,11 @@ export interface Server {
 }
 
 export interface InputPort {
+  // UI fields
+  id?: string; // For form tracking
+  links?: Record<string, string>; // Port-level links
+  custom?: Record<string, any>; // Port-level custom properties
+
   // ODPS required fields
   name: string;
   version: string;
@@ -82,6 +87,9 @@ export interface InputPort {
   // Databricks extensions
   assetType?: string; // table, notebook, job
   assetIdentifier?: string; // catalog.schema.table, /path/to/notebook, job_id
+  sourceSystemId?: string;
+  type?: string;
+  description?: string;
 }
 
 export interface SBOM {
@@ -95,6 +103,11 @@ export interface InputContract {
 }
 
 export interface OutputPort {
+  // UI fields
+  id?: string; // For form tracking
+  links?: Record<string, string>; // Port-level links
+  custom?: Record<string, any>; // Port-level custom properties
+
   // ODPS required fields
   name: string;
   version: string;
@@ -187,6 +200,28 @@ export interface Team {
 }
 
 // ============================================================================
+// ODPS v1.0.0 Link Type
+// ============================================================================
+
+export interface Link {
+  url: string;
+  description?: string;
+}
+
+// ============================================================================
+// ODPS v1.0.0 Info Type
+// ============================================================================
+
+export interface Info {
+  title?: string;
+  owner?: string;
+  domain?: string;
+  archetype?: string;
+  description?: string;
+  status?: string;
+}
+
+// ============================================================================
 // ODPS v1.0.0 Data Product (Main Model)
 // ============================================================================
 
@@ -231,6 +266,13 @@ export interface DataProduct {
   baseName?: string; // Base name without version for grouping versions
   changeSummary?: string; // Summary of changes in this version
   published?: boolean; // Whether published to marketplace
+
+  // UI form fields (for form handling)
+  dataProductSpecification?: string; // Spec version
+  productType?: string; // Product type
+  info?: Info; // Basic info object
+  links?: Record<string, Link>; // Named links
+  custom?: Record<string, any>; // Custom key-value pairs
 }
 
 // ============================================================================

@@ -35,7 +35,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   // Subscribed products state
   const [subscribedProducts, setSubscribedProducts] = useState<DataProduct[]>([]);
   const [subscribedLoading, setSubscribedLoading] = useState<boolean>(false);
-  const [subscribedError, setSubscribedError] = useState<string | null>(null);
+  const [_subscribedError, setSubscribedError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProducts = async () => {

@@ -52,7 +52,7 @@ export default function ConceptsSearch({
   const [isConceptDropdownOpen, setIsConceptDropdownOpen] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<ConceptItem | null>(initialSelectedConcept);
   const [conceptIri, setConceptIri] = useState('');
-  const [conceptLabel, setConceptLabel] = useState('');
+  const [_conceptLabel, setConceptLabel] = useState('');
   const [conceptNeighbors, setConceptNeighbors] = useState<Neighbor[]>([]);
   const [semanticLinks, setSemanticLinks] = useState<EnrichedSemanticLink[]>([]);
 

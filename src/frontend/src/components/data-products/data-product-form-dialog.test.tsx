@@ -10,7 +10,7 @@
  *
  * Tests focus on critical functionality while acknowledging the complexity.
  */
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/utils';
@@ -42,7 +42,7 @@ describe('DataProductFormDialog', () => {
   const mockOnOpenChange = vi.fn();
   const mockOnSubmitSuccess = vi.fn();
 
-  const mockStatuses: DataProductStatus[] = ['draft', 'active', 'deprecated'];
+  const mockStatuses: DataProductStatus[] = [DataProductStatus.DRAFT, DataProductStatus.ACTIVE, DataProductStatus.DEPRECATED];
   const mockOwners: DataProductOwner[] = [];
   const mockProductTypes: DataProductType[] = ['dataset', 'ml-model', 'dashboard', 'api'];
 
@@ -51,17 +51,18 @@ describe('DataProductFormDialog', () => {
     post: mockPost,
     put: mockPut,
     delete: vi.fn(),
+    loading: false,
   };
 
   const sampleProduct: DataProduct = {
     id: 'product-1',
+    apiVersion: 'v1.0.0',
+    kind: 'DataProduct',
+    status: 'active',
     dataProductSpecification: '0.0.1',
     info: {
       title: 'Test Product',
       owner: 'test@example.com',
-      domain: 'Sales',
-      description: 'Test description',
-      status: 'active',
     },
     version: '1.0.0',
     productType: 'dataset',

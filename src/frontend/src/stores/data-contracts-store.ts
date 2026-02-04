@@ -14,7 +14,7 @@ type State = {
 
 export const useDataContractsStore = create<State>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       drafts: {},
       list: [],
       setList: (items) => set({ list: items }),

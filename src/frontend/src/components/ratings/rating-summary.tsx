@@ -29,11 +29,13 @@ export function RatingSummary({
   compact = false,
   className,
 }: RatingSummaryProps) {
-  // Calculate max count for distribution scaling
+  // Calculate max count for distribution scaling (may be used in future features)
+  // @ts-ignore - Kept for future use
   const maxCount = useMemo(() => {
     if (!aggregation?.distribution) return 0;
     return Math.max(...Object.values(aggregation.distribution), 1);
   }, [aggregation?.distribution]);
+  void maxCount; // Suppress unused warning
 
   if (loading) {
     return (

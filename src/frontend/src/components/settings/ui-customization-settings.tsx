@@ -318,7 +318,7 @@ export default function UICustomizationSettings() {
             <TabsContent value="preview" className="mt-4">
               <div className="min-h-[300px] rounded-lg border p-4 bg-background">
                 {settings.aboutContent ? (
-                  <MarkdownViewer content={settings.aboutContent} />
+                  <MarkdownViewer markdown={settings.aboutContent} />
                 ) : (
                   <p className="text-muted-foreground italic">
                     {t('settings:uiCustomization.about.noContent', 'No custom content. The default About page will be shown.')}

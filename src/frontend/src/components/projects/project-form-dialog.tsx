@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import TagSelector from '@/components/ui/tag-selector';
-import type { AssignedTag } from '@/components/ui/tag-chip';
+import type { AssignedTag as _AssignedTag } from '@/components/ui/tag-chip';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, FolderOpen, Users, X } from 'lucide-react';
+import { Loader2, FolderOpen, Users, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -159,7 +159,7 @@ export function ProjectFormDialog({
           name: cleanedData.name,
           title: cleanedData.title || undefined,
           description: cleanedData.description || undefined,
-          tags: cleanedData.tags,
+          tags: cleanedData.tags as ProjectUpdate['tags'],
           metadata: undefined,
           project_type: cleanedData.project_type,
         };
@@ -177,7 +177,7 @@ export function ProjectFormDialog({
           name: cleanedData.name,
           title: cleanedData.title || undefined,
           description: cleanedData.description || undefined,
-          tags: cleanedData.tags,
+          tags: cleanedData.tags as ProjectCreate['tags'],
           metadata: undefined,
           team_ids: cleanedData.team_ids,
           project_type: cleanedData.project_type,
@@ -387,7 +387,7 @@ export function ProjectFormDialog({
                     <FormLabel>{t('projects:form.labels.tags')}</FormLabel>
                     <FormControl>
                       <TagSelector
-                        value={field.value || []}
+                        value={(field.value || []) as (string | import('@/components/ui/tag-chip').AssignedTag)[]}
                         onChange={field.onChange}
                         placeholder={t('projects:form.placeholders.selectTags')}
                         allowCreate={true}

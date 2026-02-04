@@ -21,7 +21,7 @@ import {
 import { Loader2, Plus, Trash2, GripVertical, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
-import { MatchingRule, SurvivorshipRule, MdmConfig } from '@/types/mdm';
+import { MatchingRule, SurvivorshipRule, MdmConfig, MatchRuleType, SurvivorshipStrategy } from '@/types/mdm';
 
 interface MatchingRulesEditorProps {
   isOpen: boolean;
@@ -77,7 +77,7 @@ export default function MatchingRulesEditor({
       ...matchingRules,
       {
         name: `rule_${matchingRules.length + 1}`,
-        type: 'deterministic',
+        type: MatchRuleType.DETERMINISTIC,
         fields: [],
         weight: 1.0,
         threshold: 0.8,
@@ -100,7 +100,7 @@ export default function MatchingRulesEditor({
       ...survivorshipRules,
       {
         field: '',
-        strategy: 'most_recent',
+        strategy: SurvivorshipStrategy.MOST_RECENT,
       },
     ]);
   };

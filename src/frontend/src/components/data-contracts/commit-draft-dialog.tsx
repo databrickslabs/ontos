@@ -32,7 +32,7 @@ export default function CommitDraftDialog({
   isOpen,
   onOpenChange,
   contractId,
-  contractName,
+  contractName: _contractName,
   onSuccess,
 }: CommitDraftDialogProps) {
   const { toast } = useToast()

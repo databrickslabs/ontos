@@ -12,7 +12,6 @@ import {
   getStatusConfig,
   validateTransition,
   getRecommendedAction,
-  type StatusConfig,
 } from '@/lib/odps-lifecycle';
 
 interface StatusTransitionDialogProps {

@@ -50,7 +50,7 @@ interface DataProductFormDialogProps {
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
-    response: { data?: T | { detail?: string }, error?: string },
+    response: { data?: T | { detail?: string }, error?: string | null },
     name: string
 ) => T;
 
@@ -172,8 +172,13 @@ const cleanEmptyOptionalStrings = (data: Record<string, any>): Record<string, an
 const createDefaultProduct = (): DataProduct => {
   // No need for timestamps here, they are added during submit or by backend
   return {
+    // Required ODPS fields
+    apiVersion: "v1.0.0",
+    kind: "DataProduct",
+    id: "", // Generated on submit
+    status: "draft",
+    // Optional fields
     dataProductSpecification: "0.0.1",
-    // id is generated on submit if needed
     info: { title: "", owner: "" },
     inputPorts: [],
     version: "1.0.0", // Default version
@@ -198,7 +203,7 @@ interface PortMetadataEditorProps {
 }
 
 const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
-  control, register, getValues, setValue, portIndex, portType
+  control: _control, register: _register, getValues, setValue, portIndex, portType
 }) => {
   const linksFieldName = `${portType}.${portIndex}.links` as const;
   const customFieldName = `${portType}.${portIndex}.custom` as const;
@@ -312,7 +317,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     onOpenChange, 
     initialProduct, 
     statuses, 
-    owners, // Use owners prop
+    owners: _owners, // Unused but kept for prop interface compatibility
     productTypes, // Add productTypes to destructuring
     api, 
     onSubmitSuccess 
@@ -344,7 +349,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   const [dataProductSchema, setDataProductSchema] = useState<object | null>(null);
   const [schemaValidator, setSchemaValidator] = useState<ValidateFunction | null>(null);
   const [validationStatusMessage, setValidationStatusMessage] = useState<string | null>(null);
-  const [isSchemaLoading, setIsSchemaLoading] = useState<boolean>(false);
+  const [_isSchemaLoading, setIsSchemaLoading] = useState<boolean>(false);
   const [schemaValidationErrors, setSchemaValidationErrors] = useState<ErrorObject[] | null>(null);
 
   const ajv = useRef<Ajv | null>(null);
@@ -355,10 +360,10 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     handleSubmit, 
     control, 
     reset, 
-    watch, 
+    watch: _watch, 
     getValues, // Get getValues and setValue from useForm
     setValue,
-    formState: { errors, isSubmitting, dirtyFields, isDirty } // Track dirty state
+    formState: { errors, isSubmitting, dirtyFields: _dirtyFields, isDirty } // Track dirty state
   } = useForm<DataProduct>({
     defaultValues: createDefaultProduct(), // Start with default
   });
@@ -1120,7 +1125,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                     onClick={() => appendInputPort({ 
                                         id: `input-${inputPortFields.length + 1}`,
                                         name: 'New Input Port',
-                                        sourceSystemId: '', // Required field
+                                        version: '1.0.0', // Required ODPS field
+                                        contractId: '', // Required ODPS field
+                                        sourceSystemId: '',
                                         type: 'table', 
                                         links: {}, custom: {}, tags: []
                                     })}
@@ -1190,8 +1197,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                   type="button" variant="outline" 
                                   onClick={() => appendOutputPort({ 
                                       id: `output-${outputPortFields.length + 1}`,
-                                      name: 'New Output Port', 
-                                      description: '', // Add description
+                                      name: 'New Output Port',
+                                      version: '1.0.0', // Required ODPS field
+                                      description: '',
                                       type: 'table', 
                                       links: {}, custom: {}, tags: [] 
                                    })}

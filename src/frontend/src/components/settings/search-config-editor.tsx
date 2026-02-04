@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import {
   AssetTypeConfig, 
   MatchType, 
   SortField,
-  DefaultsConfig,
+  // DefaultsConfig - unused
   RankingConfig,
 } from '@/types/settings';
 
@@ -147,7 +147,7 @@ function FieldConfigEditor({
 
 
 export default function SearchConfigEditor() {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t: _t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
   

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Check, ChevronsUpDown, Plus, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+// Input - unused
+// import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Command,
@@ -95,15 +96,13 @@ const TagSelector: React.FC<TagSelectorProps> = ({
     fetchTags();
   }, [open, get]);
 
-  // Get display value for a tag
-  const getTagDisplay = (tag: string | AssignedTag): string => {
-    if (typeof tag === 'string') {
-      return tag;
-    }
-    return tag.assigned_value ?
-      `${tag.fully_qualified_name}: ${tag.assigned_value}` :
-      tag.fully_qualified_name;
-  };
+  // Get display value for a tag (available for future features)
+  // const getTagDisplay = (tag: string | AssignedTag): string => {
+  //   if (typeof tag === 'string') return tag;
+  //   return tag.assigned_value ?
+  //     `${tag.fully_qualified_name}: ${tag.assigned_value}` :
+  //     tag.fully_qualified_name;
+  // };
 
   // Get tag key for comparison
   const getTagKey = (tag: string | AssignedTag): string => {

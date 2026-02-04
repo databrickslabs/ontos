@@ -94,8 +94,9 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
       });
 
       // Call success callback with product ID
-      if (onSuccess && response.id) {
-        onSuccess(response.id);
+      const productData = response.data as { id?: string };
+      if (onSuccess && productData?.id) {
+        onSuccess(productData.id);
       }
 
       // Reset form and close dialog

@@ -39,7 +39,7 @@ describe('DataDomainFormDialog', () => {
       name: 'Sales',
       description: 'Sales domain',
       owner: ['sales@example.com'],
-      tags: ['sales'],
+      tags: null, // Tags as null for testing (AssignedTag[] requires full objects)
       parent_id: null,
       created_at: '2024-01-01',
       updated_at: '2024-01-01',
@@ -49,7 +49,7 @@ describe('DataDomainFormDialog', () => {
       name: 'Marketing',
       description: 'Marketing domain',
       owner: ['marketing@example.com'],
-      tags: ['marketing'],
+      tags: null, // Tags as null for testing
       parent_id: null,
       created_at: '2024-01-01',
       updated_at: '2024-01-01',
@@ -105,7 +105,7 @@ describe('DataDomainFormDialog', () => {
         name: 'Engineering',
         description: 'Engineering domain',
         owner: ['eng@example.com'],
-        tags: ['engineering'],
+        tags: null, // Tags as null for testing
         parent_id: null,
         created_at: '2024-01-01',
         updated_at: '2024-01-01',
@@ -217,7 +217,7 @@ describe('DataDomainFormDialog', () => {
       name: 'Sales',
       description: 'Sales domain',
       owner: ['sales@example.com', 'sales-team@example.com'],
-      tags: ['sales', 'revenue'],
+      tags: null, // Tags as null for testing
       parent_id: null,
       created_at: '2024-01-01',
       updated_at: '2024-01-01',

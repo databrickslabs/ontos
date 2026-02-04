@@ -13,13 +13,14 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+// Select imports commented out - not currently used
+// import {
+//   Select,
+//   SelectContent,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -39,7 +40,7 @@ import {
   Check,
   X,
   Edit2,
-  RefreshCw,
+  // RefreshCw - unused
   Database,
   GitCompare,
   Loader2,
@@ -55,6 +56,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   MdmMatchCandidate,
   MdmMatchCandidateStatus,
+  MdmMatchType,
   SurvivorshipStrategy,
 } from '@/types/mdm';
 
@@ -283,7 +285,7 @@ export default function MdmMatchReview({
           description: response.error,
           variant: 'destructive',
         });
-        return;
+        return false;
       }
 
       toast({
@@ -420,8 +422,8 @@ export default function MdmMatchReview({
               <CardTitle className="text-lg">Match Review</CardTitle>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={candidate.match_type === 'match' ? 'default' : 'secondary'}>
-                {candidate.match_type === 'match' ? 'Match Found' : 'New Record'}
+              <Badge variant={candidate.match_type !== MdmMatchType.NEW ? 'default' : 'secondary'}>
+                {candidate.match_type !== MdmMatchType.NEW ? 'Match Found' : 'New Record'}
               </Badge>
               <Badge 
                 variant={

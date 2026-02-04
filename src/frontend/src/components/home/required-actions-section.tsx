@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, CheckSquare, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertCircle, CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Link } from 'react-router-dom';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
@@ -78,7 +78,7 @@ export default function RequiredActionsSection() {
       title: req.action_payload?.requester_email || 'Unknown user',
       subtitle: req.action_payload?.role_name || 'Unknown role',
       date: req.created_at,
-      payload: req.action_payload,
+      payload: req.action_payload ?? undefined,
     })),
     // Contracts
     ...approvals.contracts.map(c => ({

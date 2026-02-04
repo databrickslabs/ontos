@@ -19,7 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useSharedAssets, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
 
-export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'dataset';
+export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'dataset' | 'concept' | 'collection';
 
 interface Props {
   entityId: string;
@@ -33,7 +33,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
   const [richTexts, setRichTexts] = React.useState<RichTextItem[]>([]);
   const [links, setLinks] = React.useState<LinkItem[]>([]);
   const [documents, setDocuments] = React.useState<DocumentItem[]>([]);
-  const [attachments, setAttachments] = React.useState<MetadataAttachment[]>([]);
+  const [_attachments, setAttachments] = React.useState<MetadataAttachment[]>([]);
 
   const [addingNote, setAddingNote] = React.useState(false);
   const [noteTitle, setNoteTitle] = React.useState('');

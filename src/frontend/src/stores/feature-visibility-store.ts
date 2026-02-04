@@ -15,7 +15,7 @@ interface FeatureVisibilityState {
 
 export const useFeatureVisibilityStore = create<FeatureVisibilityState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       showBeta: true,
       showAlpha: true,
       // Compute allowedMaturities whenever state changes
@@ -51,7 +51,7 @@ export const useFeatureVisibilityStore = create<FeatureVisibilityState>()(
         showAlpha: state.showAlpha,
       }),
        // Recompute allowedMaturities after rehydration from storage
-        onRehydrateStorage: () => (state, error) => {
+        onRehydrateStorage: () => (state, _error) => {
             if (state) {
                  const maturities: FeatureMaturity[] = ['ga'];
                 if (state.showBeta) maturities.push('beta');

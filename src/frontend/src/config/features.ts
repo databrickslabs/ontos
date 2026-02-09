@@ -20,6 +20,7 @@ import {
     Package, // Icon for Data Products (matching marketplace)
     GitBranch, // Icon for Process Workflows
     BookOpen, // Icon for Data Catalog
+    Waypoints, // Icon for Graph Explorer
     type LucideIcon, // Import LucideIcon type
   } from 'lucide-react';
   
@@ -248,7 +249,7 @@ import {
       name: 'Graph Explorer',
       path: '/graph-explorer',
       description: 'Explore and edit property graphs stored in Databricks tables.',
-      icon: Network,
+      icon: Waypoints,
       group: 'Governance',
       maturity: 'alpha',
       showInLanding: true,

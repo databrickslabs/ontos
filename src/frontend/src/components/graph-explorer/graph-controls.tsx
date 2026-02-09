@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -53,6 +54,7 @@ export default function GraphControls({
   graphData,
   stats,
 }: GraphControlsProps) {
+  const { t } = useTranslation('graph-explorer');
   const nodeTypes = getUniqueNodeTypes(graphData);
   const relationshipTypes = getUniqueRelationshipTypes(graphData);
 
@@ -75,31 +77,31 @@ export default function GraphControls({
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Graph Controls</CardTitle>
+        <CardTitle>{t('controls.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Graph Statistics */}
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 p-3">
-            <div className="text-xs text-muted-foreground">Total Nodes</div>
+            <div className="text-xs text-muted-foreground">{t('controls.totalNodes')}</div>
             <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">
               {stats.totalNodes}
             </div>
           </div>
           <div className="rounded-lg bg-purple-50 dark:bg-purple-950/30 p-3">
-            <div className="text-xs text-muted-foreground">Total Edges</div>
+            <div className="text-xs text-muted-foreground">{t('controls.totalEdges')}</div>
             <div className="text-2xl font-bold text-purple-700 dark:text-purple-400">
               {stats.totalEdges}
             </div>
           </div>
           <div className="rounded-lg bg-green-50 dark:bg-green-950/30 p-3">
-            <div className="text-xs text-muted-foreground">New Nodes</div>
+            <div className="text-xs text-muted-foreground">{t('controls.newNodes')}</div>
             <div className="text-2xl font-bold text-green-700 dark:text-green-400">
               {stats.newNodes}
             </div>
           </div>
           <div className="rounded-lg bg-orange-50 dark:bg-orange-950/30 p-3">
-            <div className="text-xs text-muted-foreground">New Edges</div>
+            <div className="text-xs text-muted-foreground">{t('controls.newEdges')}</div>
             <div className="text-2xl font-bold text-orange-700 dark:text-orange-400">
               {stats.newEdges}
             </div>
@@ -113,7 +115,7 @@ export default function GraphControls({
           <div className="flex items-center justify-between">
             <Label htmlFor="show-proposed" className="flex items-center gap-2">
               <Eye className="h-4 w-4" />
-              Show Proposed
+              {t('controls.showProposed')}
             </Label>
             <Switch
               id="show-proposed"
@@ -124,7 +126,7 @@ export default function GraphControls({
           <div className="flex items-center justify-between">
             <Label htmlFor="show-node-labels" className="flex items-center gap-2">
               <Tag className="h-4 w-4" />
-              Node Labels
+              {t('controls.nodeLabels')}
             </Label>
             <Switch
               id="show-node-labels"
@@ -135,7 +137,7 @@ export default function GraphControls({
           <div className="flex items-center justify-between">
             <Label htmlFor="show-edge-labels" className="flex items-center gap-2">
               <Tag className="h-4 w-4" />
-              Edge Labels
+              {t('controls.edgeLabels')}
             </Label>
             <Switch
               id="show-edge-labels"
@@ -151,7 +153,7 @@ export default function GraphControls({
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="edge-length">Edge Length</Label>
+              <Label htmlFor="edge-length">{t('controls.edgeLength')}</Label>
               <span className="text-sm text-muted-foreground">{edgeLength}</span>
             </div>
             <input
@@ -171,7 +173,7 @@ export default function GraphControls({
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="node-size">Node Size</Label>
+              <Label htmlFor="node-size">{t('controls.nodeSize')}</Label>
               <span className="text-sm text-muted-foreground">{nodeSize}</span>
             </div>
             <input
@@ -195,7 +197,7 @@ export default function GraphControls({
 
         {/* Node Type Filter */}
         <div className="space-y-2">
-          <Label>Node Types</Label>
+          <Label>{t('controls.nodeTypes')}</Label>
           <ScrollArea className="h-32">
             <div className="flex flex-wrap gap-2">
               {nodeTypes.map((type) => {
@@ -233,7 +235,7 @@ export default function GraphControls({
 
         {/* Relationship Type Filter */}
         <div className="space-y-2">
-          <Label>Relationship Types</Label>
+          <Label>{t('controls.relationshipTypes')}</Label>
           <ScrollArea className="h-32">
             <div className="flex flex-wrap gap-2">
               {relationshipTypes.map((type) => {
@@ -271,7 +273,7 @@ export default function GraphControls({
 
         {/* Legend */}
         <div className="space-y-2">
-          <Label>Type Colors</Label>
+          <Label>{t('controls.typeColors')}</Label>
           <ScrollArea className="h-24">
             <div className="space-y-1.5">
               {nodeTypes.slice(0, 10).map((type) => {
@@ -288,7 +290,7 @@ export default function GraphControls({
               })}
               {nodeTypes.length > 10 && (
                 <div className="text-xs text-muted-foreground">
-                  +{nodeTypes.length - 10} more types
+                  {t('controls.moreTypes', { count: nodeTypes.length - 10 })}
                 </div>
               )}
             </div>
@@ -300,7 +302,7 @@ export default function GraphControls({
         {/* Reset View Button */}
         <Button onClick={onResetView} variant="outline" className="w-full">
           <RefreshCw className="mr-2 h-4 w-4" />
-          Reset View
+          {t('actions.resetView')}
         </Button>
       </CardContent>
     </Card>

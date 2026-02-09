@@ -78,5 +78,9 @@
   "about": {
     "name": "概要",
     "description": "アプリケーションと機能に関する情報。"
+  },
+  "graph-explorer": {
+    "name": "グラフエクスプローラー",
+    "description": "Databricks統合のビジュアルプロパティグラフエディター。"
   }
 }

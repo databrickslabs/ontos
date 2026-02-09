@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useGraphEditor } from '@/hooks/use-graph-editor';
 import type { GraphData, GraphNode, GraphEdge } from '@/types/graph-explorer';
@@ -18,6 +19,7 @@ const DEFAULT_TABLE = 'main.default.property_graph_entity_edges';
 const EMPTY_GRAPH_DATA: GraphData = { nodes: [], edges: [] };
 
 export default function GraphExplorerView() {
+  const { t } = useTranslation(['graph-explorer', 'common']);
   const { toast } = useToast();
   const graphRef = useRef<GraphVisualizationRef>(null);
 
@@ -97,10 +99,10 @@ export default function GraphExplorerView() {
       const data: GraphData = await response.json();
       resetToInitialData(data);
       setHasLoaded(true);
-      toast({ title: 'Graph loaded', description: `${data.nodes.length} nodes, ${data.edges.length} edges from ${tableName}` });
+      toast({ title: t('toast.graphLoaded'), description: t('toast.graphLoadedDescription', { nodeCount: data.nodes.length, edgeCount: data.edges.length, tableName }) });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      toast({ title: 'Error loading graph', description: message, variant: 'destructive' });
+      toast({ title: t('toast.errorLoading'), description: message, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -112,7 +114,7 @@ export default function GraphExplorerView() {
     const newEdges = editor.userCreatedEdges;
 
     if (newNodes.length === 0 && newEdges.length === 0) {
-      toast({ title: 'Nothing to save', description: 'No new nodes or edges to write.' });
+      toast({ title: t('toast.nothingToSave'), description: t('toast.nothingToSaveDescription') });
       return;
     }
 
@@ -150,12 +152,12 @@ export default function GraphExplorerView() {
         newEdges.map((e) => e.id),
       );
       toast({
-        title: 'Saved to Databricks',
-        description: `Wrote ${result.nodesWritten} nodes and ${result.edgesWritten} edges to ${tableName}`,
+        title: t('toast.savedToDatabricks'),
+        description: t('toast.savedDescription', { nodesWritten: result.nodesWritten, edgesWritten: result.edgesWritten, tableName }),
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      toast({ title: 'Error saving', description: message, variant: 'destructive' });
+      toast({ title: t('toast.errorSaving'), description: message, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -175,10 +177,10 @@ export default function GraphExplorerView() {
           throw new Error(err.detail || `HTTP ${response.status}`);
         }
         editorDeleteNode(nodeId);
-        toast({ title: 'Node deleted', description: `Removed node ${nodeId} from ${tableName}` });
+        toast({ title: t('toast.nodeDeleted'), description: t('toast.nodeDeletedDescription', { nodeId, tableName }) });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        toast({ title: 'Error deleting node', description: message, variant: 'destructive' });
+        toast({ title: t('toast.errorDeletingNode'), description: message, variant: 'destructive' });
       }
     },
     [tableName, editorDeleteNode, toast],
@@ -205,10 +207,10 @@ export default function GraphExplorerView() {
           throw new Error(err.detail || `HTTP ${response.status}`);
         }
         editorDeleteEdge(edgeId);
-        toast({ title: 'Edge deleted' });
+        toast({ title: t('toast.edgeDeleted') });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        toast({ title: 'Error deleting edge', description: message, variant: 'destructive' });
+        toast({ title: t('toast.errorDeletingEdge'), description: message, variant: 'destructive' });
       }
     },
     [tableName, editor.graphData.edges, editorDeleteEdge, toast],
@@ -302,13 +304,13 @@ export default function GraphExplorerView() {
           <div className="flex-1 space-y-1">
             <Label htmlFor="table-name" className="flex items-center gap-2 text-sm font-medium">
               <Database className="h-4 w-4" />
-              Databricks Table
+              {t('databricksTable')}
             </Label>
             <Input
               id="table-name"
               value={tableInput}
               onChange={(e) => setTableInput(e.target.value)}
-              placeholder="catalog.schema.table"
+              placeholder={t('placeholders.catalogSchemaTable')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleConnect();
               }}
@@ -316,11 +318,11 @@ export default function GraphExplorerView() {
           </div>
           <Button onClick={handleConnect} disabled={isLoading || !tableInput.trim()}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            {hasLoaded ? 'Reload' : 'Connect'}
+            {hasLoaded ? t('actions.reload') : t('actions.connect')}
           </Button>
           <Button onClick={handleSave} disabled={isSaving || !hasUnsaved} variant={hasUnsaved ? 'default' : 'outline'}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save ({editor.userCreatedNodes.length + editor.userCreatedEdges.length})
+            {t('actions.save')} ({editor.userCreatedNodes.length + editor.userCreatedEdges.length})
           </Button>
         </CardContent>
       </Card>
@@ -352,7 +354,7 @@ export default function GraphExplorerView() {
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
               <div className="text-center space-y-2">
                 <Database className="h-12 w-12 mx-auto opacity-50" />
-                <p>Enter a Databricks table name and click Connect to load graph data.</p>
+                <p>{t('emptyState.message')}</p>
               </div>
             </div>
           )}
@@ -406,11 +408,11 @@ export default function GraphExplorerView() {
           <CardContent className="flex items-center justify-between py-3">
             <span className="text-sm font-medium text-green-700 dark:text-green-400">
               {edgeCreateSourceId
-                ? `Click a target node to connect from "${edgeCreateSourceId}"`
-                : 'Click a source node to start creating an edge'}
+                ? t('edgeCreateMode.clickTarget', { sourceId: edgeCreateSourceId })
+                : t('edgeCreateMode.clickSource')}
             </span>
             <Button variant="outline" size="sm" onClick={cancelEdgeCreateMode}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
           </CardContent>
         </Card>

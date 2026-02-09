@@ -12,6 +12,7 @@ import type {
   ForceGraphLink,
 } from '@/types/graph-explorer';
 import { getColorForType, ChangeStatus } from '@/types/graph-explorer';
+import { useTranslation } from 'react-i18next';
 
 export interface GraphVisualizationProps {
   data: GraphData;
@@ -68,6 +69,32 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
     const [hoveredNode, setHoveredNode] = useState<ForceGraphNode | null>(null);
     const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Use refs for callbacks to avoid stale closures in react-force-graph-2d.
+    // The library may not synchronously update event handlers when props change,
+    // so we always call through refs that hold the latest callbacks.
+    const onNodeClickRef = useRef(onNodeClick);
+    onNodeClickRef.current = onNodeClick;
+    const onEdgeClickRef = useRef(onEdgeClick);
+    onEdgeClickRef.current = onEdgeClick;
+
+    // Stable refs for rendering params that change frequently
+    const selectedNodeIdRef = useRef(selectedNodeId);
+    selectedNodeIdRef.current = selectedNodeId;
+    const edgeCreateModeRef = useRef(edgeCreateMode);
+    edgeCreateModeRef.current = edgeCreateMode;
+    const edgeCreateSourceIdRef = useRef(edgeCreateSourceId);
+    edgeCreateSourceIdRef.current = edgeCreateSourceId;
+    const hoveredNodeRef = useRef(hoveredNode);
+    hoveredNodeRef.current = hoveredNode;
+    const showNodeLabelsRef = useRef(showNodeLabels);
+    showNodeLabelsRef.current = showNodeLabels;
+    const showEdgeLabelsRef = useRef(showEdgeLabels);
+    showEdgeLabelsRef.current = showEdgeLabels;
+    const nodeSizeRef = useRef(nodeSize);
+    nodeSizeRef.current = nodeSize;
+
+    const { t } = useTranslation('graph-explorer');
 
     // Detect dark mode
     const isDarkMode = document.documentElement.classList.contains('dark');
@@ -189,24 +216,25 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
       }
     }, [forceGraphData.nodes.length]);
 
-    // Handle node click
+    // Handle node click — uses ref to always call the latest callback,
+    // preventing stale closure issues when edge-create mode changes.
     const handleNodeClick = useCallback(
       (node: ForceGraphNode) => {
-        if (onNodeClick) {
-          onNodeClick(node.id);
+        if (onNodeClickRef.current) {
+          onNodeClickRef.current(node.id);
         }
       },
-      [onNodeClick]
+      [] // eslint-disable-line react-hooks/exhaustive-deps -- intentionally stable via ref
     );
 
-    // Handle edge click
+    // Handle edge click — same ref pattern
     const handleLinkClick = useCallback(
       (link: ForceGraphLink) => {
-        if (onEdgeClick) {
-          onEdgeClick(link.id);
+        if (onEdgeClickRef.current) {
+          onEdgeClickRef.current(link.id);
         }
       },
-      [onEdgeClick]
+      [] // eslint-disable-line react-hooks/exhaustive-deps -- intentionally stable via ref
     );
 
     // Handle node drag end - save position
@@ -255,55 +283,82 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
       }
     }, [handleMouseMove]);
 
-    // Custom node renderer
+    // Custom node renderer — reads interactive state from refs to prevent
+    // stale closure issues and unnecessary re-creation of this callback.
+    // Node fill color always reflects its type; interactive states are shown
+    // via a surrounding ring so the type color is never lost.
     const nodeCanvasObject = useCallback(
       (node: ForceGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
-        const isSelected = selectedNodeId === node.id;
-        const isHovered = hoveredNode?.id === node.id;
-        const isEdgeCreateSource = edgeCreateMode && edgeCreateSourceId === node.id;
+        const curSelectedNodeId = selectedNodeIdRef.current;
+        const curHoveredNode = hoveredNodeRef.current;
+        const curEdgeCreateMode = edgeCreateModeRef.current;
+        const curEdgeCreateSourceId = edgeCreateSourceIdRef.current;
+        const curNodeSize = nodeSizeRef.current;
+        const curShowNodeLabels = showNodeLabelsRef.current;
+
+        const isSelected = curSelectedNodeId === node.id;
+        const isHovered = curHoveredNode?.id === node.id;
+        const isEdgeCreateSource = curEdgeCreateMode && curEdgeCreateSourceId === node.id;
         const isNew = node.status === ChangeStatus.NEW;
 
-        // Determine node color
-        let nodeColor = node.color || getColorForType(node.type, isDarkMode);
-        if (isSelected) {
-          nodeColor = '#a855f7'; // purple-500
-        } else if (isHovered) {
-          nodeColor = '#3b82f6'; // blue-500
-        } else if (isEdgeCreateSource) {
-          nodeColor = '#22c55e'; // green-500
-        } else if (isNew) {
-          nodeColor = '#22c55e'; // green-500
-        }
+        // Always use the type-based fill color
+        const typeColor = node.color || getColorForType(node.type, isDarkMode);
 
-        // Draw node circle
-        ctx.fillStyle = nodeColor;
-        ctx.beginPath();
-        ctx.arc(node.x!, node.y!, nodeSize, 0, 2 * Math.PI);
-        ctx.fill();
+        const x = node.x ?? 0;
+        const y = node.y ?? 0;
 
-        // Draw border for selected/hovered nodes
+        // Draw outer ring for interactive states (drawn first, behind the node)
         if (isSelected || isHovered || isEdgeCreateSource) {
-          ctx.strokeStyle = nodeColor;
+          const ringColor = isSelected
+            ? '#a855f7'  // purple-500 for selection
+            : isEdgeCreateSource
+              ? '#22c55e'  // green-500 for edge source
+              : '#3b82f6'; // blue-500 for hover
+          ctx.fillStyle = `${ringColor}30`; // translucent glow
+          ctx.beginPath();
+          ctx.arc(x, y, curNodeSize + 5, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.strokeStyle = ringColor;
           ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, curNodeSize + 3, 0, 2 * Math.PI);
           ctx.stroke();
         }
 
+        // Draw dashed ring for new (unsaved) nodes
+        if (isNew && !isSelected && !isHovered && !isEdgeCreateSource) {
+          ctx.strokeStyle = '#22c55e'; // green-500
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.arc(x, y, curNodeSize + 3, 0, 2 * Math.PI);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Draw node circle — always uses the type color
+        ctx.fillStyle = typeColor;
+        ctx.beginPath();
+        ctx.arc(x, y, curNodeSize, 0, 2 * Math.PI);
+        ctx.fill();
+
         // Draw label if enabled
-        if (showNodeLabels && globalScale > 0.5) {
+        if (curShowNodeLabels && globalScale > 0.5) {
           ctx.fillStyle = isDarkMode ? '#e2e8f0' : '#1e293b';
           ctx.font = `${12 / globalScale}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(node.name, node.x!, node.y! + nodeSize + 12 / globalScale);
+          ctx.fillText(node.name, x, y + curNodeSize + 12 / globalScale);
         }
       },
-      [selectedNodeId, hoveredNode, edgeCreateMode, edgeCreateSourceId, showNodeLabels, nodeSize, isDarkMode]
+      [isDarkMode] // Only depends on dark mode; interactive state read from refs
     );
 
-    // Custom link renderer
+    // Custom link renderer — reads showEdgeLabels from ref for stability.
+    // Uses `== null` instead of falsy checks to correctly handle 0 coordinates.
     const linkCanvasObject = useCallback(
       (link: ForceGraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
-        // Handle both string IDs and node objects
+        // Handle both string IDs and node objects (d3-force replaces IDs with objects)
         const sourceNode =
           typeof link.source === 'string'
             ? forceGraphData.nodes.find((n) => n.id === link.source)
@@ -313,7 +368,9 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
             ? forceGraphData.nodes.find((n) => n.id === link.target)
             : (link.target as ForceGraphNode);
 
-        if (!sourceNode || !targetNode || !sourceNode.x || !sourceNode.y || !targetNode.x || !targetNode.y) return;
+        if (!sourceNode || !targetNode) return;
+        // Use == null to allow 0 coordinates (which are valid positions)
+        if (sourceNode.x == null || sourceNode.y == null || targetNode.x == null || targetNode.y == null) return;
 
         const isNew = link.status === ChangeStatus.NEW;
         const linkColor = isNew ? '#22c55e' : link.color || (isDarkMode ? '#64748b' : '#94a3b8');
@@ -326,7 +383,8 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
         ctx.stroke();
 
         // Draw label if enabled
-        if (showEdgeLabels && globalScale > 0.5) {
+        const curShowEdgeLabels = showEdgeLabelsRef.current;
+        if (curShowEdgeLabels && globalScale > 0.5) {
           const midX = (sourceNode.x + targetNode.x) / 2;
           const midY = (sourceNode.y + targetNode.y) / 2;
 
@@ -337,7 +395,7 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
           ctx.fillText(link.relationshipType, midX, midY);
         }
       },
-      [showEdgeLabels, isDarkMode, forceGraphData.nodes]
+      [isDarkMode, forceGraphData.nodes]
     );
 
     // Configure d3 forces via effect on graph ref
@@ -413,7 +471,7 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Zoom In</p>
+                <p>{t('tooltip.zoomIn')}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -435,7 +493,7 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Zoom Out</p>
+                <p>{t('tooltip.zoomOut')}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -455,7 +513,7 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
             </CardHeader>
             <CardContent className="space-y-2 text-xs">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Type:</span>
+                <span className="font-medium">{t('tooltip.type')}:</span>
                 <span
                   className="rounded px-2 py-0.5 text-xs font-medium"
                   style={{
@@ -467,7 +525,7 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-medium">Status:</span>
+                <span className="font-medium">{t('tooltip.status')}:</span>
                 <span
                   className={cn(
                     'rounded px-2 py-0.5 text-xs font-medium',
@@ -481,7 +539,7 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
               </div>
               {Object.keys(hoveredNode.properties).length > 0 && (
                 <div className="mt-2 space-y-1">
-                  <span className="font-medium">Properties:</span>
+                  <span className="font-medium">{t('tooltip.properties')}:</span>
                   <div className="ml-2 space-y-0.5">
                     {Object.entries(hoveredNode.properties).map(([key, value]) => (
                       <div key={key} className="text-xs">

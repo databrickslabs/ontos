@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ export default function NodeSearch({
   onNodeSelect,
   disabled = false,
 }: NodeSearchProps) {
+  const { t } = useTranslation('graph-explorer');
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +143,7 @@ export default function NodeSearch({
         <Input
           ref={inputRef}
           type="text"
-          placeholder="Search nodes by label, type, or properties..."
+          placeholder={t('placeholders.searchNodes')}
           value={query}
           onChange={handleInputChange}
           onFocus={handleFocus}

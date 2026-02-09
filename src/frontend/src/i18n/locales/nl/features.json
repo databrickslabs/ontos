@@ -78,6 +78,10 @@
   "about": {
     "name": "Over",
     "description": "Informatie over de applicatie en zijn functies."
+  },
+  "graph-explorer": {
+    "name": "Graafverkenner",
+    "description": "Visuele property graph-editor met Databricks-integratie."
   }
 }
 

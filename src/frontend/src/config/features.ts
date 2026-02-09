@@ -250,7 +250,7 @@ import {
       path: '/graph-explorer',
       description: 'Explore and edit property graphs stored in Databricks tables.',
       icon: Waypoints,
-      group: 'Governance',
+      group: 'Operations',
       maturity: 'alpha',
       showInLanding: true,
     },

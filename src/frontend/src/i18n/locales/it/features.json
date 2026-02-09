@@ -78,5 +78,9 @@
   "about": {
     "name": "Informazioni",
     "description": "Informazioni sull'applicazione e le sue funzionalità."
+  },
+  "graph-explorer": {
+    "name": "Esploratrice di grafi",
+    "description": "Editor visuale di grafi di proprietà con integrazione Databricks."
   }
 }

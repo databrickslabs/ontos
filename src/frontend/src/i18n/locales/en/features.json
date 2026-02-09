@@ -78,5 +78,9 @@
   "about": {
     "name": "About",
     "description": "Information about the application and its features."
+  },
+  "graph-explorer": {
+    "name": "Graph Explorer",
+    "description": "Visual property graph editor with Databricks integration."
   }
 }

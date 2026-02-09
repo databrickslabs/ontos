@@ -1,38 +1,35 @@
 import os
-import uuid
-import time
 import threading
+import time
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TypeVar
-
-from sqlalchemy import create_engine, text, event
-from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import pool
-from sqlalchemy.engine import Connection, URL
+from typing import Any, TypeVar
 
 from alembic.config import Config as AlembicConfig
-from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
-from alembic import command as alembic_command
+from alembic.script import ScriptDirectory
 
-from .config import get_settings, Settings
-from .logging import get_logger
-from src.common.workspace_client import get_workspace_client
+# Import SDK components
+from sqlalchemy import create_engine, event, pool, text
+from sqlalchemy.engine import URL, Connection
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
 from src.common.unity_catalog_utils import (
     ensure_catalog_exists,
     ensure_schema_exists,
     sanitize_postgres_identifier,
 )
-# Import SDK components
-from databricks.sdk.errors import NotFound, DatabricksError
-from databricks.sdk.core import Config, oauth_service_principal
+from src.common.workspace_client import get_workspace_client
+
+from .config import Settings, get_settings
+from .logging import get_logger
 
 logger = get_logger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # Define the base class for SQLAlchemy models
 Base = declarative_base()
@@ -41,40 +38,52 @@ Base = declarative_base()
 # This ensures Base.metadata is populated before init_db needs it.
 logger.debug("Importing all DB model modules to register with Base...")
 try:
-    from src.db_models import settings as settings_db
-    from src.db_models import audit_log
-    from src.db_models import data_asset_reviews
-    from src.db_models import data_products
-    from src.db_models import notifications
-    from src.db_models import data_domains
-    from src.db_models import semantic_links
-    from src.db_models import metadata as metadata_db
-    from src.db_models import semantic_models
-    from src.db_models import comments
-    from src.db_models import costs
-    from src.db_models import change_log
     # Add missing model imports for Alembic
-    from src.db_models import data_contracts
-    from src.db_models import workflow_configurations
-    from src.db_models import workflow_installations
-    from src.db_models import workflow_job_runs
-    from src.db_models import compliance
-    from src.db_models import projects
-    from src.db_models import teams
-    from src.db_models import mdm  # MDM models for master data management
-    # from src.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb  # Already imported via module import above
-    from src.db_models.settings import AppRoleDb
+    from src.db_models import (
+        audit_log,
+        change_log,
+        comments,
+        compliance,
+        costs,
+        data_asset_reviews,
+        data_contracts,
+        data_domains,
+        data_products,
+        mdm,  # MDM models for master data management
+        notifications,
+        projects,
+        semantic_links,
+        semantic_models,
+        teams,
+        workflow_configurations,
+        workflow_installations,
+        workflow_job_runs,
+    )
+    from src.db_models import metadata as metadata_db
+    from src.db_models import settings as settings_db
+
     # from src.db_models.users import UserActivityDb, UserSearchHistoryDb # Commented out due to missing file
     from src.db_models.audit_log import AuditLogDb
     from src.db_models.notifications import NotificationDb
+
+    # from src.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb  # Already imported via module import above
+    from src.db_models.settings import AppRoleDb
+
     # from src.db_models.business_glossary import GlossaryDb, TermDb, CategoryDb, term_category_association, term_related_terms, term_asset_association # Commented out due to missing file
     # Add new tag models
-    from src.db_models.tags import TagDb, TagNamespaceDb, TagNamespacePermissionDb, EntityTagAssociationDb
+    from src.db_models.tags import (
+        EntityTagAssociationDb,
+        TagDb,
+        TagNamespaceDb,
+        TagNamespacePermissionDb,
+    )
+
     # Add imports for any other future model modules here
     logger.debug("DB model modules imported successfully.")
 except ImportError as e:
     logger.critical(
-        f"Failed to import a DB model module during initial registration: {e}", exc_info=True)
+        f"Failed to import a DB model module during initial registration: {e}", exc_info=True
+    )
     # This is likely a fatal error, consider raising or exiting
     raise
 # ------------------------------------------------------------------------- #
@@ -86,20 +95,20 @@ _SessionLocal = None
 engine = None
 
 # OAuth token state for Lakebase connections
-_oauth_token: Optional[str] = None
+_oauth_token: str | None = None
 _token_last_refresh: float = 0
 _token_refresh_lock = threading.Lock()
-_token_refresh_thread: Optional[threading.Thread] = None
+_token_refresh_thread: threading.Thread | None = None
 _token_refresh_stop_event = threading.Event()
 
 
-def get_lakebase_instance_name(app_name: str, ws_client) -> Optional[str]:
+def get_lakebase_instance_name(app_name: str, ws_client) -> str | None:
     """Get the Lakebase instance name from the Databricks App resources.
-    
+
     Args:
         app_name: Name of the Databricks App
         ws_client: Workspace client instance
-        
+
     Returns:
         The database instance name, or None if not found
     """
@@ -117,7 +126,8 @@ def get_lakebase_instance_name(app_name: str, ws_client) -> Optional[str]:
 @dataclass
 class InMemorySession:
     """In-memory session for managing transactions."""
-    changes: List[Dict[str, Any]]
+
+    changes: list[dict[str, Any]]
 
     def __init__(self):
         self.changes = []
@@ -135,10 +145,10 @@ class InMemoryStore:
 
     def __init__(self):
         """Initialize the in-memory store."""
-        self._data: Dict[str, List[Dict[str, Any]]] = {}
-        self._metadata: Dict[str, Dict[str, Any]] = {}
+        self._data: dict[str, list[dict[str, Any]]] = {}
+        self._metadata: dict[str, dict[str, Any]] = {}
 
-    def create_table(self, table_name: str, metadata: Dict[str, Any] = None) -> None:
+    def create_table(self, table_name: str, metadata: dict[str, Any] = None) -> None:
         """Create a new table in the store.
 
         Args:
@@ -150,7 +160,7 @@ class InMemoryStore:
             if metadata:
                 self._metadata[table_name] = metadata
 
-    def insert(self, table_name: str, data: Dict[str, Any]) -> None:
+    def insert(self, table_name: str, data: dict[str, Any]) -> None:
         """Insert a record into a table.
 
         Args:
@@ -161,16 +171,16 @@ class InMemoryStore:
             self.create_table(table_name)
 
         # Add timestamp and id if not present
-        if 'id' not in data:
-            data['id'] = str(len(self._data[table_name]) + 1)
-        if 'created_at' not in data:
-            data['created_at'] = datetime.utcnow().isoformat()
-        if 'updated_at' not in data:
-            data['updated_at'] = data['created_at']
+        if "id" not in data:
+            data["id"] = str(len(self._data[table_name]) + 1)
+        if "created_at" not in data:
+            data["created_at"] = datetime.utcnow().isoformat()
+        if "updated_at" not in data:
+            data["updated_at"] = data["created_at"]
 
         self._data[table_name].append(data)
 
-    def get(self, table_name: str, id: str) -> Optional[Dict[str, Any]]:
+    def get(self, table_name: str, id: str) -> dict[str, Any] | None:
         """Get a record by ID.
 
         Args:
@@ -182,9 +192,9 @@ class InMemoryStore:
         """
         if table_name not in self._data:
             return None
-        return next((item for item in self._data[table_name] if item['id'] == id), None)
+        return next((item for item in self._data[table_name] if item["id"] == id), None)
 
-    def get_all(self, table_name: str) -> List[Dict[str, Any]]:
+    def get_all(self, table_name: str) -> list[dict[str, Any]]:
         """Get all records from a table.
 
         Args:
@@ -195,7 +205,7 @@ class InMemoryStore:
         """
         return self._data.get(table_name, [])
 
-    def update(self, table_name: str, id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update(self, table_name: str, id: str, data: dict[str, Any]) -> dict[str, Any] | None:
         """Update a record.
 
         Args:
@@ -210,9 +220,9 @@ class InMemoryStore:
             return None
 
         for item in self._data[table_name]:
-            if item['id'] == id:
+            if item["id"] == id:
                 item.update(data)
-                item['updated_at'] = datetime.utcnow().isoformat()
+                item["updated_at"] = datetime.utcnow().isoformat()
                 return item
         return None
 
@@ -230,8 +240,7 @@ class InMemoryStore:
             return False
 
         initial_length = len(self._data[table_name])
-        self._data[table_name] = [
-            item for item in self._data[table_name] if item['id'] != id]
+        self._data[table_name] = [item for item in self._data[table_name] if item["id"] != id]
         return len(self._data[table_name]) < initial_length
 
     def clear(self, table_name: str) -> None:
@@ -276,37 +285,39 @@ class DatabaseManager:
 
 
 # Global database manager instance
-db_manager: Optional[DatabaseManager] = None
+db_manager: DatabaseManager | None = None
 
 
 def refresh_oauth_token(settings: Settings) -> str:
     """Generate fresh OAuth token from Databricks for Lakebase connection."""
     global _oauth_token, _token_last_refresh
-    
+
     with _token_refresh_lock:
         ws_client = get_workspace_client(settings)
         instance_name = get_lakebase_instance_name(settings.DATABRICKS_APP_NAME, ws_client)
-        
+
         if not instance_name:
-            raise ValueError(f"Could not determine Lakebase instance name for app '{settings.DATABRICKS_APP_NAME}'")
-        
+            raise ValueError(
+                f"Could not determine Lakebase instance name for app '{settings.DATABRICKS_APP_NAME}'"
+            )
+
         logger.info(f"Generating OAuth token for Lakebase instance: {instance_name}")
         cred = ws_client.database.generate_database_credential(
             request_id=str(uuid.uuid4()),
             instance_names=[instance_name],
         )
-        
+
         _oauth_token = cred.token
         _token_last_refresh = time.time()
         logger.info("OAuth token refreshed successfully")
-        
+
         return _oauth_token
 
 
 def start_token_refresh_background(settings: Settings):
     """Start background thread to refresh OAuth tokens every 50 minutes."""
     global _token_refresh_thread, _token_refresh_stop_event
-    
+
     def refresh_loop():
         while not _token_refresh_stop_event.is_set():
             _token_refresh_stop_event.wait(50 * 60)  # 50 minutes
@@ -315,7 +326,7 @@ def start_token_refresh_background(settings: Settings):
                     refresh_oauth_token(settings)
                 except Exception as e:
                     logger.error(f"Background token refresh failed: {e}", exc_info=True)
-    
+
     _token_refresh_stop_event.clear()
     _token_refresh_thread = threading.Thread(target=refresh_loop, daemon=True)
     _token_refresh_thread.start()
@@ -333,14 +344,16 @@ def stop_token_refresh_background():
 
 def get_db_url(settings: Settings) -> str:
     """Construct the PostgreSQL SQLAlchemy URL with appropriate auth method."""
-    
+
     # Validate required settings
     if not all([settings.PGHOST, settings.PGDATABASE]):
-        raise ValueError("PostgreSQL connection details (PGHOST, PGDATABASE) are missing in settings.")
-    
+        raise ValueError(
+            "PostgreSQL connection details (PGHOST, PGDATABASE) are missing in settings."
+        )
+
     # Determine authentication mode based on ENV
     use_password_auth = settings.ENV.upper().startswith("LOCAL")
-    
+
     if use_password_auth:
         logger.info("Database: Using password authentication (LOCAL mode)")
         if not settings.PGPASSWORD or not settings.PGUSER:
@@ -351,20 +364,17 @@ def get_db_url(settings: Settings) -> str:
         logger.info("Database: Using OAuth authentication (Lakebase mode)")
         # Dynamically determine username from authenticated principal
         ws_client = get_workspace_client(settings)
-        username = (
-            os.getenv("DATABRICKS_CLIENT_ID")
-            or ws_client.current_user.me().user_name
-        )
+        username = os.getenv("DATABRICKS_CLIENT_ID") or ws_client.current_user.me().user_name
         if not username:
             raise ValueError("Could not determine database username from authenticated principal")
-        
+
         logger.info(f"🔑 Detected service principal username: {username}")
         password = ""  # Will be set via event handler
-    
+
     # Build URL with schema options and statement timeout
     query_params = {}
     options_list = []
-    
+
     # Add schema to search_path if specified
     if settings.PGSCHEMA:
         # Validate schema name for connection options to prevent injection
@@ -379,15 +389,15 @@ def get_db_url(settings: Settings) -> str:
         logger.info(f"PostgreSQL schema will be set via options: {validated_schema}")
     else:
         logger.info("No specific PostgreSQL schema configured, using default (public).")
-    
+
     # Add statement timeout to prevent indefinite locks (30 seconds)
     # This helps prevent stuck transactions when operations fail
     options_list.append("-cstatement_timeout=30000")
     logger.info("PostgreSQL statement timeout set to 30 seconds")
-    
+
     if options_list:
         query_params["options"] = " ".join(options_list)
-    
+
     db_url_obj = URL.create(
         drivername="postgresql+psycopg2",
         username=username,
@@ -395,7 +405,7 @@ def get_db_url(settings: Settings) -> str:
         host=settings.PGHOST,
         port=settings.PGPORT,
         database=settings.PGDATABASE,
-        query=query_params if query_params else None
+        query=query_params if query_params else None,
     )
     url_str = db_url_obj.render_as_string(hide_password=False)
     logger.debug(
@@ -409,52 +419,53 @@ def ensure_database_and_schema_exist(settings: Settings):
     """
     Ensure the target database and schema exist. If not, create them.
     Works in both LOCAL and OAuth modes (authentication differs but logic is unified).
-    
+
     If APP_DB_DROP_ON_START=true, drops the schema CASCADE before creating it.
     Connects to default postgres database to create target database (OAuth mode only),
     then creates schema within it.
-    
+
     The app (as service principal) becomes the owner of what it creates in OAuth mode,
     eliminating permission issues.
-    
+
     Security: All PostgreSQL identifiers are validated to prevent SQL injection.
     """
     is_local_mode = settings.ENV.upper().startswith("LOCAL")
-    
-    logger.info(f"Ensuring database and schema exist ({'LOCAL' if is_local_mode else 'OAuth'} mode)...")
-    
+
+    logger.info(
+        f"Ensuring database and schema exist ({'LOCAL' if is_local_mode else 'OAuth'} mode)..."
+    )
+
     # Determine username based on mode
     if is_local_mode:
         username = settings.PGUSER
     else:
         # Get service principal username for OAuth mode
         ws_client = get_workspace_client(settings)
-        username = (
-            os.getenv("DATABRICKS_CLIENT_ID")
-            or ws_client.current_user.me().user_name
-        )
-    
+        username = os.getenv("DATABRICKS_CLIENT_ID") or ws_client.current_user.me().user_name
+
     if not username:
         raise ValueError("Could not determine username/service principal")
-    
+
     # Validate all PostgreSQL identifiers to prevent SQL injection
     try:
         target_db = sanitize_postgres_identifier(settings.PGDATABASE)
-        target_schema = sanitize_postgres_identifier(settings.PGSCHEMA) if settings.PGSCHEMA else None
+        target_schema = (
+            sanitize_postgres_identifier(settings.PGSCHEMA) if settings.PGSCHEMA else None
+        )
         username = sanitize_postgres_identifier(username)
     except ValueError as e:
         raise ValueError(
             f"Invalid PostgreSQL identifier in configuration: {e}. "
             "Please check PGDATABASE, PGSCHEMA, and username."
         ) from e
-    
+
     logger.info(f"Username: {username}")
     logger.debug(f"Target database: {target_db}, schema: {target_schema}")
-    
+
     # Generate initial OAuth token for OAuth mode
     if not is_local_mode:
         refresh_oauth_token(settings)
-    
+
     # Build connection URL
     # In OAuth mode, connect directly to the target database (must be pre-created)
     # In LOCAL mode, connect to the target database (should already exist)
@@ -466,24 +477,25 @@ def ensure_database_and_schema_exist(settings: Settings):
         port=settings.PGPORT,
         database=target_db,
     )
-    
+
     # Create temporary engine for schema setup
     temp_engine = create_engine(
         connection_url.render_as_string(hide_password=False),
-        isolation_level="AUTOCOMMIT"  # Needed for CREATE SCHEMA
+        isolation_level="AUTOCOMMIT",  # Needed for CREATE SCHEMA
     )
-    
+
     # Inject OAuth token for connections in OAuth mode
     if not is_local_mode:
+
         @event.listens_for(temp_engine, "do_connect")
         def inject_token_temp(dialect, conn_rec, cargs, cparams):
             global _oauth_token
             if _oauth_token:
                 cparams["password"] = _oauth_token
-    
+
     try:
         # In OAuth mode, verify we can connect to the target database
-        # The database must be pre-created by an admin with: 
+        # The database must be pre-created by an admin with:
         #   CREATE DATABASE "app_ontos"; GRANT CREATE ON DATABASE "app_ontos" TO PUBLIC;
         if not is_local_mode:
             try:
@@ -504,22 +516,26 @@ def ensure_database_and_schema_exist(settings: Settings):
                         f"See the README for detailed setup instructions."
                     ) from e
                 raise
-        
+
         # Now handle schema (works for both LOCAL and OAuth modes)
         with temp_engine.connect() as conn:
             if target_schema and target_schema != "public":
                 # Handle APP_DB_DROP_ON_START: Drop schema CASCADE before creating
                 if settings.APP_DB_DROP_ON_START:
-                    logger.warning(f"APP_DB_DROP_ON_START=true: Dropping schema '{target_schema}' CASCADE...")
+                    logger.warning(
+                        f"APP_DB_DROP_ON_START=true: Dropping schema '{target_schema}' CASCADE..."
+                    )
                     # DROP SCHEMA cannot be parameterized, but identifier is validated
                     conn.execute(text(f'DROP SCHEMA IF EXISTS "{target_schema}" CASCADE'))
                     conn.commit()
-                    logger.warning(f"✓ Schema '{target_schema}' dropped CASCADE. Will be recreated.")
-                    
+                    logger.warning(
+                        f"✓ Schema '{target_schema}' dropped CASCADE. Will be recreated."
+                    )
+
                     # Explicitly drop application enum types from public schema
                     # These are often created in public and not dropped with CASCADE on a specific schema
                     logger.info("Dropping application enum types from public schema...")
-                    enum_types = ['commentstatus', 'commenttype', 'accesslevel']
+                    enum_types = ["commentstatus", "commenttype", "accesslevel"]
                     for enum_type in enum_types:
                         try:
                             conn.execute(text(f'DROP TYPE IF EXISTS "{enum_type}" CASCADE'))
@@ -527,47 +543,53 @@ def ensure_database_and_schema_exist(settings: Settings):
                             logger.warning(f"Could not drop enum type '{enum_type}': {e}")
                     conn.commit()
                     logger.info("✓ Enum types cleanup completed.")
-                
+
                 # Check if schema exists (using parameterized query)
                 result = conn.execute(
-                    text("SELECT 1 FROM information_schema.schemata WHERE schema_name = :schemaname"),
-                    {"schemaname": target_schema}
+                    text(
+                        "SELECT 1 FROM information_schema.schemata WHERE schema_name = :schemaname"
+                    ),
+                    {"schemaname": target_schema},
                 )
                 schema_exists = result.scalar() is not None
-                
+
                 if not schema_exists:
                     logger.info(f"Creating schema: {target_schema}")
                     # CREATE SCHEMA cannot be parameterized, but identifier is validated
                     conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
                     logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
-                    
+
                     # Set default privileges for future objects (OAuth mode only)
                     if not is_local_mode:
                         # ALTER statements cannot be parameterized, but identifiers are validated
                         logger.info(f"Setting default privileges in schema: {target_schema}")
-                        conn.execute(text(
-                            f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
-                            f'GRANT ALL ON TABLES TO "{username}"'
-                        ))
-                        conn.execute(text(
-                            f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
-                            f'GRANT ALL ON SEQUENCES TO "{username}"'
-                        ))
-                        logger.info(f"✓ Default privileges configured")
-                    
+                        conn.execute(
+                            text(
+                                f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
+                                f'GRANT ALL ON TABLES TO "{username}"'
+                            )
+                        )
+                        conn.execute(
+                            text(
+                                f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
+                                f'GRANT ALL ON SEQUENCES TO "{username}"'
+                            )
+                        )
+                        logger.info("✓ Default privileges configured")
+
                     conn.commit()
                 else:
                     logger.info(f"✓ Schema already exists: {target_schema}")
             else:
-                logger.info(f"Using public schema (no custom schema specified)")
-        
+                logger.info("Using public schema (no custom schema specified)")
+
     except Exception as e:
         if "permission denied" in str(e).lower():
             logger.error(
                 f"❌ Permission denied - check database/schema privileges for user '{username}'"
             )
             if not is_local_mode:
-                logger.error(f"To fix this, run as a Lakebase admin:")
+                logger.error("To fix this, run as a Lakebase admin:")
                 logger.error(f'  DROP DATABASE IF EXISTS "{target_db}";')
                 logger.error(f'  CREATE DATABASE "{target_db}";')
                 logger.error(f'  GRANT CREATE ON DATABASE "{target_db}" TO "{username}";')
@@ -575,13 +597,13 @@ def ensure_database_and_schema_exist(settings: Settings):
         raise
     finally:
         temp_engine.dispose()
-    
+
     logger.info("✓ Database and schema are ready")
 
 
 def ensure_catalog_schema_exists(settings: Settings):
     """Checks if the configured catalog and schema exist, creates them if not.
-    
+
     Uses shared Unity Catalog utilities for secure, idempotent catalog/schema creation.
     """
     logger.info("Ensuring required catalog and schema exist...")
@@ -600,18 +622,15 @@ def ensure_catalog_schema_exists(settings: Settings):
             ensure_catalog_exists(
                 ws=ws_client,
                 catalog_name=catalog_name,
-                comment=f"System catalog for {settings.APP_NAME}"
+                comment=f"System catalog for {settings.APP_NAME}",
             )
             logger.info(f"Catalog '{catalog_name}' is ready.")
         except Exception as e:
             # Map HTTPException or other errors to ConnectionError for consistency
             logger.critical(
-                f"Failed to ensure catalog '{catalog_name}': {e}. Check permissions.", 
-                exc_info=True
+                f"Failed to ensure catalog '{catalog_name}': {e}. Check permissions.", exc_info=True
             )
-            raise ConnectionError(
-                f"Failed to create required catalog '{catalog_name}': {e}"
-            ) from e
+            raise ConnectionError(f"Failed to create required catalog '{catalog_name}': {e}") from e
 
         try:
             logger.debug(f"Ensuring schema exists: {full_schema_name}")
@@ -619,13 +638,13 @@ def ensure_catalog_schema_exists(settings: Settings):
                 ws=ws_client,
                 catalog_name=catalog_name,
                 schema_name=schema_name,
-                comment=f"System schema for {settings.APP_NAME}"
+                comment=f"System schema for {settings.APP_NAME}",
             )
             logger.info(f"Schema '{full_schema_name}' is ready.")
         except Exception as e:
             logger.critical(
-                f"Failed to ensure schema '{full_schema_name}': {e}. Check permissions.", 
-                exc_info=True
+                f"Failed to ensure schema '{full_schema_name}': {e}. Check permissions.",
+                exc_info=True,
             )
             raise ConnectionError(
                 f"Failed to create required schema '{full_schema_name}': {e}"
@@ -638,15 +657,14 @@ def ensure_catalog_schema_exists(settings: Settings):
         raise
     except Exception as e:
         logger.critical(
-            f"An unexpected error occurred during catalog/schema check/creation: {e}", 
-            exc_info=True
+            f"An unexpected error occurred during catalog/schema check/creation: {e}", exc_info=True
         )
-        raise ConnectionError(
-            f"Failed during catalog/schema setup: {e}"
-        ) from e
+        raise ConnectionError(f"Failed during catalog/schema setup: {e}") from e
 
 
-def get_current_db_revision(engine_connection: Connection, alembic_cfg: AlembicConfig) -> str | None:
+def get_current_db_revision(
+    engine_connection: Connection, alembic_cfg: AlembicConfig
+) -> str | None:
     """Gets the current revision of the database."""
     context = MigrationContext.configure(engine_connection)
     return context.get_current_revision()
@@ -662,7 +680,7 @@ def init_db() -> None:
         return
 
     logger.info("Initializing database engine and session factory...")
-    
+
     # Ensure database and schema exist (creates them if needed in OAuth mode)
     ensure_database_and_schema_exist(settings)
 
@@ -675,27 +693,31 @@ def init_db() -> None:
         logger.info("Connecting to database...")
         logger.info(f"> Database URL: {db_url}")
         logger.info(f"> Connect args: {connect_args}")
-        logger.info(f"> Pool settings: size={settings.DB_POOL_SIZE}, max_overflow={settings.DB_MAX_OVERFLOW}, "
-                   f"timeout={settings.DB_POOL_TIMEOUT}s, recycle={settings.DB_POOL_RECYCLE}s")
-        
-        _engine = create_engine(db_url,
-                                connect_args=connect_args, 
-                                echo=settings.DB_ECHO, 
-                                poolclass=pool.QueuePool, 
-                                pool_size=settings.DB_POOL_SIZE, 
-                                max_overflow=settings.DB_MAX_OVERFLOW,
-                                pool_timeout=settings.DB_POOL_TIMEOUT,
-                                pool_recycle=settings.DB_POOL_RECYCLE,
-                                pool_pre_ping=True)
-        engine = _engine # Assign to public variable
+        logger.info(
+            f"> Pool settings: size={settings.DB_POOL_SIZE}, max_overflow={settings.DB_MAX_OVERFLOW}, "
+            f"timeout={settings.DB_POOL_TIMEOUT}s, recycle={settings.DB_POOL_RECYCLE}s"
+        )
+
+        _engine = create_engine(
+            db_url,
+            connect_args=connect_args,
+            echo=settings.DB_ECHO,
+            poolclass=pool.QueuePool,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
+            pool_recycle=settings.DB_POOL_RECYCLE,
+            pool_pre_ping=True,
+        )
+        engine = _engine  # Assign to public variable
 
         # Add OAuth token injection if not in LOCAL mode
         if not settings.ENV.upper().startswith("LOCAL"):
             logger.info("Setting up OAuth token injection for Lakebase...")
-            
+
             # Generate initial token
             refresh_oauth_token(settings)
-            
+
             # Register event handler to inject tokens for new connections
             # Use 'do_connect' event to inject password at connection creation time
             @event.listens_for(_engine, "do_connect")
@@ -704,7 +726,7 @@ def init_db() -> None:
                 if _oauth_token:
                     cparams["password"] = _oauth_token
                     logger.debug("Injected OAuth token into new database connection")
-            
+
             # Start background refresh thread
             start_token_refresh_background(settings)
             logger.info("OAuth authentication configured successfully")
@@ -738,13 +760,21 @@ def init_db() -> None:
         logger.info("Database engine and session factory initialized.")
 
         # --- Alembic Migration Logic --- #
-        alembic_cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..' , 'alembic.ini'))
-        alembic_script_location = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'alembic'))
+        alembic_cfg_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
+        )
+        alembic_script_location = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "alembic")
+        )
         logger.info(f"Loading Alembic configuration from: {alembic_cfg_path}")
         logger.info(f"Alembic script location: {alembic_script_location}")
         alembic_cfg = AlembicConfig(alembic_cfg_path)
-        alembic_cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%")) # Ensure Alembic uses the same URL
-        alembic_cfg.set_main_option("script_location", alembic_script_location) # Set absolute path to alembic directory
+        alembic_cfg.set_main_option(
+            "sqlalchemy.url", db_url.replace("%", "%%")
+        )  # Ensure Alembic uses the same URL
+        alembic_cfg.set_main_option(
+            "script_location", alembic_script_location
+        )  # Set absolute path to alembic directory
         script = ScriptDirectory.from_config(alembic_cfg)
         head_revision = script.get_current_head()
         logger.info(f"Alembic Head Revision: {head_revision}")
@@ -765,23 +795,29 @@ def init_db() -> None:
         # Handle migrations based on database state
         if db_revision is None:
             # Fresh database - will use create_all() + stamp later
-            logger.info("Fresh database detected (no Alembic version table). Will initialize with create_all() and stamp.")
+            logger.info(
+                "Fresh database detected (no Alembic version table). Will initialize with create_all() and stamp."
+            )
         elif db_revision != head_revision:
             # Existing database needs migration
-            logger.info(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
+            logger.info(
+                f"Database revision '{db_revision}' differs from head revision '{head_revision}'."
+            )
             logger.info("Attempting Alembic upgrade to head...")
             try:
                 # CRITICAL: Dispose the main engine's connection pool before running Alembic.
                 # This releases all pooled connections that might hold implicit transaction state.
-                logger.info("Disposing engine pool to release connections before Alembic migration...")
+                logger.info(
+                    "Disposing engine pool to release connections before Alembic migration..."
+                )
                 _engine.dispose()
-                
+
                 # Run Alembic upgrade via subprocess to avoid hanging issues with
                 # Alembic's internal runpy-based execution when called programmatically.
                 # This ensures proper process isolation and cleanup.
+                import shutil
                 import subprocess
                 import sys
-                import shutil
 
                 # For Lakebase (OAuth mode), we need to pass the token to the subprocess
                 # via environment variable since the subprocess can't access our in-memory token
@@ -798,7 +834,11 @@ def init_db() -> None:
                 python_executable = None
 
                 # Try sys.executable first if it exists and is absolute
-                if sys.executable and os.path.isabs(sys.executable) and os.path.exists(sys.executable):
+                if (
+                    sys.executable
+                    and os.path.isabs(sys.executable)
+                    and os.path.exists(sys.executable)
+                ):
                     python_executable = sys.executable
                     logger.info(f"Using sys.executable: {python_executable}")
                 else:
@@ -810,8 +850,12 @@ def init_db() -> None:
                         os.path.join(os.getcwd(), "venv", "bin", "python3"),
                         os.path.join(os.getcwd(), "venv", "bin", "python"),
                         # Try relative to the backend src directory
-                        os.path.join(os.path.dirname(__file__), "..", "..", ".venv", "bin", "python3"),
-                        os.path.join(os.path.dirname(__file__), "..", "..", ".venv", "bin", "python"),
+                        os.path.join(
+                            os.path.dirname(__file__), "..", "..", ".venv", "bin", "python3"
+                        ),
+                        os.path.join(
+                            os.path.dirname(__file__), "..", "..", ".venv", "bin", "python"
+                        ),
                         # Try system Python as fallback
                         "/usr/local/bin/python3",
                         "/usr/bin/python3",
@@ -828,7 +872,9 @@ def init_db() -> None:
                     if not python_executable:
                         alembic_path = shutil.which("alembic")
                         if alembic_path:
-                            logger.warning("Could not find Python executable, will try running alembic command directly")
+                            logger.warning(
+                                "Could not find Python executable, will try running alembic command directly"
+                            )
                             python_executable = None  # Will use alembic directly below
                         else:
                             raise RuntimeError(
@@ -851,18 +897,22 @@ def init_db() -> None:
                     capture_output=True,
                     text=True,
                     timeout=300,  # 5 minute timeout
-                    env=subprocess_env
+                    env=subprocess_env,
                 )
                 if result.returncode != 0:
                     logger.error(f"Alembic upgrade stderr: {result.stderr}")
-                    raise RuntimeError(f"Alembic upgrade failed with exit code {result.returncode}: {result.stderr}")
+                    raise RuntimeError(
+                        f"Alembic upgrade failed with exit code {result.returncode}: {result.stderr}"
+                    )
                 logger.info(f"Alembic upgrade output: {result.stdout}")
                 logger.info("✓ Alembic upgrade to head COMPLETED.")
             except subprocess.TimeoutExpired:
                 logger.critical("Alembic upgrade timed out after 5 minutes!")
                 raise RuntimeError("Alembic upgrade timed out")
             except Exception as alembic_err:
-                logger.critical("Alembic upgrade failed! Manual intervention may be required.", exc_info=True)
+                logger.critical(
+                    "Alembic upgrade failed! Manual intervention may be required.", exc_info=True
+                )
                 raise RuntimeError("Failed to upgrade database schema.") from alembic_err
         else:
             logger.info("✓ Database schema is up to date according to Alembic.")
@@ -882,43 +932,51 @@ def init_db() -> None:
             # with engine.connect() as connection:
             # connection.execute(sqlalchemy.text(f"CREATE SCHEMA IF NOT EXISTS {schema_to_create_in}"))
             # connection.commit()
-            logger.info(f"PostgreSQL: Tables will be targeted for schema '{schema_to_create_in}' via search_path or model definitions.")
+            logger.info(
+                f"PostgreSQL: Tables will be targeted for schema '{schema_to_create_in}' via search_path or model definitions."
+            )
 
         # No Databricks-specific metadata modifications required
-        
-        # Note: Schema creation and APP_DB_DROP_ON_START handling is done in 
+
+        # Note: Schema creation and APP_DB_DROP_ON_START handling is done in
         # ensure_database_and_schema_exist() before Alembic migrations run
 
         # Only use create_all() for fresh databases without Alembic version table
         # Once Alembic is tracking the schema, migrations handle all schema changes
         if db_revision is None:
-            logger.info("Fresh database detected (no Alembic version). Using create_all() for initial setup...")
-            target_schema = settings.PGSCHEMA or 'public'
-            
+            logger.info(
+                "Fresh database detected (no Alembic version). Using create_all() for initial setup..."
+            )
+            target_schema = settings.PGSCHEMA or "public"
+
             # Create all tables in the target schema
             with _engine.begin() as connection:
                 # Explicitly set search_path to ensure tables are created in correct schema
                 connection.execute(text(f'SET search_path TO "{target_schema}"'))
                 Base.metadata.create_all(bind=connection, checkfirst=True)
             logger.info("✓ Database tables created by create_all.")
-            
+
             # Stamp the database with the baseline migration
-            # Using direct INSERT instead of alembic_command.stamp() to avoid 
+            # Using direct INSERT instead of alembic_command.stamp() to avoid
             # hanging issues with Alembic's runpy-based execution in some environments
             logger.info("Stamping database with baseline migration...")
             try:
                 with _engine.begin() as connection:
                     connection.execute(text(f'SET search_path TO "{target_schema}"'))
                     # Create alembic_version table if needed and insert head revision
-                    connection.execute(text("""
+                    connection.execute(
+                        text("""
                         CREATE TABLE IF NOT EXISTS alembic_version (
                             version_num VARCHAR(32) NOT NULL,
                             CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
                         )
-                    """))
+                    """)
+                    )
                     connection.execute(text("DELETE FROM alembic_version"))
-                    connection.execute(text("INSERT INTO alembic_version (version_num) VALUES (:rev)"), 
-                                      {"rev": head_revision})
+                    connection.execute(
+                        text("INSERT INTO alembic_version (version_num) VALUES (:rev)"),
+                        {"rev": head_revision},
+                    )
                 logger.info(f"✓ Database stamped with baseline migration: {head_revision}")
             except Exception as stamp_err:
                 logger.error(f"Failed to stamp database: {stamp_err}", exc_info=True)
@@ -929,21 +987,24 @@ def init_db() -> None:
         logger.critical(f"Database initialization failed: {e}", exc_info=True)
         _engine = None
         _SessionLocal = None
-        engine = None # Reset public engine on failure
+        engine = None  # Reset public engine on failure
         raise ConnectionError("Failed to initialize database connection or run migrations.") from e
+
 
 def get_db():
     global _SessionLocal
     if _SessionLocal is None:
         logger.error("Database not initialized. Cannot get session.")
         # Consider raising HTTPException for FastAPI to handle gracefully if this occurs at runtime
-        raise RuntimeError("Database session factory is not available. Database might not have been initialized correctly.")
-    
+        raise RuntimeError(
+            "Database session factory is not available. Database might not have been initialized correctly."
+        )
+
     db = _SessionLocal()
     try:
         yield db
         db.commit()  # Commit the transaction on successful completion of the request
-    except Exception as e: # Catch all exceptions to ensure rollback
+    except Exception as e:  # Catch all exceptions to ensure rollback
         logger.error(f"Error during database session for request, rolling back: {e}", exc_info=True)
         db.rollback()
         # Re-raise the exception so FastAPI can handle it appropriately
@@ -951,6 +1012,7 @@ def get_db():
         raise
     finally:
         db.close()
+
 
 @contextmanager
 def get_db_session():
@@ -966,7 +1028,9 @@ def get_db_session():
             init_db()
         except Exception as e:
             logger.critical(f"Failed to initialize database session factory: {e}", exc_info=True)
-            raise RuntimeError("Database session factory not available and initialization failed.") from e
+            raise RuntimeError(
+                "Database session factory not available and initialization failed."
+            ) from e
 
     session = _SessionLocal()
     try:
@@ -979,11 +1043,13 @@ def get_db_session():
     finally:
         session.close()
 
+
 def get_engine():
     global _engine
     if _engine is None:
         raise RuntimeError("Database engine not initialized.")
     return _engine
+
 
 def get_session_factory():
     global _SessionLocal
@@ -995,25 +1061,26 @@ def get_session_factory():
 def set_session_factory(factory):
     """
     Set the global session factory. Used by tests to inject a test database session factory.
-    
+
     Args:
         factory: A sessionmaker instance or callable that returns database sessions
     """
     global _SessionLocal
     _SessionLocal = factory
 
+
 def cleanup_db():
     """Cleanup database resources including OAuth token refresh."""
     global _engine, _SessionLocal, engine
-    
+
     # Stop token refresh if running
     stop_token_refresh_background()
-    
+
     # Dispose engine
     if _engine:
         _engine.dispose()
         logger.info("Database engine disposed")
-    
+
     _engine = None
     _SessionLocal = None
     engine = None

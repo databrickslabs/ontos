@@ -294,6 +294,11 @@ def initialize_managers(app: FastAPI):
         #     SEARCHABLE_ASSET_MANAGERS.append(metadata_manager) # If it's searchable
         #     logger.info("MetadataManager initialized.")
 
+        # Graph Explorer Manager (no DB needed - uses Databricks SQL)
+        from src.controller.graph_explorer_manager import GraphExplorerManager
+        app.state.graph_explorer_manager = GraphExplorerManager(settings=settings)
+        logger.info("GraphExplorerManager initialized.")
+
         logger.info("All managers instantiated and stored in app.state.")
 
         # Defer SearchManager initialization until after initial data loading completes

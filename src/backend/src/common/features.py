@@ -164,6 +164,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'name': 'Comments & Ratings',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS  # READ_WRITE to add, ADMIN to manage all
     },
+    # Graph Explorer
+    'graph-explorer': {
+        'name': 'Graph Explorer',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+    },
     # 'about': { ... } # About page doesn't need explicit permissions here
 
 }

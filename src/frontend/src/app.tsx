@@ -47,6 +47,7 @@ import ProjectsView from './views/projects';
 import AuditTrail from './views/audit-trail';
 import WorkflowDesignerView from './views/workflow-designer';
 import Workflows from './views/workflows';
+import GraphExplorer from './views/graph-explorer';
 
 export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
@@ -118,6 +119,7 @@ export default function App() {
               <Route path="/data-asset-reviews/:requestId" element={<DataAssetReviewDetails />} />
               <Route path="/data-catalog" element={<DataCatalog />} />
               <Route path="/data-catalog/*" element={<DataCatalogDetails />} />
+              <Route path="/graph-explorer" element={<GraphExplorer />} />
               <Route path="/audit" element={<AuditTrail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

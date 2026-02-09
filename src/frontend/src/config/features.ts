@@ -244,6 +244,16 @@ import {
       showInLanding: false,
     },
     {
+      id: 'graph-explorer',
+      name: 'Graph Explorer',
+      path: '/graph-explorer',
+      description: 'Explore and edit property graphs stored in Databricks tables.',
+      icon: Network,
+      group: 'Governance',
+      maturity: 'alpha',
+      showInLanding: true,
+    },
+    {
       id: 'about',
       name: 'About',
       path: '/about',

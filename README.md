@@ -81,7 +81,7 @@ yarn dev:frontend
 **Terminal 2 - Backend:**
 ```bash
 cd src
-yarn dev:backend
+hatch -e dev run dev-backend
 ```
 
 - Frontend: http://localhost:3000
@@ -171,5 +171,4 @@ This project is licensed under the Databricks License - see the [LICENSE.txt](LI
 
 ---
 
-**Version**: 0.4.0  
 **Maintained by**: [Databricks](https://databricks.com)

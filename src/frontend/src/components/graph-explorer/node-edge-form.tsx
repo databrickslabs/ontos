@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -116,6 +117,9 @@ export function NodeForm({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? t('nodeForm.createTitle') : t('nodeForm.editTitle')}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {mode === 'create' ? t('nodeForm.createTitle') : t('nodeForm.editTitle')}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -325,6 +329,9 @@ export function EdgeForm({
           <DialogTitle>
             {mode === 'create' ? t('edgeForm.createTitle') : t('edgeForm.editTitle')}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {mode === 'create' ? t('edgeForm.createTitle') : t('edgeForm.editTitle')}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">

@@ -367,12 +367,12 @@ const GraphQueryPanel: React.FC<GraphQueryPanelProps> = ({
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <div className="rounded-lg border bg-card text-card-foreground">
         {/* Header */}
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="flex w-full items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-2">
+        <div className="flex w-full items-center justify-between px-4 py-3">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex flex-1 items-center gap-2 hover:bg-muted/50 transition-colors cursor-pointer rounded-sm -ml-1 pl-1 py-0.5"
+            >
               <Sparkles
                 className={`h-4 w-4 ${llmEnabled === false ? 'text-muted-foreground' : 'text-primary'}`}
               />
@@ -395,26 +395,23 @@ const GraphQueryPanel: React.FC<GraphQueryPanelProps> = ({
                   {t('queryPanel.queryActive')}
                 </Badge>
               )}
-            </div>
-            <div className="flex items-center gap-1">
-              {queryApplied && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleClearQuery();
-                  }}
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  {t('queryPanel.clearQuery')}
-                </Button>
-              )}
-              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </div>
-          </button>
-        </CollapsibleTrigger>
+              <span className="ml-auto">
+                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          {queryApplied && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700 ml-1"
+              onClick={handleClearQuery}
+            >
+              <X className="h-3 w-3 mr-1" />
+              {t('queryPanel.clearQuery')}
+            </Button>
+          )}
+        </div>
 
         {/* Collapsible body */}
         <CollapsibleContent>

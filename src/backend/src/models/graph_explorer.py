@@ -69,3 +69,48 @@ class EnsureTableResponse(BaseModel):
     """Response model for table creation."""
     tableName: str
     status: str = "ok"
+
+
+# ---------------------------------------------------------------------------
+# Graph Query (Cypher / Gremlin → SQL via LLM)
+# ---------------------------------------------------------------------------
+
+class GraphQueryRequest(BaseModel):
+    """Request model for executing a Cypher/Gremlin graph query."""
+    query: str
+    language: str = Field(default="cypher", description="Query language: 'cypher' or 'gremlin'")
+    tableName: Optional[str] = None
+    modelEndpoint: Optional[str] = None
+    sql: Optional[str] = Field(default=None, description="Override SQL — skip LLM translation and execute directly")
+
+
+class GraphQueryResponseMetadata(BaseModel):
+    """Metadata about the query execution."""
+    source: str = "databricks"
+    timestamp: Optional[str] = None
+    duration: Optional[str] = None
+    translationModel: Optional[str] = None
+    graphSchema: Optional[str] = None
+
+
+class GraphQueryResponse(BaseModel):
+    """Response model for a graph query execution."""
+    success: bool
+    nodes: List[Dict[str, Any]] = Field(default_factory=list)
+    edges: List[Dict[str, Any]] = Field(default_factory=list)
+    sql: str = ""
+    language: str = ""
+    originalQuery: str = ""
+    rawRowCount: Optional[int] = None
+    hasEdgeColumns: Optional[bool] = None
+    vertexOnly: Optional[bool] = None
+    message: Optional[str] = None
+    metadata: Optional[GraphQueryResponseMetadata] = None
+
+
+class LlmConfigResponse(BaseModel):
+    """Response model for LLM configuration status."""
+    enabled: bool
+    defaultModel: str = ""
+    maxTokens: int = 4096
+    provider: str = "databricks"

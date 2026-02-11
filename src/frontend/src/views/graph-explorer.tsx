@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useGraphEditor } from '@/hooks/use-graph-editor';
@@ -8,6 +8,7 @@ import GraphControls from '@/components/graph-explorer/graph-controls';
 import NodePalette from '@/components/graph-explorer/node-palette';
 import NodeSearch from '@/components/graph-explorer/node-search';
 import { NodeForm, EdgeForm } from '@/components/graph-explorer/node-edge-form';
+import GraphQueryPanel from '@/components/graph-explorer/graph-query-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +59,7 @@ export default function GraphExplorerView() {
   const [showNodeLabels, setShowNodeLabels] = useState(false);
   const [showEdgeLabels, setShowEdgeLabels] = useState(false);
   const [edgeLength, setEdgeLength] = useState(80);
+  const [edgeOpacity, setEdgeOpacity] = useState(0.6);
   const [nodeSize, setNodeSize] = useState(6);
 
   // Dialog states
@@ -69,6 +71,23 @@ export default function GraphExplorerView() {
   const [edgeFormData, setEdgeFormData] = useState<GraphEdge | undefined>();
   const [edgeFormSourceId, setEdgeFormSourceId] = useState<string | undefined>();
   const [edgeFormTargetId, setEdgeFormTargetId] = useState<string | undefined>();
+
+  // Query panel overlay — when a query is active, we show its results instead of the full graph
+  const [queryOverrideData, setQueryOverrideData] = useState<GraphData | null>(null);
+
+  const handleQueryApply = useCallback((nodes: GraphNode[], edges: GraphEdge[]) => {
+    setQueryOverrideData({ nodes, edges });
+  }, []);
+
+  const handleQueryClear = useCallback(() => {
+    setQueryOverrideData(null);
+  }, []);
+
+  // The data fed to the visualization — query results take precedence
+  const displayData = useMemo<GraphData>(
+    () => queryOverrideData ?? editor.graphData,
+    [queryOverrideData, editor.graphData],
+  );
 
   // Container dimensions
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -327,11 +346,19 @@ export default function GraphExplorerView() {
         </CardContent>
       </Card>
 
+      {/* Graph Query Panel */}
+      <GraphQueryPanel
+        onApplyResults={handleQueryApply}
+        onClearQuery={handleQueryClear}
+        graphData={editor.graphData}
+        tableName={tableName}
+      />
+
       {/* Main Layout */}
       <div className="flex flex-1 gap-4 min-h-0">
         {/* Left Sidebar */}
         <div className="w-72 flex-shrink-0 space-y-4 overflow-y-auto">
-          <NodeSearch graphData={editor.graphData} onNodeSelect={handleNodeClick} disabled={!hasLoaded} />
+          <NodeSearch graphData={displayData} onNodeSelect={handleNodeClick} disabled={!hasLoaded} />
           <NodePalette
             onStartCreateNode={() => {
               setNodeFormData(undefined);
@@ -360,13 +387,14 @@ export default function GraphExplorerView() {
           )}
           <GraphVisualization
             ref={graphRef}
-            data={editor.graphData}
+            data={displayData}
             showProposed={showProposed}
             selectedNodeTypes={selectedNodeTypes}
             selectedRelationshipTypes={selectedRelationshipTypes}
             showNodeLabels={showNodeLabels}
             showEdgeLabels={showEdgeLabels}
             edgeLength={edgeLength}
+            edgeOpacity={edgeOpacity}
             nodeSize={nodeSize}
             width={dimensions.width}
             height={dimensions.height}
@@ -393,10 +421,12 @@ export default function GraphExplorerView() {
             onToggleEdgeLabels={setShowEdgeLabels}
             edgeLength={edgeLength}
             onEdgeLengthChange={setEdgeLength}
+            edgeOpacity={edgeOpacity}
+            onEdgeOpacityChange={setEdgeOpacity}
             nodeSize={nodeSize}
             onNodeSizeChange={setNodeSize}
             onResetView={() => graphRef.current?.resetView()}
-            graphData={editor.graphData}
+            graphData={displayData}
             stats={stats}
           />
         </div>

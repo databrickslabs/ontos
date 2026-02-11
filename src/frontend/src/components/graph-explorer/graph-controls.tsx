@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -28,6 +29,8 @@ interface GraphControlsProps {
   onToggleEdgeLabels: (show: boolean) => void;
   edgeLength: number;
   onEdgeLengthChange: (length: number) => void;
+  edgeOpacity?: number;
+  onEdgeOpacityChange?: (opacity: number) => void;
   nodeSize: number;
   onNodeSizeChange: (size: number) => void;
   onResetView: () => void;
@@ -48,6 +51,8 @@ export default function GraphControls({
   onToggleEdgeLabels,
   edgeLength,
   onEdgeLengthChange,
+  edgeOpacity,
+  onEdgeOpacityChange,
   nodeSize,
   onNodeSizeChange,
   onResetView,
@@ -55,11 +60,26 @@ export default function GraphControls({
   stats,
 }: GraphControlsProps) {
   const { t } = useTranslation('graph-explorer');
-  const nodeTypes = getUniqueNodeTypes(graphData);
-  const relationshipTypes = getUniqueRelationshipTypes(graphData);
+  const nodeTypes = useMemo(() => getUniqueNodeTypes(graphData), [graphData]);
+  const relationshipTypes = useMemo(() => getUniqueRelationshipTypes(graphData), [graphData]);
 
+  // Color map for node type legend
+  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const nodeTypeColors = useMemo(() => {
+    const colorMap = new Map<string, string>();
+    nodeTypes.forEach((type) => {
+      colorMap.set(type, getColorForType(type, isDarkMode));
+    });
+    return colorMap;
+  }, [nodeTypes, isDarkMode]);
+
+  // "Show all" = empty array. Clicking a type when showing all deselects it
+  // (shows all except it). Select All resets to empty array.
   const handleNodeTypeToggle = (type: string) => {
-    if (selectedNodeTypes.includes(type)) {
+    if (selectedNodeTypes.length === 0) {
+      // "Show all" mode — deselect this one (show all except it)
+      onNodeTypeChange(nodeTypes.filter((t) => t !== type));
+    } else if (selectedNodeTypes.includes(type)) {
       onNodeTypeChange(selectedNodeTypes.filter((t) => t !== type));
     } else {
       onNodeTypeChange([...selectedNodeTypes, type]);
@@ -67,12 +87,17 @@ export default function GraphControls({
   };
 
   const handleRelationshipTypeToggle = (type: string) => {
-    if (selectedRelationshipTypes.includes(type)) {
+    if (selectedRelationshipTypes.length === 0) {
+      onRelationshipTypeChange(relationshipTypes.filter((t) => t !== type));
+    } else if (selectedRelationshipTypes.includes(type)) {
       onRelationshipTypeChange(selectedRelationshipTypes.filter((t) => t !== type));
     } else {
       onRelationshipTypeChange([...selectedRelationshipTypes, type]);
     }
   };
+
+  const allNodesSelected = selectedNodeTypes.length === 0;
+  const allRelsSelected = selectedRelationshipTypes.length === 0;
 
   return (
     <Card className="w-full">
@@ -160,17 +185,43 @@ export default function GraphControls({
               id="edge-length"
               type="range"
               min="30"
-              max="200"
+              max="1000"
               value={edgeLength}
               onChange={(e) => onEdgeLengthChange(Number(e.target.value))}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
               style={{
                 background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${
-                  ((edgeLength - 30) / (200 - 30)) * 100
-                }%, rgb(229 231 235) ${((edgeLength - 30) / (200 - 30)) * 100}%, rgb(229 231 235) 100%)`,
+                  ((edgeLength - 30) / (1000 - 30)) * 100
+                }%, rgb(229 231 235) ${((edgeLength - 30) / (1000 - 30)) * 100}%, rgb(229 231 235) 100%)`,
               }}
             />
           </div>
+
+          {/* Edge Opacity Slider */}
+          {edgeOpacity != null && onEdgeOpacityChange && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edge-opacity">{t('controls.edgeOpacity', { defaultValue: 'Edge Opacity' })}</Label>
+                <span className="text-sm text-muted-foreground">{Math.round(edgeOpacity * 100)}%</span>
+              </div>
+              <input
+                id="edge-opacity"
+                type="range"
+                min="0.05"
+                max="1"
+                step="0.05"
+                value={edgeOpacity}
+                onChange={(e) => onEdgeOpacityChange(Number(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                style={{
+                  background: `linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) ${
+                    ((edgeOpacity - 0.05) / (1 - 0.05)) * 100
+                  }%, rgb(229 231 235) ${((edgeOpacity - 0.05) / (1 - 0.05)) * 100}%, rgb(229 231 235) 100%)`,
+                }}
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="node-size">{t('controls.nodeSize')}</Label>
@@ -197,12 +248,19 @@ export default function GraphControls({
 
         {/* Node Type Filter */}
         <div className="space-y-2">
-          <Label>{t('controls.nodeTypes')}</Label>
+          <div className="flex items-center justify-between">
+            <Label>{t('controls.nodeTypes')}</Label>
+            {!allNodesSelected && (
+              <Button variant="ghost" size="sm" onClick={() => onNodeTypeChange([])}>
+                Select All
+              </Button>
+            )}
+          </div>
           <ScrollArea className="h-32">
             <div className="flex flex-wrap gap-2">
               {nodeTypes.map((type) => {
-                const isSelected = selectedNodeTypes.includes(type);
-                const color = getColorForType(type);
+                const isSelected = selectedNodeTypes.length === 0 || selectedNodeTypes.includes(type);
+                const color = nodeTypeColors.get(type) || getColorForType(type, isDarkMode);
                 return (
                   <Badge
                     key={type}
@@ -210,7 +268,7 @@ export default function GraphControls({
                     className={cn(
                       'cursor-pointer transition-colors',
                       isSelected && 'border-2',
-                      !isSelected && 'hover:bg-accent'
+                      !isSelected && 'hover:bg-accent',
                     )}
                     style={
                       isSelected
@@ -219,7 +277,7 @@ export default function GraphControls({
                             borderColor: color,
                             color: 'white',
                           }
-                        : {}
+                        : { borderColor: color }
                     }
                     onClick={() => handleNodeTypeToggle(type)}
                   >
@@ -235,12 +293,20 @@ export default function GraphControls({
 
         {/* Relationship Type Filter */}
         <div className="space-y-2">
-          <Label>{t('controls.relationshipTypes')}</Label>
+          <div className="flex items-center justify-between">
+            <Label>{t('controls.relationshipTypes')}</Label>
+            {!allRelsSelected && (
+              <Button variant="ghost" size="sm" onClick={() => onRelationshipTypeChange([])}>
+                Select All
+              </Button>
+            )}
+          </div>
           <ScrollArea className="h-32">
             <div className="flex flex-wrap gap-2">
               {relationshipTypes.map((type) => {
-                const isSelected = selectedRelationshipTypes.includes(type);
-                const color = getColorForType(type);
+                const isSelected =
+                  selectedRelationshipTypes.length === 0 || selectedRelationshipTypes.includes(type);
+                const color = getColorForType(type, isDarkMode);
                 return (
                   <Badge
                     key={type}
@@ -248,7 +314,7 @@ export default function GraphControls({
                     className={cn(
                       'cursor-pointer transition-colors',
                       isSelected && 'border-2',
-                      !isSelected && 'hover:bg-accent'
+                      !isSelected && 'hover:bg-accent',
                     )}
                     style={
                       isSelected
@@ -274,24 +340,40 @@ export default function GraphControls({
         {/* Legend */}
         <div className="space-y-2">
           <Label>{t('controls.typeColors')}</Label>
-          <ScrollArea className="h-24">
+          <ScrollArea className="h-28">
             <div className="space-y-1.5">
-              {nodeTypes.slice(0, 10).map((type) => {
-                const color = getColorForType(type);
+              {/* Show only selected types (or all if none selected) */}
+              {(selectedNodeTypes.length === 0 ? nodeTypes : selectedNodeTypes).map((type) => {
+                const color = nodeTypeColors.get(type) || getColorForType(type, isDarkMode);
                 return (
                   <div key={type} className="flex items-center gap-2 text-sm">
                     <div
-                      className="h-4 w-4 rounded-full border"
-                      style={{ backgroundColor: color }}
+                      className="h-4 w-4 rounded-full border flex-shrink-0"
+                      style={{ backgroundColor: color, boxShadow: `0 2px 6px ${color}40` }}
                     />
                     <span className="text-muted-foreground">{type}</span>
                   </div>
                 );
               })}
-              {nodeTypes.length > 10 && (
+              {nodeTypes.length > 10 && selectedNodeTypes.length === 0 && (
                 <div className="text-xs text-muted-foreground">
                   {t('controls.moreTypes', { count: nodeTypes.length - 10 })}
                 </div>
+              )}
+
+              {/* Proposed indicator */}
+              {showProposed && (
+                <>
+                  <Separator className="my-1" />
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="h-4 w-4 rounded-full border-2 border-green-500 bg-green-500/20 flex-shrink-0" />
+                    <span className="text-muted-foreground font-medium">Proposed New</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="h-4 w-4 rounded-full border-2 border-amber-500 border-dashed bg-amber-500/20 flex-shrink-0" />
+                    <span className="text-muted-foreground font-medium">Modified</span>
+                  </div>
+                </>
               )}
             </div>
           </ScrollArea>

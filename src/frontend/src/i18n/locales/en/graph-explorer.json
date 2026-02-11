@@ -63,6 +63,7 @@
     "nodeLabels": "Node Labels",
     "edgeLabels": "Edge Labels",
     "edgeLength": "Edge Length",
+    "edgeOpacity": "Edge Opacity",
     "nodeSize": "Node Size",
     "nodeTypes": "Node Types",
     "relationshipTypes": "Relationship Types",
@@ -103,5 +104,27 @@
     "properties": "Properties",
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out"
+  },
+  "queryPanel": {
+    "title": "Graph Query",
+    "notConfigured": "Not Configured",
+    "queryActive": "Query Active",
+    "clearQuery": "Clear Query",
+    "llmNotConfiguredTitle": "LLM endpoint not configured",
+    "llmNotConfiguredDescription": "Set LLM_FOUNDATIONAL_ENDPOINT in your backend environment to enable query translation.",
+    "checkingConfig": "Checking LLM configuration...",
+    "naturalLanguage": "Text to SQL",
+    "naturalPlaceholder": "Show me all characters on the dark side with their relationships...",
+    "examples": "Examples",
+    "runQuery": "Run Query",
+    "translating": "Translating...",
+    "translatingViaLlm": "Translating to SQL via LLM...",
+    "generatedSql": "Generated SQL",
+    "copySql": "Copy SQL",
+    "applied": "Applied {{nodeCount}} nodes and {{edgeCount}} edges to the graph.",
+    "clear": "Clear",
+    "limitWarning": "Results limited to {{limit}} rows by the generated SQL. Your full dataset may contain more matches.",
+    "removeLimit": "Remove Limit",
+    "noGraphData": "Query returned {{rowCount}} rows but no graph nodes or edges could be extracted. Try a different query."
   }
 }

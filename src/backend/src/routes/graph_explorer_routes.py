@@ -17,6 +17,9 @@ from src.models.graph_explorer import (
     DeleteNodeRequest,
     EnsureTableResponse,
     GraphDataResponse,
+    GraphQueryRequest,
+    GraphQueryResponse,
+    LlmConfigResponse,
     SaveGraphRequest,
     SaveGraphResponse,
     UpdateNodeRequest,
@@ -162,6 +165,49 @@ async def update_node(
     except Exception as e:
         logger.error(f"Error updating node: {e}")
         raise HTTPException(status_code=500, detail=f"Error updating node: {str(e)}")
+
+
+@router.get("/llm-config", response_model=LlmConfigResponse)
+async def get_llm_config(
+    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+):
+    """Return the current LLM configuration status for the query panel."""
+    return manager.get_llm_config()
+
+
+@router.post("/query", response_model=GraphQueryResponse)
+async def execute_graph_query(
+    request: GraphQueryRequest,
+    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Translate a Cypher/Gremlin query to SQL via LLM and execute it."""
+    try:
+        ws_client, warehouse_id = _get_ws_and_warehouse(settings)
+        table_name = request.tableName or DEFAULT_TABLE_NAME
+        result = manager.execute_graph_query(
+            ws_client=ws_client,
+            warehouse_id=warehouse_id,
+            query=request.query,
+            language=request.language,
+            table_name=table_name,
+            override_sql=request.sql,
+        )
+        return result
+    except RuntimeError as e:
+        # LLM or SQL execution error — return as a structured error, not 500
+        return GraphQueryResponse(
+            success=False,
+            sql="",
+            language=request.language,
+            originalQuery=request.query,
+            message=str(e),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error executing graph query: {e}")
+        raise HTTPException(status_code=500, detail=f"Error executing graph query: {str(e)}")
 
 
 def register_routes(app: FastAPI):

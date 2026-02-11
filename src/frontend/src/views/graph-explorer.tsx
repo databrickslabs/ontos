@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useGraphEditor } from '@/hooks/use-graph-editor';
 import type { GraphData, GraphNode, GraphEdge } from '@/types/graph-explorer';
@@ -17,6 +18,7 @@ import {
 import GraphControls from '@/components/graph-explorer/graph-controls';
 import { GraphTableView } from '@/components/graph-explorer/graph-table-view';
 import { DiagramManager } from '@/components/graph-explorer/diagram-manager';
+import { ConceptTooltip } from '@/components/graph-explorer/concept-tooltip';
 import NodePalette from '@/components/graph-explorer/node-palette';
 import NodeSearch from '@/components/graph-explorer/node-search';
 import { NodeForm, EdgeForm } from '@/components/graph-explorer/node-edge-form';
@@ -39,6 +41,7 @@ export default function GraphExplorerView() {
   const { t } = useTranslation(['graph-explorer', 'common']);
   const { toast } = useToast();
   const graphRef = useRef<GraphVisualizationRef>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Table name state
   const [tableName, setTableName] = useState(DEFAULT_TABLE);
@@ -72,6 +75,16 @@ export default function GraphExplorerView() {
     collapseNode,
     expandedNodeIds,
   } = editor;
+
+  // Derive the type of the currently-selected node (for ConceptTooltip)
+  const selectedNodeType = useMemo(() => {
+    if (!selectedNodeId) return null;
+    const node = editor.graphData.nodes.find((n) => n.id === selectedNodeId);
+    return node?.type ?? null;
+  }, [selectedNodeId, editor.graphData.nodes]);
+
+  // Phase 2b: read ?filterType= URL param and apply as node type filter
+  const filterTypeParam = searchParams.get('filterType');
 
   // Visualization settings
   const [showProposed, setShowProposed] = useState(true);
@@ -513,6 +526,23 @@ export default function GraphExplorerView() {
     }
   }, [tableName]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Phase 2b: apply ?filterType= URL param as a node type filter
+  useEffect(() => {
+    if (filterTypeParam) {
+      setSelectedNodeTypes([filterTypeParam]);
+    }
+  }, [filterTypeParam]);
+
+  // Clear the filterType param from the URL (user action)
+  const clearFilterType = useCallback(() => {
+    setSelectedNodeTypes([]);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('filterType');
+      return next;
+    });
+  }, [setSearchParams]);
+
   const stats = editor.getStats();
   const hasUnsaved = editor.userCreatedNodes.length > 0 || editor.userCreatedEdges.length > 0;
 
@@ -554,6 +584,30 @@ export default function GraphExplorerView() {
         graphData={editor.graphData}
         tableName={tableName}
       />
+
+      {/* filterType URL param banner */}
+      {filterTypeParam && (
+        <Card className="border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+          <CardContent className="flex items-center gap-3 py-2.5">
+            <span className="text-sm text-blue-700 dark:text-blue-400">
+              {t('filterType.active', { type: filterTypeParam })}
+            </span>
+            {!hasLoaded && (
+              <span className="text-xs text-blue-500 dark:text-blue-400/70">
+                {t('filterType.connectHint', { type: filterTypeParam })}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-6 px-2 text-xs text-blue-600 hover:text-blue-700"
+              onClick={clearFilterType}
+            >
+              {t('filterType.clear')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Truncation Banner */}
       {isTruncated && totalAvailable && (
@@ -735,7 +789,8 @@ export default function GraphExplorerView() {
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-72 flex-shrink-0 overflow-y-auto">
+        <div className="w-72 flex-shrink-0 overflow-y-auto space-y-4">
+          <ConceptTooltip nodeType={selectedNodeType} />
           <GraphControls
             showProposed={showProposed}
             onToggleProposed={setShowProposed}

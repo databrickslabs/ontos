@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,7 @@ import {
   Filter,
   FolderTree,
   Languages,
+  Network,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
@@ -116,6 +118,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   onSetFilterExpanded,
 }) => {
   const { t, i18n } = useTranslation(['semantic-models', 'common']);
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['root']));
   
@@ -609,27 +612,41 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                   </div>
                 </div>
                 
-                {isConceptEditable(selectedConcept) && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onEditConcept(selectedConcept)}
-                    >
-                      <Pencil className="h-4 w-4 mr-1" />
-                      {t('common:actions.edit')}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => onDeleteConcept(selectedConcept)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      {t('common:actions.delete')}
-                    </Button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const label = resolveLabel(selectedConcept, selectedLanguage);
+                      navigate(`/graph-explorer?filterType=${encodeURIComponent(label)}`);
+                    }}
+                    data-testid="explore-in-graph-button"
+                  >
+                    <Network className="h-4 w-4 mr-1" />
+                    {t('semantic-models:actions.exploreInGraph')}
+                  </Button>
+                  {isConceptEditable(selectedConcept) && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onEditConcept(selectedConcept)}
+                      >
+                        <Pencil className="h-4 w-4 mr-1" />
+                        {t('common:actions.edit')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => onDeleteConcept(selectedConcept)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        {t('common:actions.delete')}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
               
               {/* Definition */}

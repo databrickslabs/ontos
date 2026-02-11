@@ -162,6 +162,15 @@
     "table": "Table",
     "split": "Split"
   },
+  "conceptTooltip": {
+    "title": "Glossary Matches",
+    "viewInGlossary": "View in Glossary"
+  },
+  "filterType": {
+    "active": "Filtering by type: {{type}}",
+    "clear": "Clear filter",
+    "connectHint": "Connect a table to explore nodes of type \"{{type}}\"."
+  },
   "queryPanel": {
     "title": "Graph Query",
     "notConfigured": "Not Configured",

@@ -129,7 +129,8 @@
   },
   "actions": {
     "createConcept": "Create Concept",
-    "createCollection": "Create Collection"
+    "createCollection": "Create Collection",
+    "exploreInGraph": "Explore in Graph"
   },
   "badges": {
     "imported": "Imported",

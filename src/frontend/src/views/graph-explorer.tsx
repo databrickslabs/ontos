@@ -16,7 +16,6 @@ import {
   type ContextMenuPosition,
 } from '@/components/graph-explorer/graph-context-menu';
 import GraphControls from '@/components/graph-explorer/graph-controls';
-import { GraphTableView } from '@/components/graph-explorer/graph-table-view';
 import { DiagramManager } from '@/components/graph-explorer/diagram-manager';
 import { ConceptTooltip } from '@/components/graph-explorer/concept-tooltip';
 import NodePalette from '@/components/graph-explorer/node-palette';
@@ -28,10 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, Save, RefreshCw, Database, AlertTriangle, LayoutGrid, Table2, Columns2 } from 'lucide-react';
-
-type ViewMode = 'graph' | 'table' | 'split';
+import { Loader2, Save, RefreshCw, Database, AlertTriangle } from 'lucide-react';
 
 const EMPTY_GRAPH_DATA: GraphData = { nodes: [], edges: [] };
 
@@ -93,8 +89,6 @@ export default function GraphExplorerView() {
   const [edgeLength, setEdgeLength] = useState(80);
   const [edgeOpacity, setEdgeOpacity] = useState(0.6);
   const [nodeSize, setNodeSize] = useState(6);
-  const [viewMode, setViewMode] = useState<ViewMode>('graph');
-
   // Dialog states
   const [nodeFormOpen, setNodeFormOpen] = useState(false);
   const [nodeFormMode, setNodeFormMode] = useState<'create' | 'edit'>('create');
@@ -647,57 +641,8 @@ export default function GraphExplorerView() {
           />
         </div>
 
-        {/* Graph Canvas / Table / Split */}
+        {/* Graph Canvas */}
         <div ref={containerRef} className="flex-1 flex flex-col min-h-[400px] gap-0 relative">
-          {/* View mode toggle */}
-          <div className="absolute top-2 left-2 z-20 flex gap-0.5 rounded-md border bg-background/90 backdrop-blur-sm p-0.5">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={viewMode === 'graph' ? 'default' : 'ghost'}
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setViewMode('graph')}
-                  >
-                    <LayoutGrid className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom"><p>{t('viewMode.graph')}</p></TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={viewMode === 'split' ? 'default' : 'ghost'}
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setViewMode('split')}
-                  >
-                    <Columns2 className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom"><p>{t('viewMode.split')}</p></TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={viewMode === 'table' ? 'default' : 'ghost'}
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setViewMode('table')}
-                  >
-                    <Table2 className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom"><p>{t('viewMode.table')}</p></TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
           {isLoading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -712,78 +657,30 @@ export default function GraphExplorerView() {
             </div>
           )}
 
-          {viewMode === 'graph' && (
-            <div className="flex-1 rounded-lg border bg-background overflow-hidden">
-              <GraphVisualization
-                ref={graphRef}
-                data={displayData}
-                showProposed={showProposed}
-                selectedNodeTypes={selectedNodeTypes}
-                selectedRelationshipTypes={selectedRelationshipTypes}
-                showNodeLabels={showNodeLabels}
-                showEdgeLabels={showEdgeLabels}
-                edgeLength={edgeLength}
-                edgeOpacity={edgeOpacity}
-                nodeSize={nodeSize}
-                width={dimensions.width}
-                height={dimensions.height}
-                onNodeClick={handleNodeClick}
-                onEdgeClick={handleEdgeClick}
-                onNodeRightClick={handleNodeRightClick}
-                onEdgeRightClick={handleEdgeRightClick}
-                onCanvasRightClick={handleCanvasRightClick}
-                edgeCreateMode={isEdgeCreateMode}
-                edgeCreateSourceId={edgeCreateSourceId}
-                selectedNodeId={selectedNodeId}
-              />
-            </div>
-          )}
-
-          {viewMode === 'table' && (
-            <GraphTableView
+          <div className="flex-1 rounded-lg border bg-background overflow-hidden">
+            <GraphVisualization
+              ref={graphRef}
               data={displayData}
+              showProposed={showProposed}
+              selectedNodeTypes={selectedNodeTypes}
+              selectedRelationshipTypes={selectedRelationshipTypes}
+              showNodeLabels={showNodeLabels}
+              showEdgeLabels={showEdgeLabels}
+              edgeLength={edgeLength}
+              edgeOpacity={edgeOpacity}
+              nodeSize={nodeSize}
+              width={dimensions.width}
+              height={dimensions.height}
               onNodeClick={handleNodeClick}
               onEdgeClick={handleEdgeClick}
+              onNodeRightClick={handleNodeRightClick}
+              onEdgeRightClick={handleEdgeRightClick}
+              onCanvasRightClick={handleCanvasRightClick}
+              edgeCreateMode={isEdgeCreateMode}
+              edgeCreateSourceId={edgeCreateSourceId}
               selectedNodeId={selectedNodeId}
-              className="flex-1 rounded-lg"
             />
-          )}
-
-          {viewMode === 'split' && (
-            <div className="flex-1 flex flex-col gap-2">
-              <div className="flex-1 rounded-lg border bg-background overflow-hidden min-h-[200px]">
-                <GraphVisualization
-                  ref={graphRef}
-                  data={displayData}
-                  showProposed={showProposed}
-                  selectedNodeTypes={selectedNodeTypes}
-                  selectedRelationshipTypes={selectedRelationshipTypes}
-                  showNodeLabels={showNodeLabels}
-                  showEdgeLabels={showEdgeLabels}
-                  edgeLength={edgeLength}
-                  edgeOpacity={edgeOpacity}
-                  nodeSize={nodeSize}
-                  width={dimensions.width}
-                  height={Math.max(Math.floor(dimensions.height * 0.55), 200)}
-                  onNodeClick={handleNodeClick}
-                  onEdgeClick={handleEdgeClick}
-                  onNodeRightClick={handleNodeRightClick}
-                  onEdgeRightClick={handleEdgeRightClick}
-                  onCanvasRightClick={handleCanvasRightClick}
-                  edgeCreateMode={isEdgeCreateMode}
-                  edgeCreateSourceId={edgeCreateSourceId}
-                  selectedNodeId={selectedNodeId}
-                />
-              </div>
-              <GraphTableView
-                data={displayData}
-                onNodeClick={handleNodeClick}
-                onEdgeClick={handleEdgeClick}
-                selectedNodeId={selectedNodeId}
-                className="h-[250px] rounded-lg"
-              />
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Right Sidebar */}

@@ -144,7 +144,7 @@ describe('DiagramManager component', () => {
     // Find the diagram entry and hover to reveal buttons
     const entry = screen.getByText('Saved View').closest('div[class*="group"]')!;
     // Click the restore button (FolderOpen icon button)
-    const restoreBtn = within(entry).getAllByRole('button')[0];
+    const restoreBtn = within(entry as HTMLElement).getAllByRole('button')[0];
     await user.click(restoreBtn);
 
     expect(onRestore).toHaveBeenCalledWith(sampleData);
@@ -176,7 +176,7 @@ describe('DiagramManager component', () => {
 
     // Click delete button
     const entry = screen.getByText('To Delete').closest('div[class*="group"]')!;
-    const deleteBtn = within(entry).getAllByRole('button')[1];
+    const deleteBtn = within(entry as HTMLElement).getAllByRole('button')[1];
     await user.click(deleteBtn);
 
     // Should be removed from view and localStorage

@@ -96,7 +96,7 @@ describe('GraphTableView', () => {
   });
 
   it('highlights selected node row', () => {
-    const { container } = render(<GraphTableView data={sampleData} selectedNodeId="n1" />);
+    render(<GraphTableView data={sampleData} selectedNodeId="n1" />);
     // Find the row containing Alice and check it has the highlight class
     const aliceRow = screen.getByText('Alice').closest('tr');
     expect(aliceRow?.className).toContain('bg-primary/10');

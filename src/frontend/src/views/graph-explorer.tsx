@@ -33,8 +33,6 @@ import { Loader2, Save, RefreshCw, Database, AlertTriangle, LayoutGrid, Table2, 
 
 type ViewMode = 'graph' | 'table' | 'split';
 
-const DEFAULT_TABLE = 'main.default.property_graph_entity_edges';
-
 const EMPTY_GRAPH_DATA: GraphData = { nodes: [], edges: [] };
 
 export default function GraphExplorerView() {
@@ -43,9 +41,9 @@ export default function GraphExplorerView() {
   const graphRef = useRef<GraphVisualizationRef>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Table name state
-  const [tableName, setTableName] = useState(DEFAULT_TABLE);
-  const [tableInput, setTableInput] = useState(DEFAULT_TABLE);
+  // Table name state — start empty so the user sees the empty state
+  const [tableName, setTableName] = useState('');
+  const [tableInput, setTableInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);

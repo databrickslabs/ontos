@@ -122,7 +122,6 @@ class Settings(BaseSettings):
     # LLM Configuration
     LLM_ENABLED: bool = Field(False, env='LLM_ENABLED')
     LLM_ENDPOINT: Optional[str] = Field(None, env='LLM_ENDPOINT')  # Databricks serving endpoint name (e.g., 'databricks-claude-sonnet-4-5')
-    LLM_FOUNDATIONAL_ENDPOINT: Optional[str] = Field('databricks-claude-sonnet-4-5', env='LLM_FOUNDATIONAL_ENDPOINT')  # Endpoint for foundational/utility tasks (graph query translation, etc.). Defaults to databricks-claude-sonnet-4-5 (matching ontology repo). Falls back to LLM_ENDPOINT if explicitly cleared.
     LLM_BASE_URL: Optional[str] = Field(None, env='LLM_BASE_URL')  # Databricks base URL (e.g., 'https://your-workspace.cloud.databricks.com/serving-endpoints')
     LLM_SYSTEM_PROMPT: Optional[str] = Field(None, env='LLM_SYSTEM_PROMPT')  # User-configurable Data Steward role prompt
     LLM_DISCLAIMER_TEXT: Optional[str] = Field(
@@ -177,13 +176,6 @@ class Settings(BaseSettings):
         """Compute the DATABRICKS_HTTP_PATH after validation."""
         if self.DATABRICKS_WAREHOUSE_ID:
             self.DATABRICKS_HTTP_PATH = f"/sql/1.0/warehouses/{self.DATABRICKS_WAREHOUSE_ID}"
-        return self
-
-    @model_validator(mode='after')
-    def default_foundational_endpoint(self) -> 'Settings':
-        """Ensure LLM_FOUNDATIONAL_ENDPOINT has a value — falls back to LLM_ENDPOINT."""
-        if not self.LLM_FOUNDATIONAL_ENDPOINT:
-            self.LLM_FOUNDATIONAL_ENDPOINT = self.LLM_ENDPOINT or 'databricks-claude-sonnet-4-5'
         return self
 
     @model_validator(mode='after')

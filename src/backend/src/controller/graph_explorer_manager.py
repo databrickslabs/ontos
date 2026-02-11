@@ -403,21 +403,17 @@ class GraphExplorerManager:
     # LLM Configuration
     # -----------------------------------------------------------------
 
-    def _get_foundational_endpoint(self) -> str:
-        """Return the foundational LLM endpoint (falls back to main LLM_ENDPOINT via config validator)."""
-        return getattr(self.settings, "LLM_FOUNDATIONAL_ENDPOINT", "") or getattr(self.settings, "LLM_ENDPOINT", "") or ""
-
     def get_llm_config(self) -> Dict[str, Any]:
         """Return the current LLM configuration state.
 
-        The graph query panel is enabled whenever a foundational endpoint is
+        The graph query panel is enabled whenever an LLM endpoint is
         configured — it does NOT require the global LLM_ENABLED flag, which
         gates the heavier conversational search feature.
         """
         if not self.settings:
             return {"enabled": False, "defaultModel": "", "maxTokens": 4096, "provider": "databricks"}
 
-        endpoint = self._get_foundational_endpoint()
+        endpoint = getattr(self.settings, "LLM_ENDPOINT", "") or ""
         return {
             "enabled": bool(endpoint),
             "defaultModel": endpoint,
@@ -611,7 +607,7 @@ class GraphExplorerManager:
                           graph_schema: str = "") -> str:
         """Translate a natural language, Cypher, or Gremlin query to Databricks SQL via LLM."""
         client = self._get_openai_client()
-        endpoint = self._get_foundational_endpoint()
+        endpoint = getattr(self.settings, "LLM_ENDPOINT", "") or ""
 
         safe_table = _validate_table_name(table_name)
 
@@ -742,7 +738,7 @@ class GraphExplorerManager:
         translation and execute the SQL directly.
         """
         t0 = time.time()
-        endpoint = self._get_foundational_endpoint()
+        endpoint = getattr(self.settings, "LLM_ENDPOINT", "") or ""
 
         # Step 1: get SQL
         graph_schema = ""

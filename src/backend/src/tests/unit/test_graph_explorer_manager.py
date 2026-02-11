@@ -48,7 +48,6 @@ class TestGraphExplorerManager:
     def manager(self):
         settings = MagicMock()
         settings.DATABRICKS_WAREHOUSE_ID = "test-warehouse"
-        settings.LLM_FOUNDATIONAL_ENDPOINT = ""
         settings.LLM_ENDPOINT = ""
         settings.GRAPH_MAX_EDGES = 10000
         settings.GRAPH_MAX_NODES = 5000
@@ -373,7 +372,6 @@ class TestGraphExplorerManager:
         """Test that get_graph_data returns truncation info when data exceeds limit."""
         settings = MagicMock()
         settings.DATABRICKS_WAREHOUSE_ID = "test-warehouse"
-        settings.LLM_FOUNDATIONAL_ENDPOINT = ""
         settings.LLM_ENDPOINT = ""
         settings.GRAPH_MAX_EDGES = 2  # Very low limit
         settings.GRAPH_QUERY_TIMEOUT = "30s"
@@ -434,7 +432,6 @@ class TestGraphExplorerManager:
         """Test that _execute_sql uses GRAPH_QUERY_TIMEOUT from settings."""
         settings = MagicMock()
         settings.DATABRICKS_WAREHOUSE_ID = "test-warehouse"
-        settings.LLM_FOUNDATIONAL_ENDPOINT = ""
         settings.LLM_ENDPOINT = ""
         settings.GRAPH_MAX_EDGES = 10000
         settings.GRAPH_QUERY_TIMEOUT = "60s"
@@ -484,8 +481,7 @@ class TestGraphExplorerManager:
 
     def test_get_llm_config_enabled(self):
         settings = MagicMock()
-        settings.LLM_FOUNDATIONAL_ENDPOINT = "databricks-claude-sonnet"
-        settings.LLM_ENDPOINT = ""
+        settings.LLM_ENDPOINT = "databricks-claude-sonnet"
         mgr = GraphExplorerManager(settings=settings)
 
         config = mgr.get_llm_config()

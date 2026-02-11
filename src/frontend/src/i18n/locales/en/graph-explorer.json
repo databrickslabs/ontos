@@ -134,19 +134,6 @@
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out"
   },
-  "tableView": {
-    "title": "Data Table",
-    "nodes": "Nodes",
-    "edges": "Edges",
-    "label": "Label",
-    "type": "Type",
-    "id": "ID",
-    "source": "Source",
-    "target": "Target",
-    "relationship": "Relationship",
-    "noNodes": "No nodes to display.",
-    "noEdges": "No edges to display."
-  },
   "diagrams": {
     "title": "Saved Diagrams",
     "save": "Save",
@@ -156,11 +143,6 @@
     "restore": "Restore",
     "delete": "Delete",
     "empty": "No saved diagrams yet. Save the current view to create one."
-  },
-  "viewMode": {
-    "graph": "Graph",
-    "table": "Table",
-    "split": "Split"
   },
   "queryPanel": {
     "title": "Graph Query",

@@ -25,6 +25,7 @@ from src.controller.workspace_manager import WorkspaceManager
 from src.controller.change_log_manager import ChangeLogManager
 from src.controller.datasets_manager import DatasetsManager
 from src.controller.delivery_service import DeliveryService
+from src.controller.graph_explorer_manager import GraphExplorerManager
 
 # Import other dependencies needed by these providers
 from src.common.database import get_db
@@ -180,6 +181,13 @@ def get_datasets_manager(request: Request) -> DatasetsManager:
     return manager
 
 # Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added
+
+def get_graph_explorer_manager(request: Request) -> GraphExplorerManager:
+    manager = getattr(request.app.state, 'graph_explorer_manager', None)
+    if not manager:
+        logger.critical("GraphExplorerManager not found in application state during request!")
+        raise HTTPException(status_code=503, detail="Graph Explorer service not configured.")
+    return manager
 
 def get_delivery_service(request: Request) -> DeliveryService:
     """Get the DeliveryService for multi-mode delivery of governance changes."""

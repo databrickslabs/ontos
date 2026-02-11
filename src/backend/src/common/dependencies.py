@@ -20,7 +20,8 @@ from src.controller.search_manager import SearchManager
 from src.controller.tags_manager import TagsManager # Import TagsManager
 from src.controller.workspace_manager import WorkspaceManager # Import WorkspaceManager
 from src.controller.change_log_manager import ChangeLogManager # Import ChangeLogManager
-from src.controller.datasets_manager import DatasetsManager # Import DatasetsManager
+from src.controller.datasets_manager import DatasetsManager
+from src.controller.graph_explorer_manager import GraphExplorerManager # Import DatasetsManager
 
 # Import base dependencies
 from src.common.database import get_session_factory # Import the factory function
@@ -47,6 +48,7 @@ from src.common.manager_dependencies import (
     get_workspace_manager,
     get_change_log_manager,
     get_datasets_manager,
+    get_graph_explorer_manager,
 )
 # Import workspace client getter separately as it might be structured differently
 from src.common.workspace_client import get_workspace_client_dependency  # Fixed to use proper wrapper
@@ -120,6 +122,7 @@ SearchManagerDep = Annotated[SearchManager, Depends(get_search_manager)]
 WorkspaceManagerDep = Annotated[WorkspaceManager, Depends(get_workspace_manager)]
 ChangeLogManagerDep = Annotated[ChangeLogManager, Depends(get_change_log_manager)]
 DatasetsManagerDep = Annotated[DatasetsManager, Depends(get_datasets_manager)]
+GraphExplorerManagerDep = Annotated[GraphExplorerManager, Depends(get_graph_explorer_manager)]
 
 # Permission Checker Dependency
 PermissionCheckerDep = AuthorizationManagerDep 

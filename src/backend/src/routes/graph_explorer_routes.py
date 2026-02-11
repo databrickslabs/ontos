@@ -8,7 +8,10 @@ The table name is passed as a query parameter or in the request body.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 
+from src.common.authorization import PermissionChecker
 from src.common.config import Settings, get_settings
+from src.common.dependencies import GraphExplorerManagerDep
+from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.workspace_client import get_workspace_client
 from src.controller.graph_explorer_manager import GraphExplorerManager, DEFAULT_TABLE_NAME
@@ -29,12 +32,9 @@ from src.models.graph_explorer import (
 
 logger = get_logger(__name__)
 
+GRAPH_EXPLORER_FEATURE_ID = 'graph-explorer'
+
 router = APIRouter(prefix="/api/graph-explorer", tags=["graph-explorer"])
-
-
-def get_graph_explorer_manager(request: Request) -> GraphExplorerManager:
-    """Get the GraphExplorerManager from app state."""
-    return request.app.state.graph_explorer_manager
 
 
 def _get_ws_and_warehouse(settings: Settings):
@@ -49,8 +49,9 @@ def _get_ws_and_warehouse(settings: Settings):
 @router.get("", response_model=GraphDataResponse)
 async def get_graph_data(
     table_name: str = Query(default=DEFAULT_TABLE_NAME, alias="tableName"),
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     """Read graph data from a Databricks table."""
     try:
@@ -74,8 +75,9 @@ async def get_neighbors(
     edge_types: Optional[List[str]] = Query(default=None, alias="edgeTypes"),
     limit: int = Query(default=25, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     """Get the 1-hop neighborhood of a node for incremental expansion."""
     try:
@@ -99,8 +101,9 @@ async def get_neighbors(
 @router.post("/save", response_model=SaveGraphResponse)
 async def save_graph_data(
     request: SaveGraphRequest,
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Write new nodes and edges to a Databricks table."""
     try:
@@ -124,8 +127,9 @@ async def save_graph_data(
 @router.post("/ensure-table", response_model=EnsureTableResponse)
 async def ensure_table(
     table_name: str = Query(default=DEFAULT_TABLE_NAME, alias="tableName"),
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Ensure the graph table exists, creating it if necessary."""
     try:
@@ -142,8 +146,9 @@ async def ensure_table(
 @router.delete("/node")
 async def delete_node(
     request: DeleteNodeRequest,
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Delete a node and its connected edges from the Databricks table."""
     try:
@@ -160,8 +165,9 @@ async def delete_node(
 @router.delete("/edge")
 async def delete_edge(
     request: DeleteEdgeRequest,
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Delete an edge from the Databricks table."""
     try:
@@ -181,8 +187,9 @@ async def delete_edge(
 @router.put("/node")
 async def update_node(
     request: UpdateNodeRequest,
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Update a node in the Databricks table."""
     try:
@@ -202,6 +209,7 @@ async def update_node(
 @router.get("/limits", response_model=GraphLimitsResponse)
 async def get_graph_limits(
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     """Return the current server-side safety limits for graph operations."""
     return GraphLimitsResponse(
@@ -214,7 +222,8 @@ async def get_graph_limits(
 
 @router.get("/llm-config", response_model=LlmConfigResponse)
 async def get_llm_config(
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     """Return the current LLM configuration status for the query panel."""
     return manager.get_llm_config()
@@ -223,8 +232,9 @@ async def get_llm_config(
 @router.post("/query", response_model=GraphQueryResponse)
 async def execute_graph_query(
     request: GraphQueryRequest,
-    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    manager: GraphExplorerManagerDep = None,
     settings: Settings = Depends(get_settings),
+    _: bool = Depends(PermissionChecker(GRAPH_EXPLORER_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Translate a Cypher/Gremlin query to SQL via LLM and execute it."""
     try:

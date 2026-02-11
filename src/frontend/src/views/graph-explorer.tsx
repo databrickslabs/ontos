@@ -3,8 +3,20 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useGraphEditor } from '@/hooks/use-graph-editor';
 import type { GraphData, GraphNode, GraphEdge } from '@/types/graph-explorer';
-import GraphVisualization, { type GraphVisualizationRef } from '@/components/graph-explorer/graph-visualization';
+import GraphVisualization, {
+  type GraphVisualizationRef,
+  type NodeRightClickEvent,
+  type EdgeRightClickEvent,
+  type CanvasRightClickEvent,
+} from '@/components/graph-explorer/graph-visualization';
+import {
+  GraphContextMenu,
+  type ContextMenuTarget,
+  type ContextMenuPosition,
+} from '@/components/graph-explorer/graph-context-menu';
 import GraphControls from '@/components/graph-explorer/graph-controls';
+import { GraphTableView } from '@/components/graph-explorer/graph-table-view';
+import { DiagramManager } from '@/components/graph-explorer/diagram-manager';
 import NodePalette from '@/components/graph-explorer/node-palette';
 import NodeSearch from '@/components/graph-explorer/node-search';
 import { NodeForm, EdgeForm } from '@/components/graph-explorer/node-edge-form';
@@ -13,7 +25,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Save, RefreshCw, Database } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Loader2, Save, RefreshCw, Database, AlertTriangle, LayoutGrid, Table2, Columns2 } from 'lucide-react';
+
+type ViewMode = 'graph' | 'table' | 'split';
 
 const DEFAULT_TABLE = 'main.default.property_graph_entity_edges';
 
@@ -30,6 +46,8 @@ export default function GraphExplorerView() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
 
   // Graph editor hook — destructure stable callbacks for dependency arrays
   const editor = useGraphEditor({ initialData: EMPTY_GRAPH_DATA });
@@ -50,6 +68,9 @@ export default function GraphExplorerView() {
     isEdgeCreateMode,
     edgeCreateSourceId,
     selectedNodeId,
+    mergeNeighbors,
+    collapseNode,
+    expandedNodeIds,
   } = editor;
 
   // Visualization settings
@@ -61,6 +82,7 @@ export default function GraphExplorerView() {
   const [edgeLength, setEdgeLength] = useState(80);
   const [edgeOpacity, setEdgeOpacity] = useState(0.6);
   const [nodeSize, setNodeSize] = useState(6);
+  const [viewMode, setViewMode] = useState<ViewMode>('graph');
 
   // Dialog states
   const [nodeFormOpen, setNodeFormOpen] = useState(false);
@@ -74,6 +96,183 @@ export default function GraphExplorerView() {
 
   // Query panel overlay — when a query is active, we show its results instead of the full graph
   const [queryOverrideData, setQueryOverrideData] = useState<GraphData | null>(null);
+
+  // Context menu state
+  const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition | null>(null);
+  const [contextMenuTarget, setContextMenuTarget] = useState<ContextMenuTarget | null>(null);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenuPosition(null);
+    setContextMenuTarget(null);
+  }, []);
+
+  // Build the set of edge types connected to a given node
+  const getConnectedEdgeTypes = useCallback(
+    (nodeId: string): string[] => {
+      const types = new Set<string>();
+      editor.graphData.edges.forEach((e) => {
+        if (e.source === nodeId || e.target === nodeId) {
+          types.add(e.relationshipType);
+        }
+      });
+      return [...types].sort();
+    },
+    [editor.graphData.edges],
+  );
+
+  // Right-click handlers for context menu
+  const handleNodeRightClick = useCallback(
+    (event: NodeRightClickEvent) => {
+      setContextMenuPosition({ x: event.screenX, y: event.screenY });
+      setContextMenuTarget({
+        type: 'node',
+        id: event.nodeId,
+        label: event.label,
+        nodeType: event.type,
+        isExpanded: expandedNodeIds.has(event.nodeId),
+        connectedEdgeTypes: getConnectedEdgeTypes(event.nodeId),
+      });
+    },
+    [expandedNodeIds, getConnectedEdgeTypes],
+  );
+
+  const handleEdgeRightClick = useCallback((event: EdgeRightClickEvent) => {
+    setContextMenuPosition({ x: event.screenX, y: event.screenY });
+    setContextMenuTarget({
+      type: 'edge',
+      id: event.edgeId,
+      relationshipType: event.relationshipType,
+    });
+  }, []);
+
+  const handleCanvasRightClick = useCallback((event: CanvasRightClickEvent) => {
+    setContextMenuPosition({ x: event.screenX, y: event.screenY });
+    setContextMenuTarget({ type: 'canvas' });
+  }, []);
+
+  // Expand neighbors of a node via the API
+  const handleExpandNeighbors = useCallback(
+    async (nodeId: string, direction: 'outgoing' | 'incoming' | 'both') => {
+      try {
+        const params = new URLSearchParams({
+          nodeId,
+          tableName,
+          direction,
+          limit: '25',
+        });
+        const response = await fetch(`/api/graph-explorer/neighbors?${params}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(err.detail || `HTTP ${response.status}`);
+        }
+        const data: GraphData & { truncated?: boolean; totalAvailable?: number } = await response.json();
+        mergeNeighbors(nodeId, data);
+
+        const newNodeCount = data.nodes.length;
+        const newEdgeCount = data.edges.length;
+        if (newNodeCount > 0 || newEdgeCount > 0) {
+          toast({
+            title: t('contextMenu.neighborsLoaded'),
+            description: t('contextMenu.neighborsLoadedDescription', { nodeCount: newNodeCount, edgeCount: newEdgeCount }),
+          });
+        } else {
+          toast({ title: t('contextMenu.noNewNeighbors') });
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast({ title: t('contextMenu.errorLoadingNeighbors'), description: message, variant: 'destructive' });
+      }
+    },
+    [tableName, mergeNeighbors, toast, t],
+  );
+
+  // Expand neighbors filtered by a specific edge type
+  const handleExpandByType = useCallback(
+    async (nodeId: string, edgeType: string) => {
+      try {
+        const params = new URLSearchParams({
+          nodeId,
+          tableName,
+          direction: 'both',
+          limit: '25',
+        });
+        params.append('edgeTypes', edgeType);
+        const response = await fetch(`/api/graph-explorer/neighbors?${params}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(err.detail || `HTTP ${response.status}`);
+        }
+        const data: GraphData & { truncated?: boolean; totalAvailable?: number } = await response.json();
+        mergeNeighbors(nodeId, data);
+
+        const newNodeCount = data.nodes.length;
+        const newEdgeCount = data.edges.length;
+        if (newNodeCount > 0 || newEdgeCount > 0) {
+          toast({
+            title: t('contextMenu.neighborsLoaded'),
+            description: t('contextMenu.neighborsLoadedDescription', { nodeCount: newNodeCount, edgeCount: newEdgeCount }),
+          });
+        } else {
+          toast({ title: t('contextMenu.noNewNeighbors') });
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast({ title: t('contextMenu.errorLoadingNeighbors'), description: message, variant: 'destructive' });
+      }
+    },
+    [tableName, mergeNeighbors, toast, t],
+  );
+
+  // Collapse handler delegates to editor hook
+  const handleCollapseNode = useCallback(
+    (nodeId: string) => {
+      collapseNode(nodeId);
+    },
+    [collapseNode],
+  );
+
+  // Center on node via graph ref
+  const handleCenterOnNode = useCallback(
+    (nodeId: string) => {
+      graphRef.current?.centerOnNode(nodeId);
+    },
+    [],
+  );
+
+  // Edit node via context menu — opens the node form
+  const handleContextEditNode = useCallback(
+    (nodeId: string) => {
+      selectNode(nodeId);
+      const node = editor.graphData.nodes.find((n) => n.id === nodeId);
+      if (node) {
+        setNodeFormData(node);
+        setNodeFormMode('edit');
+        setNodeFormOpen(true);
+      }
+    },
+    [selectNode, editor.graphData.nodes],
+  );
+
+  // Edit edge via context menu — opens the edge form
+  const handleContextEditEdge = useCallback(
+    (edgeId: string) => {
+      selectEdge(edgeId);
+      const edge = editor.graphData.edges.find((e) => e.id === edgeId);
+      if (edge) {
+        setEdgeFormData(edge);
+        setEdgeFormMode('edit');
+        setEdgeFormOpen(true);
+      }
+    },
+    [selectEdge, editor.graphData.edges],
+  );
+
+  // Create node from canvas context menu
+  const handleContextCreateNode = useCallback(() => {
+    setNodeFormData(undefined);
+    setNodeFormMode('create');
+    setNodeFormOpen(true);
+  }, []);
 
   const handleQueryApply = useCallback((nodes: GraphNode[], edges: GraphEdge[]) => {
     setQueryOverrideData({ nodes, edges });
@@ -115,9 +314,11 @@ export default function GraphExplorerView() {
         const err = await response.json().catch(() => ({ detail: response.statusText }));
         throw new Error(err.detail || `HTTP ${response.status}`);
       }
-      const data: GraphData = await response.json();
+      const data = await response.json() as GraphData & { truncated?: boolean; totalAvailable?: number | null };
       resetToInitialData(data);
       setHasLoaded(true);
+      setIsTruncated(!!data.truncated);
+      setTotalAvailable(data.totalAvailable ?? null);
       toast({ title: t('toast.graphLoaded'), description: t('toast.graphLoadedDescription', { nodeCount: data.nodes.length, edgeCount: data.edges.length, tableName }) });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -354,6 +555,24 @@ export default function GraphExplorerView() {
         tableName={tableName}
       />
 
+      {/* Truncation Banner */}
+      {isTruncated && totalAvailable && (
+        <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="flex items-center gap-3 py-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+            <span className="text-sm text-amber-700 dark:text-amber-400">
+              {t('limits.truncatedDescription', {
+                shown: editor.graphData.nodes.length + editor.graphData.edges.length,
+                total: totalAvailable,
+              })}
+            </span>
+            <Badge variant="outline" className="ml-auto text-amber-600 border-amber-400 text-xs">
+              {t('limits.truncated')}
+            </Badge>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Main Layout */}
       <div className="flex flex-1 gap-4 min-h-0">
         {/* Left Sidebar */}
@@ -368,42 +587,151 @@ export default function GraphExplorerView() {
             onStartCreateEdge={startEdgeCreateMode}
             disabled={!hasLoaded}
           />
+          <DiagramManager
+            tableName={tableName}
+            currentData={displayData}
+            onRestoreDiagram={resetToInitialData}
+            disabled={!hasLoaded}
+          />
         </div>
 
-        {/* Graph Canvas */}
-        <div ref={containerRef} className="flex-1 rounded-lg border bg-background overflow-hidden relative min-h-[400px]">
+        {/* Graph Canvas / Table / Split */}
+        <div ref={containerRef} className="flex-1 flex flex-col min-h-[400px] gap-0 relative">
+          {/* View mode toggle */}
+          <div className="absolute top-2 left-2 z-20 flex gap-0.5 rounded-md border bg-background/90 backdrop-blur-sm p-0.5">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={viewMode === 'graph' ? 'default' : 'ghost'}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setViewMode('graph')}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>{t('viewMode.graph')}</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={viewMode === 'split' ? 'default' : 'ghost'}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setViewMode('split')}
+                  >
+                    <Columns2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>{t('viewMode.split')}</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={viewMode === 'table' ? 'default' : 'ghost'}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setViewMode('table')}
+                  >
+                    <Table2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p>{t('viewMode.table')}</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
           {isLoading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           )}
           {!hasLoaded && !isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground rounded-lg border bg-background">
               <div className="text-center space-y-2">
                 <Database className="h-12 w-12 mx-auto opacity-50" />
                 <p>{t('emptyState.message')}</p>
               </div>
             </div>
           )}
-          <GraphVisualization
-            ref={graphRef}
-            data={displayData}
-            showProposed={showProposed}
-            selectedNodeTypes={selectedNodeTypes}
-            selectedRelationshipTypes={selectedRelationshipTypes}
-            showNodeLabels={showNodeLabels}
-            showEdgeLabels={showEdgeLabels}
-            edgeLength={edgeLength}
-            edgeOpacity={edgeOpacity}
-            nodeSize={nodeSize}
-            width={dimensions.width}
-            height={dimensions.height}
-            onNodeClick={handleNodeClick}
-            onEdgeClick={handleEdgeClick}
-            edgeCreateMode={isEdgeCreateMode}
-            edgeCreateSourceId={edgeCreateSourceId}
-            selectedNodeId={selectedNodeId}
-          />
+
+          {viewMode === 'graph' && (
+            <div className="flex-1 rounded-lg border bg-background overflow-hidden">
+              <GraphVisualization
+                ref={graphRef}
+                data={displayData}
+                showProposed={showProposed}
+                selectedNodeTypes={selectedNodeTypes}
+                selectedRelationshipTypes={selectedRelationshipTypes}
+                showNodeLabels={showNodeLabels}
+                showEdgeLabels={showEdgeLabels}
+                edgeLength={edgeLength}
+                edgeOpacity={edgeOpacity}
+                nodeSize={nodeSize}
+                width={dimensions.width}
+                height={dimensions.height}
+                onNodeClick={handleNodeClick}
+                onEdgeClick={handleEdgeClick}
+                onNodeRightClick={handleNodeRightClick}
+                onEdgeRightClick={handleEdgeRightClick}
+                onCanvasRightClick={handleCanvasRightClick}
+                edgeCreateMode={isEdgeCreateMode}
+                edgeCreateSourceId={edgeCreateSourceId}
+                selectedNodeId={selectedNodeId}
+              />
+            </div>
+          )}
+
+          {viewMode === 'table' && (
+            <GraphTableView
+              data={displayData}
+              onNodeClick={handleNodeClick}
+              onEdgeClick={handleEdgeClick}
+              selectedNodeId={selectedNodeId}
+              className="flex-1 rounded-lg"
+            />
+          )}
+
+          {viewMode === 'split' && (
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="flex-1 rounded-lg border bg-background overflow-hidden min-h-[200px]">
+                <GraphVisualization
+                  ref={graphRef}
+                  data={displayData}
+                  showProposed={showProposed}
+                  selectedNodeTypes={selectedNodeTypes}
+                  selectedRelationshipTypes={selectedRelationshipTypes}
+                  showNodeLabels={showNodeLabels}
+                  showEdgeLabels={showEdgeLabels}
+                  edgeLength={edgeLength}
+                  edgeOpacity={edgeOpacity}
+                  nodeSize={nodeSize}
+                  width={dimensions.width}
+                  height={Math.max(Math.floor(dimensions.height * 0.55), 200)}
+                  onNodeClick={handleNodeClick}
+                  onEdgeClick={handleEdgeClick}
+                  onNodeRightClick={handleNodeRightClick}
+                  onEdgeRightClick={handleEdgeRightClick}
+                  onCanvasRightClick={handleCanvasRightClick}
+                  edgeCreateMode={isEdgeCreateMode}
+                  edgeCreateSourceId={edgeCreateSourceId}
+                  selectedNodeId={selectedNodeId}
+                />
+              </div>
+              <GraphTableView
+                data={displayData}
+                onNodeClick={handleNodeClick}
+                onEdgeClick={handleEdgeClick}
+                selectedNodeId={selectedNodeId}
+                className="h-[250px] rounded-lg"
+              />
+            </div>
+          )}
         </div>
 
         {/* Right Sidebar */}
@@ -475,6 +803,24 @@ export default function GraphExplorerView() {
         targetNodeId={edgeFormTargetId}
         mode={edgeFormMode}
         availableNodes={editor.graphData.nodes}
+      />
+
+      {/* Context Menu */}
+      <GraphContextMenu
+        position={contextMenuPosition}
+        target={contextMenuTarget}
+        onClose={closeContextMenu}
+        onExpandNeighbors={handleExpandNeighbors}
+        onExpandByType={handleExpandByType}
+        onCollapseNode={handleCollapseNode}
+        onEditNode={handleContextEditNode}
+        onDeleteNode={handleDeleteNode}
+        onCenterOnNode={handleCenterOnNode}
+        onEditEdge={handleContextEditEdge}
+        onDeleteEdge={handleDeleteEdge}
+        onCreateNode={handleContextCreateNode}
+        onResetView={() => graphRef.current?.resetView()}
+        onFitToScreen={() => graphRef.current?.resetView()}
       />
     </div>
   );

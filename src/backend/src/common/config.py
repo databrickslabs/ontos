@@ -139,6 +139,12 @@ class Settings(BaseSettings):
         env='LLM_INJECTION_CHECK_PROMPT'
     )
 
+    # Graph Explorer safety limits
+    GRAPH_MAX_NODES: int = Field(5000, env='GRAPH_MAX_NODES')  # Max nodes returned from initial graph load
+    GRAPH_MAX_EDGES: int = Field(10000, env='GRAPH_MAX_EDGES')  # Max edges returned from initial graph load
+    GRAPH_QUERY_TIMEOUT: str = Field("30s", env='GRAPH_QUERY_TIMEOUT')  # SQL statement timeout
+    GRAPH_NEIGHBOR_LIMIT: int = Field(50, env='GRAPH_NEIGHBOR_LIMIT')  # Default max neighbors per expansion
+
     # Sandbox allowlist settings
     sandbox_default_schema: str = Field('sandbox', validation_alias=AliasChoices('SANDBOX_DEFAULT_SCHEMA', 'sandbox_default_schema'))
     sandbox_allowed_catalog_prefixes: List[str] = Field(default_factory=lambda: ['user_'], validation_alias=AliasChoices('SANDBOX_ALLOWED_CATALOG_PREFIXES', 'sandbox_allowed_catalog_prefixes'))

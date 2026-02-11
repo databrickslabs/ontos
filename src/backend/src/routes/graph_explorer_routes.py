@@ -5,7 +5,7 @@ All operations go through Databricks Statement Execution API.
 The table name is passed as a query parameter or in the request body.
 """
 
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 
 from src.common.config import Settings, get_settings
@@ -17,9 +17,11 @@ from src.models.graph_explorer import (
     DeleteNodeRequest,
     EnsureTableResponse,
     GraphDataResponse,
+    GraphLimitsResponse,
     GraphQueryRequest,
     GraphQueryResponse,
     LlmConfigResponse,
+    NeighborDirection,
     SaveGraphRequest,
     SaveGraphResponse,
     UpdateNodeRequest,
@@ -62,6 +64,36 @@ async def get_graph_data(
     except Exception as e:
         logger.error(f"Error reading graph data: {e}")
         raise HTTPException(status_code=500, detail=f"Error reading graph data: {str(e)}")
+
+
+@router.get("/neighbors", response_model=GraphDataResponse)
+async def get_neighbors(
+    node_id: str = Query(..., alias="nodeId"),
+    table_name: str = Query(default=DEFAULT_TABLE_NAME, alias="tableName"),
+    direction: NeighborDirection = Query(default=NeighborDirection.BOTH),
+    edge_types: Optional[List[str]] = Query(default=None, alias="edgeTypes"),
+    limit: int = Query(default=25, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    manager: GraphExplorerManager = Depends(get_graph_explorer_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get the 1-hop neighborhood of a node for incremental expansion."""
+    try:
+        ws_client, warehouse_id = _get_ws_and_warehouse(settings)
+        data = manager.get_neighbors(
+            ws_client, table_name, warehouse_id,
+            node_id=node_id,
+            direction=direction.value,
+            edge_types=edge_types,
+            limit=limit,
+            offset=offset,
+        )
+        return data
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error getting neighbors: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting neighbors: {str(e)}")
 
 
 @router.post("/save", response_model=SaveGraphResponse)
@@ -165,6 +197,19 @@ async def update_node(
     except Exception as e:
         logger.error(f"Error updating node: {e}")
         raise HTTPException(status_code=500, detail=f"Error updating node: {str(e)}")
+
+
+@router.get("/limits", response_model=GraphLimitsResponse)
+async def get_graph_limits(
+    settings: Settings = Depends(get_settings),
+):
+    """Return the current server-side safety limits for graph operations."""
+    return GraphLimitsResponse(
+        maxNodes=settings.GRAPH_MAX_NODES,
+        maxEdges=settings.GRAPH_MAX_EDGES,
+        neighborLimit=settings.GRAPH_NEIGHBOR_LIMIT,
+        queryTimeout=settings.GRAPH_QUERY_TIMEOUT,
+    )
 
 
 @router.get("/llm-config", response_model=LlmConfigResponse)

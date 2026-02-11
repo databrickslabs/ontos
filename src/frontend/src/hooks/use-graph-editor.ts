@@ -9,7 +9,7 @@
  * - Selection and edge-creation mode
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { GraphNode, GraphEdge, GraphData } from '@/types/graph-explorer';
 import { ChangeStatus } from '@/types/graph-explorer';
 
@@ -25,6 +25,7 @@ interface UseGraphEditorReturn {
   selectedEdgeId: string | null;
   isEdgeCreateMode: boolean;
   edgeCreateSourceId: string | null;
+  expandedNodeIds: Set<string>;
   addNode: (node: Omit<GraphNode, 'status'>) => void;
   updateNode: (nodeId: string, updates: Partial<GraphNode>) => void;
   deleteNode: (nodeId: string) => void;
@@ -36,6 +37,8 @@ interface UseGraphEditorReturn {
   startEdgeCreateMode: () => void;
   cancelEdgeCreateMode: () => void;
   handleNodeClickForEdge: (nodeId: string) => { sourceId: string; targetId: string } | null;
+  mergeNeighbors: (nodeId: string, data: GraphData) => void;
+  collapseNode: (nodeId: string) => void;
   markItemsAsSaved: (nodeIds: string[], edgeIds: string[]) => void;
   clearModifications: (nodeIds: string[], edgeIds: string[]) => void;
   resetToInitialData: (newData: GraphData) => void;
@@ -63,6 +66,10 @@ export function useGraphEditor({ initialData }: UseGraphEditorOptions): UseGraph
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [isEdgeCreateMode, setIsEdgeCreateMode] = useState(false);
   const [edgeCreateSourceId, setEdgeCreateSourceId] = useState<string | null>(null);
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+  // Track which nodes were added by expanding a specific node, for collapse.
+  // Use a ref to avoid stale closure issues in collapseNode.
+  const expansionSourcesRef = useRef<Map<string, Set<string>>>(new Map());
 
   // Note: Don't sync initialData via useEffect - it causes infinite loops
   // when callers pass a new object literal each render.
@@ -213,6 +220,84 @@ export function useGraphEditor({ initialData }: UseGraphEditorOptions): UseGraph
     [isEdgeCreateMode, edgeCreateSourceId],
   );
 
+  const mergeNeighbors = useCallback(
+    (nodeId: string, data: GraphData) => {
+      // Mark this node as expanded
+      setExpandedNodeIds((prev) => new Set(prev).add(nodeId));
+
+      // Record ALL neighbor node IDs in the expansion tracking (not just new ones).
+      // This ensures that shared nodes (reached from multiple expansions) are tracked
+      // correctly for collapse logic.
+      const neighborNodeIds = new Set(data.nodes.map((n) => n.id));
+      if (neighborNodeIds.size > 0) {
+        const existing = expansionSourcesRef.current.get(nodeId) || new Set<string>();
+        neighborNodeIds.forEach((id) => existing.add(id));
+        expansionSourcesRef.current.set(nodeId, existing);
+      }
+
+      // Merge new data into the graph, deduplicating against existing nodes/edges.
+      setOriginalData((prev) => {
+        const existingNodeIds = new Set(prev.nodes.map((n) => n.id));
+        const existingEdgeIds = new Set(prev.edges.map((e) => e.id));
+
+        const newNodes = data.nodes.filter((n) => !existingNodeIds.has(n.id));
+        const newEdges = data.edges.filter((e) => !existingEdgeIds.has(e.id));
+
+        if (newNodes.length === 0 && newEdges.length === 0) return prev;
+
+        return {
+          nodes: [...prev.nodes, ...newNodes],
+          edges: [...prev.edges, ...newEdges],
+        };
+      });
+    },
+    [],
+  );
+
+  const collapseNode = useCallback(
+    (nodeId: string) => {
+      setExpandedNodeIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(nodeId);
+        return newSet;
+      });
+
+      // Remove nodes that were added by expanding this node
+      // (but only if they aren't also connected to other expanded nodes)
+      const sources = expansionSourcesRef.current;
+      const addedByThisNode = sources.get(nodeId);
+      if (!addedByThisNode || addedByThisNode.size === 0) return;
+
+      // Find nodes that are ONLY reachable through this expansion
+      const addedByOtherNodes = new Set<string>();
+      sources.forEach((nodeSet, sourceId) => {
+        if (sourceId !== nodeId) {
+          nodeSet.forEach((id) => addedByOtherNodes.add(id));
+        }
+      });
+
+      const nodeIdsToRemove = new Set<string>();
+      addedByThisNode.forEach((id) => {
+        if (!addedByOtherNodes.has(id)) {
+          nodeIdsToRemove.add(id);
+        }
+      });
+
+      if (nodeIdsToRemove.size > 0) {
+        setOriginalData((prev) => ({
+          nodes: prev.nodes.filter((n) => !nodeIdsToRemove.has(n.id)),
+          edges: prev.edges.filter(
+            (e) => !nodeIdsToRemove.has(e.source) && !nodeIdsToRemove.has(e.target),
+          ),
+        }));
+      }
+
+      // Clean up expansion tracking
+      sources.delete(nodeId);
+    },
+    [],
+  );
+
   const markItemsAsSaved = useCallback((nodeIds: string[], edgeIds: string[]) => {
     let savedNodes: GraphNode[] = [];
     let savedEdges: GraphEdge[] = [];
@@ -245,6 +330,8 @@ export function useGraphEditor({ initialData }: UseGraphEditorOptions): UseGraph
     setDeletedEdgeIds(new Set());
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
+    setExpandedNodeIds(new Set());
+    expansionSourcesRef.current = new Map();
   }, []);
 
   const clearModifications = useCallback((nodeIds: string[], edgeIds: string[]) => {
@@ -297,6 +384,7 @@ export function useGraphEditor({ initialData }: UseGraphEditorOptions): UseGraph
     selectedEdgeId,
     isEdgeCreateMode,
     edgeCreateSourceId,
+    expandedNodeIds,
     addNode,
     updateNode,
     deleteNode,
@@ -308,6 +396,8 @@ export function useGraphEditor({ initialData }: UseGraphEditorOptions): UseGraph
     startEdgeCreateMode,
     cancelEdgeCreateMode,
     handleNodeClickForEdge,
+    mergeNeighbors,
+    collapseNode,
     markItemsAsSaved,
     clearModifications,
     resetToInitialData,

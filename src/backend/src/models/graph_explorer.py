@@ -2,6 +2,7 @@
 Pydantic models for Graph Explorer API.
 """
 
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
@@ -53,10 +54,19 @@ class UpdateNodeRequest(BaseModel):
     properties: Dict[str, Any] = Field(default_factory=dict)
 
 
+class NeighborDirection(str, Enum):
+    """Direction for neighbor expansion."""
+    OUTGOING = "outgoing"
+    INCOMING = "incoming"
+    BOTH = "both"
+
+
 class GraphDataResponse(BaseModel):
     """Response model for graph data."""
     nodes: List[Dict[str, Any]]
     edges: List[Dict[str, Any]]
+    truncated: bool = False
+    totalAvailable: Optional[int] = None
 
 
 class SaveGraphResponse(BaseModel):
@@ -106,6 +116,14 @@ class GraphQueryResponse(BaseModel):
     vertexOnly: Optional[bool] = None
     message: Optional[str] = None
     metadata: Optional[GraphQueryResponseMetadata] = None
+
+
+class GraphLimitsResponse(BaseModel):
+    """Response model for graph safety limits."""
+    maxNodes: int = 5000
+    maxEdges: int = 10000
+    neighborLimit: int = 50
+    queryTimeout: str = "30s"
 
 
 class LlmConfigResponse(BaseModel):

@@ -55,6 +55,26 @@ const STATUS_COLORS = {
   EDGE_SOURCE: '#22c55e',
 } as const;
 
+export interface NodeRightClickEvent {
+  nodeId: string;
+  label: string;
+  type: string;
+  screenX: number;
+  screenY: number;
+}
+
+export interface EdgeRightClickEvent {
+  edgeId: string;
+  relationshipType: string;
+  screenX: number;
+  screenY: number;
+}
+
+export interface CanvasRightClickEvent {
+  screenX: number;
+  screenY: number;
+}
+
 export interface GraphVisualizationProps {
   data: GraphData;
   showProposed: boolean;
@@ -69,6 +89,9 @@ export interface GraphVisualizationProps {
   height?: number;
   onNodeClick?: (nodeId: string) => void;
   onEdgeClick?: (edgeId: string) => void;
+  onNodeRightClick?: (event: NodeRightClickEvent) => void;
+  onEdgeRightClick?: (event: EdgeRightClickEvent) => void;
+  onCanvasRightClick?: (event: CanvasRightClickEvent) => void;
   edgeCreateMode?: boolean;
   edgeCreateSourceId?: string | null;
   selectedNodeId?: string | null;
@@ -97,6 +120,9 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
       height = 600,
       onNodeClick,
       onEdgeClick,
+      onNodeRightClick,
+      onEdgeRightClick,
+      onCanvasRightClick,
       edgeCreateMode = false,
       edgeCreateSourceId = null,
       selectedNodeId = null,
@@ -135,6 +161,12 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
     showEdgeLabelsRef.current = showEdgeLabels;
     const nodeSizeRef = useRef(nodeSize);
     nodeSizeRef.current = nodeSize;
+    const onNodeRightClickRef = useRef(onNodeRightClick);
+    onNodeRightClickRef.current = onNodeRightClick;
+    const onEdgeRightClickRef = useRef(onEdgeRightClick);
+    onEdgeRightClickRef.current = onEdgeRightClick;
+    const onCanvasRightClickRef = useRef(onCanvasRightClick);
+    onCanvasRightClickRef.current = onCanvasRightClick;
 
     const { t } = useTranslation('graph-explorer');
 
@@ -436,6 +468,57 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
       }
     }, []);
 
+    // Right-click handlers
+    const handleNodeRightClick = useCallback(
+      (node: ForceGraphNode, event: MouseEvent) => {
+        event.preventDefault();
+        if (onNodeRightClickRef.current) {
+          onNodeRightClickRef.current({
+            nodeId: node.id as string,
+            label: node.name,
+            type: node.type,
+            screenX: event.clientX,
+            screenY: event.clientY,
+          });
+        }
+      },
+      [], // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
+    const handleLinkRightClick = useCallback(
+      (link: ForceGraphLink, event: MouseEvent) => {
+        event.preventDefault();
+        if (onEdgeRightClickRef.current) {
+          onEdgeRightClickRef.current({
+            edgeId: link.id,
+            relationshipType: link.relationshipType,
+            screenX: event.clientX,
+            screenY: event.clientY,
+          });
+        }
+      },
+      [], // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
+    // Canvas right-click (when not on a node or edge)
+    const handleCanvasContextMenu = useCallback(
+      (event: React.MouseEvent) => {
+        // Only fire if the right-click didn't land on a node or edge
+        // react-force-graph handles node/link right-clicks first; if those handlers
+        // fire they call event.preventDefault(). We check defaultPrevented to avoid
+        // double-firing.
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        if (onCanvasRightClickRef.current) {
+          onCanvasRightClickRef.current({
+            screenX: event.clientX,
+            screenY: event.clientY,
+          });
+        }
+      },
+      [], // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
     // ---------------------------------------------------------------------------
     // Custom node renderer — full-featured with performance paths
     // ---------------------------------------------------------------------------
@@ -734,7 +817,7 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
     );
 
     return (
-      <div ref={containerRef} className={cn('relative w-full h-full', edgeCreateMode && 'cursor-crosshair')} style={{ width, height }}>
+      <div ref={containerRef} className={cn('relative w-full h-full', edgeCreateMode && 'cursor-crosshair')} style={{ width, height }} onContextMenu={handleCanvasContextMenu}>
         {/* Dot grid background */}
         <div
           className="absolute inset-0 pointer-events-none"
@@ -754,8 +837,10 @@ const GraphVisualization = React.forwardRef<GraphVisualizationRef, GraphVisualiz
           linkCanvasObject={paintLink}
           onNodeHover={isLargeGraph || (showNodeLabels && showEdgeLabels) ? undefined : handleNodeHover}
           onNodeClick={handleNodeClick}
+          onNodeRightClick={handleNodeRightClick}
           onNodeDragEnd={handleNodeDragEnd}
           onLinkClick={isLargeGraph ? undefined : handleLinkClick}
+          onLinkRightClick={isLargeGraph ? undefined : handleLinkRightClick}
           enableNodeDrag={!isLargeGraph}
           enableZoomInteraction={true}
           enablePanInteraction={true}

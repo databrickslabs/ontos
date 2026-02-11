@@ -225,4 +225,177 @@ describe('useGraphEditor', () => {
     });
     expect(result.current.getModifiedNodes()).toHaveLength(0);
   });
+
+  // ---------------------------------------------------------------
+  // mergeNeighbors tests
+  // ---------------------------------------------------------------
+
+  describe('mergeNeighbors', () => {
+    it('adds new nodes and edges from neighbor expansion', () => {
+      const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+      const neighborData: GraphData = {
+        nodes: [
+          { id: 'n4', label: 'Dave', type: 'Person', properties: {}, status: ChangeStatus.EXISTING },
+        ],
+        edges: [
+          { id: 'e3', source: 'n1', target: 'n4', relationshipType: 'KNOWS', properties: {}, status: ChangeStatus.EXISTING },
+        ],
+      };
+
+      act(() => {
+        result.current.mergeNeighbors('n1', neighborData);
+      });
+
+      expect(result.current.graphData.nodes).toHaveLength(4); // 3 original + 1 new
+      expect(result.current.graphData.edges).toHaveLength(3); // 2 original + 1 new
+      expect(result.current.graphData.nodes.find((n) => n.id === 'n4')).toBeDefined();
+    });
+
+    it('does not duplicate existing nodes', () => {
+      const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+      // Return data that includes n2 (already exists) and n4 (new)
+      const neighborData: GraphData = {
+        nodes: [
+          { id: 'n2', label: 'Bob', type: 'Person', properties: {}, status: ChangeStatus.EXISTING },
+          { id: 'n4', label: 'Dave', type: 'Person', properties: {}, status: ChangeStatus.EXISTING },
+        ],
+        edges: [
+          { id: 'e2', source: 'n1', target: 'n2', relationshipType: 'KNOWS', properties: {}, status: ChangeStatus.EXISTING },
+          { id: 'e3', source: 'n1', target: 'n4', relationshipType: 'LIKES', properties: {}, status: ChangeStatus.EXISTING },
+        ],
+      };
+
+      act(() => {
+        result.current.mergeNeighbors('n1', neighborData);
+      });
+
+      // n2 already existed, so only n4 is added
+      expect(result.current.graphData.nodes).toHaveLength(4); // 3 + 1
+      // e2 already existed, so only e3 is added
+      expect(result.current.graphData.edges).toHaveLength(3); // 2 + 1
+    });
+
+    it('marks node as expanded', () => {
+      const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+      expect(result.current.expandedNodeIds.has('n1')).toBe(false);
+
+      act(() => {
+        result.current.mergeNeighbors('n1', { nodes: [], edges: [] });
+      });
+
+      expect(result.current.expandedNodeIds.has('n1')).toBe(true);
+    });
+
+    it('handles empty neighbor result gracefully', () => {
+      const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+      act(() => {
+        result.current.mergeNeighbors('n1', { nodes: [], edges: [] });
+      });
+
+      // No change in graph data
+      expect(result.current.graphData.nodes).toHaveLength(3);
+      expect(result.current.graphData.edges).toHaveLength(2);
+      // But node is still marked as expanded
+      expect(result.current.expandedNodeIds.has('n1')).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // collapseNode tests
+  // ---------------------------------------------------------------
+
+  describe('collapseNode', () => {
+    it('removes expanded state for a node', () => {
+      const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+      act(() => {
+        result.current.mergeNeighbors('n1', { nodes: [], edges: [] });
+      });
+      expect(result.current.expandedNodeIds.has('n1')).toBe(true);
+
+      act(() => {
+        result.current.collapseNode('n1');
+      });
+      expect(result.current.expandedNodeIds.has('n1')).toBe(false);
+    });
+
+    it('removes nodes that were added by the expansion', () => {
+      const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+      const neighborData: GraphData = {
+        nodes: [
+          { id: 'n4', label: 'Dave', type: 'Person', properties: {}, status: ChangeStatus.EXISTING },
+          { id: 'n5', label: 'Eve', type: 'Person', properties: {}, status: ChangeStatus.EXISTING },
+        ],
+        edges: [
+          { id: 'e3', source: 'n1', target: 'n4', relationshipType: 'KNOWS', properties: {}, status: ChangeStatus.EXISTING },
+          { id: 'e4', source: 'n1', target: 'n5', relationshipType: 'KNOWS', properties: {}, status: ChangeStatus.EXISTING },
+        ],
+      };
+
+      act(() => {
+        result.current.mergeNeighbors('n1', neighborData);
+      });
+      expect(result.current.graphData.nodes).toHaveLength(5); // 3 + 2
+
+      act(() => {
+        result.current.collapseNode('n1');
+      });
+      // n4 and n5 removed, back to original 3
+      expect(result.current.graphData.nodes).toHaveLength(3);
+      expect(result.current.graphData.edges).toHaveLength(2);
+    });
+
+    it('does not remove nodes shared with another expansion', () => {
+      const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+      // Expand n1 → adds n4
+      act(() => {
+        result.current.mergeNeighbors('n1', {
+          nodes: [{ id: 'n4', label: 'Dave', type: 'Person', properties: {}, status: ChangeStatus.EXISTING }],
+          edges: [{ id: 'e3', source: 'n1', target: 'n4', relationshipType: 'KNOWS', properties: {}, status: ChangeStatus.EXISTING }],
+        });
+      });
+
+      // Expand n2 → also references n4
+      act(() => {
+        result.current.mergeNeighbors('n2', {
+          nodes: [{ id: 'n4', label: 'Dave', type: 'Person', properties: {}, status: ChangeStatus.EXISTING }],
+          edges: [{ id: 'e4', source: 'n2', target: 'n4', relationshipType: 'KNOWS', properties: {}, status: ChangeStatus.EXISTING }],
+        });
+      });
+
+      // n4 won't be added again (dedup), but it's tracked by both expansions
+      expect(result.current.graphData.nodes).toHaveLength(4); // 3 original + n4
+
+      // Collapse n1 — n4 should stay because n2 also expanded to it
+      act(() => {
+        result.current.collapseNode('n1');
+      });
+      expect(result.current.graphData.nodes).toHaveLength(4); // n4 still there
+      expect(result.current.graphData.nodes.find((n) => n.id === 'n4')).toBeDefined();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // resetToInitialData clears expansion state
+  // ---------------------------------------------------------------
+
+  it('resetToInitialData clears expansion state', () => {
+    const { result } = renderHook(() => useGraphEditor({ initialData: SAMPLE_DATA }));
+
+    act(() => {
+      result.current.mergeNeighbors('n1', { nodes: [], edges: [] });
+    });
+    expect(result.current.expandedNodeIds.has('n1')).toBe(true);
+
+    act(() => {
+      result.current.resetToInitialData(SAMPLE_DATA);
+    });
+    expect(result.current.expandedNodeIds.size).toBe(0);
+  });
 });

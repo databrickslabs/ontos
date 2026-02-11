@@ -56,10 +56,11 @@ class GraphExplorerManager:
     def _execute_sql(self, ws_client, sql: str, warehouse_id: str) -> Tuple[List[str], List[List[Any]]]:
         """Execute a SQL statement and return (columns, rows)."""
         logger.debug(f"Executing SQL: {sql[:200]}...")
+        timeout = getattr(self.settings, "GRAPH_QUERY_TIMEOUT", "30s") if self.settings else "30s"
         result = ws_client.statement_execution.execute_statement(
             statement=sql,
             warehouse_id=warehouse_id,
-            wait_timeout="30s"
+            wait_timeout=timeout,
         )
 
         if result.status and result.status.state:
@@ -93,14 +94,32 @@ class GraphExplorerManager:
         self._execute_sql(ws_client, sql, warehouse_id)
         logger.info(f"Ensured table exists: {safe_table}")
 
-    def get_graph_data(self, ws_client, table_name: str, warehouse_id: str) -> Dict[str, Any]:
-        """Read all graph data from a Databricks table and return as nodes + edges."""
+    def get_graph_data(self, ws_client, table_name: str, warehouse_id: str, max_rows: int = 0) -> Dict[str, Any]:
+        """Read graph data from a Databricks table and return as nodes + edges.
+
+        Args:
+            max_rows: Maximum rows to fetch. 0 means use the server-side
+                      default derived from GRAPH_MAX_EDGES setting.
+        """
         safe_table = _validate_table_name(table_name)
-        sql = f"SELECT * FROM {safe_table}"
+
+        # Determine effective row limit from settings or argument
+        if max_rows <= 0:
+            max_edges = getattr(self.settings, "GRAPH_MAX_EDGES", 10000) if self.settings else 10000
+            effective_limit = max_edges
+        else:
+            effective_limit = max_rows
+
+        # Count total rows for truncation info
+        count_sql = f"SELECT COUNT(*) FROM {safe_table}"
+        _, count_rows = self._execute_sql(ws_client, count_sql, warehouse_id)
+        total_rows = int(count_rows[0][0]) if count_rows and count_rows[0][0] else 0
+
+        sql = f"SELECT * FROM {safe_table} LIMIT {effective_limit}"
         columns, rows = self._execute_sql(ws_client, sql, warehouse_id)
 
         if not columns:
-            return {"nodes": [], "edges": []}
+            return {"nodes": [], "edges": [], "truncated": False, "totalAvailable": None}
 
         # Build column index map
         col_idx = {name: i for i, name in enumerate(columns)}
@@ -158,9 +177,124 @@ class GraphExplorerManager:
                     "status": "existing",
                 })
 
+        truncated = total_rows > effective_limit
+
         return {
             "nodes": list(nodes_map.values()),
             "edges": edges,
+            "truncated": truncated,
+            "totalAvailable": total_rows if truncated else None,
+        }
+
+    def get_neighbors(
+        self,
+        ws_client,
+        table_name: str,
+        warehouse_id: str,
+        node_id: str,
+        direction: str = "both",
+        edge_types: Optional[List[str]] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Get the 1-hop neighborhood of a node.
+
+        Args:
+            node_id: The node to expand from.
+            direction: 'outgoing', 'incoming', or 'both'.
+            edge_types: Optional list of relationship types to filter on.
+            limit: Max edges to return.
+            offset: Pagination offset.
+
+        Returns:
+            Dict with nodes, edges, truncated, and totalAvailable.
+        """
+        safe_table = _validate_table_name(table_name)
+        safe_id = _escape_sql_string(node_id)
+
+        # Build direction filter
+        if direction == "outgoing":
+            direction_filter = f"node_start_id = '{safe_id}'"
+        elif direction == "incoming":
+            direction_filter = f"node_end_id = '{safe_id}'"
+        else:  # both
+            direction_filter = f"(node_start_id = '{safe_id}' OR node_end_id = '{safe_id}')"
+
+        # Exclude EXISTS self-references (standalone node markers)
+        base_where = f"{direction_filter} AND relationship != 'EXISTS'"
+
+        # Optional edge type filter
+        if edge_types:
+            escaped_types = [f"'{_escape_sql_string(t)}'" for t in edge_types]
+            base_where += f" AND relationship IN ({', '.join(escaped_types)})"
+
+        # Count total available (for truncation info)
+        count_sql = f"SELECT COUNT(*) FROM {safe_table} WHERE {base_where}"
+        _, count_rows = self._execute_sql(ws_client, count_sql, warehouse_id)
+        total_available = int(count_rows[0][0]) if count_rows and count_rows[0][0] else 0
+
+        # Fetch the edges with limit/offset
+        sql = f"SELECT * FROM {safe_table} WHERE {base_where} LIMIT {limit} OFFSET {offset}"
+        columns, rows = self._execute_sql(ws_client, sql, warehouse_id)
+
+        if not columns:
+            return {"nodes": [], "edges": [], "truncated": False, "totalAvailable": 0}
+
+        # Parse rows into nodes + edges (reuse the same logic as get_graph_data)
+        col_idx = {name: i for i, name in enumerate(columns)}
+        nodes_map: Dict[str, Dict[str, Any]] = {}
+        edges: List[Dict[str, Any]] = []
+
+        for row in rows:
+            start_id = row[col_idx.get("node_start_id", 0)] or ""
+            start_key = row[col_idx.get("node_start_key", 1)] or "Node"
+            relationship = row[col_idx.get("relationship", 2)] or ""
+            end_id = row[col_idx.get("node_end_id", 3)] or ""
+            end_key = row[col_idx.get("node_end_key", 4)] or "Node"
+            start_props_raw = row[col_idx.get("node_start_properties", 5)]
+            end_props_raw = row[col_idx.get("node_end_properties", 6)]
+
+            start_props = self._parse_props(start_props_raw)
+            end_props = self._parse_props(end_props_raw)
+            start_label = start_props.pop("_label", None) or start_id
+            end_label = end_props.pop("_label", None) or end_id
+
+            if start_id and start_id not in nodes_map:
+                nodes_map[start_id] = {
+                    "id": start_id,
+                    "label": start_label,
+                    "type": start_key,
+                    "properties": start_props,
+                    "status": "existing",
+                }
+
+            if end_id and end_id not in nodes_map:
+                nodes_map[end_id] = {
+                    "id": end_id,
+                    "label": end_label,
+                    "type": end_key,
+                    "properties": end_props,
+                    "status": "existing",
+                }
+
+            if relationship and start_id and end_id:
+                edge_id = f"{start_id}-{relationship}-{end_id}"
+                edges.append({
+                    "id": edge_id,
+                    "source": start_id,
+                    "target": end_id,
+                    "relationshipType": relationship,
+                    "properties": {},
+                    "status": "existing",
+                })
+
+        truncated = total_available > (offset + limit)
+
+        return {
+            "nodes": list(nodes_map.values()),
+            "edges": edges,
+            "truncated": truncated,
+            "totalAvailable": total_available,
         }
 
     def write_nodes_and_edges(

@@ -80,6 +80,11 @@
     "clickTarget": "Click a target node to connect from \"{{sourceId}}\"",
     "clickSource": "Click a source node to start creating an edge"
   },
+  "limits": {
+    "truncated": "Results truncated",
+    "truncatedDescription": "Showing {{shown}} of {{total}} rows. Use filters or expand specific nodes to explore further.",
+    "serverLimits": "Server limits: {{maxNodes}} nodes, {{maxEdges}} edges"
+  },
   "emptyState": {
     "message": "Enter a Databricks table name and click Connect to load graph data."
   },
@@ -98,12 +103,64 @@
     "edgeDeleted": "Edge deleted",
     "errorDeletingEdge": "Error deleting edge"
   },
+  "contextMenu": {
+    "expandAll": "Expand All Neighbors",
+    "expandOutgoing": "Expand Outgoing",
+    "expandIncoming": "Expand Incoming",
+    "expandByType": "Expand by Type",
+    "collapse": "Collapse",
+    "editNode": "Edit Node",
+    "deleteNode": "Delete Node",
+    "pinNode": "Pin Position",
+    "unpinNode": "Unpin Position",
+    "centerOnNode": "Center on Node",
+    "copyNodeId": "Copy Node ID",
+    "editEdge": "Edit Edge",
+    "deleteEdge": "Delete Edge",
+    "copyEdgeDetails": "Copy Edge Details",
+    "createNode": "Create Node Here",
+    "resetView": "Reset View",
+    "fitToScreen": "Fit to Screen",
+    "neighborsLoaded": "Neighbors loaded",
+    "neighborsLoadedDescription": "Added {{nodeCount}} nodes and {{edgeCount}} edges",
+    "noNewNeighbors": "No new neighbors found",
+    "errorLoadingNeighbors": "Error loading neighbors",
+    "copiedToClipboard": "Copied to clipboard"
+  },
   "tooltip": {
     "type": "Type",
     "status": "Status",
     "properties": "Properties",
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out"
+  },
+  "tableView": {
+    "title": "Data Table",
+    "nodes": "Nodes",
+    "edges": "Edges",
+    "label": "Label",
+    "type": "Type",
+    "id": "ID",
+    "source": "Source",
+    "target": "Target",
+    "relationship": "Relationship",
+    "noNodes": "No nodes to display.",
+    "noEdges": "No edges to display."
+  },
+  "diagrams": {
+    "title": "Saved Diagrams",
+    "save": "Save",
+    "saveTitle": "Save Diagram",
+    "saveDescription": "Save current view ({{nodeCount}} nodes, {{edgeCount}} edges) as a named diagram.",
+    "namePlaceholder": "Diagram name...",
+    "restore": "Restore",
+    "delete": "Delete",
+    "empty": "No saved diagrams yet. Save the current view to create one."
+  },
+  "viewMode": {
+    "graph": "Graph",
+    "table": "Table",
+    "split": "Split"
   },
   "queryPanel": {
     "title": "Graph Query",

@@ -136,7 +136,7 @@ function buildExampleQueries(
   if (t1 && samplePropKey && samplePropVal) gremlin.push({ label: `Filter by ${samplePropKey}`, query: `g.V().hasLabel('${t1}').has('${samplePropKey}', '${samplePropVal}')` });
   gremlin.push({ label: 'All edges', query: 'g.E().limit(100)' });
 
-  return { cypher, gremlin };
+  return { natural: [], cypher, gremlin };
 }
 
 // ---------------------------------------------------------------------------

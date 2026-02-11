@@ -64,8 +64,8 @@ class TestSearchManager:
         return UserInfo(
             username="testuser",
             email="test@example.com",
-            display_name="Test User",
-            active=True,
+            user="Test User",
+            ip="127.0.0.1",
             groups=["users", "data_consumers"],
         )
 
@@ -279,8 +279,8 @@ class TestSearchManager:
         user_no_groups = UserInfo(
             username="nogroups",
             email="nogroups@example.com",
-            display_name="No Groups User",
-            active=True,
+            user="No Groups User",
+            ip="127.0.0.1",
             groups=[],
         )
 

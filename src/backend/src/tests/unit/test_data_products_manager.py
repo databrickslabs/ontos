@@ -134,10 +134,11 @@ class TestDataProductsManager:
 
     def test_create_product_validation_error(self, manager, db_session):
         """Test that invalid product data raises ValueError."""
-        # Arrange
+        # Arrange - Use data that fails Pydantic validation (id must be str, not int)
         invalid_data = {
-            "name": "",  # Empty name should fail
-            "version": "invalid",  # Invalid version format might fail
+            "id": 12345,  # Invalid type - Pydantic expects str
+            "name": "Test",
+            "version": "1.0.0",
         }
 
         # Act & Assert
@@ -290,9 +291,10 @@ class TestDataProductsManager:
         """Test that invalid update data raises ValueError."""
         # Arrange
         created = manager.create_product(sample_product_data, db=db_session)
+        # Use data that fails Pydantic validation (status must be str, not int)
         invalid_update = {
             "id": created.id,
-            "status": "invalid-status",  # Invalid status
+            "status": 123,  # Invalid type - Pydantic expects str
         }
 
         # Act & Assert
@@ -489,13 +491,17 @@ class TestDataProductsManager:
 
     def test_get_distinct_owners(self, manager, db_session):
         """Test retrieving distinct owners."""
-        # Arrange - Create products with different owners
+        # Arrange - Create products with team members (ODPS stores owners in team.members)
         for i, owner in enumerate(["owner1@test.com", "owner2@test.com"]):
             product_data = {
                 "name": f"Product {i}",
                 "version": "1.0.0",
                 "productType": "sourceAligned",
-                "owner": owner,
+                "team": {
+                    "members": [
+                        {"username": owner, "role": "owner", "name": owner}
+                    ]
+                },
             }
             manager.create_product(product_data, db=db_session)
 
@@ -562,12 +568,13 @@ class TestDataProductsManager:
         self, manager, db_session, sample_product_data
     ):
         """Test graceful handling of database errors during creation."""
-        # Arrange - Force DB error by closing session
-        db_session.close()
+        # Arrange - Patch repository to simulate DB error
+        from sqlalchemy.exc import SQLAlchemyError
 
-        # Act & Assert
-        with pytest.raises(Exception):  # SQLAlchemy error
-            manager.create_product(sample_product_data, db=db_session)
+        with patch.object(manager._repo, 'create', side_effect=SQLAlchemyError("DB connection failed")):
+            # Act & Assert
+            with pytest.raises(SQLAlchemyError):
+                manager.create_product(sample_product_data, db=db_session)
 
     def test_manager_without_workspace_client(self, db_session):
         """Test manager initialization without WorkspaceClient."""

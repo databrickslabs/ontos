@@ -3,11 +3,38 @@ Unit tests for NotificationsManager
 """
 import pytest
 from datetime import datetime
-from unittest.mock import Mock, MagicMock, patch, mock_open
-from src.controller.notifications_manager import NotificationsManager, NotificationNotFoundError
+from types import SimpleNamespace
+from unittest.mock import Mock
+from src.controller.notifications_manager import NotificationsManager
 from src.models.notifications import Notification, NotificationType
 from src.models.users import UserInfo
 from src.db_models.notifications import NotificationDb
+
+
+def _make_notif_db(**kwargs):
+    """Create a mock NotificationDb with all attributes needed for Notification.model_validate."""
+    defaults = {
+        "id": "notif-1",
+        "recipient": None,
+        "title": "Test",
+        "type": "info",
+        "created_at": datetime(2024, 1, 1),
+        "read": False,
+        "can_delete": True,
+        "subtitle": None,
+        "description": None,
+        "message": None,
+        "link": None,
+        "action_type": None,
+        "action_payload": None,
+        "data": None,
+        "target_roles": None,
+        "updated_at": None,
+        "recipient_role_id": None,
+        "recipient_role_name": None,
+    }
+    defaults.update(kwargs)
+    return SimpleNamespace(**defaults)
 
 
 class TestNotificationsManager:
@@ -26,9 +53,11 @@ class TestNotificationsManager:
         return Mock()
 
     @pytest.fixture
-    def manager(self, mock_settings_manager):
+    def manager(self, mock_settings_manager, mock_repository):
         """Create NotificationsManager instance for testing."""
-        return NotificationsManager(settings_manager=mock_settings_manager)
+        manager = NotificationsManager(settings_manager=mock_settings_manager)
+        manager._repo = mock_repository  # Replace real repo with mock for unit testing
+        return manager
 
     @pytest.fixture
     def sample_notification(self):
@@ -80,21 +109,7 @@ class TestNotificationsManager:
         mock_db = Mock()
         
         # Create notification DB objects
-        broadcast_notif = Mock(spec=NotificationDb)
-        broadcast_notif.id = "notif-1"
-        broadcast_notif.recipient = None
-        broadcast_notif.title = "Broadcast"
-        broadcast_notif.type = "info"
-        broadcast_notif.created_at = datetime(2024, 1, 1)
-        broadcast_notif.read = False
-        broadcast_notif.can_delete = True
-        broadcast_notif.subtitle = None
-        broadcast_notif.description = None
-        broadcast_notif.link = None
-        broadcast_notif.action_type = None
-        broadcast_notif.action_payload = None
-        broadcast_notif.data = None
-        broadcast_notif.target_roles = None
+        broadcast_notif = _make_notif_db(id="notif-1", recipient=None, title="Broadcast")
 
         manager._repo.get_multi.return_value = [broadcast_notif]
 
@@ -108,37 +123,13 @@ class TestNotificationsManager:
         mock_db = Mock()
         
         # Create notifications
-        user_notif = Mock(spec=NotificationDb)
-        user_notif.id = "notif-1"
-        user_notif.recipient = "user@example.com"
-        user_notif.title = "User Notification"
-        user_notif.type = "info"
-        user_notif.created_at = datetime(2024, 1, 1)
-        user_notif.read = False
-        user_notif.can_delete = True
-        user_notif.subtitle = None
-        user_notif.description = None
-        user_notif.link = None
-        user_notif.action_type = None
-        user_notif.action_payload = None
-        user_notif.data = None
-        user_notif.target_roles = None
-
-        other_notif = Mock(spec=NotificationDb)
-        other_notif.id = "notif-2"
-        other_notif.recipient = "other@example.com"
-        other_notif.title = "Other Notification"
-        other_notif.type = "info"
-        other_notif.created_at = datetime(2024, 1, 2)
-        other_notif.read = False
-        other_notif.can_delete = True
-        other_notif.subtitle = None
-        other_notif.description = None
-        other_notif.link = None
-        other_notif.action_type = None
-        other_notif.action_payload = None
-        other_notif.data = None
-        other_notif.target_roles = None
+        user_notif = _make_notif_db(id="notif-1", recipient="user@example.com", title="User Notification")
+        other_notif = _make_notif_db(
+            id="notif-2",
+            recipient="other@example.com",
+            title="Other Notification",
+            created_at=datetime(2024, 1, 2),
+        )
 
         manager._repo.get_multi.return_value = [user_notif, other_notif]
 
@@ -159,21 +150,9 @@ class TestNotificationsManager:
         mock_settings_manager.list_app_roles.return_value = [mock_role]
 
         # Create role-targeted notification
-        role_notif = Mock(spec=NotificationDb)
-        role_notif.id = "notif-1"
-        role_notif.recipient = "Data Consumer"
-        role_notif.title = "Role Notification"
-        role_notif.type = "info"
-        role_notif.created_at = datetime(2024, 1, 1)
-        role_notif.read = False
-        role_notif.can_delete = True
-        role_notif.subtitle = None
-        role_notif.description = None
-        role_notif.link = None
-        role_notif.action_type = None
-        role_notif.action_payload = None
-        role_notif.data = None
-        role_notif.target_roles = None
+        role_notif = _make_notif_db(
+            id="notif-1", recipient="Data Consumer", title="Role Notification"
+        )
 
         manager._repo.get_multi.return_value = [role_notif]
 
@@ -187,53 +166,9 @@ class TestNotificationsManager:
         mock_db = Mock()
         
         # Create notifications with different timestamps
-        notif1 = Mock(spec=NotificationDb)
-        notif1.id = "notif-1"
-        notif1.recipient = None
-        notif1.title = "First"
-        notif1.type = "info"
-        notif1.created_at = datetime(2024, 1, 1)
-        notif1.read = False
-        notif1.can_delete = True
-        notif1.subtitle = None
-        notif1.description = None
-        notif1.link = None
-        notif1.action_type = None
-        notif1.action_payload = None
-        notif1.data = None
-        notif1.target_roles = None
-
-        notif2 = Mock(spec=NotificationDb)
-        notif2.id = "notif-2"
-        notif2.recipient = None
-        notif2.title = "Second"
-        notif2.type = "info"
-        notif2.created_at = datetime(2024, 1, 3)
-        notif2.read = False
-        notif2.can_delete = True
-        notif2.subtitle = None
-        notif2.description = None
-        notif2.link = None
-        notif2.action_type = None
-        notif2.action_payload = None
-        notif2.data = None
-        notif2.target_roles = None
-
-        notif3 = Mock(spec=NotificationDb)
-        notif3.id = "notif-3"
-        notif3.recipient = None
-        notif3.title = "Third"
-        notif3.type = "info"
-        notif3.created_at = datetime(2024, 1, 2)
-        notif3.read = False
-        notif3.can_delete = True
-        notif3.subtitle = None
-        notif3.description = None
-        notif3.link = None
-        notif3.action_type = None
-        notif3.action_payload = None
-        notif3.data = None
-        notif3.target_roles = None
+        notif1 = _make_notif_db(id="notif-1", title="First", created_at=datetime(2024, 1, 1))
+        notif2 = _make_notif_db(id="notif-2", title="Second", created_at=datetime(2024, 1, 3))
+        notif3 = _make_notif_db(id="notif-3", title="Third", created_at=datetime(2024, 1, 2))
 
         manager._repo.get_multi.return_value = [notif1, notif2, notif3]
 
@@ -250,15 +185,19 @@ class TestNotificationsManager:
         """Test marking notification as read."""
         mock_db = Mock()
         
-        notif_db = Mock(spec=NotificationDb)
-        notif_db.id = "notif-123"
-        notif_db.read = False
+        notif_db = _make_notif_db(id="notif-123", read=False, title="Test")
+        
+        def mock_update(db, db_obj, obj_in):
+            for k, v in obj_in.items():
+                setattr(db_obj, k, v)
+            return db_obj
         
         manager._repo.get.return_value = notif_db
+        manager._repo.update.side_effect = mock_update
 
-        result = manager.mark_as_read(mock_db, notification_id="notif-123")
+        result = manager.mark_notification_read(db=mock_db, notification_id="notif-123")
 
-        assert result is True
+        assert result is not None
         assert notif_db.read is True
         mock_db.commit.assert_called_once()
 
@@ -267,8 +206,9 @@ class TestNotificationsManager:
         mock_db = Mock()
         manager._repo.get.return_value = None
 
-        with pytest.raises(NotificationNotFoundError):
-            manager.mark_as_read(mock_db, notification_id="nonexistent")
+        result = manager.mark_notification_read(db=mock_db, notification_id="nonexistent")
+
+        assert result is None
 
     # Mark All as Read Tests
 
@@ -276,39 +216,22 @@ class TestNotificationsManager:
         """Test marking all notifications as read for user."""
         mock_db = Mock()
         
-        notif1 = Mock(spec=NotificationDb)
-        notif1.id = "notif-1"
-        notif1.recipient = "user@example.com"
-        notif1.read = False
-        notif1.title = "Test 1"
-        notif1.type = "info"
-        notif1.created_at = datetime(2024, 1, 1)
-        notif1.can_delete = True
-        notif1.subtitle = None
-        notif1.description = None
-        notif1.link = None
-        notif1.action_type = None
-        notif1.action_payload = None
-        notif1.data = None
-        notif1.target_roles = None
+        notif1 = _make_notif_db(id="notif-1", recipient="user@example.com", read=False, title="Test 1")
+        notif2 = _make_notif_db(
+            id="notif-2",
+            recipient="user@example.com",
+            read=False,
+            title="Test 2",
+            created_at=datetime(2024, 1, 2),
+        )
 
-        notif2 = Mock(spec=NotificationDb)
-        notif2.id = "notif-2"
-        notif2.recipient = "user@example.com"
-        notif2.read = False
-        notif2.title = "Test 2"
-        notif2.type = "info"
-        notif2.created_at = datetime(2024, 1, 2)
-        notif2.can_delete = True
-        notif2.subtitle = None
-        notif2.description = None
-        notif2.link = None
-        notif2.action_type = None
-        notif2.action_payload = None
-        notif2.data = None
-        notif2.target_roles = None
+        def mock_update(db, db_obj, obj_in):
+            for k, v in obj_in.items():
+                setattr(db_obj, k, v)
+            return db_obj
 
         manager._repo.get_multi.return_value = [notif1, notif2]
+        manager._repo.update.side_effect = mock_update
 
         result = manager.mark_all_as_read(mock_db, user_info=sample_user_info)
 
@@ -322,9 +245,7 @@ class TestNotificationsManager:
         """Test deleting a notification."""
         mock_db = Mock()
         
-        notif_db = Mock(spec=NotificationDb)
-        notif_db.id = "notif-123"
-        notif_db.can_delete = True
+        notif_db = _make_notif_db(id="notif-123", can_delete=True)
         
         manager._repo.get.return_value = notif_db
         manager._repo.remove.return_value = notif_db
@@ -339,16 +260,15 @@ class TestNotificationsManager:
         mock_db = Mock()
         manager._repo.get.return_value = None
 
-        with pytest.raises(NotificationNotFoundError):
-            manager.delete_notification(mock_db, notification_id="nonexistent")
+        result = manager.delete_notification(mock_db, notification_id="nonexistent")
+
+        assert result is False
 
     def test_delete_notification_cannot_delete(self, manager):
         """Test trying to delete a notification marked as non-deletable."""
         mock_db = Mock()
         
-        notif_db = Mock(spec=NotificationDb)
-        notif_db.id = "notif-123"
-        notif_db.can_delete = False
+        notif_db = _make_notif_db(id="notif-123", can_delete=False)
         
         manager._repo.get.return_value = notif_db
 

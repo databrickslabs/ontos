@@ -23,9 +23,29 @@ class TestSettingsManager:
 
     @pytest.fixture
     def mock_settings(self):
-        """Create mock settings."""
+        """Create mock settings with attributes required by get_settings()."""
         mock = MagicMock(spec=Settings)
         mock.job_cluster_id = "test-cluster"
+        mock.WORKSPACE_DEPLOYMENT_PATH = None
+        mock.DATABRICKS_CATALOG = None
+        mock.DATABRICKS_SCHEMA = None
+        mock.DATABRICKS_VOLUME = None
+        mock.APP_AUDIT_LOG_DIR = None
+        mock.LLM_ENABLED = False
+        mock.LLM_ENDPOINT = None
+        mock.LLM_SYSTEM_PROMPT = None
+        mock.LLM_DISCLAIMER_TEXT = None
+        mock.DELIVERY_MODE_DIRECT = False
+        mock.DELIVERY_MODE_INDIRECT = False
+        mock.DELIVERY_MODE_MANUAL = True
+        mock.DELIVERY_DIRECT_DRY_RUN = False
+        mock.GIT_REPO_URL = None
+        mock.GIT_BRANCH = None
+        mock.GIT_USERNAME = None
+        mock.UI_I18N_ENABLED = True
+        mock.UI_CUSTOM_LOGO_URL = None
+        mock.UI_ABOUT_CONTENT = None
+        mock.UI_CUSTOM_CSS = None
         mock.to_dict.return_value = {"job_cluster_id": "test-cluster"}
         return mock
 

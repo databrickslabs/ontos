@@ -3,11 +3,12 @@ Unit tests for CommentsManager
 """
 import pytest
 import json
+import uuid
 from datetime import datetime
 from unittest.mock import Mock, MagicMock
 from src.controller.comments_manager import CommentsManager
 from src.models.comments import CommentCreate, CommentUpdate, Comment
-from src.db_models.comments import CommentDb, CommentStatus
+from src.db_models.comments import CommentDb, CommentStatus, CommentType as DbCommentType
 
 
 class TestCommentsManager:
@@ -27,13 +28,16 @@ class TestCommentsManager:
     def sample_comment_db(self):
         """Sample comment database object."""
         comment = Mock(spec=CommentDb)
-        comment.id = "comment-123"
+        comment.id = uuid.UUID("11111111-2222-3333-4444-555555555555")
         comment.entity_id = "entity-456"
         comment.entity_type = "data_product"
         comment.title = "Test Comment"
         comment.comment = "This is a test comment"
         comment.audience = None
+        comment.project_id = None
         comment.status = CommentStatus.ACTIVE
+        comment.comment_type = DbCommentType.COMMENT
+        comment.rating = None
         comment.created_by = "user@example.com"
         comment.updated_by = "user@example.com"
         comment.created_at = datetime(2024, 1, 1, 0, 0, 0)
@@ -49,6 +53,7 @@ class TestCommentsManager:
             title="Test Comment",
             comment="This is a test comment",
             audience=None,
+            project_id="project-1",  # Project-scoped; global (project_id=None) requires admin
         )
 
     # Initialization Tests
@@ -82,7 +87,7 @@ class TestCommentsManager:
         """Test converting database model to API model."""
         result = manager._db_to_api_model(sample_comment_db)
         assert isinstance(result, Comment)
-        assert result.id == "comment-123"
+        assert result.id == uuid.UUID("11111111-2222-3333-4444-555555555555")
         assert result.title == "Test Comment"
 
     # Create Comment Tests
@@ -95,7 +100,7 @@ class TestCommentsManager:
         result = manager.create_comment(db_session, data=sample_comment_create, user_email="user@example.com")
 
         assert isinstance(result, Comment)
-        assert result.id == "comment-123"
+        assert result.id == uuid.UUID("11111111-2222-3333-4444-555555555555")
         mock_repository.create_with_audience.assert_called_once()
         db_session.commit.assert_called_once()
 
@@ -107,6 +112,7 @@ class TestCommentsManager:
             title="Restricted Comment",
             comment="For admins only",
             audience=["admins", "data_stewards"],
+            project_id="project-1",  # Project-scoped; global (project_id=None) requires admin
         )
         sample_comment_db.audience = '["admins", "data_stewards"]'
         mock_repository.create_with_audience.return_value = sample_comment_db
@@ -114,7 +120,7 @@ class TestCommentsManager:
         db_session = Mock()
         result = manager.create_comment(db_session, data=comment_data, user_email="admin@example.com")
 
-        assert result.id == "comment-123"
+        assert result.id == uuid.UUID("11111111-2222-3333-4444-555555555555")
         mock_repository.create_with_audience.assert_called_once_with(
             db_session, obj_in=comment_data, created_by="admin@example.com"
         )
@@ -146,18 +152,21 @@ class TestCommentsManager:
         assert result.total_count == 1
         assert result.visible_count == 1
         assert len(result.comments) == 1
-        assert result.comments[0].id == "comment-123"
+        assert result.comments[0].id == uuid.UUID("11111111-2222-3333-4444-555555555555")
 
     def test_list_comments_filtered_by_groups(self, manager, mock_repository, sample_comment_db):
         """Test listing comments filtered by user groups."""
         comment2 = Mock(spec=CommentDb)
-        comment2.id = "comment-456"
+        comment2.id = uuid.UUID("66666666-7777-8888-9999-000000000000")
         comment2.entity_id = "entity-456"
         comment2.entity_type = "data_product"
         comment2.title = "Another Comment"
         comment2.comment = "Another test"
         comment2.audience = '["admins"]'
+        comment2.project_id = None
         comment2.status = CommentStatus.ACTIVE
+        comment2.comment_type = DbCommentType.COMMENT
+        comment2.rating = None
         comment2.created_by = "admin@example.com"
         comment2.updated_by = "admin@example.com"
         comment2.created_at = datetime(2024, 1, 1, 0, 0, 0)
@@ -201,7 +210,10 @@ class TestCommentsManager:
     def test_update_comment_success(self, manager, mock_repository, sample_comment_db):
         """Test updating a comment."""
         updated_comment = Mock(spec=CommentDb)
-        updated_comment.__dict__.update(sample_comment_db.__dict__)
+        for attr in ("id", "entity_id", "entity_type", "comment", "audience", "project_id",
+                     "status", "comment_type", "rating", "created_by", "updated_by",
+                     "created_at", "updated_at"):
+            setattr(updated_comment, attr, getattr(sample_comment_db, attr))
         updated_comment.title = "Updated Title"
 
         mock_repository.get.return_value = sample_comment_db
@@ -212,7 +224,7 @@ class TestCommentsManager:
         update_data = CommentUpdate(title="Updated Title")
         result = manager.update_comment(
             db_session,
-            comment_id="comment-123",
+            comment_id="11111111-2222-3333-4444-555555555555",
             data=update_data,
             user_email="user@example.com",
         )
@@ -284,7 +296,7 @@ class TestCommentsManager:
 
         db_session = Mock()
         result = manager.delete_comment(
-            db_session, comment_id="comment-123", user_email="user@example.com"
+            db_session, comment_id="11111111-2222-3333-4444-555555555555", user_email="user@example.com"
         )
 
         assert result is True
@@ -324,7 +336,7 @@ class TestCommentsManager:
 
         db_session = Mock()
         result = manager.delete_comment(
-            db_session, comment_id="comment-123", user_email="other@example.com"
+            db_session, comment_id="11111111-2222-3333-4444-555555555555", user_email="other@example.com"
         )
 
         assert result is False
@@ -336,10 +348,10 @@ class TestCommentsManager:
         mock_repository.get.return_value = sample_comment_db
 
         db_session = Mock()
-        result = manager.get_comment(db_session, comment_id="comment-123")
+        result = manager.get_comment(db_session, comment_id="11111111-2222-3333-4444-555555555555")
 
         assert result is not None
-        assert result.id == "comment-123"
+        assert result.id == uuid.UUID("11111111-2222-3333-4444-555555555555")
 
     def test_get_comment_not_found(self, manager, mock_repository):
         """Test getting non-existent comment."""
@@ -359,7 +371,7 @@ class TestCommentsManager:
 
         db_session = Mock()
         result = manager.can_user_modify_comment(
-            db_session, comment_id="comment-123", user_email="user@example.com"
+            db_session, comment_id="11111111-2222-3333-4444-555555555555", user_email="user@example.com"
         )
 
         assert result is True
@@ -371,7 +383,7 @@ class TestCommentsManager:
 
         db_session = Mock()
         result = manager.can_user_modify_comment(
-            db_session, comment_id="comment-123", user_email="other@example.com"
+            db_session, comment_id="11111111-2222-3333-4444-555555555555", user_email="other@example.com"
         )
 
         assert result is False

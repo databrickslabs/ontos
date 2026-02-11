@@ -1,6 +1,8 @@
 """
 Unit tests for MetadataManager
 """
+import uuid
+from datetime import datetime
 import pytest
 from unittest.mock import Mock, MagicMock
 from databricks.sdk.service.catalog import VolumeType
@@ -40,31 +42,45 @@ class TestMetadataManager:
     def sample_rich_text_db(self):
         """Sample rich text database object."""
         rt = Mock(spec=RichTextMetadataDb)
-        rt.id = "rt-123"
+        rt.id = uuid.UUID("12345678-1234-1234-1234-123456789012")
         rt.entity_type = "data_product"
         rt.entity_id = "product-456"
         rt.title = "Documentation"
         rt.short_description = "Product docs"
         rt.content_markdown = "# Test\nContent"
+        rt.is_shared = False
+        rt.level = 50
+        rt.inheritable = True
+        rt.created_by = "user@example.com"
+        rt.updated_by = "user@example.com"
+        rt.created_at = datetime(2024, 1, 1, 12, 0, 0)
+        rt.updated_at = datetime(2024, 1, 1, 12, 0, 0)
         return rt
 
     @pytest.fixture
     def sample_link_db(self):
         """Sample link database object."""
         link = Mock(spec=LinkMetadataDb)
-        link.id = "link-123"
+        link.id = uuid.UUID("22345678-1234-1234-1234-123456789012")
         link.entity_type = "data_contract"
         link.entity_id = "contract-456"
         link.title = "Related Link"
         link.short_description = "External resource"
         link.url = "https://example.com"
+        link.is_shared = False
+        link.level = 50
+        link.inheritable = True
+        link.created_by = "user@example.com"
+        link.updated_by = "user@example.com"
+        link.created_at = datetime(2024, 1, 1, 12, 0, 0)
+        link.updated_at = datetime(2024, 1, 1, 12, 0, 0)
         return link
 
     @pytest.fixture
     def sample_document_db(self):
         """Sample document database object."""
         doc = Mock(spec=DocumentMetadataDb)
-        doc.id = "doc-123"
+        doc.id = uuid.UUID("32345678-1234-1234-1234-123456789012")
         doc.entity_type = "data_product"
         doc.entity_id = "product-789"
         doc.title = "User Guide"
@@ -73,6 +89,13 @@ class TestMetadataManager:
         doc.content_type = "application/pdf"
         doc.size_bytes = 1024000
         doc.storage_path = "/volumes/catalog/schema/volume/guide.pdf"
+        doc.is_shared = False
+        doc.level = 50
+        doc.inheritable = True
+        doc.created_by = "user@example.com"
+        doc.updated_by = "user@example.com"
+        doc.created_at = datetime(2024, 1, 1, 12, 0, 0)
+        doc.updated_at = datetime(2024, 1, 1, 12, 0, 0)
         return doc
 
     # Initialization Tests
@@ -105,7 +128,7 @@ class TestMetadataManager:
 
         result = manager.create_rich_text(mock_db, data=data, user_email="user@example.com")
 
-        assert result.id == "rt-123"
+        assert result.id == uuid.UUID("12345678-1234-1234-1234-123456789012")
         mock_rich_text_repo.create.assert_called_once()
         assert mock_db.commit.called
 
@@ -126,14 +149,17 @@ class TestMetadataManager:
         result = manager.list_rich_texts(mock_db, entity_type="data_product", entity_id="product-456")
 
         assert len(result) == 1
-        assert result[0].id == "rt-123"
+        assert result[0].id == uuid.UUID("12345678-1234-1234-1234-123456789012")
 
     def test_update_rich_text_success(self, manager, mock_rich_text_repo, sample_rich_text_db):
         """Test updating rich text metadata."""
         updated_rt = Mock(spec=RichTextMetadataDb)
-        for key, value in sample_rich_text_db.__dict__.items():
-            if not key.startswith('_'):
-                setattr(updated_rt, key, value)
+        for attr in (
+            "id", "entity_type", "entity_id", "title", "short_description", "content_markdown",
+            "is_shared", "level", "inheritable", "created_by", "updated_by",
+            "created_at", "updated_at",
+        ):
+            setattr(updated_rt, attr, getattr(sample_rich_text_db, attr))
         updated_rt.title = "Updated Title"
 
         mock_rich_text_repo.get.return_value = sample_rich_text_db
@@ -141,7 +167,9 @@ class TestMetadataManager:
         mock_db = Mock()
 
         update_data = RichTextUpdate(title="Updated Title")
-        result = manager.update_rich_text(mock_db, id="rt-123", data=update_data, user_email="user@example.com")
+        result = manager.update_rich_text(
+            mock_db, id="12345678-1234-1234-1234-123456789012", data=update_data, user_email="user@example.com"
+        )
 
         assert result is not None
         assert result.title == "Updated Title"
@@ -162,7 +190,9 @@ class TestMetadataManager:
         mock_rich_text_repo.remove.return_value = sample_rich_text_db
         mock_db = Mock()
 
-        result = manager.delete_rich_text(mock_db, id="rt-123", user_email="user@example.com")
+        result = manager.delete_rich_text(
+            mock_db, id="12345678-1234-1234-1234-123456789012", user_email="user@example.com"
+        )
 
         assert result is True
         mock_rich_text_repo.remove.assert_called_once()
@@ -193,7 +223,7 @@ class TestMetadataManager:
 
         result = manager.create_link(mock_db, data=data, user_email="user@example.com")
 
-        assert result.id == "link-123"
+        assert result.id == uuid.UUID("22345678-1234-1234-1234-123456789012")
         mock_link_repo.create.assert_called_once()
 
     def test_list_links_empty(self, manager, mock_link_repo):
@@ -218,9 +248,12 @@ class TestMetadataManager:
     def test_update_link_success(self, manager, mock_link_repo, sample_link_db):
         """Test updating link metadata."""
         updated_link = Mock(spec=LinkMetadataDb)
-        for key, value in sample_link_db.__dict__.items():
-            if not key.startswith('_'):
-                setattr(updated_link, key, value)
+        for attr in (
+            "id", "entity_type", "entity_id", "title", "short_description", "url",
+            "is_shared", "level", "inheritable", "created_by", "updated_by",
+            "created_at", "updated_at",
+        ):
+            setattr(updated_link, attr, getattr(sample_link_db, attr))
         updated_link.url = "https://updated.com"
 
         mock_link_repo.get.return_value = sample_link_db
@@ -228,7 +261,9 @@ class TestMetadataManager:
         mock_db = Mock()
 
         update_data = LinkUpdate(url="https://updated.com")
-        result = manager.update_link(mock_db, id="link-123", data=update_data, user_email="user@example.com")
+        result = manager.update_link(
+            mock_db, id="22345678-1234-1234-1234-123456789012", data=update_data, user_email="user@example.com"
+        )
 
         assert result is not None
         assert result.url == "https://updated.com"
@@ -249,7 +284,9 @@ class TestMetadataManager:
         mock_link_repo.remove.return_value = sample_link_db
         mock_db = Mock()
 
-        result = manager.delete_link(mock_db, id="link-123", user_email="user@example.com")
+        result = manager.delete_link(
+            mock_db, id="22345678-1234-1234-1234-123456789012", user_email="user@example.com"
+        )
 
         assert result is True
 
@@ -267,6 +304,17 @@ class TestMetadataManager:
     def test_create_document_record_success(self, manager):
         """Test creating document record."""
         mock_db = Mock()
+
+        # Simulate db.refresh populating DB-generated fields (id, timestamps, defaults)
+        def _mock_refresh(db_obj):
+            setattr(db_obj, "id", uuid.UUID("32345678-1234-1234-1234-123456789012"))
+            setattr(db_obj, "created_at", datetime(2024, 1, 1, 12, 0, 0))
+            setattr(db_obj, "updated_at", datetime(2024, 1, 1, 12, 0, 0))
+            setattr(db_obj, "is_shared", False)
+            setattr(db_obj, "level", 50)
+            setattr(db_obj, "inheritable", True)
+
+        mock_db.refresh = Mock(side_effect=_mock_refresh)
 
         data = DocumentCreate(
             entity_type="data_product",
@@ -313,10 +361,10 @@ class TestMetadataManager:
         mock_document_repo.get.return_value = sample_document_db
         mock_db = Mock()
 
-        result = manager.get_document(mock_db, id="doc-123")
+        result = manager.get_document(mock_db, id="32345678-1234-1234-1234-123456789012")
 
         assert result is not None
-        assert result.id == "doc-123"
+        assert result.id == uuid.UUID("32345678-1234-1234-1234-123456789012")
 
     def test_get_document_not_found(self, manager, mock_document_repo):
         """Test getting non-existent document."""
@@ -333,7 +381,9 @@ class TestMetadataManager:
         mock_document_repo.remove.return_value = sample_document_db
         mock_db = Mock()
 
-        result = manager.delete_document(mock_db, id="doc-123", user_email="user@example.com")
+        result = manager.delete_document(
+            mock_db, id="32345678-1234-1234-1234-123456789012", user_email="user@example.com"
+        )
 
         assert result is True
 

@@ -1,6 +1,8 @@
 """
 Unit tests for AuditManager
 """
+import uuid
+
 import pytest
 from datetime import datetime
 from unittest.mock import Mock, MagicMock, patch
@@ -41,7 +43,7 @@ class TestAuditManager:
     def sample_audit_log_db(self):
         """Sample audit log database object."""
         log = Mock(spec=AuditLogDb)
-        log.id = 1
+        log.id = uuid.uuid4()
         log.username = "user@example.com"
         log.ip_address = "192.168.1.1"
         log.feature = "data-products"

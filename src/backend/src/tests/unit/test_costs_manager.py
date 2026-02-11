@@ -2,11 +2,40 @@
 Unit tests for CostsManager
 """
 import pytest
-from datetime import date
+from datetime import date, datetime, timezone
+from uuid import uuid4, UUID
 from unittest.mock import Mock
 from src.controller.costs_manager import CostsManager
 from src.models.costs import CostItemCreate, CostItemUpdate, CostItem
 from src.db_models.costs import CostItemDb
+
+# Fixed UUID for deterministic test assertions
+SAMPLE_COST_UUID = UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+
+
+def _make_cost_item_db(
+    id_val=None,
+    amount_cents=150000,
+    cost_center="INFRASTRUCTURE",
+):
+    """Build a mock CostItemDb with properly typed values for Pydantic validation."""
+    cost_item = Mock(spec=CostItemDb)
+    cost_item.id = id_val or uuid4()
+    cost_item.entity_type = "data_product"
+    cost_item.entity_id = "product-456"
+    cost_item.title = "Storage Costs"
+    cost_item.description = "Monthly storage costs"
+    cost_item.cost_center = cost_center
+    cost_item.custom_center_name = None
+    cost_item.amount_cents = amount_cents
+    cost_item.currency = "USD"
+    cost_item.start_month = date(2024, 1, 1)
+    cost_item.end_month = None
+    cost_item.created_by = None
+    cost_item.updated_by = None
+    cost_item.created_at = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+    cost_item.updated_at = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+    return cost_item
 
 
 class TestCostsManager:
@@ -25,18 +54,7 @@ class TestCostsManager:
     @pytest.fixture
     def sample_cost_item_db(self):
         """Sample cost item database object."""
-        cost_item = Mock(spec=CostItemDb)
-        cost_item.id = "cost-123"
-        cost_item.entity_type = "data_product"
-        cost_item.entity_id = "product-456"
-        cost_item.title = "Storage Costs"
-        cost_item.description = "Monthly storage costs"
-        cost_item.cost_center = "infrastructure"
-        cost_item.amount_cents = 150000
-        cost_item.currency = "USD"
-        cost_item.start_month = date(2024, 1, 1)
-        cost_item.end_month = None
-        return cost_item
+        return _make_cost_item_db(id_val=SAMPLE_COST_UUID, amount_cents=150000)
 
     @pytest.fixture
     def sample_cost_create(self):
@@ -69,7 +87,7 @@ class TestCostsManager:
         result = manager.create(mock_db, data=sample_cost_create, user_email="user@example.com")
 
         assert isinstance(result, CostItem)
-        assert result.id == "cost-123"
+        assert result.id == SAMPLE_COST_UUID
         assert result.amount_cents == 150000
         mock_repository.create.assert_called_once()
         assert mock_db.commit.called
@@ -107,7 +125,7 @@ class TestCostsManager:
         result = manager.list(mock_db, entity_type="data_product", entity_id="product-456")
 
         assert len(result) == 1
-        assert result[0].id == "cost-123"
+        assert result[0].id == SAMPLE_COST_UUID
         assert result[0].amount_cents == 150000
 
     def test_list_cost_items_filtered_by_month(self, manager, mock_repository, sample_cost_item_db):
@@ -130,13 +148,9 @@ class TestCostsManager:
     def test_update_cost_item_success(self, manager, mock_repository, sample_cost_item_db):
         """Test updating a cost item."""
         # Create updated item with same attributes but changed amount
-        updated_item = Mock(spec=CostItemDb)
-        for key, value in sample_cost_item_db.__dict__.items():
-            if not key.startswith('_'):
-                setattr(updated_item, key, value)
-        updated_item.amount_cents = 200000
-        updated_item.entity_type = sample_cost_item_db.entity_type
-        updated_item.entity_id = sample_cost_item_db.entity_id
+        updated_item = _make_cost_item_db(
+            id_val=SAMPLE_COST_UUID, amount_cents=200000
+        )
 
         mock_repository.get.return_value = sample_cost_item_db
         mock_repository.update.return_value = updated_item
@@ -161,12 +175,9 @@ class TestCostsManager:
 
     def test_update_cost_item_logs_change(self, manager, mock_repository, sample_cost_item_db):
         """Test that updating a cost item logs a change."""
-        updated_item = Mock(spec=CostItemDb)
-        for key, value in sample_cost_item_db.__dict__.items():
-            if not key.startswith('_'):
-                setattr(updated_item, key, value)
-        updated_item.entity_type = sample_cost_item_db.entity_type
-        updated_item.entity_id = sample_cost_item_db.entity_id
+        updated_item = _make_cost_item_db(
+            id_val=SAMPLE_COST_UUID, amount_cents=200000
+        )
 
         mock_repository.get.return_value = sample_cost_item_db
         mock_repository.update.return_value = updated_item

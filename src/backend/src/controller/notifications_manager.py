@@ -63,7 +63,9 @@ class NotificationsManager:
         # --- Filtering logic (similar to before, but uses API models and SettingsManager) ---
         if not user_info:
             # Return only broadcast notifications if no user info
-            return [n for n in all_notifications_api if not n.recipient]
+            broadcast = [n for n in all_notifications_api if not n.recipient]
+            broadcast.sort(key=lambda x: x.created_at, reverse=True)
+            return broadcast
 
         user_groups = set(user_info.groups or [])
         user_email = user_info.email
@@ -276,11 +278,30 @@ class NotificationsManager:
     def delete_notification(self, db: Session, notification_id: str) -> bool:
         """Delete a notification by ID using the repository."""
         try:
+             db_obj = self._repo.get(db=db, id=notification_id)
+             if db_obj is None:
+                 return False
+             if not db_obj.can_delete:
+                 return False
              deleted_obj = self._repo.remove(db=db, id=notification_id)
              return deleted_obj is not None
         except Exception as e:
              logger.error(f"Error deleting notification {notification_id}: {e}", exc_info=True)
              raise
+
+    def mark_all_as_read(self, db: Session, user_info: UserInfo) -> int:
+        """Mark all notifications for a user as read. Returns count of updated notifications."""
+        if not user_info:
+            return 0
+        all_notifications = self._repo.get_multi(db=db, limit=1000)
+        count = 0
+        user_email = user_info.email
+        for db_obj in all_notifications:
+            if db_obj.recipient == user_email and not db_obj.read:
+                self._repo.update(db=db, db_obj=db_obj, obj_in={"read": True})
+                count += 1
+        db.commit()
+        return count
 
     def mark_notification_read(self, db: Session, notification_id: str) -> Optional[Notification]:
         """Mark a notification as read using the repository."""

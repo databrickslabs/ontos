@@ -188,7 +188,7 @@ class TestSecurityFeaturesManager:
         assert result is True
         assert len(manager.features) == 0
 
-    @patch('builtins.open', new_callable=mock_open, read_data="features:")
+    @patch('builtins.open', new_callable=mock_open, read_data="features: []")
     @patch('pathlib.Path.exists')
     def test_load_from_yaml_empty_features_list(self, mock_exists, mock_file, manager):
         """Test loading from YAML with empty features list."""

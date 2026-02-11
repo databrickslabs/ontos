@@ -43,14 +43,14 @@ class SecurityFeaturesManager:
 
     def update_feature(self, feature_id: str, feature: SecurityFeature) -> Optional[SecurityFeature]:
         if feature_id not in self.features:
-            logging.warning(f"Security feature not found: {feature_id}")
+            logger.warning(f"Security feature not found: {feature_id}")
             return None
         self.features[feature_id] = feature
         return feature
 
     def delete_feature(self, feature_id: str) -> bool:
         if feature_id not in self.features:
-            logging.warning(f"Security feature not found: {feature_id}")
+            logger.warning(f"Security feature not found: {feature_id}")
             return False
         del self.features[feature_id]
         return True
@@ -119,5 +119,5 @@ class SecurityFeaturesManager:
             with open(yaml_path, 'w') as f:
                 yaml.dump(data, f)
         except Exception as e:
-            logging.exception(f"Error saving security features to YAML: {e!s}")
+            logger.exception(f"Error saving security features to YAML: {e!s}")
             raise

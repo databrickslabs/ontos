@@ -659,11 +659,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if not product_db:
                 raise ValueError(f"Data product with ID {product_id} not found")
 
+            # Validate that product has at least one output port with a data contract
+            output_ports = product_db.output_ports or []
+            ports_with_contracts = [p for p in output_ports if p.contract_id]
+            if not ports_with_contracts:
+                raise ValueError(
+                    "Cannot publish product: Product must have at least one output port with a data contract assigned"
+                )
+
             # Validate that all output ports have data contracts
-            if product_db.output_ports:
+            if output_ports:
                 ports_without_contracts = [
-                    port.name for port in product_db.output_ports
-                    if not port.data_contract_id
+                    port.name for port in output_ports
+                    if not port.contract_id
                 ]
                 if ports_without_contracts:
                     raise ValueError(
@@ -677,9 +685,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 valid_contract_statuses = ['approved', 'active', 'certified']
                 contracts_not_approved = []
                 
-                for port in product_db.output_ports:
-                    if port.data_contract_id:
-                        contract = data_contract_repo.get(db=self._db, id=port.data_contract_id)
+                for port in output_ports:
+                    if port.contract_id:
+                        contract = data_contract_repo.get(db=self._db, id=port.contract_id)
                         if contract:
                             contract_status = (contract.status or '').lower()
                             if contract_status not in valid_contract_statuses:

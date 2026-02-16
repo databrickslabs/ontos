@@ -1,5 +1,5 @@
 {
-  "title": "Willkommen bei Ontos",
+  "title": "Willkommen bei {{brand}}",
   "tagline": "Verwalten Sie Business Glossar, Datenverträge, Datenprodukte, Personas und mehr",
   "search": {
     "placeholder": "Suche nach Datenprodukten, Glossarbegriffen, Verträgen..."

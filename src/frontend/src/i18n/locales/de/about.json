@@ -1,5 +1,5 @@
 {
-  "title": "Über Ontos",
+  "title": "Über {{brand}}",
   "intro": "Diese Anwendung läuft als Databricks App und bietet Unity Catalog und verwandte Dienste mit Fokus auf Metadatenmanagement, Governance und Betriebstools.",
   "version": "Version",
   "runningSince": "Läuft seit",

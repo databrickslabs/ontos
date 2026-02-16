@@ -2,7 +2,7 @@
   "title": "検索",
   "placeholder": "すべてのアセットを検索...",
   "tabs": {
-    "askOntos": "Ontosに聞く",
+    "askOntos": "{{brand}}に聞く",
     "indexSearch": "インデックス検索",
     "conceptGraph": "コンセプトグラフ",
     "knowledgeGraph": "ナレッジグラフ",
@@ -92,7 +92,7 @@
     }
   },
   "llm": {
-    "title": "Ontosに聞く",
+    "title": "{{brand}}に聞く",
     "subtitle": "データ製品、コスト、分析について質問する",
     "rerun": "再実行",
     "copyToInput": "編集して再送信",

@@ -5,7 +5,7 @@
   "objectInformation": "Informazioni Oggetto",
   "basicInformation": "Informazioni di Base",
   "commentsAndActivity": "Commenti e Attività",
-  "askOntos": "Chiedi a Ontos",
+  "askOntos": "Chiedi a {{brand}}",
   
   "actions": {
     "viewData": "Visualizza Dati",
@@ -51,7 +51,7 @@
   },
   
   "askPanel": {
-    "title": "Chiedi a Ontos",
+    "title": "Chiedi a {{brand}}",
     "askAboutItem": "Fai domande su questo elemento del catalogo",
     "askQuestionsAbout": "Fai domande su \"{{name}}\"",
     "selectItemFirst": "Seleziona un elemento per fare domande",

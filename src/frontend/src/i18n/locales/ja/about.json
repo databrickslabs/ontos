@@ -1,5 +1,5 @@
 {
-  "title": "Ontos について",
+  "title": "{{brand}} について",
   "intro": "このアプリケーションは Databricks アプリとして動作し、Unity Catalog をはじめ、メタデータ管理・ガバナンス・運用ツールに焦点を当てたサービスを提供します。",
   "version": "バージョン",
   "runningSince": "起動時刻",

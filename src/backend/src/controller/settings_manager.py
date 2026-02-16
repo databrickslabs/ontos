@@ -256,7 +256,12 @@ class SettingsManager:
             if 'UI_I18N_ENABLED' in all_settings and all_settings['UI_I18N_ENABLED'] is not None:
                 self._settings.UI_I18N_ENABLED = all_settings['UI_I18N_ENABLED'].lower() == 'true'
                 logger.info(f"Loaded UI_I18N_ENABLED from database: {self._settings.UI_I18N_ENABLED}")
-            
+
+            if 'UI_BRAND_NAME' in all_settings and all_settings['UI_BRAND_NAME'] is not None:
+                persisted_brand = (all_settings['UI_BRAND_NAME'] or '').strip()
+                self._settings.UI_BRAND_NAME = persisted_brand or 'Ontos'
+                logger.info(f"Loaded UI_BRAND_NAME from database: {self._settings.UI_BRAND_NAME}")
+
             if 'UI_CUSTOM_LOGO_URL' in all_settings and all_settings['UI_CUSTOM_LOGO_URL'] is not None:
                 self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
                 logger.info("Loaded UI_CUSTOM_LOGO_URL from database")
@@ -1093,6 +1098,7 @@ class SettingsManager:
             'git_username': self._settings.GIT_USERNAME,
             # UI Customization settings
             'ui_i18n_enabled': self._settings.UI_I18N_ENABLED,
+            'ui_brand_name': self._settings.UI_BRAND_NAME,
             'ui_custom_logo_url': self._settings.UI_CUSTOM_LOGO_URL,
             'ui_about_content': self._settings.UI_ABOUT_CONTENT,
             'ui_custom_css': self._settings.UI_CUSTOM_CSS,
@@ -1384,7 +1390,14 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'UI_I18N_ENABLED', str(value).lower() if value is not None else None)
             self._settings.UI_I18N_ENABLED = bool(value) if value is not None else self._settings.UI_I18N_ENABLED
             logger.info(f"Updated UI_I18N_ENABLED to: {value}")
-        
+
+        if 'ui_brand_name' in settings:
+            value = (settings.get('ui_brand_name') or '').strip() or None
+            app_settings_repo.set(self._db, 'UI_BRAND_NAME', value)
+            # Keep a non-empty in-memory default for downstream consumers.
+            self._settings.UI_BRAND_NAME = value or 'Ontos'
+            logger.info(f"Updated UI_BRAND_NAME to: {self._settings.UI_BRAND_NAME}")
+
         if 'ui_custom_logo_url' in settings:
             value = settings.get('ui_custom_logo_url') or None
             app_settings_repo.set(self._db, 'UI_CUSTOM_LOGO_URL', value)

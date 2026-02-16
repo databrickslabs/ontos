@@ -1,7 +1,10 @@
 import { create } from 'zustand';
+import { setI18nBrand } from '@/i18n/config';
+import { getStoredBrandName, normalizeBrandName, setStoredBrandName } from '@/utils/brand';
 
 export interface UICustomizationSettings {
   i18nEnabled: boolean;
+  brandName: string;
   customLogoUrl: string | null;
   aboutContent: string | null;
   customCss: string | null;
@@ -15,6 +18,7 @@ interface UICustomizationStore extends UICustomizationSettings {
 
 export const useUICustomizationStore = create<UICustomizationStore>((set) => ({
   i18nEnabled: true,
+  brandName: getStoredBrandName(),
   customLogoUrl: null,
   aboutContent: null,
   customCss: null,
@@ -27,8 +31,11 @@ export const useUICustomizationStore = create<UICustomizationStore>((set) => ({
       const response = await fetch('/api/settings/ui-customization');
       if (response.ok) {
         const data = await response.json();
+        const brandName = normalizeBrandName(data.brand_name);
+
         set({
           i18nEnabled: data.i18n_enabled ?? true,
+          brandName,
           customLogoUrl: data.custom_logo_url || null,
           aboutContent: data.about_content || null,
           customCss: data.custom_css || null,
@@ -44,6 +51,9 @@ export const useUICustomizationStore = create<UICustomizationStore>((set) => ({
         } else {
           localStorage.removeItem('i18n-disabled');
         }
+
+        setStoredBrandName(brandName);
+        setI18nBrand(brandName);
       }
     } catch (error) {
       console.error('Failed to fetch UI customization settings:', error);
@@ -81,4 +91,3 @@ function injectCustomCss(css: string | null): void {
 if (typeof window !== 'undefined') {
   useUICustomizationStore.getState().fetchSettings();
 }
-

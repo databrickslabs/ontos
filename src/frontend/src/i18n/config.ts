@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import type { Resource } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import { getStoredBrandName, normalizeBrandName } from '@/utils/brand';
 
 // Dynamically import all translation JSON files using Vite's import.meta.glob
 // This makes path resolution resilient across environments (e.g., Databricks Apps)
@@ -62,7 +63,9 @@ for (const [lang, data] of Object.entries(fallbackSettingsByLang)) {
 
 // Check if i18n is disabled via settings (set in localStorage)
 // When disabled, we force English regardless of browser settings
-const isI18nDisabled = localStorage.getItem('i18n-disabled') === 'true';
+const isI18nDisabled =
+  typeof window !== 'undefined' && localStorage.getItem('i18n-disabled') === 'true';
+const initialBrandName = getStoredBrandName();
 
 // Configure i18next
 i18n
@@ -80,6 +83,9 @@ i18n
 
     interpolation: {
       escapeValue: false, // React already escapes values
+      defaultVariables: {
+        brand: initialBrandName,
+      },
     },
 
     detection: {
@@ -98,6 +104,22 @@ i18n
 // Log i18n status
 if (isI18nDisabled) {
   console.log('[i18n] Internationalization disabled - using English');
+}
+
+export function setI18nBrand(brandName: string): void {
+  const normalizedBrandName = normalizeBrandName(brandName);
+  const interpolation = i18n.options.interpolation || {};
+
+  i18n.options.interpolation = {
+    ...interpolation,
+    defaultVariables: {
+      ...(interpolation.defaultVariables || {}),
+      brand: normalizedBrandName,
+    },
+  };
+
+  // Trigger rerender of translated content that depends on default interpolation variables.
+  void i18n.changeLanguage(i18n.language || 'en');
 }
 
 export default i18n;

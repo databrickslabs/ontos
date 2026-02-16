@@ -2,7 +2,7 @@
   "title": "Ricerca",
   "placeholder": "Cerca in tutti gli asset...",
   "tabs": {
-    "askOntos": "Chiedi a Ontos",
+    "askOntos": "Chiedi a {{brand}}",
     "indexSearch": "Ricerca Indice",
     "conceptGraph": "Grafo dei Concetti",
     "knowledgeGraph": "Grafo della Conoscenza",
@@ -92,7 +92,7 @@
     }
   },
   "llm": {
-    "title": "Chiedi a Ontos",
+    "title": "Chiedi a {{brand}}",
     "subtitle": "Fai domande su prodotti dati, costi e analisi",
     "rerun": "Esegui di nuovo",
     "copyToInput": "Modifica e reinvia",

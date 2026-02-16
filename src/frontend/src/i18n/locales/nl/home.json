@@ -1,5 +1,5 @@
 {
-  "title": "Welkom bij Ontos",
+  "title": "Welkom bij {{brand}}",
   "tagline": "Beheer business glossary, datacontracten, dataproducten, persona's en meer",
   "search": {
     "placeholder": "Zoek naar dataproducten, glossary termen, contracten..."

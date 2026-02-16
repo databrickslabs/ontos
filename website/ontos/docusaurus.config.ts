@@ -5,10 +5,11 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+const BRAND_NAME = process.env.APP_BRAND_NAME || 'Ontos';
 
 const config: Config = {
-  title: 'Ontos',
-  tagline: 'Ontos from Databricks Labs',
+  title: BRAND_NAME,
+  tagline: `${BRAND_NAME} from Databricks Labs`,
   favicon: '/img/ontos-logo2.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -41,6 +42,9 @@ const config: Config = {
   i18n: {
     defaultLocale: 'en',
     locales: ['en'],
+  },
+  customFields: {
+    brandName: BRAND_NAME,
   },
 
   plugins: [
@@ -92,9 +96,9 @@ const config: Config = {
       respectPrefersColorScheme: false,
     },
     navbar: {
-      title: 'Ontos',
+      title: BRAND_NAME,
       logo: {
-        alt: 'Ontos Logo',
+        alt: `${BRAND_NAME} Logo`,
         src: 'img/ontos-logo2.svg',
       },
       items: [
@@ -134,7 +138,5 @@ const config: Config = {
 };
 
 export default config;
-
-
 
 

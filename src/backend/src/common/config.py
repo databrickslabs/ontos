@@ -154,6 +154,10 @@ class Settings(BaseSettings):
 
     # UI Customization settings
     UI_I18N_ENABLED: bool = Field(True, env='UI_I18N_ENABLED')  # Enable/disable internationalization (disable forces English)
+    UI_BRAND_NAME: str = Field(
+        "Ontos",
+        validation_alias=AliasChoices('APP_BRAND_NAME', 'UI_BRAND_NAME'),
+    )  # Display brand name for UI copy and titles
     UI_CUSTOM_LOGO_URL: Optional[str] = Field(None, env='UI_CUSTOM_LOGO_URL')  # URL to custom logo image
     UI_ABOUT_CONTENT: Optional[str] = Field(None, env='UI_ABOUT_CONTENT')  # Custom Markdown content for About page
     UI_CUSTOM_CSS: Optional[str] = Field(None, env='UI_CUSTOM_CSS')  # Custom CSS to inject into the app

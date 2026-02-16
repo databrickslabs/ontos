@@ -5,7 +5,7 @@
   "objectInformation": "Object Information",
   "basicInformation": "Basic Information",
   "commentsAndActivity": "Comments & Activity",
-  "askOntos": "Ask Ontos",
+  "askOntos": "Ask {{brand}}",
   
   "actions": {
     "viewData": "View Data",
@@ -51,7 +51,7 @@
   },
   
   "askPanel": {
-    "title": "Ask Ontos",
+    "title": "Ask {{brand}}",
     "askAboutItem": "Ask about this catalog item",
     "askQuestionsAbout": "Ask questions about \"{{name}}\"",
     "selectItemFirst": "Select an item to ask questions about it",

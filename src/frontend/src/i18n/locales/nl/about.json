@@ -1,5 +1,5 @@
 {
-  "title": "Over Ontos",
+  "title": "Over {{brand}}",
   "intro": "Deze applicatie draait als een Databricks App en biedt Unity Catalog en gerelateerde diensten gericht op metadatabeheer, governance en operationele tools.",
   "version": "Versie",
   "runningSince": "Actief Sinds",

@@ -2,7 +2,7 @@
   "title": "Search",
   "placeholder": "Search across all assets...",
   "tabs": {
-    "askOntos": "Ask Ontos",
+    "askOntos": "Ask {{brand}}",
     "indexSearch": "Index Search",
     "conceptGraph": "Concept Graph",
     "knowledgeGraph": "Knowledge Graph",
@@ -137,7 +137,7 @@
     }
   },
   "llm": {
-    "title": "Ask Ontos",
+    "title": "Ask {{brand}}",
     "subtitle": "Ask questions about data products, costs, and analytics",
     "rerun": "Run again",
     "copyToInput": "Edit & resend",

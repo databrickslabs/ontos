@@ -33,9 +33,12 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
+import { setStoredBrandName } from '@/utils/brand';
+import { setI18nBrand } from '@/i18n/config';
 
 interface UICustomizationState {
   i18nEnabled: boolean;
+  brandName: string;
   customLogoUrl: string;
   aboutContent: string;
   customCss: string;
@@ -49,6 +52,7 @@ export default function UICustomizationSettings() {
 
   const [settings, setSettings] = useState<UICustomizationState>({
     i18nEnabled: true,
+    brandName: 'Ontos',
     customLogoUrl: '',
     aboutContent: '',
     customCss: '',
@@ -68,6 +72,7 @@ export default function UICustomizationSettings() {
           const data = await response.json();
           setSettings({
             i18nEnabled: data.ui_i18n_enabled ?? true,
+            brandName: data.ui_brand_name || 'Ontos',
             customLogoUrl: data.ui_custom_logo_url || '',
             aboutContent: data.ui_about_content || '',
             customCss: data.ui_custom_css || '',
@@ -90,6 +95,7 @@ export default function UICustomizationSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ui_i18n_enabled: settings.i18nEnabled,
+          ui_brand_name: settings.brandName || 'Ontos',
           ui_custom_logo_url: settings.customLogoUrl || null,
           ui_about_content: settings.aboutContent || null,
           ui_custom_css: settings.customCss || null,
@@ -106,6 +112,8 @@ export default function UICustomizationSettings() {
         } else {
           localStorage.removeItem('i18n-disabled');
         }
+        setStoredBrandName(settings.brandName || 'Ontos');
+        setI18nBrand(settings.brandName || 'Ontos');
       } else {
         throw new Error('Failed to save settings');
       }
@@ -199,6 +207,34 @@ export default function UICustomizationSettings() {
               onCheckedChange={handleI18nToggle}
               disabled={!hasWriteAccess}
             />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Brand Name */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Palette className="h-5 w-5 text-muted-foreground" />
+            <h3 className="text-lg font-medium">
+              {t('settings:uiCustomization.brand.title', 'Brand Name')}
+            </h3>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brandName">
+              {t('settings:uiCustomization.brand.label', 'Display Brand')}
+            </Label>
+            <Input
+              id="brandName"
+              name="brandName"
+              value={settings.brandName}
+              onChange={handleChange}
+              placeholder={t('settings:uiCustomization.brand.placeholder', 'Ontos')}
+              disabled={!hasWriteAccess}
+            />
+            <p className="text-sm text-muted-foreground">
+              {t('settings:uiCustomization.brand.help', 'Used for app and docs display text.')}
+            </p>
           </div>
         </div>
 
@@ -389,4 +425,3 @@ export default function UICustomizationSettings() {
     </Card>
   );
 }
-

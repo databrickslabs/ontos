@@ -112,6 +112,7 @@ async def get_ui_customization():
     
     Returns settings for:
     - i18n_enabled: Whether internationalization is enabled (disable forces English)
+    - brand_name: Display brand used for titles and marketing copy
     - custom_logo_url: URL to custom logo image
     - about_content: Custom Markdown content for About page
     - custom_css: Custom CSS to inject into the app
@@ -120,6 +121,7 @@ async def get_ui_customization():
         app_settings = get_settings()
         return {
             "i18n_enabled": app_settings.UI_I18N_ENABLED,
+            "brand_name": app_settings.UI_BRAND_NAME,
             "custom_logo_url": app_settings.UI_CUSTOM_LOGO_URL,
             "about_content": sanitize_markdown_input(app_settings.UI_ABOUT_CONTENT) if app_settings.UI_ABOUT_CONTENT else None,
             "custom_css": app_settings.UI_CUSTOM_CSS,

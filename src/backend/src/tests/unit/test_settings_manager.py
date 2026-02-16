@@ -24,8 +24,31 @@ class TestSettingsManager:
     @pytest.fixture
     def mock_settings(self):
         """Create mock settings."""
-        mock = MagicMock(spec=Settings)
+        # Keep this as a flexible mock because SettingsManager.get_settings()
+        # returns a broad set of settings fields that can evolve over time.
+        mock = MagicMock()
         mock.job_cluster_id = "test-cluster"
+        mock.WORKSPACE_DEPLOYMENT_PATH = "/Workspace/Applications/ontos"
+        mock.DATABRICKS_CATALOG = "dataengineering_catalog"
+        mock.DATABRICKS_SCHEMA = "ns_testpad"
+        mock.DATABRICKS_VOLUME = "app_files"
+        mock.APP_AUDIT_LOG_DIR = "audit_logs"
+        mock.LLM_ENABLED = True
+        mock.LLM_ENDPOINT = "databricks-llm-endpoint"
+        mock.LLM_SYSTEM_PROMPT = "You are a helpful assistant."
+        mock.LLM_DISCLAIMER_TEXT = "LLM-generated content."
+        mock.DELIVERY_MODE_DIRECT = False
+        mock.DELIVERY_MODE_INDIRECT = False
+        mock.DELIVERY_MODE_MANUAL = True
+        mock.DELIVERY_DIRECT_DRY_RUN = False
+        mock.GIT_REPO_URL = None
+        mock.GIT_BRANCH = None
+        mock.GIT_USERNAME = None
+        mock.UI_I18N_ENABLED = True
+        mock.UI_BRAND_NAME = "Ontos"
+        mock.UI_CUSTOM_LOGO_URL = None
+        mock.UI_ABOUT_CONTENT = None
+        mock.UI_CUSTOM_CSS = None
         mock.to_dict.return_value = {"job_cluster_id": "test-cluster"}
         return mock
 
@@ -311,6 +334,16 @@ class TestSettingsManager:
         # Assert
         assert isinstance(result, dict)
 
+    def test_get_settings_includes_ui_brand_name(self, manager):
+        """Test getting settings includes ui_brand_name."""
+        result = manager.get_settings()
+        assert result["ui_brand_name"] == "Ontos"
+
+    def test_update_settings_updates_ui_brand_name(self, manager):
+        """Test updating ui_brand_name persists to in-memory settings."""
+        manager.update_settings({"ui_brand_name": "Atlas"})
+        assert manager._settings.UI_BRAND_NAME == "Atlas"
+
     def test_get_features_with_access_levels(self, manager, db_session):
         """Test getting features with their access levels."""
         # Act
@@ -391,4 +424,3 @@ class TestSettingsManager:
         assert result is not None
         assert result.description == "Updated description only"
         assert result.name == sample_role_db.name  # Name unchanged
-

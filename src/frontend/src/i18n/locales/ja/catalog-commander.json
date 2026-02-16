@@ -5,7 +5,7 @@
   "objectInformation": "オブジェクト情報",
   "basicInformation": "基本情報",
   "commentsAndActivity": "コメントとアクティビティ",
-  "askOntos": "Ontosに質問",
+  "askOntos": "{{brand}}に質問",
   
   "actions": {
     "viewData": "データを表示",
@@ -51,7 +51,7 @@
   },
   
   "askPanel": {
-    "title": "Ontosに質問",
+    "title": "{{brand}}に質問",
     "askAboutItem": "このカタログ項目について質問する",
     "askQuestionsAbout": "「{{name}}」について質問する",
     "selectItemFirst": "質問するには項目を選択してください",

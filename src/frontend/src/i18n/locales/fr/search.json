@@ -2,7 +2,7 @@
   "title": "Recherche",
   "placeholder": "Rechercher dans tous les actifs...",
   "tabs": {
-    "askOntos": "Demander à Ontos",
+    "askOntos": "Demander à {{brand}}",
     "indexSearch": "Recherche d'Index",
     "conceptGraph": "Graphe de Concepts",
     "knowledgeGraph": "Graphe de Connaissances",
@@ -92,7 +92,7 @@
     }
   },
   "llm": {
-    "title": "Demander à Ontos",
+    "title": "Demander à {{brand}}",
     "subtitle": "Posez des questions sur les produits de données, les coûts et les analyses",
     "rerun": "Exécuter à nouveau",
     "copyToInput": "Modifier et renvoyer",

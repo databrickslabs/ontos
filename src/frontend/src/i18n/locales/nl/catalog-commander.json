@@ -5,7 +5,7 @@
   "objectInformation": "Object Informatie",
   "basicInformation": "Basis Informatie",
   "commentsAndActivity": "Opmerkingen & Activiteit",
-  "askOntos": "Vraag Ontos",
+  "askOntos": "Vraag {{brand}}",
   
   "actions": {
     "viewData": "Data Bekijken",
@@ -51,7 +51,7 @@
   },
   
   "askPanel": {
-    "title": "Vraag Ontos",
+    "title": "Vraag {{brand}}",
     "askAboutItem": "Vraag over dit catalogus item",
     "askQuestionsAbout": "Stel vragen over \"{{name}}\"",
     "selectItemFirst": "Selecteer een item om er vragen over te stellen",

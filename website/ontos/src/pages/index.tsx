@@ -1,40 +1,14 @@
 import Layout from '@theme/Layout';
 import { JSX } from 'react';
 import Button from '../components/Button';
-import Link from '@docusaurus/Link';
 import AnimatedOntosLogo from '../components/AnimatedOntosLogo';
-
-
-import type {ReactNode} from 'react';
-import clsx from 'clsx';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import HomepageFeatures from '@site/src/components/HomepageFeatures';
-import Heading from '@theme/Heading';
 import styles from './index.module.css';
 
-
-/* function HomepageHeader() {
-  const {siteConfig} = useDocusaurusContext();
-  return (
-    <header className={clsx('hero hero--primary', styles.heroBanner)}>
-      <div className="container">
-        <Heading as="h1" className="hero__title">
-          {siteConfig.title}
-        </Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
-        <div className={styles.buttons}>
-          <Link
-            className="button button--secondary button--lg"
-            to="/docs/intro">
-            Docusaurus Tutorial - 5min ⏱️
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-} */
-
 const Hero = () => {
+  const { siteConfig } = useDocusaurusContext();
+  const brandName = (siteConfig.customFields?.brandName as string) || siteConfig.title;
+
   return (
 
   <header className={styles.heroBanner}>  
@@ -44,7 +18,7 @@ const Hero = () => {
         <AnimatedOntosLogo width={300} height={300} />
       </div>
       <h1 className={styles.centeredContent}>
-        Ontos 
+        {brandName}
       </h1>
       <p className={styles.centeredContent}>
         A comprehensive data governance and management platform built for<a className={styles.spacedlink} href="https://www.databricks.com/product/unity-catalog">Databricks Unity Catalog.</a>
@@ -88,8 +62,11 @@ const Hero = () => {
 };
 
 export default function Home(): JSX.Element {
+  const { siteConfig } = useDocusaurusContext();
+  const brandName = (siteConfig.customFields?.brandName as string) || siteConfig.title;
+
   return (
-    <Layout>
+    <Layout title={brandName}>
       <main>
         <div className='flex justify-center mx-auto'>
           <div className='max-w-screen-lg'>
@@ -100,19 +77,3 @@ export default function Home(): JSX.Element {
     </Layout>
   );
 }
-
-
-/* export default function Home(): ReactNode {
-  const {siteConfig} = useDocusaurusContext();
-  return (
-    <Layout
-      title={`Hello from ${siteConfig.title}`}
-      description="Description will go into a meta tag in <head />">
-      <HomepageHeader />
-      <main>
-        <HomepageFeatures />
-      </main>
-    </Layout>
-  );
-
-} */

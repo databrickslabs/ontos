@@ -7,7 +7,8 @@ import { Toaster } from './components/ui/toaster';
 import { useUserStore } from './stores/user-store';
 import { usePermissions } from './stores/permissions-store';
 import { useNotificationsStore } from './stores/notifications-store';
-import './i18n/config'; // Initialize i18n
+import { useBrand } from './hooks/use-brand';
+import '@/i18n/config'; // Initialize i18n
 
 // Import views
 import Home from './views/home';
@@ -52,6 +53,7 @@ export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
   const { fetchPermissions, fetchAvailableRoles } = usePermissions();
   const { startPolling: startNotificationPolling, stopPolling: stopNotificationPolling } = useNotificationsStore();
+  const brandName = useBrand();
 
   useEffect(() => {
     console.log("App component mounted, fetching initial user info and permissions...");
@@ -67,6 +69,10 @@ export default function App() {
         stopNotificationPolling();
     };
   }, [fetchUserInfo, fetchPermissions, fetchAvailableRoles, startNotificationPolling, stopNotificationPolling]);
+
+  useEffect(() => {
+    document.title = brandName;
+  }, [brandName]);
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="ucapp-theme">

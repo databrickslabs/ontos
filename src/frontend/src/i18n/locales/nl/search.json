@@ -2,7 +2,7 @@
   "title": "Zoeken",
   "placeholder": "Zoek over alle assets...",
   "tabs": {
-    "askOntos": "Vraag Ontos",
+    "askOntos": "Vraag {{brand}}",
     "indexSearch": "Index Zoeken",
     "conceptGraph": "Concept Grafiek",
     "knowledgeGraph": "Knowledge Graph",
@@ -92,7 +92,7 @@
     }
   },
   "llm": {
-    "title": "Vraag Ontos",
+    "title": "Vraag {{brand}}",
     "subtitle": "Stel vragen over dataproducten, kosten en analytics",
     "rerun": "Opnieuw uitvoeren",
     "copyToInput": "Bewerken & opnieuw verzenden",

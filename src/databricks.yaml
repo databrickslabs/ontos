@@ -4,8 +4,7 @@ bundle:
 variables:
   sql_warehouse_id:
     description: "ID of the SQL warehouse to use"
-    lookup:
-      warehouse: "default"
+    default: "d4fe94239cc28584"
   catalog_name:
     description: "Name of the catalog to use"
     default: "app_data"
@@ -15,52 +14,96 @@ variables:
   volume_name:
     description: "Name of the volume to use"
     default: "app_files"
+  app_name:
+    description: "Databricks app name"
+    default: "vaa-dev-cardinal"
+  app_env:
+    description: "Application environment flag (DEV or PROD)"
+    default: "DEV"
   app_config:
     type: complex
     description: "Configuration for Ontos"
     default:
       command:
         - "uvicorn"
+        - "--app-dir"
+        - "backend"
         - "src.app:app"
         - "--host"
         - "0.0.0.0"
         - "--port"
         - "8000"
       env:
+        - name: "APP_DEMO_MODE"
+          value: "false"
+        - name: "APP_DB_DROP_ON_START"
+          value: "false"
+        - name: "PYTHONPATH"
+          value: "./backend:${PYTHONPATH}"
+        - name: "PYTHONUNBUFFERED"
+          value: "1"
+        - name: "FRONTEND_STATIC_DIR"
+          value: "./static"
+        - name: "PGHOST"
+          value_from: "database"
+        - name: "PGSCHEMA"
+          value: ${var.schema_name}
         - name: "DATABRICKS_WAREHOUSE_ID"
-          value: ${var.sql_warehouse_id}
+          value_from: "sql-warehouse"
+        - name: "DATABRICKS_VOLUME"
+          value_from: "volume"
+        - name: "APP_ADMIN_DEFAULT_GROUPS"
+          value: "[\"admins\"]"
+        - name: "APP_AUDIT_LOG_DIR"
+          value: "audit_logs"
+        - name: "LLM_ENABLED"
+          value: "false"
+        - name: "LLM_ENDPOINT"
+          value_from: "serving-endpoint"
+        - name: "ENV"
+          value: ${var.app_env}
+        - name: "DATABRICKS_APP_NAME"
+          value: ${var.app_name}
         - name: "DATABRICKS_CATALOG"
           value: ${var.catalog_name}
         - name: "DATABRICKS_SCHEMA"
           value: ${var.schema_name}
-        - name: "DATABRICKS_VOLUME"
-          value: ${var.volume_name}
 
 resources:
   apps:
     ontos:
-      name: "ontos"
+      name: ${var.app_name}
       description: "Ontos"
       source_code_path: "."
       config: ${var.app_config}
-      resources:
-        - name: "sql-warehouse"
-          description: "SQL warehouse for the app"
-          sql_warehouse:
-            id: ${var.sql_warehouse_id}
-            permission: "CAN_USE"
       permissions:
         - user_name: "*"
-          level: "CAN_VIEW"
+          level: "CAN_USE"
+      user_api_scopes:
+        - "sql"
+        - "serving.serving-endpoints"
+        - "files.files"
+        - "dashboards.genie"
+        - "catalog.connections"
+        - "catalog.catalogs:read"
+        - "catalog.schemas:read"
+        - "catalog.tables:read"
 
 targets:
   dev:
+    default: true
+    mode: development
     variables:
+      app_name: "vaa-dev-cardinal"
+      app_env: "DEV"
       catalog_name: "app_data_dev"
       schema_name: "app_ontos_dev"
       volume_name: "app_files_dev"
   prod:
+    mode: production
     variables:
+      app_name: "vaa-prod-cardinal"
+      app_env: "PROD"
       catalog_name: "app_data_prod"
       schema_name: "app_ontos_prod"
       volume_name: "app_files_prod"

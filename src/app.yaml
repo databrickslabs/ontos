@@ -1,8 +1,6 @@
 command: ['python', 'backend/src/app.py']
 
 env:
-  - name: "ENV"
-    value: "PROD"
   - name: "APP_DEMO_MODE"
     value: "false"
   - name: "APP_DB_DROP_ON_START"

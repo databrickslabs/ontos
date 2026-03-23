@@ -48,7 +48,7 @@ class EmailService:
 
         Returns None when email is not configured or disabled.
         """
-        from src.db_models.settings import SettingDb
+        from src.db_models.app_settings import AppSettingDb as SettingDb
         import json
 
         row = db.query(SettingDb).filter(SettingDb.key == "email_config").first()

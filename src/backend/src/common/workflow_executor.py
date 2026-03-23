@@ -444,7 +444,7 @@ class NotificationStepHandler(StepHandler):
         """Read global default notification channels from settings."""
         try:
             import json as _json
-            from src.db_models.settings import SettingDb
+            from src.db_models.app_settings import AppSettingDb as SettingDb
             row = self._db.query(SettingDb).filter(SettingDb.key == "notification_channel_defaults").first()
             if row:
                 cfg = _json.loads(row.value) if isinstance(row.value, str) else row.value
@@ -781,7 +781,7 @@ class ScriptStepHandler(StepHandler):
             ws = get_workspace_client()
 
             # Resolve SQL warehouse ID from settings
-            from src.db_models.settings import SettingDb
+            from src.db_models.app_settings import AppSettingDb as SettingDb
             import json as _json
             wh_row = self._db.query(SettingDb).filter(SettingDb.key == "sql_warehouse_id").first()
             if not wh_row or not wh_row.value:

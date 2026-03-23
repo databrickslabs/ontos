@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare, Loader2 } from 'lucide-react';
-import { useApi } from '@/hooks/use-api';
-import { useToast } from '@/hooks/use-toast';
 import { Button } from './button';
 import { Progress } from './progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
@@ -44,9 +42,6 @@ export default function NotificationBell() {
   } | null>(null);
   const [workflowApprovalNotificationId, setWorkflowApprovalNotificationId] = useState<string | null>(null);
   
-  const api = useApi();
-  const { toast } = useToast();
-
   // Removed useEffect that was causing duplicate fetches - notifications are fetched when dropdown opens
 
   const handleDelete = async (id: string) => {
@@ -319,7 +314,7 @@ export default function NotificationBell() {
                         className="mt-2 h-7 px-2 text-xs gap-1"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleOpenWorkflowApprovalDialog(notification.action_payload, notification.id);
+                          handleOpenWorkflowApprovalDialog(notification.action_payload as { execution_id: string; entity_name?: string } | undefined, notification.id);
                         }}
                       >
                         <CheckSquare className="h-3.5 w-3.5" />

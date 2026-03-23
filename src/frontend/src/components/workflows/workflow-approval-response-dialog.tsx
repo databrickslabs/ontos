@@ -45,7 +45,7 @@ export default function WorkflowApprovalResponseDialog({
   isOpen,
   onOpenChange,
   payload,
-  notificationId,
+  notificationId: _notificationId,
   onDecisionMade,
 }: WorkflowApprovalResponseDialogProps) {
   const { get, post } = useApi();

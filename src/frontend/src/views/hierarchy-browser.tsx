@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Network, Loader2, AlertCircle, Search, ChevronRight,
+  Network, AlertCircle, Search,
   Box, Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain,
   Activity, Server, Shield, BookOpen, Database, FolderOpen, Shapes,
   ExternalLink, RefreshCw, ListTree, GitFork, Layers,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -333,6 +333,13 @@ export function getAssetTypeDisplayName(assetType: UnifiedAssetType): string {
         [UnifiedAssetType.SNOWFLAKE_FUNCTION]: "Snowflake Function",
         [UnifiedAssetType.SNOWFLAKE_PROCEDURE]: "Snowflake Procedure",
         [UnifiedAssetType.SNOWFLAKE_TASK]: "Snowflake Task",
+        // BigQuery
+        [UnifiedAssetType.BQ_TABLE]: "BigQuery Table",
+        [UnifiedAssetType.BQ_VIEW]: "BigQuery View",
+        [UnifiedAssetType.BQ_MATERIALIZED_VIEW]: "BigQuery Materialized View",
+        [UnifiedAssetType.BQ_EXTERNAL_TABLE]: "BigQuery External Table",
+        [UnifiedAssetType.BQ_ROUTINE]: "BigQuery Routine",
+        [UnifiedAssetType.BQ_MODEL]: "BigQuery Model",
         // Kafka
         [UnifiedAssetType.KAFKA_TOPIC]: "Kafka Topic",
         [UnifiedAssetType.KAFKA_SCHEMA]: "Kafka Schema",

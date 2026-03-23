@@ -353,7 +353,7 @@ export default function ConceptsSearch({
   };
 
   // Navigate to entity detail page
-  const navigateToEntity = (link: SemanticLink) => {
+  const navigateToEntity = (link: EnrichedSemanticLink) => {
     let path = '';
     switch (link.entity_type) {
       case 'data_product':

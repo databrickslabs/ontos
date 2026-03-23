@@ -62,10 +62,10 @@ export default function ApprovalWizardDialog({
   const { get, post } = useApi();
   const { toast } = useToast();
   const [workflows, setWorkflows] = useState<ApprovalWorkflowRef[]>([]);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(preselectedWorkflowId ?? null);
+  const [, setSelectedWorkflowId] = useState<string | null>(preselectedWorkflowId ?? null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<WizardStep | null>(null);
-  const [stepResults, setStepResults] = useState<Array<{ step_id: string; payload: Record<string, unknown> }>>([]);
+  const [, setStepResults] = useState<Array<{ step_id: string; payload: Record<string, unknown> }>>([]);
   const [payload, setPayload] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [completeResult, setCompleteResult] = useState<{ agreement_id: string | null; pdf_storage_path: string | null } | null>(null);
@@ -108,7 +108,7 @@ export default function ApprovalWizardDialog({
         }
         setSessionId((res.data as { session_id: string }).session_id);
         setCurrentStep((res.data as { current_step: WizardStep }).current_step);
-        setStepResults((res.data as { step_results?: unknown[] }).step_results ?? []);
+        setStepResults(((res.data as { step_results?: unknown[] }).step_results ?? []) as Array<{ step_id: string; payload: Record<string, unknown> }>);
         setPayload({});
       } catch (e) {
         toast({ title: 'Error', description: 'Failed to start session', variant: 'destructive' });

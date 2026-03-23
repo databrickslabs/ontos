@@ -189,7 +189,7 @@ export default function DataContracts() {
 
       const file = acceptedFiles[0];
       if (!file.type.startsWith('text/') && file.type !== 'application/json' && file.type !== 'application/x-yaml') {
-        setUploadError('Please upload a text file (JSON, YAML, etc)');
+        setUploadError({ message: 'Please upload a text file (JSON, YAML, etc)' });
         return;
       }
 
@@ -421,7 +421,7 @@ export default function DataContracts() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={(e) => { e.stopPropagation(); setPreviewContractId(contract.id ?? null); setPreviewContractTitle(contract.title ?? ''); }}
+              onClick={(e) => { e.stopPropagation(); setPreviewContractId(contract.id ?? null); setPreviewContractTitle(contract.name ?? ''); }}
               title="Preview Metadata"
             >
               <Eye className="h-4 w-4" />

@@ -393,9 +393,9 @@ export default function UCAssetLookupDialog({
     }
 
     const parts = item.id.split('.')
-    const isCatalog = parts.length === 1 || item.type === UCAssetType.CATALOG || item.type === 'catalog'
-    const isSchema = parts.length === 2 || item.type === UCAssetType.SCHEMA || item.type === 'schema'
-    const isColumn = parts.length === 4 || item.type === UCAssetType.COLUMN || item.type === 'column'
+    const isCatalog = parts.length === 1 || item.type === UCAssetType.CATALOG
+    const isSchema = parts.length === 2 || item.type === UCAssetType.SCHEMA
+    const isColumn = parts.length === 4 || item.type === UCAssetType.COLUMN
 
     if (isCatalog) {
       const assetInfo: UCAssetInfo = {
@@ -740,8 +740,8 @@ export default function UCAssetLookupDialog({
     const currentSegment = segments[level]
     
     return nodes.filter((node) => {
-      const isColumn = node.type === UCAssetType.COLUMN || node.type === 'column'
-      const isCatalogOrSchema = node.type === UCAssetType.CATALOG || node.type === UCAssetType.SCHEMA || node.type === 'catalog' || node.type === 'schema'
+      const isColumn = node.type === UCAssetType.COLUMN
+      const isCatalogOrSchema = node.type === UCAssetType.CATALOG || node.type === UCAssetType.SCHEMA
       // When selectable via selectableTypes (e.g. catalog/schema), skip allowedTypes filter
       if (isNodeSelectable(node.type as UCAssetType) && !isColumn) {
         if (!isCatalogOrSchema) {

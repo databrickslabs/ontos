@@ -66,7 +66,7 @@ const typeColors: Record<string, string> = {
 
 export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   collections,
-  groupedConcepts,
+  groupedConcepts: _groupedConcepts,
   filteredConcepts,
   selectedConcept,
   onSelectConcept,
@@ -77,7 +77,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   canEdit,
   // Display options (from unified filter panel)
   groupBySource,
-  showProperties,
+  showProperties: _showProperties,
   groupByDomain,
   selectedLanguage,
 }) => {

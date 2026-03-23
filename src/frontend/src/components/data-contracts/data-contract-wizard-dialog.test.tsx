@@ -6,6 +6,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderWithProviders } from '@/test/utils'
 import DataContractWizardDialog from './data-contract-wizard-dialog'
+import type { InferredSchemaObject } from './infer-from-asset-dialog'
 
 // Mock the hooks and components
 vi.mock('@/hooks/use-domains', () => ({
@@ -31,77 +32,65 @@ vi.mock('@/hooks/use-toast', () => ({
   })
 }))
 
-vi.mock('./dataset-lookup-dialog', () => ({
-  default: ({ onSelect }: { onSelect: (table: { full_name: string }) => void }) => (
-    <div data-testid="dataset-lookup-dialog">
-      <button
-        onClick={() => onSelect({ full_name: 'lars_george_uc.test-db.table_a' })}
-        data-testid="select-dataset"
-      >
-        Select Dataset
-      </button>
-    </div>
-  )
+// Track schemas to pass to onInfer per-test
+let currentMockSchemas: InferredSchemaObject[] = []
+
+vi.mock('./infer-from-asset-dialog', () => ({
+  default: ({ isOpen, onInfer }: { isOpen: boolean; onOpenChange: (open: boolean) => void; onInfer: (schemas: InferredSchemaObject[]) => void }) => {
+    if (!isOpen) return null
+    return (
+      <div data-testid="infer-from-asset-dialog">
+        <button
+          onClick={() => onInfer(currentMockSchemas)}
+          data-testid="select-dataset"
+        >
+          Select Asset
+        </button>
+      </div>
+    )
+  }
 }))
 
 vi.mock('@/components/business-concepts/business-concepts-display', () => ({
   default: () => <div data-testid="business-concepts-display" />
 }))
 
-// Mock fetch globally
-const mockFetch = vi.fn()
-global.fetch = mockFetch
+const storageLocation = 's3://databricks-e2demofieldengwest/b169b504-4c54-49f2-bc3a-adf4b128f36d/tables/c39d273a-d87b-4a62-8792-0193f142fca7'
+
+const sampleInferredSchemas: InferredSchemaObject[] = [
+  {
+    name: 'table_a',
+    physicalName: storageLocation,
+    description: 'The table contains records of various entries identified by a unique ID.',
+    physicalType: 'DELTA',
+    properties: [
+      {
+        name: 'id',
+        physicalType: 'int',
+        logicalType: 'integer',
+        required: true,
+        description: 'A unique identifier for each entry in the table, allowing for easy tracking and referencing of specific records.',
+        partitioned: false,
+      },
+      {
+        name: 'info',
+        physicalType: 'string',
+        logicalType: 'string',
+        required: false,
+        description: 'Contains additional details related to each entry, which can provide context or further information necessary for analysis or reporting.',
+        partitioned: false,
+      }
+    ]
+  }
+]
 
 describe('DataContractWizardDialog Schema Inference', () => {
   const mockOnOpenChange = vi.fn()
   const mockOnSubmit = vi.fn()
 
-  const sampleUCResponse = {
-    schema: [
-      {
-        name: 'id',
-        type: 'int',
-        physicalType: 'int',
-        logicalType: 'integer',
-        nullable: false,
-        comment: 'A unique identifier for each entry in the table, allowing for easy tracking and referencing of specific records.',
-        partitioned: false,
-        partitionKeyPosition: null
-      },
-      {
-        name: 'info',
-        type: 'string',
-        physicalType: 'string',
-        logicalType: 'string',
-        nullable: true,
-        comment: 'Contains additional details related to each entry, which can provide context or further information necessary for analysis or reporting.',
-        partitioned: false,
-        partitionKeyPosition: null
-      }
-    ],
-    table_info: {
-      name: 'table_a',
-      catalog_name: 'lars_george_uc',
-      schema_name: 'test-db',
-      table_type: 'MANAGED',
-      data_source_format: 'DELTA',
-      storage_location: 's3://databricks-e2demofieldengwest/b169b504-4c54-49f2-bc3a-adf4b128f36d/tables/c39d273a-d87b-4a62-8792-0193f142fca7',
-      owner: 'lars.george@databricks.com',
-      comment: 'The table contains records of various entries identified by a unique ID.',
-      created_at: 'Mon Jul 28 12:31:34 UTC 2025',
-      properties: {
-        'delta.enableDeletionVectors': 'true',
-        'delta.feature.appendOnly': 'supported'
-      }
-    }
-  }
-
   beforeEach(() => {
     vi.clearAllMocks()
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(sampleUCResponse)
-    })
+    currentMockSchemas = sampleInferredSchemas
   })
 
   it('should render the wizard dialog', () => {
@@ -131,23 +120,18 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    // Wait for step 2 to appear - use getByText with partial match
+    // Wait for step 2 to appear
     await waitFor(() => {
-      expect(screen.getByText(/Infer from Dataset/i)).toBeInTheDocument()
+      expect(screen.getByText(/Infer from Asset/i)).toBeInTheDocument()
     }, { timeout: 5000 })
 
-    // Click "Infer from Dataset" button
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    // Click "Infer from Asset" button to open the dialog
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
-    // Click the dataset selection in the mocked dialog
+    // Click the asset selection in the mocked dialog
     const selectDatasetButton = screen.getByTestId('select-dataset')
     fireEvent.click(selectDatasetButton)
-
-    // Wait for fetch to be called
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/api/catalogs/dataset/lars_george_uc.test-db.table_a')
-    })
 
     // Wait for schema to be populated
     await waitFor(() => {
@@ -155,7 +139,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     })
 
     // Verify physical name is set to storage location
-    expect(screen.getByDisplayValue(sampleUCResponse.table_info.storage_location)).toBeInTheDocument()
+    expect(screen.getByDisplayValue(storageLocation)).toBeInTheDocument()
   })
 
   it('should properly set physical and logical types from UC metadata', async () => {
@@ -172,7 +156,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -206,7 +190,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -222,27 +206,22 @@ describe('DataContractWizardDialog Schema Inference', () => {
   })
 
   it('should handle partition information correctly', async () => {
-    const partitionedResponse = {
-      ...sampleUCResponse,
-      schema: [
-        ...sampleUCResponse.schema,
-        {
-          name: 'partition_date',
-          type: 'date',
-          physicalType: 'date',
-          logicalType: 'date',
-          nullable: false,
-          comment: 'Partition column',
-          partitioned: true,
-          partitionKeyPosition: 0
-        }
-      ]
-    }
-
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(partitionedResponse)
-    })
+    currentMockSchemas = [
+      {
+        ...sampleInferredSchemas[0],
+        properties: [
+          ...sampleInferredSchemas[0].properties,
+          {
+            name: 'partition_date',
+            physicalType: 'date',
+            logicalType: 'date',
+            required: true,
+            description: 'Partition column',
+            partitioned: true,
+          }
+        ]
+      }
+    ]
 
     renderWithProviders(
       <DataContractWizardDialog
@@ -257,7 +236,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -267,13 +246,18 @@ describe('DataContractWizardDialog Schema Inference', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('partition_date')).toBeInTheDocument()
     })
-
-    // Verify partition checkbox is checked (would need to find specific element)
-    // This would require more specific test setup to check checkbox states
   })
 
-  it('should handle fetch errors gracefully', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'))
+  it('should handle empty schema gracefully', async () => {
+    currentMockSchemas = [
+      {
+        name: 'empty_table',
+        physicalName: '',
+        description: '',
+        physicalType: '',
+        properties: []
+      }
+    ]
 
     renderWithProviders(
       <DataContractWizardDialog
@@ -288,27 +272,33 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
     fireEvent.click(selectDatasetButton)
 
-    // Wait for error handling
+    // Wait for success toast with 0 columns
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith({
-        title: 'Schema added without columns',
-        description: 'Could not fetch columns. Configure SQL warehouse to enable inference.',
-        variant: 'warning'
-      })
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Schema inferred successfully' })
+      )
     })
   })
 
-  it('should handle API error responses gracefully', async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 500
-    })
+  it('should handle multiple schemas inference', async () => {
+    currentMockSchemas = [
+      { ...sampleInferredSchemas[0] },
+      {
+        name: 'table_b',
+        physicalName: '',
+        description: '',
+        physicalType: 'DELTA',
+        properties: [
+          { name: 'col1', physicalType: 'string', logicalType: 'string', required: false, description: '', partitioned: false }
+        ]
+      }
+    ]
 
     renderWithProviders(
       <DataContractWizardDialog
@@ -319,27 +309,25 @@ describe('DataContractWizardDialog Schema Inference', () => {
       />
     )
 
-    // Trigger inference
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
     fireEvent.click(selectDatasetButton)
 
-    // Wait for error handling
+    // Wait for success toast
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith({
-        title: 'Schema added without columns',
-        description: 'Could not fetch columns. Configure SQL warehouse to enable inference.',
-        variant: 'warning'
+        title: 'Schema inferred successfully',
+        description: 'Added 2 schemas with 3 columns',
       })
     })
   })
 
-  it('should show enhanced success message with owner information', async () => {
+  it('should show success message after inference', async () => {
     renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
@@ -353,7 +341,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -363,29 +351,29 @@ describe('DataContractWizardDialog Schema Inference', () => {
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith({
         title: 'Schema inferred successfully',
-        description: 'Loaded 2 columns from lars_george_uc.test-db.table_a (owner: lars.george@databricks.com)'
+        description: 'Added 1 schema with 2 columns',
       })
     })
   })
 
   it('should map various UC types to correct ODCS logical types', async () => {
-    const variedTypesResponse = {
-      schema: [
-        { name: 'int_col', type: 'int', physicalType: 'int', logicalType: 'integer', nullable: true },
-        { name: 'bigint_col', type: 'bigint', physicalType: 'bigint', logicalType: 'integer', nullable: true },
-        { name: 'string_col', type: 'string', physicalType: 'string', logicalType: 'string', nullable: true },
-        { name: 'double_col', type: 'double', physicalType: 'double', logicalType: 'number', nullable: true },
-        { name: 'date_col', type: 'date', physicalType: 'date', logicalType: 'date', nullable: true },
-        { name: 'bool_col', type: 'boolean', physicalType: 'boolean', logicalType: 'boolean', nullable: true },
-        { name: 'array_col', type: 'array<string>', physicalType: 'array<string>', logicalType: 'array', nullable: true }
-      ],
-      table_info: { name: 'varied_types_table' }
-    }
-
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(variedTypesResponse)
-    })
+    currentMockSchemas = [
+      {
+        name: 'varied_types_table',
+        physicalName: '',
+        description: '',
+        physicalType: 'DELTA',
+        properties: [
+          { name: 'int_col', physicalType: 'int', logicalType: 'integer', required: false, description: '', partitioned: false },
+          { name: 'bigint_col', physicalType: 'bigint', logicalType: 'integer', required: false, description: '', partitioned: false },
+          { name: 'string_col', physicalType: 'string', logicalType: 'string', required: false, description: '', partitioned: false },
+          { name: 'double_col', physicalType: 'double', logicalType: 'number', required: false, description: '', partitioned: false },
+          { name: 'date_col', physicalType: 'date', logicalType: 'date', required: false, description: '', partitioned: false },
+          { name: 'bool_col', physicalType: 'boolean', logicalType: 'boolean', required: false, description: '', partitioned: false },
+          { name: 'array_col', physicalType: 'array<string>', logicalType: 'array', required: false, description: '', partitioned: false },
+        ]
+      }
+    ]
 
     renderWithProviders(
       <DataContractWizardDialog
@@ -400,7 +388,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText(/Infer from Dataset/i)
+    const inferButton = screen.getByText(/Infer from Asset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -410,8 +398,5 @@ describe('DataContractWizardDialog Schema Inference', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('int_col')).toBeInTheDocument()
     })
-
-    // Verify various logical types are correctly mapped
-    // (This would require more detailed DOM inspection to verify select values)
   })
 })

@@ -19,7 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useSharedAssets, attachSharedAsset, RichTextItem, LinkItem, DocumentItem, MetadataAttachment } from '@/hooks/use-entity-metadata';
 
-export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'dataset' | 'concept' | 'collection' | 'compliance_policy';
+export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'dataset' | 'concept' | 'collection' | 'compliance_policy' | 'asset';
 
 interface Props {
   entityId: string;

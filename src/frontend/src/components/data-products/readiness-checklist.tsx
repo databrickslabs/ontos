@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw, ClipboardCheck } from 'lucide-react';
-import type { ReadinessReport, ReadinessCheck } from '@/types/ontology-schema';
+import type { ReadinessReport } from '@/types/ontology-schema';
 
 interface ReadinessChecklistProps {
   productId: string;

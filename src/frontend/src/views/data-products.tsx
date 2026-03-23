@@ -607,7 +607,7 @@ export default function DataProducts() {
             <Button
                 variant="ghost"
                 size="icon"
-                onClick={(e) => { e.stopPropagation(); setPreviewProductId(product.id ?? null); setPreviewProductTitle(product.title ?? ''); }}
+                onClick={(e) => { e.stopPropagation(); setPreviewProductId(product.id ?? null); setPreviewProductTitle(product.name ?? ''); }}
                 title="Preview Metadata"
             >
               <Eye className="h-4 w-4" />

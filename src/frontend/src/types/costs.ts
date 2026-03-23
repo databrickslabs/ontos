@@ -1,4 +1,4 @@
-export type EntityKind = 'data_domain' | 'data_product' | 'data_contract';
+export type EntityKind = 'data_domain' | 'data_product' | 'data_contract' | 'asset';
 
 export type CostCenter = 'INFRASTRUCTURE' | 'HR' | 'STORAGE' | 'MAINTENANCE' | 'OTHER';
 

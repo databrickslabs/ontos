@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
+import { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 // @ts-expect-error - react-cytoscapejs doesn't have type declarations
 import CytoscapeComponent from 'react-cytoscapejs';
 import type { Core, ElementDefinition, LayoutOptions } from 'cytoscape';

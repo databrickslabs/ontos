@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -20,9 +19,7 @@ interface ProductWithSubscribers {
 }
 
 export default function OwnerConsumersView() {
-  const { t } = useTranslation(['data-products', 'common']);
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { t: _t } = useTranslation(['data-products', 'common']);
   const api = useApi();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
 
@@ -39,8 +36,8 @@ export default function OwnerConsumersView() {
   const fetchProducts = useCallback(async () => {
     setProductsLoading(true);
     try {
-      const data = await api.get('/api/data-products');
-      setProducts(data);
+      const resp = await api.get<DataProduct[]>('/api/data-products');
+      setProducts(resp.data ?? []);
     } catch (err) {
       console.error('Failed to fetch products:', err);
     } finally {
@@ -56,12 +53,12 @@ export default function OwnerConsumersView() {
       [productId]: { ...prev[productId], loading: true },
     }));
     try {
-      const data = await api.get(`/api/data-products/${productId}/subscribers`);
+      const resp = await api.get<{ subscribers: SubscriberInfo[] }>(`/api/data-products/${productId}/subscribers`);
       setProductSubscribers((prev) => ({
         ...prev,
         [productId]: {
           product: products.find((p) => p.id === productId)!,
-          subscribers: data.subscribers ?? [],
+          subscribers: resp.data?.subscribers ?? [],
           loading: false,
         },
       }));

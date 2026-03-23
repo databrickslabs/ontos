@@ -19,6 +19,7 @@ describe('Permissions Store', () => {
         requestableRoles: [],
         appliedRoleId: null,
         _isInitializing: false,
+        _initAttempted: false,
       });
     });
 

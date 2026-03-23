@@ -60,7 +60,7 @@ export default function PropertiesSearch({
 
   // Assign dialog: target type and selection
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [assignTargetType, setAssignTargetType] = useState<'data_contract_property' | 'uc_column'>('');
+  const [assignTargetType, setAssignTargetType] = useState<'data_contract_property' | 'uc_column' | ''>('');
   const [contracts, setContracts] = useState<any[]>([]);
   const [selectedContractId, setSelectedContractId] = useState('');
   const [selectedSchemaName, setSelectedSchemaName] = useState('');

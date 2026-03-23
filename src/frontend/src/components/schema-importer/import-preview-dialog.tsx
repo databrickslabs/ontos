@@ -12,7 +12,6 @@ import {
   Box,
   FolderOpen,
   Database,
-  Braces,
   Library,
   Server,
 } from 'lucide-react';

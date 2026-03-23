@@ -577,7 +577,7 @@ class AssignTagStepHandler(StepHandler):
             persisted = False
             try:
                 from src.controller.tags_manager import TagsManager
-                tags_mgr = TagsManager(self._db)
+                tags_mgr = TagsManager()
                 tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
                 if tag:
                     tags_mgr.add_tag_to_entity(
@@ -637,7 +637,7 @@ class RemoveTagStepHandler(StepHandler):
             persisted = False
             try:
                 from src.controller.tags_manager import TagsManager
-                tags_mgr = TagsManager(self._db)
+                tags_mgr = TagsManager()
                 tag = tags_mgr.get_tag_by_fqn(db=self._db, fqn=key)
                 if tag:
                     ok = tags_mgr.remove_tag_from_entity(
@@ -659,7 +659,7 @@ class RemoveTagStepHandler(StepHandler):
             return StepResult(
                 passed=True,
                 message=f"Removed tag {key}" + (" (persisted)" if persisted else " (context only)"),
-                data={'key': key}
+                data={'key': key, 'persisted': persisted}
             )
         except Exception as e:
             logger.exception(f"Remove tag step failed: {e}")

@@ -1678,7 +1678,7 @@ class WorkflowExecutor:
                 success_count=success_count,
                 failure_count=failure_count,
                 error_message=error_message,
-                finished_at=datetime.utcnow().isoformat(),
+                finished_at=datetime.utcnow(),
             )
         
         # Return execution with results
@@ -1880,7 +1880,7 @@ class WorkflowExecutor:
                 success_count=success_count,
                 failure_count=failure_count,
                 error_message=error_message,
-                finished_at=datetime.utcnow().isoformat(),
+                finished_at=datetime.utcnow(),
             )
             
             # Handle entity status updates based on workflow outcome

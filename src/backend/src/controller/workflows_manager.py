@@ -330,8 +330,8 @@ class WorkflowsManager:
         
         matching = []
         for wf in db_workflows:
-            # Additional status filtering for on_status_change
-            if trigger_type == TriggerType.ON_STATUS_CHANGE:
+            # Additional status filtering for on_status_change and before_status_change
+            if trigger_type in (TriggerType.ON_STATUS_CHANGE, TriggerType.BEFORE_STATUS_CHANGE):
                 trigger_config = json.loads(wf.trigger_config) if wf.trigger_config else {}
                 wf_from = trigger_config.get('from_status')
                 wf_to = trigger_config.get('to_status')

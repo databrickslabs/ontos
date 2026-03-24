@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import { loadDemoData, clearDemoData } from './helpers/demo-data'
 
 test.beforeAll(async ({ request }) => {

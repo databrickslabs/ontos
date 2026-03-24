@@ -45,6 +45,9 @@ audit_logs/
 .playwright-mcp/
 test-results/
 
+# E2E test local config
+src/e2e/config.local.yaml
+
 # License check outputs
 licenses.json
 licenses.csv

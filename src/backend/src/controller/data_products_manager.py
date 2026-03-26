@@ -2768,7 +2768,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError(f"Product {product_id} not found")
         
         # Fetch team with members
-        team = team_repo.get_with_members(self.db, id=team_id)
+        team = team_repo.get_with_members(self._db, id=team_id)
         if not team:
             raise ValueError(f"Team {team_id} not found")
         

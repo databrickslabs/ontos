@@ -1632,7 +1632,7 @@ async def create_data_product_version(
     try:
         logger.info(f"Received request to create version '{version_request.new_version}' from product ID: {product_id}")
         # The manager method handles its own DB interactions
-        new_product_response = manager.create_new_version(product_id, version_request.new_version)
+        new_product_response = manager.create_new_version(product_id, version_request)
         
         # request.state.audit_created_resource_id is no longer needed here as we capture it below
         

@@ -5525,21 +5525,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         notifications_manager.create_notification(notification=requester_note, db=db)
         
-        # Create actionable notification for admins
-        notifications_manager.create_actionable_notification(
-            db=db,
+        # Create notification for admins about the pending request
+        admin_note = Notification(
+            id=str(uuid4()),
+            created_at=now,
+            type=NotificationType.ACTION_REQUIRED,
             title="Status Change Request Pending",
             subtitle=f"Contract: {contract.name}",
             description=f"{requester_email} is requesting to change status from '{current_status}' to '{target_status}'.\n\nJustification: {justification}",
-            action_type="handle_status_change_request",
-            action_payload={
-                "contract_id": contract_id,
-                "target_status": target_status,
-                "requester_email": requester_email,
-                "current_status": current_status,
-            },
-            recipient_role="Admin",
+            recipient="admins",
+            can_delete=True,
         )
+        notifications_manager.create_notification(notification=admin_note, db=db)
         
         # Log change
         from src.controller.change_log_manager import change_log_manager

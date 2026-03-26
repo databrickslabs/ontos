@@ -57,7 +57,7 @@ def create_review_request(
         "params": {
             "requester_email": request_data.requester_email,
             "reviewer_email": request_data.reviewer_email,
-            "asset_count": len(request_data.assets)
+            "asset_count": len(request_data.asset_fqns)
         }
     }
 
@@ -134,6 +134,8 @@ def get_review_request(
     except ValueError as e: # Catch mapping errors
          logger.error(f"Mapping error retrieving request {request_id}: {e}")
          raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal data error: {e}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Error getting review request {request_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error getting review request.")

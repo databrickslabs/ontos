@@ -3804,10 +3804,13 @@ class SemanticModelsManager:
         target_context.add((new_uri, ONTOS.promotedAt, Literal(now, datatype=XSD.dateTime)))
         
         # Delete or deprecate original
+        status = existing.get("status") or "draft"
         if delete_source:
-            status = existing.get("status")
             if status and status != "draft":
                 raise ValueError("Cannot delete non-draft concept. Will deprecate instead.")
+            self.delete_concept(concept_iri, migrated_by)
+        elif status == "draft":
+            # Draft concepts cannot transition to deprecated; delete instead
             self.delete_concept(concept_iri, migrated_by)
         else:
             self.update_concept_status(concept_iri, "deprecated", migrated_by)

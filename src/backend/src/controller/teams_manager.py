@@ -37,7 +37,9 @@ class TeamsManager:
         if 'tags' in data:
             del data['tags']
         if 'metadata' in data and isinstance(data['metadata'], dict):
-            data['metadata'] = json.dumps(data['metadata'])
+            data['extra_metadata'] = json.dumps(data.pop('metadata'))
+        elif 'metadata' in data:
+            data.pop('metadata')
         return data
 
     def _convert_db_to_read_model(self, db_team: TeamDb, db: Optional[Session] = None) -> TeamRead:

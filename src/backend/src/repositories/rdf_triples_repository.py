@@ -40,9 +40,14 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         created_by: Optional[str] = None,
     ) -> Optional[RdfTripleDb]:
         """Add a single triple with ON CONFLICT DO NOTHING.
-        
+
         Returns the triple if inserted, None if it already existed.
         """
+        # Coerce None to '' — the DB columns are NOT NULL with default ''
+        if object_language is None:
+            object_language = ''
+        if object_datatype is None:
+            object_datatype = ''
         stmt = insert(RdfTripleDb).values(
             id=uuid.uuid4(),
             subject_uri=subject_uri,
@@ -98,10 +103,14 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         for i in range(0, len(triples), batch_size):
             batch = triples[i:i + batch_size]
             
-            # Add UUIDs to each triple
+            # Add UUIDs and coerce None -> '' for NOT NULL columns
             for triple in batch:
                 if 'id' not in triple:
                     triple['id'] = uuid.uuid4()
+                if triple.get('object_language') is None:
+                    triple['object_language'] = ''
+                if triple.get('object_datatype') is None:
+                    triple['object_datatype'] = ''
             
             stmt = insert(RdfTripleDb).values(batch).on_conflict_do_nothing(
                 index_elements=['subject_uri', 'predicate_uri', 'object_value', 

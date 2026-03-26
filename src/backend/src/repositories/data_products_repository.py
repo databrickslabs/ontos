@@ -68,6 +68,10 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 owner_team_id=obj_in.owner_team_id,
                 project_id=None,  # Set via manager if needed
                 max_level_inheritance=obj_in.max_level_inheritance,
+                parent_product_id=getattr(obj_in, 'parent_product_id', None),
+                base_name=getattr(obj_in, 'base_name', None),
+                change_summary=getattr(obj_in, 'change_summary', None),
+                draft_owner_id=getattr(obj_in, 'draft_owner_id', None),
             )
 
             # 2. Create Structured Description (One-to-One)

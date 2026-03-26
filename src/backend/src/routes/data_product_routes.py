@@ -1809,7 +1809,7 @@ async def update_data_product(
 
         # Delegate to manager (includes auth check)
         user_groups = current_user.groups or []
-        product_dict = product_update.model_dump(by_alias=True)
+        product_dict = product_update.model_dump()
 
         updated_product_response = manager.update_product_with_auth(
             product_id=product_id,
@@ -1949,6 +1949,8 @@ async def get_data_product(
     except ValueError as e:
         logger.error("Validation error fetching product %s: %s", product_id, e)
         raise HTTPException(status_code=404, detail="Data product not found")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Unexpected error fetching product {product_id}")
         raise HTTPException(status_code=500, detail="Internal server error")

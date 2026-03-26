@@ -1187,6 +1187,32 @@ async def submit_concept_for_review(
         raise HTTPException(status_code=500, detail="Failed to submit for review")
 
 
+@router.post('/knowledge/concepts/{concept_iri:path}/approve')
+async def approve_concept(
+    concept_iri: str,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Approve a concept that is under review."""
+    try:
+        concept = manager.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="approved",
+            updated_by=current_user.email,
+        )
+        if not concept:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error approving concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to approve concept")
+
+
 @router.post('/knowledge/concepts/{concept_iri:path}/publish')
 async def publish_concept(
     concept_iri: str,
@@ -1194,8 +1220,20 @@ async def publish_concept(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Publish an approved concept."""
+    """Publish an approved concept.
+
+    If the concept is currently ``under_review``, it is automatically
+    approved first so callers do not need a separate ``/approve`` step.
+    """
     try:
+        # Auto-approve if still under_review so publish works in one step
+        existing = manager.get_concept(concept_iri)
+        if existing and existing.get("status") == "under_review":
+            manager.update_concept_status(
+                concept_iri=concept_iri,
+                new_status="approved",
+                updated_by=current_user.email,
+            )
         concept = manager.update_concept_status(
             concept_iri=concept_iri,
             new_status="published",

@@ -105,6 +105,13 @@ async def delete_link(
     }
 
     try:
+        # Validate link_id is a valid UUID before querying the database
+        try:
+            import uuid as _uuid
+            _uuid.UUID(link_id)
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=404, detail="Link not found")
+
         ok = manager.remove(link_id, removed_by=(current_user.username if current_user else None))
         if not ok:
             raise HTTPException(status_code=404, detail="Link not found")

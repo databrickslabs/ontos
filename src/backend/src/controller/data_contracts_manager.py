@@ -2262,6 +2262,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 else:
                     domain_id = self._resolve_domain(db, domain_id=domain_id)
             
+            # Extract description fields from nested dict or flat keys
+            description = data_dict.get('description')
+            if isinstance(description, str):
+                description = {"purpose": description}
+            elif not isinstance(description, dict):
+                description = None
+
+            desc_usage = data_dict.get('descriptionUsage') or (description.get('usage') if description else None)
+            desc_purpose = data_dict.get('descriptionPurpose') or (description.get('purpose') if description else None)
+            desc_limitations = data_dict.get('descriptionLimitations') or (description.get('limitations') if description else None)
+
             # Build update payload
             update_payload = {}
             payload_map = {
@@ -2272,9 +2283,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 'project_id': data_dict.get('project_id'),
                 'tenant': data_dict.get('tenant'),
                 'data_product': data_dict.get('dataProduct'),
-                'description_usage': data_dict.get('descriptionUsage'),
-                'description_purpose': data_dict.get('descriptionPurpose'),
-                'description_limitations': data_dict.get('descriptionLimitations'),
+                'description_usage': desc_usage,
+                'description_purpose': desc_purpose,
+                'description_limitations': desc_limitations,
                 'api_version': data_dict.get('apiVersion'),
                 'kind': data_dict.get('kind'),
                 'domain_id': domain_id,

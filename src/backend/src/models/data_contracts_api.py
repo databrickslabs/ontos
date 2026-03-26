@@ -404,6 +404,7 @@ class DataContractUpdate(BaseModel):
     domainId: Optional[str] = Field(None, alias='domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
+    description: Optional[ContractDescription] = None  # Nested description object (flattened in manager)
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')

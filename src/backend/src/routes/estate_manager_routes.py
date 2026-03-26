@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Annotated
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from src.common.authorization import PermissionChecker
 from src.common.config import Settings, get_settings
 from src.common.features import FeatureAccessLevel
 from src.common.workspace_client import get_workspace_client, WorkspaceClient
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.models.estate import Estate, CloudType, SyncStatus
+
+# Annotated type for flat (non-embedded) Estate body parameter
+EstateBody = Annotated[Estate, Body(embed=False)]
 from src.controller.estate_manager import EstateManager
 
 # Configure logging
@@ -43,7 +47,7 @@ async def get_estate(
 
 @router.post("/estates", response_model=Estate)
 async def create_estate(
-    payload: Estate,
+    payload: EstateBody,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
@@ -87,7 +91,7 @@ async def create_estate(
 @router.put("/estates/{estate_id}", response_model=Estate)
 async def update_estate(
     estate_id: str,
-    payload: Estate,
+    payload: EstateBody,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,

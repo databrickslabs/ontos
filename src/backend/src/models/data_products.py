@@ -290,7 +290,7 @@ class Team(BaseModel):
 class DataProduct(BaseModel):
     """ODPS v1.0.0 Data Product"""
     # ODPS v1.0.0 required fields
-    apiVersion: str = Field("v1.0.0", description="Version of the ODPS standard")
+    apiVersion: str = Field("v1.0.0", alias="api_version", description="Version of the ODPS standard")
     kind: str = Field("DataProduct", description="Resource type")
     id: str = Field(..., description="Unique identifier")
     status: str = Field(..., description="Status (proposed, draft, active, deprecated, retired)")

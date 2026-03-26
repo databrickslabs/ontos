@@ -41,9 +41,9 @@ async def create_cost_item(
         "params": {
             "entity_type": entity_type,
             "entity_id": entity_id,
-            "cost_type": payload.cost_type,
-            "amount": float(payload.amount) if payload.amount else None,
-            "recurring": payload.recurring
+            "cost_center": payload.cost_center,
+            "amount_cents": payload.amount_cents,
+            "currency": payload.currency
         }
     }
 
@@ -123,8 +123,8 @@ async def update_cost_item(
     details = {
         "params": {
             "cost_item_id": id,
-            "has_amount_update": payload.amount is not None,
-            "has_notes_update": payload.notes is not None
+            "has_amount_update": payload.amount_cents is not None,
+            "has_title_update": payload.title is not None
         }
     }
 

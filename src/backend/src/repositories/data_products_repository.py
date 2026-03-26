@@ -66,7 +66,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 domain=obj_in.domain,
                 tenant=obj_in.tenant,
                 owner_team_id=obj_in.owner_team_id,
-                project_id=None  # Set via manager if needed
+                project_id=None,  # Set via manager if needed
+                max_level_inheritance=obj_in.max_level_inheritance,
             )
 
             # 2. Create Structured Description (One-to-One)
@@ -246,6 +247,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.owner_team_id = update_data['owner_team_id']
             if 'project_id' in update_data:
                 db_obj.project_id = update_data['project_id']
+            if 'max_level_inheritance' in update_data:
+                db_obj.max_level_inheritance = update_data['max_level_inheritance']
 
             # 2. Update Structured Description
             if 'description' in update_data:

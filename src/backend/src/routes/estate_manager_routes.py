@@ -43,7 +43,7 @@ async def get_estate(
 
 @router.post("/estates", response_model=Estate)
 async def create_estate(
-    estate: Estate,
+    payload: Estate,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
@@ -55,22 +55,22 @@ async def create_estate(
     success = False
     details = {
         "params": {
-            "estate_id": estate.id,
-            "name": estate.name,
-            "cloud_type": estate.cloud.value if estate.cloud else None,
-            "enabled": estate.enabled
+            "estate_id": payload.id,
+            "name": payload.name,
+            "cloud_type": payload.cloud_type.value if payload.cloud_type else None,
+            "enabled": payload.is_enabled
         }
     }
 
     try:
-        result = await estate_manager.create_estate(estate)
+        result = await estate_manager.create_estate(payload)
         success = True
         return result
     except HTTPException as e:
         details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
-        logger.exception("Failed creating estate %s", estate.id)
+        logger.exception("Failed creating estate %s", payload.id)
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to create estate")
     finally:
@@ -87,7 +87,7 @@ async def create_estate(
 @router.put("/estates/{estate_id}", response_model=Estate)
 async def update_estate(
     estate_id: str,
-    estate: Estate,
+    payload: Estate,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
@@ -100,13 +100,13 @@ async def update_estate(
     details = {
         "params": {
             "estate_id": estate_id,
-            "name": estate.name,
-            "enabled": estate.enabled
+            "name": payload.name,
+            "enabled": payload.is_enabled
         }
     }
 
     try:
-        updated_estate = await estate_manager.update_estate(estate_id, estate)
+        updated_estate = await estate_manager.update_estate(estate_id, payload)
         if not updated_estate:
             raise HTTPException(status_code=404, detail="Estate not found")
         success = True

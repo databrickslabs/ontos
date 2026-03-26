@@ -5953,29 +5953,70 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 limitations=db_contract.description_limitations
             )
         
-        # Build schema objects -- metadata only, no properties (loaded on-demand via /schemas/{name}/properties)
+        # Build schema objects with their properties included
         schema_objects = []
-        from sqlalchemy import func as sa_func
-        schema_rows = (
-            db.query(SchemaObjectDb.id, SchemaObjectDb.name, SchemaObjectDb.physical_name,
-                     SchemaObjectDb.business_name, SchemaObjectDb.physical_type,
-                     SchemaObjectDb.description,
-                     sa_func.count(SchemaPropertyDb.id).label("prop_count"))
-            .outerjoin(SchemaPropertyDb, SchemaPropertyDb.object_id == SchemaObjectDb.id)
+        schema_obj_rows = (
+            db.query(SchemaObjectDb)
             .filter(SchemaObjectDb.contract_id == db_contract.id)
-            .group_by(SchemaObjectDb.id)
             .order_by(SchemaObjectDb.name)
             .all()
         )
-        for row in schema_rows:
+        # Batch-load all properties for all schema objects in one query
+        schema_obj_ids = [s.id for s in schema_obj_rows]
+        all_props = []
+        if schema_obj_ids:
+            all_props = (
+                db.query(SchemaPropertyDb)
+                .filter(SchemaPropertyDb.object_id.in_(schema_obj_ids))
+                .order_by(SchemaPropertyDb.name)
+                .all()
+            )
+        # Group properties by object_id
+        props_by_object: Dict[str, list] = {}
+        for p in all_props:
+            props_by_object.setdefault(p.object_id, []).append(p)
+
+        for schema_obj in schema_obj_rows:
+            # Convert DB properties to API dicts
+            prop_items = []
+            for p in props_by_object.get(schema_obj.id, []):
+                options = {}
+                if p.logical_type_options_json:
+                    try:
+                        options = json.loads(p.logical_type_options_json)
+                    except Exception:
+                        pass
+                item = {
+                    "name": p.name,
+                    "logicalType": p.logical_type or "string",
+                    "physicalType": p.physical_type,
+                    "required": p.required,
+                    "unique": p.unique,
+                    "primaryKey": p.primary_key,
+                    "primaryKeyPosition": p.primary_key_position,
+                    "partitioned": p.partitioned,
+                    "partitionKeyPosition": p.partition_key_position,
+                    "classification": p.classification,
+                    "description": p.transform_description,
+                    "businessName": p.business_name,
+                    "criticalDataElement": p.critical_data_element,
+                    "examples": p.examples,
+                    "transformLogic": p.transform_logic,
+                    "transformSourceObjects": p.transform_source_objects,
+                    "transformDescription": p.transform_description,
+                    "encryptedName": p.encrypted_name,
+                }
+                item.update(options)
+                prop_items.append(item)
+
             schema_objects.append(SchemaObject(
-                name=row.name,
-                physicalName=row.physical_name,
-                businessName=row.business_name,
-                physicalType=row.physical_type,
-                description=row.description,
-                properties=[],
-                propertyCount=row.prop_count,
+                name=schema_obj.name,
+                physicalName=schema_obj.physical_name,
+                businessName=schema_obj.business_name,
+                physicalType=schema_obj.physical_type,
+                description=schema_obj.description,
+                properties=prop_items,
+                propertyCount=len(prop_items),
             ))
         
         # Build team (ODCS compliant)

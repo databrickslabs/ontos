@@ -150,13 +150,12 @@ class ContractCloner:
 
             cloned_prop = {
                 'id': new_prop_id,
-                'schema_object_id': new_schema_id,
+                'object_id': new_schema_id,
                 'name': prop.name,
                 'logical_type': prop.logical_type,
                 'physical_type': prop.physical_type,
                 'required': prop.required,
                 'unique': prop.unique,
-                'description': prop.description,
                 'business_name': getattr(prop, 'business_name', None),
                 'encrypted_name': getattr(prop, 'encrypted_name', None),
                 'critical_data_element': getattr(prop, 'critical_data_element', None),

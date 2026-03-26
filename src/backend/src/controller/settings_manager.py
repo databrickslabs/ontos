@@ -1056,6 +1056,12 @@ class SettingsManager:
             'relationships': relationships
         }
 
+    def list_available_workflows(self) -> list:
+        """Delegate to JobsManager to list available workflows."""
+        if getattr(self, '_jobs', None):
+            return self._jobs.list_available_workflows()
+        return []
+
     def get_settings(self) -> dict:
         """Get current settings"""
         # Refresh available jobs from filesystem to reflect changes

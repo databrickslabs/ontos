@@ -1306,6 +1306,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         new_product_data['id'] = str(uuid.uuid4())
         new_product_data['version'] = request.new_version
 
+        # Link new version back to the original product
+        new_product_data['parent_product_id'] = original_product_id
+
         # Reset status to DRAFT
         new_product_data['status'] = DataProductStatus.DRAFT.value
         logger.info(f"Resetting status to DRAFT for new version {new_product_data['id']}")

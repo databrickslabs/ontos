@@ -383,7 +383,7 @@ async def add_namespace_permission(
         "params": {
             "namespace_id": str(namespace_id),
             "group_id": permission_in.group_id,
-            "permission_level": permission_in.permission_level
+            "permission_level": permission_in.access_level
         }
     }
 

@@ -134,6 +134,16 @@
   fill: hsl(var(--border));
 }
 
+/* React Flow selected edge highlight */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.5));
+}
+
+.react-flow__edge.selected .react-flow__edge-textbg {
+  fill: rgba(59, 130, 246, 0.1);
+}
+
 /* React Flow edge labels in dark mode */
 .dark .react-flow__edge-textbg {
   fill: hsl(var(--background));

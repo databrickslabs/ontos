@@ -12,6 +12,10 @@ import ReactFlow, {
   useEdgesState,
   MarkerType,
   Panel,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
+  type EdgeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
@@ -119,6 +123,57 @@ const nodeTypes = {
   default: DefaultStepNode,
 };
 
+// Custom edge with visible delete button when selected
+function DeletableEdge({
+  id, sourceX, sourceY, targetX, targetY,
+  sourcePosition, targetPosition, style, label, labelStyle, markerEnd, selected, data,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
+  });
+
+  return (
+    <>
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      <EdgeLabelRenderer>
+        <div
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+            pointerEvents: 'all',
+          }}
+          className="nodrag nopan flex items-center gap-1"
+        >
+          {label && (
+            <span className="text-xs font-medium" style={{ ...labelStyle, color: (labelStyle as any)?.fill || (labelStyle as any)?.color }}>
+              {label}
+            </span>
+          )}
+          {selected && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                data?.onDelete?.(id);
+              }}
+              className="flex items-center justify-center w-5 h-5 rounded-full
+                bg-red-500 hover:bg-red-600 text-white text-xs leading-none
+                shadow-sm transition-colors dark:bg-red-600 dark:hover:bg-red-700"
+              title="Delete connection"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+// Edge types registry
+const edgeTypes = {
+  deletable: DeletableEdge,
+};
+
 // Layout helper
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
@@ -188,6 +243,7 @@ const workflowToElements = (
       id: 'trigger-to-first',
       source: 'trigger',
       target: workflow.steps[0].step_id,
+      type: 'deletable',
       markerEnd: { type: MarkerType.ArrowClosed },
     });
   }
@@ -200,6 +256,7 @@ const workflowToElements = (
         source: step.step_id,
         sourceHandle: 'pass',
         target: step.on_pass,
+        type: 'deletable',
         label: 'Pass',
         labelStyle: { fill: '#22c55e', fontWeight: 500 },
         markerEnd: { type: MarkerType.ArrowClosed },
@@ -212,6 +269,7 @@ const workflowToElements = (
         source: step.step_id,
         sourceHandle: 'fail',
         target: step.on_fail,
+        type: 'deletable',
         label: 'Fail',
         labelStyle: { fill: '#ef4444', fontWeight: 500 },
         markerEnd: { type: MarkerType.ArrowClosed },
@@ -290,6 +348,24 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       }
     }
   }, [onEdgesChangeBase, edges]);
+
+  // Delete edge handler — removes edge and syncs step on_pass/on_fail
+  const onDeleteEdge = useCallback((edgeId: string) => {
+    const target = edges.find(e => e.id === edgeId);
+    if (target) {
+      const field = target.sourceHandle === 'fail' ? 'on_fail' : 'on_pass';
+      setSteps(prev => prev.map(s =>
+        s.step_id === target.source ? { ...s, [field]: undefined } : s
+      ));
+    }
+    setEdges(prev => prev.filter(e => e.id !== edgeId));
+  }, [edges, setEdges]);
+
+  // Inject onDelete callback into every edge's data so DeletableEdge can call it
+  const edgesWithDelete = useMemo(
+    () => edges.map(e => ({ ...e, data: { ...e.data, onDelete: onDeleteEdge } })),
+    [edges, onDeleteEdge],
+  );
 
   // Compute dirty state - compare current values to original
   const isDirty = useMemo(() => {
@@ -503,6 +579,38 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setSelectedNodeId(node.id);
   }, []);
 
+  // Handle edge reconnection (drag an existing edge endpoint to a different node)
+  const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    if (!newConnection.source || !newConnection.target) return;
+    const handleType = oldEdge.sourceHandle || 'pass';
+    const isPass = handleType !== 'fail';
+
+    // Remove old edge and add reconnected edge
+    setEdges(prev => {
+      const filtered = prev.filter(e => e.id !== oldEdge.id);
+      const reconnectedEdge: Edge = {
+        id: `${newConnection.source}-${handleType}-to-${newConnection.target}`,
+        source: newConnection.source!,
+        sourceHandle: handleType,
+        target: newConnection.target!,
+        type: 'deletable',
+        label: isPass ? 'Pass' : 'Fail',
+        labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: isPass ? '#22c55e' : '#ef4444' },
+      };
+      return [...filtered, reconnectedEdge];
+    });
+
+    // Clear old target, set new target in step data
+    setSteps(prev => prev.map(s => {
+      if (s.step_id === oldEdge.source) {
+        return { ...s, [isPass ? 'on_pass' : 'on_fail']: newConnection.target };
+      }
+      return s;
+    }));
+  }, [setEdges]);
+
   // Handle manual edge creation (drag from handle to handle)
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) return;
@@ -519,6 +627,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       source: connection.source,
       sourceHandle: handleType,
       target: connection.target,
+      type: 'deletable',
       label: isPass ? 'Pass' : 'Fail',
       labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
       markerEnd: { type: MarkerType.ArrowClosed },
@@ -564,6 +673,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         source: lastNode.id,
         sourceHandle: lastNode.id === 'trigger' ? undefined : 'pass',
         target: stepId,
+        type: 'deletable',
         markerEnd: { type: MarkerType.ArrowClosed },
       };
       setEdges(prev => [...prev, newEdge]);
@@ -736,12 +846,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         <div className="flex-1">
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={edgesWithDelete}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onReconnect={onReconnect}
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            defaultEdgeOptions={{ interactionWidth: 20 }}
+            deleteKeyCode={['Backspace', 'Delete']}
+            edgesUpdatable
+            edgesFocusable
             fitView
             fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
             minZoom={0.3}

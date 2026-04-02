@@ -4,15 +4,12 @@ import { useTranslation } from 'react-i18next';
 import ReactFlow, {
   Node,
   Edge,
+  Connection,
   Controls,
   Background,
   MiniMap,
   useNodesState,
   useEdgesState,
-  // addEdge - unused
-  // Connection - unused
-  // NodeChange - unused
-  // EdgeChange - unused
   MarkerType,
   Panel,
 } from 'reactflow';
@@ -276,8 +273,24 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState([]);
+
+  // Wrap onEdgesChange to sync step on_pass/on_fail when edges are removed
+  const onEdgesChange = useCallback((changes: import('reactflow').EdgeChange[]) => {
+    onEdgesChangeBase(changes);
+    for (const change of changes) {
+      if (change.type === 'remove') {
+        const removed = edges.find(e => e.id === change.id);
+        if (removed) {
+          const field = removed.sourceHandle === 'fail' ? 'on_fail' : 'on_pass';
+          setSteps(prev => prev.map(s =>
+            s.step_id === removed.source ? { ...s, [field]: undefined } : s
+          ));
+        }
+      }
+    }
+  }, [onEdgesChangeBase, edges]);
+
   // Compute dirty state - compare current values to original
   const isDirty = useMemo(() => {
     if (!originalState) {
@@ -490,6 +503,37 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setSelectedNodeId(node.id);
   }, []);
 
+  // Handle manual edge creation (drag from handle to handle)
+  const onConnect = useCallback((connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+    const handleType = connection.sourceHandle || 'pass';
+    const isPass = handleType !== 'fail';
+
+    // Remove any existing edge from the same source handle
+    setEdges(prev => prev.filter(e =>
+      !(e.source === connection.source && e.sourceHandle === handleType)
+    ));
+
+    const newEdge: Edge = {
+      id: `${connection.source}-${handleType}-to-${connection.target}`,
+      source: connection.source,
+      sourceHandle: handleType,
+      target: connection.target,
+      label: isPass ? 'Pass' : 'Fail',
+      labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+      markerEnd: { type: MarkerType.ArrowClosed },
+      style: { stroke: isPass ? '#22c55e' : '#ef4444' },
+    };
+    setEdges(prev => [...prev, newEdge]);
+
+    // Update the step's on_pass or on_fail
+    setSteps(prev => prev.map(s =>
+      s.step_id === connection.source
+        ? { ...s, [isPass ? 'on_pass' : 'on_fail']: connection.target }
+        : s
+    ));
+  }, [setEdges]);
+
   // Add new step
   const addStep = (type: StepType) => {
     const stepId = `step-${Date.now()}`;
@@ -695,6 +739,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
             fitView

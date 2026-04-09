@@ -138,13 +138,24 @@ def initialize_managers(app: FastAPI):
     db_session = None
     ws_client = None
 
+    # Access health state for soft-fail reporting (set in app.py startup_event)
+    health = getattr(app.state, 'health', {"warnings": []})
+
     try:
-        # --- Initialize Workspace Client --- 
+        # --- Initialize Workspace Client (soft-fail) ---
         logger.info("Attempting to initialize WorkspaceClient...")
-        ws_client = get_workspace_client(settings=settings)
-        if not ws_client:
-            raise RuntimeError("Failed to initialize Databricks WorkspaceClient (returned None).")
-        logger.info("WorkspaceClient initialized successfully.")
+        try:
+            ws_client = get_workspace_client(settings=settings)
+            if not ws_client:
+                raise RuntimeError("WorkspaceClient returned None.")
+            logger.info("WorkspaceClient initialized successfully.")
+            health["ws_ok"] = True
+        except Exception as ws_err:
+            ws_client = None
+            msg = f"Workspace client unavailable: {ws_err}"
+            logger.warning(msg, exc_info=True)
+            health.setdefault("warnings", []).append(msg)
+            health["ws_ok"] = False
         
         # --- Initialize Connector Registry ---
         logger.info("Initializing asset connector registry...")
@@ -414,8 +425,9 @@ def initialize_managers(app: FastAPI):
 
     except Exception as e:
         logger.critical(f"Failed during application startup (manager init or default roles): {e}", exc_info=True)
-        if db_session: db_session.rollback() # Rollback if any part fails
-        raise RuntimeError("Failed to initialize application managers or default roles.") from e
+        if db_session: db_session.rollback()
+        msg = f"Manager initialization failed: {e}"
+        health.setdefault("warnings", []).append(msg)
     finally:
         # Keep the DB session open for manager singletons that rely on it.
         # It will be managed at application shutdown.

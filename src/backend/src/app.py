@@ -16,12 +16,12 @@ SERVER_STARTUP_TIME = int(time.time())
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from fastapi import HTTPException, status
 
-from src.common.middleware import ErrorHandlingMiddleware, LoggingMiddleware
+from src.common.middleware import ErrorHandlingMiddleware, LoggingMiddleware, MaintenanceMiddleware
 from src.routes import (
     access_grants_routes,
     catalog_commander_routes,
@@ -113,16 +113,33 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 async def startup_event():
     import os
     
+    # Initialize health state (must happen before anything else)
+    app.state.health = {
+        "db_ok": False,
+        "ws_ok": False,
+        "warnings": [],
+        "db_error": None,
+    }
+    
     # Skip startup tasks if running tests
     if os.getenv('SKIP_STARTUP_TASKS') == 'true':
         logger.info("SKIP_STARTUP_TASKS=true detected - skipping startup tasks (test mode)")
+        app.state.health["db_ok"] = True
+        app.state.health["ws_ok"] = True
         return
     
     logger.info("Running application startup event...")
     settings = get_settings()
     
-    initialize_database(settings=settings)
-    initialize_managers(app)  # Handles DB-backed manager init
+    try:
+        initialize_database(settings=settings)
+        app.state.health["db_ok"] = True
+    except Exception as e:
+        app.state.health["db_error"] = str(e)
+        logger.critical(f"Database init failed — entering maintenance mode: {e}", exc_info=True)
+        return  # Skip manager init; MaintenanceMiddleware will serve the maintenance page
+
+    initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
     
     # Initialize Git service for indirect delivery mode
     try:
@@ -294,9 +311,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add custom middleware
+# Add custom middleware (outermost middleware runs first)
 app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(MaintenanceMiddleware)
 
 # Mount static files for the React application (skip in test mode)
 if not os.environ.get('TESTING'):
@@ -386,6 +404,34 @@ async def get_app_version():
         'startTime': SERVER_STARTUP_TIME,
         'timestamp': int(time.time())
     }
+
+# --- Health & retry endpoints ---
+@app.get("/api/health", tags=["System"])
+async def health_check():
+    """Return application health state."""
+    return app.state.health
+
+@app.post("/api/health/retry", tags=["System"])
+async def retry_startup():
+    """Re-attempt database init + manager init after a maintenance-mode failure."""
+    settings = get_settings()
+    try:
+        initialize_database(settings=settings)
+        app.state.health["db_ok"] = True
+        app.state.health["db_error"] = None
+    except Exception as e:
+        app.state.health["db_error"] = str(e)
+        logger.critical(f"Database retry failed: {e}", exc_info=True)
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=503)
+
+    try:
+        app.state.health["warnings"] = []  # Reset warnings before retry
+        initialize_managers(app)  # Sets health["ws_ok"] internally
+    except Exception as e:
+        app.state.health["warnings"].append(f"Manager init failed on retry: {e}")
+        logger.error(f"Manager init failed on retry: {e}", exc_info=True)
+
+    return {"status": "ok", "health": app.state.health}
 
 # Define the SPA catch-all route LAST (skip in test mode)
 if not os.environ.get('TESTING'):

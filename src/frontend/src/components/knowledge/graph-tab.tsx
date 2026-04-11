@@ -7,6 +7,11 @@ interface GraphTabProps {
   hiddenRoots: Set<string>;
   onToggleRoot: (rootIri: string) => void;
   onNodeClick: (concept: OntologyConcept) => void;
+  onNodeRightClick?: (concept: OntologyConcept, event: MouseEvent) => void;
+  onBackgroundRightClick?: (event: MouseEvent) => void;
+  linkDrawSource?: string | null;
+  onLinkDraw?: (source: OntologyConcept, target: OntologyConcept) => void;
+  onLinkDrawCancel?: () => void;
   showRootBadges?: boolean;
 }
 
@@ -15,6 +20,11 @@ export const GraphTab: React.FC<GraphTabProps> = ({
   hiddenRoots,
   onToggleRoot,
   onNodeClick,
+  onNodeRightClick,
+  onBackgroundRightClick,
+  linkDrawSource,
+  onLinkDraw,
+  onLinkDrawCancel,
   showRootBadges = true,
 }) => {
   return (
@@ -26,6 +36,11 @@ export const GraphTab: React.FC<GraphTabProps> = ({
           hiddenRoots={hiddenRoots}
           onToggleRoot={onToggleRoot}
           onNodeClick={onNodeClick}
+          onNodeRightClick={onNodeRightClick}
+          onBackgroundRightClick={onBackgroundRightClick}
+          linkDrawSource={linkDrawSource}
+          onLinkDraw={onLinkDraw}
+          onLinkDrawCancel={onLinkDrawCancel}
           showRootBadges={showRootBadges}
         />
       </div>

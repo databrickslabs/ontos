@@ -104,17 +104,32 @@ class OntologyProperty(BaseModel):
     property_type: str  # 'datatype' | 'object' | 'annotation'
 
 
+class TypedRelationship(BaseModel):
+    """A relationship with its RDF predicate type preserved."""
+    iri: str                    # Target concept IRI
+    predicate: str              # Full predicate URI, e.g. "http://www.w3.org/2004/02/skos/core#broader"
+    predicate_label: str = ""   # Human-readable short form: "skos:broader", "rdfs:subClassOf"
+
+
 class OntologyConcept(BaseModel):
     iri: str
     label: Optional[str] = None  # Primary label (computed from labels dict)
     labels: Dict[str, str] = {}  # Multi-language labels: {"en": "Dataset", "ja": "データセット"}
     comment: Optional[str] = None  # Primary comment (computed from comments dict)
     comments: Dict[str, str] = {}  # Multi-language comments: {"en": "A curated...", "ja": "..."}
-    concept_type: str  # 'class' | 'concept' | 'individual' | 'term'
+    concept_type: str  # 'class' | 'concept' | 'individual' | 'term' | 'scheme'
     source_context: Optional[str] = None  # The taxonomy/ontology source (collection IRI)
-    parent_concepts: List[str] = []  # Parent class/concept IRIs
-    child_concepts: List[str] = []   # Child class/concept IRIs
-    related_concepts: List[str] = [] # skos:related IRIs
+    parent_concepts: List[str] = []  # Parent class/concept IRIs (flat, backward-compat)
+    child_concepts: List[str] = []   # Child class/concept IRIs (flat, backward-compat)
+    related_concepts: List[str] = [] # skos:related IRIs (flat, backward-compat)
+    # Typed relationships — parallel to flat lists, preserving W3C predicate types
+    typed_parents: List[TypedRelationship] = []
+    typed_children: List[TypedRelationship] = []
+    typed_related: List[TypedRelationship] = []
+    # SKOS metadata
+    notation: Optional[str] = None       # skos:notation (e.g. "CUST", "ENGY.ELEC")
+    in_scheme: Optional[str] = None      # skos:inScheme IRI
+    is_top_concept: bool = False         # True when skos:topConceptOf exists
     domain: Optional[str] = None     # For properties: rdfs:domain
     range: Optional[str] = None      # For properties: rdfs:range
     properties: List[OntologyProperty] = []

@@ -69,17 +69,32 @@ export interface OntologyProperty {
   property_type: 'datatype' | 'object' | 'annotation';
 }
 
+/** A relationship with its W3C RDF predicate type preserved. */
+export interface TypedRelationship {
+  iri: string;
+  predicate: string;        // Full URI e.g. "http://www.w3.org/2004/02/skos/core#broader"
+  predicate_label: string;  // Short form: "skos:broader", "rdfs:subClassOf"
+}
+
 export interface OntologyConcept {
   iri: string;
   label?: string;  // Primary label (computed from labels dict)
   labels?: Record<string, string>;  // Multi-language labels: {"en": "Dataset", "ja": "データセット"}
   comment?: string;  // Primary comment (computed from comments dict)
   comments?: Record<string, string>;  // Multi-language comments: {"en": "A curated...", "ja": "..."}
-  concept_type: 'class' | 'concept' | 'individual' | 'property' | 'term';
+  concept_type: 'class' | 'concept' | 'individual' | 'property' | 'term' | 'scheme';
   source_context?: string;
   parent_concepts: string[];
   child_concepts: string[];
   related_concepts?: string[];
+  // Typed relationships — parallel to flat lists, preserving W3C predicate types
+  typed_parents?: TypedRelationship[];
+  typed_children?: TypedRelationship[];
+  typed_related?: TypedRelationship[];
+  // SKOS metadata
+  notation?: string;          // skos:notation (e.g. "CUST", "ENGY.ELEC")
+  in_scheme?: string;         // skos:inScheme IRI
+  is_top_concept?: boolean;   // true when skos:topConceptOf exists
   properties: OntologyProperty[];
   tagged_assets: Array<{
     id: string;

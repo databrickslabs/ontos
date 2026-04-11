@@ -1,191 +1,338 @@
+/**
+ * Domain taxonomy graph using ReactFlow + dagre layout.
+ * Shows data domains as an interactive hierarchical graph with 3 custom node types:
+ *   - SchemeNode: dark root node (top of hierarchy)
+ *   - DomainNode: colored pill for top-level domains
+ *   - SubdomainNode: white pill for child domains
+ *
+ * Includes MiniMap, Controls, Background, domain-based coloring, and
+ * top-to-bottom dagre layout for clear hierarchy visualization.
+ */
 import React, { useMemo, useEffect } from 'react';
 import ReactFlow, {
-    Node,
-    Edge,
-    Position,
-    MarkerType,
-    useNodesState,
-    useEdgesState,
-    Controls,
-    Background,
-    MiniMap,
-    NodeProps,
-    Handle
+  Node,
+  Edge,
+  Position,
+  useNodesState,
+  useEdgesState,
+  Controls,
+  Background,
+  MiniMap,
+  Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
 import { DataDomain } from '@/types/data-domain';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ListTree } from 'lucide-react';
-import dagre from 'dagre'; // Import dagre
+import dagre from 'dagre';
+
+// ---- Domain Color Map ----
+// Assigns consistent colors to well-known domain labels.
+// Falls back to a neutral blue for unrecognized domains.
+
+const DOMAIN_COLOR_MAP: Record<string, string> = {
+  'Customer': '#3b82f6',
+  'Energy': '#06b6d4',
+  'Billing': '#eab308',
+  'Billing & Payments': '#eab308',
+  'Network': '#7c3aed',
+  'Network & Infrastructure': '#7c3aed',
+  'Solar': '#22c55e',
+  'Solar & Batteries': '#22c55e',
+  'Wholesale': '#f97316',
+  'Wholesale & Trading': '#f97316',
+  'Digital': '#a855f7',
+  'Digital & Experience': '#a855f7',
+  'Regulatory': '#ef4444',
+  'Regulatory & Compliance': '#ef4444',
+  // Generic fallbacks
+  'Finance': '#eab308',
+  'Operations': '#14b8a6',
+  'Marketing': '#ec4899',
+  'Analytics': '#6366f1',
+  'Compliance': '#ef4444',
+  'Security': '#dc2626',
+  'Research': '#8b5cf6',
+  'Clinical': '#0ea5e9',
+};
+
+function getDomainColor(label: string): string {
+  // Exact match first
+  if (DOMAIN_COLOR_MAP[label]) return DOMAIN_COLOR_MAP[label];
+  // Partial match
+  for (const [key, color] of Object.entries(DOMAIN_COLOR_MAP)) {
+    if (label.includes(key) || key.includes(label)) return color;
+  }
+  return '#3b82f6';
+}
+
+// ---- Custom Node Components ----
+
+interface SchemeNodeData {
+  label: string;
+}
+
+const SchemeNode: React.FC<{ data: SchemeNodeData }> = ({ data }) => {
+  return (
+    <div className="bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 rounded-xl px-7 py-3.5 font-bold text-[15px] text-center min-w-[160px] border-2 border-slate-800 dark:border-slate-200 shadow-lg">
+      <Handle type="target" position={Position.Top} style={{ visibility: 'hidden' }} />
+      {data.label}
+      <Handle type="source" position={Position.Bottom} style={{ visibility: 'hidden' }} />
+    </div>
+  );
+};
 
 interface DomainNodeData {
-    label: string;
-    id: string;
-    parentId?: string | null;
-    childrenCount?: number;
+  label: string;
+  id: string;
+  parentId?: string | null;
+  childrenCount?: number;
+  notation?: string;
 }
 
-const DomainNode: React.FC<NodeProps<DomainNodeData>> = ({ data, id }) => {
-    const navigate = useNavigate();
-    const handleNodeClick = () => {
-        navigate(`/settings/data-domains/${id}`);
-    };
+const DomainNode: React.FC<{ data: DomainNodeData; id: string }> = ({ data, id }) => {
+  const navigate = useNavigate();
+  const color = getDomainColor(data.label);
 
-    return (
-        <>
-            {/* Explicit handles - adjust position based on layout direction if needed later */}
-            {/* For LR layout, target is Left, source is Right */}
-            <Handle type="target" position={Position.Left} id="target" style={{ visibility: 'hidden' }} />
-            <Card 
-                onClick={handleNodeClick} 
-                className="w-60 shadow-md hover:shadow-lg transition-shadow rounded-lg cursor-pointer bg-card border-primary/30 react-flow__node-default"
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleNodeClick()}
-            >
-                <CardHeader className="p-2 flex flex-row items-center justify-between space-y-0">
-                    <CardTitle className="text-sm font-medium flex items-center">
-                        <ListTree className="w-4 h-4 mr-2 text-primary" />
-                        {data.label}
-                    </CardTitle>
-                    {typeof data.childrenCount === 'number' && data.childrenCount > 0 && (
-                        <Badge variant="secondary" className="text-xs">{data.childrenCount} {data.childrenCount === 1 ? 'child' : 'children'}</Badge>
-                    )}
-                </CardHeader>
-                {/* Optionally, add more details to CardContent if needed */}
-                {/* <CardContent className="p-2 text-xs text-muted-foreground">
-                    ID: {data.id}
-                </CardContent> */}
-            </Card>
-            <Handle type="source" position={Position.Right} id="source" style={{ visibility: 'hidden' }} />
-        </>
-    );
+  return (
+    <div
+      className="rounded-full px-6 py-3 font-semibold text-[13px] text-center min-w-[140px] cursor-pointer text-white transition-transform hover:scale-105"
+      style={{
+        backgroundColor: color,
+        border: `2px solid ${color}`,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+      }}
+      onClick={() => navigate(`/settings/data-domains/${id}`)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/settings/data-domains/${id}`)}
+    >
+      <Handle type="target" position={Position.Top} style={{ visibility: 'hidden' }} />
+      {data.label}
+      {data.childrenCount !== undefined && data.childrenCount > 0 && (
+        <div className="text-[10px] opacity-80 mt-0.5">
+          {data.childrenCount} {data.childrenCount === 1 ? 'subdomain' : 'subdomains'}
+        </div>
+      )}
+      {data.notation && (
+        <div className="text-[10px] opacity-70 mt-0.5 font-mono">{data.notation}</div>
+      )}
+      <Handle type="source" position={Position.Bottom} style={{ visibility: 'hidden' }} />
+    </div>
+  );
 };
 
-const nodeTypes = { domainNode: DomainNode };
+interface SubdomainNodeData {
+  label: string;
+  id: string;
+  parentId?: string | null;
+  childrenCount?: number;
+  notation?: string;
+}
+
+const SubdomainNode: React.FC<{ data: SubdomainNodeData; id: string }> = ({ data, id }) => {
+  const navigate = useNavigate();
+
+  return (
+    <div
+      className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-full px-5 py-2.5 text-[12px] text-center min-w-[120px] border border-slate-200 dark:border-slate-600 cursor-pointer transition-all hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500"
+      onClick={() => navigate(`/settings/data-domains/${id}`)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && navigate(`/settings/data-domains/${id}`)}
+    >
+      <Handle type="target" position={Position.Top} style={{ visibility: 'hidden' }} />
+      {data.label}
+      {data.childrenCount !== undefined && data.childrenCount > 0 && (
+        <div className="text-[10px] text-muted-foreground mt-0.5">
+          {data.childrenCount} children
+        </div>
+      )}
+      {data.notation && (
+        <div className="text-[9px] text-muted-foreground mt-0.5 font-mono">{data.notation}</div>
+      )}
+      <Handle type="source" position={Position.Bottom} style={{ visibility: 'hidden' }} />
+    </div>
+  );
+};
+
+const nodeTypes = {
+  schemeNode: SchemeNode,
+  domainNode: DomainNode,
+  subdomainNode: SubdomainNode,
+};
+
+// ---- Dagre Layout ----
+
+const NODE_DIMENSIONS: Record<string, { width: number; height: number }> = {
+  schemeNode: { width: 200, height: 50 },
+  domainNode: { width: 170, height: 55 },
+  subdomainNode: { width: 150, height: 45 },
+};
 
 interface DataDomainGraphViewProps {
-    domains: DataDomain[];
+  domains: DataDomain[];
 }
 
-// Helper to arrange nodes in a basic tree layout (can be improved)
-const getLayoutedElements = (domains: DataDomain[], direction = 'LR') => {
-    const nodes: Node<DomainNodeData>[] = [];
-    const edges: Edge[] = [];
-    if (!domains || domains.length === 0) return { nodes, edges };
+const getLayoutedElements = (domains: DataDomain[]) => {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  if (!domains || domains.length === 0) return { nodes, edges };
 
-    // Detect dark mode
-    const isDarkMode = document.documentElement.classList.contains('dark');
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  const domainMap = new Map(domains.map(d => [d.id, d]));
 
-    const domainMap = new Map(domains.map(d => [d.id, d]));
+  // Identify root domains (no parent or parent not in the set)
+  const rootDomains = domains.filter(d => !d.parent_id || !domainMap.has(d.parent_id));
+  const hasHierarchy = rootDomains.length < domains.length;
 
-    const nodeHeight = 80;
-    const nodeWidth = 240; 
-
-    // Create all nodes first
-    domains.forEach(domain => {
-        nodes.push({
-            id: domain.id,
-            type: 'domainNode',
-            data: { 
-                label: domain.name,
-                id: domain.id, 
-                parentId: domain.parent_id,
-                childrenCount: domain.children_count
-            },
-            position: { x: 0, y: 0 }, // Initial position, Dagre will override
-            // Adjust source/target positions based on LR direction
-            sourcePosition: direction === 'LR' ? Position.Right : Position.Bottom,
-            targetPosition: direction === 'LR' ? Position.Left : Position.Top,
-        });
+  // If there are root domains with children, add a virtual scheme node
+  const schemeId = '__scheme__';
+  if (hasHierarchy && rootDomains.length > 1) {
+    nodes.push({
+      id: schemeId,
+      type: 'schemeNode',
+      data: { label: 'Data Domains' },
+      position: { x: 0, y: 0 },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
     });
+  }
 
-    // Create edges
-    domains.forEach(domain => {
-        if (domain.parent_id && domainMap.has(domain.parent_id)) {
-            edges.push({
-                id: `e-${domain.parent_id}-${domain.id}`,
-                source: domain.parent_id,
-                target: domain.id,
-                type: 'smoothstep',
-                markerEnd: {
-                    type: MarkerType.ArrowClosed,
-                    color: isDarkMode ? '#94a3b8' : '#333333'
-                },
-                style: {
-                    stroke: isDarkMode ? '#94a3b8' : '#666666',
-                    strokeWidth: 1.5
-                }
-            });
-        }
-    });
-    
-    if (nodes.length > 0 && typeof window !== 'undefined') { 
-        const dagreGraph = new dagre.graphlib.Graph();
-        dagreGraph.setDefaultEdgeLabel(() => ({}));
-        dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 70 });
+  // Categorize each domain
+  domains.forEach(domain => {
+    const isRoot = !domain.parent_id || !domainMap.has(domain.parent_id);
+    const hasChildren = domains.some(d => d.parent_id === domain.id);
 
-        nodes.forEach((node) => {
-            dagreGraph.setNode(node.id, { label: node.data.label, width: nodeWidth, height: nodeHeight });
-        });
-
-        edges.forEach((edge) => {
-            dagreGraph.setEdge(edge.source, edge.target);
-        });
-
-        dagre.layout(dagreGraph);
-
-        const layoutedNodes = nodes.map((node) => {
-            const nodeWithPosition = dagreGraph.node(node.id);
-            return {
-                ...node,
-                targetPosition: direction === 'LR' ? Position.Left : Position.Top, // Ensure this is consistent
-                sourcePosition: direction === 'LR' ? Position.Right : Position.Bottom, // Ensure this is consistent
-                position: { x: nodeWithPosition.x - nodeWidth / 2, y: nodeWithPosition.y - nodeHeight / 2 },
-            };
-        });
-        return { nodes: layoutedNodes, edges };
+    // Determine node type based on position in hierarchy
+    let nodeType: string;
+    if (isRoot && hasChildren) {
+      nodeType = 'domainNode';
+    } else if (isRoot && !hasChildren) {
+      // Single-level: treat as domain node
+      nodeType = 'domainNode';
+    } else {
+      nodeType = 'subdomainNode';
     }
-    
-    return { nodes, edges };
+
+    nodes.push({
+      id: domain.id,
+      type: nodeType,
+      data: {
+        label: domain.name,
+        id: domain.id,
+        parentId: domain.parent_id,
+        childrenCount: domain.children_count,
+      },
+      position: { x: 0, y: 0 },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
+    });
+
+    // Edge: parent → child
+    if (domain.parent_id && domainMap.has(domain.parent_id)) {
+      edges.push({
+        id: `e-${domain.parent_id}-${domain.id}`,
+        source: domain.parent_id,
+        target: domain.id,
+        type: 'smoothstep',
+        style: {
+          stroke: isDarkMode ? '#475569' : '#d1d5db',
+          strokeWidth: 2,
+        },
+      });
+    } else if (hasHierarchy && rootDomains.length > 1) {
+      // Connect root domains to scheme node
+      edges.push({
+        id: `e-${schemeId}-${domain.id}`,
+        source: schemeId,
+        target: domain.id,
+        type: 'smoothstep',
+        style: {
+          stroke: isDarkMode ? '#475569' : '#d1d5db',
+          strokeWidth: 2,
+        },
+      });
+    }
+  });
+
+  // Apply dagre layout (top-to-bottom)
+  if (nodes.length > 0) {
+    const g = new dagre.graphlib.Graph();
+    g.setDefaultEdgeLabel(() => ({}));
+    g.setGraph({ rankdir: 'TB', ranksep: 80, nodesep: 40 });
+
+    nodes.forEach(node => {
+      const dims = NODE_DIMENSIONS[node.type || 'subdomainNode'] ?? { width: 150, height: 50 };
+      g.setNode(node.id, { width: dims.width, height: dims.height });
+    });
+
+    edges.forEach(edge => {
+      g.setEdge(edge.source, edge.target);
+    });
+
+    dagre.layout(g);
+
+    return {
+      nodes: nodes.map(node => {
+        const pos = g.node(node.id);
+        const dims = NODE_DIMENSIONS[node.type || 'subdomainNode'] ?? { width: 150, height: 50 };
+        return {
+          ...node,
+          position: { x: pos.x - dims.width / 2, y: pos.y - dims.height / 2 },
+        };
+      }),
+      edges,
+    };
+  }
+
+  return { nodes, edges };
 };
+
+// ---- Main Component ----
 
 const DataDomainGraphView: React.FC<DataDomainGraphViewProps> = ({ domains }) => {
-    // Use useMemo for initial calculation, then useEffect to update when domains change
-    const memoizedElements = useMemo(() => getLayoutedElements(domains, 'LR'), [domains]);
-    const [nodes, setNodes, onNodesChange] = useNodesState(memoizedElements.nodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(memoizedElements.edges);
+  const memoizedElements = useMemo(() => getLayoutedElements(domains), [domains]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(memoizedElements.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(memoizedElements.edges);
+  const isDarkMode = document.documentElement.classList.contains('dark');
 
-    // Detect dark mode
-    const isDarkMode = document.documentElement.classList.contains('dark');
+  useEffect(() => {
+    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(domains);
+    setNodes(newNodes);
+    setEdges(newEdges);
+  }, [domains, setNodes, setEdges]);
 
-    useEffect(() => {
-        // Pass 'LR' explicitly to ensure horizontal layout
-        const { nodes: newNodes, edges: newEdges } = getLayoutedElements(domains, 'LR');
-        setNodes(newNodes);
-        setEdges(newEdges);
-    }, [domains, setNodes, setEdges]);
-
-    return (
-        <div className="h-[calc(100vh-280px)] w-full border rounded-lg" data-testid="data-domain-graph-view">
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                nodeTypes={nodeTypes}
-                fitView
-                attributionPosition="bottom-right"
-                className="bg-background"
-            >
-                <Controls />
-                <MiniMap nodeStrokeWidth={3} zoomable pannable />
-                <Background color={isDarkMode ? '#334155' : '#e2e8f0'} gap={16} />
-            </ReactFlow>
-        </div>
-    );
+  return (
+    <div className="h-[calc(100vh-280px)] w-full border rounded-lg overflow-hidden" data-testid="data-domain-graph-view">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={nodeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.3}
+        maxZoom={2}
+        attributionPosition="bottom-right"
+        className="bg-background"
+      >
+        <Controls />
+        <MiniMap
+          nodeColor={(node) => {
+            if (node.type === 'schemeNode') return isDarkMode ? '#e2e8f0' : '#1e293b';
+            if (node.type === 'domainNode') return getDomainColor(node.data?.label ?? '');
+            return isDarkMode ? '#475569' : '#d1d5db';
+          }}
+          maskColor={isDarkMode ? 'rgba(0, 0, 0, 0.15)' : 'rgba(0, 0, 0, 0.05)'}
+          style={{ borderRadius: '8px' }}
+          zoomable
+          pannable
+        />
+        <Background color={isDarkMode ? '#334155' : '#e2e8f0'} gap={20} />
+      </ReactFlow>
+    </div>
+  );
 };
 
-export default DataDomainGraphView; 
+export default DataDomainGraphView;

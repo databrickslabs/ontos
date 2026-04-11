@@ -27,6 +27,7 @@ from src.models.semantic_models import (
 from src.models.ontology import (
     OntologyConcept,
     OntologyProperty,
+    TypedRelationship,
     SemanticModel as SemanticModelOntology,
     ConceptHierarchy,
     TaxonomyStats,
@@ -603,6 +604,34 @@ class SemanticModelsManager:
             except Exception as e:
                 logger.error(f"Failed to sync taxonomy {f.name}: {e}")
                 self._db.rollback()
+
+    def import_taxonomy_file(self, file_path: Path, created_by: str = "system@demo") -> int:
+        """Import a single taxonomy TTL file into the database.
+
+        Public wrapper around the internal import pipeline, intended for
+        on-demand loading (e.g. demo data overlays) rather than startup sync.
+
+        Returns the number of new triples inserted (0 if already synced).
+        """
+        context_name = f"urn:taxonomy:{file_path.stem}"
+
+        temp_graph = Graph()
+        temp_graph.parse(file_path.as_posix(), format="turtle")
+        triple_count = len(temp_graph)
+
+        inserted = self._import_graph_to_db(
+            graph=temp_graph,
+            context_name=context_name,
+            source_type="file",
+            source_identifier=file_path.name,
+            created_by=created_by,
+        )
+
+        logger.info(
+            f"Imported taxonomy '{file_path.name}': {inserted} new triples "
+            f"(total in file: {triple_count})"
+        )
+        return inserted
 
     def _get_disabled_context_names(self) -> set:
         """Build the set of rdf_triples context names belonging to disabled semantic models."""
@@ -1854,7 +1883,7 @@ class SemanticModelsManager:
                     elif (concept_uri, RDF.type, SKOS.Concept) in context:
                         concept_type = "concept"
                     elif (concept_uri, RDF.type, SKOS.ConceptScheme) in context:
-                        concept_type = "concept"
+                        concept_type = "scheme"
                     # Check for all property types
                     elif (concept_uri, RDF.type, RDF.Property) in context:
                         concept_type = "property"
@@ -1879,25 +1908,47 @@ class SemanticModelsManager:
                     else:
                         concept_type = "individual"
 
-                    # Get parent concepts/properties
+                    # Get parent concepts/properties (flat + typed)
                     parent_concepts = []
+                    typed_parents = []
                     # Handle rdfs:subClassOf relationships (class-to-class)
                     for parent in context.objects(concept_uri, RDFS.subClassOf):
                         parent_str = str(parent)
                         if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
                             parent_concepts.append(parent_str)
+                            typed_parents.append(TypedRelationship(
+                                iri=parent_str,
+                                predicate=str(RDFS.subClassOf),
+                                predicate_label="rdfs:subClassOf",
+                            ))
                     # Handle owl:equivalentClass + owl:intersectionOf (A ≡ B ∩ C implies A ⊑ B)
                     for parent_iri in self._extract_parents_from_owl_equivalent_class(context, concept_uri):
                         if parent_iri not in parent_concepts:
                             parent_concepts.append(parent_iri)
+                            typed_parents.append(TypedRelationship(
+                                iri=parent_iri,
+                                predicate=str(OWL.equivalentClass),
+                                predicate_label="owl:equivalentClass",
+                            ))
                     # Handle rdfs:subPropertyOf relationships (property-to-property)
                     for parent in context.objects(concept_uri, RDFS.subPropertyOf):
                         parent_str = str(parent)
                         if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
                             parent_concepts.append(parent_str)
+                            typed_parents.append(TypedRelationship(
+                                iri=parent_str,
+                                predicate=str(RDFS.subPropertyOf),
+                                predicate_label="rdfs:subPropertyOf",
+                            ))
                     # Handle SKOS broader relationships
                     for parent in context.objects(concept_uri, SKOS.broader):
-                        parent_concepts.append(str(parent))
+                        parent_str = str(parent)
+                        parent_concepts.append(parent_str)
+                        typed_parents.append(TypedRelationship(
+                            iri=parent_str,
+                            predicate=str(SKOS.broader),
+                            predicate_label="skos:broader",
+                        ))
                     # Handle rdf:type relationships (instance-to-class)
                     for parent_type in context.objects(concept_uri, RDF.type):
                         # Only include custom types, not basic RDF/RDFS/SKOS/OWL types
@@ -1909,6 +1960,11 @@ class SemanticModelsManager:
                             "http://www.w3.org/2002/07/owl#"
                         ]):
                             parent_concepts.append(parent_type_str)
+                            typed_parents.append(TypedRelationship(
+                                iri=parent_type_str,
+                                predicate=str(RDF.type),
+                                predicate_label="rdf:type",
+                            ))
 
                     # Extract source context name
                     source_context = None
@@ -1936,8 +1992,31 @@ class SemanticModelsManager:
                         ranges = [r for r in ranges if not isinstance(r, BNode) and not self._is_skolemized_bnode(str(r))]
                         range_val = str(ranges[0]) if ranges else None
 
-                    # Extract related concepts (skos:related)
-                    related_concepts = [str(r) for r in context.objects(concept_uri, SKOS.related)]
+                    # Extract related concepts (skos:related) — flat + typed
+                    related_concepts = []
+                    typed_related = []
+                    for r in context.objects(concept_uri, SKOS.related):
+                        r_str = str(r)
+                        related_concepts.append(r_str)
+                        typed_related.append(TypedRelationship(
+                            iri=r_str,
+                            predicate=str(SKOS.related),
+                            predicate_label="skos:related",
+                        ))
+
+                    # Extract SKOS metadata (O(1) graph lookups per concept)
+                    notation_val = None
+                    for n in context.objects(concept_uri, SKOS.notation):
+                        notation_val = str(n)
+                        break
+                    in_scheme_val = None
+                    for s in context.objects(concept_uri, SKOS.inScheme):
+                        in_scheme_val = str(s)
+                        break
+                    is_top = any(context.objects(concept_uri, SKOS.topConceptOf))
+
+                    # Collect skos:altLabel into synonyms
+                    alt_labels = [str(a) for a in context.objects(concept_uri, SKOS.altLabel)]
 
                     concepts.append(OntologyConcept(
                         iri=concept_iri,
@@ -1948,17 +2027,44 @@ class SemanticModelsManager:
                         concept_type=concept_type,
                         source_context=source_context,
                         parent_concepts=parent_concepts,
+                        typed_parents=typed_parents,
+                        typed_related=typed_related,
+                        notation=notation_val,
+                        in_scheme=in_scheme_val,
+                        is_top_concept=is_top,
                         domain=domain_val,
                         range=range_val,
-                        related_concepts=related_concepts
+                        related_concepts=related_concepts,
+                        synonyms=alt_labels
                     ))
             except Exception as e:
                 logger.warning(f"Failed to query concepts in context {context_name}: {e}")
 
-        # Second pass: populate child_concepts using O(n) dictionary lookup
+        # Predicate inversions for typed_children (broader→narrower, etc.)
+        _PREDICATE_INVERSE = {
+            str(SKOS.broader): (str(SKOS.narrower), "skos:narrower"),
+            str(RDFS.subClassOf): (str(RDFS.subClassOf), "rdfs:subClassOf"),
+            str(RDFS.subPropertyOf): (str(RDFS.subPropertyOf), "rdfs:subPropertyOf"),
+            str(OWL.equivalentClass): (str(OWL.equivalentClass), "owl:equivalentClass"),
+            str(RDF.type): (str(RDF.type), "rdf:type"),
+        }
+
+        # Second pass: populate child_concepts + typed_children using O(n) dictionary lookup
         concept_map = {concept.iri: concept for concept in concepts}
         for concept in concepts:
-            # For each parent of this concept, add this concept as a child
+            # For each typed parent of this concept, add this concept as a typed child
+            for tp in concept.typed_parents:
+                if tp.iri in concept_map:
+                    parent_concept = concept_map[tp.iri]
+                    if concept.iri not in parent_concept.child_concepts:
+                        parent_concept.child_concepts.append(concept.iri)
+                        inv = _PREDICATE_INVERSE.get(tp.predicate, (tp.predicate, tp.predicate_label))
+                        parent_concept.typed_children.append(TypedRelationship(
+                            iri=concept.iri,
+                            predicate=inv[0],
+                            predicate_label=inv[1],
+                        ))
+            # Fallback: handle any parent_concepts not covered by typed_parents (shouldn't happen, but safe)
             for parent_iri in concept.parent_concepts:
                 if parent_iri in concept_map:
                     parent_concept = concept_map[parent_iri]

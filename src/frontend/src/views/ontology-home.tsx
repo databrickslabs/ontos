@@ -1,31 +1,61 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
   Network,
   Loader2,
+  Plus,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type {
   OntologyConcept,
+  KnowledgeCollection,
   GroupedConcepts,
 } from '@/types/ontology';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/feature-access-levels';
+import { useToast } from '@/hooks/use-toast';
 import {
   GraphTab,
   GlossaryFilterPanel,
+  ConceptEditorDialog,
+  LinkEditorDialog,
 } from '@/components/knowledge';
+import { ConceptDetailPanel } from '@/components/semantic-models/concept-detail-panel';
+import { GraphContextMenu } from '@/components/semantic-models/graph-context-menu';
 
 export default function OntologyHomeView() {
   const { t } = useTranslation(['semantic-models', 'common']);
-  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canWrite = hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
 
   // Data state
   const [isLoading, setIsLoading] = useState(true);
   const [groupedConcepts, setGroupedConcepts] = useState<GroupedConcepts>({});
   const [groupedProperties, setGroupedProperties] = useState<Record<string, OntologyConcept[]>>({});
   const [hiddenRoots, setHiddenRoots] = useState<Set<string>>(new Set());
+  const [collections, setCollections] = useState<KnowledgeCollection[]>([]);
+
+  // Concept detail panel state
+  const [selectedConceptIri, setSelectedConceptIri] = useState<string | null>(null);
+  const [selectedConceptData, setSelectedConceptData] = useState<OntologyConcept | null>(null);
+
+  // Concept editor state
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorConcept, setEditorConcept] = useState<OntologyConcept | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number; y: number; concept?: OntologyConcept;
+  } | null>(null);
+
+  // Link draw state (click-to-connect mode)
+  const [linkDrawSource, setLinkDrawSource] = useState<OntologyConcept | null>(null);
+  const [linkTarget, setLinkTarget] = useState<OntologyConcept | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
 
   // Language selection - defaults to UI language
   const [selectedLanguage, setSelectedLanguage] = useState<string>(i18n.language?.split('-')[0] || 'en');
@@ -106,10 +136,17 @@ export default function OntologyHomeView() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/semantic-models/concepts-grouped');
-      if (res.ok) {
-        const data = await res.json();
+      const [conceptsRes, collectionsRes] = await Promise.all([
+        fetch('/api/semantic-models/concepts-grouped'),
+        fetch('/api/knowledge/collections?hierarchical=true'),
+      ]);
+      if (conceptsRes.ok) {
+        const data = await conceptsRes.json();
         setGroupedConcepts(data.grouped_concepts || {});
+      }
+      if (collectionsRes.ok) {
+        const data = await collectionsRes.json();
+        setCollections(data.collections || []);
       }
     } catch (error) {
       console.error('Failed to fetch concepts:', error);
@@ -152,10 +189,164 @@ export default function OntologyHomeView() {
     fetchData();
   }, [fetchData]);
 
-  // Navigate to concept in Business Terms view on node click
+  // Open detail panel on node click (instead of navigating away)
   const handleNodeClick = useCallback((concept: OntologyConcept) => {
-    navigate(`/semantic-models?concept=${encodeURIComponent(concept.iri)}`);
-  }, [navigate]);
+    setSelectedConceptIri(concept.iri);
+    setSelectedConceptData(concept);
+  }, []);
+
+  const handleClosePanel = useCallback(() => {
+    setSelectedConceptIri(null);
+    setSelectedConceptData(null);
+  }, []);
+
+  const handleEditConcept = useCallback((concept: OntologyConcept) => {
+    setEditorConcept(concept);
+    setEditorOpen(true);
+  }, []);
+
+  const handleSaveConcept = useCallback(async (data: any, isNew: boolean) => {
+    try {
+      if (!isNew && !editorConcept) return;
+      const url = isNew
+        ? '/api/knowledge/concepts'
+        : `/api/knowledge/concepts/${encodeURIComponent(editorConcept!.iri)}`;
+      const method = isNew ? 'POST' : 'PATCH';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to save concept');
+      }
+
+      toast({
+        title: t('common:toast.success'),
+        description: isNew
+          ? t('semantic-models:messages.conceptCreated')
+          : t('semantic-models:messages.conceptUpdated'),
+      });
+
+      setEditorOpen(false);
+      await fetchData();
+    } catch (error: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: error.message,
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  }, [editorConcept, fetchData, toast, t]);
+
+  const handleDeleteConcept = useCallback(async (concept: OntologyConcept) => {
+    if (!confirm(`Delete "${concept.label || concept.iri}"? This cannot be undone.`)) return;
+
+    try {
+      const response = await fetch(
+        `/api/knowledge/concepts/${encodeURIComponent(concept.iri)}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to delete concept');
+      }
+
+      toast({
+        title: t('common:toast.success'),
+        description: t('semantic-models:messages.conceptDeleted'),
+      });
+
+      if (selectedConceptIri === concept.iri) {
+        setSelectedConceptIri(null);
+        setSelectedConceptData(null);
+      }
+      await fetchData();
+    } catch (error: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  }, [selectedConceptIri, fetchData, toast, t]);
+
+  // Right-click handlers for context menu
+  const handleNodeRightClick = useCallback((concept: OntologyConcept, event: MouseEvent) => {
+    setContextMenu({ x: event.clientX, y: event.clientY, concept });
+  }, []);
+
+  const handleBackgroundRightClick = useCallback((event: MouseEvent) => {
+    setContextMenu({ x: event.clientX, y: event.clientY });
+  }, []);
+
+  // Link draw handlers (click-to-connect mode)
+  const handleStartLinkDraw = useCallback((concept: OntologyConcept) => {
+    setLinkDrawSource(concept);
+  }, []);
+
+  const handleLinkDraw = useCallback((source: OntologyConcept, target: OntologyConcept) => {
+    setLinkDrawSource(source);
+    setLinkTarget(target);
+    setLinkEditorOpen(true);
+  }, []);
+
+  const handleLinkDrawCancel = useCallback(() => {
+    setLinkDrawSource(null);
+  }, []);
+
+  const handleCreateLink = useCallback(async (relationshipType: string, targetIri?: string) => {
+    if (!linkDrawSource || !targetIri) return;
+
+    try {
+      // Determine which relationship array to update based on type
+      const conceptIri = linkDrawSource.iri;
+      const update: Record<string, string[]> = {};
+
+      if (relationshipType === 'broader') {
+        update.broader_iris = [...(linkDrawSource.parent_concepts || []), targetIri];
+      } else if (relationshipType === 'narrower') {
+        update.narrower_iris = [...(linkDrawSource.child_concepts || []), targetIri];
+      } else if (relationshipType === 'related') {
+        update.related_iris = [...(linkDrawSource.related_concepts || []), targetIri];
+      }
+
+      const response = await fetch(
+        `/api/knowledge/concepts/${encodeURIComponent(conceptIri)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create link');
+      }
+
+      toast({
+        title: t('common:toast.success'),
+        description: 'Relationship created successfully',
+      });
+
+      setLinkEditorOpen(false);
+      setLinkDrawSource(null);
+      setLinkTarget(null);
+      await fetchData();
+    } catch (error: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  }, [linkDrawSource, fetchData, toast, t]);
 
   // Toggle root visibility in the graph
   const handleToggleRoot = useCallback((rootIri: string) => {
@@ -183,6 +374,16 @@ export default function OntologyHomeView() {
             </p>
           </div>
         </div>
+        {canWrite && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setEditorConcept(null); setEditorOpen(true); }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            {t('semantic-models:actions.newConcept', { defaultValue: 'New Concept' })}
+          </Button>
+        )}
       </div>
 
       {/* Loading state */}
@@ -219,10 +420,62 @@ export default function OntologyHomeView() {
             hiddenRoots={hiddenRoots}
             onToggleRoot={handleToggleRoot}
             onNodeClick={handleNodeClick}
+            onNodeRightClick={canWrite ? handleNodeRightClick : undefined}
+            onBackgroundRightClick={canWrite ? handleBackgroundRightClick : undefined}
+            linkDrawSource={linkDrawSource?.iri ?? null}
+            onLinkDraw={handleLinkDraw}
+            onLinkDrawCancel={handleLinkDrawCancel}
             showRootBadges={!groupBySource}
           />
         </div>
       )}
+
+      {/* Graph context menu (right-click on node or background) */}
+      <GraphContextMenu
+        position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
+        concept={contextMenu?.concept}
+        onClose={() => setContextMenu(null)}
+        onViewDetails={(concept) => {
+          setSelectedConceptIri(concept.iri);
+          setSelectedConceptData(concept);
+        }}
+        onEdit={canWrite ? handleEditConcept : undefined}
+        onDelete={canWrite ? handleDeleteConcept : undefined}
+        onCreateLink={canWrite ? handleStartLinkDraw : undefined}
+        onCreateConcept={canWrite ? () => { setEditorConcept(null); setEditorOpen(true); } : undefined}
+      />
+
+      {/* Concept detail side panel (slides in from right on node click) */}
+      <ConceptDetailPanel
+        conceptIri={selectedConceptIri}
+        conceptData={selectedConceptData}
+        onClose={handleClosePanel}
+        onNavigate={(iri) => { setSelectedConceptIri(iri); setSelectedConceptData(null); }}
+        onEdit={canWrite ? handleEditConcept : undefined}
+        onDelete={canWrite ? handleDeleteConcept : undefined}
+      />
+
+      {/* Concept editor dialog (create/edit) */}
+      <ConceptEditorDialog
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        concept={editorConcept}
+        collections={collections}
+        onSave={handleSaveConcept}
+      />
+
+      {/* Link editor dialog (create relationship between concepts) */}
+      <LinkEditorDialog
+        open={linkEditorOpen}
+        onOpenChange={(open) => {
+          setLinkEditorOpen(open);
+          if (!open) { setLinkDrawSource(null); setLinkTarget(null); }
+        }}
+        sourceConcept={linkDrawSource}
+        targetConcept={linkTarget}
+        allConcepts={filteredConcepts}
+        onCreateLink={handleCreateLink}
+      />
     </div>
   );
 }

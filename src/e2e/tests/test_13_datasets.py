@@ -1,10 +1,16 @@
-"""Datasets — CRUD lifecycle with field round-trip verification."""
+"""Datasets — CRUD lifecycle with field round-trip verification.
+
+NOTE: The Datasets API is DEPRECATED and replaced by the ontology-driven Asset model.
+Legacy routes at /api/datasets have been partially removed (POST returns 405).
+These tests are marked as xfail until the test file is replaced with /api/assets coverage.
+"""
 import pytest
 
 from helpers.assertions import assert_fields_match
 from helpers.test_data import make_dataset, mutate_dataset, make_dataset_instance, make_data_contract
 
 
+@pytest.mark.xfail(reason="Datasets API is deprecated; POST/write endpoints return 405")
 class TestDatasetsCRUD:
 
     @pytest.fixture(autouse=True)

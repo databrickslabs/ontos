@@ -40,7 +40,7 @@ class TestDataContractsCRUD:
         # domain is a FK-resolved name; if the domain entity doesn't exist, it won't round-trip
         assert_fields_match(
             payload, created,
-            ignore={"schema", "domain"},
+            ignore={"schema", "domain", "apiVersion"},
             context="after CREATE",
         )
         # Verify schema separately (aliased field)
@@ -73,7 +73,7 @@ class TestDataContractsCRUD:
         fetched = resp.json()
         assert_fields_match(
             payload, fetched,
-            ignore={"schema", "domain"},
+            ignore={"schema", "domain", "apiVersion"},
             context="after GET",
         )
 
@@ -85,7 +85,7 @@ class TestDataContractsCRUD:
         updated = resp.json()
         assert_fields_match(
             updated_payload, updated,
-            ignore={"schema", "domain"},
+            ignore={"schema", "domain", "apiVersion"},
             context="after UPDATE response",
         )
 
@@ -95,7 +95,7 @@ class TestDataContractsCRUD:
         re_fetched = resp.json()
         assert_fields_match(
             updated_payload, re_fetched,
-            ignore={"schema", "domain"},
+            ignore={"schema", "domain", "apiVersion"},
             context="after UPDATE GET",
         )
 

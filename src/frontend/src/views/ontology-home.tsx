@@ -220,6 +220,7 @@ export default function OntologyHomeView() {
             onToggleRoot={handleToggleRoot}
             onNodeClick={handleNodeClick}
             showRootBadges={!groupBySource}
+            selectedLanguage={selectedLanguage}
           />
         </div>
       )}

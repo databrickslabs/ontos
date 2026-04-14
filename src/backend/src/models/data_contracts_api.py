@@ -9,10 +9,25 @@ if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
 
 
+# ODCS v3.1.0 relationship model (schema-level and property-level)
+class SchemaRelationship(BaseModel):
+    """ODCS v3.1.0 relationship (foreign key) at schema or property level."""
+    id: Optional[str] = None  # internal DB id (populated on read)
+    type: str = "foreignKey"
+    # from is a reserved word in Python; use Field alias
+    from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
+    to: Union[str, List[str]] = ""
+    customProperties: Optional[List[Dict[str, Any]]] = None
+
+    class Config:
+        populate_by_name = True
+
+
 # ODCS-compliant schema models
 class ColumnProperty(BaseModel):
     name: str
     logicalType: str = Field(alias='logical_type')
+    stableId: Optional[str] = None  # ODCS v3.1.0 StableId
     required: Optional[bool] = False
     unique: Optional[bool] = False
     primaryKey: Optional[bool] = Field(False, alias='primary_key')
@@ -57,6 +72,9 @@ class ColumnProperty(BaseModel):
     transformSourceObjects: Optional[str] = None
     transformDescription: Optional[str] = None
 
+    # ODCS v3.1.0 relationships (property-level FKs)
+    relationships: Optional[List[SchemaRelationship]] = None
+
     class Config:
         # Accept both JSON keys: "logicalType" (field name) and "logical_type" (alias)
         populate_by_name = True
@@ -65,6 +83,7 @@ class ColumnProperty(BaseModel):
 
 class SchemaObject(BaseModel):
     name: str
+    stableId: Optional[str] = None  # ODCS v3.1.0 StableId
     physicalName: Optional[str] = None
     properties: List[ColumnProperty] = Field(default_factory=list)
     propertyCount: Optional[int] = Field(0, description="Total number of properties (columns) in this schema object")
@@ -78,6 +97,9 @@ class SchemaObject(BaseModel):
     authoritativeDefinitions: Optional[List['AuthoritativeDefinition']] = Field(default_factory=list)
     customProperties: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     quality: Optional[List['QualityRule']] = Field(default_factory=list)  # ODCS quality rules are schema-nested
+
+    # ODCS v3.1.0 relationships (schema-level FKs)
+    relationships: Optional[List[SchemaRelationship]] = None
 
     class Config:
         populate_by_name = True
@@ -752,6 +774,69 @@ class DiffFromParentResponse(BaseModel):
     suggested_bump: str  # "major", "minor", "patch"
     suggested_version: str
     analysis: Dict[str, Any]  # Full analysis from ContractChangeAnalyzer
+
+
+# ===== ODCS v3.1.0 Team Metadata Models =====
+class TeamMetadataUpdate(BaseModel):
+    """Update team-level metadata (ODCS v3.1.0 Team object fields)."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
+    authoritativeDefinitions: Optional[List[Dict[str, Any]]] = None
+
+
+class TeamMetadataRead(BaseModel):
+    """Response model for team metadata."""
+    id: str
+    contract_id: str
+    stable_id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
+    authoritativeDefinitions: Optional[List[Dict[str, Any]]] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ===== ODCS v3.1.0 Relationship CRUD Models =====
+class SchemaRelationshipCreate(BaseModel):
+    """Create a schema-level or property-level relationship."""
+    type: str = "foreignKey"
+    from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
+    to: Union[str, List[str]] = ""
+    customProperties: Optional[List[Dict[str, Any]]] = None
+
+    class Config:
+        populate_by_name = True
+
+
+class SchemaRelationshipUpdate(BaseModel):
+    """Update a relationship."""
+    type: Optional[str] = None
+    from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
+    to: Optional[Union[str, List[str]]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
+
+    class Config:
+        populate_by_name = True
+
+
+class SchemaRelationshipRead(BaseModel):
+    """Response model for a relationship."""
+    id: str
+    type: str
+    from_value: Optional[Union[str, List[str]]] = Field(None, alias='from')
+    to: Union[str, List[str]] = ""
+    customProperties: Optional[List[Dict[str, Any]]] = None
+    schema_object_id: Optional[str] = None
+    property_id: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
+        from_attributes = True
 
 
 # Rebuild models to resolve forward references

@@ -98,10 +98,11 @@ import type {
   HttpConnectionRef,
 } from '@/types/process-workflow';
 import { 
-  getTriggerTypeLabel, 
-  getEntityTypeLabel, 
-  ALL_TRIGGER_TYPES, 
-  ALL_ENTITY_TYPES 
+  getTriggerTypeLabel,
+  getEntityTypeLabel,
+  ALL_TRIGGER_TYPES,
+  ALL_ENTITY_TYPES,
+  isTriggerEntitySupported,
 } from '@/lib/workflow-labels';
 
 // Node types registry (default = fallback for unknown step_type e.g. generate_pdf)
@@ -988,6 +989,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       ))}
                     </div>
                   </div>
+                  {entityTypes.length > 0 && entityTypes.some(et => !isTriggerEntitySupported(triggerType, et)) && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                      <span className="font-medium">Warning:</span> This trigger–entity combination is not wired in the backend. The workflow will save but never fire automatically.
+                    </div>
+                  )}
                   {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>

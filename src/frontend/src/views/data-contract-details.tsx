@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ChevronLeft, ChevronRight, ShieldCheck, Globe } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ChevronLeft, ChevronRight, ShieldCheck, Globe, Link2 } from 'lucide-react'
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
@@ -58,6 +59,8 @@ import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/di
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 // Status-based editability constants
 // Only draft/proposed contracts can be edited in place
@@ -75,6 +78,8 @@ type SchemaProperty = {
   required: boolean
   unique: boolean
   description?: string
+  stableId?: string
+  relationships?: { id?: string; type: string; to: string | string[]; from?: string | string[]; customProperties?: any[] }[]
 }
 
 // Define this as a function to access component state
@@ -96,6 +101,9 @@ const createSchemaPropertyColumns = (
       return (
         <div>
           <span className="font-mono font-medium">{property.name}</span>
+          {property.stableId && (
+            <span className="ml-2 text-[10px] font-mono text-muted-foreground/60" title="ODCS StableId">{property.stableId}</span>
+          )}
           {links.length > 0 && (
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
               {links.map((link, idx) => {
@@ -151,6 +159,35 @@ const createSchemaPropertyColumns = (
     ),
   },
   {
+    id: 'fk',
+    header: '',
+    size: 32,
+    cell: ({ row }) => {
+      const rels = row.original.relationships
+      if (!rels || rels.length === 0) return null
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <span className="cursor-pointer" title="Foreign key relationship">
+              <Link2 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+            </span>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto max-w-xs p-3" side="right">
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold">Relationships</p>
+              {rels.map((rel, i) => (
+                <div key={i} className="text-xs flex items-center gap-1.5">
+                  <Badge variant="outline" className="text-[10px] px-1 py-0">{rel.type}</Badge>
+                  <span className="font-mono">→ {typeof rel.to === 'string' ? rel.to : JSON.stringify(rel.to)}</span>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )
+    },
+  },
+  {
     accessorKey: 'description',
     header: 'Description',
     cell: ({ row }) => (
@@ -194,7 +231,7 @@ export default function DataContractDetails() {
     availableRoles,
     appliedRoleId,
   } = usePermissions()
-  const { post, get } = useApi()
+  const { post, get, put } = useApi()
   const { userInfo, fetchUserInfo } = useUserStore()
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments)
@@ -234,6 +271,12 @@ export default function DataContractDetails() {
 
   // Team import state
   const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false)
+
+  // Team metadata (ODCS v3.1.0)
+  const [teamMetadata, setTeamMetadata] = useState<{ name?: string; description?: string }>({})
+  const [teamMetaName, setTeamMetaName] = useState('')
+  const [teamMetaDesc, setTeamMetaDesc] = useState('')
+  const [teamMetaDirty, setTeamMetaDirty] = useState(false)
 
   // Link product dialog state
   const [isLinkProductDialogOpen, setIsLinkProductDialogOpen] = useState(false)
@@ -496,6 +539,17 @@ export default function DataContractDetails() {
       })
       setContract(contractData)
       setDynamicTitle(contractData.name)
+
+      // Fetch team metadata (ODCS v3.1.0)
+      try {
+        const tmRes = await fetch(`/api/data-contracts/${contractId}/team-metadata`)
+        if (tmRes.ok) {
+          const tm = await tmRes.json()
+          setTeamMetadata(tm || {})
+          setTeamMetaName(tm?.name || '')
+          setTeamMetaDesc(tm?.description || '')
+        }
+      } catch { /* ignore */ }
 
       if (linksRes.ok) {
         const linksData = await linksRes.json()
@@ -1540,6 +1594,21 @@ export default function DataContractDetails() {
     }
   }
 
+  const handleSaveTeamMetadata = async () => {
+    if (!contractId) return
+    try {
+      await put(`/api/data-contracts/${contractId}/team-metadata`, {
+        name: teamMetaName || null,
+        description: teamMetaDesc || null
+      })
+      setTeamMetadata({ name: teamMetaName, description: teamMetaDesc })
+      setTeamMetaDirty(false)
+      toast({ title: 'Team metadata saved' })
+    } catch {
+      toast({ title: 'Failed to save team metadata', variant: 'destructive' })
+    }
+  }
+
   // Helper functions for conditional rendering based on view mode
   const shouldShowSection = (section: string): boolean => {
     switch (viewMode) {
@@ -2218,6 +2287,15 @@ export default function DataContractDetails() {
                   <div className="flex items-center gap-4 justify-between">
                     <div>
                       <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      {contract.schema[selectedSchemaIndex]?.stableId && (
+                        <span className="ml-2 text-xs font-mono text-muted-foreground" title="ODCS StableId">{contract.schema[selectedSchemaIndex].stableId}</span>
+                      )}
+                      {contract.schema[selectedSchemaIndex]?.relationships && contract.schema[selectedSchemaIndex].relationships!.length > 0 && (
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          <Link2 className="h-3 w-3 mr-1" />
+                          {contract.schema[selectedSchemaIndex].relationships!.length} FK{contract.schema[selectedSchemaIndex].relationships!.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
                       {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
                         <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                           {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
@@ -2359,6 +2437,15 @@ export default function DataContractDetails() {
                   <div className="flex items-center gap-4 justify-between">
                     <div>
                       <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      {contract.schema[selectedSchemaIndex]?.stableId && (
+                        <span className="ml-2 text-xs font-mono text-muted-foreground" title="ODCS StableId">{contract.schema[selectedSchemaIndex].stableId}</span>
+                      )}
+                      {contract.schema[selectedSchemaIndex]?.relationships && contract.schema[selectedSchemaIndex].relationships!.length > 0 && (
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          <Link2 className="h-3 w-3 mr-1" />
+                          {contract.schema[selectedSchemaIndex].relationships!.length} FK{contract.schema[selectedSchemaIndex].relationships!.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
                       {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
                         <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                           {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
@@ -2665,7 +2752,44 @@ export default function DataContractDetails() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Team metadata (ODCS v3.1.0) */}
+          <div className="grid grid-cols-2 gap-4 border rounded-lg p-4 bg-muted/30">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Team Name</Label>
+              {canEditInPlace ? (
+                <Input
+                  value={teamMetaName}
+                  onChange={(e) => { setTeamMetaName(e.target.value); setTeamMetaDirty(true) }}
+                  placeholder="e.g. Data Engineering"
+                  className="h-8"
+                />
+              ) : (
+                <p className="text-sm">{teamMetaName || '—'}</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Team Description</Label>
+              {canEditInPlace ? (
+                <Textarea
+                  value={teamMetaDesc}
+                  onChange={(e) => { setTeamMetaDesc(e.target.value); setTeamMetaDirty(true) }}
+                  placeholder="Brief description of the team"
+                  className="min-h-[32px] resize-none"
+                  rows={1}
+                />
+              ) : (
+                <p className="text-sm">{teamMetaDesc || '—'}</p>
+              )}
+            </div>
+            {canEditInPlace && teamMetaDirty && (
+              <div className="col-span-2 flex justify-end">
+                <Button size="sm" onClick={handleSaveTeamMetadata}>Save Team Info</Button>
+              </div>
+            )}
+          </div>
+
+          {/* Team members list */}
           {contract.team && contract.team.length > 0 ? (
             <div className="space-y-2">
               {contract.team.map((member, idx) => (

@@ -37,7 +37,10 @@ from src.db_models.data_contracts import (
     DataContractPricingDb,
     DataContractRolePropertyDb,
     DataProfilingRunDb,
-    SuggestedQualityCheckDb
+    SuggestedQualityCheckDb,
+    SchemaObjectRelationshipDb,
+    SchemaPropertyRelationshipDb,
+    DataContractTeamMetadataDb,
 )
 from src.models.data_contracts_api import (
     DataContractCreate,
@@ -3834,6 +3837,341 @@ async def get_my_personal_drafts(
     except Exception as e:
         logger.error("Error fetching personal drafts", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch personal drafts")
+
+
+# ===== ODCS v3.1.0: Schema-Level Relationship CRUD =====
+
+def _relationship_db_to_dict(rel) -> dict:
+    """Convert a relationship DB row to an API-friendly dict."""
+    to_val = rel.to_value
+    try:
+        to_val = json.loads(rel.to_value)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    result = {
+        'id': rel.id,
+        'type': rel.relationship_type,
+        'to': to_val,
+    }
+    if hasattr(rel, 'from_value'):
+        from_val = rel.from_value
+        try:
+            from_val = json.loads(rel.from_value)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        result['from'] = from_val
+    if hasattr(rel, 'schema_object_id'):
+        result['schema_object_id'] = rel.schema_object_id
+    if hasattr(rel, 'property_id'):
+        result['property_id'] = rel.property_id
+    if rel.custom_properties_json:
+        try:
+            result['customProperties'] = json.loads(rel.custom_properties_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return result
+
+
+@router.get('/data-contracts/{contract_id}/schemas/{schema_id}/relationships', response_model=List[dict])
+async def list_schema_relationships(
+    contract_id: str,
+    schema_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    schema_obj = db.query(SchemaObjectDb).filter(
+        SchemaObjectDb.id == schema_id,
+        SchemaObjectDb.contract_id == contract_id
+    ).first()
+    if not schema_obj:
+        raise HTTPException(404, "Schema object not found")
+    rels = db.query(SchemaObjectRelationshipDb).filter(
+        SchemaObjectRelationshipDb.schema_object_id == schema_id
+    ).all()
+    return [_relationship_db_to_dict(r) for r in rels]
+
+
+@router.post('/data-contracts/{contract_id}/schemas/{schema_id}/relationships', response_model=dict, status_code=201)
+async def create_schema_relationship(
+    contract_id: str,
+    schema_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    schema_obj = db.query(SchemaObjectDb).filter(
+        SchemaObjectDb.id == schema_id,
+        SchemaObjectDb.contract_id == contract_id
+    ).first()
+    if not schema_obj:
+        raise HTTPException(404, "Schema object not found")
+
+    from_val = body.get('from', '')
+    to_val = body.get('to', '')
+    rel = SchemaObjectRelationshipDb(
+        id=str(uuid4()),
+        schema_object_id=schema_id,
+        relationship_type=body.get('type', 'foreignKey'),
+        from_value=json.dumps(from_val) if isinstance(from_val, list) else str(from_val),
+        to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
+        custom_properties_json=json.dumps(body['customProperties']) if body.get('customProperties') else None,
+    )
+    db.add(rel)
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.put('/data-contracts/{contract_id}/schemas/{schema_id}/relationships/{rel_id}', response_model=dict)
+async def update_schema_relationship(
+    contract_id: str,
+    schema_id: str,
+    rel_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    rel = db.query(SchemaObjectRelationshipDb).filter(
+        SchemaObjectRelationshipDb.id == rel_id,
+        SchemaObjectRelationshipDb.schema_object_id == schema_id
+    ).first()
+    if not rel:
+        raise HTTPException(404, "Relationship not found")
+
+    if 'type' in body:
+        rel.relationship_type = body['type']
+    if 'from' in body:
+        from_val = body['from']
+        rel.from_value = json.dumps(from_val) if isinstance(from_val, list) else str(from_val)
+    if 'to' in body:
+        to_val = body['to']
+        rel.to_value = json.dumps(to_val) if isinstance(to_val, list) else str(to_val)
+    if 'customProperties' in body:
+        rel.custom_properties_json = json.dumps(body['customProperties']) if body['customProperties'] else None
+
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/relationships/{rel_id}', status_code=204)
+async def delete_schema_relationship(
+    contract_id: str,
+    schema_id: str,
+    rel_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    deleted = db.query(SchemaObjectRelationshipDb).filter(
+        SchemaObjectRelationshipDb.id == rel_id,
+        SchemaObjectRelationshipDb.schema_object_id == schema_id
+    ).delete()
+    if not deleted:
+        raise HTTPException(404, "Relationship not found")
+    db.commit()
+
+
+# ===== ODCS v3.1.0: Property-Level Relationship CRUD =====
+
+@router.get('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships', response_model=List[dict])
+async def list_property_relationships(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    prop = db.query(SchemaPropertyDb).filter(
+        SchemaPropertyDb.id == prop_id,
+        SchemaPropertyDb.object_id == schema_id
+    ).first()
+    if not prop:
+        raise HTTPException(404, "Property not found")
+    rels = db.query(SchemaPropertyRelationshipDb).filter(
+        SchemaPropertyRelationshipDb.property_id == prop_id
+    ).all()
+    return [_relationship_db_to_dict(r) for r in rels]
+
+
+@router.post('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships', response_model=dict, status_code=201)
+async def create_property_relationship(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    prop = db.query(SchemaPropertyDb).filter(
+        SchemaPropertyDb.id == prop_id,
+        SchemaPropertyDb.object_id == schema_id
+    ).first()
+    if not prop:
+        raise HTTPException(404, "Property not found")
+
+    to_val = body.get('to', '')
+    rel = SchemaPropertyRelationshipDb(
+        id=str(uuid4()),
+        property_id=prop_id,
+        relationship_type=body.get('type', 'foreignKey'),
+        to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
+        custom_properties_json=json.dumps(body['customProperties']) if body.get('customProperties') else None,
+    )
+    db.add(rel)
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.put('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships/{rel_id}', response_model=dict)
+async def update_property_relationship(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    rel_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    rel = db.query(SchemaPropertyRelationshipDb).filter(
+        SchemaPropertyRelationshipDb.id == rel_id,
+        SchemaPropertyRelationshipDb.property_id == prop_id
+    ).first()
+    if not rel:
+        raise HTTPException(404, "Relationship not found")
+
+    if 'type' in body:
+        rel.relationship_type = body['type']
+    if 'to' in body:
+        to_val = body['to']
+        rel.to_value = json.dumps(to_val) if isinstance(to_val, list) else str(to_val)
+    if 'customProperties' in body:
+        rel.custom_properties_json = json.dumps(body['customProperties']) if body['customProperties'] else None
+
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships/{rel_id}', status_code=204)
+async def delete_property_relationship(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    rel_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    deleted = db.query(SchemaPropertyRelationshipDb).filter(
+        SchemaPropertyRelationshipDb.id == rel_id,
+        SchemaPropertyRelationshipDb.property_id == prop_id
+    ).delete()
+    if not deleted:
+        raise HTTPException(404, "Relationship not found")
+    db.commit()
+
+
+# ===== ODCS v3.1.0: Team Metadata =====
+
+@router.get('/data-contracts/{contract_id}/team-metadata', response_model=dict)
+async def get_team_metadata(
+    contract_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(404, "Contract not found")
+
+    meta = db.query(DataContractTeamMetadataDb).filter(
+        DataContractTeamMetadataDb.contract_id == contract_id
+    ).first()
+    if not meta:
+        return {'contract_id': contract_id, 'name': None, 'description': None}
+
+    result = {
+        'id': meta.id,
+        'contract_id': meta.contract_id,
+        'stable_id': meta.stable_id,
+        'name': meta.name,
+        'description': meta.description,
+    }
+    if meta.tags_json:
+        try:
+            result['tags'] = json.loads(meta.tags_json)
+        except (json.JSONDecodeError, TypeError):
+            result['tags'] = None
+    if meta.custom_properties_json:
+        try:
+            result['customProperties'] = json.loads(meta.custom_properties_json)
+        except (json.JSONDecodeError, TypeError):
+            result['customProperties'] = None
+    if meta.authoritative_definitions_json:
+        try:
+            result['authoritativeDefinitions'] = json.loads(meta.authoritative_definitions_json)
+        except (json.JSONDecodeError, TypeError):
+            result['authoritativeDefinitions'] = None
+    return result
+
+
+@router.put('/data-contracts/{contract_id}/team-metadata', response_model=dict)
+async def update_team_metadata(
+    contract_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(404, "Contract not found")
+
+    meta = db.query(DataContractTeamMetadataDb).filter(
+        DataContractTeamMetadataDb.contract_id == contract_id
+    ).first()
+    if not meta:
+        meta = DataContractTeamMetadataDb(
+            id=str(uuid4()),
+            contract_id=contract_id,
+        )
+        db.add(meta)
+
+    if 'name' in body:
+        meta.name = body['name']
+    if 'description' in body:
+        meta.description = body['description']
+    if 'tags' in body:
+        meta.tags_json = json.dumps(body['tags']) if body['tags'] else None
+    if 'customProperties' in body:
+        meta.custom_properties_json = json.dumps(body['customProperties']) if body['customProperties'] else None
+    if 'authoritativeDefinitions' in body:
+        meta.authoritative_definitions_json = json.dumps(body['authoritativeDefinitions']) if body['authoritativeDefinitions'] else None
+
+    db.commit()
+    db.refresh(meta)
+
+    result = {
+        'id': meta.id,
+        'contract_id': meta.contract_id,
+        'stable_id': meta.stable_id,
+        'name': meta.name,
+        'description': meta.description,
+    }
+    if meta.tags_json:
+        try:
+            result['tags'] = json.loads(meta.tags_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if meta.custom_properties_json:
+        try:
+            result['customProperties'] = json.loads(meta.custom_properties_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if meta.authoritative_definitions_json:
+        try:
+            result['authoritativeDefinitions'] = json.loads(meta.authoritative_definitions_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return result
 
 
 def register_routes(app):

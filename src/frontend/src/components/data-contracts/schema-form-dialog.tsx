@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Plus, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useTranslation } from 'react-i18next'
 import SchemaPropertyEditor, { type SchemaPropertyEditorHandle } from './schema-property-editor'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
-import type { SchemaObject, ColumnProperty } from '@/types/data-contract'
+import type { SchemaObject, ColumnProperty, SchemaRelationship } from '@/types/data-contract'
 
 type SchemaFormProps = {
   isOpen: boolean
@@ -37,6 +39,12 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
   // Properties (columns)
   const [properties, setProperties] = useState<ColumnProperty[]>([])
   const [schemaSemanticConcepts, setSchemaSemanticConcepts] = useState<{ iri: string; label?: string }[]>([])
+
+  // Schema-level relationships (ODCS v3.1.0)
+  const [schemaRelationships, setSchemaRelationships] = useState<SchemaRelationship[]>([])
+  const [newRelFrom, setNewRelFrom] = useState('')
+  const [newRelTo, setNewRelTo] = useState('')
+  const [newRelType, setNewRelType] = useState('foreignKey')
 
   // Initialize form when dialog opens
   useEffect(() => {
@@ -66,6 +74,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
       } else {
         setSchemaSemanticConcepts([])
       }
+      setSchemaRelationships(initial.relationships || [])
     } else if (isOpen && !initial) {
       // Reset for new schema
       setName('')
@@ -76,6 +85,10 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
       setDataGranularityDescription('')
       setProperties([])
       setSchemaSemanticConcepts([])
+      setSchemaRelationships([])
+      setNewRelFrom('')
+      setNewRelTo('')
+      setNewRelType('foreignKey')
     }
   }, [isOpen, initial])
 
@@ -105,6 +118,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
         authoritativeDefinitions: schemaSemanticConcepts.length > 0 ? schemaSemanticConcepts.map(c => ({ url: c.iri, type: 'http://databricks.com/ontology/uc/semanticAssignment' })) : undefined,
         // @ts-ignore retain local concepts for further editing flows
         semanticConcepts: schemaSemanticConcepts.length > 0 ? schemaSemanticConcepts : undefined,
+        relationships: schemaRelationships.length > 0 ? schemaRelationships : undefined,
       }
 
       await onSubmit(schema)
@@ -281,6 +295,93 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
               properties={properties}
               onChange={setProperties}
             />
+          </div>
+
+          {/* Schema-level Relationships (ODCS v3.1.0) */}
+          <div className="space-y-4 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                Relationships (Foreign Keys)
+                {schemaRelationships.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">{schemaRelationships.length}</Badge>
+                )}
+              </h3>
+            </div>
+
+            {schemaRelationships.length > 0 && (
+              <div className="space-y-2">
+                {schemaRelationships.map((rel, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-2 flex-1 text-sm">
+                      <Badge variant="outline" className="text-xs">{rel.type}</Badge>
+                      <span className="font-mono">{typeof rel.from === 'string' ? rel.from : JSON.stringify(rel.from)}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-mono">{typeof rel.to === 'string' ? rel.to : JSON.stringify(rel.to)}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSchemaRelationships(schemaRelationships.filter((_, i) => i !== idx))}
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="border rounded-lg p-3 bg-background space-y-2">
+              <div className="grid grid-cols-7 gap-2">
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs">From (local column)</Label>
+                  <Input
+                    value={newRelFrom}
+                    onChange={(e) => setNewRelFrom(e.target.value)}
+                    placeholder="e.g., customer_id"
+                    className="h-9 font-mono text-xs"
+                  />
+                </div>
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs">To (target reference)</Label>
+                  <Input
+                    value={newRelTo}
+                    onChange={(e) => setNewRelTo(e.target.value)}
+                    placeholder="e.g., schema.table.column"
+                    className="h-9 font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Type</Label>
+                  <Select value={newRelType} onValueChange={setNewRelType}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="foreignKey">foreignKey</SelectItem>
+                      <SelectItem value="reference">reference</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!newRelFrom.trim() || !newRelTo.trim()}
+                onClick={() => {
+                  setSchemaRelationships([...schemaRelationships, { type: newRelType, from: newRelFrom.trim(), to: newRelTo.trim() }])
+                  setNewRelFrom('')
+                  setNewRelTo('')
+                  setNewRelType('foreignKey')
+                }}
+                className="h-7"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Relationship
+              </Button>
+            </div>
           </div>
         </div>
 

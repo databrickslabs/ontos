@@ -35,8 +35,6 @@ pip-licenses==5.5.1
 filelock==3.20.3
 bcrypt==5.0.0
 sse-starlette==1.8.2
-# TODO: pin with hash (not in local env)
-reportlab>=4.0.0
-# TODO: pin with hash (not in local env)
-google-cloud-bigquery>=3.25.0
+reportlab==4.4.10
+google-cloud-bigquery==3.41.0
 openpyxl==3.1.5

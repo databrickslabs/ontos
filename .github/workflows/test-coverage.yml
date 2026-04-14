@@ -12,7 +12,7 @@ permissions:
 jobs:
   backend-tests:
     name: Backend Tests
-    runs-on: ubuntu-latest
+    runs-on: databrickslabs-protected-runner-group
     timeout-minutes: 15
 
     steps:
@@ -72,7 +72,7 @@ jobs:
 
   frontend-tests:
     name: Frontend Tests
-    runs-on: ubuntu-latest
+    runs-on: databrickslabs-protected-runner-group
     timeout-minutes: 15
 
     steps:
@@ -117,7 +117,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: databrickslabs-protected-runner-group
     timeout-minutes: 20
     # Run E2E tests only on pushes to main (not on PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -241,7 +241,7 @@ jobs:
 
   type-check:
     name: TypeScript Type Check
-    runs-on: ubuntu-latest
+    runs-on: databrickslabs-protected-runner-group
     timeout-minutes: 10
 
     steps:
@@ -265,7 +265,7 @@ jobs:
 
   frontend-build:
     name: Frontend Build Check
-    runs-on: ubuntu-latest
+    runs-on: databrickslabs-protected-runner-group
     timeout-minutes: 10
 
     steps:
@@ -289,7 +289,7 @@ jobs:
 
   coverage-report:
     name: Coverage Report
-    runs-on: ubuntu-latest
+    runs-on: databrickslabs-protected-runner-group
     needs: [backend-tests, frontend-tests]
     if: always()
 

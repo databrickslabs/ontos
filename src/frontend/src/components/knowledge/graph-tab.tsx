@@ -8,6 +8,7 @@ interface GraphTabProps {
   onToggleRoot: (rootIri: string) => void;
   onNodeClick: (concept: OntologyConcept) => void;
   showRootBadges?: boolean;
+  selectedLanguage?: string;
 }
 
 export const GraphTab: React.FC<GraphTabProps> = ({
@@ -16,6 +17,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({
   onToggleRoot,
   onNodeClick,
   showRootBadges = true,
+  selectedLanguage = 'en',
 }) => {
   return (
     <div className="h-[800px] flex flex-col">
@@ -27,6 +29,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({
           onToggleRoot={onToggleRoot}
           onNodeClick={onNodeClick}
           showRootBadges={showRootBadges}
+          selectedLanguage={selectedLanguage}
         />
       </div>
     </div>

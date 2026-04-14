@@ -1586,6 +1586,20 @@ async def create_data_product(
         created_product_response = manager.create_product(payload, db=db, user=current_user.username if current_user else None)
         success = True
 
+        # Fire on_create workflow trigger
+        try:
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_create(
+                entity_type=EntityType.DATA_PRODUCT,
+                entity_id=str(created_product_response.id) if created_product_response else str(payload.get('id', '')),
+                entity_name=getattr(created_product_response, 'name', None),
+                entity_data={"product_id": str(created_product_response.id), "name": getattr(created_product_response, 'name', None)},
+                user_email=current_user.email if current_user else None,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_create trigger failed for product: {e}")
+
         if created_product_response and hasattr(created_product_response, 'id'):
             details_for_audit["created_resource_id"] = str(created_product_response.id)
 
@@ -1826,10 +1840,25 @@ async def update_data_product(
 
         success = True
         response_status_code = 200
+
+        # Fire on_update workflow trigger
+        try:
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_update(
+                entity_type=EntityType.DATA_PRODUCT,
+                entity_id=product_id,
+                entity_name=getattr(updated_product_response, 'name', None),
+                entity_data=product_dict,
+                user_email=current_user.email if current_user else None,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_update trigger failed for product {product_id}: {e}")
+
         logger.info(f"Successfully updated data product with ID: {product_id}")
-        
+
         # Delivery is now handled in the manager via DeliveryMixin
-        
+
         return updated_product_response
 
     except PermissionError as e:
@@ -1902,9 +1931,23 @@ async def delete_data_product(
 
         success = True
         response_status_code = 204 # Standard for successful DELETE
+
+        # Fire on_delete workflow trigger
+        try:
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_delete(
+                entity_type=EntityType.DATA_PRODUCT,
+                entity_id=product_id,
+                entity_data={"product_id": product_id},
+                user_email=current_user.email if current_user else None,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_delete trigger failed for product {product_id}: {e}")
+
         logger.info(f"Successfully deleted data product with ID: {product_id}")
         # No response body for 204, so no updated_product_response or response_preview
-        return None 
+        return None
 
     except HTTPException as http_exc:
         success = False
@@ -1913,7 +1956,7 @@ async def delete_data_product(
         raise
     except Exception as e:
         success = False
-        response_status_code = 500 
+        response_status_code = 500
         error_msg = f"Unexpected error deleting data product {product_id}: {e!s}"
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         logger.exception(error_msg)
@@ -2052,10 +2095,25 @@ async def subscribe_to_product(
             reason=reason,
             db=db
         )
-        
+
         success = True
+
+        # Fire on_subscribe workflow trigger
+        try:
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_subscribe(
+                entity_type=EntityType.SUBSCRIPTION,
+                entity_id=str(result.subscription_id) if hasattr(result, 'subscription_id') else product_id,
+                entity_name=product_id,
+                entity_data={"product_id": product_id, "subscriber_email": current_user.username, "reason": reason},
+                user_email=current_user.username,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_subscribe trigger failed for product {product_id}: {e}")
+
         return result
-        
+
     except ValueError as e:
         logger.error("Validation error subscribing to product %s: %s", product_id, e)
         raise HTTPException(status_code=400, detail=str(e))
@@ -2094,10 +2152,25 @@ async def unsubscribe_from_product(
             subscriber_email=current_user.username,
             db=db
         )
-        
+
         success = True
+
+        # Fire on_unsubscribe workflow trigger
+        try:
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_unsubscribe(
+                entity_type=EntityType.SUBSCRIPTION,
+                entity_id=product_id,
+                entity_name=product_id,
+                entity_data={"product_id": product_id, "subscriber_email": current_user.username},
+                user_email=current_user.username,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_unsubscribe trigger failed for product {product_id}: {e}")
+
         return result
-        
+
     except Exception as e:
         logger.error("Error unsubscribing from product %s: %s", product_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to unsubscribe from product")

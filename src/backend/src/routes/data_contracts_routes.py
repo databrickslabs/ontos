@@ -899,6 +899,65 @@ async def certify_contract_direct(
         raise HTTPException(status_code=500, detail="Failed to certify contract")
 
 
+@router.post('/data-contracts/{contract_id}/decertify')
+async def decertify_contract(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(ApprovalChecker('CONTRACTS')),
+):
+    """Remove certification from a data contract."""
+    try:
+        contract_db = data_contract_repo.get(db, id=contract_id)
+        if not contract_db:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        old_level = contract_db.certification_level
+        contract_db.certification_level = None
+        contract_db.certified_at = None
+        contract_db.certified_by = None
+        contract_db.certification_expires_at = None
+        contract_db.certification_notes = None
+        db.add(contract_db)
+        db.commit()
+
+        from src.common.workflow_triggers import get_trigger_registry
+        from src.models.process_workflows import EntityType
+
+        try:
+            get_trigger_registry(db).on_decertify(
+                EntityType.DATA_CONTRACT,
+                contract_id,
+                entity_name=contract_db.name,
+                user_email=current_user.username,
+            )
+        except Exception as trigger_err:
+            logger.warning("on_decertify trigger error (non-fatal): %s", trigger_err)
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action='DECERTIFY',
+            success=True,
+            details={'contract_id': contract_id, 'previous_level': old_level},
+        )
+
+        manager._update_search_index(contract_db, db)
+
+        return {'certification_level': None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Decertify contract failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to decertify contract")
+
+
 @router.post('/data-contracts/{contract_id}/set-publication-scope')
 async def set_contract_publication_scope(
     contract_id: str,
@@ -928,6 +987,8 @@ async def set_contract_publication_scope(
                 detail=f"Contract must be active or approved to publish. Current status: {contract_db.status}",
             )
 
+        was_published = (contract_db.publication_scope or "none").lower() != "none"
+
         if scope != "none":
             contract_db.publication_scope = scope
             contract_db.published_at = datetime.now(timezone.utc)
@@ -939,6 +1000,20 @@ async def set_contract_publication_scope(
         db.add(contract_db)
         db.commit()
         db.refresh(contract_db)
+
+        # Fire on_unpublish trigger when transitioning from published to unpublished
+        if scope == "none" and was_published:
+            try:
+                from src.common.workflow_triggers import get_trigger_registry
+                from src.models.process_workflows import EntityType
+                get_trigger_registry(db).on_unpublish(
+                    EntityType.DATA_CONTRACT,
+                    contract_id,
+                    entity_name=contract_db.name,
+                    user_email=current_user.username if current_user else None,
+                )
+            except Exception as e:
+                logger.warning(f"on_unpublish trigger error (non-fatal): {e}")
 
         audit_manager.log_action(
             db=db,
@@ -1127,6 +1202,22 @@ async def create_contract(
         success = True
         created_contract_id = created.id
 
+        # Fire on_create workflow trigger
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_create(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=str(created.id),
+                entity_name=created.name,
+                entity_data={"contract_id": str(created.id), "name": created.name, "status": getattr(created, 'status', 'draft')},
+                user_email=current_user.email if current_user else None,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_create trigger failed for contract {created.id}: {e}")
+
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return manager._build_contract_api_model(db, created_with_relations)
@@ -1241,6 +1332,34 @@ async def update_contract(
                         )
                         # Continue with update - admin override in effect
 
+        # Run before_update workflow validation
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+            trigger_registry = get_trigger_registry(db)
+            pre_passed, pre_executions = trigger_registry.before_update(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=contract_id,
+                entity_name=getattr(db_obj, 'name', None),
+                entity_data=contract_data.model_dump(exclude_unset=True),
+                user_email=current_user.email if current_user else None,
+            )
+            if not pre_passed:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        'message': 'Pre-update validation failed',
+                        'workflows': [
+                            {'workflow_name': exe.workflow_name, 'status': exe.status.value}
+                            for exe in pre_executions
+                        ],
+                    }
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"before_update trigger failed for contract {contract_id}: {e}")
+
         # Business logic now in manager (delivery handled via DeliveryMixin)
         updated = manager.update_contract_with_relations(
             db=db,
@@ -1251,6 +1370,22 @@ async def update_contract(
         )
 
         success = True
+
+        # Fire on_update workflow trigger
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_update(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=contract_id,
+                entity_name=getattr(updated, 'name', None),
+                entity_data=contract_data.model_dump(exclude_unset=True),
+                user_email=current_user.email if current_user else None,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_update trigger failed for contract {contract_id}: {e}")
 
         # Load with relationships for full response
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
@@ -1308,6 +1443,22 @@ async def delete_contract(
         db.commit()
         success = True
         response_status_code = 204
+
+        # Fire on_delete workflow trigger
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+            trigger_registry = get_trigger_registry(db)
+            trigger_registry.on_delete(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=contract_id,
+                entity_data={"contract_id": contract_id},
+                user_email=current_user.email if current_user else None,
+                blocking=False,
+            )
+        except Exception as e:
+            logger.warning(f"on_delete trigger failed for contract {contract_id}: {e}")
+
         return None
     except ValueError as e:
         response_status_code = 404

@@ -12,6 +12,8 @@ from src.models.ontology import (
     ConceptSearchResult
 )
 from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate
+from src.utils.semantic_model_title_candidates import extract_title_candidates, pick_auto_display_name
+from src.utils.rdf_serialization_display import serialization_label_for_graph_taxonomy
 from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep, AuditCurrentUserDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
@@ -80,14 +82,29 @@ async def get_semantic_models(
             # Skip if name matches (either original or sanitized version)
             if tax.name in db_model_names or tax.name in db_model_names_sanitized:
                 continue
+            serialization = serialization_label_for_graph_taxonomy(
+                source_type=tax.source_type,
+                graph_format=tax.format,
+            )
+            size_bytes = None
+            if tax.source_type == 'file':
+                size_bytes = manager.bundled_taxonomy_file_size_bytes(tax.name)
+            if serialization == 'Turtle':
+                content_type = 'text/turtle'
+            elif serialization == 'RDF/XML':
+                content_type = 'application/rdf+xml'
+            else:
+                content_type = None
             # Create a pseudo-model for file-based/schema taxonomies
             combined.append({
                 'id': f'file-{tax.name}',  # Pseudo-ID for file-based
                 'name': tax.name,
-                'format': tax.format or 'skos',
+                'display_name': tax.display_name,
+                'format': tax.format,
+                'serialization': serialization,
                 'original_filename': tax.name,
-                'content_type': 'text/turtle' if tax.format == 'ttl' else 'application/rdf+xml',
-                'size_bytes': None,
+                'content_type': content_type,
+                'size_bytes': size_bytes,
                 'enabled': True,  # File-based are always enabled
                 'created_by': 'system@file' if tax.source_type == 'file' else f'system@{tax.source_type}',
                 'updated_by': None,
@@ -239,9 +256,12 @@ async def upload_semantic_model(
                 detail=f"Failed to parse ontology file. Please check the file format and syntax. Error: {str(parse_error)}"
             )
         
-        # Create semantic model in database
+        # Create semantic model in database (optional display title from ontology header)
+        title_candidates = extract_title_candidates(content_text, format_type)
+        auto_display_name = pick_auto_display_name(title_candidates)
         create_data = SemanticModelCreate(
             name=safe_filename,
+            display_name=auto_display_name,
             format=format_type,
             content_text=content_text,
             original_filename=safe_filename,
@@ -309,7 +329,10 @@ async def update_semantic_model(
     
     try:
         # Update the model
-        updated_model = manager.update(model_id, update_data, updated_by=current_user.username)
+        try:
+            updated_model = manager.update(model_id, update_data, updated_by=current_user.username)
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve)) from ve
         
         if not updated_model:
             audit_manager.log_action(
@@ -455,6 +478,20 @@ async def get_semantic_model_content(
     except Exception as e:
         logger.error(f"Error retrieving semantic model content for {model_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve semantic model content")
+
+
+@router.get('/semantic-models/{model_id}/title-candidates')
+async def get_semantic_model_title_candidates(
+    model_id: str,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker("semantic-models", FeatureAccessLevel.READ_ONLY)),
+) -> dict:
+    """Suggest display titles from owl:Ontology / skos:ConceptScheme header metadata."""
+    candidates = manager.get_title_candidates(model_id)
+    if candidates is None:
+        raise HTTPException(status_code=404, detail="Semantic model not found")
+    return {"candidates": candidates}
+
 
 @router.get('/semantic-models/concepts')
 async def list_simple_concepts(

@@ -153,7 +153,12 @@ export interface ConceptUpdate {
 export interface SemanticModel {
   id: string;
   name: string;
-  format: 'rdfs' | 'skos';
+  /** User-facing title; graph key remains `name` (filename / stable id). */
+  display_name?: string | null;
+  /** Legacy DB parse branch — not vocabulary. Prefer `serialization` for UI. */
+  format?: 'rdfs' | 'skos' | string | null;
+  /** RDF syntax label from API (Turtle, RDF/XML, …). */
+  serialization?: string | null;
   original_filename?: string;
   content_type?: string;
   size_bytes?: number;

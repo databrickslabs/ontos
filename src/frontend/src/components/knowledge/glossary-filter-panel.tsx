@@ -27,6 +27,7 @@ import {
   Languages,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
 import type { OntologyConcept } from '@/types/ontology';
 import { getAvailableLanguages, getLanguageDisplayName } from '@/lib/ontology-utils';
 
@@ -148,7 +149,7 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
                     onCheckedChange={() => onToggleSource(source)}
                     className="h-3.5 w-3.5"
                   />
-                  <span>{source}</span>
+                  <span title={source}>{systemRdfNamespaceDisplayLabel(source, t)}</span>
                   <Badge variant="secondary" className="h-4 text-[10px] px-1">
                     {conceptCount}
                   </Badge>

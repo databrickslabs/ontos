@@ -36,6 +36,11 @@ from src.repositories.semantic_models_repository import semantic_models_repo
 from src.repositories.rdf_triples_repository import rdf_triples_repo
 from src.common.logging import get_logger
 from src.common.sparql_validator import SPARQLQueryValidator
+from src.utils.semantic_model_title_candidates import (
+    best_display_title_from_graph,
+    extract_title_candidates,
+)
+from src.utils.rdf_serialization_display import serialization_label_for_stored_model
 
 
 logger = get_logger(__name__)
@@ -124,6 +129,16 @@ class SemanticModelsManager:
         except Exception as e:
             logger.error(f"Failed to rebuild graph during initialization: {e}")
 
+    def bundled_taxonomy_file_size_bytes(self, taxonomy_name: str) -> Optional[int]:
+        """Byte size of shipped ``taxonomies/{name}.ttl`` when that file exists."""
+        path = self._data_dir / "taxonomies" / f"{taxonomy_name}.ttl"
+        try:
+            if path.is_file():
+                return path.stat().st_size
+        except OSError:
+            logger.debug("Could not stat bundled taxonomy file", exc_info=True)
+        return None
+
     def list(self) -> List[SemanticModelApi]:
         items = semantic_models_repo.get_multi(self._db)
         return [self._to_api(m) for m in items]
@@ -194,7 +209,20 @@ class SemanticModelsManager:
         db_obj = semantic_models_repo.get(self._db, id=model_id)
         if not db_obj:
             return None
-        updated = semantic_models_repo.update(self._db, db_obj=db_obj, obj_in=update)
+        patch = update.model_dump(exclude_unset=True) if hasattr(update, "model_dump") else update.dict(exclude_unset=True)
+        if patch.get("name") is not None and patch["name"] != db_obj.name:
+            raise ValueError(
+                "Renaming semantic models (name) is not allowed because it would break the RDF graph context. "
+                "Use display_name for a custom title."
+            )
+        patch.pop("name", None)
+        if "display_name" in patch:
+            raw = patch["display_name"]
+            patch["display_name"] = None if raw is None or str(raw).strip() == "" else str(raw).strip()
+        if not patch:
+            return self._to_api(db_obj)
+        update_for_repo = SemanticModelUpdate(**patch)
+        updated = semantic_models_repo.update(self._db, db_obj=db_obj, obj_in=update_for_repo)
         if updated_by:
             updated.updated_by = updated_by
             self._db.add(updated)
@@ -202,6 +230,13 @@ class SemanticModelsManager:
         self._db.refresh(updated)
         self._db.commit()  # Persist changes immediately since manager uses singleton session
         return self._to_api(updated)
+
+    def get_title_candidates(self, model_id: str) -> Optional[List[dict]]:
+        """Return suggested titles from ontology header resources, or None if model not found."""
+        db_obj = semantic_models_repo.get(self._db, id=model_id)
+        if not db_obj:
+            return None
+        return extract_title_candidates(db_obj.content_text or "", db_obj.format)
 
     def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str]) -> Optional[SemanticModelApi]:
         db_obj = semantic_models_repo.get(self._db, id=model_id)
@@ -353,7 +388,13 @@ class SemanticModelsManager:
         return SemanticModelApi(
             id=db_obj.id,
             name=db_obj.name,
+            display_name=db_obj.display_name,
             format=db_obj.format,  # type: ignore
+            serialization=serialization_label_for_stored_model(
+                original_filename=db_obj.original_filename,
+                name=db_obj.name or "",
+                legacy_format=db_obj.format or "",
+            ),
             original_filename=db_obj.original_filename,
             content_type=db_obj.content_type,
             size_bytes=int(db_obj.size_bytes) if db_obj.size_bytes is not None and str(db_obj.size_bytes).isdigit() else None,
@@ -1064,8 +1105,20 @@ class SemanticModelsManager:
                 name = context_str
                 format_str = None
 
+            # Human title from owl:Ontology / skos:ConceptScheme in this named graph (bundled TTLs, etc.)
+            skip_title_contexts = frozenset(
+                ("urn:x-rdflib:default", "", "urn:meta:sources", "urn:semantic-links")
+            )
+            display_name: Optional[str] = None
+            if context_str not in skip_title_contexts:
+                try:
+                    display_name = best_display_title_from_graph(context)
+                except Exception as e:
+                    logger.debug("Could not derive display title for context %s: %s", context_str, e)
+
             taxonomies.append(SemanticModelOntology(
                 name=name,
+                display_name=display_name,
                 description=f"{source_type.title()} taxonomy: {name}",
                 source_type=source_type,
                 format=format_str,

@@ -28,6 +28,7 @@ import { NodeLinksPanel } from '@/components/knowledge/node-links-panel';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import { resolveLabel, resolveComment } from '@/lib/ontology-utils';
+import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
 
 interface ConceptsTabProps {
   collections: KnowledgeCollection[];
@@ -280,8 +281,8 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       return typeIcons[concept?.concept_type || 'concept'] || <Layers className="h-4 w-4" />;
     };
     
-    const displayName = isSourceGroup 
-      ? itemId 
+    const displayName = isSourceGroup
+      ? systemRdfNamespaceDisplayLabel(itemId, t)
       : (concept ? resolveLabel(concept, selectedLanguage) : itemId);
     
     return (
@@ -582,7 +583,12 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
 
               {/* Source Info */}
               <div className="text-sm text-muted-foreground border-t pt-4">
-                <p>Source: {selectedConcept.source_context}</p>
+                <p>
+                  {t('semantic-models:fields.source')}:{' '}
+                  {selectedConcept.source_context
+                    ? systemRdfNamespaceDisplayLabel(selectedConcept.source_context, t)
+                    : '—'}
+                </p>
                 {selectedConcept.created_at && (
                   <p>Created: {new Date(selectedConcept.created_at).toLocaleDateString()}</p>
                 )}

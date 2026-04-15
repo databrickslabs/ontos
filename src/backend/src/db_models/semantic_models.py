@@ -11,6 +11,7 @@ class SemanticModelDb(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False, index=True)
+    display_name = Column(String, nullable=True)
     format = Column(String, nullable=False, index=True)  # 'rdfs' | 'skos'
     original_filename = Column(String, nullable=True)
     content_type = Column(String, nullable=True)

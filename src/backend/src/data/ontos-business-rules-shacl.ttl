@@ -24,7 +24,7 @@
 # =============================================================================
 
 rules: a owl:Ontology ;
-    rdfs:label "Ontos Business Rules (SHACL)" ;
+    rdfs:label "Ontos Business Rules (SHACL)"@en ;
     rdfs:comment "SHACL shapes expressing business rules: number ranges, string patterns, and cardinality for governance and validation." ;
     owl:versionInfo "1.0.0" ;
     dc:created "2025-02-12" ;

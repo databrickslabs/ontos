@@ -9,7 +9,12 @@ SemanticFormat = Literal["rdfs", "skos"]
 class SemanticModel(BaseModel):
     id: str
     name: str
-    format: SemanticFormat
+    display_name: Optional[str] = None
+    format: SemanticFormat  # legacy parse branch in DB; use serialization for display
+    serialization: Optional[str] = Field(
+        default=None,
+        description="RDF serialization (Turtle, RDF/XML, …), not vocabulary.",
+    )
     original_filename: Optional[str] = None
     content_type: Optional[str] = None
     size_bytes: Optional[int] = None
@@ -22,6 +27,7 @@ class SemanticModel(BaseModel):
 
 class SemanticModelCreate(BaseModel):
     name: str
+    display_name: Optional[str] = None
     format: SemanticFormat
     content_text: str
     original_filename: Optional[str] = None
@@ -32,6 +38,7 @@ class SemanticModelCreate(BaseModel):
 
 class SemanticModelUpdate(BaseModel):
     name: Optional[str] = None
+    display_name: Optional[str] = None
     enabled: Optional[bool] = None
 
 

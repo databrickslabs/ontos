@@ -4,7 +4,7 @@ description: "An app for managing data products, contracts, and more"
 resource_specs:
   - name: "database"
     description: "Lakebase database for the apps metadata"
-    database_spec:
+    postgres_spec:
       permission: "CAN_CONNECT_AND_CREATE"
   - name: "sql-warehouse"
     description: "SQL warehouse for the app to query datasets"

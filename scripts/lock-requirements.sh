@@ -27,6 +27,7 @@ for req_in in \
     --generate-hashes \
     --python-version "$PYTHON_VERSION" \
     --python-platform linux \
+    --no-header \
     "${INDEX_ARGS[@]+"${INDEX_ARGS[@]}"}" \
     --output-file "$req_txt"
 done

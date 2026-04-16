@@ -263,6 +263,36 @@ jobs:
         working-directory: ./src/frontend
         run: yarn type-check
 
+  check-lockfiles:
+    name: Requirements Lockfile Check
+    runs-on: databrickslabs-protected-runner-group
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Regenerate lockfiles
+        run: ./scripts/lock-requirements.sh
+
+      - name: Check for lockfile drift
+        run: |
+          if ! git diff --exit-code src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt; then
+            echo ""
+            echo "ERROR: requirements.txt lockfiles are out of sync with .in files."
+            echo "Run ./scripts/lock-requirements.sh and commit the updated .txt files."
+            exit 1
+          fi
+          echo "Lockfiles are up to date."
+
   frontend-build:
     name: Frontend Build Check
     runs-on: databrickslabs-protected-runner-group

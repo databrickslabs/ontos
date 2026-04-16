@@ -50,3 +50,13 @@ repos:
         language: system
         files: ^src/frontend/src/.*\.(ts|tsx)$
         pass_filenames: false
+
+  # Requirements lockfile sync check
+  - repo: local
+    hooks:
+      - id: check-requirements-lock
+        name: check-requirements-lock
+        entry: bash -c 'if git diff --cached --name-only | grep -q "requirements\.in$"; then if ! git diff --cached --name-only | grep -q "requirements\.txt$"; then echo "ERROR: requirements.in changed but requirements.txt was not updated." && echo "Run ./scripts/lock-requirements.sh and stage the updated .txt files." && exit 1; fi; fi'
+        language: system
+        files: requirements\.(in|txt)$
+        pass_filenames: false

@@ -1,4 +1,4 @@
-import { Github, BookOpenCheck } from 'lucide-react';
+import { ExternalLink, BookOpenCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
@@ -170,7 +170,7 @@ export default function About() {
       <div className="flex flex-col md:flex-row gap-4">
         <Button asChild size="lg">
           <a href="https://github.com/larsgeorge/ontos" target="_blank" rel="noopener noreferrer">
-            <Github className="mr-2 h-5 w-5" /> {t('about:cta.github')}
+            <ExternalLink className="mr-2 h-5 w-5" /> {t('about:cta.github')}
           </a>
         </Button>
         <Button variant="outline" asChild size="lg">

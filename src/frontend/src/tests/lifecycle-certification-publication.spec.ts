@@ -486,10 +486,6 @@ test.describe('Workflow Designer — Entity Action Support', () => {
 test.describe('Notification Bell', () => {
   test('notification bell renders without errors', async ({ page }) => {
     await page.goto('/')
-    // The bell icon should be in the header
-    const bell = page.locator('[class*="bell"]')
-      .or(page.getByRole('button', { name: /notification/i }))
-      .or(page.locator('button:has(svg)').filter({ hasText: '' }).first())
     // Just verify the page loads without crashing
     await expect(page.locator('main')).toBeVisible()
   })

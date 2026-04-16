@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ReactFlowProvider, MarkerType } from 'reactflow';
+import { MarkerType } from 'reactflow';
 import type { Edge, Connection } from 'reactflow';
 import type { WorkflowStepCreate } from '@/types/process-workflow';
 
@@ -228,8 +228,6 @@ function makeFailEdge(source: string, target: string): Edge {
 // minimal ReactFlow instance with a custom edge. However, ReactFlow in jsdom
 // is tricky. Instead, we recreate the component logic inline for unit testing.
 // This mirrors the actual component 1:1 (lines 127-170).
-
-import { getBezierPath, BaseEdge, EdgeLabelRenderer } from 'reactflow';
 
 function DeletableEdgeTestable({
   id,

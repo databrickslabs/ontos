@@ -273,7 +273,7 @@ export default function DataContractDetails() {
   const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false)
 
   // Team metadata (ODCS v3.1.0)
-  const [teamMetadata, setTeamMetadata] = useState<{ name?: string; description?: string }>({})
+  const [, setTeamMetadata] = useState<{ name?: string; description?: string }>({})
   const [teamMetaName, setTeamMetaName] = useState('')
   const [teamMetaDesc, setTeamMetaDesc] = useState('')
   const [teamMetaDirty, setTeamMetaDirty] = useState(false)

@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # Databricks internal package proxies (public registries blocked on runners)
+  PIP_INDEX_URL: https://pypi-proxy.dev.databricks.com/simple
+  UV_DEFAULT_INDEX: https://pypi-proxy.dev.databricks.com/simple/
+  npm_config_registry: https://npm-proxy.dev.databricks.com/
+
 jobs:
   backend-tests:
     name: Backend Tests
@@ -291,6 +297,8 @@ jobs:
         run: pip install uv
 
       - name: Regenerate lockfiles
+        env:
+          UV_DEFAULT_INDEX: https://pypi-proxy.dev.databricks.com/simple/
         run: ./scripts/lock-requirements.sh
 
       - name: Check for lockfile drift

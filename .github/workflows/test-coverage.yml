@@ -12,6 +12,8 @@ permissions:
 env:
   # Databricks internal package proxies (public registries blocked on runners)
   PIP_INDEX_URL: https://pypi-proxy.dev.databricks.com/simple
+  PIP_TIMEOUT: "120"
+  PIP_RETRIES: "10"
   UV_DEFAULT_INDEX: https://pypi-proxy.dev.databricks.com/simple/
   npm_config_registry: https://npm-proxy.dev.databricks.com/
 

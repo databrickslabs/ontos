@@ -2,7 +2,7 @@ version: 1
 name: "ontos"
 description: "An app for managing data products, contracts, and more"
 resource_specs:
-  - name: "database"
+  - name: "postgres"
     description: "Lakebase database for the apps metadata"
     postgres_spec:
       permission: "CAN_CONNECT_AND_CREATE"

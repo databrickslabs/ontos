@@ -15,7 +15,7 @@
 
 # Ontology Header
 odcs: a owl:Ontology ;
-    rdfs:label "Open Data Contract Standard Ontology" ;
+    rdfs:label "Open Data Contract Standard Ontology"@en ;
     rdfs:comment "Vocabulary for Open Data Contract Standard v3.1.0 entities" ;
     owl:versionInfo "3.0.2" ;
     dc:created "2024-09-22" ;

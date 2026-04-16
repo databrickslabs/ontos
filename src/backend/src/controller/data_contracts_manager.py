@@ -910,10 +910,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
             auth_defs = []
             for auth_def in db_obj.authoritative_defs:
-                auth_defs.append({
+                ad_item: Dict[str, Any] = {
                     'url': auth_def.url,
                     'type': auth_def.type
-                })
+                }
+                if getattr(auth_def, 'stable_id', None):
+                    ad_item['id'] = auth_def.stable_id
+                auth_defs.append(ad_item)
             description['authoritativeDefinitions'] = auth_defs
         else:
             # For ODCS compliance testing, add sample authoritativeDefinitions under description
@@ -935,6 +938,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     'name': schema_obj.name,
                     'properties': []
                 }
+                if getattr(schema_obj, 'stable_id', None):
+                    schema_dict['id'] = schema_obj.stable_id
                 if schema_obj.physical_name:
                     schema_dict['physicalName'] = schema_obj.physical_name
                 if schema_obj.data_granularity_description:
@@ -957,6 +962,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         prop_dict = {
                             'name': prop.name,
                         }
+                        if getattr(prop, 'stable_id', None):
+                            prop_dict['id'] = prop.stable_id
                         if prop.logical_type:
                             prop_dict['logicalType'] = prop.logical_type
                         if prop.physical_type:
@@ -1061,10 +1068,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if hasattr(prop, 'authoritative_definitions') and prop.authoritative_definitions:
                             auth_defs = []
                             for auth_def in prop.authoritative_definitions:
-                                auth_defs.append({
+                                ad_item: Dict[str, Any] = {
                                     'url': auth_def.url,
                                     'type': auth_def.type
-                                })
+                                }
+                                if getattr(auth_def, 'stable_id', None):
+                                    ad_item['id'] = auth_def.stable_id
+                                auth_defs.append(ad_item)
                             prop_dict['authoritativeDefinitions'] = auth_defs
                         elif prop.name == 'rcvr_cntry_code':
                             # Add sample authoritative definitions for ODCS compliance testing
@@ -1119,10 +1129,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             if property_quality_checks:
                                 quality = []
                                 for check in property_quality_checks:
-                                    quality_dict = {
+                                    quality_dict: Dict[str, Any] = {
                                         'rule': check.rule or check.name,
                                         'type': check.type,
                                     }
+                                    if getattr(check, 'stable_id', None):
+                                        quality_dict['id'] = check.stable_id
                                     if check.description:
                                         quality_dict['description'] = check.description
                                     if check.dimension:
@@ -1188,6 +1200,23 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 }
                             ]
 
+                        # Property-level relationships (ODCS v3.1.0)
+                        if hasattr(prop, 'relationships') and prop.relationships:
+                            prop_rels = []
+                            for rel in prop.relationships:
+                                rel_dict = {'type': rel.relationship_type}
+                                try:
+                                    rel_dict['to'] = json.loads(rel.to_value)
+                                except (json.JSONDecodeError, TypeError):
+                                    rel_dict['to'] = rel.to_value
+                                if rel.custom_properties_json:
+                                    try:
+                                        rel_dict['customProperties'] = json.loads(rel.custom_properties_json)
+                                    except (json.JSONDecodeError, TypeError):
+                                        pass
+                                prop_rels.append(rel_dict)
+                            prop_dict['relationships'] = prop_rels
+
                         schema_dict['properties'].append(prop_dict)
 
                 # Add schema-level quality rules (ODCS compliant structure)
@@ -1198,10 +1227,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         # Property-level checks have property_id set and are exported with their properties
                         if check.property_id is not None:
                             continue
-                        quality_dict = {
+                        quality_dict: Dict[str, Any] = {
                             'rule': check.rule or check.name,
                             'type': check.type,
                         }
+                        if getattr(check, 'stable_id', None):
+                            quality_dict['id'] = check.stable_id
                         if check.description:
                             quality_dict['description'] = check.description
                         if check.dimension:
@@ -1242,10 +1273,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if hasattr(schema_obj, 'authoritative_definitions') and schema_obj.authoritative_definitions:
                     auth_defs = []
                     for auth_def in schema_obj.authoritative_definitions:
-                        auth_defs.append({
+                        ad_item: Dict[str, Any] = {
                             'url': auth_def.url,
                             'type': auth_def.type
-                        })
+                        }
+                        if getattr(auth_def, 'stable_id', None):
+                            ad_item['id'] = auth_def.stable_id
+                        auth_defs.append(ad_item)
                     schema_dict['authoritativeDefinitions'] = auth_defs
 
                 # Add schema-level custom properties
@@ -1254,29 +1288,54 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     for custom_prop in schema_obj.custom_properties:
                         prop_value = custom_prop.value
                         try:
-                            # Try to parse JSON if it's a serialized object
-                            import json
                             prop_value = json.loads(custom_prop.value)
                         except (json.JSONDecodeError, TypeError):
-                            pass  # Keep as string
-
-                        custom_props.append({
+                            pass
+                        cp_item: Dict[str, Any] = {
                             'property': custom_prop.property,
                             'value': prop_value
-                        })
+                        }
+                        if getattr(custom_prop, 'stable_id', None):
+                            cp_item['id'] = custom_prop.stable_id
+                        custom_props.append(cp_item)
                     schema_dict['customProperties'] = custom_props
+
+                # Schema-level relationships (ODCS v3.1.0)
+                if hasattr(schema_obj, 'relationships') and schema_obj.relationships:
+                    rels = []
+                    for rel in schema_obj.relationships:
+                        rel_dict = {'type': rel.relationship_type}
+                        try:
+                            rel_dict['from'] = json.loads(rel.from_value)
+                        except (json.JSONDecodeError, TypeError):
+                            rel_dict['from'] = rel.from_value
+                        try:
+                            rel_dict['to'] = json.loads(rel.to_value)
+                        except (json.JSONDecodeError, TypeError):
+                            rel_dict['to'] = rel.to_value
+                        if rel.custom_properties_json:
+                            try:
+                                rel_dict['customProperties'] = json.loads(rel.custom_properties_json)
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        rels.append(rel_dict)
+                    schema_dict['relationships'] = rels
 
                 schema.append(schema_dict)
             odcs['schema'] = schema
             
-        # Build team array from relationships
+        # Build team (version-aware: Team object for v3.1.0+, plain array for v3.0.x)
         if hasattr(db_obj, 'team') and db_obj.team:
-            team = []
+            members_list = []
             for member in db_obj.team:
                 member_dict = {
                     'role': member.role,
                     'username': member.username,
                 }
+                if getattr(member, 'stable_id', None):
+                    member_dict['id'] = member.stable_id
+                if getattr(member, 'name', None):
+                    member_dict['name'] = member.name
                 if member.date_in:
                     member_dict['dateIn'] = member.date_in
                 if member.date_out:
@@ -1285,8 +1344,37 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     member_dict['replacedByUsername'] = member.replaced_by_username
                 if getattr(member, 'description', None):
                     member_dict['description'] = member.description
-                team.append(member_dict)
-            odcs['team'] = team
+                members_list.append(member_dict)
+
+            api_version = db_obj.api_version or 'v3.1.0'
+            tm = getattr(db_obj, 'team_metadata', None)
+            if api_version >= 'v3.1.0' and tm:
+                team_obj: Dict[str, Any] = {}
+                if tm.stable_id:
+                    team_obj['id'] = tm.stable_id
+                if tm.name:
+                    team_obj['name'] = tm.name
+                if tm.description:
+                    team_obj['description'] = tm.description
+                team_obj['members'] = members_list
+                if tm.tags_json:
+                    try:
+                        team_obj['tags'] = json.loads(tm.tags_json)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if tm.custom_properties_json:
+                    try:
+                        team_obj['customProperties'] = json.loads(tm.custom_properties_json)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if tm.authoritative_definitions_json:
+                    try:
+                        team_obj['authoritativeDefinitions'] = json.loads(tm.authoritative_definitions_json)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                odcs['team'] = team_obj
+            else:
+                odcs['team'] = members_list
             
         # Legacy: Top-level quality rules are deprecated in favor of schema-nested quality rules
         # ODCS specifies quality rules should be nested under schema objects (implemented above)
@@ -1305,6 +1393,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     'channel': channel.channel,
                     'url': channel.url
                 }
+                if getattr(channel, 'stable_id', None):
+                    support_item['id'] = channel.stable_id
                 if channel.description:
                     support_item['description'] = channel.description
                 if channel.tool:
@@ -1323,6 +1413,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 sla_item = {
                     'property': prop.property,
                 }
+                if getattr(prop, 'stable_id', None):
+                    sla_item['id'] = prop.stable_id
                 # Add value, trying to preserve types
                 if prop.value:
                     try:
@@ -1379,26 +1471,30 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 prop_value: Any = prop.value
                 if isinstance(prop_value, str):
                     try:
-                        import json
                         parsed = json.loads(prop_value)
                         prop_value = parsed
                     except (json.JSONDecodeError, TypeError):
-                        # Keep original string
                         pass
-                custom_props_list.append({
+                cp_item: Dict[str, Any] = {
                     'property': prop.property,
                     'value': prop_value
-                })
+                }
+                if getattr(prop, 'stable_id', None):
+                    cp_item['id'] = prop.stable_id
+                custom_props_list.append(cp_item)
             odcs['customProperties'] = custom_props_list
 
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
             auth_defs = []
             for auth_def in db_obj.authoritative_defs:
-                auth_defs.append({
+                ad_item: Dict[str, Any] = {
                     'url': auth_def.url,
                     'type': auth_def.type
-                })
+                }
+                if getattr(auth_def, 'stable_id', None):
+                    ad_item['id'] = auth_def.stable_id
+                auth_defs.append(ad_item)
             odcs['authoritativeDefinitions'] = auth_defs
 
         # Legacy support for tags and roles
@@ -1408,9 +1504,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if hasattr(db_obj, 'roles') and db_obj.roles:
             roles = []
             for r in db_obj.roles:
-                role_dict = {
+                role_dict: Dict[str, Any] = {
                     'role': r.role,
                 }
+                if getattr(r, 'stable_id', None):
+                    role_dict['id'] = r.stable_id
                 if r.description:
                     role_dict['description'] = r.description
                 if r.access:
@@ -1434,10 +1532,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if hasattr(db_obj, 'servers') and db_obj.servers:
             servers = []
             for server in db_obj.servers:
-                server_dict = {
+                server_dict: Dict[str, Any] = {
                     'server': server.server,
                     'type': server.type,
                 }
+                if getattr(server, 'stable_id', None):
+                    server_dict['id'] = server.stable_id
 
                 # Add optional server fields
                 if server.description:
@@ -1602,6 +1702,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         """
         all_schema_objs = []
         all_properties = []
+        all_obj_relationships = []
+        all_prop_relationships = []
         # Collect semantic link work to process after bulk insert
         schema_semantic_work = []
         prop_semantic_work = []
@@ -1616,6 +1718,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             schema_obj = SchemaObjectDb(
                 id=schema_obj_id,
                 contract_id=contract_id,
+                stable_id=schema_dict.get('id'),
                 name=schema_dict.get('name', 'table'),
                 physical_name=schema_dict.get('physicalName') or schema_dict.get('physical_name'),
                 logical_type='object',
@@ -1662,9 +1765,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if prop_dict.get('transformSourceObjects'):
                     transform_source_objects_json = json.dumps(prop_dict['transformSourceObjects']) if isinstance(prop_dict['transformSourceObjects'], list) else str(prop_dict['transformSourceObjects'])
 
+                prop_id = str(uuid4())
                 prop = SchemaPropertyDb(
-                    id=str(uuid4()),
+                    id=prop_id,
                     object_id=schema_obj_id,
+                    stable_id=prop_dict.get('id'),
                     name=prop_dict.get('name', 'column'),
                     logical_type=prop_dict.get('logicalType') or prop_dict.get('logical_type', 'string'),
                     physical_type=prop_dict.get('physicalType') or prop_dict.get('physical_type'),
@@ -1686,13 +1791,45 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
                 all_properties.append(prop)
 
+                # Collect property-level relationships (ODCS v3.1.0)
+                for rel_data in (prop_dict.get('relationships') or []):
+                    if isinstance(rel_data, dict):
+                        from src.db_models.data_contracts import SchemaPropertyRelationshipDb
+                        to_val = rel_data.get('to', '')
+                        all_prop_relationships.append(SchemaPropertyRelationshipDb(
+                            id=str(uuid4()),
+                            property_id=prop_id,
+                            relationship_type=rel_data.get('type', 'foreignKey'),
+                            to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
+                            custom_properties_json=json.dumps(rel_data['customProperties']) if rel_data.get('customProperties') else None,
+                        ))
+
                 prop_auth_defs = prop_dict.get('authoritativeDefinitions', [])
                 if prop_auth_defs and current_user:
                     prop_semantic_work.append((contract_id, schema_dict.get('name', 'table'), prop_dict.get('name', 'column'), prop_auth_defs))
 
-        # Bulk add all schema objects and properties in one flush
+            # Collect schema-level relationships (ODCS v3.1.0)
+            for rel_data in (schema_dict.get('relationships') or []):
+                if isinstance(rel_data, dict):
+                    from src.db_models.data_contracts import SchemaObjectRelationshipDb
+                    from_val = rel_data.get('from', '')
+                    to_val = rel_data.get('to', '')
+                    all_obj_relationships.append(SchemaObjectRelationshipDb(
+                        id=str(uuid4()),
+                        schema_object_id=schema_obj_id,
+                        relationship_type=rel_data.get('type', 'foreignKey'),
+                        from_value=json.dumps(from_val) if isinstance(from_val, list) else str(from_val),
+                        to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
+                        custom_properties_json=json.dumps(rel_data['customProperties']) if rel_data.get('customProperties') else None,
+                    ))
+
+        # Bulk add all schema objects, properties, and relationships in one flush
         db.add_all(all_schema_objs)
         db.add_all(all_properties)
+        if all_obj_relationships:
+            db.add_all(all_obj_relationships)
+        if all_prop_relationships:
+            db.add_all(all_prop_relationships)
         db.flush()
 
         # Process semantic links after bulk insert
@@ -1742,6 +1879,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             quality_check = DataQualityCheckDb(
                 object_id=schema_obj.id,
+                stable_id=rule_dict.get('id'),
                 level=rule_dict.get('level', 'object'),
                 name=rule_dict.get('name'),
                 description=rule_dict.get('description'),
@@ -1809,6 +1947,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 continue
             member_db = DataContractTeamDb(
                 contract_id=contract_id,
+                stable_id=member_data.get('id'),
+                name=member_data.get('name'),
                 username=member_data.get('username'),
                 role=member_data.get('role'),
                 description=member_data.get('description'),
@@ -1833,6 +1973,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             return team_raw
         return []
 
+    def _create_team_metadata(self, db, contract_id: str, team_raw):
+        """Persist ODCS v3.1.0 Team object metadata (name, description, tags, customProperties, authoritativeDefinitions)."""
+        if not isinstance(team_raw, dict):
+            return
+        from src.db_models.data_contracts import DataContractTeamMetadataDb
+        metadata = DataContractTeamMetadataDb(
+            contract_id=contract_id,
+            stable_id=team_raw.get('id'),
+            name=team_raw.get('name'),
+            description=team_raw.get('description'),
+            tags_json=json.dumps(team_raw['tags']) if team_raw.get('tags') else None,
+            custom_properties_json=json.dumps(team_raw['customProperties']) if team_raw.get('customProperties') else None,
+            authoritative_definitions_json=json.dumps(team_raw['authoritativeDefinitions']) if team_raw.get('authoritativeDefinitions') else None,
+        )
+        db.add(metadata)
+
     def _create_support_channels(self, db, contract_id: str, support_data: List[dict]):
         """Create support channels from ODCS support array."""
         from src.db_models.data_contracts import DataContractSupportDb
@@ -1842,6 +1998,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 continue
             channel_db = DataContractSupportDb(
                 contract_id=contract_id,
+                stable_id=support_item.get('id'),
                 channel=support_item.get('channel', ''),
                 url=support_item.get('url', ''),
                 description=support_item.get('description'),
@@ -1884,6 +2041,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         value_str = str(prop_value)
                     custom_prop_db = DataContractCustomPropertyDb(
                         contract_id=contract_id,
+                        stable_id=prop_data.get('id'),
                         property=prop_name,
                         value=value_str
                     )
@@ -1913,6 +2071,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 continue
             sla_prop = DataContractSlaPropertyDb(
                 contract_id=contract_id,
+                stable_id=sla_prop_data.get('id'),
                 property=sla_prop_data.get('property'),
                 value=str(sla_prop_data.get('value')) if sla_prop_data.get('value') is not None else None,
                 value_ext=json.dumps(sla_prop_data.get('valueExt')) if sla_prop_data.get('valueExt') else None,
@@ -1930,6 +2089,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
                 auth_def_db = DataContractAuthoritativeDefinitionDb(
                     contract_id=contract_id,
+                    stable_id=auth_def.get('id'),
                     url=auth_def['url'],
                     type=auth_def['type']
                 )
@@ -1945,6 +2105,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             server_db = DataContractServerDb(
                 contract_id=contract_id,
+                stable_id=server_data.get('id'),
                 server=server_data.get('server'),
                 type=server_data.get('type', ''),
                 description=server_data.get('description'),
@@ -1992,6 +2153,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 continue
             role_db = DataContractRoleDb(
                 contract_id=contract_id,
+                stable_id=role_data.get('id'),
                 role=role_data.get('role'),
                 description=role_data.get('description'),
                 access=role_data.get('access'),
@@ -2030,6 +2192,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             quality_rule_db = DataQualityCheckDb(
                 object_id=first_schema_obj.id,
+                stable_id=rule_data.get('id'),
                 name=rule_data.get('name'),
                 description=rule_data.get('description'),
                 level=rule_data.get('level', 'contract'),
@@ -2160,9 +2323,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 self._process_semantic_links(db, created.id, data_dict, current_user)
 
             # Create team members if provided (v3.1.0: team can be object with members or deprecated array)
-            team_data = self._normalize_team_data(data_dict.get('team'))
+            team_raw = data_dict.get('team')
+            team_data = self._normalize_team_data(team_raw)
             if team_data:
                 self._create_team_members(db, created.id, team_data)
+            self._create_team_metadata(db, created.id, team_raw)
 
             db.commit()
             db.refresh(created)
@@ -2376,16 +2541,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             
             # Handle team members if provided (v3.1.0: team can be object with members or deprecated array)
             if data_dict.get('team') is not None:
-                from src.db_models.data_contracts import DataContractTeamDb
-                # Remove existing team members
+                from src.db_models.data_contracts import DataContractTeamDb, DataContractTeamMetadataDb
+                # Remove existing team members and metadata
                 db.query(DataContractTeamDb).filter(
                     DataContractTeamDb.contract_id == contract_id
                 ).delete()
+                db.query(DataContractTeamMetadataDb).filter(
+                    DataContractTeamMetadataDb.contract_id == contract_id
+                ).delete()
                 
-                # Add new team members
-                team_data = self._normalize_team_data(data_dict['team'])
+                # Add new team members and metadata
+                team_raw = data_dict['team']
+                team_data = self._normalize_team_data(team_raw)
                 if team_data:
                     self._create_team_members(db, contract_id, team_data)
+                self._create_team_metadata(db, contract_id, team_raw)
             
             # Handle tags if provided and tags_manager is available
             if tags_data is not None and self._tags_manager:
@@ -2721,10 +2891,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if isinstance(schema_data, list) and schema_data:
                 self._create_schema_objects(db, created.id, schema_data, current_user)
             
-            # Create team members if present (v3.1.0: team can be object with members or deprecated array)
-            team_data = self._normalize_team_data(parsed_odcs.get('team'))
+            # Create team members and metadata if present (v3.1.0: team can be object or deprecated array)
+            team_raw = parsed_odcs.get('team')
+            team_data = self._normalize_team_data(team_raw)
             if team_data:
                 self._create_team_members(db, created.id, team_data)
+            self._create_team_metadata(db, created.id, team_raw)
             
             # Create support channels if present
             support_data = parsed_odcs.get('support', [])

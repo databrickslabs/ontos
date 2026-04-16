@@ -173,6 +173,7 @@ class ConceptUpdate(BaseModel):
 class SemanticModel(BaseModel):
     """Represents a loaded semantic model (taxonomy/ontology source)"""
     name: str
+    display_name: Optional[str] = None
     description: Optional[str] = None
     source_type: str  # 'file' | 'database' | 'external' | 'schema'
     format: Optional[str] = None  # 'ttl' | 'rdf' | 'owl'

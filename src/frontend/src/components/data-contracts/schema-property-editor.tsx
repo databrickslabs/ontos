@@ -10,7 +10,7 @@ import { Plus, Trash2, Edit, Info } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import type { ColumnProperty, QualityRule } from '@/types/data-contract'
+import type { ColumnProperty, QualityRule, SchemaRelationship } from '@/types/data-contract'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import QualityRuleFormDialog from './quality-rule-form-dialog'
 
@@ -28,7 +28,8 @@ const getTabsWithValues = (prop: ColumnProperty) => ({
   governance: !!(prop.classification || prop.examples || (prop as any).tags?.length),
   business: !!(prop.businessName || prop.encryptedName || prop.criticalDataElement),
   transform: !!(prop.transformLogic || prop.transformSourceObjects || prop.transformDescription),
-  semantics: !!(prop.authoritativeDefinitions?.length || (prop as any).semanticConcepts?.length)
+  semantics: !!(prop.authoritativeDefinitions?.length || (prop as any).semanticConcepts?.length),
+  relationships: !!(prop.relationships?.length)
 })
 
 // Compact 6-square indicator showing which tabs have values configured
@@ -41,6 +42,7 @@ const TabIndicator = ({ prop }: { prop: ColumnProperty }) => {
     { key: 'business', label: 'Business', active: tabs.business },
     { key: 'transform', label: 'Transform', active: tabs.transform },
     { key: 'semantics', label: 'Semantics', active: tabs.semantics },
+    { key: 'relationships', label: 'Relationships', active: tabs.relationships },
   ]
   
   return (
@@ -200,6 +202,11 @@ function SchemaPropertyEditorInner(
   const [tags, setTags] = useState('')
   const [customProps, setCustomProps] = useState<Record<string, any>>({})
 
+  // Property-level relationships (ODCS v3.1.0)
+  const [propRelationships, setPropRelationships] = useState<SchemaRelationship[]>([])
+  const [newRelTo, setNewRelTo] = useState('')
+  const [newRelType, setNewRelType] = useState('foreignKey')
+
   // Quality rule dialog state
   const [isQualityRuleDialogOpen, setIsQualityRuleDialogOpen] = useState(false)
   const [editingQualityCheckIndex, setEditingQualityCheckIndex] = useState<number | null>(null)
@@ -242,6 +249,9 @@ function SchemaPropertyEditorInner(
     setQualityChecks([])
     setTags('')
     setCustomProps({})
+    setPropRelationships([])
+    setNewRelTo('')
+    setNewRelType('foreignKey')
     setEditingIndex(null)
   }
 
@@ -290,10 +300,11 @@ function SchemaPropertyEditorInner(
     } else {
       setSemanticConcepts([])
     }
-    // Load quality checks, tags, and custom properties
+    // Load quality checks, tags, custom properties, and relationships
     setQualityChecks((prop as any).quality || [])
     setTags((prop as any).tags ? (prop as any).tags.join(', ') : '')
     setCustomProps((prop as any).customProperties || {})
+    setPropRelationships(prop.relationships || [])
   }
 
   // Build a ColumnProperty from current form state (shared by handleAddOrUpdate and getPropertiesForSubmit)
@@ -339,6 +350,7 @@ function SchemaPropertyEditorInner(
     tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
     // @ts-ignore
     customProperties: Object.keys(customProps).length > 0 ? customProps : undefined,
+    relationships: propRelationships.length > 0 ? propRelationships : undefined,
   })
 
   useImperativeHandle(ref, () => ({
@@ -355,7 +367,7 @@ function SchemaPropertyEditorInner(
       const existing = properties[editingIndex]
       return normalizePropertyForCompare(current) !== normalizePropertyForCompare(existing)
     },
-  }), [editingIndex, properties, name, logicalType, description, physicalType, physicalName, required, unique, primaryKey, primaryKeyPosition, partitioned, partitionKeyPosition, minLength, maxLength, pattern, minimum, maximum, multipleOf, precision, dateFormat, timezone, customFormat, itemType, minItems, maxItems, classification, examples, businessName, encryptedName, criticalDataElement, transformLogic, transformSourceObjects, transformDescription, authoritativeDefinitions, semanticConcepts, qualityChecks, tags, customProps])
+  }), [editingIndex, properties, name, logicalType, description, physicalType, physicalName, required, unique, primaryKey, primaryKeyPosition, partitioned, partitionKeyPosition, minLength, maxLength, pattern, minimum, maximum, multipleOf, precision, dateFormat, timezone, customFormat, itemType, minItems, maxItems, classification, examples, businessName, encryptedName, criticalDataElement, transformLogic, transformSourceObjects, transformDescription, authoritativeDefinitions, semanticConcepts, qualityChecks, tags, customProps, propRelationships])
 
   const isDirty = editingIndex !== null && (() => {
     const current = buildPropertyFromFormState()
@@ -448,7 +460,7 @@ function SchemaPropertyEditorInner(
           )}
           
           <Tabs defaultValue="core" className="w-full">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="core">Core</TabsTrigger>
               <TabsTrigger value="constraints">Constraints</TabsTrigger>
               <TabsTrigger value="quality">Quality</TabsTrigger>
@@ -456,6 +468,12 @@ function SchemaPropertyEditorInner(
               <TabsTrigger value="business">Business</TabsTrigger>
               <TabsTrigger value="transform">Transform</TabsTrigger>
               <TabsTrigger value="semantics">Semantics</TabsTrigger>
+              <TabsTrigger value="relationships">
+                Relationships
+                {propRelationships.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">{propRelationships.length}</Badge>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             {/* Core Tab */}
@@ -941,6 +959,88 @@ function SchemaPropertyEditorInner(
                   entityId={name || 'property'}
                   conceptType="property"
                 />
+              </div>
+            </TabsContent>
+
+            {/* Relationships Tab (ODCS v3.1.0) */}
+            <TabsContent value="relationships" className="space-y-3 mt-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold flex items-center">
+                    Foreign Key Relationships
+                    <FieldTooltip content="ODCS v3.1.0 property-level relationships (e.g., foreign keys to other schema/table columns)" />
+                  </Label>
+                </div>
+
+                {propRelationships.length > 0 && (
+                  <div className="space-y-2">
+                    {propRelationships.map((rel, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 border rounded-lg bg-background">
+                        <div className="flex items-center gap-2 flex-1">
+                          <Badge variant="outline" className="text-xs">{rel.type}</Badge>
+                          <span className="text-sm font-mono">→ {typeof rel.to === 'string' ? rel.to : JSON.stringify(rel.to)}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setPropRelationships(propRelationships.filter((_, i) => i !== idx))}
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="border rounded-lg p-3 bg-background space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs">Target Reference (to)</Label>
+                      <Input
+                        value={newRelTo}
+                        onChange={(e) => setNewRelTo(e.target.value)}
+                        placeholder="e.g., schema.table.column"
+                        className="h-9 font-mono text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Type</Label>
+                      <Select value={newRelType} onValueChange={setNewRelType}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="foreignKey">foreignKey</SelectItem>
+                          <SelectItem value="reference">reference</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!newRelTo.trim()}
+                    onClick={() => {
+                      setPropRelationships([...propRelationships, { type: newRelType, to: newRelTo.trim() }])
+                      setNewRelTo('')
+                      setNewRelType('foreignKey')
+                    }}
+                    className="h-7"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Relationship
+                  </Button>
+                </div>
+
+                {propRelationships.length === 0 && (
+                  <div className="text-center py-4 border-2 border-dashed rounded-lg">
+                    <p className="text-sm text-muted-foreground">No relationships defined</p>
+                    <p className="text-xs text-muted-foreground mt-1">Add a foreign key reference to link this property to another entity</p>
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>

@@ -34,10 +34,32 @@ export type DataContractListItem = {
   description?: ContractDescription
 }
 
+// ODCS v3.1.0 relationship (foreign key) at schema or property level
+export type SchemaRelationship = {
+  id?: string
+  type: string
+  from?: string | string[] // schema-level only; absent for property-level
+  to: string | string[]
+  customProperties?: { property: string; value: any }[]
+}
+
+// ODCS v3.1.0 Team object metadata
+export type TeamMetadata = {
+  id?: string
+  contract_id?: string
+  stable_id?: string
+  name?: string
+  description?: string
+  tags?: string[]
+  customProperties?: { property: string; value: any }[]
+  authoritativeDefinitions?: { url: string; type: string }[]
+}
+
 // ODCS compliant column property
 export type ColumnProperty = {
   name: string
   logicalType: string
+  stableId?: string // ODCS v3.1.0 StableId
   physicalType?: string // Physical data type (VARCHAR(50), INT, etc.)
   physicalName?: string // Physical column name
   required?: boolean
@@ -82,11 +104,14 @@ export type ColumnProperty = {
   quality?: QualityRule[]  // Property-level quality checks
   tags?: string[]  // ODCS tags for categorization
   customProperties?: Record<string, any>  // ODCS custom properties
+  // ODCS v3.1.0 relationships (property-level FKs)
+  relationships?: SchemaRelationship[]
 }
 
 // ODCS compliant schema object
 export type SchemaObject = {
   name: string
+  stableId?: string // ODCS v3.1.0 StableId
   physicalName?: string
   properties: ColumnProperty[]
   propertyCount?: number
@@ -105,6 +130,8 @@ export type SchemaObject = {
   authoritativeDefinitions?: { url: string; type: string }[]
   // Optional local helper used by wizard/editor to collect concepts
   semanticConcepts?: { iri: string; label?: string }[]
+  // ODCS v3.1.0 relationships (schema-level FKs)
+  relationships?: SchemaRelationship[]
 }
 
 // Lightweight schema summary for listing (no properties loaded)

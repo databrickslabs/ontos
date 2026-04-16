@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, ChevronDown, RefreshCw, Trash2, Loader2, Library, Eye, Copy, Check, Network, FileCode2 } from 'lucide-react';
+import { Upload, ChevronDown, RefreshCw, Trash2, Loader2, Library, Eye, Copy, Check, Network, FileCode2, Pencil } from 'lucide-react';
 import type { SemanticModel } from '@/types/ontology';
 import {
   AlertDialog,
@@ -30,11 +30,49 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import OntologyLibraryDialog from '@/components/settings/ontology-library-dialog';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
+import type { TFunction } from 'i18next';
 
 const SYSTEM_CONTEXTS = ['urn:meta:sources', 'urn:semantic-links'];
 
+interface TitleCandidateRow {
+  iri: string;
+  kind: string;
+  text: string;
+  lang?: string;
+}
+
+function semanticModelDisplayTitle(m: SemanticModel, t: TFunction<'semantic-models', undefined>): string {
+  const d = m.display_name?.trim();
+  if (d) return d;
+  return systemRdfNamespaceDisplayLabel(m.name, t);
+}
+
+/** Serialization (syntax) for table — prefer API `serialization`, not vocabulary. */
+function semanticModelSerializationLabel(m: SemanticModel, tr: (key: string) => string): string {
+  const fromApi = m.serialization?.trim();
+  if (fromApi) return fromApi;
+  const fn = (m.original_filename || m.name || '').toLowerCase();
+  if (fn.endsWith('.ttl') || fn.endsWith('.n3')) return tr('rdfSources.serializationTurtle');
+  if (fn.endsWith('.owl') || fn.endsWith('.rdf') || fn.endsWith('.xml')) return tr('rdfSources.serializationRdfXml');
+  if (fn.endsWith('.jsonld') || fn.endsWith('.json-ld') || fn.endsWith('.json')) return tr('rdfSources.serializationJsonLd');
+  if (fn.endsWith('.nt')) return tr('rdfSources.serializationNTriples');
+  if (fn.endsWith('.trig')) return tr('rdfSources.serializationTriG');
+  const fmt = (m.format || '').toLowerCase();
+  if (fmt === 'skos') return tr('rdfSources.serializationTurtle');
+  if (fmt === 'rdfs') return tr('rdfSources.serializationRdfXml');
+  if (fmt === 'ttl') return tr('rdfSources.serializationTurtle');
+  return tr('rdfSources.serializationUnknown');
+}
+
 export default function SemanticModelsSettings() {
-  const { t } = useTranslation('semantic-models');
+  const { t } = useTranslation(['semantic-models', 'common']);
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const canWriteSemantic = !permissionsLoading && hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
   const { get, post, delete: deleteApi } = useApi();
   const { toast } = useToast();
   const [items, setItems] = useState<SemanticModel[]>([]);
@@ -50,11 +88,28 @@ export default function SemanticModelsSettings() {
   const [copied, setCopied] = useState(false);
   const [isRefreshingGraph, setIsRefreshingGraph] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  
+  const [listSearch, setListSearch] = useState('');
+  const [titleDialogOpen, setTitleDialogOpen] = useState(false);
+  const [titleEditModel, setTitleEditModel] = useState<SemanticModel | null>(null);
+  const [titleCandidates, setTitleCandidates] = useState<TitleCandidateRow[]>([]);
+  const [titleCandidatesLoading, setTitleCandidatesLoading] = useState(false);
+  const [titleChoice, setTitleChoice] = useState<string>('custom');
+  const [titleCustom, setTitleCustom] = useState('');
+  const [titleSaving, setTitleSaving] = useState(false);
+
   const filteredItems = useMemo(() => 
     items.filter(m => !SYSTEM_CONTEXTS.includes(m.name)),
     [items]
   );
+
+  const tableData = useMemo(() => {
+    const q = listSearch.trim().toLowerCase();
+    if (!q) return filteredItems;
+    return filteredItems.filter((m) => {
+      const title = semanticModelDisplayTitle(m, t).toLowerCase();
+      return title.includes(q) || m.name.toLowerCase().includes(q);
+    });
+  }, [filteredItems, listSearch, t]);
 
   const fetchItems = async () => {
     setIsLoading(true);
@@ -199,15 +254,132 @@ export default function SemanticModelsSettings() {
     }
   };
 
+  const openTitleDialog = useCallback(
+    async (model: SemanticModel) => {
+      setTitleEditModel(model);
+      setTitleDialogOpen(true);
+      setTitleCandidatesLoading(true);
+      setTitleCandidates([]);
+      setTitleChoice('custom');
+      setTitleCustom(model.display_name?.trim() || '');
+      try {
+        const res = await get<{ candidates: TitleCandidateRow[] }>(
+          `/api/semantic-models/${encodeURIComponent(model.id)}/title-candidates`
+        );
+        if (res.error) {
+          toast({ title: t('messages.error'), description: res.error, variant: 'destructive' });
+          setTitleCandidatesLoading(false);
+          return;
+        }
+        const candidates = res.data?.candidates ?? [];
+        setTitleCandidates(candidates);
+        const cur = model.display_name?.trim();
+        if (cur) {
+          const idx = candidates.findIndex((c) => c.text.trim() === cur);
+          if (idx >= 0) {
+            setTitleChoice(`c:${idx}`);
+          } else {
+            setTitleChoice('custom');
+            setTitleCustom(cur);
+          }
+        } else if (candidates.length > 0) {
+          setTitleChoice('c:0');
+          setTitleCustom(candidates[0].text);
+        }
+      } catch (e: any) {
+        toast({
+          title: t('messages.error'),
+          description: e.message || t('rdfSources.loadSuggestionsFailed'),
+          variant: 'destructive',
+        });
+      } finally {
+        setTitleCandidatesLoading(false);
+      }
+    },
+    [get, toast, t]
+  );
+
+  const saveTitleDialog = async () => {
+    if (!titleEditModel) return;
+    let displayName = '';
+    if (titleChoice.startsWith('c:')) {
+      const idx = parseInt(titleChoice.slice(2), 10);
+      displayName = (titleCandidates[idx]?.text ?? '').trim();
+    } else {
+      displayName = titleCustom.trim();
+    }
+    setTitleSaving(true);
+    try {
+      const response = await fetch(`/api/semantic-models/${encodeURIComponent(titleEditModel.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: displayName }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to update title');
+      }
+      toast({ title: t('messages.success'), description: t('rdfSources.titleSaved') });
+      setTitleDialogOpen(false);
+      setTitleEditModel(null);
+      await fetchItems();
+    } catch (e: any) {
+      toast({ title: t('messages.error'), description: e.message || 'Failed to save', variant: 'destructive' });
+    } finally {
+      setTitleSaving(false);
+    }
+  };
+
+  const clearDisplayTitle = async () => {
+    if (!titleEditModel) return;
+    setTitleSaving(true);
+    try {
+      const response = await fetch(`/api/semantic-models/${encodeURIComponent(titleEditModel.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_name: '' }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to clear title');
+      }
+      toast({ title: t('messages.success'), description: t('rdfSources.titleSaved') });
+      setTitleDialogOpen(false);
+      setTitleEditModel(null);
+      await fetchItems();
+    } catch (e: any) {
+      toast({ title: t('messages.error'), description: e.message || 'Failed to clear', variant: 'destructive' });
+    } finally {
+      setTitleSaving(false);
+    }
+  };
+
   const columns = useMemo<ColumnDef<SemanticModel>[]>(() => [
     {
-      accessorKey: 'name',
+      id: 'displayTitle',
+      accessorFn: (row) => semanticModelDisplayTitle(row, t),
       header: ({ column }: { column: Column<SemanticModel, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Name <ChevronDown className="ml-2 h-4 w-4" />
+          {t('rdfSources.nameColumn')} <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
+      cell: ({ row }) => {
+        const model = row.original;
+        const title = semanticModelDisplayTitle(model, t);
+        const showFileHint = Boolean(model.display_name?.trim());
+        return (
+          <div className="min-w-0">
+            <div className="font-medium truncate" title={title}>
+              {title}
+            </div>
+            {showFileHint && (
+              <div className="text-xs text-muted-foreground truncate" title={model.name}>
+                {model.name}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     { 
       id: 'source',
@@ -239,17 +411,20 @@ export default function SemanticModelsSettings() {
         return <Badge variant={variant}>{label}</Badge>;
       }
     },
-    { 
-      accessorKey: 'format', 
-      header: 'Format', 
-      cell: ({ row }) => <Badge variant="secondary">{(row.getValue('format') as string)?.toUpperCase()}</Badge> 
+    {
+      id: 'serialization',
+      accessorFn: (row) => semanticModelSerializationLabel(row, t),
+      header: t('rdfSources.syntaxColumn'),
+      cell: ({ row }) => (
+        <Badge variant="secondary">{semanticModelSerializationLabel(row.original, t)}</Badge>
+      ),
     },
     { 
       accessorKey: 'size_bytes', 
       header: 'Size', 
       cell: ({ row }) => {
-        const bytes = row.getValue('size_bytes') as number | undefined;
-        if (!bytes) return <span>-</span>;
+        const bytes = row.getValue('size_bytes') as number | undefined | null;
+        if (bytes === undefined || bytes === null) return <span>-</span>;
         const kb = (bytes / 1024).toFixed(1);
         return <span>{kb} KB</span>;
       }
@@ -292,9 +467,21 @@ export default function SemanticModelsSettings() {
         const createdBy = model.created_by || '';
         const isSystemManaged = createdBy.startsWith('system@') && createdBy !== 'system@startup';
         const canDelete = !isFileBased && !isSystemManaged;
+        const canEditTitle = canWriteSemantic && !isFileBased && !isSystemManaged;
         
         return (
           <div className="flex items-center justify-end gap-1">
+            {canEditTitle && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => openTitleDialog(model)}
+                title={t('rdfSources.editDisplayTitle')}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -320,7 +507,7 @@ export default function SemanticModelsSettings() {
       },
       enableSorting: false,
     },
-  ], [uploadingId]);
+  ], [uploadingId, canWriteSemantic, t, openTitleDialog]);
 
   return (
     <>
@@ -336,8 +523,11 @@ export default function SemanticModelsSettings() {
 
       <DataTable
         columns={columns}
-        data={filteredItems}
+        data={tableData}
         searchColumn="name"
+        searchValue={listSearch}
+        onSearchChange={setListSearch}
+        defaultSortColumn="displayTitle"
         isLoading={isLoading}
         storageKey="rdf-sources-sort"
         toolbarActions={
@@ -387,7 +577,8 @@ export default function SemanticModelsSettings() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete RDF Source</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{modelToDelete?.name}</strong>? 
+              Are you sure you want to delete{' '}
+              <strong>{modelToDelete ? semanticModelDisplayTitle(modelToDelete, t) : ''}</strong>?
               This action cannot be undone and will remove the model from the semantic graph.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -399,6 +590,99 @@ export default function SemanticModelsSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={titleDialogOpen}
+        onOpenChange={(open) => {
+          setTitleDialogOpen(open);
+          if (!open) {
+            setTitleEditModel(null);
+            setTitleCandidates([]);
+            setTitleChoice('custom');
+            setTitleCustom('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('rdfSources.titleDialog')}</DialogTitle>
+            <DialogDescription>{t('rdfSources.titleDialogDescription')}</DialogDescription>
+          </DialogHeader>
+          {titleCandidatesLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <RadioGroup value={titleChoice} onValueChange={setTitleChoice} className="space-y-4">
+              {titleCandidates.length > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wide">
+                    {t('rdfSources.suggestedFromFile')}
+                  </Label>
+                  {titleCandidates.map((c, i) => (
+                    <div key={`${c.iri}-${c.text}-${i}`} className="flex items-start gap-3">
+                      <RadioGroupItem value={`c:${i}`} id={`title-c-${i}`} className="mt-1 shrink-0" />
+                      <Label htmlFor={`title-c-${i}`} className="font-normal cursor-pointer leading-snug min-w-0">
+                        <span className="font-medium block">{c.text}</span>
+                        <span className="block text-xs text-muted-foreground break-all">
+                          {c.kind}
+                          {c.lang ? ` · ${c.lang}` : ''}
+                        </span>
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-start gap-3">
+                <RadioGroupItem value="custom" id="title-custom" className="mt-1 shrink-0" />
+                <div className="grid gap-2 flex-1 min-w-0">
+                  <Label htmlFor="title-custom-input" className="font-normal cursor-pointer">
+                    {t('rdfSources.customTitle')}
+                  </Label>
+                  <Input
+                    id="title-custom-input"
+                    value={titleCustom}
+                    onChange={(e) => setTitleCustom(e.target.value)}
+                    onFocus={() => setTitleChoice('custom')}
+                    placeholder={titleEditModel?.name ?? ''}
+                  />
+                </div>
+              </div>
+            </RadioGroup>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between sm:space-x-0">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => void clearDisplayTitle()}
+              disabled={titleSaving || !titleEditModel?.display_name?.trim()}
+            >
+              {t('rdfSources.useFilename')}
+            </Button>
+            <div className="flex gap-2 justify-end w-full sm:w-auto">
+              <Button type="button" variant="ghost" onClick={() => setTitleDialogOpen(false)}>
+                {t('common:actions.cancel')}
+              </Button>
+              <Button
+                type="button"
+                className="inline-flex items-center gap-2"
+                onClick={() => void saveTitleDialog()}
+                disabled={titleSaving}
+              >
+                {titleSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    {t('common:actions.saving')}
+                  </>
+                ) : (
+                  t('common:actions.save')
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <OntologyLibraryDialog
         isOpen={libraryDialogOpen}
@@ -417,10 +701,14 @@ export default function SemanticModelsSettings() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
-              {viewingModel?.name || 'View Ontology'}
+              {viewingModel ? semanticModelDisplayTitle(viewingModel, t) : 'View Ontology'}
             </DialogTitle>
             <DialogDescription>
-              Raw content of the semantic model ({viewingModel?.format?.toUpperCase() || 'Unknown format'})
+              {viewingModel
+                ? t('rdfSources.viewRawDescription', {
+                    syntax: semanticModelSerializationLabel(viewingModel, t),
+                  })
+                : t('rdfSources.viewRawDescriptionFallback')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0">

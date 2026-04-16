@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react'
 import CytoscapeComponent from 'react-cytoscapejs';
 import type { Core, ElementDefinition, LayoutOptions } from 'cytoscape';
 import type { OntologyConcept } from '@/types/ontology';
+import { resolveLabel } from '@/lib/ontology-utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -49,6 +50,7 @@ interface RootNodeFilterProps {
   hiddenRoots: Set<string>;
   onToggleRoot: (iri: string) => void;
   getRootDescendants: (rootIri: string) => Set<string>;
+  selectedLanguage: string;
 }
 
 // Internal component for filtering root nodes - handles both badge and dropdown modes
@@ -58,6 +60,7 @@ const RootNodeFilter: React.FC<RootNodeFilterProps> = ({
   hiddenRoots,
   onToggleRoot,
   getRootDescendants,
+  selectedLanguage,
 }) => {
   const visibleCount = rootNodes.filter(r => !hiddenRoots.has(r.iri)).length;
   const totalCount = rootNodes.length;
@@ -86,7 +89,7 @@ const RootNodeFilter: React.FC<RootNodeFilterProps> = ({
       <div className="flex flex-wrap gap-2 text-xs">
         {rootNodes.map(root => {
           const color = rootColors.get(root.iri) || '#64748b';
-          const label = root.label || root.iri.split(/[/#]/).pop() || 'Unknown';
+          const label = resolveLabel(root, selectedLanguage);
           const isHidden = hiddenRoots.has(root.iri);
           const descendants = getRootDescendants(root.iri);
           
@@ -164,7 +167,7 @@ const RootNodeFilter: React.FC<RootNodeFilterProps> = ({
             <div className="p-2 space-y-1">
               {rootNodes.map(root => {
                 const color = rootColors.get(root.iri) || '#64748b';
-                const label = root.label || root.iri.split(/[/#]/).pop() || 'Unknown';
+                const label = resolveLabel(root, selectedLanguage);
                 const isVisible = !hiddenRoots.has(root.iri);
                 const descendants = getRootDescendants(root.iri);
                 
@@ -213,7 +216,8 @@ interface KnowledgeGraphProps {
   hiddenRoots: Set<string>;
   onToggleRoot: (rootIri: string) => void;
   onNodeClick: (concept: OntologyConcept) => void;
-  showRootBadges?: boolean; // Controls visibility of root node filter badges (tied to Group by Source)
+  showRootBadges?: boolean;
+  selectedLanguage?: string;
 }
 
 interface GraphData {
@@ -229,6 +233,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   onToggleRoot,
   onNodeClick,
   showRootBadges = true,
+  selectedLanguage = 'en',
 }) => {
   const cyRef = useRef<Core | null>(null);
   const fullscreenCyRef = useRef<Core | null>(null);
@@ -380,7 +385,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           elements.push({
             data: {
               id: `domain_${root.iri}`,
-              label: root.label || root.iri.split(/[/#]/).pop() || 'Unknown',
+              label: resolveLabel(root, selectedLanguage),
               type: 'domain',
               color: rootColors.get(root.iri),
             },
@@ -399,7 +404,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
       const nodeData: ElementDefinition = {
         data: {
           id: concept.iri,
-          label: concept.label || concept.iri.split(/[/#]/).pop() || 'Unknown',
+          label: resolveLabel(concept, selectedLanguage),
           type: 'concept',
           conceptType: concept.concept_type,
           color: color,
@@ -437,7 +442,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
     });
 
     return { elements, rootNodes, rootColors, getRootDescendants };
-  }, [concepts, hiddenRoots, showDomainBoxes]);
+  }, [concepts, hiddenRoots, showDomainBoxes, selectedLanguage]);
 
   // Create stylesheet based on dark mode
   // Cytoscape stylesheet - using any[] due to complex type definitions
@@ -743,6 +748,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
             hiddenRoots={hiddenRoots}
             onToggleRoot={onToggleRoot}
             getRootDescendants={graphData.getRootDescendants}
+            selectedLanguage={selectedLanguage}
           />
         </div>
       )}
@@ -903,6 +909,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                 hiddenRoots={hiddenRoots}
                 onToggleRoot={onToggleRoot}
                 getRootDescendants={graphData.getRootDescendants}
+                selectedLanguage={selectedLanguage}
               />
             </div>
           )}

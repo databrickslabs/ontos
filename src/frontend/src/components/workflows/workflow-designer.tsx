@@ -1470,9 +1470,6 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectItem value="requester">Requester (Original User)</SelectItem>
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Role UUIDs ensure referential integrity if roles are renamed.
-                        </p>
                       </div>
                       <div>
                         <Label>Timeout (days)</Label>

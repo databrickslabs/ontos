@@ -39,7 +39,7 @@ from src.common.dependencies import (
     AuditCurrentUserDep,
     ChangeLogManagerDep,
 )
-from src.common.workflow_triggers import get_trigger_registry
+from src.common.workflow_triggers import get_trigger_registry, fire_trigger_safe
 from src.models.process_workflows import EntityType
 from src.models.notifications import NotificationType
 from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
@@ -1587,18 +1587,14 @@ async def create_data_product(
         success = True
 
         # Fire on_create workflow trigger
-        try:
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_create(
-                entity_type=EntityType.DATA_PRODUCT,
-                entity_id=str(created_product_response.id) if created_product_response else str(payload.get('id', '')),
-                entity_name=getattr(created_product_response, 'name', None),
-                entity_data={"product_id": str(created_product_response.id), "name": getattr(created_product_response, 'name', None)},
-                user_email=current_user.email if current_user else None,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_create trigger failed for product: {e}")
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=str(created_product_response.id) if created_product_response else str(payload.get('id', '')),
+            entity_name=getattr(created_product_response, 'name', None),
+            entity_data={"product_id": str(created_product_response.id), "name": getattr(created_product_response, 'name', None)},
+            user_email=current_user.email if current_user else None,
+        )
 
         if created_product_response and hasattr(created_product_response, 'id'):
             details_for_audit["created_resource_id"] = str(created_product_response.id)
@@ -1842,18 +1838,14 @@ async def update_data_product(
         response_status_code = 200
 
         # Fire on_update workflow trigger
-        try:
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_update(
-                entity_type=EntityType.DATA_PRODUCT,
-                entity_id=product_id,
-                entity_name=getattr(updated_product_response, 'name', None),
-                entity_data=product_dict,
-                user_email=current_user.email if current_user else None,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_update trigger failed for product {product_id}: {e}")
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=product_id,
+            entity_name=getattr(updated_product_response, 'name', None),
+            entity_data=product_dict,
+            user_email=current_user.email if current_user else None,
+        )
 
         logger.info(f"Successfully updated data product with ID: {product_id}")
 
@@ -1933,17 +1925,13 @@ async def delete_data_product(
         response_status_code = 204 # Standard for successful DELETE
 
         # Fire on_delete workflow trigger
-        try:
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_delete(
-                entity_type=EntityType.DATA_PRODUCT,
-                entity_id=product_id,
-                entity_data={"product_id": product_id},
-                user_email=current_user.email if current_user else None,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_delete trigger failed for product {product_id}: {e}")
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_PRODUCT,
+            entity_id=product_id,
+            entity_data={"product_id": product_id},
+            user_email=current_user.email if current_user else None,
+        )
 
         logger.info(f"Successfully deleted data product with ID: {product_id}")
         # No response body for 204, so no updated_product_response or response_preview
@@ -2099,18 +2087,14 @@ async def subscribe_to_product(
         success = True
 
         # Fire on_subscribe workflow trigger
-        try:
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_subscribe(
-                entity_type=EntityType.SUBSCRIPTION,
-                entity_id=str(result.subscription_id) if hasattr(result, 'subscription_id') else product_id,
-                entity_name=product_id,
-                entity_data={"product_id": product_id, "subscriber_email": current_user.username, "reason": reason},
-                user_email=current_user.username,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_subscribe trigger failed for product {product_id}: {e}")
+        fire_trigger_safe(
+            db, "on_subscribe",
+            entity_type=EntityType.SUBSCRIPTION,
+            entity_id=str(result.subscription_id) if hasattr(result, 'subscription_id') else product_id,
+            entity_name=product_id,
+            entity_data={"product_id": product_id, "subscriber_email": current_user.username, "reason": reason},
+            user_email=current_user.username,
+        )
 
         return result
 
@@ -2156,18 +2140,14 @@ async def unsubscribe_from_product(
         success = True
 
         # Fire on_unsubscribe workflow trigger
-        try:
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_unsubscribe(
-                entity_type=EntityType.SUBSCRIPTION,
-                entity_id=product_id,
-                entity_name=product_id,
-                entity_data={"product_id": product_id, "subscriber_email": current_user.username},
-                user_email=current_user.username,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_unsubscribe trigger failed for product {product_id}: {e}")
+        fire_trigger_safe(
+            db, "on_unsubscribe",
+            entity_type=EntityType.SUBSCRIPTION,
+            entity_id=product_id,
+            entity_name=product_id,
+            entity_data={"product_id": product_id, "subscriber_email": current_user.username},
+            user_email=current_user.username,
+        )
 
         return result
 

@@ -767,23 +767,20 @@ async def handle_contract_certification(
         db.commit()
         db.refresh(contract_db)
 
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import fire_trigger_safe
         from src.models.process_workflows import EntityType
-
-        try:
-            get_trigger_registry(db).on_certify(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                entity_name=contract_db.name,
-                entity_data={
-                    "certification_level": certification_level,
-                    "certification_notes": notes,
-                    "certified_by": contract_db.certified_by,
-                },
-                user_email=current_user.email if current_user else None,
-            )
-        except Exception as wf_err:
-            logger.warning("on_certify trigger error (non-fatal): %s", wf_err, exc_info=True)
+        fire_trigger_safe(
+            db, "on_certify",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=contract_db.name,
+            entity_data={
+                "certification_level": certification_level,
+                "certification_notes": notes,
+                "certified_by": contract_db.certified_by,
+            },
+            user_email=current_user.email if current_user else None,
+        )
 
         manager._update_search_index(contract_db, db)
 
@@ -869,19 +866,16 @@ async def certify_contract_direct(
         propagate_certification(db, "DataContract", contract_id)
         db.commit()
 
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import fire_trigger_safe
         from src.models.process_workflows import EntityType
-
-        try:
-            get_trigger_registry(db).on_certify(
-                EntityType.DATA_CONTRACT,
-                contract_id,
-                entity_name=contract_db.name,
-                entity_data={"certification_level": contract_db.certification_level},
-                user_email=current_user.username if current_user else None,
-            )
-        except Exception as trigger_err:
-            logger.warning("on_certify trigger error (non-fatal): %s", trigger_err)
+        fire_trigger_safe(
+            db, "on_certify",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=contract_db.name,
+            entity_data={"certification_level": contract_db.certification_level},
+            user_email=current_user.username if current_user else None,
+        )
 
         manager._update_search_index(contract_db, db)
 
@@ -924,18 +918,15 @@ async def decertify_contract(
         db.add(contract_db)
         db.commit()
 
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import fire_trigger_safe
         from src.models.process_workflows import EntityType
-
-        try:
-            get_trigger_registry(db).on_decertify(
-                EntityType.DATA_CONTRACT,
-                contract_id,
-                entity_name=contract_db.name,
-                user_email=current_user.username,
-            )
-        except Exception as trigger_err:
-            logger.warning("on_decertify trigger error (non-fatal): %s", trigger_err)
+        fire_trigger_safe(
+            db, "on_decertify",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=contract_db.name,
+            user_email=current_user.username,
+        )
 
         audit_manager.log_action(
             db=db,
@@ -1003,17 +994,15 @@ async def set_contract_publication_scope(
 
         # Fire on_unpublish trigger when transitioning from published to unpublished
         if scope == "none" and was_published:
-            try:
-                from src.common.workflow_triggers import get_trigger_registry
-                from src.models.process_workflows import EntityType
-                get_trigger_registry(db).on_unpublish(
-                    EntityType.DATA_CONTRACT,
-                    contract_id,
-                    entity_name=contract_db.name,
-                    user_email=current_user.username if current_user else None,
-                )
-            except Exception as e:
-                logger.warning(f"on_unpublish trigger error (non-fatal): {e}")
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType
+            fire_trigger_safe(
+                db, "on_unpublish",
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=contract_id,
+                entity_name=contract_db.name,
+                user_email=current_user.username if current_user else None,
+            )
 
         audit_manager.log_action(
             db=db,
@@ -1203,20 +1192,16 @@ async def create_contract(
         created_contract_id = created.id
 
         # Fire on_create workflow trigger
-        try:
-            from src.common.workflow_triggers import get_trigger_registry
-            from src.models.process_workflows import EntityType
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_create(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=str(created.id),
-                entity_name=created.name,
-                entity_data={"contract_id": str(created.id), "name": created.name, "status": getattr(created, 'status', 'draft')},
-                user_email=current_user.email if current_user else None,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_create trigger failed for contract {created.id}: {e}")
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(created.id),
+            entity_name=created.name,
+            entity_data={"contract_id": str(created.id), "name": created.name, "status": getattr(created, 'status', 'draft')},
+            user_email=current_user.email if current_user else None,
+        )
 
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
@@ -1372,20 +1357,16 @@ async def update_contract(
         success = True
 
         # Fire on_update workflow trigger
-        try:
-            from src.common.workflow_triggers import get_trigger_registry
-            from src.models.process_workflows import EntityType
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_update(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                entity_name=getattr(updated, 'name', None),
-                entity_data=contract_data.model_dump(exclude_unset=True),
-                user_email=current_user.email if current_user else None,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_update trigger failed for contract {contract_id}: {e}")
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=getattr(updated, 'name', None),
+            entity_data=contract_data.model_dump(exclude_unset=True),
+            user_email=current_user.email if current_user else None,
+        )
 
         # Load with relationships for full response
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
@@ -1445,19 +1426,15 @@ async def delete_contract(
         response_status_code = 204
 
         # Fire on_delete workflow trigger
-        try:
-            from src.common.workflow_triggers import get_trigger_registry
-            from src.models.process_workflows import EntityType
-            trigger_registry = get_trigger_registry(db)
-            trigger_registry.on_delete(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                entity_data={"contract_id": contract_id},
-                user_email=current_user.email if current_user else None,
-                blocking=False,
-            )
-        except Exception as e:
-            logger.warning(f"on_delete trigger failed for contract {contract_id}: {e}")
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_data={"contract_id": contract_id},
+            user_email=current_user.email if current_user else None,
+        )
 
         return None
     except ValueError as e:

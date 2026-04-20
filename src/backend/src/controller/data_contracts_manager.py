@@ -3774,21 +3774,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.refresh(updated)
 
             # Fire on_status_change workflow trigger
-            try:
-                from src.common.workflow_triggers import get_trigger_registry as _get_tr
-                from src.models.process_workflows import EntityType as _WFEntityType
-                _get_tr(db).on_status_change(
-                    entity_type=_WFEntityType.DATA_CONTRACT,
-                    entity_id=contract_id,
-                    from_status=current_status,
-                    to_status=new_status,
-                    entity_name=contract.name,
-                    entity_data={"name": contract.name, "status": new_status},
-                    user_email=current_user,
-                    blocking=False,
-                )
-            except Exception as e:
-                logger.warning(f"on_status_change trigger failed for contract {contract_id}: {e}")
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType
+            fire_trigger_safe(
+                db, "on_status_change",
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=contract_id,
+                from_status=current_status,
+                to_status=new_status,
+                entity_name=contract.name,
+                entity_data={"name": contract.name, "status": new_status},
+                user_email=current_user,
+            )
 
             return updated
         except Exception as e:

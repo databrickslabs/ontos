@@ -609,22 +609,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             
             # Fire on_status_change workflow trigger
-            try:
-                from src.common.workflow_triggers import get_trigger_registry
-                from src.models.process_workflows import EntityType as WFEntityType
-                tr = get_trigger_registry(self._db)
-                tr.on_status_change(
-                    entity_type=WFEntityType.DATA_PRODUCT,
-                    entity_id=product_id,
-                    from_status=current_status,
-                    to_status=new_status_lower,
-                    entity_name=product_db.name,
-                    entity_data={"name": product_db.name, "status": new_status_lower},
-                    user_email=current_user,
-                    blocking=False,
-                )
-            except Exception as e:
-                logger.warning(f"on_status_change trigger failed for product {product_id}: {e}")
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType
+            fire_trigger_safe(
+                self._db, "on_status_change",
+                entity_type=EntityType.DATA_PRODUCT,
+                entity_id=product_id,
+                from_status=current_status,
+                to_status=new_status_lower,
+                entity_name=product_db.name,
+                entity_data={"name": product_db.name, "status": new_status_lower},
+                user_email=current_user,
+            )
 
             result = self._load_product_with_tags(product_db)
             self._update_search_index(result)

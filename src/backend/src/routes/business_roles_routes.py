@@ -177,6 +177,36 @@ def delete_role(
         )
 
 
+@router.get(
+    "/{role_id}/workflow-usage",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+def get_role_workflow_usage(
+    role_id: UUID,
+    db: DBSessionDep,
+):
+    """Check if a business role is referenced by any workflow steps (approval/notification)."""
+    from src.db_models.process_workflows import WorkflowStepDb, ProcessWorkflowDb
+
+    search_token = f"business:{role_id}"
+    # Search step configs for this role reference
+    steps = (
+        db.query(WorkflowStepDb)
+        .filter(WorkflowStepDb.config.contains(search_token))
+        .all()
+    )
+
+    workflows = []
+    seen = set()
+    for step in steps:
+        wf = db.query(ProcessWorkflowDb).filter(ProcessWorkflowDb.id == step.workflow_id).first()
+        if wf and str(wf.id) not in seen:
+            seen.add(str(wf.id))
+            workflows.append({"id": str(wf.id), "name": wf.name})
+
+    return {"role_id": str(role_id), "used_in_workflows": workflows, "count": len(workflows)}
+
+
 def register_routes(app):
     app.include_router(router)
     logger.info("Business roles routes registered with prefix /api/business-roles")

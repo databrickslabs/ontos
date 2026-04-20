@@ -25,6 +25,7 @@ class BusinessRoleBase(BaseModel):
     category: Optional[BusinessRoleCategory] = Field(None, description="Role category")
     is_system: bool = Field(False, description="Whether this is a built-in role")
     status: BusinessRoleStatus = Field(BusinessRoleStatus.ACTIVE, description="Lifecycle status")
+    is_approver: bool = Field(False, description="Whether this role appears in workflow approver/recipient dropdowns")
 
 
 class BusinessRoleCreate(BusinessRoleBase):
@@ -37,6 +38,7 @@ class BusinessRoleUpdate(BaseModel):
     category: Optional[BusinessRoleCategory] = None
     is_system: Optional[bool] = None
     status: Optional[BusinessRoleStatus] = None
+    is_approver: Optional[bool] = None
 
 
 class BusinessRoleRead(BusinessRoleBase):

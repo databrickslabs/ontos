@@ -14,6 +14,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
@@ -28,6 +29,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   category: z.string().optional(),
   status: z.enum(['active', 'deprecated']),
+  is_approver: z.boolean(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -43,13 +45,14 @@ export function BusinessRoleFormDialog({
   isOpen, onOpenChange, role, onSubmitSuccess,
 }: BusinessRoleFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { post: apiPost, put: apiPut } = useApi();
+  const [workflowUsage, setWorkflowUsage] = useState<{ count: number; used_in_workflows: { id: string; name: string }[] }>({ count: 0, used_in_workflows: [] });
+  const { get, post: apiPost, put: apiPut } = useApi();
   const { toast } = useToast();
   const { t } = useTranslation(['business-roles', 'common']);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: '', description: '', category: 'none', status: 'active' },
+    defaultValues: { name: '', description: '', category: 'none', status: 'active', is_approver: false },
   });
 
   useEffect(() => {
@@ -60,9 +63,21 @@ export function BusinessRoleFormDialog({
           description: role.description || '',
           category: role.category || 'none',
           status: role.status,
+          is_approver: role.is_approver ?? false,
         });
+        // Check if this role is used in any workflows
+        if (role.is_approver) {
+          get<{ count: number; used_in_workflows: { id: string; name: string }[] }>(
+            `/api/business-roles/${role.id}/workflow-usage`
+          ).then((res) => {
+            if (res.data) setWorkflowUsage(res.data);
+          }).catch(() => setWorkflowUsage({ count: 0, used_in_workflows: [] }));
+        } else {
+          setWorkflowUsage({ count: 0, used_in_workflows: [] });
+        }
       } else {
-        form.reset({ name: '', description: '', category: 'none', status: 'active' });
+        form.reset({ name: '', description: '', category: 'none', status: 'active', is_approver: false });
+        setWorkflowUsage({ count: 0, used_in_workflows: [] });
       }
     }
   }, [isOpen, role, form]);
@@ -75,6 +90,7 @@ export function BusinessRoleFormDialog({
         description: data.description || undefined,
         category: data.category === 'none' ? undefined : data.category,
         status: data.status,
+        is_approver: data.is_approver,
       };
 
       const response = role
@@ -186,6 +202,33 @@ export function BusinessRoleFormDialog({
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_approver"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <FormLabel>{t('form.isApprover')}</FormLabel>
+                    <p className="text-xs text-muted-foreground">
+                      {t('form.isApproverDescription')}
+                    </p>
+                    {workflowUsage.count > 0 && field.value && (
+                      <p className="text-xs text-amber-600">
+                        {t('form.isApproverInUse', { count: workflowUsage.count, workflows: workflowUsage.used_in_workflows.map(w => w.name).join(', ') })}
+                      </p>
+                    )}
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={workflowUsage.count > 0 && field.value}
+                    />
+                  </FormControl>
                 </FormItem>
               )}
             />

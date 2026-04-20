@@ -55,6 +55,9 @@
     "create": "Create",
     "update": "Save Changes",
     "noCategory": "No category",
+    "isApprover": "Workflow Approver",
+    "isApproverDescription": "Show this role in workflow approver and notification recipient dropdowns.",
+    "isApproverInUse": "Cannot disable — used in {{count}} workflow(s): {{workflows}}.",
     "placeholders": {
       "name": "e.g., Data Owner",
       "description": "Describe the responsibilities of this role...",

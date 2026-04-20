@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -305,7 +305,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
-  const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; has_groups: boolean }[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   
@@ -319,6 +319,60 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [isActive, setIsActive] = useState(true);
   const [steps, setSteps] = useState<WorkflowStepCreate[]>([]);
   
+  // Helper to render roles grouped by source type
+  const renderGroupedRoles = (roles: typeof availableRoles, includeSpecialItems?: { requester?: boolean; owner?: boolean }) => {
+    const appRoles = roles.filter(r => r.source === 'app');
+    const businessRoles = roles.filter(r => r.source === 'business');
+
+    return (
+      <>
+        {includeSpecialItems?.requester && (
+          <SelectGroup>
+            <SelectLabel>Special</SelectLabel>
+            <SelectItem value="requester">Requester (Original User)</SelectItem>
+            {includeSpecialItems?.owner && (
+              <SelectItem value="owner">Owner (Entity Owner)</SelectItem>
+            )}
+          </SelectGroup>
+        )}
+        {appRoles.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>App Roles</SelectLabel>
+            {appRoles.map((role) => (
+              <SelectItem key={role.id} value={role.id}>
+                <div className="flex items-center gap-2">
+                  <span>{role.name}</span>
+                  {!role.has_groups && (
+                    <Badge variant="outline" className="text-xs text-amber-600">
+                      No groups
+                    </Badge>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
+        {businessRoles.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>Business Roles</SelectLabel>
+            {businessRoles.map((role) => (
+              <SelectItem key={role.id} value={role.id}>
+                <div className="flex items-center gap-2">
+                  <span>{role.name}</span>
+                  {role.category && (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                      {role.category}
+                    </Badge>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
+      </>
+    );
+  };
+
   // Track initial state for dirty checking
   interface OriginalState {
     name: string;
@@ -453,7 +507,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       
       // Load available roles for approval/notification step selectors
       try {
-        const rolesResponse = await get<{ id: string; name: string; has_groups: boolean }[]>('/api/workflows/roles');
+        const rolesResponse = await get<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles');
         if (rolesResponse.data && Array.isArray(rolesResponse.data)) {
           setAvailableRoles(rolesResponse.data);
         } else {
@@ -1327,20 +1381,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectValue placeholder="Select recipients" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="requester">Requester (Original User)</SelectItem>
-                            <SelectItem value="owner">Owner (Entity Owner)</SelectItem>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{role.name}</span>
-                                  {!role.has_groups && (
-                                    <Badge variant="outline" className="text-xs text-amber-600">
-                                      No groups
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {renderGroupedRoles(availableRoles, { requester: true, owner: true })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1455,19 +1496,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectValue placeholder="Select role" />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{role.name}</span>
-                                  {!role.has_groups && (
-                                    <Badge variant="outline" className="text-xs text-amber-600">
-                                      No groups
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                            <SelectItem value="requester">Requester (Original User)</SelectItem>
+                            {renderGroupedRoles(availableRoles, { requester: true })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1498,18 +1527,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectValue placeholder="Select reviewer role" />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{role.name}</span>
-                                  {!role.has_groups && (
-                                    <Badge variant="outline" className="text-xs text-amber-600">
-                                      No groups
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {renderGroupedRoles(availableRoles)}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground mt-1">

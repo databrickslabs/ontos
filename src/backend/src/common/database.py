@@ -100,7 +100,8 @@ def get_lakebase_info(app_name: str, ws_client) -> Optional[LakebaseInfo]:
                     return _lakebase_info
 
                 # Autoscale Lakebase — resource.postgres with branch
-                if resource.postgres is not None:
+                # Use hasattr for SDK compatibility (postgres attr added in SDK >=0.95.0)
+                if hasattr(resource, 'postgres') and resource.postgres is not None:
                     branch = resource.postgres.branch
                     logger.info(f"Detected autoscale Lakebase resource on branch: {branch}")
                     endpoints = list(ws_client.postgres.list_endpoints(parent=branch))
@@ -289,6 +290,14 @@ def refresh_oauth_token(settings: Settings) -> str:
         ws_client = get_workspace_client(settings)
         info = get_lakebase_info(settings.DATABRICKS_APP_NAME, ws_client)
         
+        if not info and settings.LAKEBASE_INSTANCE_NAME:
+            # Fallback: use LAKEBASE_INSTANCE_NAME env var when app resource lookup fails
+            logger.info(f"Using LAKEBASE_INSTANCE_NAME fallback: {settings.LAKEBASE_INSTANCE_NAME}")
+            if settings.LAKEBASE_INSTANCE_NAME.startswith("projects/"):
+                info = LakebaseInfo("autoscale", settings.LAKEBASE_INSTANCE_NAME)
+            else:
+                info = LakebaseInfo("provisioned", settings.LAKEBASE_INSTANCE_NAME)
+
         if not info:
             raise ValueError(f"Could not determine Lakebase info for app '{settings.DATABRICKS_APP_NAME}'")
         
@@ -551,7 +560,7 @@ def ensure_database_and_schema_exist(settings: Settings):
                 if not schema_exists:
                     logger.info(f"Creating schema: {target_schema}")
                     # CREATE SCHEMA cannot be parameterized, but identifier is validated
-                    conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
+                    conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{target_schema}"'))
                     logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
                     
                     # Set default privileges for future objects (OAuth mode only)

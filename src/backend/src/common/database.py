@@ -292,11 +292,23 @@ def refresh_oauth_token(settings: Settings) -> str:
         
         if not info and settings.LAKEBASE_INSTANCE_NAME:
             # Fallback: use LAKEBASE_INSTANCE_NAME env var when app resource lookup fails
-            logger.info(f"Using LAKEBASE_INSTANCE_NAME fallback: {settings.LAKEBASE_INSTANCE_NAME}")
-            if settings.LAKEBASE_INSTANCE_NAME.startswith("projects/"):
-                info = LakebaseInfo("autoscale", settings.LAKEBASE_INSTANCE_NAME)
+            identifier = settings.LAKEBASE_INSTANCE_NAME
+            logger.info(f"Using LAKEBASE_INSTANCE_NAME fallback: {identifier}")
+            if identifier.startswith("projects/"):
+                # If it's a branch path (no /endpoints/), discover the endpoint
+                if "/endpoints/" not in identifier:
+                    try:
+                        endpoints = list(ws_client.postgres.list_endpoints(parent=identifier))
+                        if endpoints:
+                            identifier = endpoints[0].name
+                            logger.info(f"Resolved fallback branch to endpoint: {identifier}")
+                        else:
+                            logger.error(f"No endpoints found for fallback branch: {identifier}")
+                    except Exception as ep_err:
+                        logger.error(f"Failed to list endpoints for fallback: {ep_err}")
+                info = LakebaseInfo("autoscale", identifier)
             else:
-                info = LakebaseInfo("provisioned", settings.LAKEBASE_INSTANCE_NAME)
+                info = LakebaseInfo("provisioned", identifier)
 
         if not info:
             raise ValueError(f"Could not determine Lakebase info for app '{settings.DATABRICKS_APP_NAME}'")

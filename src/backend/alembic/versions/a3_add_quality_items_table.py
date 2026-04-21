@@ -18,6 +18,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Guard against partial previous runs where table already exists
+    conn = op.get_bind()
+    result = conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.tables WHERE table_name = 'quality_items'"
+    ))
+    if result.scalar() is not None:
+        return  # Table already exists, skip
     op.create_table(
         "quality_items",
         sa.Column("id", PG_UUID(as_uuid=True), primary_key=True),

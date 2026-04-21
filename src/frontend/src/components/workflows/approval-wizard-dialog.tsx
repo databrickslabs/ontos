@@ -3,7 +3,7 @@
  * Creates session, shows steps (user_action: fields, acceptances), submits until complete or abort.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -36,17 +36,24 @@ interface WizardStep {
   index?: number;
 }
 
+/** Step types that require no user interaction and should auto-advance. */
+const NON_VISUAL_STEP_TYPES = new Set(['persist_agreement', 'generate_pdf', 'deliver']);
+
 export interface ApprovalWizardDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   entityType: string;
   entityId: string;
+  /** Human-readable name of the entity (shown in the contextual header). */
+  entityName?: string;
   preselectedWorkflowId?: string;
   /** When set (e.g. 'subscribe'), session is created with completion_action; backend runs that after wizard complete. */
   completionAction?: string;
   /** When true and preselectedWorkflowId is set, start session immediately without showing workflow list. */
   autoStartWithPreselected?: boolean;
   onComplete?: (agreementId: string | null, pdfStoragePath: string | null) => void;
+  /** Called when no workflow is available so the caller can proceed directly. */
+  onNoWorkflow?: () => void;
 }
 
 export default function ApprovalWizardDialog({
@@ -54,10 +61,12 @@ export default function ApprovalWizardDialog({
   onOpenChange,
   entityType,
   entityId,
+  entityName,
   preselectedWorkflowId,
   completionAction,
   autoStartWithPreselected,
   onComplete,
+  onNoWorkflow,
 }: ApprovalWizardDialogProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
@@ -69,6 +78,15 @@ export default function ApprovalWizardDialog({
   const [payload, setPayload] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [completeResult, setCompleteResult] = useState<{ agreement_id: string | null; pdf_storage_path: string | null } | null>(null);
+  /** Total steps and current index (0-based) for the progress indicator. */
+  const [totalSteps, setTotalSteps] = useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  /** Step names for displaying in the progress indicator. */
+  const [stepNames, setStepNames] = useState<string[]>([]);
+  /** Track whether workflows have been loaded (to distinguish empty from not-yet-loaded). */
+  const [workflowsLoaded, setWorkflowsLoaded] = useState(false);
+  /** Ref to prevent duplicate auto-submit for non-visual steps. */
+  const autoSubmitRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -78,13 +96,32 @@ export default function ApprovalWizardDialog({
     setPayload({});
     setCompleteResult(null);
     setSelectedWorkflowId(preselectedWorkflowId ?? null);
+    setTotalSteps(0);
+    setCurrentStepIndex(0);
+    setStepNames([]);
+    setWorkflowsLoaded(false);
+    autoSubmitRef.current = null;
     let cancelled = false;
     get<{ workflows: ApprovalWorkflowRef[]; total: number }>('/api/workflows?workflow_type=approval')
       .then((res) => {
         if (cancelled || !res.data) return;
-        setWorkflows(Array.isArray(res.data?.workflows) ? res.data.workflows : []);
+        const wfs = Array.isArray(res.data?.workflows) ? res.data.workflows : [];
+        setWorkflows(wfs);
+        setWorkflowsLoaded(true);
+        // No-workflow fallback: if no workflows exist, close dialog and notify caller
+        if (wfs.length === 0 && onNoWorkflow) {
+          onOpenChange(false);
+          onNoWorkflow();
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        setWorkflowsLoaded(true);
+        // Also trigger fallback on fetch error
+        if (onNoWorkflow) {
+          onOpenChange(false);
+          onNoWorkflow();
+        }
+      });
     return () => { cancelled = true; };
   }, [isOpen, preselectedWorkflowId, get]);
 
@@ -92,6 +129,13 @@ export default function ApprovalWizardDialog({
     async (workflowId: string) => {
       setLoading(true);
       try {
+        // Capture step metadata from the selected workflow for progress tracking
+        const wf = workflows.find((w) => w.id === workflowId);
+        if (wf?.steps) {
+          setTotalSteps(wf.steps.length);
+          setStepNames(wf.steps.map((s) => s.name));
+          setCurrentStepIndex(0);
+        }
         const body: Record<string, string> = {
           workflow_id: workflowId,
           entity_type: entityType,
@@ -116,7 +160,7 @@ export default function ApprovalWizardDialog({
         setLoading(false);
       }
     },
-    [entityType, entityId, completionAction, post, toast],
+    [entityType, entityId, completionAction, post, toast, workflows],
   );
 
   useEffect(() => {
@@ -133,7 +177,7 @@ export default function ApprovalWizardDialog({
     }
   }, [isOpen, autoStartWithPreselected, preselectedWorkflowId, workflows, sessionId, loading, startSession]);
 
-  const submitStep = async () => {
+  const submitStep = useCallback(async () => {
     if (!sessionId || !currentStep) return;
     setLoading(true);
     try {
@@ -149,9 +193,13 @@ export default function ApprovalWizardDialog({
       if (data.complete) {
         setCompleteResult({ agreement_id: data.agreement_id ?? null, pdf_storage_path: data.pdf_storage_path ?? null });
         setCurrentStep(null);
+        toast({ title: 'Completed', description: 'Approval workflow completed successfully.' });
         onComplete?.(data.agreement_id ?? null, data.pdf_storage_path ?? null);
+        // Auto-close after a brief delay so the user sees the success state
+        setTimeout(() => onOpenChange(false), 800);
       } else {
         setCurrentStep(data.current_step ?? null);
+        setCurrentStepIndex((idx) => idx + 1);
         setStepResults((data.step_results as Array<{ step_id: string; payload: Record<string, unknown> }>) ?? []);
         setPayload({});
       }
@@ -160,10 +208,25 @@ export default function ApprovalWizardDialog({
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId, currentStep, payload, post, toast, onComplete, onOpenChange]);
+
+  /** Auto-advance non-visual steps (persist_agreement, generate_pdf, deliver). */
+  useEffect(() => {
+    if (
+      sessionId &&
+      currentStep &&
+      !loading &&
+      NON_VISUAL_STEP_TYPES.has(currentStep.step_type) &&
+      autoSubmitRef.current !== currentStep.step_id
+    ) {
+      autoSubmitRef.current = currentStep.step_id;
+      submitStep();
+    }
+  }, [sessionId, currentStep, loading, submitStep]);
 
   const abortSession = async () => {
     if (!sessionId) {
+      toast({ title: 'Cancelled', variant: 'default' });
       onOpenChange(false);
       return;
     }
@@ -174,7 +237,16 @@ export default function ApprovalWizardDialog({
       // ignore
     }
     setLoading(false);
+    toast({ title: 'Cancelled', variant: 'default' });
     onOpenChange(false);
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open && !completeResult) {
+      // User closed via X or escape — treat as cancel
+      toast({ title: 'Cancelled', variant: 'default' });
+    }
+    onOpenChange(open);
   };
 
   const requiredFields = (currentStep?.config?.required_fields as Array<{ id: string; label: string; type: string; required?: boolean }>) ?? [];
@@ -195,15 +267,66 @@ export default function ApprovalWizardDialog({
     config.minimum_input_length == null || primaryValue.length >= config.minimum_input_length;
   const isStepValid = requiredFieldsValid && requiresInputValid && minLengthValid;
 
+  /** Whether the current step is non-visual (auto-advancing). */
+  const isNonVisualStep = currentStep && NON_VISUAL_STEP_TYPES.has(currentStep.step_type);
+
+  /** Determine if the current step is the last visual step. */
+  const isLastVisualStep = (() => {
+    if (!currentStep || totalSteps === 0) return false;
+    // Check if all remaining steps after the current one are non-visual
+    const remainingSteps = stepNames.slice(currentStepIndex + 1);
+    if (remainingSteps.length === 0) return true;
+    // Look at the workflow to check remaining step types
+    const wf = workflows.find((w) => w.steps?.some((s) => s.step_id === currentStep.step_id));
+    if (!wf?.steps) return currentStepIndex >= totalSteps - 1;
+    const stepsAfterCurrent = wf.steps.slice(currentStepIndex + 1);
+    return stepsAfterCurrent.every((s) => NON_VISUAL_STEP_TYPES.has(s.step_type));
+  })();
+
+  /** Human-readable action name derived from completionAction. */
+  const actionLabel = completionAction
+    ? completionAction.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    : 'proceed';
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Approval wizard</DialogTitle>
           <DialogDescription>
-            {!sessionId ? 'Choose an approval workflow to run for this entity.' : currentStep ? `Step: ${currentStep.name}` : completeResult ? 'Completed.' : 'Loading…'}
+            {!sessionId ? 'Choose an approval workflow to run for this entity.' : currentStep ? `Step: ${currentStep.name}` : completeResult ? 'Completed.' : 'Loading\u2026'}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Progress indicator — shown when a session is active and we know the step count */}
+        {sessionId && totalSteps > 0 && (
+          <div className="flex items-center gap-2 px-1">
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: totalSteps }, (_, i) => (
+                <div
+                  key={i}
+                  className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                    i < currentStepIndex
+                      ? 'bg-primary'
+                      : i === currentStepIndex
+                        ? 'bg-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
+                        : 'bg-muted'
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground ml-1">
+              Step {currentStepIndex + 1}: {stepNames[currentStepIndex] ?? currentStep?.name ?? ''}
+            </span>
+          </div>
+        )}
+
+        {/* Contextual header — shown when session is active */}
+        {sessionId && !completeResult && entityName && (
+          <p className="text-sm text-muted-foreground px-1">
+            Complete the following before {actionLabel.toLowerCase()} to <strong>{entityName}</strong>
+          </p>
+        )}
 
         {completeResult && (
           <div className="space-y-2 py-4">
@@ -222,8 +345,8 @@ export default function ApprovalWizardDialog({
 
         {!sessionId && (
           <div className="space-y-2 py-4">
-            {workflows.length === 0 && !loading && (
-              <p className="text-sm text-muted-foreground">No approval workflows available. Add them in Settings → Workflows (Approval workflows).</p>
+            {workflows.length === 0 && !loading && workflowsLoaded && (
+              <p className="text-sm text-muted-foreground">No approval workflows available. Add them in Settings &rarr; Workflows (Approval workflows).</p>
             )}
             {workflows.map((wf) => (
               <Button
@@ -238,12 +361,21 @@ export default function ApprovalWizardDialog({
               </Button>
             ))}
             <DialogFooter>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button variant="ghost" onClick={() => { toast({ title: 'Cancelled', variant: 'default' }); onOpenChange(false); }}>Cancel</Button>
             </DialogFooter>
           </div>
         )}
 
-        {sessionId && currentStep && (
+        {/* Non-visual step: spinner with auto-advancing message */}
+        {sessionId && currentStep && isNonVisualStep && (
+          <div className="flex flex-col items-center justify-center gap-3 py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Finalizing...</p>
+          </div>
+        )}
+
+        {/* Visual step: show form fields */}
+        {sessionId && currentStep && !isNonVisualStep && (
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               {(currentStep.config?.title as string) && (
@@ -287,11 +419,11 @@ export default function ApprovalWizardDialog({
             <DialogFooter>
               <Button variant="ghost" onClick={abortSession} disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                Abort
+                Cancel
               </Button>
               <Button onClick={submitStep} disabled={loading || !isStepValid}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Next
+                {isLastVisualStep ? 'Complete' : 'Next'}
               </Button>
             </DialogFooter>
           </div>

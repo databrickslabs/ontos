@@ -252,11 +252,11 @@ export const ApprovalNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <UserCheck className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Approval'}
+          {props.data.step.name || 'Request Approval'}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <Badge variant="outline" className="text-xs dark:border-amber-400/50 dark:text-amber-200">approval</Badge>
+        <Badge variant="outline" className="text-xs dark:border-amber-400/50 dark:text-amber-200">request approval</Badge>
         {approversValue && (
           <div className={nodeTextStyles.description + " mt-1"}>
             {displayName}

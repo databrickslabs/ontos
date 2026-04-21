@@ -30,6 +30,7 @@ import {
   RotateCcw,
   Power,
   PowerOff,
+  HelpCircle,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -41,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ColumnDef, Column } from "@tanstack/react-table";
 import { useApi } from '@/hooks/use-api';
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
@@ -1079,10 +1081,32 @@ export default function Workflows() {
         </div>
         <div className="mt-4">
           <Tabs value={workflowTypeFilter} onValueChange={(v) => setWorkflowTypeFilter(v as 'process' | 'approval')}>
-            <TabsList>
-              <TabsTrigger value="process">Process workflows</TabsTrigger>
-              <TabsTrigger value="approval">Approval workflows</TabsTrigger>
-            </TabsList>
+            <div className="flex items-center gap-2">
+              <TabsList>
+                <TabsTrigger value="process" className="flex flex-col items-start">
+                  <span>Process workflows</span>
+                  <span className="text-xs text-muted-foreground">Background automation after events</span>
+                </TabsTrigger>
+                <TabsTrigger value="approval" className="flex flex-col items-start">
+                  <span>Approval workflows</span>
+                  <span className="text-xs text-muted-foreground">Interactive consent before actions</span>
+                </TabsTrigger>
+              </TabsList>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs">
+                    <ul className="text-xs space-y-1 list-disc pl-3">
+                      <li>Process: runs after events (notify, tag, validate)</li>
+                      <li>Approval: pops up before actions (consent, terms)</li>
+                      <li>They chain: approval first, then process</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </Tabs>
         </div>
       </div>

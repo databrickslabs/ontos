@@ -347,7 +347,7 @@
     },
     "stepTypes": {
       "validation": "Validation",
-      "approval": "Approval",
+      "approval": "Request Approval",
       "notification": "Notification",
       "assign_tag": "Assign Tag",
       "remove_tag": "Remove Tag",

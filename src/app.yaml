@@ -22,6 +22,9 @@ env:
   # Keep schema (no PG* auto-injection):
   - name: "PGSCHEMA"
     value: "app_ontos"
+  # Fallback for Lakebase when SDK < 0.95.0 can't read postgres app resource
+  - name: "LAKEBASE_INSTANCE_NAME"
+    value: "projects/ontos-db/branches/production"
   
   - name: "DATABRICKS_WAREHOUSE_ID"
     valueFrom: "sql-warehouse"

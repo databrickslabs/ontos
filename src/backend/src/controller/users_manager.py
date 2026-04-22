@@ -64,19 +64,23 @@ class UsersManager:
 
             logger.info(f"UsersManager: Successfully retrieved SDK user info for: {databricks_user.user_name}")
 
-            # Extract group names
-            group_names: Optional[List[str]] = None
+            # Extract group names — always include user email as implicit group
+            # so that role assigned_groups can match on email directly
+            group_names: List[str] = []
             if databricks_user.groups:
                 group_names = [group.display for group in databricks_user.groups if group.display]
                 logger.info(f"Extracted groups for {user_email}: {group_names}")
             else:
                 logger.info(f"No group information found for {user_email} in SDK response.")
+            # Always add user email as implicit group for direct role assignment
+            if user_email and user_email not in group_names:
+                group_names.append(user_email)
 
             # Map DatabricksUser fields to UserInfo model
             user_info_response = UserInfo(
                 email=(databricks_user.emails[0].value if databricks_user.emails else databricks_user.user_name),
                 username=databricks_user.user_name,
-                user=databricks_user.display_name, 
+                user=databricks_user.display_name,
                 ip=real_ip, # Pass through the IP from the request
                 groups=group_names # Add the extracted group names
             )
@@ -122,17 +126,21 @@ class UsersManager:
 
             logger.info(f"UsersManager: Successfully retrieved current user info for: {databricks_user.user_name}")
 
-            # Extract group names
-            group_names: Optional[List[str]] = None
+            # Extract group names — always include user email as implicit group
+            group_names: List[str] = []
             if databricks_user.groups:
                 group_names = [group.display for group in databricks_user.groups if group.display]
                 logger.info(f"Extracted groups for current user: {group_names}")
             else:
                 logger.info("No group information found for current user in SDK response.")
+            # Always add user email as implicit group for direct role assignment
+            user_email_resolved = (databricks_user.emails[0].value if databricks_user.emails else databricks_user.user_name)
+            if user_email_resolved and user_email_resolved not in group_names:
+                group_names.append(user_email_resolved)
 
             # Map DatabricksUser fields to UserInfo model
             user_info_response = UserInfo(
-                email=(databricks_user.emails[0].value if databricks_user.emails else databricks_user.user_name),
+                email=user_email_resolved,
                 username=databricks_user.user_name,
                 user=databricks_user.display_name,
                 ip=real_ip,

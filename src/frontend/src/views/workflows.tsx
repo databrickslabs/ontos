@@ -1081,15 +1081,15 @@ export default function Workflows() {
         </div>
         <div className="mt-4">
           <Tabs value={workflowTypeFilter} onValueChange={(v) => setWorkflowTypeFilter(v as 'process' | 'approval')}>
-            <div className="flex items-center gap-2">
-              <TabsList>
-                <TabsTrigger value="process" className="flex flex-col items-start">
+            <div className="flex items-center gap-3">
+              <TabsList className="h-auto p-1">
+                <TabsTrigger value="process" className="flex flex-col items-start px-4 py-2">
                   <span>Process workflows</span>
-                  <span className="text-xs text-muted-foreground">Background automation after events</span>
+                  <span className="text-[10px] italic text-muted-foreground font-normal">Background automation after events</span>
                 </TabsTrigger>
-                <TabsTrigger value="approval" className="flex flex-col items-start">
+                <TabsTrigger value="approval" className="flex flex-col items-start px-4 py-2">
                   <span>Approval workflows</span>
-                  <span className="text-xs text-muted-foreground">Interactive consent before actions</span>
+                  <span className="text-[10px] italic text-muted-foreground font-normal">Interactive consent before actions</span>
                 </TabsTrigger>
               </TabsList>
               <TooltipProvider>
@@ -1112,7 +1112,7 @@ export default function Workflows() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 min-h-[120px]">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Active Workflows</CardTitle>

@@ -183,11 +183,13 @@ class DatabricksConnector(AssetConnector):
     ) -> List[AssetInfo]:
         """
         List Unity Catalog assets.
-        
+
         The path format determines what is listed:
         - None or "": List all catalogs
         - "catalog": List schemas in catalog
-        - "catalog.schema": List tables/views/functions in schema
+        - "catalog.schema": List tables/views/functions/models/volumes in schema
+        - "catalog.schema.object" (or deeper): empty — leaf FQN. Columns come
+          from get_asset_metadata().schema_info, not from listing.
         """
         ws = self._ensure_client()
         options = options or ListAssetsOptions()
@@ -205,7 +207,12 @@ class DatabricksConnector(AssetConnector):
             elif len(parts) == 1:
                 # List schemas in catalog
                 results.extend(self._list_schemas(ws, parts[0], options, limit))
-            elif len(parts) >= 2:
+            elif len(parts) >= 3:
+                # Leaf FQN (catalog.schema.object[.column...]) — no children to list.
+                # Columns are sourced from get_asset_metadata().schema_info, not from listing.
+                # Mirrors the BigQuery connector's documented contract.
+                return []
+            elif len(parts) == 2:
                 # List objects in schema
                 catalog = parts[0]
                 schema = parts[1]

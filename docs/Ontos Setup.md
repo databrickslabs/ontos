@@ -435,6 +435,18 @@ In the Databricks Account console, configure the above hostnames in the network'
 
 Once these hostnames are added, the deployment of the app should be able to proceed as expected.
 
+### Solve Scope Change Issues
+
+Databricks Apps uses a [Scope-based Security](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/auth#scope-based-security-and-privilege-escalation) model. When deploying the app from the Marketplace, these are defined in the [Manifest YAML](https://github.com/databrickslabs/ontos/blob/main/src/manifest.yaml) file and cannot be changed currently without recreating the app's marketplace listing. But for installations using the source code, you need to configure the scopes manually in the Apps UI during the Custom App installation process (explained above). 
+
+When you modify these scopes later on, they are NOT automatically available to the app! Recall that each user has to accept the current scopes once when the app is opened first. That information is stored in the browser cookie storage and reused from there. You may see an error like the following in the app or its logs:
+
+```
+ERROR - Error fetching catalogs.list: Provided OAuth token does not have required scopes: unity-catalog
+```
+
+This can be caused by a later change of scopes with the cookie missing the update. The fix is to remove the cookie for the app's URL in the browser and reloaded that page. It MUST then ask the user again to accept the current scopes, now with the latest ones present. After that, the error should go away.
+
 ### Fix Access for Databricks Reader/Writer
 
 The Databricks control plane uses a dedicated set of roles to read and write data, as well as access the information schema. If you run into [DANGER ZONE](#DANGER%20ZONE), you can fix access like so:

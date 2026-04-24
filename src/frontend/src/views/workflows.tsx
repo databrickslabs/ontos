@@ -109,7 +109,7 @@ export default function Workflows() {
   const canEdit = hasPermission('process-workflows', FeatureAccessLevel.ADMIN);
   
   // Workflow type filter: process (event-driven) | approval (wizard-driven)
-  const [workflowTypeFilter, setWorkflowTypeFilter] = useState<'process' | 'approval'>('process');
+  const [workflowTypeFilter, setWorkflowTypeFilter] = useState<'all' | 'process' | 'approval'>('all');
   // Workflow state
   const [workflows, setWorkflows] = useState<ProcessWorkflow[]>([]);
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(true);
@@ -135,7 +135,9 @@ export default function Workflows() {
     setIsLoadingWorkflows(true);
     try {
       const params = new URLSearchParams();
-      params.set('workflow_type', workflowTypeFilter);
+      if (workflowTypeFilter !== 'all') {
+        params.set('workflow_type', workflowTypeFilter);
+      }
       const response = await apiGet<WorkflowListResponse>(`/api/workflows?${params.toString()}`);
       if (response.data) {
         setWorkflows(response.data.workflows || []);
@@ -750,6 +752,11 @@ export default function Workflows() {
           {row.original.is_default && (
             <Badge variant="secondary" className="text-xs">Default</Badge>
           )}
+          {row.original.workflow_type === 'approval' ? (
+            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Approval</Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">Process</Badge>
+          )}
         </div>
       ),
     },
@@ -1072,7 +1079,7 @@ export default function Workflows() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={() => navigate(`${pathname}/new`)}>
+              <Button onClick={() => navigate(`${pathname}/new${workflowTypeFilter !== 'all' ? `?type=${workflowTypeFilter}` : ''}`)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Workflow
               </Button>
@@ -1080,16 +1087,19 @@ export default function Workflows() {
           )}
         </div>
         <div className="mt-4">
-          <Tabs value={workflowTypeFilter} onValueChange={(v) => setWorkflowTypeFilter(v as 'process' | 'approval')}>
+          <Tabs value={workflowTypeFilter} onValueChange={(v) => setWorkflowTypeFilter(v as 'all' | 'process' | 'approval')}>
             <div className="flex items-center gap-3">
               <TabsList className="h-auto p-1">
+                <TabsTrigger value="all" className="px-4 py-2">
+                  <span>All</span>
+                </TabsTrigger>
                 <TabsTrigger value="process" className="flex flex-col items-start px-4 py-2">
-                  <span>Process workflows</span>
-                  <span className="text-[10px] italic text-muted-foreground font-normal">Background automation after events</span>
+                  <span>Process</span>
+                  <span className="text-[10px] italic text-muted-foreground font-normal">Background automation</span>
                 </TabsTrigger>
                 <TabsTrigger value="approval" className="flex flex-col items-start px-4 py-2">
-                  <span>Approval workflows</span>
-                  <span className="text-[10px] italic text-muted-foreground font-normal">Interactive consent before actions</span>
+                  <span>Approval</span>
+                  <span className="text-[10px] italic text-muted-foreground font-normal">Interactive consent</span>
                 </TabsTrigger>
               </TabsList>
               <TooltipProvider>

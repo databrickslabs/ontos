@@ -3,7 +3,7 @@
  * Creates session, shows steps (user_action: fields, acceptances), submits until complete or abort.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Check, XCircle, ChevronRight } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -87,6 +88,16 @@ export default function ApprovalWizardDialog({
   const [workflowsLoaded, setWorkflowsLoaded] = useState(false);
   /** Ref to prevent duplicate auto-submit for non-visual steps. */
   const autoSubmitRef = useRef<string | null>(null);
+  /** Legal document: tracks whether user scrolled to bottom. */
+  const [scrolledToEnd, setScrolledToEnd] = useState(false);
+  /** Legal document: tracks acknowledgement checkbox state. */
+  const [acknowledged, setAcknowledged] = useState(false);
+  /** Acknowledgement checklist: tracks which items are checked. */
+  const [checklistState, setChecklistState] = useState<Record<string, boolean>>({});
+  /** Co-signers: list of entered principals. */
+  const [coSigners, setCoSigners] = useState<string[]>([]);
+  /** Co-signers: current input value. */
+  const [coSignerInput, setCoSignerInput] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -101,6 +112,11 @@ export default function ApprovalWizardDialog({
     setStepNames([]);
     setWorkflowsLoaded(false);
     autoSubmitRef.current = null;
+    setScrolledToEnd(false);
+    setAcknowledged(false);
+    setChecklistState({});
+    setCoSigners([]);
+    setCoSignerInput('');
     let cancelled = false;
     get<{ workflows: ApprovalWorkflowRef[]; total: number }>('/api/workflows?workflow_type=approval')
       .then((res) => {
@@ -177,13 +193,68 @@ export default function ApprovalWizardDialog({
     }
   }, [isOpen, autoStartWithPreselected, preselectedWorkflowId, workflows, sessionId, loading, startSession]);
 
+  const requiredFields = (currentStep?.config?.required_fields as Array<{ id: string; label: string; type: string; required?: boolean }>) ?? [];
+
+  // --- Per-step-type validation ---
+  const stepValidation = useMemo(() => {
+    if (!currentStep) return { valid: false, payload: {} as Record<string, unknown> };
+    const cfg = (currentStep.config ?? {}) as Record<string, unknown>;
+    const stepType = currentStep.step_type;
+
+    if (stepType === 'user_action') {
+      const rFields = (cfg.required_fields as Array<{ id: string; label: string; type: string; required?: boolean }>) ?? [];
+      const primaryFieldId = (cfg.primary_field_id as string) || rFields.find((f) => f.required)?.id || rFields[0]?.id || 'reason';
+      const primaryValue = payload[primaryFieldId]?.trim() ?? '';
+      const requiredFieldsValid = rFields.filter((f) => f.required).every((f) => (payload[f.id]?.trim() ?? '').length > 0);
+      const requiresInputValid = !cfg.requires_input || primaryValue.length > 0;
+      const minLen = cfg.minimum_input_length as number | undefined;
+      const minLengthValid = minLen == null || primaryValue.length >= minLen;
+      return { valid: requiredFieldsValid && requiresInputValid && minLengthValid, payload: payload as Record<string, unknown> };
+    }
+
+    if (stepType === 'legal_document') {
+      const needScroll = (cfg.require_scroll_to_end as boolean) ?? false;
+      const needAck = (cfg.require_acknowledgement_checkbox as boolean) ?? false;
+      const scrollOk = !needScroll || scrolledToEnd;
+      const ackOk = !needAck || acknowledged;
+      return {
+        valid: scrollOk && ackOk,
+        payload: { scrolled_to_end: scrolledToEnd, acknowledged } as Record<string, unknown>,
+      };
+    }
+
+    if (stepType === 'acknowledgement_checklist') {
+      const items = (cfg.items as Array<{ id: string; label: string; required?: boolean }>) ?? [];
+      const allRequiredChecked = items.filter((i) => i.required !== false).every((i) => checklistState[i.id]);
+      return {
+        valid: allRequiredChecked,
+        payload: { items: checklistState } as Record<string, unknown>,
+      };
+    }
+
+    if (stepType === 'co_signers') {
+      const minCount = (cfg.min_count as number) ?? 0;
+      const maxCount = (cfg.max_count as number) ?? 5;
+      return {
+        valid: coSigners.length >= minCount && coSigners.length <= maxCount,
+        payload: { co_signers: coSigners } as Record<string, unknown>,
+      };
+    }
+
+    // Default: valid (non-visual steps auto-advance anyway)
+    return { valid: true, payload: {} as Record<string, unknown> };
+  }, [currentStep, payload, scrolledToEnd, acknowledged, checklistState, coSigners]);
+
+  const isStepValid = stepValidation.valid;
+
   const submitStep = useCallback(async () => {
     if (!sessionId || !currentStep) return;
     setLoading(true);
     try {
+      const submissionPayload = currentStep.step_type === 'user_action' ? payload : stepValidation.payload;
       const res = await post<{ complete?: boolean; agreement_id?: string; pdf_storage_path?: string; current_step?: WizardStep; step_results?: unknown[] }>(
         `/api/approvals/sessions/${sessionId}/steps`,
-        { step_id: currentStep.step_id, payload },
+        { step_id: currentStep.step_id, payload: submissionPayload },
       );
       if (res.error || !res.data) {
         toast({ title: 'Error', description: (res as { error?: string }).error || 'Failed to submit step', variant: 'destructive' });
@@ -202,13 +273,18 @@ export default function ApprovalWizardDialog({
         setCurrentStepIndex((idx) => idx + 1);
         setStepResults((data.step_results as Array<{ step_id: string; payload: Record<string, unknown> }>) ?? []);
         setPayload({});
+        setScrolledToEnd(false);
+        setAcknowledged(false);
+        setChecklistState({});
+        setCoSigners([]);
+        setCoSignerInput('');
       }
     } catch (e) {
       toast({ title: 'Error', description: 'Failed to submit step', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  }, [sessionId, currentStep, payload, post, toast, onComplete, onOpenChange]);
+  }, [sessionId, currentStep, payload, stepValidation, post, toast, onComplete, onOpenChange]);
 
   /** Auto-advance non-visual steps (persist_agreement, generate_pdf, deliver). */
   useEffect(() => {
@@ -248,24 +324,6 @@ export default function ApprovalWizardDialog({
     }
     onOpenChange(open);
   };
-
-  const requiredFields = (currentStep?.config?.required_fields as Array<{ id: string; label: string; type: string; required?: boolean }>) ?? [];
-  const config = (currentStep?.config ?? {}) as {
-    requires_input?: boolean;
-    minimum_input_length?: number;
-    primary_field_id?: string;
-  };
-  const primaryFieldId =
-    config.primary_field_id ||
-    requiredFields.find((f) => f.required)?.id ||
-    requiredFields[0]?.id ||
-    'reason';
-  const primaryValue = payload[primaryFieldId]?.trim() ?? '';
-  const requiredFieldsValid = requiredFields.filter((f) => f.required).every((f) => (payload[f.id]?.trim() ?? '').length > 0);
-  const requiresInputValid = !config.requires_input || primaryValue.length > 0;
-  const minLengthValid =
-    config.minimum_input_length == null || primaryValue.length >= config.minimum_input_length;
-  const isStepValid = requiredFieldsValid && requiresInputValid && minLengthValid;
 
   /** Whether the current step is non-visual (auto-advancing). */
   const isNonVisualStep = currentStep && NON_VISUAL_STEP_TYPES.has(currentStep.step_type);
@@ -374,48 +432,182 @@ export default function ApprovalWizardDialog({
           </div>
         )}
 
-        {/* Visual step: show form fields */}
+        {/* Visual step: show form fields (dispatched by step_type) */}
         {sessionId && currentStep && !isNonVisualStep && (
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              {(currentStep.config?.title as string) && (
+            {/* Step header (title + description) — shown for all visual step types */}
+            {(currentStep.config?.title as string) && (
+              <div className="space-y-1">
                 <Label className="text-base">{(currentStep.config.title as string)}</Label>
-              )}
-              {(currentStep.config?.description as string) && (
-                <p className="text-sm text-muted-foreground">{(currentStep.config.description as string)}</p>
-              )}
-              {requiredFields.map((f) => (
-                <div key={f.id} className="space-y-1">
-                  <Label htmlFor={f.id}>{f.label}{f.required ? ' *' : ''}</Label>
-                  {f.type === 'text' && (
-                    <Textarea
-                      id={f.id}
-                      value={payload[f.id] ?? ''}
-                      onChange={(e) => setPayload((p) => ({ ...p, [f.id]: e.target.value }))}
-                      placeholder={f.label}
-                      rows={2}
-                      disabled={loading}
-                    />
-                  )}
-                  {f.type !== 'text' && (
-                    <Input
-                      id={f.id}
-                      value={payload[f.id] ?? ''}
-                      onChange={(e) => setPayload((p) => ({ ...p, [f.id]: e.target.value }))}
-                      placeholder={f.label}
-                      disabled={loading}
-                    />
-                  )}
+                {(currentStep.config?.description as string) && (
+                  <p className="text-sm text-muted-foreground">{(currentStep.config.description as string)}</p>
+                )}
+              </div>
+            )}
+
+            {/* === user_action renderer === */}
+            {currentStep.step_type === 'user_action' && (
+              <div className="space-y-2">
+                {requiredFields.map((f) => (
+                  <div key={f.id} className="space-y-1">
+                    <Label htmlFor={f.id}>{f.label}{f.required ? ' *' : ''}</Label>
+                    {f.type === 'text' ? (
+                      <Textarea
+                        id={f.id}
+                        value={payload[f.id] ?? ''}
+                        onChange={(e) => setPayload((p) => ({ ...p, [f.id]: e.target.value }))}
+                        placeholder={f.label}
+                        rows={2}
+                        disabled={loading}
+                      />
+                    ) : (
+                      <Input
+                        id={f.id}
+                        value={payload[f.id] ?? ''}
+                        onChange={(e) => setPayload((p) => ({ ...p, [f.id]: e.target.value }))}
+                        placeholder={f.label}
+                        disabled={loading}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* === legal_document renderer === */}
+            {currentStep.step_type === 'legal_document' && (
+              <div className="space-y-3">
+                <div
+                  className="max-h-64 overflow-y-auto border rounded-md p-4 text-sm prose prose-sm dark:prose-invert"
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {
+                      setScrolledToEnd(true);
+                    }
+                  }}
+                >
+                  <div dangerouslySetInnerHTML={{
+                    __html: (currentStep.config?.body_markdown as string || '*No document content provided.*')
+                      .replace(/\n/g, '<br/>')
+                  }} />
                 </div>
-              ))}
-            </div>
-            {!isStepValid && (config.requires_input || (config.minimum_input_length != null && config.minimum_input_length > 0)) && (
+                {(currentStep.config?.require_scroll_to_end as boolean) && !scrolledToEnd && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Please scroll to the bottom of the document to continue.
+                  </p>
+                )}
+                {(currentStep.config?.require_acknowledgement_checkbox as boolean) && (
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="legal-ack"
+                      checked={acknowledged}
+                      onCheckedChange={(checked) => setAcknowledged(checked === true)}
+                      disabled={loading}
+                    />
+                    <Label htmlFor="legal-ack" className="text-sm cursor-pointer leading-tight">
+                      {(currentStep.config?.acknowledgement_label as string) || 'I have read and understood the above'}
+                    </Label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* === acknowledgement_checklist renderer === */}
+            {currentStep.step_type === 'acknowledgement_checklist' && (
+              <div className="space-y-3">
+                {((currentStep.config?.items as Array<{ id: string; label: string; required?: boolean }>) ?? []).map((item) => (
+                  <div key={item.id} className="flex items-start gap-2">
+                    <Checkbox
+                      id={`checklist-${item.id}`}
+                      checked={checklistState[item.id] ?? false}
+                      onCheckedChange={(checked) =>
+                        setChecklistState((prev) => ({ ...prev, [item.id]: checked === true }))
+                      }
+                      disabled={loading}
+                    />
+                    <Label htmlFor={`checklist-${item.id}`} className="text-sm cursor-pointer leading-tight">
+                      {item.label}
+                      {item.required !== false && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* === co_signers renderer === */}
+            {currentStep.step_type === 'co_signers' && (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    value={coSignerInput}
+                    onChange={(e) => setCoSignerInput(e.target.value)}
+                    placeholder={(currentStep.config?.label as string) || 'Enter email or group name'}
+                    disabled={loading}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && coSignerInput.trim()) {
+                        e.preventDefault();
+                        const maxCount = (currentStep.config?.max_count as number) ?? 5;
+                        if (coSigners.length < maxCount) {
+                          setCoSigners((prev) => [...prev, coSignerInput.trim()]);
+                          setCoSignerInput('');
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loading || !coSignerInput.trim() || coSigners.length >= ((currentStep.config?.max_count as number) ?? 5)}
+                    onClick={() => {
+                      if (coSignerInput.trim()) {
+                        setCoSigners((prev) => [...prev, coSignerInput.trim()]);
+                        setCoSignerInput('');
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                {coSigners.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {coSigners.map((s, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 bg-muted text-sm px-2 py-1 rounded-md">
+                        {s}
+                        <button
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => setCoSigners((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          <XCircle className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {((currentStep.config?.min_count as number) ?? 0) > 0
+                    ? `Minimum ${(currentStep.config?.min_count as number)} co-signer(s) required.`
+                    : 'Co-signers are optional for this step.'}
+                  {' '}Maximum: {(currentStep.config?.max_count as number) ?? 5}.
+                </p>
+              </div>
+            )}
+
+            {/* Validation hints for user_action */}
+            {currentStep.step_type === 'user_action' && !isStepValid && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                {!requiresInputValid && config.requires_input && 'This step requires input.'}
-                {requiresInputValid && !minLengthValid && config.minimum_input_length != null && config.minimum_input_length > 0 &&
-                  `Minimum length: ${config.minimum_input_length} characters (${primaryValue.length} entered).`}
+                {(() => {
+                  const cfg2 = (currentStep.config ?? {}) as { requires_input?: boolean; minimum_input_length?: number; primary_field_id?: string };
+                  const rfs = (currentStep.config?.required_fields as Array<{ id: string; label: string; type: string; required?: boolean }>) ?? [];
+                  const pfid = cfg2.primary_field_id || rfs.find((f) => f.required)?.id || rfs[0]?.id || 'reason';
+                  const pv = payload[pfid]?.trim() ?? '';
+                  if (cfg2.requires_input && !pv) return 'This step requires input.';
+                  if (cfg2.minimum_input_length != null && cfg2.minimum_input_length > 0 && pv.length < cfg2.minimum_input_length)
+                    return `Minimum length: ${cfg2.minimum_input_length} characters (${pv.length} entered).`;
+                  return null;
+                })()}
               </p>
             )}
+
             <DialogFooter>
               <Button variant="ghost" onClick={abortSession} disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ReactFlow, {
   Node,
@@ -96,6 +96,7 @@ import type {
   StepTypeSchema,
   CompliancePolicyRef,
   HttpConnectionRef,
+  WorkflowTypeValue,
 } from '@/types/process-workflow';
 import { 
   getTriggerTypeLabel,
@@ -174,6 +175,24 @@ function DeletableEdge({
 const edgeTypes = {
   deletable: DeletableEdge,
 };
+
+// Palette steps filtered by workflow type
+const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield }[] = [
+  { type: 'policy_check', label: 'Policy Check', icon: ClipboardCheck },
+  { type: 'validation', label: 'Validation', icon: Shield },
+  { type: 'approval', label: 'Request Approval', icon: UserCheck },
+  { type: 'entity_action', label: 'Entity Action', icon: Zap },
+  { type: 'notification', label: 'Notification', icon: Bell },
+  { type: 'assign_tag', label: 'Assign Tag', icon: Tag },
+  { type: 'conditional', label: 'Conditional', icon: GitBranch },
+  { type: 'script', label: 'Script', icon: Code },
+  { type: 'create_asset_review', label: 'Asset Review', icon: FileSearch },
+  { type: 'webhook', label: 'Webhook', icon: Globe },
+];
+
+const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield }[] = [
+  { type: 'user_action', label: 'User Action', icon: MessageSquare },
+];
 
 // Layout helper
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
@@ -289,13 +308,15 @@ interface WorkflowDesignerProps {
 export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) {
   const navigate = useNavigate();
   const params = useParams();
+  const [searchParams] = useSearchParams();
   const id = workflowId || params.workflowId;
   const isNew = !id || id === 'new';
-  
+  const initialType = (searchParams.get('type') as WorkflowTypeValue) || undefined;
+
   const { get, post, put } = useApi();
   const { toast } = useToast();
   const { t } = useTranslation(['common']);
-  
+
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
@@ -318,7 +339,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [triggerToStatus, setTriggerToStatus] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [steps, setSteps] = useState<WorkflowStepCreate[]>([]);
-  
+  const [workflowType, setWorkflowType] = useState<WorkflowTypeValue | null>(isNew ? (initialType || null) : null);
+
   // Helper to render roles grouped by source type
   const renderGroupedRoles = (roles: typeof availableRoles, includeSpecialItems?: { requester?: boolean; owner?: boolean }) => {
     const appRoles = roles.filter(r => r.source === 'app');
@@ -546,6 +568,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             setTriggerFromStatus(response.data.trigger.from_status || '');
             setTriggerToStatus(response.data.trigger.to_status || '');
             setIsActive(response.data.is_active);
+            setWorkflowType((response.data.workflow_type as WorkflowTypeValue) || 'process');
             const loadedSteps = response.data.steps.map(s => ({
               step_id: s.step_id,
               name: s.name,
@@ -766,6 +789,15 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // Save workflow
   const handleSave = async () => {
+    if (!workflowType) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select a workflow type',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!name.trim()) {
       toast({
         title: 'Validation Error',
@@ -786,6 +818,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           ...(triggerFromStatus ? { from_status: triggerFromStatus } : {}),
           ...(triggerToStatus ? { to_status: triggerToStatus } : {}),
         },
+        workflow_type: workflowType || 'process',
         is_active: isActive,
         steps: steps.map((s, i) => ({ ...s, order: i })),
       };
@@ -870,6 +903,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           {workflow?.is_default && (
             <Badge variant="secondary">Default</Badge>
           )}
+          {!isNew && workflowType && (
+            <Badge variant="outline" className={workflowType === 'approval' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'}>
+              {workflowType === 'approval' ? 'Approval' : 'Process'}
+            </Badge>
+          )}
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -897,7 +935,34 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Flow canvas */}
+        {/* Workflow type chooser for new workflows without ?type= param */}
+        {isNew && workflowType === null && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="max-w-lg w-full space-y-4">
+              <h2 className="text-lg font-semibold text-center">What type of workflow?</h2>
+              <p className="text-sm text-muted-foreground text-center">Choose the type based on how this workflow will be used.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  className="border rounded-lg p-6 text-left hover:border-primary hover:bg-accent transition-colors"
+                  onClick={() => setWorkflowType('process')}
+                >
+                  <div className="font-medium mb-1">Process Workflow</div>
+                  <div className="text-sm text-muted-foreground">Background automation triggered by events — validate, notify, tag, run scripts.</div>
+                </button>
+                <button
+                  className="border rounded-lg p-6 text-left hover:border-primary hover:bg-accent transition-colors"
+                  onClick={() => setWorkflowType('approval')}
+                >
+                  <div className="font-medium mb-1">Approval Workflow</div>
+                  <div className="text-sm text-muted-foreground">Interactive wizard before user actions — collect consent, terms, acknowledgements.</div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Flow canvas - shown only when workflow type is selected */}
+        {workflowType !== null && (
         <div className="flex-1">
           <ReactFlow
             nodes={nodes}
@@ -928,39 +993,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Panel position="top-left" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-2 dark:bg-slate-800/95">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-muted-foreground dark:text-slate-300 px-2 mb-1">Add Step</span>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('policy_check')}>
-                  <ClipboardCheck className="h-4 w-4 mr-2" /> Policy Check
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('validation')}>
-                  <Shield className="h-4 w-4 mr-2" /> Validation
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('approval')}>
-                  <UserCheck className="h-4 w-4 mr-2" /> Approval
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('user_action')}>
-                  <MessageSquare className="h-4 w-4 mr-2" /> User Action
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('entity_action')}>
-                  <Zap className="h-4 w-4 mr-2 text-lime-600 dark:text-lime-400" /> Entity Action
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('notification')}>
-                  <Bell className="h-4 w-4 mr-2" /> Notification
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('assign_tag')}>
-                  <Tag className="h-4 w-4 mr-2" /> Assign Tag
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('conditional')}>
-                  <GitBranch className="h-4 w-4 mr-2" /> Conditional
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('script')}>
-                  <Code className="h-4 w-4 mr-2" /> Script
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('create_asset_review')}>
-                  <FileSearch className="h-4 w-4 mr-2" /> Asset Review
-                </Button>
-                <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('webhook')}>
-                  <Globe className="h-4 w-4 mr-2 text-orange-500" /> Webhook
-                </Button>
+                {(workflowType === 'approval' ? APPROVAL_PALETTE_STEPS : PROCESS_PALETTE_STEPS).map(({ type, label, icon: Icon }) => (
+                  <Button key={type} variant="ghost" size="sm" className="justify-start" onClick={() => addStep(type)}>
+                    <Icon className="h-4 w-4 mr-2" /> {label}
+                  </Button>
+                ))}
                 <Separator className="my-1" />
                 <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('pass')}>
                   <CheckCircle className="h-4 w-4 mr-2 text-green-500" /> Pass
@@ -972,6 +1009,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             </Panel>
           </ReactFlow>
         </div>
+        )}
 
         {/* Discard changes confirmation dialog */}
         <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>

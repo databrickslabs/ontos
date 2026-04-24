@@ -263,12 +263,15 @@ export interface WorkflowStepCreate {
 }
 
 // Process workflow
+export type WorkflowTypeValue = 'process' | 'approval';
+
 export interface ProcessWorkflow {
   id: string;
   name: string;
   description?: string;
   trigger: WorkflowTrigger;
   scope?: WorkflowScope;
+  workflow_type?: WorkflowTypeValue;
   is_active: boolean;
   is_default: boolean;
   version: number;
@@ -284,6 +287,7 @@ export interface ProcessWorkflowCreate {
   description?: string;
   trigger: WorkflowTrigger;
   scope?: WorkflowScope;
+  workflow_type?: WorkflowTypeValue;
   is_active?: boolean;
   steps: WorkflowStepCreate[];
 }
@@ -293,6 +297,7 @@ export interface ProcessWorkflowUpdate {
   description?: string;
   trigger?: WorkflowTrigger;
   scope?: WorkflowScope;
+  workflow_type?: WorkflowTypeValue;
   is_active?: boolean;
   steps?: WorkflowStepCreate[];
 }

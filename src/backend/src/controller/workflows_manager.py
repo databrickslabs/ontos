@@ -750,6 +750,39 @@ class WorkflowsManager:
                 has_fail_branch=True,
             ),
             StepTypeSchema(
+                type=StepType.GRANT_PERMISSIONS,
+                name="Grant Permissions",
+                description="Grant UC permissions via the SP workspace client (e.g. SELECT on a table after approval).",
+                icon="key",
+                config_schema={
+                    "type": "object",
+                    "properties": {
+                        "permission_type": {
+                            "type": "string",
+                            "title": "Permission Type",
+                            "enum": ["SELECT", "USE_SCHEMA", "USE_CATALOG", "ALL_PRIVILEGES"],
+                            "default": "SELECT",
+                        },
+                        "target_source": {
+                            "type": "string",
+                            "title": "Target Source",
+                            "enum": ["from_entity", "from_variable"],
+                            "default": "from_entity",
+                        },
+                        "target_variable": {"type": "string", "title": "Target Variable (step_results path)"},
+                        "principal_source": {
+                            "type": "string",
+                            "title": "Principal Source",
+                            "enum": ["requester", "from_variable"],
+                            "default": "requester",
+                        },
+                        "principal_variable": {"type": "string", "title": "Principal Variable (step_results path)"},
+                    },
+                },
+                has_pass_branch=True,
+                has_fail_branch=True,
+            ),
+            StepTypeSchema(
                 type=StepType.PASS,
                 name="Pass (Success)",
                 description="Terminal step indicating success",

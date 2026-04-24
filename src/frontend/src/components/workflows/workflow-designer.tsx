@@ -70,6 +70,7 @@ import {
   Users,
   Database,
   Send,
+  KeyRound,
 } from 'lucide-react';
 
 import {
@@ -193,6 +194,7 @@ const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shiel
   { type: 'script', label: 'Script', icon: Code },
   { type: 'create_asset_review', label: 'Asset Review', icon: FileSearch },
   { type: 'webhook', label: 'Webhook', icon: Globe },
+  { type: 'grant_permissions', label: 'Grant Permissions', icon: KeyRound },
 ];
 
 const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield }[] = [
@@ -2001,6 +2003,85 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                     <p className="text-xs text-muted-foreground">
                       Non-visual step — auto-advances in the wizard. No configuration needed.
                     </p>
+                  )}
+
+                  {selectedStep.step_type === 'grant_permissions' && (
+                    <>
+                      <div>
+                        <Label>Permission Type</Label>
+                        <Select
+                          value={(selectedStep.config as { permission_type?: string })?.permission_type || 'SELECT'}
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, permission_type: v },
+                          })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SELECT">SELECT</SelectItem>
+                            <SelectItem value="USE_SCHEMA">USE SCHEMA</SelectItem>
+                            <SelectItem value="USE_CATALOG">USE CATALOG</SelectItem>
+                            <SelectItem value="ALL_PRIVILEGES">ALL PRIVILEGES</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Target Source</Label>
+                        <Select
+                          value={(selectedStep.config as { target_source?: string })?.target_source || 'from_entity'}
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, target_source: v },
+                          })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="from_entity">From trigger entity</SelectItem>
+                            <SelectItem value="from_variable">From variable</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {(selectedStep.config as { target_source?: string })?.target_source === 'from_variable' && (
+                        <div>
+                          <Label>Target Variable</Label>
+                          <Input
+                            value={(selectedStep.config as { target_variable?: string })?.target_variable || ''}
+                            onChange={(e) => updateStep(selectedStep.step_id, {
+                              config: { ...selectedStep.config, target_variable: e.target.value },
+                            })}
+                            placeholder="e.g. step_results.user_input.catalog_name"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <Label>Principal Source</Label>
+                        <Select
+                          value={(selectedStep.config as { principal_source?: string })?.principal_source || 'requester'}
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, principal_source: v },
+                          })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="requester">Requester (who triggered the workflow)</SelectItem>
+                            <SelectItem value="from_variable">From variable (e.g. on-behalf-of input)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {(selectedStep.config as { principal_source?: string })?.principal_source === 'from_variable' && (
+                        <div>
+                          <Label>Principal Variable</Label>
+                          <Input
+                            value={(selectedStep.config as { principal_variable?: string })?.principal_variable || ''}
+                            onChange={(e) => updateStep(selectedStep.step_id, {
+                              config: { ...selectedStep.config, principal_variable: e.target.value },
+                            })}
+                            placeholder="e.g. step_results.access_request.principal"
+                          />
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Grants UC permissions via the SP workspace client after approval. Requires #291 for cross-workflow variable propagation when using &quot;from variable&quot; sources.
+                      </p>
+                    </>
                   )}
 
                   <Separator />

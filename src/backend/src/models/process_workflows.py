@@ -115,6 +115,7 @@ class StepType(str, Enum):
     CO_SIGNERS = "co_signers"
     PERSIST_AGREEMENT = "persist_agreement"
     DELIVER = "deliver"
+    GRANT_PERMISSIONS = "grant_permissions"  # Process workflow: grant UC permissions via SP workspace client
 
 
 class ExecutionStatus(str, Enum):
@@ -277,6 +278,15 @@ class DeliverStepConfig(BaseModel):
     )
     subject_template: Optional[str] = Field(None, description="Subject line template with ${variable} substitution")
     body_template: Optional[str] = Field(None, description="Body template with ${variable} substitution")
+
+
+class GrantPermissionsStepConfig(BaseModel):
+    """Config for grant_permissions step: grant UC permissions via SP workspace client."""
+    permission_type: str = Field("SELECT", description="Permission to grant: SELECT, USE_SCHEMA, USE_CATALOG, ALL_PRIVILEGES")
+    target_source: str = Field("from_entity", description="'from_entity' (use trigger entity) or 'from_variable' (use step_results variable)")
+    target_variable: Optional[str] = Field(None, description="step_results variable path for target (when target_source=from_variable)")
+    principal_source: str = Field("requester", description="'requester', 'from_variable', or literal email/group")
+    principal_variable: Optional[str] = Field(None, description="step_results variable path for principal (when principal_source=from_variable)")
 
 
 class NotificationStepConfig(BaseModel):

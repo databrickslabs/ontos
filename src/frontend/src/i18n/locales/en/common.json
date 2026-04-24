@@ -366,7 +366,8 @@
       "co_signers": "Co-Signers",
       "persist_agreement": "Persist Agreement",
       "generate_pdf": "Generate PDF",
-      "deliver": "Deliver"
+      "deliver": "Deliver",
+      "grant_permissions": "Grant Permissions"
     }
   }
 }

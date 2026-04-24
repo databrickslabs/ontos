@@ -187,6 +187,40 @@ class AgreementWizardManager:
         if minimum_input_length is not None and minimum_input_length > 0 and len(primary_value) < minimum_input_length:
             raise ValueError(f"Input must be at least {minimum_input_length} characters (got {len(primary_value)}).")
 
+    def _validate_legal_document_payload(self, step: WorkflowStep, payload: Dict[str, Any]) -> None:
+        """Validate payload for legal_document step."""
+        config = step.config or {}
+        if config.get("require_scroll_to_end") and not payload.get("scrolled_to_end"):
+            raise ValueError("You must scroll to the end of the document before continuing.")
+        if config.get("require_acknowledgement_checkbox") and not payload.get("acknowledged"):
+            raise ValueError("You must acknowledge the document before continuing.")
+
+    def _validate_acknowledgement_checklist_payload(self, step: WorkflowStep, payload: Dict[str, Any]) -> None:
+        """Validate payload for acknowledgement_checklist step."""
+        config = step.config or {}
+        items = config.get("items") or []
+        checked_items = payload.get("items") or {}
+        for item in items:
+            item_id = item.get("id")
+            if not item_id:
+                continue
+            required = item.get("required", True)  # Default required
+            if required and not checked_items.get(item_id):
+                raise ValueError(f"Required item '{item.get('label', item_id)}' must be checked.")
+
+    def _validate_co_signers_payload(self, step: WorkflowStep, payload: Dict[str, Any]) -> None:
+        """Validate payload for co_signers step."""
+        config = step.config or {}
+        min_count = config.get("min_count", 0)
+        max_count = config.get("max_count", 5)
+        signers = payload.get("co_signers") or []
+        if not isinstance(signers, list):
+            raise ValueError("co_signers must be a list.")
+        if len(signers) < min_count:
+            raise ValueError(f"At least {min_count} co-signer(s) required (got {len(signers)}).")
+        if len(signers) > max_count:
+            raise ValueError(f"At most {max_count} co-signer(s) allowed (got {len(signers)}).")
+
     def submit_step(
         self,
         session_id: str,
@@ -213,8 +247,16 @@ class AgreementWizardManager:
         if current.step_id != step_id:
             raise ValueError(f"Step mismatch: expected {current.step_id}, got {step_id}")
 
+        # Per-step-type validation
         if current.step_type == StepType.USER_ACTION:
             self._validate_user_action_payload(current, payload)
+        elif current.step_type == StepType.LEGAL_DOCUMENT:
+            self._validate_legal_document_payload(current, payload)
+        elif current.step_type == StepType.ACKNOWLEDGEMENT_CHECKLIST:
+            self._validate_acknowledgement_checklist_payload(current, payload)
+        elif current.step_type == StepType.CO_SIGNERS:
+            self._validate_co_signers_payload(current, payload)
+        # Non-visual steps (persist_agreement, generate_pdf, deliver) skip validation
 
         agreement_wizard_sessions_repo.append_step_result(self._db, session_id, step_id, payload)
         session = agreement_wizard_sessions_repo.get(self._db, session_id)

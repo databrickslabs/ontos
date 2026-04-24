@@ -110,6 +110,11 @@ class StepType(str, Enum):
     USER_ACTION = "user_action"  # Approval workflow: collect user input (reason, acceptances, fields)
     GENERATE_PDF = "generate_pdf"  # Approval workflow: build agreement PDF from step_results + pdf_contribution
     ENTITY_ACTION = "entity_action"  # Performs an action on the trigger entity (certify, publish, etc.)
+    LEGAL_DOCUMENT = "legal_document"
+    ACKNOWLEDGEMENT_CHECKLIST = "acknowledgement_checklist"
+    CO_SIGNERS = "co_signers"
+    PERSIST_AGREEMENT = "persist_agreement"
+    DELIVER = "deliver"
 
 
 class ExecutionStatus(str, Enum):
@@ -222,6 +227,56 @@ class UserActionStepConfig(BaseModel):
                 "required_fields": [{"id": "reason", "label": "Reason for approval or rejection", "type": "text", "required": True}]
             }
         }
+
+
+class LegalDocumentStepConfig(BaseModel):
+    """Config for legal_document step: display legal text for review."""
+    title: Optional[str] = Field(None, description="Step title shown in wizard")
+    description: Optional[str] = Field(None, description="Step description (markdown)")
+    body_markdown: Optional[str] = Field(None, description="Legal document body (markdown)")
+    require_scroll_to_end: bool = Field(False, description="Require user to scroll to bottom")
+    require_acknowledgement_checkbox: bool = Field(False, description="Require acknowledgement checkbox")
+    acknowledgement_label: Optional[str] = Field("I have read and understood the above", description="Label for acknowledgement checkbox")
+
+
+class AcknowledgementChecklistStepConfig(BaseModel):
+    """Config for acknowledgement_checklist step: checkbox list for explicit consents."""
+    title: Optional[str] = Field(None, description="Step title shown in wizard")
+    description: Optional[str] = Field(None, description="Step description (markdown)")
+    items: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of { id, label, required } checkbox items (max 10)",
+    )
+
+
+class CoSignersStepConfig(BaseModel):
+    """Config for co_signers step: collect co-signer principals."""
+    title: Optional[str] = Field(None, description="Step title shown in wizard")
+    description: Optional[str] = Field(None, description="Step description (markdown)")
+    min_count: int = Field(0, description="Minimum number of co-signers")
+    max_count: int = Field(5, description="Maximum number of co-signers")
+    principal_type: Optional[str] = Field("either", description="'user' | 'group' | 'either'")
+    label: Optional[str] = Field("Add co-signer", description="Input label")
+
+
+class PersistAgreementStepConfig(BaseModel):
+    """Config for persist_agreement step: materialize the agreement record."""
+    # No user-configurable fields — placement in workflow determines when agreement is persisted.
+    pass
+
+
+class DeliverStepConfig(BaseModel):
+    """Config for deliver step: send agreement via notification channels."""
+    channels: List[str] = Field(
+        default_factory=lambda: ["in_app"],
+        description="Delivery channels: 'in_app', 'email', 'webhook'",
+    )
+    recipients: List[str] = Field(
+        default_factory=lambda: ["signer"],
+        description="Recipients: 'signer', 'co_signers', 'entity_owner', or literal email/group",
+    )
+    subject_template: Optional[str] = Field(None, description="Subject line template with ${variable} substitution")
+    body_template: Optional[str] = Field(None, description="Body template with ${variable} substitution")
 
 
 class NotificationStepConfig(BaseModel):

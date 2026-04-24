@@ -139,5 +139,28 @@ class AgreementWizardSessionsRepository:
         db.refresh(session)
         return session
 
+    def get_latest_completed_by_entity(
+        self,
+        db: Session,
+        entity_type: str,
+        entity_id: str,
+    ) -> Optional[AgreementWizardSessionDb]:
+        """Get the most recently completed wizard session for an entity.
+
+        Used by the workflow executor to propagate approval-flow user inputs
+        into the process workflow's step context (cross-workflow variable
+        propagation).
+        """
+        return (
+            db.query(AgreementWizardSessionDb)
+            .filter(
+                AgreementWizardSessionDb.entity_type == entity_type,
+                AgreementWizardSessionDb.entity_id == entity_id,
+                AgreementWizardSessionDb.status == 'completed',
+            )
+            .order_by(AgreementWizardSessionDb.updated_at.desc())
+            .first()
+        )
+
 
 agreement_wizard_sessions_repo = AgreementWizardSessionsRepository()

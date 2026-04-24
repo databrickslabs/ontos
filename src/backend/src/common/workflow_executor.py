@@ -1919,7 +1919,67 @@ class WorkflowExecutor:
                 'data': result_data,
             }},
         )
-        
+
+        # Cross-workflow variable propagation (#291):
+        # When the approval step was backed by a wizard session (approval flow),
+        # the user may have entered data (e.g. workspaceId, reason).  Merge those
+        # wizard step_results into context.step_results under the approval step's
+        # step_id so subsequent process-workflow steps can reference them via
+        # ${step_results.<approval_step_id>.<field>}.
+        if trigger_context and step_result:
+            try:
+                from src.repositories.agreement_wizard_sessions_repository import (
+                    agreement_wizard_sessions_repo,
+                )
+
+                entity_type_for_lookup = trigger_context.entity_type
+                entity_id_for_lookup = trigger_context.entity_id
+
+                if entity_type_for_lookup and entity_id_for_lookup:
+                    wizard_session = (
+                        agreement_wizard_sessions_repo.get_latest_completed_by_entity(
+                            self._db,
+                            entity_type=entity_type_for_lookup,
+                            entity_id=entity_id_for_lookup,
+                        )
+                    )
+                    if wizard_session:
+                        wizard_results = (
+                            agreement_wizard_sessions_repo.get_step_results(
+                                wizard_session
+                            )
+                        )
+                        # Flatten all wizard-collected fields under the
+                        # approval step's ID.  Keys from later wizard steps
+                        # override earlier ones if they collide (last-write
+                        # wins), which matches user expectation that the most
+                        # recent input is authoritative.
+                        merged: Dict[str, str] = {}
+                        for wr in wizard_results:
+                            wizard_payload = wr.get("payload", {})
+                            for key, value in wizard_payload.items():
+                                if isinstance(value, (str, int, float, bool)):
+                                    merged[key] = str(value)
+                        if merged:
+                            approval_entry = context.step_results.setdefault(
+                                current_step_id, {}
+                            )
+                            approval_entry.update(merged)
+                            logger.info(
+                                "Merged %d wizard field(s) from session %s "
+                                "into step_results.%s",
+                                len(merged),
+                                wizard_session.id,
+                                current_step_id,
+                            )
+            except Exception as e:
+                # Non-fatal: workflow continues even if propagation fails
+                logger.warning(
+                    "Failed to propagate wizard results for execution %s: %s",
+                    execution_id,
+                    e,
+                )
+
         # Continue execution from next step
         success_count = db_execution.success_count
         failure_count = db_execution.failure_count

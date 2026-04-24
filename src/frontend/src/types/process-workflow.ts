@@ -83,7 +83,13 @@ export type StepType =
   | 'create_asset_review' // Creates a DataAssetReview for formal review tracking
   | 'webhook'            // Calls external HTTP endpoints via UC Connections or direct URL
   | 'user_action'        // Approval workflow: collect user input (reason, acceptances, fields)
-  | 'entity_action';     // Lifecycle action on trigger entity (certify, publish, etc.)
+  | 'entity_action'      // Lifecycle action on trigger entity (certify, publish, etc.)
+  | 'legal_document'             // Approval: display legal document for review
+  | 'acknowledgement_checklist'  // Approval: checkbox list for explicit consents
+  | 'co_signers'                 // Approval: collect co-signer principals
+  | 'persist_agreement'          // Approval: materialize agreement record (non-visual)
+  | 'generate_pdf'               // Approval: generate PDF artifact
+  | 'deliver';                   // Approval: send agreement via channels (non-visual)
 
 /** Canonical step type value for lifecycle actions on the trigger entity */
 export const ENTITY_ACTION = 'entity_action' as const satisfies StepType;
@@ -203,6 +209,46 @@ export interface EntityActionStepConfig {
   fixed_scope?: EntityActionFixedScope;
 }
 
+export interface LegalDocumentStepConfig {
+  title?: string;
+  description?: string;
+  body_markdown?: string;
+  require_scroll_to_end?: boolean;
+  require_acknowledgement_checkbox?: boolean;
+  acknowledgement_label?: string;
+}
+
+export interface AcknowledgementChecklistStepConfig {
+  title?: string;
+  description?: string;
+  items?: Array<{ id: string; label: string; required?: boolean }>;
+}
+
+export interface CoSignersStepConfig {
+  title?: string;
+  description?: string;
+  min_count?: number;
+  max_count?: number;
+  principal_type?: 'user' | 'group' | 'either';
+  label?: string;
+}
+
+export interface PersistAgreementStepConfig {
+  // No user-configurable fields
+}
+
+export interface GeneratePdfStepConfig {
+  storage?: 'volume' | 'none';
+  volume_path?: string;
+}
+
+export interface DeliverStepConfig {
+  channels?: Array<'in_app' | 'email' | 'webhook'>;
+  recipients?: string[];
+  subject_template?: string;
+  body_template?: string;
+}
+
 // Reference to a UC HTTP Connection (for UI selection)
 export interface HttpConnectionRef {
   name: string;
@@ -233,6 +279,12 @@ export type StepConfig =
   | PolicyCheckStepConfig
   | WebhookStepConfig
   | EntityActionStepConfig
+  | LegalDocumentStepConfig
+  | AcknowledgementChecklistStepConfig
+  | CoSignersStepConfig
+  | PersistAgreementStepConfig
+  | GeneratePdfStepConfig
+  | DeliverStepConfig
   | Record<string, unknown>;
 
 // Workflow step

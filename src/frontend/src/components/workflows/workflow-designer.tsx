@@ -65,6 +65,11 @@ import {
   Globe,
   MessageSquare,
   Zap,
+  FileText,
+  ListChecks,
+  Users,
+  Database,
+  Send,
 } from 'lucide-react';
 
 import {
@@ -191,7 +196,13 @@ const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shiel
 ];
 
 const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield }[] = [
+  { type: 'legal_document', label: 'Legal Document', icon: FileText },
+  { type: 'acknowledgement_checklist', label: 'Acknowledgement Checklist', icon: ListChecks },
   { type: 'user_action', label: 'User Action', icon: MessageSquare },
+  { type: 'co_signers', label: 'Co-Signers', icon: Users },
+  { type: 'persist_agreement', label: 'Persist Agreement', icon: Database },
+  { type: 'generate_pdf', label: 'Generate PDF', icon: FileText },
+  { type: 'deliver', label: 'Deliver', icon: Send },
 ];
 
 // Layout helper
@@ -1770,10 +1781,232 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                     </>
                   )}
 
+                  {selectedStep.step_type === 'legal_document' && (
+                    <>
+                      <div>
+                        <Label>Title</Label>
+                        <Input
+                          value={(selectedStep.config as { title?: string })?.title || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, title: e.target.value },
+                          })}
+                          placeholder="e.g. Terms of Service"
+                        />
+                      </div>
+                      <div>
+                        <Label>Description</Label>
+                        <Textarea
+                          value={(selectedStep.config as { description?: string })?.description || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, description: e.target.value },
+                          })}
+                          placeholder="Brief instruction shown above the document"
+                          rows={2}
+                        />
+                      </div>
+                      <div>
+                        <Label>Document Body (Markdown)</Label>
+                        <Textarea
+                          value={(selectedStep.config as { body_markdown?: string })?.body_markdown || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, body_markdown: e.target.value },
+                          })}
+                          placeholder="# Terms of Service&#10;&#10;Paste your legal document here..."
+                          rows={8}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="legal-require-scroll"
+                          checked={(selectedStep.config as { require_scroll_to_end?: boolean })?.require_scroll_to_end ?? false}
+                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, require_scroll_to_end: checked },
+                          })}
+                        />
+                        <Label htmlFor="legal-require-scroll" className="cursor-pointer">Require scroll to end</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="legal-require-ack"
+                          checked={(selectedStep.config as { require_acknowledgement_checkbox?: boolean })?.require_acknowledgement_checkbox ?? false}
+                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, require_acknowledgement_checkbox: checked },
+                          })}
+                        />
+                        <Label htmlFor="legal-require-ack" className="cursor-pointer">Require acknowledgement checkbox</Label>
+                      </div>
+                      {(selectedStep.config as { require_acknowledgement_checkbox?: boolean })?.require_acknowledgement_checkbox && (
+                        <div>
+                          <Label>Acknowledgement Label</Label>
+                          <Input
+                            value={(selectedStep.config as { acknowledgement_label?: string })?.acknowledgement_label || ''}
+                            onChange={(e) => updateStep(selectedStep.step_id, {
+                              config: { ...selectedStep.config, acknowledgement_label: e.target.value },
+                            })}
+                            placeholder="I have read and understood the above"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {selectedStep.step_type === 'acknowledgement_checklist' && (
+                    <>
+                      <div>
+                        <Label>Title</Label>
+                        <Input
+                          value={(selectedStep.config as { title?: string })?.title || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, title: e.target.value },
+                          })}
+                          placeholder="e.g. Acceptable Use Acknowledgement"
+                        />
+                      </div>
+                      <div>
+                        <Label>Description</Label>
+                        <Textarea
+                          value={(selectedStep.config as { description?: string })?.description || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, description: e.target.value },
+                          })}
+                          placeholder="Please confirm each item below"
+                          rows={2}
+                        />
+                      </div>
+                      <div>
+                        <Label>Checklist Items (JSON)</Label>
+                        <Textarea
+                          value={JSON.stringify((selectedStep.config as { items?: unknown[] })?.items || [], null, 2)}
+                          onChange={(e) => {
+                            try {
+                              const items = JSON.parse(e.target.value);
+                              updateStep(selectedStep.step_id, {
+                                config: { ...selectedStep.config, items },
+                              });
+                            } catch { /* ignore parse errors while typing */ }
+                          }}
+                          placeholder={'[\n  { "id": "accept_tos", "label": "I accept the Terms of Service", "required": true },\n  { "id": "accept_privacy", "label": "I accept the Privacy Policy", "required": true }\n]'}
+                          rows={6}
+                          className="font-mono text-sm"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Array of {'{ id, label, required }'} objects. Max 10 items.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {selectedStep.step_type === 'co_signers' && (
+                    <>
+                      <div>
+                        <Label>Title</Label>
+                        <Input
+                          value={(selectedStep.config as { title?: string })?.title || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, title: e.target.value },
+                          })}
+                          placeholder="e.g. Add Co-Signers"
+                        />
+                      </div>
+                      <div>
+                        <Label>Description</Label>
+                        <Textarea
+                          value={(selectedStep.config as { description?: string })?.description || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, description: e.target.value },
+                          })}
+                          placeholder="Name additional principals for this agreement"
+                          rows={2}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>Min co-signers</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={(selectedStep.config as { min_count?: number })?.min_count ?? 0}
+                            onChange={(e) => updateStep(selectedStep.step_id, {
+                              config: { ...selectedStep.config, min_count: parseInt(e.target.value) || 0 },
+                            })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Max co-signers</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={(selectedStep.config as { max_count?: number })?.max_count ?? 5}
+                            onChange={(e) => updateStep(selectedStep.step_id, {
+                              config: { ...selectedStep.config, max_count: parseInt(e.target.value) || 5 },
+                            })}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Principal Type</Label>
+                        <Select
+                          value={(selectedStep.config as { principal_type?: string })?.principal_type || 'either'}
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, principal_type: v },
+                          })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="group">Group</SelectItem>
+                            <SelectItem value="either">Either</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Record-only: names co-signers on the agreement without launching a counter-signature flow.
+                      </p>
+                    </>
+                  )}
+
+                  {selectedStep.step_type === 'deliver' && (
+                    <>
+                      <div>
+                        <Label>Channels (comma-separated)</Label>
+                        <Input
+                          value={((selectedStep.config as { channels?: string[] })?.channels || ['in_app']).join(', ')}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, channels: e.target.value.split(',').map(s => s.trim()).filter(Boolean) },
+                          })}
+                          placeholder="in_app, email, webhook"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Available: in_app, email, webhook
+                        </p>
+                      </div>
+                      <div>
+                        <Label>Recipients (comma-separated)</Label>
+                        <Input
+                          value={((selectedStep.config as { recipients?: string[] })?.recipients || ['signer']).join(', ')}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) },
+                          })}
+                          placeholder="signer, co_signers, entity_owner"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Special: signer, co_signers, entity_owner. Or literal email addresses.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {(selectedStep.step_type === 'persist_agreement' || selectedStep.step_type === 'generate_pdf') && (
+                    <p className="text-xs text-muted-foreground">
+                      Non-visual step — auto-advances in the wizard. No configuration needed.
+                    </p>
+                  )}
+
                   <Separator />
-                  
+
                   <div className="flex gap-2">
-                    <Button 
+                    <Button
                       className="flex-1"
                       onClick={() => setSelectedNodeId(null)}
                     >

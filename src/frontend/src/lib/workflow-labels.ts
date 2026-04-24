@@ -21,6 +21,11 @@ import {
   Globe,
   MessageSquare,
   Zap,
+  FileText,
+  ListChecks,
+  Users,
+  Database,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 import { TriggerType, EntityType, StepType } from '@/types/process-workflow';
@@ -44,6 +49,12 @@ export const STEP_ICONS: Record<StepType, LucideIcon> = {
   webhook: Globe,
   user_action: MessageSquare,
   entity_action: Zap,
+  legal_document: FileText,
+  acknowledgement_checklist: ListChecks,
+  co_signers: Users,
+  persist_agreement: Database,
+  generate_pdf: FileText,
+  deliver: Send,
 };
 
 /**
@@ -65,6 +76,12 @@ export const STEP_COLORS: Record<StepType, string> = {
   webhook: 'orange',
   user_action: 'sky',
   entity_action: 'lime',
+  legal_document: 'indigo',
+  acknowledgement_checklist: 'teal',
+  co_signers: 'violet',
+  persist_agreement: 'slate',
+  generate_pdf: 'orange',
+  deliver: 'cyan',
 };
 
 /**
@@ -209,6 +226,12 @@ export const ALL_STEP_TYPES: StepType[] = [
   'webhook',
   'user_action',
   'entity_action',
+  'legal_document',
+  'acknowledgement_checklist',
+  'co_signers',
+  'persist_agreement',
+  'generate_pdf',
+  'deliver',
 ];
 
 /**

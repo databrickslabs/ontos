@@ -360,7 +360,13 @@
       "create_asset_review": "Create Asset Review",
       "webhook": "Webhook",
       "user_action": "User Action",
-      "entity_action": "Entity Action"
+      "entity_action": "Entity Action",
+      "legal_document": "Legal Document",
+      "acknowledgement_checklist": "Acknowledgement Checklist",
+      "co_signers": "Co-Signers",
+      "persist_agreement": "Persist Agreement",
+      "generate_pdf": "Generate PDF",
+      "deliver": "Deliver"
     }
   }
 }

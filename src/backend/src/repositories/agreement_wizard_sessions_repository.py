@@ -25,6 +25,8 @@ class AgreementWizardSessionsRepository:
         entity_id: str,
         completion_action: Optional[str] = None,
         created_by: Optional[str] = None,
+        workflow_snapshot: Optional[str] = None,
+        workflow_name: Optional[str] = None,
     ) -> AgreementWizardSessionDb:
         """Create a new wizard session."""
         session = AgreementWizardSessionDb(
@@ -36,6 +38,8 @@ class AgreementWizardSessionsRepository:
             step_results=json.dumps([]),
             status='in_progress',
             created_by=created_by,
+            workflow_snapshot=workflow_snapshot,
+            workflow_name=workflow_name,
         )
         db.add(session)
         db.commit()

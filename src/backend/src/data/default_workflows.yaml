@@ -1020,9 +1020,10 @@ workflows:
   # Default subscription / contract signing workflow (product or dataset subscribe)
   # Used when user subscribes via the approval wizard; completion_action=subscribe runs subscribe after wizard.
   # Looked up by trigger type for_subscribe; name is for display only.
+  # Demonstrates the full approval step catalog: legal_document → acknowledgement_checklist → user_action → pass.
   - id: "subscription"
-    name: "Subscription"
-    description: "Default workflow for subscribing to a data product or dataset: reason required, then complete."
+    name: "Subscription Agreement"
+    description: "Full approval workflow for subscribing to a data product — terms review, acknowledgements, and agreement."
     workflow_type: "approval"
     trigger:
       type: "for_subscribe"
@@ -1032,25 +1033,60 @@ workflows:
     is_active: true
     is_default: true
     steps:
-      - id: "reason"
-        name: "Why are you subscribing?"
+      - id: "review-terms"
+        name: "Review Terms"
+        type: "legal_document"
+        config:
+          title: "Terms of Service"
+          description: "Please review the following terms before subscribing."
+          body_markdown: "# Data Product Terms of Service\n\nBy subscribing to this data product, you agree to the following:\n\n1. **Acceptable Use** — You will use the data only for authorized business purposes.\n2. **Confidentiality** — You will not share raw data outside your organization.\n3. **Retention** — Data will be retained according to your organization's data retention policy.\n4. **Compliance** — You will comply with all applicable data protection regulations.\n5. **Termination** — The data product owner may revoke access for policy violations."
+          require_scroll_to_end: true
+          require_acknowledgement_checkbox: true
+          acknowledgement_label: "I have read and understood the Terms of Service"
+        on_pass: "accept-terms"
+        order: 0
+      - id: "accept-terms"
+        name: "Accept Terms"
+        type: "acknowledgement_checklist"
+        config:
+          title: "Acknowledgements"
+          description: "Please confirm each item below."
+          items:
+            - id: "accept_tos"
+              label: "I accept the Terms of Service"
+              required: true
+            - id: "accept_data_use"
+              label: "I will use this data only for authorized purposes"
+              required: true
+            - id: "accept_retention"
+              label: "I understand the data retention policy applies"
+              required: true
+        on_pass: "subscription-details"
+        order: 1
+      - id: "subscription-details"
+        name: "Subscription Details"
         type: "user_action"
         config:
-          title: "Subscribe"
-          description: "Provide a reason for your subscription. This helps data owners understand how their products are used."
-          requires_input: true
-          minimum_input_length: 10
-          primary_field_id: "reason"
+          title: "Subscription Details"
+          description: "Provide details about your intended use of this data product."
           required_fields:
             - id: "reason"
-              label: "Why are you subscribing?"
+              label: "Reason for subscribing"
               type: "text"
               required: true
+            - id: "use_case"
+              label: "Intended use case"
+              type: "text"
+              required: false
+          requires_input: true
+          minimum_input_length: 10
         on_pass: "done"
-        on_fail: "done"
+        order: 2
       - id: "done"
-        name: "Done"
+        name: "Complete"
         type: "pass"
+        config: {}
+        order: 3
 
   # =========================================================================
   # FOR_REQUEST_* Wizard Workflows (match ON_REQUEST_* process triggers)

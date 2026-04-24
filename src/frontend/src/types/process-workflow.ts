@@ -89,7 +89,8 @@ export type StepType =
   | 'co_signers'                 // Approval: collect co-signer principals
   | 'persist_agreement'          // Approval: materialize agreement record (non-visual)
   | 'generate_pdf'               // Approval: generate PDF artifact
-  | 'deliver';                   // Approval: send agreement via channels (non-visual)
+  | 'deliver'                    // Approval: send agreement via channels (non-visual)
+  | 'grant_permissions';         // Process: grant UC permissions via SP workspace client
 
 /** Canonical step type value for lifecycle actions on the trigger entity */
 export const ENTITY_ACTION = 'entity_action' as const satisfies StepType;
@@ -249,6 +250,14 @@ export interface DeliverStepConfig {
   body_template?: string;
 }
 
+export interface GrantPermissionsStepConfig {
+  permission_type?: 'SELECT' | 'USE_SCHEMA' | 'USE_CATALOG' | 'ALL_PRIVILEGES';
+  target_source?: 'from_entity' | 'from_variable';
+  target_variable?: string;
+  principal_source?: 'requester' | 'from_variable';
+  principal_variable?: string;
+}
+
 // Reference to a UC HTTP Connection (for UI selection)
 export interface HttpConnectionRef {
   name: string;
@@ -285,6 +294,7 @@ export type StepConfig =
   | PersistAgreementStepConfig
   | GeneratePdfStepConfig
   | DeliverStepConfig
+  | GrantPermissionsStepConfig
   | Record<string, unknown>;
 
 // Workflow step

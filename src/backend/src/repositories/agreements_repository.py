@@ -26,6 +26,8 @@ class AgreementsRepository:
         step_results: Optional[List[Dict[str, Any]]] = None,
         pdf_storage_path: Optional[str] = None,
         created_by: Optional[str] = None,
+        workflow_snapshot: Optional[str] = None,
+        workflow_name: Optional[str] = None,
     ) -> AgreementDb:
         """Create an agreement record."""
         import json
@@ -37,6 +39,8 @@ class AgreementsRepository:
             step_results=json.dumps(step_results) if step_results is not None else None,
             pdf_storage_path=pdf_storage_path,
             created_by=created_by,
+            workflow_snapshot=workflow_snapshot,
+            workflow_name=workflow_name,
         )
         db.add(agreement)
         db.commit()

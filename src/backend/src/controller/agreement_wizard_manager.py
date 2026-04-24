@@ -6,6 +6,7 @@ and on completion creates an agreement record and writes to entity change log
 (optional PDF via todo 5).
 """
 
+import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -99,6 +100,33 @@ class AgreementWizardManager:
         steps = self._get_workflow_steps(workflow_id)
         if not steps:
             raise ValueError("Workflow not found or not an approval workflow")
+
+        # Capture immutable workflow snapshot so historical agreements reflect
+        # what the signer actually saw, even if the workflow is later edited.
+        workflow = self._workflows_manager.get_workflow(workflow_id)
+        workflow_snapshot = None
+        workflow_name = None
+        if workflow:
+            workflow_name = workflow.name
+            workflow_snapshot = json.dumps({
+                "workflow_id": workflow.id,
+                "name": workflow.name,
+                "description": workflow.description or "",
+                "workflow_type": (lambda wt: wt.value if hasattr(wt, 'value') else str(wt))(getattr(workflow, 'workflow_type', 'approval')),
+                "steps": [
+                    {
+                        "step_id": s.step_id,
+                        "name": s.name,
+                        "step_type": s.step_type if isinstance(s.step_type, str) else s.step_type.value,
+                        "config": json.loads(s.config) if isinstance(s.config, str) else (s.config or {}),
+                        "on_pass": s.on_pass,
+                        "on_fail": s.on_fail,
+                        "order": s.order,
+                    }
+                    for s in sorted(workflow.steps or [], key=lambda x: x.order if x.order is not None else 0)
+                ],
+            })
+
         session = agreement_wizard_sessions_repo.create(
             self._db,
             workflow_id=workflow_id,
@@ -106,6 +134,8 @@ class AgreementWizardManager:
             entity_id=entity_id,
             completion_action=completion_action,
             created_by=created_by,
+            workflow_snapshot=workflow_snapshot,
+            workflow_name=workflow_name,
         )
         first = steps[0]
         return {
@@ -299,6 +329,8 @@ class AgreementWizardManager:
             step_results=step_results,
             pdf_storage_path=None,  # Todo 5: set when workflow has generate_pdf step
             created_by=created_by or session.created_by,
+            workflow_snapshot=session.workflow_snapshot,
+            workflow_name=session.workflow_name,
         )
         change_log_manager = ChangeLogManager()
         change_log_manager.log_change_with_details(

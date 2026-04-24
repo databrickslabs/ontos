@@ -24,6 +24,8 @@ class AgreementWizardSessionDb(Base):
     current_step_index = Column(Integer, nullable=False, default=0)
     step_results = Column(Text, nullable=True)  # JSON list of { step_id, payload } per completed step
     status = Column(String(50), nullable=False, default='in_progress')  # in_progress | completed | abandoned
+    workflow_snapshot = Column(Text, nullable=True)  # Immutable JSON snapshot of workflow definition at session creation
+    workflow_name = Column(String(255), nullable=True)  # Workflow name at session creation time
     created_by = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

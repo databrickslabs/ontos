@@ -288,6 +288,37 @@ class AgreementWizardManager:
             self._validate_co_signers_payload(current, payload)
         # Non-visual steps (persist_agreement, generate_pdf, deliver) skip validation
 
+        # Execute non-visual step side effects
+        if current.step_type == StepType.PERSIST_AGREEMENT:
+            # Persist agreement is handled implicitly at _complete_session.
+            # When this step is explicit in the workflow, we record it so
+            # _complete_session knows the signer saw this step (future enhancement).
+            # For now this is a no-op — the agreement is always persisted at completion.
+            pass
+
+        if current.step_type == StepType.GENERATE_PDF:
+            # PDF generation is driven by the presence of a generate_pdf step in
+            # the workflow — _complete_session already checks for it. Store any
+            # per-step config overrides (e.g. template, watermark) in the result
+            # so _complete_session can consume them.
+            config = current.config or {}
+            payload = {
+                **payload,
+                "template": config.get("template", "default"),
+                "include_step_results": config.get("include_step_results", True),
+            }
+
+        if current.step_type == StepType.DELIVER:
+            # Deliver step: capture delivery channel config for _complete_session.
+            # Actual dispatch uses existing notification infrastructure.
+            config = current.config or {}
+            payload = {
+                **payload,
+                "channels": config.get("channels", ["in_app"]),
+                "recipients": config.get("recipients", ["signer"]),
+                "delivered": True,
+            }
+
         agreement_wizard_sessions_repo.append_step_result(self._db, session_id, step_id, payload)
         session = agreement_wizard_sessions_repo.get(self._db, session_id)
         if not session:

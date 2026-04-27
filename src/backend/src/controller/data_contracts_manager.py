@@ -1441,6 +1441,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     sla_item['element'] = prop.element
                 if prop.driver:
                     sla_item['driver'] = prop.driver
+                if getattr(prop, 'description', None):
+                    sla_item['description'] = prop.description
+                if getattr(prop, 'scheduler', None):
+                    sla_item['scheduler'] = prop.scheduler
+                if getattr(prop, 'schedule', None):
+                    sla_item['schedule'] = prop.schedule
 
                 sla_properties.append(sla_item)
             odcs['slaProperties'] = sla_properties
@@ -2077,7 +2083,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 value_ext=json.dumps(sla_prop_data.get('valueExt')) if sla_prop_data.get('valueExt') else None,
                 unit=sla_prop_data.get('unit'),
                 element=sla_prop_data.get('element'),
-                driver=sla_prop_data.get('driver')
+                driver=sla_prop_data.get('driver'),
+                description=sla_prop_data.get('description'),
+                scheduler=sla_prop_data.get('scheduler'),
+                schedule=sla_prop_data.get('schedule'),
             )
             db.add(sla_prop)
     

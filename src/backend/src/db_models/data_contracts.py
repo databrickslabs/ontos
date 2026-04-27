@@ -226,6 +226,9 @@ class DataContractSlaPropertyDb(Base):
     unit = Column(String, nullable=True)
     element = Column(String, nullable=True)
     driver = Column(String, nullable=True)
+    description = Column(Text, nullable=True)  # ODCS v3.1.0 SLA description
+    schedule = Column(String, nullable=True)   # ODCS v3.1.0 scheduling config (e.g. cron)
+    scheduler = Column(String, nullable=True)  # ODCS v3.1.0 scheduler name
     contract = relationship("DataContractDb", back_populates="sla_properties")
 
 

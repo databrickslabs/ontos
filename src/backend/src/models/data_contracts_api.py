@@ -238,13 +238,16 @@ class AuthoritativeDefinition(BaseModel):
 
 
 class SLAProperty(BaseModel):
-    """ODCS SLA Property"""
+    """ODCS v3.1.0 SLA Property — https://github.com/bitol-io/open-data-contract-standard"""
     property: str
     value: Union[str, int, float]
     valueExt: Optional[Union[str, int, float]] = None
     unit: Optional[str] = None
     element: Optional[str] = None
-    driver: Optional[str] = None  # regulatory, analytics, operational
+    driver: Optional[str] = None          # regulatory, analytics, operational
+    description: Optional[str] = None    # human-readable description of the SLA
+    scheduler: Optional[str] = None      # scheduler name (e.g. cron, Airflow)
+    schedule: Optional[str] = None       # scheduling config (e.g. "0 20 * * *")
 
     class Config:
         populate_by_name = True

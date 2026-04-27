@@ -484,6 +484,7 @@ class DataContractRead(BaseModel):
 
     # Team and Roles section
     team: List[TeamMember] = Field(default_factory=list)
+    teamMetadata: Optional['TeamMetadataRead'] = None  # ODCS v3.1.0 Team object metadata
     roles: Optional[List[ContractRole]] = Field(default_factory=list)
     access_control: Optional[AccessControl] = Field(None, alias='accessControl')  # Legacy
 

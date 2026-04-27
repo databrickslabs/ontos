@@ -54,6 +54,12 @@ from src.db_models.data_contracts import (
     DataContractSlaPropertyDb,
     DataContractAuthoritativeDefinitionDb,
     DataContractServerPropertyDb,
+    DataContractTeamMetadataDb,
+    SchemaObjectAuthoritativeDefinitionDb,
+    SchemaObjectCustomPropertyDb,
+    SchemaObjectRelationshipDb,
+    SchemaPropertyAuthoritativeDefinitionDb,
+    SchemaPropertyRelationshipDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.repositories.teams_repository import team_repo
@@ -6120,9 +6126,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             ContractDescription,
             SchemaObject,
             ColumnProperty,
+            SchemaRelationship,
             ServerConfig,
             AuthoritativeDefinition,
             QualityRule,
+            SLAProperty,
+            TeamMetadataRead,
             DataContractRead,
         )
         from src.repositories.data_domain_repository import data_domain_repo
@@ -6174,6 +6183,36 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         for p in all_props:
             props_by_object.setdefault(p.object_id, []).append(p)
 
+        # Batch-load schema-object-level sub-objects (ODCS v3.1.0)
+        obj_auth_defs: Dict[str, list] = {}
+        obj_custom_props: Dict[str, list] = {}
+        obj_relationships: Dict[str, list] = {}
+        prop_ids = [p.id for p in all_props]
+        prop_auth_defs: Dict[str, list] = {}
+        prop_relationships: Dict[str, list] = {}
+        if schema_obj_ids:
+            for row in db.query(SchemaObjectAuthoritativeDefinitionDb).filter(
+                SchemaObjectAuthoritativeDefinitionDb.schema_object_id.in_(schema_obj_ids)
+            ).all():
+                obj_auth_defs.setdefault(row.schema_object_id, []).append(row)
+            for row in db.query(SchemaObjectCustomPropertyDb).filter(
+                SchemaObjectCustomPropertyDb.schema_object_id.in_(schema_obj_ids)
+            ).all():
+                obj_custom_props.setdefault(row.schema_object_id, []).append(row)
+            for row in db.query(SchemaObjectRelationshipDb).filter(
+                SchemaObjectRelationshipDb.schema_object_id.in_(schema_obj_ids)
+            ).all():
+                obj_relationships.setdefault(row.schema_object_id, []).append(row)
+        if prop_ids:
+            for row in db.query(SchemaPropertyAuthoritativeDefinitionDb).filter(
+                SchemaPropertyAuthoritativeDefinitionDb.property_id.in_(prop_ids)
+            ).all():
+                prop_auth_defs.setdefault(row.property_id, []).append(row)
+            for row in db.query(SchemaPropertyRelationshipDb).filter(
+                SchemaPropertyRelationshipDb.property_id.in_(prop_ids)
+            ).all():
+                prop_relationships.setdefault(row.property_id, []).append(row)
+
         for schema_obj in schema_obj_rows:
             # Convert DB properties to API dicts
             prop_items = []
@@ -6188,6 +6227,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "name": p.name,
                     "logicalType": p.logical_type or "string",
                     "physicalType": p.physical_type,
+                    "stableId": p.stable_id,
                     "required": p.required,
                     "unique": p.unique,
                     "primaryKey": p.primary_key,
@@ -6205,16 +6245,55 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "encryptedName": p.encrypted_name,
                 }
                 item.update(options)
+                p_ads = prop_auth_defs.get(p.id, [])
+                if p_ads:
+                    item["authoritativeDefinitions"] = [{"url": ad.url, "type": ad.type} for ad in p_ads]
+                p_rels = prop_relationships.get(p.id, [])
+                if p_rels:
+                    item["relationships"] = [
+                        {
+                            "type": rel.relationship_type,
+                            "to": json.loads(rel.to_value) if rel.to_value else "",
+                            **({"customProperties": json.loads(rel.custom_properties_json)} if rel.custom_properties_json else {}),
+                        }
+                        for rel in p_rels
+                    ]
                 prop_items.append(item)
+
+            # Build schema-object-level ODCS v3.1.0 sub-objects
+            s_auth_defs = [
+                AuthoritativeDefinition(url=ad.url, type=ad.type)
+                for ad in obj_auth_defs.get(schema_obj.id, [])
+            ]
+            s_custom_props = [
+                {"property": cp.property, "value": cp.value}
+                for cp in obj_custom_props.get(schema_obj.id, [])
+            ]
+            s_rels = []
+            for rel in obj_relationships.get(schema_obj.id, []):
+                rel_kwargs: Dict[str, Any] = {
+                    "type": rel.relationship_type,
+                    "to": json.loads(rel.to_value) if rel.to_value else "",
+                }
+                if rel.from_value:
+                    rel_kwargs["from"] = json.loads(rel.from_value)
+                if rel.custom_properties_json:
+                    rel_kwargs["customProperties"] = json.loads(rel.custom_properties_json)
+                s_rels.append(SchemaRelationship(**rel_kwargs))
 
             schema_objects.append(SchemaObject(
                 name=schema_obj.name,
+                stableId=schema_obj.stable_id,
                 physicalName=schema_obj.physical_name,
                 businessName=schema_obj.business_name,
                 physicalType=schema_obj.physical_type,
                 description=schema_obj.description,
+                dataGranularityDescription=schema_obj.data_granularity_description,
                 properties=prop_items,
                 propertyCount=len(prop_items),
+                authoritativeDefinitions=s_auth_defs or None,
+                customProperties=s_custom_props or None,
+                relationships=s_rels or None,
             ))
         
         # Build team (ODCS compliant)
@@ -6225,7 +6304,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     'username': member.username,
                     'role': member.role or 'member',
                 }
-                # Add optional fields if present
+                if getattr(member, 'name', None):
+                    entry['name'] = member.name
                 if getattr(member, 'description', None):
                     entry['description'] = member.description
                 if getattr(member, 'date_in', None):
@@ -6235,6 +6315,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if getattr(member, 'replaced_by_username', None):
                     entry['replacedByUsername'] = member.replaced_by_username
                 team.append(entry)
+
+        # Build team metadata (ODCS v3.1.0 Team object)
+        team_metadata = None
+        tm = getattr(db_contract, 'team_metadata', None)
+        if tm:
+            team_metadata = TeamMetadataRead(
+                id=tm.id,
+                contract_id=tm.contract_id,
+                stable_id=tm.stable_id,
+                name=tm.name,
+                description=tm.description,
+                tags=json.loads(tm.tags_json) if tm.tags_json else None,
+                customProperties=json.loads(tm.custom_properties_json) if tm.custom_properties_json else None,
+                authoritativeDefinitions=json.loads(tm.authoritative_definitions_json) if tm.authoritative_definitions_json else None,
+            )
         
         # Build support channels (legacy minimal)
         support = None
@@ -6250,13 +6345,31 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             for cp in db_contract.custom_properties:
                 custom_properties[cp.property] = cp.value
         
-        # SLA properties (flatten basic key/value)
-        sla = None
+        # SLA properties (ODCS v3.1.0 structure)
+        sla_properties = []
         if getattr(db_contract, 'sla_properties', None):
-            sla = {}
             for sp in db_contract.sla_properties:
-                if sp.property and sp.value is not None:
-                    sla[sp.property] = sp.value
+                if not sp.property:
+                    continue
+                # Preserve numeric types stored as strings
+                def _coerce(v: Optional[str]) -> Optional[Any]:
+                    if v is None:
+                        return None
+                    try:
+                        return float(v) if '.' in v else int(v)
+                    except (ValueError, TypeError):
+                        return v
+                sla_properties.append(SLAProperty(
+                    property=sp.property,
+                    value=_coerce(sp.value) or sp.value or "",
+                    valueExt=_coerce(sp.value_ext),
+                    unit=sp.unit,
+                    element=sp.element,
+                    driver=sp.driver,
+                    description=getattr(sp, 'description', None),
+                    scheduler=getattr(sp, 'scheduler', None),
+                    schedule=getattr(sp, 'schedule', None),
+                ))
         
         # Servers (full ODCS mapping)
         servers = []
@@ -6382,16 +6495,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             kind=db_contract.kind,
             apiVersion=db_contract.api_version,
             tenant=db_contract.tenant,
-            domain=domain_name,  # Resolved domain name
-            domainId=db_contract.domain_id,  # Provide domain ID for frontend resolution
+            domain=domain_name,
+            domainId=db_contract.domain_id,
             dataProduct=db_contract.data_product,
             description=description,
-            tags=tags,  # Include tags in response
+            tags=tags,
+            contractCreatedTs=db_contract.contract_created_ts.isoformat() if db_contract.contract_created_ts else None,
             schema=schema_objects,
+            slaDefaultElement=db_contract.sla_default_element,
+            slaProperties=sla_properties,
             team=team,
+            teamMetadata=team_metadata,
             support=support,
             customProperties=custom_properties,
-            sla=sla,
             servers=servers,
             authoritativeDefinitions=authoritative_definitions,
             qualityRules=quality_rules,

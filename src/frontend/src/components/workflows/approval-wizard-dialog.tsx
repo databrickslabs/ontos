@@ -283,8 +283,8 @@ export default function ApprovalWizardDialog({
         setCompleteResult({ agreement_id: data.agreement_id ?? null, pdf_storage_path: data.pdf_storage_path ?? null, pdf_url: data.pdf_url ?? null });
         setCurrentStep(null);
         toast({ title: 'Completed', description: 'Approval workflow completed successfully.' });
-        onComplete?.(data.agreement_id ?? null, data.pdf_storage_path ?? null);
-        // Don't auto-close — let the user see the completion screen and download PDF
+        // Defer onComplete — let user see the completion screen and download PDF first.
+        // onComplete fires when they click Close (see handleCloseAfterComplete below).
       } else {
         const nextStep = data.current_step ?? null;
         setCurrentStep(nextStep);
@@ -339,8 +339,11 @@ export default function ApprovalWizardDialog({
   };
 
   const handleDialogOpenChange = (open: boolean) => {
-    if (!open && !completeResult) {
-      // User closed via X or escape — treat as cancel
+    if (!open && completeResult) {
+      // Closing after completion — fire onComplete
+      onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path);
+    } else if (!open && !completeResult) {
+      // User closed via X or escape mid-flow — treat as cancel
       toast({ title: 'Cancelled', variant: 'default' });
     }
     onOpenChange(open);
@@ -424,7 +427,10 @@ export default function ApprovalWizardDialog({
               </Button>
             )}
             <DialogFooter>
-              <Button onClick={() => onOpenChange(false)}>Close</Button>
+              <Button onClick={() => {
+                onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path);
+                onOpenChange(false);
+              }}>Close</Button>
             </DialogFooter>
           </div>
         )}

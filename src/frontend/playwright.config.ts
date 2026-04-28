@@ -18,6 +18,10 @@ export default defineConfig({
     '**/cuj-8-data-products*',
   ] : [],
   retries: process.env.CI ? 1 : 0,
+  // Default Playwright CI workers=1 serialized 72 specs and hit the 20-min job
+  // timeout. Bump to 2 in CI; the existing retries: 1 covers any flake from
+  // workers contending on the shared Postgres service.
+  workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? 'html' : 'list',
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep
@@ -33,6 +33,20 @@ def get_agreement_wizard_manager(
     """Get AgreementWizardManager with optional PDF storage path from app.state."""
     storage_base_path = getattr(request.app.state, 'agreement_pdf_volume_path', None)
     return AgreementWizardManager(db, storage_base_path=storage_base_path)
+
+
+@router.get('/approvals/sessions')
+async def list_approval_sessions(
+    request: Request,
+    db: DBSessionDep,
+    limit: int = Query(50, ge=1, le=100),
+    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+):
+    """List recent approval wizard sessions."""
+    from src.repositories.agreement_wizard_sessions_repository import AgreementWizardSessionsRepository
+    repo = AgreementWizardSessionsRepository()
+    sessions = repo.list_recent(db, limit=limit)
+    return {"sessions": sessions, "total": len(sessions)}
 
 
 @router.get('/approvals/queue')

@@ -52,6 +52,31 @@ class AgreementWizardSessionsRepository:
             AgreementWizardSessionDb.id == session_id
         ).first()
 
+    def list_recent(self, db: Session, limit: int = 50) -> List[Dict[str, Any]]:
+        """List recent wizard sessions with basic info."""
+        sessions = (
+            db.query(AgreementWizardSessionDb)
+            .order_by(AgreementWizardSessionDb.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        result = []
+        for s in sessions:
+            result.append({
+                "id": s.id,
+                "workflow_id": s.workflow_id,
+                "workflow_name": getattr(s, 'workflow_name', None),
+                "entity_type": s.entity_type,
+                "entity_id": s.entity_id,
+                "status": s.status,
+                "current_step_index": s.current_step_index,
+                "created_by": s.created_by,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+                "completion_action": getattr(s, 'completion_action', None),
+            })
+        return result
+
     def get_by_created_by(
         self,
         db: Session,

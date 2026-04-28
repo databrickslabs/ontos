@@ -916,7 +916,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           {workflow?.is_default && (
             <Badge variant="secondary">Default</Badge>
           )}
-          {!isNew && workflowType && (
+          {workflowType && (
             <Badge variant="outline" className={workflowType === 'approval' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'}>
               {workflowType === 'approval' ? 'Approval' : 'Process'}
             </Badge>

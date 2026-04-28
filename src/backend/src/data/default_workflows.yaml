@@ -1080,13 +1080,36 @@ workflows:
               required: false
           requires_input: true
           minimum_input_length: 10
-        on_pass: "done"
+        on_pass: "persist"
         order: 2
+      - id: "persist"
+        name: "Save Agreement"
+        type: "persist_agreement"
+        config: {}
+        on_pass: "generate-pdf"
+        order: 3
+      - id: "generate-pdf"
+        name: "Generate PDF"
+        type: "generate_pdf"
+        config: {}
+        on_pass: "deliver-agreement"
+        order: 4
+      - id: "deliver-agreement"
+        name: "Deliver Agreement"
+        type: "deliver"
+        config:
+          channels:
+            - "in_app"
+          recipients:
+            - "signer"
+            - "entity_owner"
+        on_pass: "done"
+        order: 5
       - id: "done"
         name: "Complete"
         type: "pass"
         config: {}
-        order: 3
+        order: 6
 
   # =========================================================================
   # FOR_REQUEST_* Wizard Workflows (match ON_REQUEST_* process triggers)

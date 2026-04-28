@@ -45,11 +45,12 @@ export default defineConfig({
         'vite.config.ts',
       ],
       all: true,
-      // Coverage thresholds disabled for now
-      // lines: 80,
-      // functions: 80,
-      // branches: 80,
-      // statements: 80,
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
     },
   },
 });

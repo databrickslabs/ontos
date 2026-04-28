@@ -162,11 +162,12 @@ export default function ApprovalWizardDialog({
     async (workflowId: string) => {
       setLoading(true);
       try {
-        // Capture step metadata from the selected workflow for progress tracking
+        // Capture step metadata — only count visual steps for the progress indicator
         const wf = workflows.find((w) => w.id === workflowId);
         if (wf?.steps) {
-          setTotalSteps(wf.steps.length);
-          setStepNames(wf.steps.map((s) => s.name));
+          const visualSteps = wf.steps.filter((s) => !NON_VISUAL_STEP_TYPES.has(s.step_type) && s.step_type !== 'pass' && s.step_type !== 'fail');
+          setTotalSteps(visualSteps.length);
+          setStepNames(visualSteps.map((s) => s.name));
           setCurrentStepIndex(0);
         }
         const body: Record<string, string> = {
@@ -283,11 +284,14 @@ export default function ApprovalWizardDialog({
         setCurrentStep(null);
         toast({ title: 'Completed', description: 'Approval workflow completed successfully.' });
         onComplete?.(data.agreement_id ?? null, data.pdf_storage_path ?? null);
-        // Auto-close after a brief delay so the user sees the success state
-        setTimeout(() => onOpenChange(false), 800);
+        // Don't auto-close — let the user see the completion screen and download PDF
       } else {
-        setCurrentStep(data.current_step ?? null);
-        setCurrentStepIndex((idx) => idx + 1);
+        const nextStep = data.current_step ?? null;
+        setCurrentStep(nextStep);
+        // Only increment progress for visual steps (non-visual auto-advance without progress change)
+        if (nextStep && !NON_VISUAL_STEP_TYPES.has(nextStep.step_type) && nextStep.step_type !== 'pass' && nextStep.step_type !== 'fail') {
+          setCurrentStepIndex((idx) => idx + 1);
+        }
         setStepResults((data.step_results as Array<{ step_id: string; payload: Record<string, unknown> }>) ?? []);
         setPayload({});
         setScrolledToEnd(false);

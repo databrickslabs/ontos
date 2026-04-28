@@ -544,7 +544,7 @@ class AgreementWizardManager:
                         f"for {entity_label}."
                     ),
                     recipient=recipient,
-                    link=f"/approvals/agreements/{agreement_id}",
+                    link=f"/{session.entity_type.replace('_', '-')}s/{session.entity_id}" if session.entity_type else "/workflows",
                     action_type="agreement_completed",
                     action_payload={
                         "agreement_id": agreement_id,

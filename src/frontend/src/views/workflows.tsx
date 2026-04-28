@@ -885,12 +885,21 @@ export default function Workflows() {
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">{row.original.workflow_name}</span>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const wfMatch = workflows.find(w => w.name === row.original.workflow_name);
+        const wfType = wfMatch?.workflow_type || 'process';
+        return (
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">{row.original.workflow_name}</span>
+            {wfType === 'approval' ? (
+              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Approval</Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">Process</Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'entity_name',

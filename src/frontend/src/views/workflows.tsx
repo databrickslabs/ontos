@@ -31,7 +31,6 @@ import {
   Power,
   PowerOff,
   HelpCircle,
-  UserCheck,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -127,7 +126,7 @@ export default function Workflows() {
 
   // Approval sessions state
   const [approvalSessions, setApprovalSessions] = useState<any[]>([]);
-  const [isLoadingApprovalSessions, setIsLoadingApprovalSessions] = useState(true);
+  const [, setIsLoadingApprovalSessions] = useState(true);
   
   // Execution detail dialog state
   const [selectedExecution, setSelectedExecution] = useState<WorkflowExecution | null>(null);
@@ -1066,58 +1065,6 @@ export default function Workflows() {
     },
   ];
 
-  const approvalSessionColumns: ColumnDef<any>[] = [
-    {
-      accessorKey: 'workflow_name',
-      header: 'Workflow',
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Approval</Badge>
-          <span className="font-medium">{row.original.workflow_name || 'Unknown'}</span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: 'entity_type',
-      header: 'Entity',
-      cell: ({ row }) => (
-        <span className="text-sm">{row.original.entity_type}: {row.original.entity_id?.substring(0, 8)}...</span>
-      ),
-    },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }) => {
-        const status = row.original.status;
-        const color = status === 'completed' ? 'text-green-600' : status === 'abandoned' ? 'text-red-600' : 'text-blue-600';
-        return <span className={`text-sm font-medium ${color}`}>{status}</span>;
-      },
-    },
-    {
-      accessorKey: 'completion_action',
-      header: 'Action',
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{row.original.completion_action || '\u2014'}</span>
-      ),
-    },
-    {
-      accessorKey: 'created_by',
-      header: 'User',
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{row.original.created_by || '\u2014'}</span>
-      ),
-    },
-    {
-      accessorKey: 'created_at',
-      header: 'Started',
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {row.original.created_at ? new Date(row.original.created_at).toLocaleString() : '\u2014'}
-        </span>
-      ),
-    },
-  ];
-
   // Client-side type filtering (all data fetched once, tab switching is instant)
   const typeFilteredWorkflows = useMemo(() => {
     if (workflowTypeFilter === 'all') return workflows;
@@ -1139,17 +1086,27 @@ export default function Workflows() {
     });
   }, [executions, typeFilteredWorkflowIds, typeFilteredWorkflows]);
 
-  const typeFilteredApprovalSessions = useMemo(() => {
-    // Approval sessions are always approval type, so only show when filter is 'all' or 'approval'
+  // Transform approval sessions into execution-shaped rows for the unified table
+  const approvalSessionsAsExecutions = useMemo(() => {
     if (workflowTypeFilter === 'process') return [];
-    return approvalSessions;
+    return approvalSessions.map((s): WorkflowExecution => ({
+      id: s.id,
+      workflow_id: s.workflow_id,
+      workflow_name: s.workflow_name || 'Approval Workflow',
+      status: s.status === 'completed' ? 'succeeded' : s.status === 'abandoned' ? 'cancelled' : 'running',
+      entity_type: s.entity_type,
+      entity_id: s.entity_id,
+      entity_name: s.entity_id,
+      started_at: s.created_at,
+      finished_at: s.updated_at,
+      current_step_name: s.status === 'in_progress' ? `Step ${(s.current_step_index || 0) + 1}` : undefined,
+      success_count: s.status === 'completed' ? 1 : 0,
+      failure_count: s.status === 'abandoned' ? 1 : 0,
+      step_executions: [],
+    }));
   }, [approvalSessions, workflowTypeFilter]);
 
-  // Stats (computed from type-filtered data so they reflect the active tab)
-  const activeWorkflows = typeFilteredWorkflows.filter(w => w.is_active).length;
-  const totalWorkflows = typeFilteredWorkflows.length;
-  const runningExecutions = typeFilteredExecutions.filter(e => e.status === 'running' || e.status === 'paused').length;
-  const recentFailures = typeFilteredExecutions.filter(e => e.status === 'failed').length;
+  // Stats (computed after allExecutions is defined below)
 
   // Stats card filtered data (layered on top of type filtering)
   const filteredWorkflows = useMemo(() => {
@@ -1159,11 +1116,27 @@ export default function Workflows() {
     return typeFilteredWorkflows;
   }, [typeFilteredWorkflows, statsFilter]);
 
+  // Merge process executions + approval sessions into one unified list
+  const allExecutions = useMemo(() => {
+    const merged = [...typeFilteredExecutions, ...approvalSessionsAsExecutions];
+    return merged.sort((a, b) => {
+      const da = a.started_at ? new Date(a.started_at).getTime() : 0;
+      const db = b.started_at ? new Date(b.started_at).getTime() : 0;
+      return db - da; // newest first
+    });
+  }, [typeFilteredExecutions, approvalSessionsAsExecutions]);
+
+  // Stats (computed from merged executions so they include approval sessions)
+  const activeWorkflows = typeFilteredWorkflows.filter(w => w.is_active).length;
+  const totalWorkflows = typeFilteredWorkflows.length;
+  const runningExecutions = allExecutions.filter(e => e.status === 'running' || e.status === 'paused').length;
+  const recentFailures = allExecutions.filter(e => e.status === 'failed' || e.status === 'cancelled').length;
+
   const filteredExecutions = useMemo(() => {
-    if (statsFilter === 'running') return typeFilteredExecutions.filter(e => e.status === 'running' || e.status === 'paused');
-    if (statsFilter === 'failed') return typeFilteredExecutions.filter(e => e.status === 'failed');
-    return typeFilteredExecutions;
-  }, [typeFilteredExecutions, statsFilter]);
+    if (statsFilter === 'running') return allExecutions.filter(e => e.status === 'running' || e.status === 'paused');
+    if (statsFilter === 'failed') return allExecutions.filter(e => e.status === 'failed');
+    return allExecutions;
+  }, [allExecutions, statsFilter]);
 
   // Reset stats filter when workflow type changes
   useEffect(() => { setStatsFilter('all'); }, [workflowTypeFilter]);
@@ -1462,36 +1435,7 @@ export default function Workflows() {
         </CardContent>
       </Card>
 
-      {/* Approval Sessions */}
-      {typeFilteredApprovalSessions.length > 0 && (
-        <Card className="mt-8">
-          <CardHeader>
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <UserCheck className="h-5 w-5" />
-                Approval Sessions
-              </CardTitle>
-              <CardDescription>
-                Wizard sessions from approval workflows (subscribe, request access, etc.).
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoadingApprovalSessions ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : (
-              <DataTable
-                columns={approvalSessionColumns}
-                data={typeFilteredApprovalSessions}
-                searchColumn="workflow_name"
-                storageKey="approval-sessions-sort"
-              />
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Approval Sessions are merged into the Recent Executions table above */}
 
       {/* Duplicate Workflow Dialog */}
       <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>

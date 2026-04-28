@@ -507,6 +507,12 @@ export default function ApprovalWizardDialog({
               <div className="space-y-3">
                 <div
                   className="max-h-64 overflow-y-auto border rounded-md p-4 text-sm prose prose-sm dark:prose-invert"
+                  ref={(el) => {
+                    // If content fits without scrolling, mark as scrolled immediately
+                    if (el && !scrolledToEnd && el.scrollHeight <= el.clientHeight + 10) {
+                      setScrolledToEnd(true);
+                    }
+                  }}
                   onScroll={(e) => {
                     const el = e.currentTarget;
                     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -110,6 +110,8 @@ export default function Workflows() {
   
   // Workflow type filter: process (event-driven) | approval (wizard-driven)
   const [workflowTypeFilter, setWorkflowTypeFilter] = useState<'all' | 'process' | 'approval'>('all');
+  // Stats card filter
+  const [statsFilter, setStatsFilter] = useState<'all' | 'active' | 'inactive' | 'default' | 'running' | 'failed'>('all');
   // Workflow state
   const [workflows, setWorkflows] = useState<ProcessWorkflow[]>([]);
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(true);
@@ -1044,6 +1046,23 @@ export default function Workflows() {
   const runningExecutions = executions.filter(e => e.status === 'running' || e.status === 'paused').length;
   const recentFailures = executions.filter(e => e.status === 'failed').length;
 
+  // Stats card filtered data
+  const filteredWorkflows = useMemo(() => {
+    if (statsFilter === 'active') return workflows.filter(w => w.is_active);
+    if (statsFilter === 'inactive') return workflows.filter(w => !w.is_active);
+    if (statsFilter === 'default') return workflows.filter(w => w.is_default);
+    return workflows;
+  }, [workflows, statsFilter]);
+
+  const filteredExecutions = useMemo(() => {
+    if (statsFilter === 'running') return executions.filter(e => e.status === 'running' || e.status === 'paused');
+    if (statsFilter === 'failed') return executions.filter(e => e.status === 'failed');
+    return executions;
+  }, [executions, statsFilter]);
+
+  // Reset stats filter when workflow type changes
+  useEffect(() => { setStatsFilter('all'); }, [workflowTypeFilter]);
+
   return (
     <SettingsPageWrapper title={t('common:labels.workflows', 'Workflows')}>
       <div className="mb-6">
@@ -1123,16 +1142,32 @@ export default function Workflows() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 min-h-[120px]">
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors hover:border-primary ${statsFilter === 'active' ? 'border-primary bg-primary/5' : statsFilter === 'inactive' ? 'border-amber-500 bg-amber-500/5' : ''}`}
+          onClick={() => setStatsFilter(prev => prev === 'active' ? 'all' : 'active')}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Active Workflows</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">{activeWorkflows}</div>
-            <p className="text-sm text-muted-foreground mt-1">of {totalWorkflows} total</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              of {totalWorkflows} total
+              {totalWorkflows - activeWorkflows > 0 && (
+                <button
+                  className="ml-1 text-amber-600 hover:underline"
+                  onClick={(e) => { e.stopPropagation(); setStatsFilter(prev => prev === 'inactive' ? 'all' : 'inactive'); }}
+                >
+                  ({totalWorkflows - activeWorkflows} inactive)
+                </button>
+              )}
+            </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors hover:border-primary ${statsFilter === 'default' ? 'border-primary bg-primary/5' : ''}`}
+          onClick={() => setStatsFilter(prev => prev === 'default' ? 'all' : 'default')}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Default Workflows</CardTitle>
           </CardHeader>
@@ -1141,7 +1176,10 @@ export default function Workflows() {
             <p className="text-sm text-muted-foreground mt-1">built-in workflows</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors hover:border-primary ${statsFilter === 'running' ? 'border-primary bg-primary/5' : ''}`}
+          onClick={() => setStatsFilter(prev => prev === 'running' ? 'all' : 'running')}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">In Progress</CardTitle>
           </CardHeader>
@@ -1150,7 +1188,10 @@ export default function Workflows() {
             <p className="text-sm text-muted-foreground mt-1">running or paused</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors hover:border-primary ${statsFilter === 'failed' ? 'border-primary bg-primary/5' : ''}`}
+          onClick={() => setStatsFilter(prev => prev === 'failed' ? 'all' : 'failed')}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Recent Failures</CardTitle>
           </CardHeader>
@@ -1162,6 +1203,18 @@ export default function Workflows() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Stats filter indicator */}
+      {statsFilter !== 'all' && (
+        <div className="flex items-center gap-2 mb-4">
+          <Badge variant="outline" className="text-sm">
+            Filtered: {statsFilter === 'active' ? 'Active workflows' : statsFilter === 'inactive' ? 'Inactive workflows' : statsFilter === 'default' ? 'Default workflows' : statsFilter === 'running' ? 'Running executions' : 'Failed executions'}
+          </Badge>
+          <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setStatsFilter('all')}>
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {/* Workflows Table */}
       <Card className="mb-8">
@@ -1193,9 +1246,9 @@ export default function Workflows() {
               )}
             </div>
           ) : (
-            <DataTable 
-              columns={workflowColumns} 
-              data={workflows}
+            <DataTable
+              columns={workflowColumns}
+              data={filteredWorkflows}
               searchColumn="name"
               storageKey="workflows-sort"
               bulkActions={canEdit ? (selectedRows) => (
@@ -1259,9 +1312,9 @@ export default function Workflows() {
               <p className="text-sm">Executions will appear here when workflows are triggered.</p>
             </div>
           ) : (
-            <DataTable 
-              columns={executionColumns} 
-              data={executions}
+            <DataTable
+              columns={executionColumns}
+              data={filteredExecutions}
               searchColumn="workflow_name"
               storageKey="workflow-executions-sort"
               onRowClick={(row) => {

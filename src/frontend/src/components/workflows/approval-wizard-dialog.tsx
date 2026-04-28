@@ -338,7 +338,7 @@ export default function ApprovalWizardDialog({
     const wf = workflows.find((w) => w.steps?.some((s) => s.step_id === currentStep.step_id));
     if (!wf?.steps) return currentStepIndex >= totalSteps - 1;
     const stepsAfterCurrent = wf.steps.slice(currentStepIndex + 1);
-    return stepsAfterCurrent.every((s) => NON_VISUAL_STEP_TYPES.has(s.step_type));
+    return stepsAfterCurrent.every((s) => NON_VISUAL_STEP_TYPES.has(s.step_type) || s.step_type === 'pass' || s.step_type === 'fail');
   })();
 
   /** Human-readable action name derived from completionAction. */

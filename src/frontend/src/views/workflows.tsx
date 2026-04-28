@@ -136,11 +136,8 @@ export default function Workflows() {
   const loadWorkflows = useCallback(async () => {
     setIsLoadingWorkflows(true);
     try {
-      const params = new URLSearchParams();
-      if (workflowTypeFilter !== 'all') {
-        params.set('workflow_type', workflowTypeFilter);
-      }
-      const response = await apiGet<WorkflowListResponse>(`/api/workflows?${params.toString()}`);
+      // Always fetch all workflows — type filtering is done client-side for instant tab switching
+      const response = await apiGet<WorkflowListResponse>('/api/workflows');
       if (response.data) {
         setWorkflows(response.data.workflows || []);
       }
@@ -153,7 +150,7 @@ export default function Workflows() {
     } finally {
       setIsLoadingWorkflows(false);
     }
-  }, [apiGet, toast, t, workflowTypeFilter]);
+  }, [apiGet, toast, t]);
 
   const loadExecutions = useCallback(async () => {
     setIsLoadingExecutions(true);
@@ -1040,25 +1037,46 @@ export default function Workflows() {
     },
   ];
 
-  // Stats
-  const activeWorkflows = workflows.filter(w => w.is_active).length;
-  const totalWorkflows = workflows.length;
-  const runningExecutions = executions.filter(e => e.status === 'running' || e.status === 'paused').length;
-  const recentFailures = executions.filter(e => e.status === 'failed').length;
+  // Client-side type filtering (all data fetched once, tab switching is instant)
+  const typeFilteredWorkflows = useMemo(() => {
+    if (workflowTypeFilter === 'all') return workflows;
+    return workflows.filter(w => (w.workflow_type || 'process') === workflowTypeFilter);
+  }, [workflows, workflowTypeFilter]);
 
-  // Stats card filtered data
+  // Build a set of workflow IDs for the active type filter to filter executions
+  const typeFilteredWorkflowIds = useMemo(() => {
+    if (workflowTypeFilter === 'all') return null; // null = don't filter
+    return new Set(typeFilteredWorkflows.map(w => w.id));
+  }, [workflowTypeFilter, typeFilteredWorkflows]);
+
+  const typeFilteredExecutions = useMemo(() => {
+    if (!typeFilteredWorkflowIds) return executions;
+    return executions.filter(e => {
+      // Match execution to workflow by workflow_id (from trigger context or name)
+      const wfMatch = typeFilteredWorkflows.find(w => w.name === e.workflow_name);
+      return wfMatch != null;
+    });
+  }, [executions, typeFilteredWorkflowIds, typeFilteredWorkflows]);
+
+  // Stats (computed from type-filtered data so they reflect the active tab)
+  const activeWorkflows = typeFilteredWorkflows.filter(w => w.is_active).length;
+  const totalWorkflows = typeFilteredWorkflows.length;
+  const runningExecutions = typeFilteredExecutions.filter(e => e.status === 'running' || e.status === 'paused').length;
+  const recentFailures = typeFilteredExecutions.filter(e => e.status === 'failed').length;
+
+  // Stats card filtered data (layered on top of type filtering)
   const filteredWorkflows = useMemo(() => {
-    if (statsFilter === 'active') return workflows.filter(w => w.is_active);
-    if (statsFilter === 'inactive') return workflows.filter(w => !w.is_active);
-    if (statsFilter === 'default') return workflows.filter(w => w.is_default);
-    return workflows;
-  }, [workflows, statsFilter]);
+    if (statsFilter === 'active') return typeFilteredWorkflows.filter(w => w.is_active);
+    if (statsFilter === 'inactive') return typeFilteredWorkflows.filter(w => !w.is_active);
+    if (statsFilter === 'default') return typeFilteredWorkflows.filter(w => w.is_default);
+    return typeFilteredWorkflows;
+  }, [typeFilteredWorkflows, statsFilter]);
 
   const filteredExecutions = useMemo(() => {
-    if (statsFilter === 'running') return executions.filter(e => e.status === 'running' || e.status === 'paused');
-    if (statsFilter === 'failed') return executions.filter(e => e.status === 'failed');
-    return executions;
-  }, [executions, statsFilter]);
+    if (statsFilter === 'running') return typeFilteredExecutions.filter(e => e.status === 'running' || e.status === 'paused');
+    if (statsFilter === 'failed') return typeFilteredExecutions.filter(e => e.status === 'failed');
+    return typeFilteredExecutions;
+  }, [typeFilteredExecutions, statsFilter]);
 
   // Reset stats filter when workflow type changes
   useEffect(() => { setStatsFilter('all'); }, [workflowTypeFilter]);

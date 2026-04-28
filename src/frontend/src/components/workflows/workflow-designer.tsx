@@ -183,7 +183,7 @@ const edgeTypes = {
 };
 
 // Palette steps filtered by workflow type
-const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield }[] = [
+const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield; disabled?: boolean }[] = [
   { type: 'policy_check', label: 'Policy Check', icon: ClipboardCheck },
   { type: 'validation', label: 'Validation', icon: Shield },
   { type: 'approval', label: 'Request Approval', icon: UserCheck },
@@ -194,10 +194,10 @@ const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shiel
   { type: 'script', label: 'Script', icon: Code },
   { type: 'create_asset_review', label: 'Asset Review', icon: FileSearch },
   { type: 'webhook', label: 'Webhook', icon: Globe },
-  { type: 'grant_permissions', label: 'Grant Permissions', icon: KeyRound },
+  { type: 'grant_permissions', label: 'Grant Permissions', icon: KeyRound, disabled: true },
 ];
 
-const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield }[] = [
+const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield; disabled?: boolean }[] = [
   { type: 'legal_document', label: 'Legal Document', icon: FileText },
   { type: 'acknowledgement_checklist', label: 'Acknowledgement Checklist', icon: ListChecks },
   { type: 'user_action', label: 'User Action', icon: MessageSquare },
@@ -1006,9 +1006,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             <Panel position="top-left" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-2 dark:bg-slate-800/95">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-muted-foreground dark:text-slate-300 px-2 mb-1">Add Step</span>
-                {(workflowType === 'approval' ? APPROVAL_PALETTE_STEPS : PROCESS_PALETTE_STEPS).map(({ type, label, icon: Icon }) => (
-                  <Button key={type} variant="ghost" size="sm" className="justify-start" onClick={() => addStep(type)}>
-                    <Icon className="h-4 w-4 mr-2" /> {label}
+                {(workflowType === 'approval' ? APPROVAL_PALETTE_STEPS : PROCESS_PALETTE_STEPS).map(({ type, label, icon: Icon, disabled }) => (
+                  <Button key={type} variant="ghost" size="sm" className={`justify-start ${disabled ? 'opacity-50' : ''}`} onClick={() => !disabled && addStep(type)} disabled={disabled}>
+                    <Icon className="h-4 w-4 mr-2" /> {label}{disabled ? ' (soon)' : ''}
                   </Button>
                 ))}
                 <Separator className="my-1" />
@@ -1980,7 +1980,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           placeholder="in_app, email, webhook"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Available: in_app, email, webhook
+                          Supported: in_app. Coming soon: email, webhook.
                         </p>
                       </div>
                       <div>

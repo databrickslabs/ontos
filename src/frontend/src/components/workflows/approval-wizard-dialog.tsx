@@ -17,9 +17,26 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Check, XCircle, ChevronRight } from 'lucide-react';
+import { Loader2, Check, XCircle, ChevronRight, FileText } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+
+/** Lightweight markdown to HTML — handles headers, bold, lists, paragraphs. */
+function simpleMarkdown(text: string): string {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')  // escape HTML
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br/>')
+    .replace(/^/, '<p>').replace(/$/, '</p>');
+}
 
 interface ApprovalWorkflowRef {
   id: string;
@@ -78,7 +95,7 @@ export default function ApprovalWizardDialog({
   const [, setStepResults] = useState<Array<{ step_id: string; payload: Record<string, unknown> }>>([]);
   const [payload, setPayload] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [completeResult, setCompleteResult] = useState<{ agreement_id: string | null; pdf_storage_path: string | null } | null>(null);
+  const [completeResult, setCompleteResult] = useState<{ agreement_id: string | null; pdf_storage_path: string | null; pdf_url: string | null } | null>(null);
   /** Total steps and current index (0-based) for the progress indicator. */
   const [totalSteps, setTotalSteps] = useState(0);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -252,7 +269,7 @@ export default function ApprovalWizardDialog({
     setLoading(true);
     try {
       const submissionPayload = currentStep.step_type === 'user_action' ? payload : stepValidation.payload;
-      const res = await post<{ complete?: boolean; agreement_id?: string; pdf_storage_path?: string; current_step?: WizardStep; step_results?: unknown[] }>(
+      const res = await post<{ complete?: boolean; agreement_id?: string; pdf_storage_path?: string; pdf_url?: string; current_step?: WizardStep; step_results?: unknown[] }>(
         `/api/approvals/sessions/${sessionId}/steps`,
         { step_id: currentStep.step_id, payload: submissionPayload },
       );
@@ -260,9 +277,9 @@ export default function ApprovalWizardDialog({
         toast({ title: 'Error', description: (res as { error?: string }).error || 'Failed to submit step', variant: 'destructive' });
         return;
       }
-      const data = res.data as { complete?: boolean; agreement_id?: string; pdf_storage_path?: string; current_step?: WizardStep; step_results?: unknown[] };
+      const data = res.data as { complete?: boolean; agreement_id?: string; pdf_storage_path?: string; pdf_url?: string; current_step?: WizardStep; step_results?: unknown[] };
       if (data.complete) {
-        setCompleteResult({ agreement_id: data.agreement_id ?? null, pdf_storage_path: data.pdf_storage_path ?? null });
+        setCompleteResult({ agreement_id: data.agreement_id ?? null, pdf_storage_path: data.pdf_storage_path ?? null, pdf_url: data.pdf_url ?? null });
         setCurrentStep(null);
         toast({ title: 'Completed', description: 'Approval workflow completed successfully.' });
         onComplete?.(data.agreement_id ?? null, data.pdf_storage_path ?? null);
@@ -392,8 +409,15 @@ export default function ApprovalWizardDialog({
             {completeResult.agreement_id && (
               <p className="text-xs text-muted-foreground">Agreement ID: {completeResult.agreement_id}</p>
             )}
-            {completeResult.pdf_storage_path && (
-              <p className="text-xs text-muted-foreground">PDF: {completeResult.pdf_storage_path}</p>
+            {completeResult.pdf_url && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(completeResult.pdf_url!, '_blank')}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Download Agreement
+              </Button>
             )}
             <DialogFooter>
               <Button onClick={() => onOpenChange(false)}>Close</Button>
@@ -487,8 +511,7 @@ export default function ApprovalWizardDialog({
                   }}
                 >
                   <div dangerouslySetInnerHTML={{
-                    __html: (currentStep.config?.body_markdown as string || '*No document content provided.*')
-                      .replace(/\n/g, '<br/>')
+                    __html: simpleMarkdown(currentStep.config?.body_markdown as string || '*No document content provided.*')
                   }} />
                 </div>
                 {(currentStep.config?.require_scroll_to_end as boolean) && !scrolledToEnd && (
@@ -588,6 +611,7 @@ export default function ApprovalWizardDialog({
                     ? `Minimum ${(currentStep.config?.min_count as number)} co-signer(s) required.`
                     : 'Co-signers are optional for this step.'}
                   {' '}Maximum: {(currentStep.config?.max_count as number) ?? 5}.
+                  {' '}Co-signers are recorded on the agreement for audit purposes.
                 </p>
               </div>
             )}

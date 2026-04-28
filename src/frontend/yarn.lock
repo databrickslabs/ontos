@@ -745,10 +745,10 @@
   resolved "https://registry.yarnpkg.com/@floating-ui/utils/-/utils-0.2.9.tgz#50dea3616bc8191fb8e112283b49eaff03e78429"
   integrity sha512-MDWhGtE+eHw5JW7lq4qhc5yRLS11ERl1c7Z6Xd0a58DozHES6EnNNwUWbMiG4J9Cgj053Bhk8zvlhFYKVhULwg==
 
-"@headless-tree/core@^1.4.0":
-  version "1.4.0"
-  resolved "https://registry.yarnpkg.com/@headless-tree/core/-/core-1.4.0.tgz#fbc78869b2fa43832a5cb0579a27249cbe1c895f"
-  integrity sha512-xBDYr9WJb7CuWuWzAAHfCfYfYUdCknsHa6OkdsLqeOc4JuwYuSlQ+TcDjeeImmgF6hVSAbeBBubOwotk5pmiMw==
+"@headless-tree/core@^1.6.3":
+  version "1.6.3"
+  resolved "https://registry.yarnpkg.com/@headless-tree/core/-/core-1.6.3.tgz#b725d9d860784eb15b8fea2b4b8c0bbd1e680430"
+  integrity sha512-en0EOaZfiCRF2B8DEnhGhSaUf3hVr9Bauye8G8aswPbHOKSyhJiN4bsczz1GvqF4Xb7Ga3LP0vLA6Zih7YLoyw==
 
 "@headless-tree/react@^1.4.0":
   version "1.4.0"

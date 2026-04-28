@@ -4,7 +4,7 @@ Captures an immutable JSON snapshot of the workflow definition at session creati
 so historical agreements reflect what the signer actually saw (PRD #242, user stories #12-14, #23).
 
 Revision ID: g1_workflow_snapshot
-Revises: f1_merge_aa9_e2
+Revises: f1_merge_aa9_e2, 76a5bca4ce65
 Create Date: 2026-04-24
 """
 from typing import Sequence, Union
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 
 revision: str = "g1_workflow_snapshot"
-down_revision: Union[str, None] = "f1_merge_aa9_e2"
+down_revision: Union[str, Sequence[str], None] = ("f1_merge_aa9_e2", "76a5bca4ce65")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

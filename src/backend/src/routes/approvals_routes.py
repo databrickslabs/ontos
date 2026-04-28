@@ -1,7 +1,9 @@
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep
@@ -30,9 +32,14 @@ def get_agreement_wizard_manager(
     db: DBSessionDep,
     request: Request,
 ) -> AgreementWizardManager:
-    """Get AgreementWizardManager with optional PDF storage path from app.state."""
+    """Get AgreementWizardManager with optional PDF storage path and notifications from app.state."""
     storage_base_path = getattr(request.app.state, 'agreement_pdf_volume_path', None)
-    return AgreementWizardManager(db, storage_base_path=storage_base_path)
+    notifications_manager = getattr(request.app.state, 'notifications_manager', None)
+    return AgreementWizardManager(
+        db,
+        storage_base_path=storage_base_path,
+        notifications_manager=notifications_manager,
+    )
 
 
 @router.get('/approvals/sessions')
@@ -150,6 +157,119 @@ async def abort_approval_session(
     if not ok:
         raise HTTPException(status_code=404, detail="Session not found or not in progress")
     return {"session_id": session_id, "status": "abandoned"}
+
+
+# --- Agreements ---
+
+@router.get('/approvals/agreements')
+async def list_agreements(
+    request: Request,
+    db: DBSessionDep,
+    entity_type: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+):
+    """List agreements, optionally filtered by entity type/id."""
+    from src.repositories.agreements_repository import AgreementsRepository
+    repo = AgreementsRepository()
+    agreements = repo.list_recent(db, entity_type=entity_type, entity_id=entity_id, limit=limit)
+    return {"agreements": agreements, "total": len(agreements)}
+
+
+@router.get('/approvals/agreements/{agreement_id}')
+async def get_agreement(
+    agreement_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+):
+    """Get a single agreement by ID."""
+    from src.repositories.agreements_repository import AgreementsRepository
+    repo = AgreementsRepository()
+    agreement = repo.get(db, agreement_id)
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+    step_results = []
+    if agreement.step_results:
+        try:
+            step_results = json.loads(agreement.step_results) if isinstance(agreement.step_results, str) else agreement.step_results
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {
+        "id": agreement.id,
+        "entity_type": agreement.entity_type,
+        "entity_id": agreement.entity_id,
+        "workflow_id": agreement.workflow_id,
+        "workflow_name": agreement.workflow_name,
+        "wizard_session_id": agreement.wizard_session_id,
+        "step_results": step_results,
+        "pdf_storage_path": agreement.pdf_storage_path,
+        "created_by": agreement.created_by,
+        "created_at": agreement.created_at.isoformat() if agreement.created_at else None,
+        "pdf_url": f"/api/approvals/agreements/{agreement.id}/pdf",
+    }
+
+
+@router.get('/approvals/agreements/{agreement_id}/pdf')
+async def download_agreement_pdf(
+    agreement_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+):
+    """Download the agreement as an HTML document (printable to PDF).
+
+    If a reportlab-generated PDF file exists on disk, it is served directly.
+    Otherwise an HTML document is generated on-the-fly from the agreement's
+    snapshot and step results.
+    """
+    from src.repositories.agreements_repository import AgreementsRepository
+    from src.utils.agreement_pdf_builder import build_agreement_html
+
+    repo = AgreementsRepository()
+    agreement = repo.get(db, agreement_id)
+    if not agreement:
+        raise HTTPException(status_code=404, detail="Agreement not found")
+
+    # If a pre-generated PDF file exists on disk, serve it directly
+    if agreement.pdf_storage_path:
+        import os
+        if os.path.isfile(agreement.pdf_storage_path):
+            with open(agreement.pdf_storage_path, "rb") as f:
+                pdf_bytes = f.read()
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f'inline; filename="agreement-{agreement_id[:8]}.pdf"',
+                },
+            )
+
+    # Fall back to on-the-fly HTML generation
+    step_results: list = []
+    if agreement.step_results:
+        try:
+            parsed = json.loads(agreement.step_results) if isinstance(agreement.step_results, str) else agreement.step_results
+            if isinstance(parsed, list):
+                step_results = parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    html = build_agreement_html(
+        workflow_name=agreement.workflow_name or "Agreement",
+        entity_type=agreement.entity_type,
+        entity_id=agreement.entity_id,
+        step_results=step_results,
+        snapshot=agreement.workflow_snapshot,
+        created_by=agreement.created_by,
+        created_at=agreement.created_at,
+    )
+
+    return HTMLResponse(
+        content=html,
+        headers={
+            "Content-Disposition": f'inline; filename="agreement-{agreement_id[:8]}.html"',
+        },
+    )
 
 
 def register_routes(app):

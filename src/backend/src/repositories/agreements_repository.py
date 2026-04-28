@@ -51,6 +51,40 @@ class AgreementsRepository:
         """Get agreement by id."""
         return db.query(AgreementDb).filter(AgreementDb.id == agreement_id).first()
 
+    def list_recent(
+        self,
+        db: Session,
+        *,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List recent agreements, optionally filtered by entity type/id."""
+        query = db.query(AgreementDb)
+        if entity_type:
+            query = query.filter(AgreementDb.entity_type == entity_type)
+        if entity_id:
+            query = query.filter(AgreementDb.entity_id == entity_id)
+        agreements = (
+            query.order_by(AgreementDb.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        result = []
+        for a in agreements:
+            result.append({
+                "id": a.id,
+                "entity_type": a.entity_type,
+                "entity_id": a.entity_id,
+                "workflow_id": a.workflow_id,
+                "workflow_name": a.workflow_name,
+                "wizard_session_id": a.wizard_session_id,
+                "pdf_storage_path": a.pdf_storage_path,
+                "created_by": a.created_by,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            })
+        return result
+
     def set_pdf_storage_path(
         self,
         db: Session,

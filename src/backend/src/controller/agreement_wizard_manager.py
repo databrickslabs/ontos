@@ -7,13 +7,16 @@ and on completion creates an agreement record and writes to entity change log
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
 from src.controller.workflows_manager import WorkflowsManager
 from src.controller.change_log_manager import ChangeLogManager
 from src.models.process_workflows import ProcessWorkflow, WorkflowStep, StepType, WorkflowType
+from src.models.notifications import Notification, NotificationType
 from src.repositories.agreement_wizard_sessions_repository import agreement_wizard_sessions_repo
 from src.repositories.agreements_repository import agreements_repo
 from src.repositories.data_contracts_repository import data_contract_repo
@@ -21,16 +24,26 @@ from src.repositories.data_products_repository import data_product_repo
 from src.repositories.assets_repository import asset_repo
 from src.common.logging import get_logger
 
+if TYPE_CHECKING:
+    from src.controller.notifications_manager import NotificationsManager
+
 logger = get_logger(__name__)
 
 
 class AgreementWizardManager:
     """Manager for agreement wizard sessions (approval workflows as wizards)."""
 
-    def __init__(self, db: Session, *, storage_base_path: Optional[str] = None):
+    def __init__(
+        self,
+        db: Session,
+        *,
+        storage_base_path: Optional[str] = None,
+        notifications_manager: Optional['NotificationsManager'] = None,
+    ):
         self._db = db
         self._workflows_manager = WorkflowsManager(db)
         self._storage_base_path = storage_base_path
+        self._notifications_manager = notifications_manager
 
     def _get_workflow_steps(self, workflow_id: str) -> Optional[List[WorkflowStep]]:
         """Get workflow steps in order; workflow must be approval type."""
@@ -373,35 +386,37 @@ class AgreementWizardManager:
             details={"agreement_id": agreement.id, "session_id": session.id},
         )
         pdf_storage_path = agreement.pdf_storage_path
+        has_generate_pdf = False
         workflow = self._workflows_manager.get_workflow(session.workflow_id)
-        if workflow and self._storage_base_path:
+        if workflow:
             has_generate_pdf = any(
                 getattr(s, "step_type", None) == StepType.GENERATE_PDF
                 for s in (workflow.steps or [])
             )
-            if has_generate_pdf:
-                try:
-                    from pathlib import Path
-                    from src.common.agreement_pdf import build_agreement_pdf
-                    out_dir = Path(self._storage_base_path) / "agreements"
-                    out_dir.mkdir(parents=True, exist_ok=True)
-                    out_path = str(out_dir / f"{agreement.id}.pdf")
-                    steps_with_config = [
-                        {"step_id": s.step_id, "name": s.name, "step_type": s.step_type.value, "config": s.config or {}}
-                        for s in (workflow.steps or [])
-                    ]
-                    build_agreement_pdf(
-                        workflow_name=workflow.name,
-                        entity_type=session.entity_type,
-                        entity_id=session.entity_id,
-                        steps_with_config=steps_with_config,
-                        step_results=step_results,
-                        output_path=out_path,
-                    )
-                    agreements_repo.set_pdf_storage_path(self._db, agreement.id, out_path)
-                    pdf_storage_path = out_path
-                except Exception as e:
-                    logger.warning("Agreement PDF generation failed: %s", e)
+        if has_generate_pdf and workflow and self._storage_base_path:
+            # Try reportlab-based PDF first, fall back to HTML-based builder
+            try:
+                from pathlib import Path
+                from src.common.agreement_pdf import build_agreement_pdf
+                out_dir = Path(self._storage_base_path) / "agreements"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out_path = str(out_dir / f"{agreement.id}.pdf")
+                steps_with_config = [
+                    {"step_id": s.step_id, "name": s.name, "step_type": s.step_type.value, "config": s.config or {}}
+                    for s in (workflow.steps or [])
+                ]
+                build_agreement_pdf(
+                    workflow_name=workflow.name,
+                    entity_type=session.entity_type,
+                    entity_id=session.entity_id,
+                    steps_with_config=steps_with_config,
+                    step_results=step_results,
+                    output_path=out_path,
+                )
+                agreements_repo.set_pdf_storage_path(self._db, agreement.id, out_path)
+                pdf_storage_path = out_path
+            except Exception as e:
+                logger.warning("Agreement PDF generation failed (reportlab): %s — HTML download available via API", e)
         completion_action = getattr(session, "completion_action", None)
         subscriber_email = created_by or session.created_by
         if completion_action == "subscribe" and subscriber_email:
@@ -435,13 +450,141 @@ class AgreementWizardManager:
                 except Exception as e:
                     logger.warning("Subscribe (asset) after wizard failed: %s", e)
 
+        # Deliver step: send in_app notifications to configured recipients
+        self._send_delivery_notifications(
+            session=session,
+            workflow=workflow,
+            workflow_name=workflow.name if workflow else session.workflow_name,
+            agreement_id=agreement.id,
+            created_by=created_by,
+        )
+
         agreement_wizard_sessions_repo.set_completed(self._db, session.id)
+        pdf_url = f"/api/approvals/agreements/{agreement.id}/pdf" if has_generate_pdf else None
         return {
             "complete": True,
             "agreement_id": agreement.id,
             "pdf_storage_path": pdf_storage_path,
+            "pdf_url": pdf_url,
             "session_id": session.id,
         }
+
+    def _send_delivery_notifications(
+        self,
+        session: Any,
+        workflow: Any,
+        workflow_name: Optional[str],
+        agreement_id: str,
+        created_by: Optional[str],
+    ) -> None:
+        """Send in_app notifications for a deliver step if present in the workflow.
+
+        Resolves recipient tokens (``signer``, ``entity_owner``, or literal
+        email addresses) and creates one notification per recipient using the
+        existing NotificationsManager infrastructure.
+        """
+        if not self._notifications_manager:
+            return
+        if not workflow:
+            return
+
+        steps = workflow.steps or []
+        deliver_step = next(
+            (s for s in steps if getattr(s, 'step_type', None) == StepType.DELIVER),
+            None,
+        )
+        if not deliver_step:
+            return
+
+        config = deliver_step.config if hasattr(deliver_step, 'config') else {}
+        if isinstance(config, str):
+            config = json.loads(config)
+        config = config or {}
+
+        channels = config.get("channels", ["in_app"])
+        if "in_app" not in channels:
+            return
+
+        recipients_tokens = config.get("recipients", ["signer"])
+        signer_email = created_by or getattr(session, 'created_by', None)
+        entity_name = self._get_entity_name(session.entity_type, session.entity_id)
+        display_name = workflow_name or "Approval workflow"
+        entity_label = entity_name or f"{session.entity_type} {session.entity_id}"
+
+        # Resolve recipient tokens to email addresses
+        notification_recipients: List[str] = []
+        for token in recipients_tokens:
+            if token == "signer":
+                if signer_email:
+                    notification_recipients.append(signer_email)
+            elif token == "entity_owner":
+                # Best-effort: fall back to signer if we can't resolve the owner
+                owner = self._resolve_entity_owner(session.entity_type, session.entity_id)
+                notification_recipients.append(owner or signer_email or "")
+            elif isinstance(token, str) and "@" in token:
+                # Literal email address
+                notification_recipients.append(token)
+
+        # Deduplicate while preserving order, skip blanks
+        seen: set = set()
+        unique_recipients: List[str] = []
+        for r in notification_recipients:
+            if r and r not in seen:
+                seen.add(r)
+                unique_recipients.append(r)
+
+        for recipient in unique_recipients:
+            try:
+                notification = Notification(
+                    id=str(uuid.uuid4()),
+                    type=NotificationType.INFO,
+                    title=f"Agreement completed: {display_name}",
+                    description=(
+                        f"The approval workflow '{display_name}' has been completed "
+                        f"for {entity_label}."
+                    ),
+                    recipient=recipient,
+                    link=f"/approvals/agreements/{agreement_id}",
+                    action_type="agreement_completed",
+                    action_payload={
+                        "agreement_id": agreement_id,
+                        "entity_type": session.entity_type,
+                        "entity_id": session.entity_id,
+                    },
+                    created_at=datetime.utcnow(),
+                    read=False,
+                    can_delete=True,
+                )
+                self._notifications_manager.create_notification(
+                    notification=notification,
+                    db=self._db,
+                )
+                logger.info(
+                    "Delivery notification sent to %s for agreement %s",
+                    recipient, agreement_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to send delivery notification to %s: %s",
+                    recipient, e,
+                )
+
+    def _resolve_entity_owner(self, entity_type: str, entity_id: str) -> Optional[str]:
+        """Best-effort lookup of the entity owner's email."""
+        et = (entity_type or "").strip().lower()
+        try:
+            if et == "data_product":
+                row = data_product_repo.get(self._db, entity_id)
+                return getattr(row, 'owner', None) or getattr(row, 'owner_email', None) if row else None
+            if et in ("dataset", "asset"):
+                row = asset_repo.get(self._db, entity_id)
+                return getattr(row, 'owner', None) or getattr(row, 'owner_email', None) if row else None
+            if et == "data_contract":
+                row = data_contract_repo.get(self._db, entity_id)
+                return getattr(row, 'owner', None) or getattr(row, 'owner_email', None) if row else None
+        except Exception as e:
+            logger.debug("Could not resolve entity owner for %s/%s: %s", entity_type, entity_id, e)
+        return None
 
     def abort_session(self, session_id: str) -> bool:
         """Mark session as abandoned."""

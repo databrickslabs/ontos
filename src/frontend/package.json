@@ -61,7 +61,7 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.22.0",
     "react-sparklines": "^1.7.0",
-    "react-syntax-highlighter": "^15.6.1",
+    "react-syntax-highlighter": "^16.1.1",
     "reactflow": "^11.11.4",
     "recharts": "^2.15.1",
     "remark-gfm": "^4.0.1",

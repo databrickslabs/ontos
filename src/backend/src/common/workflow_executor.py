@@ -2111,8 +2111,9 @@ class WorkflowExecutor:
             workflow_name=workflow.name,
             step_results={current_step_id: {
                 'passed': step_result,
-                'message': 'approved' if step_result else 'rejected',
-                'data': result_data,
+                'decision': 'approved' if step_result else 'rejected',
+                # Flatten result_data so ${step_results.approve.reason} works directly
+                **(result_data or {}),
             }},
         )
 

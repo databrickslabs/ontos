@@ -37,6 +37,7 @@ def build_agreement_pdf(
     snapshot: Optional[str] = None,
     created_by: Optional[str] = None,
     created_at: Optional[datetime] = None,
+    workflow_version: Optional[int] = None,
 ) -> bytes:
     """Build a PDF document summarizing the agreement. Returns PDF bytes.
 
@@ -47,7 +48,9 @@ def build_agreement_pdf(
 
     snapshot_data = json.loads(snapshot) if snapshot else {}
     steps = snapshot_data.get("steps", [])
+    version = workflow_version or snapshot_data.get("version")
     ts = created_at.strftime("%Y-%m-%d %H:%M UTC") if created_at else "Unknown"
+    version_label = f" (v{version})" if version else ""
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=25)
@@ -56,7 +59,7 @@ def build_agreement_pdf(
     # Title
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(30, 64, 175)  # blue
-    pdf.cell(0, 12, f"Agreement: {workflow_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 12, f"Agreement: {workflow_name}{version_label}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_draw_color(30, 64, 175)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
@@ -137,7 +140,7 @@ def build_agreement_pdf(
     pdf.cell(0, 6, f"Digitally signed by: {created_by or 'Unknown'}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(0, 6, f"Date: {ts}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, f"Workflow: {workflow_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Workflow: {workflow_name}{version_label}", new_x="LMARGIN", new_y="NEXT")
 
     return pdf.output()
 

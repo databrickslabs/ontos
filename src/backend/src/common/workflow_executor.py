@@ -1660,13 +1660,16 @@ class GrantPermissionsStepHandler(StepHandler):
         securable_type_str: Optional[str] = None
 
         if config.target_source == 'from_entity':
-            # Build full name from entity context
-            # Prefer explicit full_name on the entity, fall back to entity_name / entity_id
+            # Build full name from entity context.
+            # For UC objects the fully-qualified name (catalog.schema.table) is
+            # required.  entity_id typically carries the full name while
+            # entity.name / entity_name may only hold the short leaf name, so
+            # prefer entity_id and full_name over the short name fields.
             target_full_name = (
                 context.entity.get('full_name')
+                or context.entity_id
                 or context.entity.get('name')
                 or context.entity_name
-                or context.entity_id
             )
             # Determine securable type from entity_type
             et = context.entity_type.lower().replace(' ', '_')
@@ -1732,21 +1735,29 @@ class GrantPermissionsStepHandler(StepHandler):
             )
 
         try:
-            from databricks.sdk.service.catalog import PermissionsChange, Privilege, SecurableType
+            # Use the UC REST API directly instead of ws.grants.update() because
+            # newer SDK versions (>=0.95) route through a managed-catalog RPC
+            # that rejects TABLE as a securable type.  The REST endpoint
+            # PATCH /api/2.1/unity-catalog/permissions/{type}/{full_name} works
+            # reliably across all SDK versions.
+            import urllib.parse
 
-            securable = SecurableType(securable_type_str)
-            privilege = Privilege[permission_type]
+            securable_lower = securable_type_str.lower()  # e.g. "table", "schema"
+            encoded_name = urllib.parse.quote(target_full_name, safe='')
+            path = f"/api/2.1/unity-catalog/permissions/{securable_lower}/{encoded_name}"
 
-            ws.grants.update(
-                securable_type=securable,
-                full_name=target_full_name,
-                changes=[
-                    PermissionsChange(
-                        add=[privilege],
-                        principal=principal,
-                    )
-                ],
-            )
+            body = {
+                "changes": [
+                    {
+                        "add": [permission_type],
+                        "principal": principal,
+                    }
+                ]
+            }
+
+            # CachingWorkspaceClient delegates unknown attrs to the inner SDK
+            # client; api_client.do() issues a raw HTTP request.
+            ws.api_client.do("PATCH", path, body=body)
 
             msg = f"Granted {permission_type} on {securable_type_str} '{target_full_name}' to {principal}"
             logger.info(f"grant_permissions: {msg}")

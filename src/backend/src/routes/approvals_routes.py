@@ -13,6 +13,18 @@ from src.controller.approvals_manager import ApprovalsManager
 from src.controller.agreement_wizard_manager import AgreementWizardManager
 from src.common.logging import get_logger
 
+
+def _agreement_has_pdf_step(agreement) -> bool:
+    """Check if the agreement's workflow snapshot includes a generate_pdf step."""
+    snapshot = getattr(agreement, 'workflow_snapshot', None)
+    if not snapshot:
+        return False
+    try:
+        data = json.loads(snapshot) if isinstance(snapshot, str) else snapshot
+        return any(s.get('step_type') == 'generate_pdf' for s in data.get('steps', []))
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        return False
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Approvals"])
@@ -206,7 +218,7 @@ async def get_agreement(
         "pdf_storage_path": agreement.pdf_storage_path,
         "created_by": agreement.created_by,
         "created_at": agreement.created_at.isoformat() if agreement.created_at else None,
-        "pdf_url": f"/api/approvals/agreements/{agreement.id}/pdf",
+        "pdf_url": f"/api/approvals/agreements/{agreement.id}/pdf" if _agreement_has_pdf_step(agreement) else None,
     }
 
 
@@ -230,6 +242,10 @@ async def download_agreement_pdf(
     agreement = repo.get(db, agreement_id)
     if not agreement:
         raise HTTPException(status_code=404, detail="Agreement not found")
+
+    # Only generate PDF if the workflow included a generate_pdf step
+    if not _agreement_has_pdf_step(agreement) and not getattr(agreement, 'pdf_storage_path', None):
+        raise HTTPException(status_code=404, detail="This agreement does not have PDF generation enabled")
 
     # If a pre-generated PDF file exists on disk, serve it directly
     if agreement.pdf_storage_path:

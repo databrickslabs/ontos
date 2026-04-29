@@ -216,14 +216,15 @@ async def download_agreement_pdf(
     db: DBSessionDep,
     _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ):
-    """Download the agreement as an HTML document (printable to PDF).
+    """Download the agreement as a PDF document.
 
-    If a reportlab-generated PDF file exists on disk, it is served directly.
-    Otherwise an HTML document is generated on-the-fly from the agreement's
-    snapshot and step results.
+    Generation priority:
+    1. Pre-generated PDF file on disk (if ``pdf_storage_path`` exists).
+    2. On-the-fly PDF via fpdf2 (``build_agreement_pdf``).
+    3. Fallback to styled HTML if fpdf2 is not installed.
     """
     from src.repositories.agreements_repository import AgreementsRepository
-    from src.utils.agreement_pdf_builder import build_agreement_html
+    from src.utils.agreement_pdf_builder import build_agreement_pdf, build_agreement_html, _HAS_FPDF
 
     repo = AgreementsRepository()
     agreement = repo.get(db, agreement_id)
@@ -240,11 +241,11 @@ async def download_agreement_pdf(
                 content=pdf_bytes,
                 media_type="application/pdf",
                 headers={
-                    "Content-Disposition": f'inline; filename="agreement-{agreement_id[:8]}.pdf"',
+                    "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
                 },
             )
 
-    # Fall back to on-the-fly HTML generation
+    # Parse step_results from the agreement record
     step_results: list = []
     if agreement.step_results:
         try:
@@ -254,6 +255,26 @@ async def download_agreement_pdf(
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # Try real PDF generation via fpdf2
+    if _HAS_FPDF:
+        pdf_bytes = build_agreement_pdf(
+            workflow_name=agreement.workflow_name or "Agreement",
+            entity_type=agreement.entity_type,
+            entity_id=agreement.entity_id,
+            step_results=step_results,
+            snapshot=agreement.workflow_snapshot,
+            created_by=agreement.created_by,
+            created_at=agreement.created_at,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
+            },
+        )
+
+    # Fallback to on-the-fly HTML generation when fpdf2 is not available
     html = build_agreement_html(
         workflow_name=agreement.workflow_name or "Agreement",
         entity_type=agreement.entity_type,

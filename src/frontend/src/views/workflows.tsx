@@ -1248,7 +1248,7 @@ export default function Workflows() {
             <CardTitle className="text-lg">Default Workflows</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{workflows.filter(w => w.is_default).length}</div>
+            <div className="text-3xl font-bold">{typeFilteredWorkflows.filter(w => w.is_default).length}</div>
             <p className="text-sm text-muted-foreground mt-1">built-in workflows</p>
           </CardContent>
         </Card>

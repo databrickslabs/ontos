@@ -175,6 +175,12 @@ function SchemaConfigPanel({
     <>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       {propertyEntries.map(([key, propSchema]: [string, any]) => {
+        // Conditional visibility: hide field when x-visible-when condition not met
+        const visibleWhen = propSchema['x-visible-when'];
+        if (visibleWhen && config[visibleWhen.field] !== visibleWhen.value) {
+          return null;
+        }
+
         const value = config[key];
         const title: string =
           propSchema.title ||

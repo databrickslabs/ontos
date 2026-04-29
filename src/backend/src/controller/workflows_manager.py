@@ -650,7 +650,8 @@ class WorkflowsManager:
                         "volume_path": {
                             "type": "string",
                             "title": "Volume Path",
-                            "description": "Databricks Volume path for storing the PDF (e.g. /Volumes/catalog/schema/volume_name). Only used when Storage is 'volume'.",
+                            "description": "Databricks Volume path for storing the PDF (e.g. /Volumes/catalog/schema/volume_name).",
+                            "x-visible-when": {"field": "storage", "value": "volume"},
                         },
                     },
                 },
@@ -788,7 +789,8 @@ class WorkflowsManager:
                         "target_variable": {
                             "type": "string",
                             "title": "Target Variable Path",
-                            "description": "When granting on a variable: the dot-separated path to the target in step results (e.g. 'step_results.user_input.catalog_name'). Only used when 'What to Grant On' is 'from_variable'.",
+                            "description": "The dot-separated path to the target in step results (e.g. 'step_results.user_input.catalog_name').",
+                            "x-visible-when": {"field": "target_source", "value": "from_variable"},
                         },
                         "principal_source": {
                             "type": "string",
@@ -800,7 +802,8 @@ class WorkflowsManager:
                         "principal_variable": {
                             "type": "string",
                             "title": "Principal Variable Path",
-                            "description": "When granting to a variable: the dot-separated path to the principal email in step results (e.g. 'step_results.access_request.on_behalf_of'). Only used when 'Who Gets Access' is 'from_variable'.",
+                            "description": "The dot-separated path to the principal email in step results (e.g. 'step_results.access_request.on_behalf_of').",
+                            "x-visible-when": {"field": "principal_source", "value": "from_variable"},
                         },
                     },
                 },

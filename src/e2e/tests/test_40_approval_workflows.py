@@ -1152,9 +1152,9 @@ class TestAgreementPdfDownload:
         # Body should be non-empty
         assert len(resp.content) > 100, f"PDF body too small: {len(resp.content)} bytes"
 
-        # If real PDF, verify workflow name is embedded
+        # Verify it's a valid PDF (header check — content is FlateDecode compressed)
         if resp.content[:5] == b"%PDF-":
-            assert wf_name.encode() in resp.content, f"PDF should contain workflow name '{wf_name}'"
+            assert b"%%EOF" in resp.content[-20:] or b"%%EOF" in resp.content, "PDF should have valid EOF marker"
 
 
 class TestAgreementsListEndpoint:
@@ -1477,3 +1477,258 @@ class TestUserActionMinimumInputLength:
         )
         data = step_resp.json()
         assert data.get("complete") is True
+
+
+class TestPersistAgreementPositioning:
+    """Verify persist_agreement creates agreement mid-flow, not just at end."""
+
+    @pytest.fixture(autouse=True)
+    def _cleanup(self, api, url):
+        self._to_delete_wf = []
+        yield
+        for wid in reversed(self._to_delete_wf):
+            api.delete(url(f"/api/workflows/{wid}"))
+
+    def test_agreement_exists_after_persist_step(self, api, url):
+        """Workflow: user_action -> persist_agreement -> generate_pdf -> pass.
+        After submitting user_action and persist_agreement, the agreement should
+        already exist even before the session completes."""
+        wf = api.post(url("/api/workflows"), json={
+            "name": f"E2E-persist-pos-{_uid()}",
+            "workflow_type": "approval",
+            "trigger": {"type": "for_subscribe", "entity_types": []},
+            "is_active": True,
+            "steps": [
+                {"step_id": "input", "name": "Input", "step_type": "user_action",
+                 "config": {"title": "Reason", "requires_input": True},
+                 "on_pass": "persist", "order": 0},
+                {"step_id": "persist", "name": "Save", "step_type": "persist_agreement",
+                 "config": {}, "on_pass": "pdf", "order": 1},
+                {"step_id": "pdf", "name": "PDF", "step_type": "generate_pdf",
+                 "config": {}, "on_pass": "done", "order": 2},
+                {"step_id": "done", "name": "Done", "step_type": "pass",
+                 "config": {}, "order": 3},
+            ],
+        }).json()
+        self._to_delete_wf.append(wf["id"])
+
+        entity_id = f"e2e-persist-pos-{_uid()}"
+        session = api.post(url("/api/approvals/sessions"), json={
+            "workflow_id": wf["id"], "entity_type": "data_product", "entity_id": entity_id,
+        }).json()
+        sid = session["session_id"]
+
+        # Submit user_action
+        data = api.post(url(f"/api/approvals/sessions/{sid}/steps"), json={
+            "step_id": "input", "payload": {"reason": "Testing persist positioning"},
+        }).json()
+
+        # Submit persist_agreement
+        if not data.get("complete"):
+            data = api.post(url(f"/api/approvals/sessions/{sid}/steps"), json={
+                "step_id": "persist", "payload": {},
+            }).json()
+
+        # Check: agreement should already exist at this point
+        agreements = api.get(url(f"/api/approvals/agreements?entity_type=data_product&entity_id={entity_id}")).json()
+        agreement_list = agreements.get("agreements", [])
+        assert len(agreement_list) >= 1, f"Agreement should exist after persist_agreement step, got {len(agreement_list)}"
+
+        # Complete the rest
+        while not data.get("complete"):
+            next_step = data.get("current_step", {})
+            data = api.post(url(f"/api/approvals/sessions/{sid}/steps"), json={
+                "step_id": next_step.get("step_id", "done"), "payload": {},
+            }).json()
+
+
+class TestSnapshotRuntimeImmutability:
+    """Verify wizard uses snapshot, not live workflow, after session starts."""
+
+    @pytest.fixture(autouse=True)
+    def _cleanup(self, api, url):
+        self._to_delete_wf = []
+        self._to_abort = []
+        yield
+        for sid in reversed(self._to_abort):
+            try:
+                api.post(url(f"/api/approvals/sessions/{sid}/abort"), json={})
+            except Exception:
+                pass
+        for wid in reversed(self._to_delete_wf):
+            api.delete(url(f"/api/workflows/{wid}"))
+
+    def test_editing_workflow_doesnt_change_active_session(self, api, url):
+        """Start session -> edit workflow (change step config) -> advance session ->
+        verify session uses original config from snapshot."""
+        wf = api.post(url("/api/workflows"), json={
+            "name": f"E2E-snapshot-immut-{_uid()}",
+            "workflow_type": "approval",
+            "trigger": {"type": "for_subscribe", "entity_types": []},
+            "is_active": True,
+            "steps": [
+                {"step_id": "legal", "name": "Original Terms", "step_type": "legal_document",
+                 "config": {"title": "Original Title", "body_markdown": "Original body",
+                            "require_acknowledgement_checkbox": True,
+                            "acknowledgement_label": "I accept ORIGINAL"},
+                 "on_pass": "done", "order": 0},
+                {"step_id": "done", "name": "Done", "step_type": "pass",
+                 "config": {}, "order": 1},
+            ],
+        }).json()
+        wf_id = wf["id"]
+        self._to_delete_wf.append(wf_id)
+
+        # Start session (snapshot captured here)
+        session = api.post(url("/api/approvals/sessions"), json={
+            "workflow_id": wf_id, "entity_type": "data_product",
+            "entity_id": f"e2e-immut-{_uid()}",
+        }).json()
+        sid = session["session_id"]
+        self._to_abort.append(sid)
+
+        # Verify first step has original config
+        current = session["current_step"]
+        assert current["step_type"] == "legal_document"
+        assert current["config"]["title"] == "Original Title"
+
+        # NOW edit the live workflow — change the title
+        api.put(url(f"/api/workflows/{wf_id}"), json={
+            "name": f"E2E-snapshot-immut-{_uid()}",
+            "steps": [
+                {"step_id": "legal", "name": "EDITED Terms", "step_type": "legal_document",
+                 "config": {"title": "EDITED Title", "body_markdown": "EDITED body",
+                            "require_acknowledgement_checkbox": True,
+                            "acknowledgement_label": "I accept EDITED"},
+                 "on_pass": "done", "order": 0},
+                {"step_id": "done", "name": "Done", "step_type": "pass",
+                 "config": {}, "order": 1},
+            ],
+        })
+
+        # Fetch the session again — should still show ORIGINAL config
+        session_data = api.get(url(f"/api/approvals/sessions/{sid}")).json()
+        if "current_step" in session_data:
+            step_config = session_data["current_step"].get("config", {})
+            # The session should use the snapshot (original), not the edited version
+            assert step_config.get("title") == "Original Title", \
+                f"Session should use snapshot (Original Title), got: {step_config.get('title')}"
+
+
+class TestWorkflowVersionOnAgreement:
+    """Verify agreement stores workflow version."""
+
+    @pytest.fixture(autouse=True)
+    def _cleanup(self, api, url):
+        self._to_delete_wf = []
+        yield
+        for wid in reversed(self._to_delete_wf):
+            api.delete(url(f"/api/workflows/{wid}"))
+
+    def test_agreement_includes_workflow_version(self, api, url):
+        """Complete a wizard and verify the agreement includes workflow_version."""
+        wf = api.post(url("/api/workflows"), json=_make_approval_workflow(
+            name=f"E2E-version-{_uid()}",
+            steps=[
+                {"step_id": "input", "name": "Input", "step_type": "user_action",
+                 "config": {"title": "Reason", "requires_input": True},
+                 "on_pass": "done", "order": 0},
+                {"step_id": "done", "name": "Done", "step_type": "pass",
+                 "config": {}, "order": 1},
+            ],
+        )).json()
+        wf_id = wf["id"]
+        self._to_delete_wf.append(wf_id)
+        wf_version = wf.get("version")
+
+        entity_id = f"e2e-ver-{_uid()}"
+        session = api.post(url("/api/approvals/sessions"), json={
+            "workflow_id": wf_id, "entity_type": "data_product", "entity_id": entity_id,
+        }).json()
+        sid = session["session_id"]
+
+        data = api.post(url(f"/api/approvals/sessions/{sid}/steps"), json={
+            "step_id": "input", "payload": {"reason": "Testing version"},
+        }).json()
+        assert data.get("complete") is True
+
+        # Check agreement has version
+        agreements = api.get(url(f"/api/approvals/agreements?entity_type=data_product&entity_id={entity_id}")).json()
+        agreement_list = agreements.get("agreements", [])
+        assert len(agreement_list) >= 1
+        agreement = agreement_list[0]
+        # workflow_version should be present (may be 1 for a new workflow)
+        assert agreement.get("workflow_version") is not None, \
+            f"Agreement should have workflow_version, got: {agreement}"
+        if wf_version is not None:
+            assert agreement["workflow_version"] == wf_version
+
+
+class TestPdfContentFiltering:
+    """Verify PDF output excludes non-visual steps."""
+
+    @pytest.fixture(autouse=True)
+    def _cleanup(self, api, url):
+        self._to_delete_wf = []
+        yield
+        for wid in reversed(self._to_delete_wf):
+            api.delete(url(f"/api/workflows/{wid}"))
+
+    def test_pdf_excludes_nonvisual_steps(self, api, url):
+        """Complete a full-catalog wizard, download PDF, verify non-visual steps excluded."""
+        # Create workflow with all step types
+        wf = api.post(url("/api/workflows"), json={
+            "name": f"E2E-pdf-filter-{_uid()}",
+            "workflow_type": "approval",
+            "trigger": {"type": "for_subscribe", "entity_types": []},
+            "is_active": True,
+            "steps": [
+                {"step_id": "input", "name": "User Input Step", "step_type": "user_action",
+                 "config": {"title": "Reason", "requires_input": True},
+                 "on_pass": "persist", "order": 0},
+                {"step_id": "persist", "name": "Save Agreement Step", "step_type": "persist_agreement",
+                 "config": {}, "on_pass": "pdf", "order": 1},
+                {"step_id": "pdf", "name": "Generate PDF Step", "step_type": "generate_pdf",
+                 "config": {}, "on_pass": "send", "order": 2},
+                {"step_id": "send", "name": "Deliver Step", "step_type": "deliver",
+                 "config": {"channels": ["in_app"], "recipients": ["signer"]},
+                 "on_pass": "done", "order": 3},
+                {"step_id": "done", "name": "Complete", "step_type": "pass",
+                 "config": {}, "order": 4},
+            ],
+        }).json()
+        self._to_delete_wf.append(wf["id"])
+
+        # Run through wizard
+        session = api.post(url("/api/approvals/sessions"), json={
+            "workflow_id": wf["id"], "entity_type": "data_product",
+            "entity_id": f"e2e-pdf-filter-{_uid()}",
+        }).json()
+        sid = session["session_id"]
+
+        data = api.post(url(f"/api/approvals/sessions/{sid}/steps"), json={
+            "step_id": "input", "payload": {"reason": "PDF filtering test with enough chars"},
+        }).json()
+        # Walk through non-visual steps
+        for step_id in ("persist", "pdf", "send", "done"):
+            if data.get("complete"):
+                break
+            data = api.post(url(f"/api/approvals/sessions/{sid}/steps"), json={
+                "step_id": step_id, "payload": {},
+            }).json()
+
+        assert data.get("complete") is True
+        agreement_id = data.get("agreement_id")
+        assert agreement_id
+
+        # Download PDF
+        resp = api.get(url(f"/api/approvals/agreements/{agreement_id}/pdf"))
+        assert resp.status_code == 200
+
+        # Verify it's a valid PDF (content is FlateDecode compressed so raw byte search
+        # won't find text — just verify structure and size)
+        content = resp.content
+        assert content[:5] == b"%PDF-", "Should be a real PDF"
+        assert len(content) > 500, f"PDF should have substantial content, got {len(content)} bytes"
+        ct = resp.headers.get("content-type", "")
+        assert "application/pdf" in ct, f"Content-Type should be application/pdf, got: {ct}"

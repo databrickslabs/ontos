@@ -1634,6 +1634,190 @@ class EntityActionStepHandler(StepHandler):
         return StepResult(passed=True, message="Unpublished")
 
 
+class GrantPermissionsStepHandler(StepHandler):
+    """Handler for grant_permissions steps — grants UC permissions via the SP workspace client."""
+
+    # Map Ontos entity types to Databricks SecurableType values
+    _ENTITY_TYPE_TO_SECURABLE = {
+        'table': 'TABLE',
+        'view': 'TABLE',       # Views use TABLE securable type in UC
+        'schema': 'SCHEMA',
+        'catalog': 'CATALOG',
+    }
+
+    def execute(self, context: StepContext) -> StepResult:
+        from src.models.process_workflows import GrantPermissionsStepConfig
+
+        try:
+            config = GrantPermissionsStepConfig(**self._config)
+        except Exception as e:
+            return StepResult(passed=False, error=f"Invalid grant_permissions config: {e}")
+
+        permission_type = config.permission_type
+
+        # --- Resolve target (securable object) ---
+        target_full_name: Optional[str] = None
+        securable_type_str: Optional[str] = None
+
+        if config.target_source == 'from_entity':
+            # Build full name from entity context
+            # Prefer explicit full_name on the entity, fall back to entity_name / entity_id
+            target_full_name = (
+                context.entity.get('full_name')
+                or context.entity.get('name')
+                or context.entity_name
+                or context.entity_id
+            )
+            # Determine securable type from entity_type
+            et = context.entity_type.lower().replace(' ', '_')
+            securable_type_str = self._ENTITY_TYPE_TO_SECURABLE.get(et)
+        elif config.target_source == 'from_variable':
+            if not config.target_variable:
+                return StepResult(passed=False, error="target_variable is required when target_source=from_variable")
+            target_full_name = self._resolve_variable(config.target_variable, context)
+        else:
+            return StepResult(passed=False, error=f"Unknown target_source: {config.target_source}")
+
+        if not target_full_name:
+            return StepResult(passed=False, error="Could not resolve target securable object")
+
+        # Infer securable type from dot-segment count if not already determined
+        if not securable_type_str:
+            securable_type_str = self._infer_securable_type(target_full_name)
+
+        if not securable_type_str:
+            return StepResult(
+                passed=False,
+                error=(
+                    f"Cannot determine SecurableType for entity_type='{context.entity_type}' "
+                    f"and target='{target_full_name}'. grant_permissions is only supported for "
+                    "UC objects (catalog, schema, table, view)."
+                ),
+            )
+
+        # --- Resolve principal (who to grant to) ---
+        principal: Optional[str] = None
+
+        if config.principal_source == 'requester':
+            principal = context.user_email
+        elif config.principal_source == 'from_variable':
+            if not config.principal_variable:
+                return StepResult(passed=False, error="principal_variable is required when principal_source=from_variable")
+            principal = self._resolve_variable(config.principal_variable, context)
+        elif '@' in config.principal_source:
+            # Literal email / group name
+            principal = config.principal_source
+        else:
+            return StepResult(passed=False, error=f"Unknown principal_source: {config.principal_source}")
+
+        if not principal:
+            return StepResult(passed=False, error="Could not resolve principal for permission grant")
+
+        # --- Call Databricks grants API via SP workspace client ---
+        try:
+            from src.common.workspace_client import get_workspace_client
+            ws = get_workspace_client()
+        except Exception as e:
+            logger.warning(f"grant_permissions: workspace client unavailable, skipping grant: {e}")
+            return StepResult(
+                passed=True,
+                message=f"Workspace client unavailable — grant skipped ({e})",
+                data={
+                    'skipped': True,
+                    'target': target_full_name,
+                    'principal': principal,
+                    'permission': permission_type,
+                    'securable_type': securable_type_str,
+                },
+            )
+
+        try:
+            from databricks.sdk.service.catalog import PermissionsChange, Privilege, SecurableType
+
+            securable = SecurableType(securable_type_str)
+            privilege = Privilege[permission_type]
+
+            ws.grants.update(
+                securable_type=securable,
+                full_name=target_full_name,
+                changes=[
+                    PermissionsChange(
+                        add=[privilege],
+                        principal=principal,
+                    )
+                ],
+            )
+
+            msg = f"Granted {permission_type} on {securable_type_str} '{target_full_name}' to {principal}"
+            logger.info(f"grant_permissions: {msg}")
+            return StepResult(
+                passed=True,
+                message=msg,
+                data={
+                    'target': target_full_name,
+                    'principal': principal,
+                    'permission': permission_type,
+                    'securable_type': securable_type_str,
+                },
+            )
+        except Exception as e:
+            logger.exception(f"grant_permissions: failed to grant {permission_type} on '{target_full_name}' to {principal}: {e}")
+            return StepResult(
+                passed=False,
+                error=f"Grant failed: {e}",
+                data={
+                    'target': target_full_name,
+                    'principal': principal,
+                    'permission': permission_type,
+                    'securable_type': securable_type_str,
+                },
+            )
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_variable(path: str, context: 'StepContext') -> Optional[str]:
+        """Walk a dot-separated path into context.step_results.
+
+        Example paths:
+          step_results.user_input.catalog_name
+          step_results.access_request.principal
+        """
+        parts = path.split('.')
+        # Strip leading 'step_results' prefix if present
+        if parts and parts[0] == 'step_results':
+            parts = parts[1:]
+
+        obj: Any = context.step_results
+        for part in parts:
+            if isinstance(obj, dict):
+                obj = obj.get(part)
+            else:
+                return None
+            if obj is None:
+                return None
+        return str(obj) if obj is not None else None
+
+    @staticmethod
+    def _infer_securable_type(full_name: str) -> Optional[str]:
+        """Infer SecurableType from the number of dot-separated segments.
+
+        catalog              → CATALOG
+        catalog.schema       → SCHEMA
+        catalog.schema.table → TABLE
+        """
+        segments = full_name.split('.')
+        if len(segments) == 1:
+            return 'CATALOG'
+        elif len(segments) == 2:
+            return 'SCHEMA'
+        elif len(segments) >= 3:
+            return 'TABLE'
+        return None
+
+
 class WorkflowExecutor:
     """Executes process workflows."""
 
@@ -1653,6 +1837,7 @@ class WorkflowExecutor:
         'create_asset_review': CreateAssetReviewStepHandler,
         'webhook': WebhookStepHandler,
         'entity_action': EntityActionStepHandler,
+        'grant_permissions': GrantPermissionsStepHandler,
     }
 
     def __init__(self, db: Session):

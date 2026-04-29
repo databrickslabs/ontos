@@ -28,6 +28,7 @@ class AgreementsRepository:
         created_by: Optional[str] = None,
         workflow_snapshot: Optional[str] = None,
         workflow_name: Optional[str] = None,
+        workflow_version: Optional[int] = None,
     ) -> AgreementDb:
         """Create an agreement record."""
         import json
@@ -41,6 +42,7 @@ class AgreementsRepository:
             created_by=created_by,
             workflow_snapshot=workflow_snapshot,
             workflow_name=workflow_name,
+            workflow_version=workflow_version,
         )
         db.add(agreement)
         db.commit()
@@ -78,12 +80,30 @@ class AgreementsRepository:
                 "entity_id": a.entity_id,
                 "workflow_id": a.workflow_id,
                 "workflow_name": a.workflow_name,
+                "workflow_version": a.workflow_version,
                 "wizard_session_id": a.wizard_session_id,
                 "pdf_storage_path": a.pdf_storage_path,
                 "created_by": a.created_by,
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             })
         return result
+
+    def update_step_results(
+        self,
+        db: Session,
+        agreement_id: str,
+        step_results: List[Dict[str, Any]],
+    ) -> Optional[AgreementDb]:
+        """Update step_results on an existing agreement (e.g. after persist_agreement created it early)."""
+        import json
+        agreement = self.get(db, agreement_id)
+        if not agreement:
+            return None
+        agreement.step_results = json.dumps(step_results) if step_results is not None else None
+        db.add(agreement)
+        db.commit()
+        db.refresh(agreement)
+        return agreement
 
     def set_pdf_storage_path(
         self,

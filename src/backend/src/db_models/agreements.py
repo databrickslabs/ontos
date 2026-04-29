@@ -6,7 +6,7 @@ They store step_results and optional pdf_storage_path; linked from entity change
 """
 
 import uuid
-from sqlalchemy import Column, String, Text, ForeignKey, func, TIMESTAMP
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, func, TIMESTAMP
 
 from src.common.database import Base
 
@@ -24,6 +24,7 @@ class AgreementDb(Base):
     pdf_storage_path = Column(String(1024), nullable=True)
     workflow_snapshot = Column(Text, nullable=True)  # Immutable JSON snapshot of workflow definition at agreement creation
     workflow_name = Column(String(255), nullable=True)  # Workflow name at agreement creation time
+    workflow_version = Column(Integer, nullable=True)  # Workflow version at agreement creation time
     created_by = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 

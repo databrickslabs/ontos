@@ -51,5 +51,6 @@ ALTER TABLE agreement_wizard_sessions ADD COLUMN IF NOT EXISTS workflow_snapshot
 ALTER TABLE agreement_wizard_sessions ADD COLUMN IF NOT EXISTS workflow_name VARCHAR(255);
 ALTER TABLE agreements ADD COLUMN IF NOT EXISTS workflow_snapshot TEXT;
 ALTER TABLE agreements ADD COLUMN IF NOT EXISTS workflow_name VARCHAR(255);
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS workflow_version INTEGER;
 
 COMMIT;

@@ -77,6 +77,9 @@ def build_agreement_html(
     ]
 
     # Render each step's results
+    # Non-visual step types — skip in the agreement document
+    _NON_VISUAL = {"persist_agreement", "generate_pdf", "deliver", "pass", "fail"}
+
     for i, sr in enumerate(step_results):
         step_id = sr.get("step_id", f"step-{i}")
         payload = sr.get("payload", {})
@@ -85,6 +88,10 @@ def build_agreement_html(
         step_name = step_meta.get("name", step_id)
         step_type = step_meta.get("step_type", "unknown")
         config = step_meta.get("config", {})
+
+        # Skip non-visual/internal steps
+        if step_type in _NON_VISUAL:
+            continue
 
         html_parts.append("<div class='step'>")
         html_parts.append(f"<div class='step-title'>{e(step_name)}</div>")

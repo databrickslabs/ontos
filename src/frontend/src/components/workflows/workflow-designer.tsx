@@ -163,9 +163,10 @@ function SchemaConfigPanel({
   const propertyEntries = Object.entries(properties);
 
   if (propertyEntries.length === 0) {
+    const schemaDesc = (schema as any)?.description;
     return (
       <p className="text-xs text-muted-foreground">
-        No configurable properties for this step type.
+        {schemaDesc || 'No configurable properties for this step type.'}
       </p>
     );
   }

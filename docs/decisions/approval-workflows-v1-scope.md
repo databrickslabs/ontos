@@ -35,6 +35,24 @@ If customers need priority ordering or mutual exclusion:
 | Workflow versioning/diff | Out of scope | Snapshot captures point-in-time; no version history UI |
 | Conditional branching in approval flows | Out of scope | Approval flows are linear in v1 (on_pass chain only) |
 
+## Missing: Approvals Inbox (recommend filing as GitHub issue)
+
+There is no dedicated "My Approvals" or "Pending Approvals" view. When a process workflow pauses at a "Request Approval" step, the approver's only way to find it is:
+
+1. **Notification bell** — easy to miss, mixed with other notification types
+2. **Workflows page → Recent Executions → filter "In Progress"** — finds paused executions, but no role-based filtering ("assigned to me")
+
+For production use, users need:
+- A dedicated **approvals inbox** showing all executions awaiting their approval, filtered by their role
+- Clear distinction between "my pending approvals" (I need to act) and "my submitted requests" (I'm waiting on someone)
+- Inline Approve/Reject without navigating to the Workflows page
+
+The existing `/api/approvals/queue` endpoint returns entities in proposed status (contracts/products), which is a different concept from process workflow approval steps. These two approval surfaces are not connected.
+
+Related issues: #62 (persona-based UI — would include a per-persona home with pending actions), #161 (filter approver roles by context). Neither covers this gap directly.
+
+**Recommendation**: file a dedicated GitHub issue for an approvals inbox/queue view.
+
 ## What's Implemented
 
 ### Step Catalog (Approval)

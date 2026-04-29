@@ -462,7 +462,12 @@ export default function ApprovalWizardDialog({
         {sessionId && currentStep && isNonVisualStep && (
           <div className="flex flex-col items-center justify-center gap-3 py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Finalizing...</p>
+            <p className="text-sm text-muted-foreground">
+              {currentStep.step_type === 'persist_agreement' ? 'Saving agreement...' :
+               currentStep.step_type === 'generate_pdf' ? 'Generating document...' :
+               currentStep.step_type === 'deliver' ? 'Sending notifications...' :
+               'Finalizing...'}
+            </p>
           </div>
         )}
 

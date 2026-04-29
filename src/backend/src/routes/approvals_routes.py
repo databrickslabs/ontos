@@ -267,7 +267,7 @@ async def download_agreement_pdf(
             created_at=agreement.created_at,
         )
         return Response(
-            content=pdf_bytes,
+            content=bytes(pdf_bytes),
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',

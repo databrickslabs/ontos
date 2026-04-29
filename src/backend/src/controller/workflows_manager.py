@@ -640,8 +640,18 @@ class WorkflowsManager:
                 config_schema={
                     "type": "object",
                     "properties": {
-                        "storage": {"type": "string", "title": "Storage", "enum": ["volume", "none"], "default": "none"},
-                        "volume_path": {"type": "string", "title": "Volume Path"},
+                        "storage": {
+                            "type": "string",
+                            "title": "Storage Destination",
+                            "description": "Where to store the generated PDF: 'volume' saves to a Databricks Volume for permanent archival, 'none' generates on-demand at download time only.",
+                            "enum": ["volume", "none"],
+                            "default": "none",
+                        },
+                        "volume_path": {
+                            "type": "string",
+                            "title": "Volume Path",
+                            "description": "Databricks Volume path for storing the PDF (e.g. /Volumes/catalog/schema/volume_name). Only used when Storage is 'volume'.",
+                        },
                     },
                 },
                 has_pass_branch=True,
@@ -718,7 +728,11 @@ class WorkflowsManager:
                 name="Persist Agreement",
                 description="Materialize the agreement record (non-visual, auto-advances).",
                 icon="database",
-                config_schema={"type": "object", "properties": {}},
+                config_schema={
+                    "type": "object",
+                    "description": "Saves the agreement record to the database at this point in the flow. Place this before Generate PDF if you want the PDF to include a stored agreement ID, or after if you want to verify PDF generation succeeded first. When omitted from a workflow, the agreement is saved automatically at the end.",
+                    "properties": {},
+                },
                 has_pass_branch=True,
                 has_fail_branch=True,
             ),

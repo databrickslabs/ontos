@@ -1,9 +1,8 @@
 """
-Generate an HTML agreement document from wizard session data.
+Generate agreement documents from wizard session data.
 
-Used as the primary PDF generation strategy (no external dependencies).
-The HTML document is styled for print and can be saved as PDF via the browser.
-When reportlab is available, the existing agreement_pdf.py in common/ is used instead.
+Primary strategy: real PDF via fpdf2 (``build_agreement_pdf``).
+Fallback: styled HTML document (``build_agreement_html``).
 """
 
 import json
@@ -15,6 +14,137 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+try:
+    from fpdf import FPDF
+    _HAS_FPDF = True
+except ImportError:
+    _HAS_FPDF = False
+    logger.info("fpdf2 not installed – PDF generation will fall back to HTML")
+
+# Non-visual step types — skip in the agreement document
+_NON_VISUAL = {"persist_agreement", "generate_pdf", "deliver", "pass", "fail"}
+
+
+# ---------------------------------------------------------------------------
+# PDF generation (fpdf2)
+# ---------------------------------------------------------------------------
+
+def build_agreement_pdf(
+    workflow_name: str,
+    entity_type: str,
+    entity_id: str,
+    step_results: List[Dict[str, Any]],
+    snapshot: Optional[str] = None,
+    created_by: Optional[str] = None,
+    created_at: Optional[datetime] = None,
+) -> bytes:
+    """Build a PDF document summarizing the agreement. Returns PDF bytes.
+
+    Raises ``RuntimeError`` if fpdf2 is not installed.
+    """
+    if not _HAS_FPDF:
+        raise RuntimeError("fpdf2 is not installed – cannot generate PDF")
+
+    snapshot_data = json.loads(snapshot) if snapshot else {}
+    steps = snapshot_data.get("steps", [])
+    ts = created_at.strftime("%Y-%m-%d %H:%M UTC") if created_at else "Unknown"
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=25)
+    pdf.add_page()
+
+    # Title
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(30, 64, 175)  # blue
+    pdf.cell(0, 12, f"Agreement: {workflow_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_draw_color(30, 64, 175)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(4)
+
+    # Metadata
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(107, 114, 128)  # gray
+    pdf.cell(0, 5, f"Entity: {entity_type} / {entity_id}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"Signed by: {created_by or 'Unknown'}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, f"Date: {ts}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    # Steps
+    for i, sr in enumerate(step_results):
+        step_id = sr.get("step_id", f"step-{i}")
+        payload = sr.get("payload", {})
+        step_meta = next((s for s in steps if s.get("step_id") == step_id), {})
+        step_name = step_meta.get("name", step_id)
+        step_type = step_meta.get("step_type", "unknown")
+        config = step_meta.get("config", {})
+
+        if step_type in _NON_VISUAL:
+            continue
+
+        # Step header
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(55, 65, 81)
+        pdf.cell(0, 8, step_name, new_x="LMARGIN", new_y="NEXT")
+
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(26, 26, 26)
+
+        if step_type == "legal_document":
+            ack = payload.get("acknowledged", False)
+            label = config.get("acknowledgement_label", "Acknowledged")
+            mark = "[x]" if ack else "[ ]"
+            pdf.cell(0, 6, f"  {mark} {label}", new_x="LMARGIN", new_y="NEXT")
+
+        elif step_type == "acknowledgement_checklist":
+            items = config.get("items", [])
+            checked = payload.get("items", {})
+            for item in items:
+                item_id = item.get("id", "")
+                is_checked = checked.get(item_id, False)
+                mark = "[x]" if is_checked else "[ ]"
+                pdf.cell(0, 6, f"  {mark} {item.get('label', '')}", new_x="LMARGIN", new_y="NEXT")
+
+        elif step_type == "co_signers":
+            signers = payload.get("co_signers", [])
+            if signers:
+                pdf.cell(0, 6, "  Co-signers:", new_x="LMARGIN", new_y="NEXT")
+                for s in signers:
+                    pdf.cell(0, 6, f"    - {s}", new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(0, 6, "  No co-signers", new_x="LMARGIN", new_y="NEXT")
+
+        elif step_type == "user_action":
+            for key, value in payload.items():
+                if isinstance(value, str) and value.strip():
+                    label = key.replace("_", " ").title()
+                    pdf.cell(0, 6, f"  {label}: {value}", new_x="LMARGIN", new_y="NEXT")
+
+        else:
+            # Generic fallback: show payload key/value pairs
+            for key, value in payload.items():
+                if isinstance(value, (str, int, float, bool)):
+                    label = key.replace("_", " ").title()
+                    pdf.cell(0, 6, f"  {label}: {value}", new_x="LMARGIN", new_y="NEXT")
+
+        pdf.ln(4)
+
+    # Signature block
+    pdf.ln(8)
+    pdf.set_draw_color(229, 231, 235)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, f"Digitally signed by: {created_by or 'Unknown'}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Date: {ts}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Workflow: {workflow_name}", new_x="LMARGIN", new_y="NEXT")
+
+    return pdf.output()
+
+
+# ---------------------------------------------------------------------------
+# HTML fallback
+# ---------------------------------------------------------------------------
 
 def build_agreement_html(
     workflow_name: str,
@@ -77,9 +207,6 @@ def build_agreement_html(
     ]
 
     # Render each step's results
-    # Non-visual step types — skip in the agreement document
-    _NON_VISUAL = {"persist_agreement", "generate_pdf", "deliver", "pass", "fail"}
-
     for i, sr in enumerate(step_results):
         step_id = sr.get("step_id", f"step-{i}")
         payload = sr.get("payload", {})

@@ -2007,6 +2007,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
                   {selectedStep.step_type === 'grant_permissions' && (
                     <>
+                      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-200">
+                        <strong>Coming soon</strong> — Grant Permissions execution is not yet implemented. You can pre-configure the step; it will become functional in a future release.
+                      </div>
                       <div>
                         <Label>Permission Type</Label>
                         <Select

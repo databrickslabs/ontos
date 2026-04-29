@@ -1134,7 +1134,7 @@ export default function Workflows() {
 
   const filteredExecutions = useMemo(() => {
     if (statsFilter === 'running') return allExecutions.filter(e => e.status === 'running' || e.status === 'paused');
-    if (statsFilter === 'failed') return allExecutions.filter(e => e.status === 'failed');
+    if (statsFilter === 'failed') return allExecutions.filter(e => e.status === 'failed' || e.status === 'cancelled');
     return allExecutions;
   }, [allExecutions, statsFilter]);
 

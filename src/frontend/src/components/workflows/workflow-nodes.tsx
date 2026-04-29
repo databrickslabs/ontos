@@ -3,7 +3,7 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { useTranslation } from 'react-i18next';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
+import {
   Zap,
   Shield,
   UserCheck,
@@ -18,6 +18,13 @@ import {
   FileSearch,
   Globe,
   MessageSquare,
+  FileText,
+  ListChecks,
+  Users,
+  Database,
+  Send,
+  KeyRound,
+  FileOutput,
 } from 'lucide-react';
 import type { WorkflowStep, WorkflowTrigger } from '@/types/process-workflow';
 import { 
@@ -98,6 +105,41 @@ const nodeColorStyles = {
     card: "border-lime-500 bg-lime-50 dark:bg-lime-950/40 dark:border-lime-400",
     icon: "text-lime-700 dark:text-lime-300",
     ring: "ring-lime-500 dark:ring-lime-400",
+  },
+  legal_document: {
+    card: "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/50 dark:border-indigo-400",
+    icon: "text-indigo-600 dark:text-indigo-300",
+    ring: "ring-indigo-500 dark:ring-indigo-400",
+  },
+  acknowledgement_checklist: {
+    card: "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/50 dark:border-emerald-400",
+    icon: "text-emerald-600 dark:text-emerald-300",
+    ring: "ring-emerald-500 dark:ring-emerald-400",
+  },
+  co_signers: {
+    card: "border-pink-500 bg-pink-50 dark:bg-pink-900/50 dark:border-pink-400",
+    icon: "text-pink-600 dark:text-pink-300",
+    ring: "ring-pink-500 dark:ring-pink-400",
+  },
+  persist_agreement: {
+    card: "border-stone-500 bg-stone-50 dark:bg-stone-900/50 dark:border-stone-400",
+    icon: "text-stone-600 dark:text-stone-300",
+    ring: "ring-stone-500 dark:ring-stone-400",
+  },
+  generate_pdf: {
+    card: "border-rose-500 bg-rose-50 dark:bg-rose-900/50 dark:border-rose-400",
+    icon: "text-rose-600 dark:text-rose-300",
+    ring: "ring-rose-500 dark:ring-rose-400",
+  },
+  deliver: {
+    card: "border-sky-500 bg-sky-50 dark:bg-sky-900/50 dark:border-sky-400",
+    icon: "text-sky-600 dark:text-sky-300",
+    ring: "ring-sky-500 dark:ring-sky-400",
+  },
+  grant_permissions: {
+    card: "border-amber-600 bg-amber-50 dark:bg-amber-900/50 dark:border-amber-500",
+    icon: "text-amber-700 dark:text-amber-300",
+    ring: "ring-amber-600 dark:ring-amber-500",
   },
 } as const;
 
@@ -356,6 +398,178 @@ export const EntityActionNode = memo((props: NodeProps<StepNodeData>) => {
   );
 });
 EntityActionNode.displayName = 'EntityActionNode';
+
+// Legal Document Node
+export const LegalDocumentNode = memo((props: NodeProps<StepNodeData>) => {
+  const title = (props.data.step.config as { title?: string })?.title;
+  const styles = nodeColorStyles.legal_document;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <FileText className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || title || 'Legal Document'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-indigo-400/50 dark:text-indigo-200">legal_document</Badge>
+        {title && (
+          <div className={nodeTextStyles.description + " mt-1 truncate max-w-[140px]"}>{title}</div>
+        )}
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />
+      <Handle type="source" position={Position.Bottom} id="fail" className="!bg-red-500 dark:!bg-red-400" style={{ left: '70%' }} />
+    </Card>
+  );
+});
+LegalDocumentNode.displayName = 'LegalDocumentNode';
+
+// Acknowledgement Checklist Node
+export const AcknowledgementChecklistNode = memo((props: NodeProps<StepNodeData>) => {
+  const title = (props.data.step.config as { title?: string })?.title;
+  const itemCount = ((props.data.step.config as { items?: unknown[] })?.items || []).length;
+  const styles = nodeColorStyles.acknowledgement_checklist;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <ListChecks className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || title || 'Checklist'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-emerald-400/50 dark:text-emerald-200">checklist</Badge>
+        {itemCount > 0 && (
+          <div className={nodeTextStyles.description + " mt-1"}>{itemCount} item{itemCount !== 1 ? 's' : ''}</div>
+        )}
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />
+      <Handle type="source" position={Position.Bottom} id="fail" className="!bg-red-500 dark:!bg-red-400" style={{ left: '70%' }} />
+    </Card>
+  );
+});
+AcknowledgementChecklistNode.displayName = 'AcknowledgementChecklistNode';
+
+// Co-Signers Node
+export const CoSignersNode = memo((props: NodeProps<StepNodeData>) => {
+  const title = (props.data.step.config as { title?: string })?.title;
+  const styles = nodeColorStyles.co_signers;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <Users className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || title || 'Co-Signers'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-pink-400/50 dark:text-pink-200">co_signers</Badge>
+        {title && (
+          <div className={nodeTextStyles.description + " mt-1 truncate max-w-[140px]"}>{title}</div>
+        )}
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />
+      <Handle type="source" position={Position.Bottom} id="fail" className="!bg-red-500 dark:!bg-red-400" style={{ left: '70%' }} />
+    </Card>
+  );
+});
+CoSignersNode.displayName = 'CoSignersNode';
+
+// Persist Agreement Node (auto-advance, no fail)
+export const PersistAgreementNode = memo((props: NodeProps<StepNodeData>) => {
+  const styles = nodeColorStyles.persist_agreement;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <Database className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || 'Persist Agreement'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-stone-400/50 dark:text-stone-200">persist_agreement</Badge>
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" />
+    </Card>
+  );
+});
+PersistAgreementNode.displayName = 'PersistAgreementNode';
+
+// Generate PDF Node (auto-advance, no fail)
+export const GeneratePdfNode = memo((props: NodeProps<StepNodeData>) => {
+  const styles = nodeColorStyles.generate_pdf;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <FileOutput className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || 'Generate PDF'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-rose-400/50 dark:text-rose-200">generate_pdf</Badge>
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" />
+    </Card>
+  );
+});
+GeneratePdfNode.displayName = 'GeneratePdfNode';
+
+// Deliver Node (notification-like, no fail)
+export const DeliverNode = memo((props: NodeProps<StepNodeData>) => {
+  const channels = (props.data.step.config as { channels?: string[] })?.channels;
+  const styles = nodeColorStyles.deliver;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <Send className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || 'Deliver'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-sky-400/50 dark:text-sky-200">deliver</Badge>
+        {channels && channels.length > 0 && (
+          <div className={nodeTextStyles.description + " mt-1"}>{channels.join(', ')}</div>
+        )}
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" />
+    </Card>
+  );
+});
+DeliverNode.displayName = 'DeliverNode';
+
+// Grant Permissions Node
+export const GrantPermissionsNode = memo((props: NodeProps<StepNodeData>) => {
+  const permType = (props.data.step.config as { permission_type?: string })?.permission_type;
+  const styles = nodeColorStyles.grant_permissions;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <KeyRound className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || 'Grant Permissions'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-amber-500/50 dark:text-amber-200">grant_permissions</Badge>
+        {permType && (
+          <div className={nodeTextStyles.description + " mt-1"}>{permType}</div>
+        )}
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />
+      <Handle type="source" position={Position.Bottom} id="fail" className="!bg-red-500 dark:!bg-red-400" style={{ left: '70%' }} />
+    </Card>
+  );
+});
+GrantPermissionsNode.displayName = 'GrantPermissionsNode';
 
 // Default/unknown step node (fallback when step_type has no dedicated component)
 export const DefaultStepNode = memo((props: NodeProps<StepNodeData>) => {

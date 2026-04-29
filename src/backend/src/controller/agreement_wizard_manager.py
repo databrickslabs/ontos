@@ -55,6 +55,46 @@ class AgreementWizardManager:
         steps = workflow.steps or []
         return sorted(steps, key=lambda s: s.order if s.order is not None else 0)
 
+    def _get_steps_from_snapshot(self, session: Any) -> Optional[List[WorkflowStep]]:
+        """Parse steps from the immutable workflow snapshot stored on the session.
+
+        Returns WorkflowStep-like objects from the snapshot so the wizard runtime
+        uses the definition the signer originally saw, even if the live workflow
+        is later edited.  Falls back to None when no snapshot is available.
+        """
+        snapshot_json = getattr(session, 'workflow_snapshot', None)
+        if not snapshot_json:
+            return None
+        try:
+            snapshot = json.loads(snapshot_json)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        raw_steps = snapshot.get("steps")
+        if not raw_steps or not isinstance(raw_steps, list):
+            return None
+        steps: List[WorkflowStep] = []
+        for s in raw_steps:
+            step_type_raw = s.get("step_type", "pass")
+            try:
+                step_type = StepType(step_type_raw)
+            except ValueError:
+                step_type = StepType.PASS
+            config = s.get("config")
+            if isinstance(config, str):
+                config = json.loads(config)
+            steps.append(WorkflowStep(
+                id=s.get("step_id", str(uuid.uuid4())),
+                step_id=s.get("step_id", ""),
+                name=s.get("name"),
+                step_type=step_type,
+                config=config or {},
+                on_pass=s.get("on_pass"),
+                on_fail=s.get("on_fail"),
+                order=s.get("order", 0),
+                workflow_id=getattr(session, 'workflow_id', ''),
+            ))
+        return sorted(steps, key=lambda st: st.order if st.order is not None else 0) if steps else None
+
     def _get_entity_name(self, entity_type: str, entity_id: str) -> Optional[str]:
         """Resolve display name for an entity by type and id via repositories."""
         if not entity_type or not entity_id:
@@ -125,6 +165,7 @@ class AgreementWizardManager:
                 "workflow_id": workflow.id,
                 "name": workflow.name,
                 "description": workflow.description or "",
+                "version": getattr(workflow, 'version', 1),
                 "workflow_type": (lambda wt: wt.value if hasattr(wt, 'value') else str(wt))(getattr(workflow, 'workflow_type', 'approval')),
                 "steps": [
                     {
@@ -187,7 +228,7 @@ class AgreementWizardManager:
         session = agreement_wizard_sessions_repo.get(self._db, session_id)
         if not session or session.status != "in_progress":
             return None
-        steps = self._get_workflow_steps(session.workflow_id)
+        steps = self._get_steps_from_snapshot(session) or self._get_workflow_steps(session.workflow_id)
         if not steps:
             return None
         idx = min(session.current_step_index, len(steps) - 1)
@@ -280,7 +321,7 @@ class AgreementWizardManager:
         session = agreement_wizard_sessions_repo.get(self._db, session_id)
         if not session or session.status != "in_progress":
             raise ValueError("Session not found or not in progress")
-        steps = self._get_workflow_steps(session.workflow_id)
+        steps = self._get_steps_from_snapshot(session) or self._get_workflow_steps(session.workflow_id)
         if not steps:
             raise ValueError("Workflow steps not found")
         idx = session.current_step_index
@@ -303,11 +344,24 @@ class AgreementWizardManager:
 
         # Execute non-visual step side effects
         if current.step_type == StepType.PERSIST_AGREEMENT:
-            # Persist agreement is handled implicitly at _complete_session.
-            # When this step is explicit in the workflow, we record it so
-            # _complete_session knows the signer saw this step (future enhancement).
-            # For now this is a no-op — the agreement is always persisted at completion.
-            pass
+            # Create the agreement record NOW (at the designer's chosen position)
+            step_results_so_far = agreement_wizard_sessions_repo.get_step_results(session) if session else []
+            workflow = self._workflows_manager.get_workflow(session.workflow_id)
+            agreement = agreements_repo.create(
+                self._db,
+                entity_type=session.entity_type,
+                entity_id=session.entity_id,
+                workflow_id=session.workflow_id,
+                wizard_session_id=session.id,
+                step_results=step_results_so_far,
+                pdf_storage_path=None,
+                created_by=created_by or session.created_by,
+                workflow_snapshot=getattr(session, 'workflow_snapshot', None),
+                workflow_name=getattr(session, 'workflow_name', None),
+                workflow_version=getattr(workflow, 'version', None) if workflow else None,
+            )
+            # Store the agreement_id in the payload so _complete_session knows it was already created
+            payload = {"agreement_id": agreement.id, "persisted_at_step": True}
 
         if current.step_type == StepType.GENERATE_PDF:
             # PDF generation is driven by the presence of a generate_pdf step in
@@ -361,21 +415,42 @@ class AgreementWizardManager:
         created_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Create agreement record, write change log, optional PDF (todo 5); set session completed.
+        Create agreement record (unless persist_agreement already did), write
+        change log, optional PDF generation + Volume storage; set session completed.
         """
         step_results = agreement_wizard_sessions_repo.get_step_results(session)
-        agreement = agreements_repo.create(
-            self._db,
-            entity_type=session.entity_type,
-            entity_id=session.entity_id,
-            workflow_id=session.workflow_id,
-            wizard_session_id=session.id,
-            step_results=step_results,
-            pdf_storage_path=None,  # Todo 5: set when workflow has generate_pdf step
-            created_by=created_by or session.created_by,
-            workflow_snapshot=session.workflow_snapshot,
-            workflow_name=session.workflow_name,
-        )
+        workflow = self._workflows_manager.get_workflow(session.workflow_id)
+
+        # Gap 1: Check if persist_agreement already created the agreement
+        existing_agreement_id = None
+        for sr in step_results:
+            p = sr.get("payload", {})
+            if p.get("persisted_at_step"):
+                existing_agreement_id = p.get("agreement_id")
+                break
+
+        if existing_agreement_id:
+            # Agreement already created by persist_agreement step — update with final step_results
+            agreements_repo.update_step_results(self._db, existing_agreement_id, step_results)
+            agreement_id = existing_agreement_id
+            agreement = agreements_repo.get(self._db, existing_agreement_id)
+        else:
+            # No persist_agreement step — create agreement implicitly (backward compatible)
+            agreement = agreements_repo.create(
+                self._db,
+                entity_type=session.entity_type,
+                entity_id=session.entity_id,
+                workflow_id=session.workflow_id,
+                wizard_session_id=session.id,
+                step_results=step_results,
+                pdf_storage_path=None,
+                created_by=created_by or session.created_by,
+                workflow_snapshot=session.workflow_snapshot,
+                workflow_name=session.workflow_name,
+                workflow_version=getattr(workflow, 'version', None) if workflow else None,
+            )
+            agreement_id = agreement.id
+
         change_log_manager = ChangeLogManager()
         change_log_manager.log_change_with_details(
             self._db,
@@ -383,40 +458,55 @@ class AgreementWizardManager:
             entity_id=session.entity_id,
             action="APPROVAL_COMPLETED",
             username=created_by or session.created_by,
-            details={"agreement_id": agreement.id, "session_id": session.id},
+            details={"agreement_id": agreement_id, "session_id": session.id},
         )
-        pdf_storage_path = agreement.pdf_storage_path
+        pdf_storage_path = agreement.pdf_storage_path if agreement else None
+
+        # Determine whether a generate_pdf step exists — check snapshot first, then live workflow
         has_generate_pdf = False
-        workflow = self._workflows_manager.get_workflow(session.workflow_id)
-        if workflow:
+        snapshot_steps = self._get_steps_from_snapshot(session)
+        if snapshot_steps:
+            has_generate_pdf = any(s.step_type == StepType.GENERATE_PDF for s in snapshot_steps)
+        elif workflow:
             has_generate_pdf = any(
                 getattr(s, "step_type", None) == StepType.GENERATE_PDF
                 for s in (workflow.steps or [])
             )
-        if has_generate_pdf and workflow and self._storage_base_path:
-            # Try reportlab-based PDF first, fall back to HTML-based builder
+
+        # Gap 2: Generate PDF and store to Volume when generate_pdf step exists
+        if has_generate_pdf and self._storage_base_path:
             try:
                 from pathlib import Path
                 from src.common.agreement_pdf import build_agreement_pdf
                 out_dir = Path(self._storage_base_path) / "agreements"
                 out_dir.mkdir(parents=True, exist_ok=True)
-                out_path = str(out_dir / f"{agreement.id}.pdf")
-                steps_with_config = [
-                    {"step_id": s.step_id, "name": s.name, "step_type": s.step_type.value, "config": s.config or {}}
-                    for s in (workflow.steps or [])
-                ]
+                out_path = str(out_dir / f"{agreement_id}.pdf")
+                # Build steps_with_config from snapshot if available, else from live workflow
+                if snapshot_steps:
+                    steps_with_config = [
+                        {"step_id": s.step_id, "name": s.name, "step_type": s.step_type.value, "config": s.config or {}}
+                        for s in snapshot_steps
+                    ]
+                elif workflow:
+                    steps_with_config = [
+                        {"step_id": s.step_id, "name": s.name, "step_type": s.step_type.value, "config": s.config or {}}
+                        for s in (workflow.steps or [])
+                    ]
+                else:
+                    steps_with_config = []
+                wf_name = (workflow.name if workflow else None) or getattr(session, 'workflow_name', None) or "Approval"
                 build_agreement_pdf(
-                    workflow_name=workflow.name,
+                    workflow_name=wf_name,
                     entity_type=session.entity_type,
                     entity_id=session.entity_id,
                     steps_with_config=steps_with_config,
                     step_results=step_results,
                     output_path=out_path,
                 )
-                agreements_repo.set_pdf_storage_path(self._db, agreement.id, out_path)
+                agreements_repo.set_pdf_storage_path(self._db, agreement_id, out_path)
                 pdf_storage_path = out_path
             except Exception as e:
-                logger.warning("Agreement PDF generation failed (reportlab): %s — HTML download available via API", e)
+                logger.warning("Agreement PDF generation/storage failed: %s — HTML download available via API", e)
         completion_action = getattr(session, "completion_action", None)
         subscriber_email = created_by or session.created_by
         if completion_action == "subscribe" and subscriber_email:
@@ -450,20 +540,20 @@ class AgreementWizardManager:
                 except Exception as e:
                     logger.warning("Subscribe (asset) after wizard failed: %s", e)
 
-        # Deliver step: send in_app notifications to configured recipients
+        # Deliver step: send in_app, email, and webhook notifications to configured recipients
         self._send_delivery_notifications(
             session=session,
             workflow=workflow,
             workflow_name=workflow.name if workflow else session.workflow_name,
-            agreement_id=agreement.id,
+            agreement_id=agreement_id,
             created_by=created_by,
         )
 
         agreement_wizard_sessions_repo.set_completed(self._db, session.id)
-        pdf_url = f"/api/approvals/agreements/{agreement.id}/pdf" if has_generate_pdf else None
+        pdf_url = f"/api/approvals/agreements/{agreement_id}/pdf" if has_generate_pdf else None
         return {
             "complete": True,
-            "agreement_id": agreement.id,
+            "agreement_id": agreement_id,
             "pdf_storage_path": pdf_storage_path,
             "pdf_url": pdf_url,
             "session_id": session.id,
@@ -477,20 +567,21 @@ class AgreementWizardManager:
         agreement_id: str,
         created_by: Optional[str],
     ) -> None:
-        """Send in_app notifications for a deliver step if present in the workflow.
+        """Send notifications for a deliver step if present in the workflow.
 
+        Supports three channels: ``in_app`` (via NotificationsManager),
+        ``email`` (via EmailService), and ``webhook`` (HTTP POST).
         Resolves recipient tokens (``signer``, ``entity_owner``, or literal
-        email addresses) and creates one notification per recipient using the
-        existing NotificationsManager infrastructure.
+        email addresses) and dispatches per channel.
         """
-        if not self._notifications_manager:
-            return
         if not workflow:
             return
 
-        steps = workflow.steps or []
+        # Look for deliver step — prefer snapshot steps, fall back to live workflow
+        snapshot_steps = self._get_steps_from_snapshot(session)
+        step_source = snapshot_steps or (workflow.steps or [])
         deliver_step = next(
-            (s for s in steps if getattr(s, 'step_type', None) == StepType.DELIVER),
+            (s for s in step_source if getattr(s, 'step_type', None) == StepType.DELIVER),
             None,
         )
         if not deliver_step:
@@ -502,9 +593,6 @@ class AgreementWizardManager:
         config = config or {}
 
         channels = config.get("channels", ["in_app"])
-        if "in_app" not in channels:
-            return
-
         recipients_tokens = config.get("recipients", ["signer"])
         signer_email = created_by or getattr(session, 'created_by', None)
         entity_name = self._get_entity_name(session.entity_type, session.entity_id)
@@ -518,11 +606,9 @@ class AgreementWizardManager:
                 if signer_email:
                     notification_recipients.append(signer_email)
             elif token == "entity_owner":
-                # Best-effort: fall back to signer if we can't resolve the owner
                 owner = self._resolve_entity_owner(session.entity_type, session.entity_id)
                 notification_recipients.append(owner or signer_email or "")
             elif isinstance(token, str) and "@" in token:
-                # Literal email address
                 notification_recipients.append(token)
 
         # Deduplicate while preserving order, skip blanks
@@ -533,41 +619,124 @@ class AgreementWizardManager:
                 seen.add(r)
                 unique_recipients.append(r)
 
-        for recipient in unique_recipients:
+        # Track which channels were actually dispatched
+        dispatched_channels: List[str] = []
+        skipped_channels: List[str] = []
+
+        # --- in_app channel ---
+        if "in_app" in channels:
+            if self._notifications_manager:
+                for recipient in unique_recipients:
+                    try:
+                        notification = Notification(
+                            id=str(uuid.uuid4()),
+                            type=NotificationType.INFO,
+                            title=f"Agreement completed: {display_name}",
+                            description=(
+                                f"The approval workflow '{display_name}' has been completed "
+                                f"for {entity_label}."
+                            ),
+                            recipient=recipient,
+                            link=f"/{session.entity_type.replace('_', '-')}s/{session.entity_id}" if session.entity_type else "/workflows",
+                            action_type="agreement_completed",
+                            action_payload={
+                                "agreement_id": agreement_id,
+                                "entity_type": session.entity_type,
+                                "entity_id": session.entity_id,
+                            },
+                            created_at=datetime.utcnow(),
+                            read=False,
+                            can_delete=True,
+                        )
+                        self._notifications_manager.create_notification(
+                            notification=notification,
+                            db=self._db,
+                        )
+                        logger.info(
+                            "Delivery notification (in_app) sent to %s for agreement %s",
+                            recipient, agreement_id,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to send in_app delivery notification to %s: %s",
+                            recipient, e,
+                        )
+                dispatched_channels.append("in_app")
+            else:
+                logger.warning("in_app delivery requested but NotificationsManager not available")
+                skipped_channels.append("in_app")
+
+        # --- email channel ---
+        if "email" in channels:
             try:
-                notification = Notification(
-                    id=str(uuid.uuid4()),
-                    type=NotificationType.INFO,
-                    title=f"Agreement completed: {display_name}",
-                    description=(
-                        f"The approval workflow '{display_name}' has been completed "
-                        f"for {entity_label}."
-                    ),
-                    recipient=recipient,
-                    link=f"/{session.entity_type.replace('_', '-')}s/{session.entity_id}" if session.entity_type else "/workflows",
-                    action_type="agreement_completed",
-                    action_payload={
+                from src.common.email_service import EmailService
+                email_svc = EmailService.from_settings(self._db)
+                if email_svc:
+                    email_addrs = [r for r in unique_recipients if "@" in r]
+                    if email_addrs:
+                        subject = config.get("subject_template") or f"Agreement completed: {display_name}"
+                        body = config.get("body_template") or (
+                            f"The approval workflow '{display_name}' has been completed "
+                            f"for {entity_label}.\n\nAgreement ID: {agreement_id}"
+                        )
+                        sent = email_svc.send(
+                            to=email_addrs,
+                            subject=subject,
+                            body_text=body,
+                        )
+                        if sent:
+                            dispatched_channels.append("email")
+                            logger.info("Delivery email sent to %s for agreement %s", email_addrs, agreement_id)
+                        else:
+                            skipped_channels.append("email")
+                            logger.warning("Email send returned False for agreement %s", agreement_id)
+                    else:
+                        skipped_channels.append("email")
+                        logger.debug("Email channel: no valid email addresses among recipients")
+                else:
+                    skipped_channels.append("email")
+                    logger.warning("Email delivery requested but email not configured in settings")
+            except Exception as e:
+                skipped_channels.append("email")
+                logger.warning("Email delivery failed for agreement %s: %s", agreement_id, e)
+
+        # --- webhook channel ---
+        if "webhook" in channels:
+            webhook_url = config.get("webhook_url")
+            if webhook_url:
+                try:
+                    import urllib.request
+                    payload_data = json.dumps({
+                        "event": "agreement_completed",
                         "agreement_id": agreement_id,
+                        "workflow_name": display_name,
                         "entity_type": session.entity_type,
                         "entity_id": session.entity_id,
-                    },
-                    created_at=datetime.utcnow(),
-                    read=False,
-                    can_delete=True,
-                )
-                self._notifications_manager.create_notification(
-                    notification=notification,
-                    db=self._db,
-                )
-                logger.info(
-                    "Delivery notification sent to %s for agreement %s",
-                    recipient, agreement_id,
-                )
-            except Exception as e:
-                logger.warning(
-                    "Failed to send delivery notification to %s: %s",
-                    recipient, e,
-                )
+                        "entity_name": entity_name,
+                        "recipients": unique_recipients,
+                    }).encode()
+                    req = urllib.request.Request(
+                        webhook_url,
+                        data=payload_data,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=10):
+                        pass
+                    dispatched_channels.append("webhook")
+                    logger.info("Delivery webhook sent to %s for agreement %s", webhook_url, agreement_id)
+                except Exception as e:
+                    skipped_channels.append("webhook")
+                    logger.warning("Webhook delivery failed for agreement %s: %s", agreement_id, e)
+            else:
+                skipped_channels.append("webhook")
+                logger.warning("Webhook delivery requested but no webhook_url configured in deliver step")
+
+        if skipped_channels:
+            logger.info(
+                "Deliver step for agreement %s: dispatched=%s, skipped=%s",
+                agreement_id, dispatched_channels, skipped_channels,
+            )
 
     def _resolve_entity_owner(self, entity_type: str, entity_id: str) -> Optional[str]:
         """Best-effort lookup of the entity owner's email."""

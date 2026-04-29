@@ -88,6 +88,13 @@ import {
   CreateAssetReviewNode,
   WebhookNode,
   EntityActionNode,
+  LegalDocumentNode,
+  AcknowledgementChecklistNode,
+  CoSignersNode,
+  PersistAgreementNode,
+  GeneratePdfNode,
+  DeliverNode,
+  GrantPermissionsNode,
 } from './workflow-nodes';
 
 import type {
@@ -112,7 +119,7 @@ import {
   isTriggerEntitySupported,
 } from '@/lib/workflow-labels';
 
-// Node types registry (default = fallback for unknown step_type e.g. generate_pdf)
+// Node types registry (default = fallback for unknown step_type)
 const nodeTypes = {
   trigger: TriggerNode,
   validation: ValidationNode,
@@ -128,8 +135,171 @@ const nodeTypes = {
   create_asset_review: CreateAssetReviewNode,
   webhook: WebhookNode,
   entity_action: EntityActionNode,
+  legal_document: LegalDocumentNode,
+  acknowledgement_checklist: AcknowledgementChecklistNode,
+  co_signers: CoSignersNode,
+  persist_agreement: PersistAgreementNode,
+  generate_pdf: GeneratePdfNode,
+  deliver: DeliverNode,
+  grant_permissions: GrantPermissionsNode,
   default: DefaultStepNode,
 };
+
+// Schema-driven configuration panel for new step types.
+// Reads the JSON schema from the backend step-types API and generates form fields automatically.
+const SCHEMA_DRIVEN_STEP_TYPES = ['legal_document', 'acknowledgement_checklist', 'co_signers', 'persist_agreement', 'generate_pdf', 'deliver', 'grant_permissions'];
+
+function SchemaConfigPanel({
+  schema,
+  config,
+  onUpdate,
+}: {
+  schema: Record<string, unknown>;
+  config: Record<string, unknown>;
+  onUpdate: (newConfig: Record<string, unknown>) => void;
+}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const properties = (schema as any)?.properties || {};
+  const propertyEntries = Object.entries(properties);
+
+  if (propertyEntries.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No configurable properties for this step type.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {propertyEntries.map(([key, propSchema]: [string, any]) => {
+        const value = config[key];
+        const title: string =
+          propSchema.title ||
+          key
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c: string) => c.toUpperCase());
+        const description: string | undefined = propSchema.description;
+
+        // Enum → Select dropdown
+        if (propSchema.enum) {
+          return (
+            <div key={key}>
+              <Label>{title}</Label>
+              <Select
+                value={String(value ?? propSchema.default ?? '')}
+                onValueChange={(v) => onUpdate({ ...config, [key]: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {propSchema.enum.map((opt: string) => (
+                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {description && (
+                <p className="text-xs text-muted-foreground mt-1">{description}</p>
+              )}
+            </div>
+          );
+        }
+
+        // Boolean → Switch
+        if (propSchema.type === 'boolean') {
+          return (
+            <div key={key} className="flex items-center gap-2">
+              <Switch
+                id={`schema-${key}`}
+                checked={!!value}
+                onCheckedChange={(checked) => onUpdate({ ...config, [key]: checked })}
+              />
+              <Label htmlFor={`schema-${key}`} className="cursor-pointer">{title}</Label>
+              {description && (
+                <p className="text-xs text-muted-foreground">{description}</p>
+              )}
+            </div>
+          );
+        }
+
+        // Number/integer → numeric Input
+        if (propSchema.type === 'integer' || propSchema.type === 'number') {
+          return (
+            <div key={key}>
+              <Label>{title}</Label>
+              <Input
+                type="number"
+                value={value ?? propSchema.default ?? ''}
+                onChange={(e) =>
+                  onUpdate({
+                    ...config,
+                    [key]: propSchema.type === 'integer'
+                      ? parseInt(e.target.value) || 0
+                      : parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+              {description && (
+                <p className="text-xs text-muted-foreground mt-1">{description}</p>
+              )}
+            </div>
+          );
+        }
+
+        // Array → JSON Textarea
+        if (propSchema.type === 'array') {
+          return (
+            <div key={key}>
+              <Label>{title}</Label>
+              <Textarea
+                value={JSON.stringify(value || propSchema.default || [], null, 2)}
+                onChange={(e) => {
+                  try {
+                    onUpdate({ ...config, [key]: JSON.parse(e.target.value) });
+                  } catch {
+                    /* ignore parse errors while typing */
+                  }
+                }}
+                rows={4}
+                className="font-mono text-sm"
+              />
+              {description && (
+                <p className="text-xs text-muted-foreground mt-1">{description}</p>
+              )}
+            </div>
+          );
+        }
+
+        // Default: string — use Textarea for long fields (markdown, template, body), Input otherwise
+        const isLong =
+          key.includes('markdown') ||
+          key.includes('template') ||
+          key.includes('body');
+        return (
+          <div key={key}>
+            <Label>{title}</Label>
+            {isLong ? (
+              <Textarea
+                value={String(value || '')}
+                onChange={(e) => onUpdate({ ...config, [key]: e.target.value })}
+                rows={4}
+                className={key.includes('markdown') ? 'font-mono text-sm' : ''}
+              />
+            ) : (
+              <Input
+                value={String(value || '')}
+                onChange={(e) => onUpdate({ ...config, [key]: e.target.value })}
+              />
+            )}
+            {description && (
+              <p className="text-xs text-muted-foreground mt-1">{description}</p>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 // Custom edge with visible delete button when selected
 function DeletableEdge({
@@ -194,7 +364,7 @@ const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shiel
   { type: 'script', label: 'Script', icon: Code },
   { type: 'create_asset_review', label: 'Asset Review', icon: FileSearch },
   { type: 'webhook', label: 'Webhook', icon: Globe },
-  { type: 'grant_permissions', label: 'Grant Permissions', icon: KeyRound, disabled: true },
+  { type: 'grant_permissions', label: 'Grant Permissions', icon: KeyRound },
 ];
 
 const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield; disabled?: boolean }[] = [
@@ -1783,308 +1953,13 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                     </>
                   )}
 
-                  {selectedStep.step_type === 'legal_document' && (
-                    <>
-                      <div>
-                        <Label>Title</Label>
-                        <Input
-                          value={(selectedStep.config as { title?: string })?.title || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, title: e.target.value },
-                          })}
-                          placeholder="e.g. Terms of Service"
-                        />
-                      </div>
-                      <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={(selectedStep.config as { description?: string })?.description || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, description: e.target.value },
-                          })}
-                          placeholder="Brief instruction shown above the document"
-                          rows={2}
-                        />
-                      </div>
-                      <div>
-                        <Label>Document Body (Markdown)</Label>
-                        <Textarea
-                          value={(selectedStep.config as { body_markdown?: string })?.body_markdown || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, body_markdown: e.target.value },
-                          })}
-                          placeholder="# Terms of Service&#10;&#10;Paste your legal document here..."
-                          rows={8}
-                          className="font-mono text-sm"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id="legal-require-scroll"
-                          checked={(selectedStep.config as { require_scroll_to_end?: boolean })?.require_scroll_to_end ?? false}
-                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, require_scroll_to_end: checked },
-                          })}
-                        />
-                        <Label htmlFor="legal-require-scroll" className="cursor-pointer">Require scroll to end</Label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id="legal-require-ack"
-                          checked={(selectedStep.config as { require_acknowledgement_checkbox?: boolean })?.require_acknowledgement_checkbox ?? false}
-                          onCheckedChange={(checked) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, require_acknowledgement_checkbox: checked },
-                          })}
-                        />
-                        <Label htmlFor="legal-require-ack" className="cursor-pointer">Require acknowledgement checkbox</Label>
-                      </div>
-                      {(selectedStep.config as { require_acknowledgement_checkbox?: boolean })?.require_acknowledgement_checkbox && (
-                        <div>
-                          <Label>Acknowledgement Label</Label>
-                          <Input
-                            value={(selectedStep.config as { acknowledgement_label?: string })?.acknowledgement_label || ''}
-                            onChange={(e) => updateStep(selectedStep.step_id, {
-                              config: { ...selectedStep.config, acknowledgement_label: e.target.value },
-                            })}
-                            placeholder="I have read and understood the above"
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {selectedStep.step_type === 'acknowledgement_checklist' && (
-                    <>
-                      <div>
-                        <Label>Title</Label>
-                        <Input
-                          value={(selectedStep.config as { title?: string })?.title || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, title: e.target.value },
-                          })}
-                          placeholder="e.g. Acceptable Use Acknowledgement"
-                        />
-                      </div>
-                      <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={(selectedStep.config as { description?: string })?.description || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, description: e.target.value },
-                          })}
-                          placeholder="Please confirm each item below"
-                          rows={2}
-                        />
-                      </div>
-                      <div>
-                        <Label>Checklist Items (JSON)</Label>
-                        <Textarea
-                          value={JSON.stringify((selectedStep.config as { items?: unknown[] })?.items || [], null, 2)}
-                          onChange={(e) => {
-                            try {
-                              const items = JSON.parse(e.target.value);
-                              updateStep(selectedStep.step_id, {
-                                config: { ...selectedStep.config, items },
-                              });
-                            } catch { /* ignore parse errors while typing */ }
-                          }}
-                          placeholder={'[\n  { "id": "accept_tos", "label": "I accept the Terms of Service", "required": true },\n  { "id": "accept_privacy", "label": "I accept the Privacy Policy", "required": true }\n]'}
-                          rows={6}
-                          className="font-mono text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Array of {'{ id, label, required }'} objects. Max 10 items.
-                        </p>
-                      </div>
-                    </>
-                  )}
-
-                  {selectedStep.step_type === 'co_signers' && (
-                    <>
-                      <div>
-                        <Label>Title</Label>
-                        <Input
-                          value={(selectedStep.config as { title?: string })?.title || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, title: e.target.value },
-                          })}
-                          placeholder="e.g. Add Co-Signers"
-                        />
-                      </div>
-                      <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={(selectedStep.config as { description?: string })?.description || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, description: e.target.value },
-                          })}
-                          placeholder="Name additional principals for this agreement"
-                          rows={2}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label>Min co-signers</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={(selectedStep.config as { min_count?: number })?.min_count ?? 0}
-                            onChange={(e) => updateStep(selectedStep.step_id, {
-                              config: { ...selectedStep.config, min_count: parseInt(e.target.value) || 0 },
-                            })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Max co-signers</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={(selectedStep.config as { max_count?: number })?.max_count ?? 5}
-                            onChange={(e) => updateStep(selectedStep.step_id, {
-                              config: { ...selectedStep.config, max_count: parseInt(e.target.value) || 5 },
-                            })}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label>Principal Type</Label>
-                        <Select
-                          value={(selectedStep.config as { principal_type?: string })?.principal_type || 'either'}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, principal_type: v },
-                          })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
-                            <SelectItem value="group">Group</SelectItem>
-                            <SelectItem value="either">Either</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Record-only: names co-signers on the agreement without launching a counter-signature flow.
-                      </p>
-                    </>
-                  )}
-
-                  {selectedStep.step_type === 'deliver' && (
-                    <>
-                      <div>
-                        <Label>Channels (comma-separated)</Label>
-                        <Input
-                          value={((selectedStep.config as { channels?: string[] })?.channels || ['in_app']).join(', ')}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, channels: e.target.value.split(',').map(s => s.trim()).filter(Boolean) },
-                          })}
-                          placeholder="in_app, email, webhook"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Supported: in_app. Coming soon: email, webhook.
-                        </p>
-                      </div>
-                      <div>
-                        <Label>Recipients (comma-separated)</Label>
-                        <Input
-                          value={((selectedStep.config as { recipients?: string[] })?.recipients || ['signer']).join(', ')}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) },
-                          })}
-                          placeholder="signer, co_signers, entity_owner"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Special: signer, co_signers, entity_owner. Or literal email addresses.
-                        </p>
-                      </div>
-                    </>
-                  )}
-
-                  {(selectedStep.step_type === 'persist_agreement' || selectedStep.step_type === 'generate_pdf') && (
-                    <p className="text-xs text-muted-foreground">
-                      Non-visual step — auto-advances in the wizard. No configuration needed.
-                    </p>
-                  )}
-
-                  {selectedStep.step_type === 'grant_permissions' && (
-                    <>
-                      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-3 text-sm text-amber-800 dark:text-amber-200">
-                        <strong>Coming soon</strong> — Grant Permissions execution is not yet implemented. You can pre-configure the step; it will become functional in a future release.
-                      </div>
-                      <div>
-                        <Label>Permission Type</Label>
-                        <Select
-                          value={(selectedStep.config as { permission_type?: string })?.permission_type || 'SELECT'}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, permission_type: v },
-                          })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="SELECT">SELECT</SelectItem>
-                            <SelectItem value="USE_SCHEMA">USE SCHEMA</SelectItem>
-                            <SelectItem value="USE_CATALOG">USE CATALOG</SelectItem>
-                            <SelectItem value="ALL_PRIVILEGES">ALL PRIVILEGES</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>Target Source</Label>
-                        <Select
-                          value={(selectedStep.config as { target_source?: string })?.target_source || 'from_entity'}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, target_source: v },
-                          })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="from_entity">From trigger entity</SelectItem>
-                            <SelectItem value="from_variable">From variable</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {(selectedStep.config as { target_source?: string })?.target_source === 'from_variable' && (
-                        <div>
-                          <Label>Target Variable</Label>
-                          <Input
-                            value={(selectedStep.config as { target_variable?: string })?.target_variable || ''}
-                            onChange={(e) => updateStep(selectedStep.step_id, {
-                              config: { ...selectedStep.config, target_variable: e.target.value },
-                            })}
-                            placeholder="e.g. step_results.user_input.catalog_name"
-                          />
-                        </div>
-                      )}
-                      <div>
-                        <Label>Principal Source</Label>
-                        <Select
-                          value={(selectedStep.config as { principal_source?: string })?.principal_source || 'requester'}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, principal_source: v },
-                          })}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="requester">Requester (who triggered the workflow)</SelectItem>
-                            <SelectItem value="from_variable">From variable (e.g. on-behalf-of input)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {(selectedStep.config as { principal_source?: string })?.principal_source === 'from_variable' && (
-                        <div>
-                          <Label>Principal Variable</Label>
-                          <Input
-                            value={(selectedStep.config as { principal_variable?: string })?.principal_variable || ''}
-                            onChange={(e) => updateStep(selectedStep.step_id, {
-                              config: { ...selectedStep.config, principal_variable: e.target.value },
-                            })}
-                            placeholder="e.g. step_results.access_request.principal"
-                          />
-                        </div>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        Grants UC permissions via the SP workspace client after approval. Requires #291 for cross-workflow variable propagation when using &quot;from variable&quot; sources.
-                      </p>
-                    </>
+                  {/* Schema-driven config for new step types */}
+                  {SCHEMA_DRIVEN_STEP_TYPES.includes(selectedStep.step_type) && (
+                    <SchemaConfigPanel
+                      schema={_stepTypes.find(s => s.type === selectedStep.step_type)?.config_schema || {}}
+                      config={selectedStep.config as Record<string, unknown>}
+                      onUpdate={(newConfig) => updateStep(selectedStep.step_id, { config: newConfig })}
+                    />
                   )}
 
                   <Separator />

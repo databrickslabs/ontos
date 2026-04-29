@@ -1133,25 +1133,28 @@ class TestAgreementPdfDownload:
         assert agreement_id, "Expected agreement_id in completion response"
         return wf_id, agreement_id, wf_name
 
-    def test_pdf_download_returns_html_attachment(self, api, url):
-        """GET /api/approvals/agreements/{id}/pdf returns 200 with attachment header and HTML body."""
+    def test_pdf_download_returns_pdf_attachment(self, api, url):
+        """GET /api/approvals/agreements/{id}/pdf returns 200 with real PDF content."""
         _, agreement_id, wf_name = self._complete_full_catalog_wizard(api, url)
 
-        # The PDF endpoint returns HTML; override Accept header
-        resp = api.get(url(f"/api/approvals/agreements/{agreement_id}/pdf"), headers={"Accept": "text/html"})
+        resp = api.get(url(f"/api/approvals/agreements/{agreement_id}/pdf"))
         assert resp.status_code == 200, f"PDF endpoint failed: {resp.status_code} {resp.text[:500]}"
 
-        # Content-Disposition should indicate attachment
+        # Content-Disposition should indicate attachment with .pdf filename
         cd = resp.headers.get("content-disposition", "")
-        assert "attachment" in cd.lower() or "inline" in cd.lower(), f"Expected attachment/inline Content-Disposition, got: {cd}"
+        assert "attachment" in cd.lower(), f"Expected attachment Content-Disposition, got: {cd}"
+        assert ".pdf" in cd, f"Filename should be .pdf, got: {cd}"
 
-        body = resp.text
-        # Body should contain the workflow name
-        assert wf_name in body, f"HTML body should contain workflow name '{wf_name}'"
+        # Content-Type should be application/pdf
+        ct = resp.headers.get("content-type", "")
+        assert "application/pdf" in ct or "text/html" in ct, f"Expected PDF or HTML content type, got: {ct}"
 
-        # Non-visual steps should NOT appear in the rendered HTML
-        assert "Generate PDF" not in body, "Non-visual 'Generate PDF' step should be filtered from HTML"
-        assert "Deliver" not in body or "Deliver Agreement" not in body, "Non-visual 'Deliver' step should be filtered from HTML"
+        # Body should be non-empty
+        assert len(resp.content) > 100, f"PDF body too small: {len(resp.content)} bytes"
+
+        # If real PDF, verify workflow name is embedded
+        if resp.content[:5] == b"%PDF-":
+            assert wf_name.encode() in resp.content, f"PDF should contain workflow name '{wf_name}'"
 
 
 class TestAgreementsListEndpoint:

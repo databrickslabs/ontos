@@ -474,37 +474,46 @@ class AgreementWizardManager:
             )
 
         # Gap 2: Generate PDF and store to Volume when generate_pdf step exists
-        if has_generate_pdf and self._storage_base_path:
+        # Read volume_path from the generate_pdf step's config (per-workflow, not global)
+        pdf_volume_path = self._storage_base_path  # global fallback
+        if has_generate_pdf:
+            all_steps = snapshot_steps or (workflow.steps if workflow else [])
+            for s in all_steps:
+                st = getattr(s, 'step_type', None)
+                if st == StepType.GENERATE_PDF or (isinstance(st, str) and st == 'generate_pdf'):
+                    cfg = s.config if hasattr(s, 'config') else {}
+                    if isinstance(cfg, str):
+                        cfg = json.loads(cfg)
+                    if cfg.get('storage') == 'volume' and cfg.get('volume_path'):
+                        pdf_volume_path = cfg['volume_path']
+                    break
+        if has_generate_pdf and pdf_volume_path:
             try:
                 from pathlib import Path
-                from src.common.agreement_pdf import build_agreement_pdf
-                out_dir = Path(self._storage_base_path) / "agreements"
-                out_dir.mkdir(parents=True, exist_ok=True)
-                out_path = str(out_dir / f"{agreement_id}.pdf")
-                # Build steps_with_config from snapshot if available, else from live workflow
-                if snapshot_steps:
-                    steps_with_config = [
-                        {"step_id": s.step_id, "name": s.name, "step_type": s.step_type.value, "config": s.config or {}}
-                        for s in snapshot_steps
-                    ]
-                elif workflow:
-                    steps_with_config = [
-                        {"step_id": s.step_id, "name": s.name, "step_type": s.step_type.value, "config": s.config or {}}
-                        for s in (workflow.steps or [])
-                    ]
+                from src.utils.agreement_pdf_builder import build_agreement_pdf as build_pdf, _HAS_FPDF
+                if _HAS_FPDF:
+                    out_dir = Path(pdf_volume_path) / "agreements"
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    out_path = str(out_dir / f"{agreement_id}.pdf")
+                    wf_name = (workflow.name if workflow else None) or getattr(session, 'workflow_name', None) or "Approval"
+                    wf_version = workflow.version if workflow else None
+                    pdf_bytes = build_pdf(
+                        workflow_name=wf_name,
+                        entity_type=session.entity_type,
+                        entity_id=session.entity_id,
+                        step_results=step_results,
+                        snapshot=getattr(session, 'workflow_snapshot', None),
+                        created_by=created_by or session.created_by,
+                        created_at=session.created_at,
+                        workflow_version=wf_version,
+                    )
+                    with open(out_path, "wb") as f:
+                        f.write(bytes(pdf_bytes))
+                    agreements_repo.set_pdf_storage_path(self._db, agreement_id, out_path)
+                    pdf_storage_path = out_path
+                    logger.info("Agreement PDF written to %s (%d bytes)", out_path, len(pdf_bytes))
                 else:
-                    steps_with_config = []
-                wf_name = (workflow.name if workflow else None) or getattr(session, 'workflow_name', None) or "Approval"
-                build_agreement_pdf(
-                    workflow_name=wf_name,
-                    entity_type=session.entity_type,
-                    entity_id=session.entity_id,
-                    steps_with_config=steps_with_config,
-                    step_results=step_results,
-                    output_path=out_path,
-                )
-                agreements_repo.set_pdf_storage_path(self._db, agreement_id, out_path)
-                pdf_storage_path = out_path
+                    logger.info("fpdf2 not available — PDF will be generated on-demand at download time")
             except Exception as e:
                 logger.warning("Agreement PDF generation/storage failed: %s — HTML download available via API", e)
         completion_action = getattr(session, "completion_action", None)

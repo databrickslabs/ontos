@@ -1190,13 +1190,11 @@ export default function Workflows() {
                 <TabsTrigger value="all" className="px-4 py-2">
                   <span>All</span>
                 </TabsTrigger>
-                <TabsTrigger value="process" className="flex flex-col items-start px-4 py-2">
+                <TabsTrigger value="process" className="px-4 py-2">
                   <span>Process</span>
-                  <span className="text-[10px] italic text-muted-foreground font-normal">Background automation</span>
                 </TabsTrigger>
-                <TabsTrigger value="approval" className="flex flex-col items-start px-4 py-2">
+                <TabsTrigger value="approval" className="px-4 py-2">
                   <span>Approval</span>
-                  <span className="text-[10px] italic text-muted-foreground font-normal">Interactive consent</span>
                 </TabsTrigger>
               </TabsList>
               <TooltipProvider>

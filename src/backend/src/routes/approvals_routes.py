@@ -281,6 +281,7 @@ async def download_agreement_pdf(
             snapshot=agreement.workflow_snapshot,
             created_by=agreement.created_by,
             created_at=agreement.created_at,
+            workflow_version=getattr(agreement, 'workflow_version', None),
         )
         return Response(
             content=bytes(pdf_bytes),

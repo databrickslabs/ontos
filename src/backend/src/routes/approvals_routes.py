@@ -267,7 +267,7 @@ async def download_agreement_pdf(
     return HTMLResponse(
         content=html,
         headers={
-            "Content-Disposition": f'inline; filename="agreement-{agreement_id[:8]}.html"',
+            "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.html"',
         },
     )
 

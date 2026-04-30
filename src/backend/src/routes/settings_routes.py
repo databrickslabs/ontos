@@ -361,7 +361,7 @@ async def handle_role_request_decision(
             feature='settings',
             action='HANDLE_ROLE_REQUEST',
             success=True,
-            details={'role_id': request_data.role_id, 'approved': request_data.approved, 'user_email': request_data.user_email}
+            details={'role_id': request_data.role_id, 'approved': request_data.approved, 'user_email': request_data.requester_email}
         )
         
         return result

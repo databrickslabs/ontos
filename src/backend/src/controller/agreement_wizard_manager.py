@@ -602,6 +602,14 @@ class AgreementWizardManager:
         config = config or {}
 
         channels = config.get("channels", ["in_app"])
+        # Non-blocking: strip 'email' if present in legacy/saved configs.
+        # Email is out of scope in v1 (non-portable across customer environments).
+        if channels and 'email' in channels:
+            logger.warning(
+                "'email' channel is not supported in v1 (non-portable across customer environments). "
+                "Stripping from channels — use 'webhook' to your own email provider instead."
+            )
+            channels = [c for c in channels if c != 'email']
         recipients_tokens = config.get("recipients", ["signer"])
         signer_email = created_by or getattr(session, 'created_by', None)
         entity_name = self._get_entity_name(session.entity_type, session.entity_id)

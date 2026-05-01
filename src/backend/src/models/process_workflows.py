@@ -7,8 +7,12 @@ Defines the API request/response schemas for workflow definitions, steps, and ex
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import uuid
+
+from src.common.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class TriggerType(str, Enum):
@@ -270,7 +274,7 @@ class DeliverStepConfig(BaseModel):
     """Config for deliver step: send agreement via notification channels."""
     channels: List[str] = Field(
         default_factory=lambda: ["in_app"],
-        description="Delivery channels: 'in_app', 'email', 'webhook'",
+        description="Delivery channels: 'in_app' or 'webhook'. Use 'webhook' to integrate with your own email provider.",
     )
     recipients: List[str] = Field(
         default_factory=lambda: ["signer"],
@@ -278,6 +282,20 @@ class DeliverStepConfig(BaseModel):
     )
     subject_template: Optional[str] = Field(None, description="Subject line template with ${variable} substitution")
     body_template: Optional[str] = Field(None, description="Body template with ${variable} substitution")
+
+    @field_validator('channels')
+    @classmethod
+    def _strip_unsupported_channels(cls, v: List[str]) -> List[str]:
+        # Non-blocking: 'email' is out of scope in v1 (non-portable across customer
+        # environments — no Databricks-managed SMTP). Strip it with a warning so
+        # legacy workflow configs still load and execute.
+        if v and 'email' in v:
+            logger.warning(
+                "'email' channel is not supported in v1 (non-portable across customer environments). "
+                "Stripping from channels — use 'webhook' to your own email provider instead."
+            )
+            return [c for c in v if c != 'email']
+        return v
 
 
 class GrantPermissionsStepConfig(BaseModel):

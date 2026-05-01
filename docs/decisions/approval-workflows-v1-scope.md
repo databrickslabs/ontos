@@ -28,8 +28,7 @@ If customers need priority ordering or mutual exclusion:
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Grant Permissions step | Type defined, no backend handler | Greyed out "(soon)" in palette. Needs #291 for variable propagation |
-| Deliver: email channel | Config accepted, silently ignored | Only `in_app` implemented. Help text says "Coming soon" |
-| Deliver: webhook channel | Config accepted, silently ignored | Same as email |
+| `deliver` / `notification` `email` channel | Out of scope (v1) — non-portable | No Databricks-managed SMTP relay; customer must BYO SendGrid/SES/SMTP + DNS (SPF/DKIM). Hidden from UI. Pydantic validator strips `email` from `channels` with a warning. **Recommended pattern**: use the `webhook` channel pointing at your own email provider's API |
 | Co-signers counter-signature | Record-only | No signing invitation sent to co-signers. By design per PRD |
 | Checklist items visual editor | Raw JSON textarea | Works but not user-friendly for non-technical designers |
 | Workflow versioning/diff | Out of scope | Snapshot captures point-in-time; no version history UI |
@@ -62,7 +61,7 @@ Related issues: #62 (persona-based UI — would include a per-persona home with 
 - `user_action` — existing, unchanged for backward compatibility
 - `persist_agreement` — explicit agreement materialization (non-visual, auto-advances)
 - `generate_pdf` — real PDF via fpdf2 with download endpoint (non-visual)
-- `deliver` — in_app notification to signer/entity_owner (non-visual)
+- `deliver` — in_app + webhook channels (non-blocking, real implementation). Email out of scope.
 
 ### Step Catalog (Process)
 - `grant_permissions` — type defined, config panel built, backend handler pending

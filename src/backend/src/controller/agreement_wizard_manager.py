@@ -489,12 +489,8 @@ class AgreementWizardManager:
                     break
         if has_generate_pdf and pdf_volume_path:
             try:
-                from pathlib import Path
                 from src.utils.agreement_pdf_builder import build_agreement_pdf as build_pdf, _HAS_FPDF
                 if _HAS_FPDF:
-                    out_dir = Path(pdf_volume_path) / "agreements"
-                    out_dir.mkdir(parents=True, exist_ok=True)
-                    out_path = str(out_dir / f"{agreement_id}.pdf")
                     wf_name = (workflow.name if workflow else None) or getattr(session, 'workflow_name', None) or "Approval"
                     wf_version = workflow.version if workflow else None
                     pdf_bytes = build_pdf(
@@ -507,15 +503,40 @@ class AgreementWizardManager:
                         created_at=session.created_at,
                         workflow_version=wf_version,
                     )
-                    with open(out_path, "wb") as f:
-                        f.write(bytes(pdf_bytes))
-                    agreements_repo.set_pdf_storage_path(self._db, agreement_id, out_path)
-                    pdf_storage_path = out_path
-                    logger.info("Agreement PDF written to %s (%d bytes)", out_path, len(pdf_bytes))
+
+                    # Route the write based on the storage backend. Inside Databricks
+                    # Apps runtime, /Volumes/... is NOT a real filesystem mount —
+                    # raw open()/mkdir() raise EACCES and the PDF silently
+                    # disappears. Use the SDK Files API for UC Volumes; keep the
+                    # local filesystem path for dev where storage_base_path may
+                    # legitimately be a tmp dir.
+                    if pdf_volume_path.startswith("/Volumes/"):
+                        from io import BytesIO
+                        from src.common.workspace_client import get_workspace_client
+                        out_path = f"{pdf_volume_path.rstrip('/')}/agreements/{agreement_id}.pdf"
+                        ws = get_workspace_client()
+                        ws.files.upload(
+                            out_path,
+                            BytesIO(bytes(pdf_bytes)),
+                            overwrite=True,
+                        )
+                        agreements_repo.set_pdf_storage_path(self._db, agreement_id, out_path)
+                        pdf_storage_path = out_path
+                        logger.info("Agreement PDF uploaded to Volume %s (%d bytes)", out_path, len(pdf_bytes))
+                    else:
+                        from pathlib import Path
+                        out_dir = Path(pdf_volume_path) / "agreements"
+                        out_dir.mkdir(parents=True, exist_ok=True)
+                        out_path = str(out_dir / f"{agreement_id}.pdf")
+                        with open(out_path, "wb") as f:
+                            f.write(bytes(pdf_bytes))
+                        agreements_repo.set_pdf_storage_path(self._db, agreement_id, out_path)
+                        pdf_storage_path = out_path
+                        logger.info("Agreement PDF written to local path %s (%d bytes)", out_path, len(pdf_bytes))
                 else:
                     logger.info("fpdf2 not available — PDF will be generated on-demand at download time")
             except Exception as e:
-                logger.warning("Agreement PDF generation/storage failed: %s — HTML download available via API", e)
+                logger.warning("Agreement PDF Volume upload/local write failed: %s — HTML download available via API", e)
         completion_action = getattr(session, "completion_action", None)
         subscriber_email = created_by or session.created_by
         if completion_action == "subscribe" and subscriber_email:

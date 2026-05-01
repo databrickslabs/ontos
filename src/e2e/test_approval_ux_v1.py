@@ -68,6 +68,13 @@ DATABRICKS_HOST = os.environ.get(
 )
 DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "account-workspace")
 
+# Volume path used by B3's Volume-write assertion. The trailing path is
+# relative to the Volume root and is created on demand by the Files API.
+E2E_VOLUME_BASE_PATH = os.environ.get(
+    "ONTOS_E2E_VOLUME_BASE_PATH",
+    "/Volumes/mkonchits_account_workspace_catalog/app_ontos/app_files/agreements/e2e_volume_test",
+)
+
 RUN_TS = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 RUN_TAG = f"E2E-ApprovalUX-{RUN_TS}-{uuid.uuid4().hex[:6]}"
 
@@ -242,9 +249,12 @@ def build_workflow_payload() -> Dict[str, Any]:
                 "name": "Generate PDF",
                 "step_type": "generate_pdf",
                 "config": {
-                    # No 'storage' key -> backend will use storage_base_path
-                    # (or skip volume write). The download endpoint regenerates
-                    # on-the-fly via fpdf2 either way, which is what we test.
+                    # storage=volume + volume_path triggers the SDK Files API
+                    # upload path inside _complete_session. We verify in B3
+                    # that the file actually lands in /Volumes/... and that
+                    # its bytes match the download endpoint.
+                    "storage": "volume",
+                    "volume_path": E2E_VOLUME_BASE_PATH,
                     "include_step_results": True,
                 },
                 "on_pass": "deliver",
@@ -649,23 +659,148 @@ def run() -> int:
             # Since the FE is responsible for displaying it, we rely on the
             # response shape + magic bytes + size as the regression signal.
             size_ok = len(body) > 1500  # a real fpdf2 cover page is ~2-5KB+
-            if (
+            base_pdf_ok = (
                 ctype.startswith("application/pdf")
                 and is_pdf_magic
                 and has_eof
                 and has_flate
                 and size_ok
-            ):
-                results.pass_(
-                    "B3",
-                    f"{len(body)} bytes, magic OK, FlateDecode OK, EOF OK",
-                )
-            else:
+            )
+            if not base_pdf_ok:
                 results.fail(
                     "B3",
                     f"ctype={ctype} magic={is_pdf_magic} eof={has_eof} "
                     f"flate={has_flate} size={len(body)}",
                 )
+            else:
+                # ----- Volume-write sub-assertion (regression guard) -----
+                # The workflow was configured with storage=volume +
+                # volume_path=E2E_VOLUME_BASE_PATH. After completion we
+                # expect:
+                #   1. agreement.pdf_storage_path is non-null and
+                #      starts with /Volumes/.
+                #   2. The file physically exists in the Volume.
+                #   3. The bytes in the Volume match the download endpoint.
+                volume_ok = False
+                volume_detail = ""
+                vol_path_recorded: Optional[str] = None
+                cleanup_path: Optional[str] = None
+                try:
+                    agr_resp = s.get(
+                        f"{BASE}/api/approvals/agreements/{agreement_id}",
+                        timeout=15,
+                    )
+                    if agr_resp.status_code != 200:
+                        volume_detail = (
+                            f"GET /agreements/{{id}} failed: "
+                            f"{agr_resp.status_code} {agr_resp.text[:200]}"
+                        )
+                    else:
+                        agr = agr_resp.json()
+                        vol_path_recorded = agr.get("pdf_storage_path")
+                        if not vol_path_recorded:
+                            volume_detail = (
+                                "agreement.pdf_storage_path is null — "
+                                "Volume upload did not happen"
+                            )
+                        elif not vol_path_recorded.startswith("/Volumes/"):
+                            volume_detail = (
+                                f"pdf_storage_path={vol_path_recorded!r} "
+                                "does not start with /Volumes/"
+                            )
+                        else:
+                            cleanup_path = vol_path_recorded
+                            # Verify the file exists + read its bytes via the
+                            # Databricks REST API. We use the workspace host
+                            # + the same OAuth token; the Files API endpoint
+                            # is /api/2.0/fs/files/{path}.
+                            from urllib.parse import quote
+                            files_url = (
+                                f"{DATABRICKS_HOST.rstrip('/')}"
+                                f"/api/2.0/fs/files{quote(vol_path_recorded)}"
+                            )
+                            file_resp = requests.get(
+                                files_url,
+                                headers={"Authorization": f"Bearer {token}"},
+                                timeout=30,
+                            )
+                            if file_resp.status_code != 200:
+                                volume_detail = (
+                                    f"GET Volume file {vol_path_recorded} -> "
+                                    f"HTTP {file_resp.status_code} "
+                                    f"{file_resp.text[:200]}"
+                                )
+                            else:
+                                vol_bytes = file_resp.content
+                                vol_size = len(vol_bytes)
+                                first16 = vol_bytes[:16].hex()
+                                # Verify the artifact in the Volume is a
+                                # real PDF and roughly the same size as
+                                # what the download endpoint serves. We do
+                                # NOT require byte-equality — the download
+                                # endpoint regenerates via fpdf2 each call
+                                # (different /CreationDate metadata) when
+                                # it can't read the stored path through
+                                # os.path.isfile() (separate code path; out
+                                # of scope here, but worth flagging). Same
+                                # magic + similar size confirms the Volume
+                                # write itself works and serves a valid PDF.
+                                vol_is_pdf = vol_bytes[:4] == b"%PDF"
+                                vol_has_eof = b"%%EOF" in vol_bytes[-32:]
+                                vol_size_close = abs(vol_size - len(body)) < 200
+                                if vol_is_pdf and vol_has_eof and vol_size_close:
+                                    volume_ok = True
+                                    volume_detail = (
+                                        f"vol_path={vol_path_recorded} "
+                                        f"vol_size={vol_size} "
+                                        f"download_size={len(body)} "
+                                        f"first16={first16}"
+                                    )
+                                else:
+                                    volume_detail = (
+                                        f"Volume artifact malformed: "
+                                        f"is_pdf={vol_is_pdf} "
+                                        f"has_eof={vol_has_eof} "
+                                        f"vol_size={vol_size} "
+                                        f"download_size={len(body)} "
+                                        f"first16={first16}"
+                                    )
+                except Exception as exc:
+                    volume_detail = f"exception during Volume check: {exc}"
+
+                if volume_ok:
+                    results.pass_(
+                        "B3",
+                        f"{len(body)} bytes via download, magic+EOF+Flate OK; "
+                        f"Volume-write OK [{volume_detail}]",
+                    )
+                else:
+                    results.fail(
+                        "B3",
+                        f"download OK but Volume-write FAILED: {volume_detail}",
+                    )
+
+                # Best-effort cleanup of the uploaded test PDF — keep tidy
+                # even on failure of subsequent behaviors. Tracked on the
+                # outer scope so the finally block can remove it too if
+                # something raised between here and the end.
+                if cleanup_path:
+                    try:
+                        from urllib.parse import quote as _q
+                        del_resp = requests.delete(
+                            f"{DATABRICKS_HOST.rstrip('/')}"
+                            f"/api/2.0/fs/files{_q(cleanup_path)}",
+                            headers={"Authorization": f"Bearer {token}"},
+                            timeout=15,
+                        )
+                        print(
+                            f"  cleanup volume PDF {cleanup_path}: "
+                            f"HTTP {del_resp.status_code}"
+                        )
+                    except Exception as exc:
+                        print(
+                            f"  cleanup volume PDF error (ignored): {exc}"
+                        )
 
         # -------------------------------------------------------------------
         # Behavior 5: deliver dispatched in_app, email stripped.

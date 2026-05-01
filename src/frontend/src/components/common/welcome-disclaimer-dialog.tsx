@@ -56,7 +56,7 @@ export default function WelcomeDisclaimerDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <InfoIcon className="w-5 h-5 text-blue-500" />
-                        Welcome to Ontos
+                        Before you continue
                     </DialogTitle>
                     <DialogDescription>
                         Please review the following before continuing.

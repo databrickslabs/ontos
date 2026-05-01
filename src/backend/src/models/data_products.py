@@ -318,6 +318,11 @@ class DataProduct(BaseModel):
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
 
+    # Daimler go-live (#486448): typed list of group display names that
+    # represent expected consumers of this product. Surfaced in the publish
+    # form and exposed to webhook bodies via ${entity.consumer_groups}.
+    consumer_groups: Optional[List[str]] = Field(default_factory=list, description="Group display names of expected consumers")
+
     # Audit fields (not in ODPS, but useful)
     created_at: Optional[datetime] = Field(None, description="Record creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Record update timestamp")
@@ -340,6 +345,25 @@ class DataProduct(BaseModel):
     certified_by: Optional[str] = Field(None, description="Who granted certification")
     certification_expires_at: Optional[datetime] = Field(None, description="When certification expires")
     certification_notes: Optional[str] = Field(None, description="Certification notes")
+
+    # Daimler #486448: consumer_groups is stored as JSON-encoded TEXT in DB.
+    # Decode to a list at read time. Accepts both list (already decoded) and
+    # str (raw from SQLite/Postgres TEXT column).
+    @field_validator('consumer_groups', mode='before')
+    def parse_consumer_groups(cls, value):
+        if value is None or value == '':
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+            return []
+        return value or []
 
     # Field validators to parse JSON strings from database
     @field_validator('tags', mode='before')
@@ -422,6 +446,9 @@ class DataProductCreate(BaseModel):
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
 
+    # Daimler go-live (#486448): consumer groups metadata
+    consumer_groups: Optional[List[str]] = Field(default_factory=list, description="Group display names of expected consumers")
+
     # Field validator to handle string IDs from frontend
     @field_validator('tags', mode='before')
     def parse_tags(cls, value):
@@ -461,6 +488,8 @@ class DataProductUpdate(BaseModel):
     support: Optional[List[Support]] = Field(None, alias="support_channels")
     team: Optional[Team] = None
     max_level_inheritance: Optional[int] = Field(None, ge=0, le=999)
+    # Daimler go-live (#486448): consumer groups metadata
+    consumer_groups: Optional[List[str]] = Field(None, description="Group display names of expected consumers")
 
     # Field validator to handle string IDs from frontend
     @field_validator('tags', mode='before')
@@ -486,9 +515,25 @@ class DataProductUpdate(BaseModel):
 # Subscription Models
 # ============================================================================
 
+class OnBehalfOf(BaseModel):
+    """Subscribe-on-behalf-of payload (Daimler #486363).
+
+    Allows a user to request a subscription on behalf of a Databricks group
+    or service principal. ``type=user`` accepts any string (covers new hires
+    not yet indexed in SCIM); ``type=group`` and ``type=service_principal``
+    are validated against the workspace SCIM directory before persisting.
+    """
+    type: str = Field(..., description="Principal type: 'user', 'group', or 'service_principal'")
+    value: str = Field(..., description="Principal identifier (email for user, displayName for group, applicationId or displayName for SP)")
+
+
 class SubscriptionCreate(BaseModel):
     """Request model for creating a subscription."""
     reason: Optional[str] = Field(None, description="Optional reason for subscribing")
+    on_behalf_of: Optional[OnBehalfOf] = Field(
+        None,
+        description="Optional: subscribe on behalf of a group or service principal (validated against workspace SCIM)",
+    )
 
 
 class Subscription(BaseModel):
@@ -498,6 +543,9 @@ class Subscription(BaseModel):
     subscriber_email: str = Field(..., description="Email of the subscriber")
     subscribed_at: datetime = Field(..., description="When the subscription was created")
     subscription_reason: Optional[str] = Field(None, description="Optional reason for subscribing")
+    # Daimler subscribe-on-behalf-of (#486363)
+    on_behalf_of_type: Optional[str] = Field(None, description="Principal type when subscribed on behalf of another principal")
+    on_behalf_of_value: Optional[str] = Field(None, description="Principal identifier when subscribed on behalf of another principal")
 
     model_config = {"from_attributes": True}
 

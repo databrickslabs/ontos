@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from databricks.sdk.errors import PermissionDenied, DatabricksError
 
@@ -71,7 +71,70 @@ async def search_workspace_assets(
             detail="An unexpected error occurred while searching workspace assets."
         )
 
+@router.get("/workspace/groups")
+async def list_workspace_groups(
+    search: Optional[str] = Query(None, description="Optional substring filter on displayName (case-insensitive)"),
+    limit: int = Query(200, description="Max groups to return", ge=1, le=1000),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY)),
+):
+    """List Databricks workspace groups for use in pickers.
+
+    Used by:
+      * the data product publish form's ``consumer_groups`` multi-select
+        (Daimler #486448)
+      * the subscribe dialog's "for a group I'm part of" picker
+        (Daimler #486363)
+
+    Returns ``[{id, display_name}, ...]``. Best-effort: SCIM directory may
+    contain thousands of groups in large workspaces, so an optional
+    ``search`` substring narrows the list; otherwise the first ``limit``
+    groups are returned alphabetically.
+    """
+    try:
+        from src.common.workspace_client import get_workspace_client
+        ws = get_workspace_client()
+    except Exception as e:
+        logger.warning(f"Workspace client unavailable for /workspace/groups: {e}")
+        return []
+
+    try:
+        # Build SCIM filter when a search term is provided. SCIM supports
+        # `co` (contains) on displayName.
+        kwargs: Dict[str, Any] = {"attributes": "displayName,id"}
+        if search:
+            # Escape any double-quotes in the search term to keep the filter valid.
+            safe = search.replace('"', '\\"')
+            kwargs["filter"] = f'displayName co "{safe}"'
+        try:
+            iterator = ws.groups.list(**kwargs)
+        except TypeError:
+            # Older SDK signatures may not accept all kwargs — degrade gracefully
+            iterator = ws.groups.list()
+
+        out: List[Dict[str, Any]] = []
+        for grp in iterator:
+            display_name = getattr(grp, 'display_name', None) or getattr(grp, 'displayName', None)
+            grp_id = getattr(grp, 'id', None)
+            if not display_name:
+                continue
+            out.append({"id": grp_id, "display_name": display_name})
+            if len(out) >= limit:
+                break
+        # Stable order so the picker is predictable
+        out.sort(key=lambda g: (g.get("display_name") or "").lower())
+        return out
+    except PermissionDenied as e:
+        logger.error(f"Permission denied listing workspace groups: {e}")
+        raise HTTPException(status_code=403, detail="Permission denied to list workspace groups.")
+    except DatabricksError as e:
+        logger.error(f"Databricks error listing workspace groups: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error listing workspace groups.")
+    except Exception as e:
+        logger.exception(f"Unexpected error listing workspace groups: {e}")
+        raise HTTPException(status_code=500, detail="Unexpected error listing workspace groups.")
+
+
 def register_routes(app):
     """Register routes with the FastAPI app."""
     app.include_router(router)
-    logger.info("Workspace routes registered") 
+    logger.info("Workspace routes registered")

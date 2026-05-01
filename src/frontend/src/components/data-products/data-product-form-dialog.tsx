@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/accordion"
 import { useApi } from '@/hooks/use-api';
 import TagSelector from '@/components/ui/tag-selector';
+import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 
 // --- Prop Types --- 
 interface DataProductFormDialogProps {
@@ -184,9 +185,10 @@ const createDefaultProduct = (): DataProduct => {
     version: "1.0.0", // Default version
     productType: "", // Default type (user should select)
     outputPorts: [],
-    links: {}, 
-    custom: {}, 
+    links: {},
+    custom: {},
     tags: [],
+    consumer_groups: [], // Daimler #486448
     // updated_at will be set on submit
     updated_at: '' // Placeholder, will be replaced
   };
@@ -1228,6 +1230,28 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       />
                                     )}
                                 />
+                            </CardContent>
+                          </Card>
+
+                          {/* Consumer Groups Card (Daimler #486448) */}
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Consumer Groups</CardTitle>
+                              <CardDescription>
+                                Workspace groups that represent the expected consumers of this product. Surfaced to subscribe webhooks via <code className="text-xs">${'{'}entity.consumer_groups{'}'}</code>.
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <Controller
+                                name="consumer_groups"
+                                control={control}
+                                render={({ field }) => (
+                                  <ConsumerGroupsPicker
+                                    value={field.value || []}
+                                    onChange={field.onChange}
+                                  />
+                                )}
+                              />
                             </CardContent>
                           </Card>
 

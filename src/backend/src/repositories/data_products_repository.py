@@ -56,6 +56,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
 
         try:
             # 1. Create core DataProduct
+            # Daimler #486448: persist consumer_groups as JSON-encoded TEXT
+            # for portability across SQLite/Postgres. None / empty list -> None.
+            cg_value = getattr(obj_in, 'consumer_groups', None)
+            cg_json: Optional[str] = json.dumps(cg_value) if cg_value else None
+
             db_obj = self.model(
                 id=obj_in.id,
                 api_version=obj_in.apiVersion,
@@ -72,6 +77,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 base_name=getattr(obj_in, 'base_name', None),
                 change_summary=getattr(obj_in, 'change_summary', None),
                 draft_owner_id=getattr(obj_in, 'draft_owner_id', None),
+                consumer_groups=cg_json,
             )
 
             # 2. Create Structured Description (One-to-One)
@@ -253,6 +259,10 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.project_id = update_data['project_id']
             if 'max_level_inheritance' in update_data:
                 db_obj.max_level_inheritance = update_data['max_level_inheritance']
+            # Daimler #486448: consumer_groups
+            if 'consumer_groups' in update_data:
+                cg_value = update_data['consumer_groups']
+                db_obj.consumer_groups = json.dumps(cg_value) if cg_value else None
 
             # 2. Update Structured Description
             if 'description' in update_data:
@@ -817,9 +827,17 @@ class DataProductSubscriptionRepository:
         *,
         product_id: str,
         subscriber_email: str,
-        reason: Optional[str] = None
+        reason: Optional[str] = None,
+        on_behalf_of_type: Optional[str] = None,
+        on_behalf_of_value: Optional[str] = None,
     ) -> DataProductSubscriptionDb:
-        """Create a new subscription."""
+        """Create a new subscription.
+
+        Daimler go-live (#486363): when ``on_behalf_of_type`` is set, the
+        subscription was requested on behalf of a different principal (group
+        or service principal). Caller is responsible for validating the
+        principal exists in the workspace SCIM directory before calling.
+        """
         from uuid import uuid4
         logger.debug(f"Creating subscription for {subscriber_email} to product {product_id}")
         try:
@@ -827,7 +845,9 @@ class DataProductSubscriptionRepository:
                 id=str(uuid4()),
                 product_id=product_id,
                 subscriber_email=subscriber_email,
-                subscription_reason=reason
+                subscription_reason=reason,
+                on_behalf_of_type=on_behalf_of_type,
+                on_behalf_of_value=on_behalf_of_value,
             )
             db.add(db_obj)
             db.flush()

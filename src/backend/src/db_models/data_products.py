@@ -46,6 +46,11 @@ class DataProductDb(Base):
     # Default 99 means inherit almost everything that's marked inheritable.
     max_level_inheritance = Column(Integer, nullable=False, default=99)
 
+    # ==================== Daimler #486448: consumer_groups ====================
+    # JSON array of group display names. Stored as JSON text for portability
+    # across SQLite (dev) + Postgres (prod). The migration adds JSONB on PG.
+    consumer_groups = Column(Text, nullable=True)
+
     # ==================== Audit Fields ====================
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -381,6 +386,11 @@ class DataProductSubscriptionDb(Base):
     subscriber_email = Column(String, nullable=False, index=True)
     subscribed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     subscription_reason = Column(Text, nullable=True)  # Optional: why they subscribed
+    # Daimler subscribe-on-behalf-of (#486363) — when set, the request was
+    # initiated for a Databricks group or service principal rather than the
+    # subscriber themselves.
+    on_behalf_of_type = Column(String(50), nullable=True)  # 'group' | 'service_principal' | 'user'
+    on_behalf_of_value = Column(String(255), nullable=True)
 
     # Relationship to product
     product = relationship("DataProductDb", backref="subscriptions")

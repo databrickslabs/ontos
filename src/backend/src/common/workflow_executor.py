@@ -37,17 +37,38 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _render_template_value(value: Any) -> str:
+    """Render a substitution value. Lists/dicts are JSON-serialized so webhook
+    body templates can interpolate `${entity.consumer_groups}` and receive a
+    valid JSON array (Daimler go-live: piping consumer_groups + on_behalf_of
+    into the Treasure runbook webhook body)."""
+    if value is None:
+        return ''
+    if isinstance(value, (list, dict)):
+        try:
+            return json.dumps(value, default=str)
+        except Exception:
+            return str(value)
+    return str(value)
+
+
 def substitute_template(template: str, context: 'StepContext') -> str:
     """Replace ${variable} and {{variable}} placeholders with context values.
-    
+
     Supports:
       ${entity_name}, ${entity_type}, ${entity_id}, ${user_email},
       ${workflow_name}, ${workflow_id}, ${execution_id},
-      ${entity.field}, ${step_results.step_id.field}
+      ${entity.field}              - flat scalars + JSON-serialized lists/dicts
+      ${entity.field.subfield}     - nested dict path
+      ${step_results.step_id.field[.sub...]}
+      ${context.<key>[.<sub>...]}  - nested path into StepContext attributes
+                                     (e.g. ${context.on_behalf_of.value}).
+                                     Top-level scalar attrs like
+                                     ${context.entity_type} also work.
     """
     import re
 
-    substitutions = {
+    flat_subs = {
         'entity_type': context.entity_type,
         'entity_id': context.entity_id,
         'entity_name': context.entity_name or '',
@@ -57,23 +78,60 @@ def substitute_template(template: str, context: 'StepContext') -> str:
         'execution_id': context.execution_id,
     }
 
-    for key, value in context.entity.items():
-        if isinstance(value, (str, int, float, bool)):
-            substitutions[f'entity.{key}'] = str(value)
+    def _walk_dict(obj: Any, parts: List[str]) -> Optional[str]:
+        for part in parts:
+            if isinstance(obj, dict):
+                obj = obj.get(part)
+            else:
+                return None
+            if obj is None:
+                return None
+        return _render_template_value(obj)
 
-    for step_id, step_data in context.step_results.items():
-        if isinstance(step_data, dict):
-            for key, value in step_data.items():
-                if isinstance(value, (str, int, float, bool)):
-                    substitutions[f'step_results.{step_id}.{key}'] = str(value)
-                elif isinstance(value, dict):
-                    for k, v in value.items():
-                        if isinstance(v, (str, int, float, bool)):
-                            substitutions[f'step_results.{step_id}.{key}.{k}'] = str(v)
+    def _lookup_context(parts: List[str]) -> Optional[str]:
+        """Resolve ${context.<attr>[.<sub>...]} by walking StepContext attrs."""
+        if not parts:
+            return None
+        head, rest = parts[0], parts[1:]
+        if not hasattr(context, head):
+            return None
+        obj: Any = getattr(context, head)
+        if obj is None:
+            return None
+        for part in rest:
+            if isinstance(obj, dict):
+                obj = obj.get(part)
+            elif obj is None:
+                return None
+            else:
+                obj = getattr(obj, part, None)
+            if obj is None:
+                return None
+        return _render_template_value(obj)
 
     def _replace(match):
         var_name = match.group(1)
-        return substitutions.get(var_name, match.group(0))
+        # 1) flat top-level scalars
+        if var_name in flat_subs:
+            return _render_template_value(flat_subs[var_name])
+        # 2) namespaced paths
+        if '.' in var_name:
+            head, _, tail = var_name.partition('.')
+            parts = tail.split('.') if tail else []
+            if head == 'entity':
+                resolved = _walk_dict(context.entity, parts)
+                if resolved is not None:
+                    return resolved
+            elif head == 'step_results':
+                resolved = _walk_dict(context.step_results, parts)
+                if resolved is not None:
+                    return resolved
+            elif head == 'context':
+                resolved = _lookup_context(parts)
+                if resolved is not None:
+                    return resolved
+        # leave placeholder intact when unresolved
+        return match.group(0)
 
     # Support both ${var} and {{var}} syntax
     result = re.sub(r'\$\{([^}]+)\}', _replace, template)
@@ -94,6 +152,10 @@ class StepContext:
     workflow_id: str
     workflow_name: str
     step_results: Dict[str, Any]  # Results from previous steps
+    # Daimler go-live: subscribe-on-behalf-of-group/SP. Resolved via
+    # ${context.on_behalf_of.value|.type|.display} in webhook bodies +
+    # grant_permissions principal_variable. None when subscribing for self.
+    on_behalf_of: Optional[Dict[str, str]] = None
 
 
 @dataclass
@@ -1799,18 +1861,47 @@ class GrantPermissionsStepHandler(StepHandler):
 
     @staticmethod
     def _resolve_variable(path: str, context: 'StepContext') -> Optional[str]:
-        """Walk a dot-separated path into context.step_results.
+        """Walk a dot-separated path into the step context.
 
-        Example paths:
-          step_results.user_input.catalog_name
-          step_results.access_request.principal
+        Supported namespaces:
+          step_results.<step_id>.<field>[.<sub>...]
+          context.<attr>[.<sub>...]   e.g. context.on_behalf_of.value
+                                            (Daimler subscribe-on-behalf)
+          entity.<field>[.<sub>...]
+        Bare paths default to step_results for backward compatibility with
+        existing GrantPermissions configs.
         """
+        if not path:
+            return None
         parts = path.split('.')
-        # Strip leading 'step_results' prefix if present
-        if parts and parts[0] == 'step_results':
-            parts = parts[1:]
+        head = parts[0]
 
-        obj: Any = context.step_results
+        if head == 'context':
+            obj: Any = context
+            for part in parts[1:]:
+                if obj is None:
+                    return None
+                if isinstance(obj, dict):
+                    obj = obj.get(part)
+                else:
+                    obj = getattr(obj, part, None)
+            return str(obj) if obj is not None else None
+
+        if head == 'entity':
+            obj = context.entity
+            for part in parts[1:]:
+                if isinstance(obj, dict):
+                    obj = obj.get(part)
+                else:
+                    return None
+                if obj is None:
+                    return None
+            return str(obj) if obj is not None else None
+
+        # default: step_results. Strip leading 'step_results' prefix if present.
+        if head == 'step_results':
+            parts = parts[1:]
+        obj = context.step_results
         for part in parts:
             if isinstance(obj, dict):
                 obj = obj.get(part)
@@ -1913,6 +2004,15 @@ class WorkflowExecutor:
             )
             db_execution = workflow_execution_repo.create(self._db, execution_create)
         
+        # Daimler: pull on_behalf_of off the trigger entity_data if the caller
+        # supplied it (e.g. subscribe-on-behalf-of-group). Falls back to None
+        # for self-subscribe / non-subscribe triggers.
+        on_behalf_of = None
+        if isinstance(entity, dict):
+            obo = entity.get('on_behalf_of')
+            if isinstance(obo, dict):
+                on_behalf_of = obo
+
         # Build step context
         context = StepContext(
             entity=entity.copy(),
@@ -1925,8 +2025,9 @@ class WorkflowExecutor:
             workflow_id=workflow.id,
             workflow_name=workflow.name,
             step_results={},
+            on_behalf_of=on_behalf_of,
         )
-        
+
         # Build step lookup
         steps_by_id = {s.step_id: s for s in workflow.steps}
         
@@ -2108,6 +2209,13 @@ class WorkflowExecutor:
         if trigger_context and trigger_context.entity_data:
             entity_data = trigger_context.entity_data
         
+        # Restore on_behalf_of from persisted entity_data (Daimler subscribe).
+        on_behalf_of = None
+        if isinstance(entity_data, dict):
+            obo = entity_data.get('on_behalf_of')
+            if isinstance(obo, dict):
+                on_behalf_of = obo
+
         context = StepContext(
             entity=entity_data.copy(),
             entity_type=trigger_context.entity_type if trigger_context else 'unknown',
@@ -2124,6 +2232,7 @@ class WorkflowExecutor:
                 # Flatten result_data so ${step_results.approve.reason} works directly
                 **(result_data or {}),
             }},
+            on_behalf_of=on_behalf_of,
         )
 
         # Cross-workflow variable propagation (#291):

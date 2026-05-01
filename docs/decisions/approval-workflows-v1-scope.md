@@ -60,7 +60,7 @@ Related issues: #62 (persona-based UI — would include a per-persona home with 
 - `co_signers` — principal picker with min/max count (record-only)
 - `user_action` — existing, unchanged for backward compatibility
 - `persist_agreement` — explicit agreement materialization (non-visual, auto-advances)
-- `generate_pdf` — real PDF via fpdf2 with download endpoint (non-visual)
+- `generate_pdf` — real PDF via fpdf2 with download endpoint (non-visual). UC Volume persistence is functional: when `storage: volume` + `volume_path: /Volumes/...` is configured on the step, the PDF is uploaded via the Databricks SDK Files API. (Earlier the code used raw `open()`/`mkdir()` which silently failed inside the Databricks Apps runtime where `/Volumes/...` is not a real filesystem mount; the wizard would complete with `pdf_storage_path=null`.)
 - `deliver` — in_app + webhook channels (non-blocking, real implementation). Email out of scope.
 
 ### Step Catalog (Process)

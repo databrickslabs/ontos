@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './components/theme';
 import Layout from './components/layout/layout';
@@ -8,6 +8,7 @@ import { RouteErrorBoundary } from './components/layout/route-error-boundary';
 import { useUserStore } from './stores/user-store';
 import { usePermissions } from './stores/permissions-store';
 import { useNotificationsStore } from './stores/notifications-store';
+import WelcomeDisclaimerDialog, { hasWelcomeConsent } from './components/common/welcome-disclaimer-dialog';
 import './i18n/config'; // Initialize i18n
 
 // Import views
@@ -91,6 +92,13 @@ export default function App() {
   const { fetchPermissions, fetchAvailableRoles } = usePermissions();
   const { startPolling: startNotificationPolling, stopPolling: stopNotificationPolling } = useNotificationsStore();
 
+  // Welcome disclaimer (first-open dialog) state. Re-evaluated on every app
+  // mount so a fresh page load / cache clear shows it again until the user
+  // accepts the current text. Visibility is gated by the
+  // `welcome_disclaimer_enabled` server setting + per-text localStorage flag.
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [welcomeText, setWelcomeText] = useState<string>('');
+
   useEffect(() => {
     console.log("App component mounted, fetching initial user info and permissions...");
     fetchUserInfo();
@@ -99,6 +107,23 @@ export default function App() {
 
     console.log("Starting notification polling...");
     startNotificationPolling();
+
+    // Fetch welcome disclaimer config and decide whether to prompt the user.
+    fetch('/api/settings/welcome-disclaimer')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        const enabled = !!data?.enabled;
+        const text = typeof data?.text === 'string' ? data.text : '';
+        if (enabled && text && !hasWelcomeConsent(text)) {
+          setWelcomeText(text);
+          setWelcomeOpen(true);
+        }
+      })
+      .catch((err) => {
+        // Non-fatal: welcome disclaimer is best-effort.
+        console.warn('Failed to fetch welcome disclaimer config:', err);
+      });
 
     return () => {
         console.log("App component unmounting, stopping notification polling...");
@@ -226,6 +251,14 @@ export default function App() {
           </Layout>
         </Router>
         <Toaster />
+        {welcomeText && (
+          <WelcomeDisclaimerDialog
+            open={welcomeOpen}
+            onOpenChange={setWelcomeOpen}
+            onAccept={() => setWelcomeOpen(false)}
+            disclaimerText={welcomeText}
+          />
+        )}
       </TooltipProvider>
     </ThemeProvider>
   );

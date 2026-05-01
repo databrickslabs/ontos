@@ -29,6 +29,7 @@ def _make_context(**overrides) -> StepContext:
         workflow_id='wf-1',
         workflow_name='Test Workflow',
         step_results={'validate': {'passed': True, 'score': 95}},
+        on_behalf_of=None,
     )
     defaults.update(overrides)
     return StepContext(**defaults)
@@ -202,6 +203,88 @@ class TestSubstituteTemplateMissing:
         """entity_name=None should resolve to empty string, not 'None'."""
         ctx = _make_context(entity_name=None)
         assert substitute_template("N=${entity_name}", ctx) == "N="
+
+
+# =========================================================================
+# Daimler go-live: list/dict serialization + nested context paths
+# =========================================================================
+
+class TestDaimlerSubscribeOnBehalfTemplates:
+    """Resolver fixes required for Daimler subscribe-on-behalf-of-group + the
+    consumer_groups data product metadata. The Treasure runbook webhook body
+    needs `${context.on_behalf_of.value}` (nested dict) AND
+    `${entity.consumer_groups}` (list, JSON-serialized)."""
+
+    def test_entity_list_serialized_as_json(self):
+        """${entity.<list_field>} renders as a JSON array string."""
+        ctx = _make_context(entity={
+            'name': 'sales_kpis',
+            'consumer_groups': ['sales_consumers', 'finance_readers'],
+        })
+        out = substitute_template("groups=${entity.consumer_groups}", ctx)
+        assert out == 'groups=["sales_consumers", "finance_readers"]'
+
+    def test_entity_empty_list_serializes(self):
+        ctx = _make_context(entity={'consumer_groups': []})
+        assert substitute_template("${entity.consumer_groups}", ctx) == "[]"
+
+    def test_entity_dict_serialized_as_json(self):
+        """${entity.<dict_field>} renders as a JSON object string."""
+        ctx = _make_context(entity={'metadata': {'k': 'v', 'n': 1}})
+        out = substitute_template("${entity.metadata}", ctx)
+        assert out in ('{"k": "v", "n": 1}', '{"n": 1, "k": "v"}')
+
+    def test_entity_nested_dict_path(self):
+        """${entity.a.b} walks nested dict structure."""
+        ctx = _make_context(entity={'metadata': {'owner': 'alice'}})
+        assert substitute_template("o=${entity.metadata.owner}", ctx) == "o=alice"
+
+    def test_context_on_behalf_of_value(self):
+        """${context.on_behalf_of.value} resolves the nested dict path."""
+        ctx = _make_context(on_behalf_of={
+            'type': 'group', 'value': 'sales_consumers', 'display': 'Group: sales_consumers',
+        })
+        out = substitute_template("principal=${context.on_behalf_of.value}", ctx)
+        assert out == "principal=sales_consumers"
+
+    def test_context_on_behalf_of_type_and_display(self):
+        ctx = _make_context(on_behalf_of={
+            'type': 'group', 'value': 'sales_consumers', 'display': 'Group: sales_consumers',
+        })
+        assert substitute_template("${context.on_behalf_of.type}", ctx) == "group"
+        assert substitute_template("${context.on_behalf_of.display}", ctx) == "Group: sales_consumers"
+
+    def test_context_on_behalf_of_none_unresolved(self):
+        """When on_behalf_of is None, the placeholder is left intact (don't render 'None')."""
+        ctx = _make_context(on_behalf_of=None)
+        out = substitute_template("p=${context.on_behalf_of.value}", ctx)
+        assert out == "p=${context.on_behalf_of.value}"
+
+    def test_context_top_level_attr(self):
+        """${context.entity_type} resolves the top-level scalar attribute."""
+        ctx = _make_context(entity_type='data_product')
+        assert substitute_template("t=${context.entity_type}", ctx) == "t=data_product"
+
+    def test_webhook_body_template_full_daimler_payload(self):
+        """Realistic Treasure-runbook payload combining both fixes."""
+        ctx = _make_context(
+            entity={
+                'name': 'sales_kpis',
+                'consumer_groups': ['sales_consumers', 'finance_readers'],
+            },
+            on_behalf_of={'type': 'group', 'value': 'sales_consumers', 'display': 'Group: sales_consumers'},
+        )
+        body_template = (
+            '{"product": "${entity_name}", '
+            '"on_behalf_of": "${context.on_behalf_of.value}", '
+            '"groups": ${entity.consumer_groups}}'
+        )
+        rendered = substitute_template(body_template, ctx)
+        import json as _json
+        payload = _json.loads(rendered)
+        assert payload['product'] == 'test_table'
+        assert payload['on_behalf_of'] == 'sales_consumers'
+        assert payload['groups'] == ['sales_consumers', 'finance_readers']
 
 
 # =========================================================================

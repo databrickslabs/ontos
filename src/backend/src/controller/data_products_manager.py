@@ -49,7 +49,8 @@ from src.models.data_products import (
     SubscriptionCreate,
     SubscriptionResponse,
     SubscriberInfo,
-    SubscribersListResponse
+    SubscribersListResponse,
+    OnBehalfOf,
 )
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
@@ -2940,32 +2941,45 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         product_id: str,
         subscriber_email: str,
         reason: Optional[str] = None,
+        on_behalf_of: Optional[OnBehalfOf] = None,
         db: Optional[Session] = None
     ) -> SubscriptionResponse:
         """
         Subscribe a user to a data product.
-        
+
         Args:
             product_id: ID of the product to subscribe to
             subscriber_email: Email of the subscriber
             reason: Optional reason for subscribing
+            on_behalf_of: Optional principal that the subscription is for
+                (Daimler #486363). When set, ``type`` ∈ {user, group,
+                service_principal} and ``value`` is validated against the
+                workspace SCIM directory for non-user types. ``user`` accepts
+                arbitrary strings to cover new hires not yet indexed.
             db: Optional database session
-            
+
         Returns:
             SubscriptionResponse with subscription details
-            
+
         Raises:
-            ValueError: If product not found or not in subscribable status
+            ValueError: If product not found, not in subscribable status, or
+                ``on_behalf_of`` references an unknown group / SP.
         """
         db_session = db if db is not None else self._db
-        logger.info(f"User {subscriber_email} subscribing to product {product_id}")
-        
+        if on_behalf_of:
+            logger.info(
+                "User %s subscribing to product %s on behalf of %s '%s'",
+                subscriber_email, product_id, on_behalf_of.type, on_behalf_of.value,
+            )
+        else:
+            logger.info(f"User {subscriber_email} subscribing to product {product_id}")
+
         try:
             # Validate product exists and is subscribable
             product = self.get_product(product_id)
             if not product:
                 raise ValueError(f"Product {product_id} not found")
-            
+
             # Check if product is in a subscribable status
             subscribable_statuses = ['active', 'certified']
             if product.status and product.status.lower() not in subscribable_statuses:
@@ -2973,29 +2987,37 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     f"Cannot subscribe to product in status '{product.status}'. "
                     f"Product must be in one of: {', '.join(subscribable_statuses)}"
                 )
-            
+
+            # Validate on_behalf_of principal exists in workspace SCIM (groups,
+            # service principals). User type is intentionally not validated —
+            # covers new hires not yet indexed (Daimler explicit ask).
+            if on_behalf_of and on_behalf_of.type in ('group', 'service_principal'):
+                self._validate_on_behalf_of_principal(on_behalf_of)
+
             # Check if already subscribed
             existing = subscription_repo.get_by_product_and_user(
                 db_session,
                 product_id=product_id,
                 subscriber_email=subscriber_email
             )
-            
+
             if existing:
                 logger.info(f"User {subscriber_email} already subscribed to product {product_id}")
                 return SubscriptionResponse(
                     subscribed=True,
                     subscription=Subscription.model_validate(existing)
                 )
-            
+
             # Create subscription
             subscription_db = subscription_repo.create(
                 db_session,
                 product_id=product_id,
                 subscriber_email=subscriber_email,
-                reason=reason
+                reason=reason,
+                on_behalf_of_type=on_behalf_of.type if on_behalf_of else None,
+                on_behalf_of_value=on_behalf_of.value if on_behalf_of else None,
             )
-            
+
             # Log to change log for audit
             self._log_subscription_change(
                 db_session,
@@ -3004,15 +3026,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 action="SUBSCRIBE",
                 reason=reason
             )
-            
+
             db_session.commit()
-            
+
             logger.info(f"User {subscriber_email} subscribed to product {product_id}")
             return SubscriptionResponse(
                 subscribed=True,
                 subscription=Subscription.model_validate(subscription_db)
             )
-            
+
         except ValueError as e:
             logger.error(f"Validation error subscribing to product {product_id}: {e}")
             raise
@@ -3020,6 +3042,72 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.error(f"Database error subscribing to product {product_id}: {e}")
             db_session.rollback()
             raise
+
+    # ------------------------------------------------------------------
+    # on_behalf_of validation (Daimler #486363)
+    # ------------------------------------------------------------------
+    # Tiny in-process cache to avoid hammering SCIM on each subscribe call
+    # within the same gunicorn worker. 60s TTL per spec.
+    _OBO_CACHE: Dict[str, tuple] = {}  # key -> (timestamp, exists_bool)
+    _OBO_CACHE_TTL_SECONDS = 60
+
+    def _validate_on_behalf_of_principal(self, on_behalf_of: OnBehalfOf) -> None:
+        """Look up the principal in the workspace SCIM directory.
+
+        Raises ValueError (caller maps to HTTP 400) if not found. Cached for
+        60s to stay friendly with workspaces that have thousands of groups.
+        """
+        import time
+        cache_key = f"{on_behalf_of.type}:{on_behalf_of.value}"
+        now = time.time()
+        cached = self._OBO_CACHE.get(cache_key)
+        if cached and (now - cached[0]) < self._OBO_CACHE_TTL_SECONDS:
+            if not cached[1]:
+                raise ValueError(
+                    f"{on_behalf_of.type} '{on_behalf_of.value}' not found in workspace directory"
+                )
+            return
+
+        try:
+            # Late import: workspace_client is heavyweight and may be mocked
+            # in unit tests via dependency override.
+            from src.common.workspace_client import get_workspace_client
+            ws = get_workspace_client()
+        except Exception as e:
+            # Workspace client not available in dev / tests — skip validation
+            # rather than reject. This mirrors how grant_permissions handles
+            # missing SP credentials (see GrantPermissionsStepHandler).
+            logger.warning(
+                "on_behalf_of validation skipped (workspace client unavailable): %s", e,
+            )
+            return
+
+        try:
+            if on_behalf_of.type == 'group':
+                # SCIM filter — exact displayName match
+                results = list(ws.groups.list(filter=f'displayName eq "{on_behalf_of.value}"'))
+            else:  # service_principal
+                # Allow either applicationId or displayName
+                results = list(ws.service_principals.list(
+                    filter=f'displayName eq "{on_behalf_of.value}"'
+                ))
+                if not results:
+                    results = list(ws.service_principals.list(
+                        filter=f'applicationId eq "{on_behalf_of.value}"'
+                    ))
+            exists = bool(results)
+        except Exception as e:
+            logger.warning(
+                "on_behalf_of SCIM lookup failed for %s '%s': %s — treating as not found",
+                on_behalf_of.type, on_behalf_of.value, e,
+            )
+            exists = False
+
+        self._OBO_CACHE[cache_key] = (now, exists)
+        if not exists:
+            raise ValueError(
+                f"{on_behalf_of.type} '{on_behalf_of.value}' not found in workspace directory"
+            )
 
     def unsubscribe(
         self,

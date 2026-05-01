@@ -247,19 +247,52 @@ async def download_agreement_pdf(
     if not _agreement_has_pdf_step(agreement) and not getattr(agreement, 'pdf_storage_path', None):
         raise HTTPException(status_code=404, detail="This agreement does not have PDF generation enabled")
 
-    # If a pre-generated PDF file exists on disk, serve it directly
-    if agreement.pdf_storage_path:
-        import os
-        if os.path.isfile(agreement.pdf_storage_path):
-            with open(agreement.pdf_storage_path, "rb") as f:
-                pdf_bytes = f.read()
-            return Response(
-                content=pdf_bytes,
-                media_type="application/pdf",
-                headers={
-                    "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
-                },
-            )
+    # If a pre-generated PDF was persisted, serve it directly. Inside the
+    # Databricks Apps runtime, /Volumes/... is NOT a real filesystem mount —
+    # raw os.path.isfile() returns False and open() raises EACCES, so the
+    # endpoint would silently fall through to fpdf2 regeneration and serve a
+    # PDF with a different /CreationDate than the persisted one. Mirror the
+    # upload-side fix: use the SDK Files API for /Volumes/ paths and keep the
+    # plain filesystem path for local dev where pdf_storage_path may
+    # legitimately be a tmp dir.
+    stored_path = agreement.pdf_storage_path
+    if stored_path:
+        if stored_path.startswith("/Volumes/"):
+            try:
+                from src.common.workspace_client import get_workspace_client
+                ws = get_workspace_client()
+                resp = ws.files.download(file_path=stored_path)
+                # SDK returns a DownloadResponse with .contents stream-like obj
+                if hasattr(resp, "contents") and resp.contents is not None:
+                    pdf_bytes = resp.contents.read()
+                else:
+                    pdf_bytes = resp.read()  # type: ignore[union-attr]
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "Volume download failed for %s: %s — regenerating",
+                    stored_path,
+                    e,
+                )
+                # Fall through to regeneration below
+        else:
+            import os
+            if os.path.isfile(stored_path):
+                with open(stored_path, "rb") as f:
+                    pdf_bytes = f.read()
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
+                    },
+                )
 
     # Parse step_results from the agreement record
     step_results: list = []

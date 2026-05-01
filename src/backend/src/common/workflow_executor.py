@@ -381,6 +381,15 @@ class NotificationStepHandler(StepHandler):
             
             # Resolve channels: step config overrides global defaults
             channels = self._config.get('channels') or self._get_default_channels()
+
+            # Non-blocking: strip 'email' if present in legacy/saved configs.
+            # Email is out of scope in v1 (non-portable across customer environments).
+            if channels and 'email' in channels:
+                logger.warning(
+                    "'email' channel is not supported in v1 (non-portable across customer environments). "
+                    "Stripping from channels — use 'webhook' to your own email provider instead."
+                )
+                channels = [c for c in channels if c != 'email']
             
             created_count = 0
             email_count = 0

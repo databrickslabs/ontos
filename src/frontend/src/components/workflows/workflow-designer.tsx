@@ -1653,7 +1653,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       <div>
                         <Label className="mb-2 block">Channels</Label>
                         <div className="flex flex-col gap-2">
-                          {(['in_app', 'email', 'webhook'] as const).map((ch) => (
+                          {(['in_app', 'webhook'] as const).map((ch) => (
                             <div key={ch} className="flex items-center gap-2">
                               <Checkbox
                                 id={`channel-${ch}`}

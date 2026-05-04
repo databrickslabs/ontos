@@ -25,6 +25,24 @@ except ImportError:
 _NON_VISUAL = {"persist_agreement", "generate_pdf", "deliver", "pass", "fail"}
 
 
+def _format_cosigner(s: Any) -> str:
+    """Format a co-signer entry for human-readable display.
+
+    The wizard records co-signers as dicts shaped like
+    ``{"type": "user", "value": "alice@x.com", "display": "Alice"}``. Older
+    sessions may have stored plain strings. Render dicts as
+    ``"<display> (<value>)"`` (or just the display when value is empty / equal
+    to display) and fall back to ``str()`` for any non-dict legacy entries.
+    """
+    if isinstance(s, dict):
+        display = s.get("display") or s.get("value") or "(unknown)"
+        value = s.get("value", "")
+        if not value or display == value:
+            return display
+        return f"{display} ({value})"
+    return str(s)
+
+
 # ---------------------------------------------------------------------------
 # PDF generation (fpdf2)
 # ---------------------------------------------------------------------------
@@ -112,7 +130,7 @@ def build_agreement_pdf(
             if signers:
                 pdf.cell(0, 6, "  Co-signers:", new_x="LMARGIN", new_y="NEXT")
                 for s in signers:
-                    pdf.cell(0, 6, f"    - {s}", new_x="LMARGIN", new_y="NEXT")
+                    pdf.cell(0, 6, f"    - {_format_cosigner(s)}", new_x="LMARGIN", new_y="NEXT")
             else:
                 pdf.cell(0, 6, "  No co-signers", new_x="LMARGIN", new_y="NEXT")
 
@@ -255,7 +273,7 @@ def build_agreement_html(
                     "<div class='field'><span class='field-label'>Co-signers:</span></div>"
                 )
                 for s in signers:
-                    html_parts.append(f"<div class='field'>&bull; {e(str(s))}</div>")
+                    html_parts.append(f"<div class='field'>&bull; {e(_format_cosigner(s))}</div>")
             else:
                 html_parts.append(
                     "<div class='field'><span class='field-label'>No co-signers</span></div>"

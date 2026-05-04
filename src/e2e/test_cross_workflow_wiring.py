@@ -425,11 +425,24 @@ def run() -> int:
         resp_text = rd.get("response", "") or ""
         # The handler may also surface the rendered body separately, but at
         # minimum the unique marker should round-trip.
-        haystack = json.dumps(rd)
+        # Build a haystack that survives nested JSON escaping (httpbin echoes
+        # the request body inside its own response, so the body's `"users"`
+        # arrives as `\"users\"` after one round of `json.dumps`). Search
+        # against both the raw rd repr and a recursively-decoded view.
+        haystack_parts = [json.dumps(rd), repr(rd)]
+        # Also try to decode any string fields that themselves contain JSON
+        # (httpbin's echo) to expose the inner structure as plain strings.
+        for v in rd.values() if isinstance(rd, dict) else []:
+            if isinstance(v, str) and v.startswith("{"):
+                try:
+                    haystack_parts.append(json.dumps(json.loads(v)))
+                except (ValueError, TypeError):
+                    pass
+        haystack = "\n".join(haystack_parts)
         missing: List[str] = []
         for needle, label in [
             (unique_marker, "unique marker"),
-            ('"users"', "consumer_groups=['users'] (or on_behalf_of value)"),
+            ("users", "consumer_groups=['users'] (or on_behalf_of value)"),
         ]:
             if needle not in haystack:
                 missing.append(f"{label} ({needle!r})")

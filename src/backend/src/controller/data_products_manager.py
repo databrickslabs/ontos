@@ -3131,10 +3131,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if cg:
                 entity_data["consumer_groups"] = cg
 
+            # Fire with entity_type=DATA_PRODUCT (NOT SUBSCRIPTION). Process
+            # workflows register with entity_types=["data_product"] because
+            # the docstring on TriggerRegistry.on_subscribe explicitly states
+            # the type is "(dataset, data_product)" — i.e. the entity the
+            # user is subscribing TO. The prior route-handler code used
+            # EntityType.SUBSCRIPTION, which is why the cross-workflow E2E
+            # never matched any workflow even on the route path. Using
+            # DATA_PRODUCT makes the on_subscribe trigger actually wire up
+            # to the registered workflows. The entity_id is the product id
+            # so workflows can resolve ${entity.product_id} consistently.
             fire_trigger_safe(
                 db_session, "on_subscribe",
-                entity_type=EntityType.SUBSCRIPTION,
-                entity_id=str(subscription_id) if subscription_id else product_id,
+                entity_type=EntityType.DATA_PRODUCT,
+                entity_id=product_id,
                 entity_name=product_id,
                 entity_data=entity_data,
                 user_email=subscriber_email,

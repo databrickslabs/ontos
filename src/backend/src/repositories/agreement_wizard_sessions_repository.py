@@ -176,6 +176,31 @@ class AgreementWizardSessionsRepository:
         db.refresh(session)
         return session
 
+    def update_on_behalf_of(
+        self,
+        db: Session,
+        session_id: str,
+        obo_type: Optional[str],
+        obo_value: Optional[str],
+    ) -> Optional[AgreementWizardSessionDb]:
+        """Persist on_behalf_of captured by the in-wizard ``on_behalf_of`` step
+        onto the session row. The auto-subscribe in ``_complete_session``
+        already reads ``session.on_behalf_of_type`` / ``on_behalf_of_value``
+        and forwards them to ``data_products_manager.subscribe()`` — so
+        writing here is the only thing required to make the new in-wizard
+        capture path equivalent to the legacy pre-wizard SubscribeDialog
+        capture path.
+        """
+        session = self.get(db, session_id)
+        if not session or session.status != 'in_progress':
+            return None
+        session.on_behalf_of_type = obo_type
+        session.on_behalf_of_value = obo_value
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+        return session
+
     def get_latest_completed_by_entity(
         self,
         db: Session,

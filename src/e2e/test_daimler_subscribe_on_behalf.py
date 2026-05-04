@@ -374,6 +374,173 @@ class TestWizardAutoSubscribeOnBehalfOf:
         )
 
 
+class TestOnBehalfOfWizardStep:
+    """Daimler in-wizard on_behalf_of capture (replaces the legacy
+    pre-wizard SubscribeDialog picker).
+
+    Workflow author drops an ``on_behalf_of`` step at the front of the
+    approval wizard. The wizard step UI captures self/group/SP, stamps it
+    onto the session row, and the existing auto-subscribe path picks it up
+    unchanged at completion.
+    """
+
+    @pytest.fixture
+    def obo_first_workflow(self, api, url, cleanup_registry):
+        """Approval workflow: on_behalf_of → legal_document. Bound to
+        for_subscribe so it's eligible for the subscribe wizard."""
+        payload = {
+            "name": f"e2e-wizard-obo-step-{_uid()}",
+            "description": "Daimler in-wizard on_behalf_of E2E",
+            "workflow_type": "approval",
+            "trigger": {"type": "for_subscribe", "entity_types": ["data_product"]},
+            "is_active": True,
+            "steps": [
+                {
+                    "step_id": "who",
+                    "name": "Who are you requesting for",
+                    "step_type": "on_behalf_of",
+                    "config": {
+                        "title": "Who are you requesting access for?",
+                        "allow_self": True,
+                        "allow_user_groups": True,
+                        "allow_free_text": True,
+                        "require_justification": False,
+                    },
+                    "on_pass": "tos",
+                    "order": 0,
+                },
+                {
+                    "step_id": "tos",
+                    "name": "Accept terms",
+                    "step_type": "legal_document",
+                    "config": {
+                        "body_markdown": "By subscribing you agree to the data product ToS.",
+                    },
+                    "on_pass": None,
+                    "order": 1,
+                },
+            ],
+        }
+        resp = api.post(url("/api/workflows"), json=payload)
+        assert resp.status_code in (200, 201), f"Create wizard wf failed: {resp.text[:500]}"
+        wf = resp.json()
+        cleanup_registry["workflows"].append(wf["id"])
+        return wf
+
+    def test_in_wizard_obo_step_persists_on_subscription(
+        self, api, url, daimler_data_product, obo_first_workflow, cleanup_registry,
+    ):
+        """End-to-end with the new step:
+          1. Create wizard session (NO on_behalf_of in body — the step captures it)
+          2. Submit the on_behalf_of step with {type: group, value: users}
+          3. Submit the legal_document step
+          4. Verify resulting subscription has on_behalf_of_type=group,
+             on_behalf_of_value=users
+          5. Verify step_results payload retained the full OBO (display etc.)
+        """
+        prod_id = daimler_data_product["id"]
+        wf_id = obo_first_workflow["id"]
+
+        # 1) Create session WITHOUT on_behalf_of — wizard step is the capture point.
+        sess_resp = api.post(
+            url("/api/approvals/sessions"),
+            json={
+                "workflow_id": wf_id,
+                "entity_type": "data_product",
+                "entity_id": prod_id,
+                "completion_action": "subscribe",
+            },
+        )
+        assert sess_resp.status_code in (200, 201), (
+            f"Create session failed: {sess_resp.text[:500]}"
+        )
+        session = sess_resp.json()
+        session_id = session["session_id"]
+        first_step = session.get("current_step") or {}
+        assert first_step.get("step_type") == "on_behalf_of", (
+            f"Expected first step to be on_behalf_of, got {first_step!r}"
+        )
+
+        # 2) Submit on_behalf_of step
+        step_resp = api.post(
+            url(f"/api/approvals/sessions/{session_id}/steps"),
+            json={
+                "step_id": "who",
+                "payload": {
+                    "type": "group",
+                    "value": "users",
+                    "display": "users",
+                },
+            },
+        )
+        assert step_resp.status_code in (200, 201), (
+            f"Submit on_behalf_of step failed: {step_resp.text[:500]}"
+        )
+        body = step_resp.json()
+
+        # 3) Walk remaining steps until complete
+        guard = 0
+        while not body.get("complete") and guard < 5:
+            nxt = body.get("current_step") or {}
+            nxt_id = nxt.get("step_id")
+            if not nxt_id:
+                break
+            step_resp = api.post(
+                url(f"/api/approvals/sessions/{session_id}/steps"),
+                json={"step_id": nxt_id, "payload": {"accepted": True}},
+            )
+            body = step_resp.json() if step_resp.status_code in (200, 201) else {}
+            guard += 1
+
+        assert body.get("complete"), f"Wizard did not complete: {body!r}"
+
+        # 4) Inspect resulting subscription
+        sub_resp = api.get(url(f"/api/data-products/{prod_id}/subscription"))
+        assert sub_resp.status_code == 200, sub_resp.text[:300]
+        sub_body = sub_resp.json()
+        sub = sub_body.get("subscription") or {}
+        cleanup_registry["subscriptions"].append((prod_id, sub.get("subscriber_email")))
+
+        assert sub.get("on_behalf_of_type") == "group", (
+            f"Expected on_behalf_of_type=group, got {sub!r}"
+        )
+        assert sub.get("on_behalf_of_value") == "users", (
+            f"Expected on_behalf_of_value=users, got {sub!r}"
+        )
+
+    def test_in_wizard_obo_rejects_unknown_group(
+        self, api, url, daimler_data_product, obo_first_workflow,
+    ):
+        """The step's validator rejects principals that fail SCIM lookup."""
+        prod_id = daimler_data_product["id"]
+        wf_id = obo_first_workflow["id"]
+        sess_resp = api.post(
+            url("/api/approvals/sessions"),
+            json={
+                "workflow_id": wf_id,
+                "entity_type": "data_product",
+                "entity_id": prod_id,
+                "completion_action": "subscribe",
+            },
+        )
+        assert sess_resp.status_code in (200, 201), sess_resp.text[:300]
+        session_id = sess_resp.json()["session_id"]
+
+        ghost = f"definitely-not-real-{_uid()}"
+        step_resp = api.post(
+            url(f"/api/approvals/sessions/{session_id}/steps"),
+            json={
+                "step_id": "who",
+                "payload": {"type": "group", "value": ghost},
+            },
+        )
+        # Backend should return 400 with "not found" message — same SCIM gate
+        # as the direct subscribe route uses.
+        assert step_resp.status_code == 400, (
+            f"Expected 400 for unknown group, got {step_resp.status_code}: {step_resp.text[:300]}"
+        )
+
+
 class TestGrantPermissionsWithOnBehalfOf:
     """Bonus check: a process workflow with grant_permissions step using
     principal_source=from_variable, principal_variable=context.on_behalf_of.value

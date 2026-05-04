@@ -57,6 +57,7 @@ export const STEP_ICONS: Record<StepType, LucideIcon> = {
   generate_pdf: FileText,
   deliver: Send,
   grant_permissions: KeyRound,
+  on_behalf_of: Users,
 };
 
 /**
@@ -85,6 +86,7 @@ export const STEP_COLORS: Record<StepType, string> = {
   generate_pdf: 'orange',
   deliver: 'cyan',
   grant_permissions: 'emerald',
+  on_behalf_of: 'pink',
 };
 
 /**
@@ -236,6 +238,7 @@ export const ALL_STEP_TYPES: StepType[] = [
   'generate_pdf',
   'deliver',
   'grant_permissions',
+  'on_behalf_of',
 ];
 
 /**

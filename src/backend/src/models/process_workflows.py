@@ -120,6 +120,7 @@ class StepType(str, Enum):
     PERSIST_AGREEMENT = "persist_agreement"
     DELIVER = "deliver"
     GRANT_PERMISSIONS = "grant_permissions"  # Process workflow: grant UC permissions via SP workspace client
+    ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start (Daimler #486363)
 
 
 class ExecutionStatus(str, Enum):
@@ -252,6 +253,28 @@ class AcknowledgementChecklistStepConfig(BaseModel):
         default_factory=list,
         description="List of { id, label, required } checkbox items (max 10)",
     )
+
+
+class OnBehalfOfStepConfig(BaseModel):
+    """Config for on_behalf_of step: captures whether the requester is acting
+    for themselves, a group they belong to, or another principal (group / SP).
+
+    Customer-controllable replacement for the pre-wizard ``SubscribeDialog``
+    on-behalf-of picker — placing the choice inside the wizard means it lands
+    in ``step_results`` (which the workflow snapshot + agreement PDF already
+    immortalize) and the session columns ``on_behalf_of_type`` /
+    ``on_behalf_of_value`` (Daimler #486363) get written exactly the same way
+    a direct ``/subscribe`` call writes them.
+    """
+    title: Optional[str] = Field("Who are you requesting access for?", description="Step title shown in wizard")
+    description: Optional[str] = Field(
+        "Pick whether you're requesting for yourself or on behalf of a group/service principal.",
+        description="Step description (markdown)",
+    )
+    allow_self: bool = Field(True, description="Show 'For myself' option")
+    allow_user_groups: bool = Field(True, description="Show dropdown of user's own groups")
+    allow_free_text: bool = Field(True, description="Show free-text input for any group/SP name")
+    require_justification: bool = Field(False, description="Require a free-text justification field")
 
 
 class CoSignersStepConfig(BaseModel):

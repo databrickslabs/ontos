@@ -17,9 +17,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Loader2, Check, XCircle, ChevronRight, FileText } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { useUserStore } from '@/stores/user-store';
 
 /** Lightweight markdown to HTML — handles headers, bold, lists, paragraphs. */
 function simpleMarkdown(text: string): string {
@@ -125,6 +134,21 @@ export default function ApprovalWizardDialog({
   const [coSigners, setCoSigners] = useState<string[]>([]);
   /** Co-signers: current input value. */
   const [coSignerInput, setCoSignerInput] = useState('');
+  /**
+   * on_behalf_of step (Daimler #486363 in-wizard capture):
+   *   - 'self'     → submits {type:'user', value:<requester email>}
+   *   - 'my_group' → submits {type:'group', value:<picked group>}
+   *   - 'other'    → submits {type:<group|service_principal>, value:<free text>}
+   * Mirrors the modes in subscribe-dialog.tsx so behaviour is identical when
+   * a workflow author flips the same flags off via step config.
+   */
+  const [oboMode, setOboMode] = useState<'self' | 'my_group' | 'other'>('self');
+  const [oboGroup, setOboGroup] = useState<string>('');
+  const [oboOther, setOboOther] = useState<string>('');
+  const [oboOtherType, setOboOtherType] = useState<'group' | 'service_principal'>('group');
+  const [oboJustification, setOboJustification] = useState<string>('');
+  const userInfo = useUserStore((s) => s.userInfo);
+  const fetchUserInfo = useUserStore((s) => s.fetchUserInfo);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -144,6 +168,16 @@ export default function ApprovalWizardDialog({
     setChecklistState({});
     setCoSigners([]);
     setCoSignerInput('');
+    setOboMode('self');
+    setOboGroup('');
+    setOboOther('');
+    setOboOtherType('group');
+    setOboJustification('');
+    // Pull user details so the on_behalf_of "for a group I'm part of" picker
+    // is populated when the workflow includes that step.
+    if (!userInfo) {
+      fetchUserInfo().catch(() => {});
+    }
     let cancelled = false;
     get<{ workflows: ApprovalWorkflowRef[]; total: number }>('/api/workflows?workflow_type=approval')
       .then((res) => {
@@ -275,9 +309,47 @@ export default function ApprovalWizardDialog({
       };
     }
 
+    if (stepType === 'on_behalf_of') {
+      const requireJustification = (cfg.require_justification as boolean) ?? false;
+      const justificationOk = !requireJustification || oboJustification.trim().length > 0;
+      const requesterEmail = userInfo?.email || userInfo?.username || '';
+      const requesterDisplay = userInfo?.user || userInfo?.username || requesterEmail;
+
+      let valid = false;
+      let oboPayload: Record<string, unknown> = {};
+      if (oboMode === 'self') {
+        valid = !!requesterEmail;
+        oboPayload = {
+          type: 'user',
+          value: requesterEmail,
+          display: requesterDisplay,
+        };
+      } else if (oboMode === 'my_group') {
+        valid = !!oboGroup;
+        oboPayload = {
+          type: 'group',
+          value: oboGroup,
+          display: oboGroup,
+        };
+      } else {
+        // 'other'
+        const trimmed = oboOther.trim();
+        valid = trimmed.length > 0;
+        oboPayload = {
+          type: oboOtherType,
+          value: trimmed,
+          display: trimmed,
+        };
+      }
+      if (requireJustification) {
+        oboPayload = { ...oboPayload, justification: oboJustification.trim() };
+      }
+      return { valid: valid && justificationOk, payload: oboPayload };
+    }
+
     // Default: valid (non-visual steps auto-advance anyway)
     return { valid: true, payload: {} as Record<string, unknown> };
-  }, [currentStep, payload, scrolledToEnd, acknowledged, checklistState, coSigners]);
+  }, [currentStep, payload, scrolledToEnd, acknowledged, checklistState, coSigners, oboMode, oboGroup, oboOther, oboOtherType, oboJustification, userInfo]);
 
   const isStepValid = stepValidation.valid;
 
@@ -315,6 +387,11 @@ export default function ApprovalWizardDialog({
         setChecklistState({});
         setCoSigners([]);
         setCoSignerInput('');
+        setOboMode('self');
+        setOboGroup('');
+        setOboOther('');
+        setOboOtherType('group');
+        setOboJustification('');
       }
     } catch (e) {
       toast({ title: 'Error', description: 'Failed to submit step', variant: 'destructive' });
@@ -652,6 +729,129 @@ export default function ApprovalWizardDialog({
                 </p>
               </div>
             )}
+
+            {/* === on_behalf_of renderer === */}
+            {currentStep.step_type === 'on_behalf_of' && (() => {
+              const cfg = (currentStep.config ?? {}) as {
+                allow_self?: boolean;
+                allow_user_groups?: boolean;
+                allow_free_text?: boolean;
+                require_justification?: boolean;
+              };
+              const allowSelf = cfg.allow_self !== false;
+              const allowUserGroups = cfg.allow_user_groups !== false;
+              const allowFreeText = cfg.allow_free_text !== false;
+              const requireJustification = cfg.require_justification === true;
+              const myGroups = (userInfo?.groups ?? []).filter((g) => !!g);
+              return (
+                <div className="space-y-3">
+                  <RadioGroup
+                    className="space-y-2"
+                    value={oboMode}
+                    onValueChange={(v) => setOboMode(v as 'self' | 'my_group' | 'other')}
+                    disabled={loading}
+                  >
+                    {allowSelf && (
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="self" id="wizard-obo-self" />
+                        <Label htmlFor="wizard-obo-self" className="font-normal cursor-pointer">
+                          For myself
+                        </Label>
+                      </div>
+                    )}
+
+                    {allowUserGroups && (
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem
+                            value="my_group"
+                            id="wizard-obo-my-group"
+                            disabled={myGroups.length === 0}
+                          />
+                          <Label
+                            htmlFor="wizard-obo-my-group"
+                            className={`font-normal cursor-pointer ${myGroups.length === 0 ? 'text-muted-foreground' : ''}`}
+                          >
+                            For a group I'm part of
+                            {myGroups.length === 0 && (
+                              <span className="ml-1 text-xs">(no groups available)</span>
+                            )}
+                          </Label>
+                        </div>
+                        {oboMode === 'my_group' && myGroups.length > 0 && (
+                          <div className="ml-6">
+                            <Select value={oboGroup} onValueChange={setOboGroup}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select one of your groups" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {myGroups.map((g) => (
+                                  <SelectItem key={g} value={g}>
+                                    {g}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {allowFreeText && (
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="other" id="wizard-obo-other" />
+                          <Label htmlFor="wizard-obo-other" className="font-normal cursor-pointer">
+                            Other group or service principal
+                          </Label>
+                        </div>
+                        {oboMode === 'other' && (
+                          <div className="ml-6 space-y-2">
+                            <Select
+                              value={oboOtherType}
+                              onValueChange={(v) => setOboOtherType(v as 'group' | 'service_principal')}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="group">Group (display name)</SelectItem>
+                                <SelectItem value="service_principal">Service principal (display name or applicationId)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              placeholder={oboOtherType === 'group' ? 'e.g., sales_consumers' : 'e.g., 11111111-2222-3333-4444-555555555555'}
+                              value={oboOther}
+                              onChange={(e) => setOboOther(e.target.value)}
+                              disabled={loading}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Validated against the workspace directory before the request is recorded.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </RadioGroup>
+
+                  {requireJustification && (
+                    <div className="space-y-1">
+                      <Label htmlFor="wizard-obo-justification">
+                        Justification <span className="text-destructive">*</span>
+                      </Label>
+                      <Textarea
+                        id="wizard-obo-justification"
+                        value={oboJustification}
+                        onChange={(e) => setOboJustification(e.target.value)}
+                        placeholder="Why are you requesting access for this principal?"
+                        rows={3}
+                        disabled={loading}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Validation hints for user_action */}
             {currentStep.step_type === 'user_action' && !isStepValid && (

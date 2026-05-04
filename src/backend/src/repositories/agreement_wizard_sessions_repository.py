@@ -27,8 +27,18 @@ class AgreementWizardSessionsRepository:
         created_by: Optional[str] = None,
         workflow_snapshot: Optional[str] = None,
         workflow_name: Optional[str] = None,
+        on_behalf_of_type: Optional[str] = None,
+        on_behalf_of_value: Optional[str] = None,
     ) -> AgreementWizardSessionDb:
-        """Create a new wizard session."""
+        """Create a new wizard session.
+
+        ``on_behalf_of_type`` / ``on_behalf_of_value`` capture the principal
+        the requester is acting on behalf of (Daimler #486363). When
+        ``completion_action='subscribe'``, ``_complete_session`` reads these
+        back and forwards them to ``data_products_manager.subscribe()`` so the
+        resulting subscription record carries the correct OBO metadata instead
+        of the previous null.
+        """
         session = AgreementWizardSessionDb(
             workflow_id=workflow_id,
             entity_type=entity_type,
@@ -40,6 +50,8 @@ class AgreementWizardSessionsRepository:
             created_by=created_by,
             workflow_snapshot=workflow_snapshot,
             workflow_name=workflow_name,
+            on_behalf_of_type=on_behalf_of_type,
+            on_behalf_of_value=on_behalf_of_value,
         )
         db.add(session)
         db.commit()

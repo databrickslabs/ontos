@@ -11,6 +11,7 @@ from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.controller.approvals_manager import ApprovalsManager
 from src.controller.agreement_wizard_manager import AgreementWizardManager
+from src.models.data_products import OnBehalfOf
 from src.common.logging import get_logger
 
 
@@ -91,6 +92,14 @@ class CreateSessionBody(BaseModel):
     entity_type: str = Field(..., description="Entity type (e.g. data_contract, data_product, dataset)")
     entity_id: str = Field(..., description="Entity ID")
     completion_action: Optional[str] = Field(None, description="Action after complete, e.g. 'subscribe'")
+    # Daimler #486363 gap-fill: when completion_action='subscribe', this OBO
+    # is persisted on the session row and forwarded to dp.subscribe() when the
+    # wizard completes — so wizard-completed subscriptions match the direct
+    # /api/data-products/{id}/subscribe path.
+    on_behalf_of: Optional[OnBehalfOf] = Field(
+        None,
+        description="Optional: subscribe on behalf of a group/SP (validated against workspace SCIM at subscribe time)",
+    )
 
 
 class SubmitStepBody(BaseModel):
@@ -116,6 +125,7 @@ async def create_approval_session(
             entity_id=body.entity_id,
             completion_action=body.completion_action,
             created_by=created_by,
+            on_behalf_of=body.on_behalf_of,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

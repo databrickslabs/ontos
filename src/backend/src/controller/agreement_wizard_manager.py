@@ -144,11 +144,16 @@ class AgreementWizardManager:
         *,
         completion_action: Optional[str] = None,
         created_by: Optional[str] = None,
+        on_behalf_of: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Create a new wizard session and return session_id and first step.
         Raises ValueError if workflow not found or not approval type.
         completion_action: optional, e.g. 'subscribe' — run after wizard complete.
+        on_behalf_of: optional ``OnBehalfOf`` (or dict-like with ``type``/``value``)
+            captured at wizard start. Persisted on the session row so the
+            auto-subscribe in ``_complete_session`` can forward it to
+            ``data_products_manager.subscribe()`` (Daimler #486363).
         """
         steps = self._get_workflow_steps(workflow_id)
         if not steps:
@@ -181,6 +186,18 @@ class AgreementWizardManager:
                 ],
             })
 
+        # Normalize on_behalf_of — accept either a Pydantic ``OnBehalfOf`` or
+        # a plain dict (some callers pass already-validated payloads).
+        obo_type: Optional[str] = None
+        obo_value: Optional[str] = None
+        if on_behalf_of is not None:
+            if hasattr(on_behalf_of, "type") and hasattr(on_behalf_of, "value"):
+                obo_type = getattr(on_behalf_of, "type", None)
+                obo_value = getattr(on_behalf_of, "value", None)
+            elif isinstance(on_behalf_of, dict):
+                obo_type = on_behalf_of.get("type")
+                obo_value = on_behalf_of.get("value")
+
         session = agreement_wizard_sessions_repo.create(
             self._db,
             workflow_id=workflow_id,
@@ -190,6 +207,8 @@ class AgreementWizardManager:
             created_by=created_by,
             workflow_snapshot=workflow_snapshot,
             workflow_name=workflow_name,
+            on_behalf_of_type=obo_type,
+            on_behalf_of_value=obo_value,
         )
         first = steps[0]
         return {
@@ -545,14 +564,34 @@ class AgreementWizardManager:
             if entity_type_lower in ("data_product", "dataproduct"):
                 try:
                     from src.controller.data_products_manager import DataProductsManager
+                    from src.models.data_products import OnBehalfOf
                     dp_manager = DataProductsManager(self._db)
+                    # Daimler #486363 gap-fill: thread on_behalf_of from the
+                    # session row (captured at wizard start) into the
+                    # auto-subscribe so the persisted subscription record
+                    # carries the same OBO metadata as the direct
+                    # /api/data-products/{id}/subscribe path. Without this,
+                    # wizard-completed subscriptions had on_behalf_of_type=null
+                    # even when the user picked a group up front.
+                    obo_type = getattr(session, "on_behalf_of_type", None)
+                    obo_value = getattr(session, "on_behalf_of_value", None)
+                    obo = (
+                        OnBehalfOf(type=obo_type, value=obo_value)
+                        if obo_type and obo_value
+                        else None
+                    )
                     dp_manager.subscribe(
                         product_id=session.entity_id,
                         subscriber_email=subscriber_email,
                         reason=reason,
+                        on_behalf_of=obo,
                         db=self._db,
                     )
-                    logger.info("Subscription created for data_product %s via agreement wizard", session.entity_id)
+                    logger.info(
+                        "Subscription created for data_product %s via agreement wizard (on_behalf_of=%s)",
+                        session.entity_id,
+                        f"{obo_type}:{obo_value}" if obo else "self",
+                    )
                 except Exception as e:
                     logger.warning("Subscribe (data_product) after wizard failed: %s", e)
             elif entity_type_lower in ("dataset", "asset"):

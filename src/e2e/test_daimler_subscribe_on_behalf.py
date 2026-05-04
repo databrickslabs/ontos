@@ -264,6 +264,116 @@ class TestDaimlerSubscribeOnBehalfOf:
         assert "not found" in resp.text.lower() or "ghost" in resp.text.lower() or ghost in resp.text
 
 
+class TestWizardAutoSubscribeOnBehalfOf:
+    """Daimler #486363 gap-fill: when an approval workflow with
+    completion_action=subscribe runs to completion, the auto-created
+    subscription must inherit the on_behalf_of the requester supplied at
+    wizard start. Pre-fix the wizard ignored on_behalf_of and persisted
+    on_behalf_of_type=null on the resulting subscription.
+    """
+
+    @pytest.fixture
+    def trivial_subscribe_workflow(self, api, url, cleanup_registry):
+        """Approval workflow with a single legal_document step that the wizard
+        can auto-pass through (no real interaction). Bound to the data_product
+        entity_type so it's eligible for subscribe wizard sessions."""
+        payload = {
+            "name": f"e2e-wizard-obo-{_uid()}",
+            "description": "Daimler subscribe wizard OBO end-to-end",
+            "workflow_type": "approval",
+            "trigger": {"type": "for_subscribe", "entity_types": ["data_product"]},
+            "is_active": True,
+            "steps": [
+                {
+                    "step_id": "tos",
+                    "name": "Accept terms",
+                    "step_type": "legal_document",
+                    "config": {
+                        "document_text": "By subscribing you agree to the data product ToS.",
+                        "require_acceptance": True,
+                    },
+                    "on_pass": None,
+                    "order": 0,
+                }
+            ],
+        }
+        resp = api.post(url("/api/workflows"), json=payload)
+        assert resp.status_code in (200, 201), f"Create wizard wf failed: {resp.text[:500]}"
+        wf = resp.json()
+        cleanup_registry["workflows"].append(wf["id"])
+        return wf
+
+    def test_wizard_auto_subscribe_persists_on_behalf_of_group(
+        self, api, url, daimler_data_product, trivial_subscribe_workflow, cleanup_registry,
+    ):
+        """End-to-end: create session with on_behalf_of, walk wizard, assert
+        the resulting subscription record has on_behalf_of_type=group."""
+        prod_id = daimler_data_product["id"]
+        wf_id = trivial_subscribe_workflow["id"]
+
+        # 1) Create wizard session with on_behalf_of
+        sess_resp = api.post(
+            url("/api/approvals/sessions"),
+            json={
+                "workflow_id": wf_id,
+                "entity_type": "data_product",
+                "entity_id": prod_id,
+                "completion_action": "subscribe",
+                "on_behalf_of": {"type": "group", "value": "users"},
+            },
+        )
+        assert sess_resp.status_code in (200, 201), (
+            f"Create session failed: {sess_resp.text[:500]}"
+        )
+        session = sess_resp.json()
+        session_id = session["session_id"]
+        first_step = session.get("current_step") or {}
+
+        # 2) Submit the legal_document step's acceptance to drive wizard to
+        # completion. The exact payload key may vary; cover both common shapes.
+        step_id = first_step.get("step_id") or "tos"
+        step_resp = api.post(
+            url(f"/api/approvals/sessions/{session_id}/steps"),
+            json={
+                "step_id": step_id,
+                "payload": {"accepted": True, "acceptance": True},
+            },
+        )
+        assert step_resp.status_code in (200, 201), (
+            f"Submit step failed: {step_resp.text[:500]}"
+        )
+        body = step_resp.json()
+        # Walk additional steps if any (defensive — workflow has 1 visual step
+        # but persist_agreement / generate_pdf may auto-advance and surface).
+        guard = 0
+        while not body.get("complete") and guard < 5:
+            nxt = body.get("current_step") or {}
+            nxt_id = nxt.get("step_id")
+            if not nxt_id:
+                break
+            step_resp = api.post(
+                url(f"/api/approvals/sessions/{session_id}/steps"),
+                json={"step_id": nxt_id, "payload": {"accepted": True}},
+            )
+            body = step_resp.json() if step_resp.status_code in (200, 201) else {}
+            guard += 1
+
+        # 3) Inspect the resulting subscription record
+        sub_resp = api.get(url(f"/api/data-products/{prod_id}/subscription"))
+        assert sub_resp.status_code == 200, sub_resp.text[:300]
+        sub_body = sub_resp.json()
+        sub = sub_body.get("subscription") or {}
+        cleanup_registry["subscriptions"].append((prod_id, sub.get("subscriber_email")))
+
+        # The whole point of the fix:
+        assert sub.get("on_behalf_of_type") == "group", (
+            f"Expected on_behalf_of_type=group, got {sub!r}"
+        )
+        assert sub.get("on_behalf_of_value") == "users", (
+            f"Expected on_behalf_of_value=users, got {sub!r}"
+        )
+
+
 class TestGrantPermissionsWithOnBehalfOf:
     """Bonus check: a process workflow with grant_permissions step using
     principal_source=from_variable, principal_variable=context.on_behalf_of.value

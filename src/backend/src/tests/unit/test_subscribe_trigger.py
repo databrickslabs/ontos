@@ -80,7 +80,10 @@ class TestFireOnSubscribeTrigger:
         args = fire_mock.call_args.args
         assert args[1] == "on_subscribe"
         from src.models.process_workflows import EntityType
-        assert kwargs["entity_type"] is EntityType.SUBSCRIPTION
+        # entity_type is DATA_PRODUCT (not SUBSCRIPTION) so workflows
+        # registered with entity_types=["data_product"] match.
+        assert kwargs["entity_type"] is EntityType.DATA_PRODUCT
+        assert kwargs["entity_id"] == "prod-123"
         assert kwargs["entity_name"] == "prod-123"
         assert kwargs["user_email"] == "consumer@example.com"
 
@@ -133,12 +136,16 @@ class TestFireOnSubscribeTrigger:
         ed = fire_mock.call_args.kwargs["entity_data"]
         assert "consumer_groups" not in ed
 
-    def test_subscription_id_used_when_present(self, manager):
+    def test_entity_id_is_product_id(self, manager):
+        """entity_id is always the data product id so workflows
+        registered with entity_types=["data_product"] resolve
+        ${entity.product_id} consistently. The subscription_id is no
+        longer used for the trigger event identifier."""
         sub_uuid = uuid4()
         fire_mock = self._call(manager, subscription_id=sub_uuid)
-        assert fire_mock.call_args.kwargs["entity_id"] == str(sub_uuid)
+        assert fire_mock.call_args.kwargs["entity_id"] == "prod-123"
 
-    def test_subscription_id_falls_back_to_product_id(self, manager):
+    def test_entity_id_when_no_subscription_id(self, manager):
         fire_mock = self._call(manager, subscription_id=None)
         assert fire_mock.call_args.kwargs["entity_id"] == "prod-123"
 

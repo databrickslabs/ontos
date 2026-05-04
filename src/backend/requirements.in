@@ -1,5 +1,5 @@
 fastapi>=0.110.2,<0.119.0
-uvicorn>=0.32.0
+uvicorn>=0.46.0
 python-multipart>=0.0.19
 flask-cors>=5.0.0
 python-dotenv>=1.0.1

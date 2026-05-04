@@ -3003,10 +3003,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             if existing:
                 logger.info(f"User {subscriber_email} already subscribed to product {product_id}")
-                return SubscriptionResponse(
+                response = SubscriptionResponse(
                     subscribed=True,
                     subscription=Subscription.model_validate(existing)
                 )
+                # Fire on_subscribe trigger even for the duplicate path so all
+                # subscribe call sites consistently surface the event (matches
+                # the prior route-handler behavior that fired regardless of
+                # new vs. duplicate). See _fire_on_subscribe_trigger.
+                self._fire_on_subscribe_trigger(
+                    db_session=db_session,
+                    product=product,
+                    product_id=product_id,
+                    subscriber_email=subscriber_email,
+                    reason=reason,
+                    on_behalf_of=on_behalf_of,
+                    subscription_id=getattr(existing, 'id', None),
+                )
+                return response
 
             # Create subscription
             subscription_db = subscription_repo.create(
@@ -3030,10 +3044,25 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db_session.commit()
 
             logger.info(f"User {subscriber_email} subscribed to product {product_id}")
-            return SubscriptionResponse(
+            response = SubscriptionResponse(
                 subscribed=True,
                 subscription=Subscription.model_validate(subscription_db)
             )
+            # Fire on_subscribe trigger after successful persistence (Option A:
+            # moved from the route handler so the wizard auto-subscribe path
+            # — agreement_wizard_manager._complete_session → dp_manager.subscribe
+            # — also fires it. Wrapped in try/except inside the helper so a
+            # transient trigger error does not break the subscribe response.
+            self._fire_on_subscribe_trigger(
+                db_session=db_session,
+                product=product,
+                product_id=product_id,
+                subscriber_email=subscriber_email,
+                reason=reason,
+                on_behalf_of=on_behalf_of,
+                subscription_id=getattr(subscription_db, 'id', None),
+            )
+            return response
 
         except ValueError as e:
             logger.error(f"Validation error subscribing to product {product_id}: {e}")
@@ -3042,6 +3071,77 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.error(f"Database error subscribing to product {product_id}: {e}")
             db_session.rollback()
             raise
+
+    # ------------------------------------------------------------------
+    # on_subscribe trigger firing (Option A — moved from route handler)
+    # ------------------------------------------------------------------
+    def _fire_on_subscribe_trigger(
+        self,
+        *,
+        db_session: Session,
+        product: Any,
+        product_id: str,
+        subscriber_email: str,
+        reason: Optional[str],
+        on_behalf_of: Optional[OnBehalfOf],
+        subscription_id: Optional[Any],
+    ) -> None:
+        """Fire the on_subscribe workflow trigger.
+
+        Centralized here so every subscribe call site (route handler + wizard
+        auto-subscribe via agreement_wizard_manager._complete_session +
+        any future caller) consistently fires the trigger. Previously this
+        lived in data_product_routes.subscribe_to_product, which meant the
+        wizard path silently bypassed the trigger.
+
+        Builds the entity_data payload that the executor flattens into
+        StepContext (.on_behalf_of for ${context.on_behalf_of.value} in
+        webhook bodies / grant_permissions principals; .consumer_groups for
+        ${entity.consumer_groups}).
+
+        Wrapped in try/except — a trigger fire failure must not break the
+        subscribe response.
+        """
+        try:
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType
+
+            entity_data: Dict[str, Any] = {
+                "product_id": product_id,
+                "subscriber_email": subscriber_email,
+                "reason": reason,
+            }
+            if on_behalf_of:
+                obo_dict: Dict[str, Any] = {
+                    "type": on_behalf_of.type,
+                    "value": on_behalf_of.value,
+                }
+                # Resolved display string for human-friendly templates
+                if on_behalf_of.type == 'user':
+                    obo_dict["display"] = on_behalf_of.value
+                elif on_behalf_of.type == 'group':
+                    obo_dict["display"] = f"Group: {on_behalf_of.value}"
+                else:  # service_principal
+                    obo_dict["display"] = f"SP: {on_behalf_of.value}"
+                entity_data["on_behalf_of"] = obo_dict
+
+            # Surface consumer_groups (Daimler #486448) so workflow webhook
+            # bodies can pipe them via ${entity.consumer_groups}.
+            cg = getattr(product, 'consumer_groups', None) if product is not None else None
+            if cg:
+                entity_data["consumer_groups"] = cg
+
+            fire_trigger_safe(
+                db_session, "on_subscribe",
+                entity_type=EntityType.SUBSCRIPTION,
+                entity_id=str(subscription_id) if subscription_id else product_id,
+                entity_name=product_id,
+                entity_data=entity_data,
+                user_email=subscriber_email,
+            )
+        except Exception as e:
+            # Non-fatal — never break the subscribe response on trigger errors.
+            logger.warning("on_subscribe trigger fire failed (non-fatal): %s", e)
 
     # ------------------------------------------------------------------
     # on_behalf_of validation (Daimler #486363)

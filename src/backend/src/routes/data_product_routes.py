@@ -2078,6 +2078,9 @@ async def subscribe_to_product(
         
         reason = subscription_data.reason if subscription_data else None
         on_behalf_of = subscription_data.on_behalf_of if subscription_data else None
+        # Trigger firing for on_subscribe lives inside manager.subscribe()
+        # (Option A refactor) so the wizard auto-subscribe path also fires
+        # it. The route handler just calls the manager and returns.
         result = manager.subscribe(
             product_id=product_id,
             subscriber_email=current_user.username,
@@ -2087,53 +2090,6 @@ async def subscribe_to_product(
         )
 
         success = True
-
-        # Daimler (#486363): thread on_behalf_of into the workflow trigger
-        # entity_data + a dedicated key. The executor pulls .on_behalf_of
-        # off entity_data into StepContext.on_behalf_of so webhook bodies
-        # and grant_permissions principals can resolve
-        # ${context.on_behalf_of.value}. Also pull consumer_groups off the
-        # product so ${entity.consumer_groups} works in the same trigger.
-        # Build trigger entity_data
-        product_for_trigger: Dict[str, Any] = {
-            "product_id": product_id,
-            "subscriber_email": current_user.username,
-            "reason": reason,
-        }
-        if on_behalf_of:
-            obo_dict = {
-                "type": on_behalf_of.type,
-                "value": on_behalf_of.value,
-            }
-            # Resolved display string for human-friendly templates
-            if on_behalf_of.type == 'user':
-                obo_dict["display"] = on_behalf_of.value
-            elif on_behalf_of.type == 'group':
-                obo_dict["display"] = f"Group: {on_behalf_of.value}"
-            else:  # service_principal
-                obo_dict["display"] = f"SP: {on_behalf_of.value}"
-            product_for_trigger["on_behalf_of"] = obo_dict
-        # Surface consumer_groups (Daimler #486448) so workflow webhook bodies
-        # can pipe them via ${entity.consumer_groups}.
-        try:
-            product_obj = manager.get_product(product_id)
-            if product_obj is not None:
-                cg = getattr(product_obj, 'consumer_groups', None)
-                if cg:
-                    product_for_trigger["consumer_groups"] = cg
-        except Exception:
-            pass  # non-fatal — trigger fires without consumer_groups
-
-        # Fire on_subscribe workflow trigger
-        fire_trigger_safe(
-            db, "on_subscribe",
-            entity_type=EntityType.SUBSCRIPTION,
-            entity_id=str(result.subscription_id) if hasattr(result, 'subscription_id') else product_id,
-            entity_name=product_id,
-            entity_data=product_for_trigger,
-            user_email=current_user.username,
-        )
-
         return result
 
     except ValueError as e:

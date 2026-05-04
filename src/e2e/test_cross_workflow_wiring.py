@@ -309,60 +309,36 @@ def run() -> int:
             return 1
         sess_data = r.json()
         session_id = sess_data.get("session_id")
-        first_step = sess_data.get("step")
         print(f"  Started wizard session (id={session_id})")
 
         # ---------------------------------------------------------------
-        # 5. Walk wizard: legal -> user_action -> (persist auto) -> done
+        # 5. Walk wizard. Server returns the next step under
+        #    `current_step`; loop until `complete=true`. user_action +
+        #    legal need real payloads; persist + pass take {}.
         # ---------------------------------------------------------------
-        # Legal document: acknowledged=True
-        if first_step and first_step.get("step_id") == "legal":
+        step_data = sess_data
+        for hop in range(8):
+            cur = step_data.get("current_step") or step_data.get("step")
+            if step_data.get("complete") or not cur:
+                break
+            sid = cur.get("step_id")
+            stype = cur.get("step_type")
+            if stype == "legal_document":
+                payload = {"acknowledged": True, "scrolled_to_end": True}
+            elif stype == "user_action":
+                payload = {"reason": f"E2E-{unique_marker}"}
+            else:
+                payload = {}
             r = s.post(
                 f"{BASE}/api/approvals/sessions/{session_id}/steps",
-                json={"step_id": "legal", "payload": {"acknowledged": True}},
+                json={"step_id": sid, "payload": payload},
                 timeout=30,
             )
             if r.status_code != 200:
-                print(f"FAIL: submit legal step: {r.status_code} {r.text[:400]}")
+                print(f"FAIL: submit '{sid}' ({stype}): "
+                      f"{r.status_code} {r.text[:400]}")
                 return 1
             step_data = r.json()
-        else:
-            step_data = sess_data
-
-        # User action: provide reason
-        if not step_data.get("complete"):
-            ua_step = step_data.get("step", {})
-            if ua_step.get("step_id") == "ua":
-                r = s.post(
-                    f"{BASE}/api/approvals/sessions/{session_id}/steps",
-                    json={"step_id": "ua",
-                          "payload": {"reason": f"E2E-{unique_marker}"}},
-                    timeout=30,
-                )
-                if r.status_code != 200:
-                    print(f"FAIL: submit ua step: {r.status_code} {r.text[:400]}")
-                    return 1
-                step_data = r.json()
-
-        # Persist + done are server-driven; we should arrive at complete=true.
-        if not step_data.get("complete"):
-            # Some snapshots emit persist as a server step; submit empty if asked.
-            for _ in range(4):
-                cur = step_data.get("step", {})
-                cur_id = cur.get("step_id")
-                if not cur_id:
-                    break
-                r = s.post(
-                    f"{BASE}/api/approvals/sessions/{session_id}/steps",
-                    json={"step_id": cur_id, "payload": {}},
-                    timeout=30,
-                )
-                if r.status_code != 200:
-                    print(f"FAIL: submit '{cur_id}': {r.status_code} {r.text[:400]}")
-                    return 1
-                step_data = r.json()
-                if step_data.get("complete"):
-                    break
         if not step_data.get("complete"):
             print("FAIL: wizard did not reach complete=true")
             return 1
@@ -370,21 +346,22 @@ def run() -> int:
         print(f"  Wizard completed (agreement_id={agreement_id})")
 
         # ---------------------------------------------------------------
-        # 6. Verify subscription was created
+        # 6. Verify subscription was created (route: /subscribers)
         # ---------------------------------------------------------------
-        r = s.get(f"{BASE}/api/data-products/{product_id}/subscriptions", timeout=15)
+        r = s.get(f"{BASE}/api/data-products/{product_id}/subscribers", timeout=15)
         if r.status_code != 200:
-            print(f"FAIL: list subscriptions: {r.status_code} {r.text[:300]}")
+            print(f"FAIL: list subscribers: {r.status_code} {r.text[:300]}")
             return 1
-        subs_payload = r.json()
-        subs = (
-            subs_payload.get("subscriptions")
-            if isinstance(subs_payload, dict) else subs_payload
-        ) or []
+        payload = r.json()
+        subs = payload.get("subscribers") if isinstance(payload, dict) else payload
+        subs = subs or []
         if not isinstance(subs, list) or not subs:
-            print(f"FAIL: no subscriptions found on product {product_id}")
+            print(
+                f"FAIL: no subscribers found on product {product_id} after "
+                f"wizard completion (response={payload!r})"
+            )
             return 1
-        print(f"  Subscription created: {len(subs)} subscription(s) on product")
+        print(f"  Subscription created: {len(subs)} subscriber(s) on product")
 
         # ---------------------------------------------------------------
         # 7. Wait for the on_subscribe process workflow to fire + finish

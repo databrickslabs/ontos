@@ -18,6 +18,11 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 15
+    # Skip on fork PRs: the protected runner group has no public internet
+    # egress and GitHub doesn't issue OIDC tokens for fork PRs, so JFrog
+    # auth and registry access both fail. Maintainers must pull fork
+    # branches into the upstream repo to run CI.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout code
@@ -113,6 +118,7 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 15
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout code
@@ -360,6 +366,7 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout code
@@ -420,6 +427,7 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout code
@@ -526,6 +534,7 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout code
@@ -586,7 +595,7 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     needs: [backend-tests, frontend-tests]
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
     steps:
       - name: Checkout code

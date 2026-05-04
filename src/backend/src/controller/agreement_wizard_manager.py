@@ -791,6 +791,38 @@ class AgreementWizardManager:
             elif token == "entity_owner":
                 owner = self._resolve_entity_owner(session.entity_type, session.entity_id)
                 notification_recipients.append(owner or signer_email or "")
+            elif token == "co_signers":
+                # Walk step_results for the co_signers step's payload and extract
+                # user emails. Group / service_principal entries can't receive an
+                # in_app notification directly (notifications are per-user); skip
+                # them with a debug log. SCIM expansion is out of scope here.
+                co_signer_step_ids = [
+                    getattr(s, 'step_id', None)
+                    for s in step_source
+                    if getattr(s, 'step_type', None) == StepType.CO_SIGNERS
+                ]
+                try:
+                    all_results = agreement_wizard_sessions_repo.get_step_results(session)
+                except Exception as e:
+                    logger.warning("Failed to load step_results for co_signers recipients: %s", e)
+                    all_results = []
+                for result in all_results:
+                    if result.get('step_id') not in co_signer_step_ids:
+                        continue
+                    payload = result.get('payload') or {}
+                    for entry in payload.get('co_signers', []) or []:
+                        if not isinstance(entry, dict):
+                            continue
+                        entry_type = entry.get('type')
+                        entry_value = entry.get('value')
+                        if entry_type == 'user' and isinstance(entry_value, str) and '@' in entry_value:
+                            notification_recipients.append(entry_value)
+                        else:
+                            logger.debug(
+                                "co_signers recipient skipped (type=%s, value=%s): "
+                                "only 'user' entries with email addresses are supported for in_app/email notifications",
+                                entry_type, entry_value,
+                            )
             elif isinstance(token, str) and "@" in token:
                 notification_recipients.append(token)
 

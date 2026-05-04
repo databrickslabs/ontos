@@ -254,6 +254,13 @@ class AcknowledgementChecklistStepConfig(BaseModel):
         description="List of { id, label, required } checkbox items (max 10)",
     )
 
+    @field_validator('items')
+    @classmethod
+    def cap_at_ten(cls, v: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if len(v) > 10:
+            raise ValueError("acknowledgement_checklist.items has a hard cap of 10 entries; split into multiple steps")
+        return v
+
 
 class OnBehalfOfStepConfig(BaseModel):
     """Config for on_behalf_of step: captures whether the requester is acting

@@ -659,6 +659,25 @@ class WorkflowsManager:
                 has_fail_branch=True,
             ),
             StepTypeSchema(
+                type=StepType.ON_BEHALF_OF,
+                name="On Behalf Of",
+                description="Capture whether the requester is acting for themselves or on behalf of a group/SP. Lands in step_results AND the session row, so the auto-subscribe path picks it up unchanged.",
+                icon="users",
+                config_schema={
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "title": "Step Title", "default": "Who are you requesting access for?"},
+                        "description": {"type": "string", "title": "Step Description"},
+                        "allow_self": {"type": "boolean", "title": "Allow self-requests", "default": True},
+                        "allow_user_groups": {"type": "boolean", "title": "Allow groups the user is in", "default": True},
+                        "allow_free_text": {"type": "boolean", "title": "Allow free-text group/SP entry", "default": True},
+                        "require_justification": {"type": "boolean", "title": "Require justification", "default": False},
+                    },
+                },
+                has_pass_branch=True,
+                has_fail_branch=False,
+            ),
+            StepTypeSchema(
                 type=StepType.LEGAL_DOCUMENT,
                 name="Legal Document",
                 description="Display a legal document for the signer to review and optionally acknowledge.",

@@ -141,6 +141,11 @@ const nodeColorStyles = {
     icon: "text-amber-700 dark:text-amber-300",
     ring: "ring-amber-600 dark:ring-amber-500",
   },
+  on_behalf_of: {
+    card: "border-fuchsia-500 bg-fuchsia-50 dark:bg-fuchsia-900/50 dark:border-fuchsia-400",
+    icon: "text-fuchsia-600 dark:text-fuchsia-300",
+    ring: "ring-fuchsia-500 dark:ring-fuchsia-400",
+  },
 } as const;
 
 // Shared text styles for better dark mode visibility
@@ -400,6 +405,31 @@ export const EntityActionNode = memo((props: NodeProps<StepNodeData>) => {
 EntityActionNode.displayName = 'EntityActionNode';
 
 // Legal Document Node
+// On Behalf Of Node — first-step principal capture (Daimler #486363)
+export const OnBehalfOfNode = memo((props: NodeProps<StepNodeData>) => {
+  const title = (props.data.step.config as { title?: string })?.title;
+  const styles = nodeColorStyles.on_behalf_of;
+  return (
+    <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 dark:!bg-slate-500" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
+          <Users className={`h-4 w-4 ${styles.icon}`} />
+          {props.data.step.name || title || 'On Behalf Of'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <Badge variant="outline" className="text-xs dark:border-fuchsia-400/50 dark:text-fuchsia-200">on_behalf_of</Badge>
+        {title && (
+          <div className={nodeTextStyles.description + " mt-1 truncate max-w-[140px]"}>{title}</div>
+        )}
+      </CardContent>
+      <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" />
+    </Card>
+  );
+});
+OnBehalfOfNode.displayName = 'OnBehalfOfNode';
+
 export const LegalDocumentNode = memo((props: NodeProps<StepNodeData>) => {
   const title = (props.data.step.config as { title?: string })?.title;
   const styles = nodeColorStyles.legal_document;

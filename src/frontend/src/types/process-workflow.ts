@@ -90,7 +90,8 @@ export type StepType =
   | 'persist_agreement'          // Approval: materialize agreement record (non-visual)
   | 'generate_pdf'               // Approval: generate PDF artifact
   | 'deliver'                    // Approval: send agreement via channels (non-visual)
-  | 'grant_permissions';         // Process: grant UC permissions via SP workspace client
+  | 'grant_permissions'          // Process: grant UC permissions via SP workspace client
+  | 'on_behalf_of';              // Approval: capture self/group/SP principal in wizard (Daimler #486363)
 
 /** Canonical step type value for lifecycle actions on the trigger entity */
 export const ENTITY_ACTION = 'entity_action' as const satisfies StepType;

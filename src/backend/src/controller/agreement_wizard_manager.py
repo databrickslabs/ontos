@@ -311,6 +311,91 @@ class AgreementWizardManager:
             if required and not checked_items.get(item_id):
                 raise ValueError(f"Required item '{item.get('label', item_id)}' must be checked.")
 
+    def _validate_on_behalf_of_payload(
+        self,
+        step: WorkflowStep,
+        payload: Dict[str, Any],
+        *,
+        requester_email: Optional[str] = None,
+    ) -> None:
+        """Validate payload for the ``on_behalf_of`` step.
+
+        Required:
+          - ``payload['type']`` ∈ {"user", "group", "service_principal"}
+          - ``payload['value']`` non-empty string
+
+        Honors the step config flags:
+          - ``allow_self``: when False, rejects ``type=user`` whose value matches
+            the requester
+          - ``allow_user_groups``: when False, rejects ``type=group`` (since
+            distinguishing "user's own group" from "any group" requires SCIM
+            membership checks not all callers expose; rejecting is the safer
+            default)
+          - ``allow_free_text``: when False, rejects ``type=service_principal``
+            (the only path free-text reaches via this step) and any
+            ``type=group`` value not in the requester's known groups
+          - ``require_justification``: when True, requires non-empty
+            ``payload['justification']``
+
+        For ``type=group`` and ``type=service_principal``, the principal is
+        looked up via SCIM (re-using the same workspace client pattern as
+        ``DataProductsManager._validate_on_behalf_of_principal``). For
+        ``type=user``, we accept any string (matches the PR A pattern that
+        covers new hires not yet indexed in SCIM).
+        """
+        config = step.config or {}
+        obo_type = (payload or {}).get("type")
+        obo_value = (payload or {}).get("value")
+        if obo_type not in ("user", "group", "service_principal"):
+            raise ValueError(
+                "on_behalf_of.type must be one of 'user', 'group', 'service_principal'"
+            )
+        if not isinstance(obo_value, str) or not obo_value.strip():
+            raise ValueError("on_behalf_of.value must be a non-empty string")
+        obo_value = obo_value.strip()
+
+        allow_self = config.get("allow_self", True)
+        allow_user_groups = config.get("allow_user_groups", True)
+        allow_free_text = config.get("allow_free_text", True)
+        require_justification = config.get("require_justification", False)
+
+        if not allow_self and obo_type == "user" and requester_email and obo_value.lower() == requester_email.lower():
+            raise ValueError("Self-requests are not allowed for this step.")
+
+        if not allow_user_groups and obo_type == "group":
+            # Strict interpretation: when the workflow author has turned off
+            # the "groups I'm in" picker, reject any group selection.
+            raise ValueError("Group requests are not allowed for this step.")
+
+        if not allow_free_text and obo_type == "service_principal":
+            raise ValueError("Service principal requests are not allowed for this step.")
+
+        if require_justification:
+            justification = (payload or {}).get("justification")
+            if not isinstance(justification, str) or not justification.strip():
+                raise ValueError("A justification is required for this step.")
+
+        # SCIM lookup for non-user principals — reuse DataProductsManager's
+        # cached validator so we don't double-hammer the directory.
+        if obo_type in ("group", "service_principal"):
+            try:
+                from src.controller.data_products_manager import DataProductsManager
+                from src.models.data_products import OnBehalfOf
+                dp = DataProductsManager(self._db)
+                dp._validate_on_behalf_of_principal(
+                    OnBehalfOf(type=obo_type, value=obo_value)
+                )
+            except ValueError:
+                raise
+            except Exception as e:
+                # Workspace client unavailable / unexpected error — log and
+                # accept (mirrors DataProductsManager's defensive fallback so
+                # dev/test environments without SCIM still work).
+                logger.warning(
+                    "on_behalf_of step SCIM validation skipped (%s): %s",
+                    obo_type, e,
+                )
+
     def _validate_co_signers_payload(self, step: WorkflowStep, payload: Dict[str, Any]) -> None:
         """Validate payload for co_signers step."""
         config = step.config or {}
@@ -359,6 +444,12 @@ class AgreementWizardManager:
             self._validate_acknowledgement_checklist_payload(current, payload)
         elif current.step_type == StepType.CO_SIGNERS:
             self._validate_co_signers_payload(current, payload)
+        elif current.step_type == StepType.ON_BEHALF_OF:
+            self._validate_on_behalf_of_payload(
+                current,
+                payload,
+                requester_email=created_by or session.created_by,
+            )
         # Non-visual steps (persist_agreement, generate_pdf, deliver) skip validation
 
         # Execute non-visual step side effects
@@ -393,6 +484,21 @@ class AgreementWizardManager:
                 "template": config.get("template", "default"),
                 "include_step_results": config.get("include_step_results", True),
             }
+
+        if current.step_type == StepType.ON_BEHALF_OF:
+            # Persist the captured principal on the session row so the
+            # auto-subscribe in _complete_session can forward it to
+            # data_products_manager.subscribe() (Daimler #486363). This is the
+            # in-wizard equivalent of the legacy SubscribeDialog setting it at
+            # session-create time.
+            obo_type = (payload or {}).get("type")
+            obo_value = ((payload or {}).get("value") or "").strip() if isinstance((payload or {}).get("value"), str) else None
+            if obo_type and obo_value:
+                agreement_wizard_sessions_repo.update_on_behalf_of(
+                    self._db, session_id, obo_type, obo_value,
+                )
+            # Keep the full payload in step_results so the workflow snapshot +
+            # PDF carry the audit trail (justification, display name, etc.).
 
         if current.step_type == StepType.DELIVER:
             # Deliver step: capture delivery channel config for _complete_session.

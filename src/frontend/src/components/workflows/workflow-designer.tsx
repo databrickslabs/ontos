@@ -95,6 +95,7 @@ import {
   GeneratePdfNode,
   DeliverNode,
   GrantPermissionsNode,
+  OnBehalfOfNode,
 } from './workflow-nodes';
 
 import type {
@@ -142,12 +143,13 @@ const nodeTypes = {
   generate_pdf: GeneratePdfNode,
   deliver: DeliverNode,
   grant_permissions: GrantPermissionsNode,
+  on_behalf_of: OnBehalfOfNode,
   default: DefaultStepNode,
 };
 
 // Schema-driven configuration panel for new step types.
 // Reads the JSON schema from the backend step-types API and generates form fields automatically.
-const SCHEMA_DRIVEN_STEP_TYPES = ['legal_document', 'acknowledgement_checklist', 'co_signers', 'persist_agreement', 'generate_pdf', 'deliver', 'grant_permissions'];
+const SCHEMA_DRIVEN_STEP_TYPES = ['legal_document', 'acknowledgement_checklist', 'co_signers', 'persist_agreement', 'generate_pdf', 'deliver', 'grant_permissions', 'on_behalf_of'];
 
 function SchemaConfigPanel({
   schema,
@@ -375,6 +377,7 @@ const PROCESS_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shiel
 ];
 
 const APPROVAL_PALETTE_STEPS: { type: StepType; label: string; icon: typeof Shield; disabled?: boolean }[] = [
+  { type: 'on_behalf_of', label: 'On Behalf Of', icon: Users },
   { type: 'legal_document', label: 'Legal Document', icon: FileText },
   { type: 'acknowledgement_checklist', label: 'Acknowledgement Checklist', icon: ListChecks },
   { type: 'user_action', label: 'User Action', icon: MessageSquare },

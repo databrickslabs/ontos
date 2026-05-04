@@ -367,7 +367,8 @@
       "persist_agreement": "Persist Agreement",
       "generate_pdf": "Generate PDF",
       "deliver": "Deliver",
-      "grant_permissions": "Grant Permissions"
+      "grant_permissions": "Grant Permissions",
+      "on_behalf_of": "On Behalf Of"
     }
   }
 }

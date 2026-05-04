@@ -67,6 +67,15 @@ export interface ApprovalWizardDialogProps {
   preselectedWorkflowId?: string;
   /** When set (e.g. 'subscribe'), session is created with completion_action; backend runs that after wizard complete. */
   completionAction?: string;
+  /**
+   * Daimler #486363 gap-fill: principal the requester is acting on behalf of.
+   * Threaded through to the session create call so the backend persists it on
+   * the session row and forwards it to data_products_manager.subscribe() when
+   * completion_action='subscribe' fires the auto-subscribe in
+   * _complete_session. Without this, wizard-completed subscriptions had
+   * on_behalf_of_type=null even when the caller picked a group up front.
+   */
+  onBehalfOf?: { type: string; value: string } | null;
   /** When true and preselectedWorkflowId is set, start session immediately without showing workflow list. */
   autoStartWithPreselected?: boolean;
   onComplete?: (agreementId: string | null, pdfStoragePath: string | null) => void;
@@ -82,6 +91,7 @@ export default function ApprovalWizardDialog({
   entityName,
   preselectedWorkflowId,
   completionAction,
+  onBehalfOf,
   autoStartWithPreselected,
   onComplete,
   onNoWorkflow,
@@ -170,12 +180,18 @@ export default function ApprovalWizardDialog({
           setStepNames(visualSteps.map((s) => s.name));
           setCurrentStepIndex(0);
         }
-        const body: Record<string, string> = {
+        // Daimler #486363 gap-fill: thread on_behalf_of through to the session
+        // create call so _complete_session's auto-subscribe persists OBO on
+        // the resulting subscription record.
+        const body: Record<string, unknown> = {
           workflow_id: workflowId,
           entity_type: entityType,
           entity_id: entityId,
         };
         if (completionAction) body.completion_action = completionAction;
+        if (onBehalfOf && onBehalfOf.type && onBehalfOf.value) {
+          body.on_behalf_of = { type: onBehalfOf.type, value: onBehalfOf.value };
+        }
         const res = await post<{ session_id: string; current_step: WizardStep; step_results: unknown[] }>(
           '/api/approvals/sessions',
           body,
@@ -194,7 +210,7 @@ export default function ApprovalWizardDialog({
         setLoading(false);
       }
     },
-    [entityType, entityId, completionAction, post, toast, workflows],
+    [entityType, entityId, completionAction, onBehalfOf, post, toast, workflows],
   );
 
   useEffect(() => {

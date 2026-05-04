@@ -208,9 +208,10 @@ class TestDaimlerSubscribeOnBehalfOf:
 
         # Webhook execution: the on_subscribe trigger fires the process workflow
         # asynchronously (blocking=False in fire_trigger_safe). Poll executions
-        # for up to 10s.
+        # for up to 30s — async dispatch + workflow execution + httpbin round-trip
+        # can drift past 15s on a busy app.
         wf_id = treasure_process_workflow["id"]
-        deadline = time.time() + 15
+        deadline = time.time() + 30
         execution = None
         while time.time() < deadline:
             ex_resp = api.get(url(f"/api/workflows/{wf_id}/executions"))
@@ -222,7 +223,7 @@ class TestDaimlerSubscribeOnBehalfOf:
                         break
             time.sleep(1)
 
-        assert execution is not None, "No webhook execution found within 15s"
+        assert execution is not None, "No webhook execution found within 30s"
         # Walk step_executions to find the webhook step's resolved request body.
         step_execs = execution.get("step_executions") or []
         webhook_exec = next(

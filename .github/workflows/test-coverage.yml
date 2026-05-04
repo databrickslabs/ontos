@@ -8,7 +8,8 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   backend-tests:
@@ -423,6 +424,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Check out the PR head branch (not the merge commit) so we can push back.
+          # Falls back to the default ref for push events.
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get JFrog OIDC token
         run: |
@@ -460,15 +467,53 @@ jobs:
       - name: Regenerate lockfiles
         run: ./scripts/lock-requirements.sh
 
-      - name: Check for lockfile drift
+      - name: Detect lockfile drift
+        id: drift
         run: |
-          if ! git diff --exit-code src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt; then
-            echo ""
-            echo "ERROR: requirements.txt lockfiles are out of sync with .in files."
-            echo "Run ./scripts/lock-requirements.sh and commit the updated .txt files."
-            exit 1
+          if git diff --quiet src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt; then
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+            echo "Lockfiles are up to date."
+          else
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+            echo "Lockfile drift detected — will auto-commit on same-repo PRs."
+            git --no-pager diff --stat src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt
           fi
-          echo "Lockfiles are up to date."
+
+      - name: Detect fork PR
+        id: fork
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "is_fork=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Auto-commit lockfile updates to PR branch
+        if: github.event_name == 'pull_request' && steps.drift.outputs.drifted == 'true' && steps.fork.outputs.is_fork == 'false'
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/requirements.txt src/backend/requirements.txt src/e2e/requirements.txt
+          git commit -m "chore: regenerate requirements lockfiles [skip ci]"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          echo "Pushed regenerated lockfiles to ${{ github.event.pull_request.head.ref }}."
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.drift.outputs.drifted == 'true' && steps.fork.outputs.is_fork == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "Auto-regenerated \`requirements.txt\` lockfiles to match \`requirements.in\`."
+
+      - name: Fail if drift on fork PR or push to protected branch
+        if: steps.drift.outputs.drifted == 'true' && (github.event_name == 'push' || steps.fork.outputs.is_fork == 'true')
+        run: |
+          echo "ERROR: requirements.txt lockfiles are out of sync with .in files."
+          echo "Run ./scripts/lock-requirements.sh locally and commit the updated .txt files."
+          exit 1
 
   frontend-build:
     name: Frontend Build Check

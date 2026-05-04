@@ -635,10 +635,18 @@ class AgreementWizardManager:
                     # disappears. Use the SDK Files API for UC Volumes; keep the
                     # local filesystem path for dev where storage_base_path may
                     # legitimately be a tmp dir.
+                    # Smart-skip: if the configured path already ends in
+                    # '/agreements', don't double-append. Daimler demo
+                    # surfaced /Volumes/.../agreements producing files at
+                    # /Volumes/.../agreements/agreements/<id>.pdf.
                     if pdf_volume_path.startswith("/Volumes/"):
                         from io import BytesIO
                         from src.common.workspace_client import get_workspace_client
-                        out_path = f"{pdf_volume_path.rstrip('/')}/agreements/{agreement_id}.pdf"
+                        base = pdf_volume_path.rstrip('/')
+                        if base.rsplit('/', 1)[-1] == 'agreements':
+                            out_path = f"{base}/{agreement_id}.pdf"
+                        else:
+                            out_path = f"{base}/agreements/{agreement_id}.pdf"
                         ws = get_workspace_client()
                         ws.files.upload(
                             out_path,
@@ -650,7 +658,9 @@ class AgreementWizardManager:
                         logger.info("Agreement PDF uploaded to Volume %s (%d bytes)", out_path, len(pdf_bytes))
                     else:
                         from pathlib import Path
-                        out_dir = Path(pdf_volume_path) / "agreements"
+                        out_dir = Path(pdf_volume_path)
+                        if out_dir.name != "agreements":
+                            out_dir = out_dir / "agreements"
                         out_dir.mkdir(parents=True, exist_ok=True)
                         out_path = str(out_dir / f"{agreement_id}.pdf")
                         with open(out_path, "wb") as f:

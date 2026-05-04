@@ -300,6 +300,26 @@ class PersistAgreementStepConfig(BaseModel):
     pass
 
 
+class GeneratePdfStepConfig(BaseModel):
+    """Config for generate_pdf step: build agreement PDF and persist to storage."""
+    storage: Optional[str] = Field(
+        "volume",
+        description="Storage backend: 'volume' (UC Volume via SDK Files API) or 'none' (regenerate on download).",
+    )
+    volume_path: Optional[str] = Field(
+        None,
+        description=(
+            "Directory where PDFs are written. If the path doesn't already end in '/agreements', "
+            "that segment is appended automatically. Final file: <resolved_dir>/<agreement_id>.pdf. "
+            "Example: '/Volumes/cat/sch/vol' → files at '/Volumes/cat/sch/vol/agreements/<id>.pdf'."
+        ),
+    )
+    include_step_results: Optional[bool] = Field(
+        True,
+        description="Include rendered step_results (acknowledgements, co-signers, etc.) in the PDF body.",
+    )
+
+
 class DeliverStepConfig(BaseModel):
     """Config for deliver step: send agreement via notification channels."""
     channels: List[str] = Field(

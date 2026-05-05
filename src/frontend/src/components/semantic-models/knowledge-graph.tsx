@@ -680,24 +680,29 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
 
     switch (layoutName) {
       case 'fcose':
-        // Modern force-directed layout. quality='proof' converges further than
-        // 'default' for a tidier final state; randomize=false uses current
-        // positions as a starting point so re-layouts don't visually thrash.
-        // tile=false because compound domain nodes already cluster children.
+        // Modern force-directed layout. Defaults tuned for an organic look:
+        //   - quality='default' converges fast enough on 250+ nodes
+        //   - randomize=true lets fcose pick a good starting state instead
+        //     of locking onto whatever the previous layout left behind
+        //   - tile=true (default) packs compound-node children naturally;
+        //     turning it off produced corner-to-corner stripes
+        //   - tile-* params keep showDomainBoxes children loosely clustered
         return {
           name: 'fcose',
           ...baseConfig,
-          quality: 'proof',
-          randomize: false,
+          quality: 'default',
+          randomize: true,
           animate: animate ? 'end' : false,
           animationEasing: 'ease-out',
-          nodeRepulsion: () => 8000,
-          idealEdgeLength: () => 90,
+          nodeRepulsion: () => 4500,
+          idealEdgeLength: () => 80,
           edgeElasticity: () => 0.45,
           gravity: 0.25,
           gravityRangeCompound: 1.5,
           numIter: 2500,
-          tile: false,
+          tile: true,
+          tilingPaddingVertical: 12,
+          tilingPaddingHorizontal: 12,
           packComponents: true,
         } as LayoutOptions;
       case 'circle':

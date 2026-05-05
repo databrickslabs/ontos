@@ -29,12 +29,20 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+interface DialogContentProps
+  extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+  // Optional class for the dimmed backdrop. Useful for nested-Dialog scenarios
+  // where the inner dialog needs to elevate above an outer Dialog's z-50 stack
+  // (pass e.g. "z-[60]" here together with "z-[60]" on className).
+  overlayClassName?: string;
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  DialogContentProps
+>(({ className, overlayClassName, children, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       onInteractOutside={(e) => e.preventDefault()}

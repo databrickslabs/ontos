@@ -229,7 +229,13 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
+      {/* z-[60] elevates above the fullscreen knowledge-graph Dialog (z-50)
+          so editing from within fullscreen places the form on top of the
+          fullscreen overlay rather than under it. */}
+      <DialogContent
+        className="sm:max-w-[700px] max-h-[90vh] z-[60]"
+        overlayClassName="z-[60]"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isNew ? t('Create Concept') : t('Edit Concept')}

@@ -111,7 +111,8 @@ export const LinkEditorDialog: React.FC<LinkEditorDialogProps> = ({
   
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+      {/* z-[60] elevates above the fullscreen knowledge-graph Dialog (z-50). */}
+      <DialogContent className="max-w-lg z-[60]" overlayClassName="z-[60]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />

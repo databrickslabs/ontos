@@ -502,7 +502,9 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
     const domainBgOpacity = isDarkMode ? 0.15 : 0.12;
     
     return [
-      // Base node styles
+      // Base node styles. Animation transitions on geometric properties give
+      // hover/select state changes a soft, force-graph-like feel without
+      // running a continuous layout.
       {
         selector: 'node',
         style: {
@@ -515,45 +517,63 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           'color': textColor,
           'text-outline-width': 2,
           'text-outline-color': textOutlineColor,
+          'transition-property': 'width, height, border-width, background-color, overlay-opacity, overlay-padding',
+          'transition-duration': 200,
+          'transition-timing-function': 'ease-out',
         },
       },
-      // Concept nodes
+      // Concept nodes — subtle drop shadow gives depth in both light and dark
+      // modes; the shadow alpha is tuned so it reads as a soft glow on dark
+      // and a soft drop on light.
       {
         selector: '.concept-node',
         style: {
           'shape': 'ellipse',
-          'width': 24,
-          'height': 24,
+          'width': 26,
+          'height': 26,
           'background-color': 'data(color)',
           'border-width': 2,
           'border-color': isDarkMode ? 'rgba(30,30,30,0.8)' : 'rgba(255,255,255,0.9)',
           'label': showLabels ? 'data(label)' : '',
+          'shadow-blur': 8,
+          'shadow-color': 'data(color)',
+          'shadow-opacity': isDarkMode ? 0.5 : 0.25,
+          'shadow-offset-x': 0,
+          'shadow-offset-y': 0,
         },
       },
-      // Concept node hover
+      // Concept node hover — overlay halo + size pulse. The overlay sits in
+      // the node's color at low opacity, expanding outward with overlay-padding,
+      // which reads as a glow ring on retina canvases.
       {
         selector: '.concept-node.hover',
         style: {
-          'width': 32,
-          'height': 32,
+          'width': 34,
+          'height': 34,
           'border-width': 3,
           'label': 'data(label)',
           'font-size': 13,
           'font-weight': 600,
           'z-index': 999,
+          'overlay-color': 'data(color)',
+          'overlay-opacity': 0.18,
+          'overlay-padding': 10,
         },
       },
-      // Concept node selected
+      // Concept node selected — gold ring + stronger halo
       {
         selector: '.concept-node:selected',
         style: {
-          'width': 40,
-          'height': 40,
+          'width': 42,
+          'height': 42,
           'border-width': 4,
           'border-color': '#FFD700',
           'label': 'data(label)',
           'font-size': 14,
           'font-weight': 700,
+          'overlay-color': '#FFD700',
+          'overlay-opacity': 0.2,
+          'overlay-padding': 8,
         },
       },
       // Link-draw source: pink dashed ring while user is creating a new edge
@@ -571,22 +591,28 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
         selector: '.property-node',
         style: {
           'shape': 'diamond',
-          'width': 20,
-          'height': 20,
+          'width': 22,
+          'height': 22,
         },
       },
       {
         selector: '.property-node.hover',
         style: {
-          'width': 28,
-          'height': 28,
+          'width': 30,
+          'height': 30,
+          'overlay-color': 'data(color)',
+          'overlay-opacity': 0.18,
+          'overlay-padding': 10,
         },
       },
       {
         selector: '.property-node:selected',
         style: {
-          'width': 36,
-          'height': 36,
+          'width': 38,
+          'height': 38,
+          'overlay-color': '#FFD700',
+          'overlay-opacity': 0.2,
+          'overlay-padding': 8,
         },
       },
       // Domain compound nodes (no label to avoid redundancy with contained nodes)
@@ -603,7 +629,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           'padding': 30,
         },
       },
-      // Edges
+      // Edges — transition for smooth width/opacity changes on hover
       {
         selector: 'edge',
         style: {
@@ -613,10 +639,13 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           'target-arrow-shape': 'triangle',
           'arrow-scale': 0.8,
           'curve-style': 'bezier',
-          'opacity': 0.6,
+          'opacity': 0.55,
+          'transition-property': 'width, opacity, line-color, target-arrow-color',
+          'transition-duration': 180,
+          'transition-timing-function': 'ease-out',
         },
       },
-      // Edge hover
+      // Edge hover — gold glow
       {
         selector: 'edge.hover',
         style: {
@@ -647,18 +676,22 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           spacingFactor: 1.5,
         };
       case 'cose':
+        // Tuned for an "organic force-graph" look: longer ideal edges +
+        // slightly higher repulsion gives nodes more breathing room without
+        // letting clusters sprawl across the canvas.
         return {
           name: 'cose',
           ...baseConfig,
-          idealEdgeLength: () => 80,
-          nodeOverlap: 20,
-          nodeRepulsion: () => 400000,
-          edgeElasticity: () => 100,
+          animationEasing: 'ease-out',
+          idealEdgeLength: () => 110,
+          nodeOverlap: 24,
+          nodeRepulsion: () => 600000,
+          edgeElasticity: () => 80,
           nestingFactor: 5,
-          gravity: 80,
-          numIter: animate ? 1000 : 500,
-          initialTemp: 200,
-          coolingFactor: 0.95,
+          gravity: 60,
+          numIter: animate ? 1500 : 700,
+          initialTemp: 220,
+          coolingFactor: 0.96,
           minTemp: 1.0,
           randomize: false,
         };

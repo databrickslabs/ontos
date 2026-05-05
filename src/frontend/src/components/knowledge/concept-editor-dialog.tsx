@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -111,7 +111,123 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
   const isNew = !concept;
   const canEdit = !readOnly && (!concept?.status || concept.status === 'draft');
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Draft persistence + dirty-state guard.
+  //
+  // Form state lives in React useState, which is lost on tab close, refresh,
+  // or accidental navigation. We back it with sessionStorage so users can:
+  //   - refresh the page mid-edit and find their work intact
+  //   - close the dialog (Cancel / Escape / X) and re-open to resume
+  // sessionStorage was chosen over localStorage so drafts don't accumulate
+  // forever on a shared machine — they self-clean when the tab closes.
+  //
+  // The confirm-discard guard fires only when there are real changes vs. the
+  // last-saved-or-restored snapshot, so opening the dialog and immediately
+  // closing doesn't nag.
+  // ──────────────────────────────────────────────────────────────────────
+  const draftKey = useMemo(
+    () => `ontos.concept-editor.draft.${concept?.iri ?? `new:${collection?.iri ?? 'no-collection'}`}`,
+    [concept?.iri, collection?.iri],
+  );
+
+  // Snapshot of the "clean" formData (last server-side load OR last restored
+  // draft) — anything different from this triggers the dirty guard.
+  const cleanSnapshotRef = useRef<typeof formData | null>(null);
+
+  // When the restore effect updates cleanSnapshotRef synchronously but
+  // setFormData(draft) schedules a re-render for next tick, the autosave
+  // effect runs once with stale formData against the new clean snapshot —
+  // computing isDirty=true and overwriting the draft with empty data. This
+  // ref skips that single rogue cycle.
+  const skipNextAutosaveRef = useRef(false);
+
+  // Track tab-close / refresh so we don't pop the discard confirm during
+  // unmount (Radix fires onOpenChange(false) when the tree tears down).
+  const isUnloadingRef = useRef(false);
   useEffect(() => {
+    const onUnload = () => { isUnloadingRef.current = true; };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, []);
+
+  const isDirty = useMemo(() => {
+    if (!cleanSnapshotRef.current) return false;
+    return JSON.stringify(formData) !== JSON.stringify(cleanSnapshotRef.current);
+  }, [formData]);
+
+  // Restore draft on open. Runs after the [concept] effect that seeds formData
+  // from the server, so a saved draft wins over the server snapshot when both
+  // exist for the same concept.
+  useEffect(() => {
+    if (!open) return;
+    let restored = false;
+    try {
+      const raw = sessionStorage.getItem(draftKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { formData: typeof formData };
+        if (parsed.formData) {
+          // Skip the next autosave cycle so the stale-formData / fresh-snapshot
+          // gap during this render doesn't write empty data over the draft.
+          skipNextAutosaveRef.current = true;
+          setFormData(parsed.formData);
+          // After restore, treat the restored draft as the new "clean" baseline
+          // so the user can discard back to *that* without a confirm prompt.
+          cleanSnapshotRef.current = parsed.formData;
+          restored = true;
+        }
+      }
+    } catch {
+      sessionStorage.removeItem(draftKey);
+    }
+    if (!restored) {
+      // No draft → take the current formData (just seeded by [concept] effect)
+      // as the clean baseline.
+      cleanSnapshotRef.current = formData;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, draftKey]);
+
+  // Autosave on every change while dialog is open. JSON.stringify is fine for
+  // these forms (no functions, no cycles, ~kB payload).
+  useEffect(() => {
+    if (!open) return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    if (!isDirty) return;
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify({ formData, ts: Date.now() }));
+    } catch { /* storage full or disabled — silently skip */ }
+  }, [formData, open, isDirty, draftKey]);
+
+  // Wrap onOpenChange so closing a dirty form prompts before discarding.
+  // Native confirm() avoids a nested-Dialog z-index dance and is dismissable
+  // with Enter/Esc — visual mismatch with the rest of the app is the trade-off.
+  // Skip the prompt during page unload (Radix fires onOpenChange on unmount):
+  // the browser's own beforeunload UX handles tab-close confirmation, and
+  // sessionStorage already preserves the draft across reloads.
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen && isDirty && !isUnloadingRef.current) {
+        const ok = window.confirm(
+          'Discard unsaved changes? Your draft will be cleared.',
+        );
+        if (!ok) return;
+        sessionStorage.removeItem(draftKey);
+      }
+      onOpenChange(newOpen);
+    },
+    [isDirty, draftKey, onOpenChange],
+  );
+
+  useEffect(() => {
+    // If a saved draft exists for this key, the [restore] effect above will
+    // populate formData from the draft. Don't clobber it with server/empty
+    // data — the restore effect's setFormData would otherwise be lost when
+    // this effect runs later in declaration order.
+    if (open && sessionStorage.getItem(draftKey)) return;
+
     if (concept) {
       setFormData({
         collection_iri: concept.source_context || '',
@@ -143,7 +259,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
         related_iris: [],
       });
     }
-  }, [concept, collection, open]);
+  }, [concept, collection, open, draftKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +303,11 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           false
         );
       }
+      // Successful save → clear the draft so reopening this concept loads the
+      // fresh server state, and bypass the dirty guard since changes are now
+      // persisted upstream.
+      sessionStorage.removeItem(draftKey);
+      cleanSnapshotRef.current = formData;
       onOpenChange(false);
     } finally {
       setIsLoading(false);
@@ -228,7 +349,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       {/* z-[60] elevates above the fullscreen knowledge-graph Dialog (z-50)
           so editing from within fullscreen places the form on top of the
           fullscreen overlay rather than under it. */}
@@ -583,7 +704,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             disabled={isLoading}
           >
             {t('Cancel')}

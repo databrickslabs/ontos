@@ -91,7 +91,7 @@ class ConnectionsManager:
             created_by=created_by or "",
         )
         self._db.add(db_obj)
-        self._db.flush()
+        self._db.commit()
         self._db.refresh(db_obj)
         logger.info(f"Created connection '{data.name}' (type={data.connector_type})")
         return ConnectionResponse.model_validate(db_obj)
@@ -116,7 +116,7 @@ class ConnectionsManager:
         for field, value in update_data.items():
             setattr(db_obj, field, value)
 
-        self._db.flush()
+        self._db.commit()
         self._db.refresh(db_obj)
         logger.info(f"Updated connection '{db_obj.name}' (id={connection_id})")
         return ConnectionResponse.model_validate(db_obj)
@@ -128,7 +128,7 @@ class ConnectionsManager:
         if db_obj.created_by == SYSTEM_CREATED_BY:
             raise ValueError("System connections cannot be deleted")
         self._db.delete(db_obj)
-        self._db.flush()
+        self._db.commit()
         logger.info(f"Deleted connection '{db_obj.name}' (id={connection_id})")
         return True
 
@@ -258,7 +258,7 @@ class ConnectionsManager:
             created_by=SYSTEM_CREATED_BY,
         )
         self._db.add(db_obj)
-        self._db.flush()
+        self._db.commit()
         logger.info("Created system Databricks UC connection")
 
     def migrate_from_app_settings(self) -> int:
@@ -298,7 +298,7 @@ class ConnectionsManager:
                     created_by="",
                 )
                 self._db.add(db_obj)
-                self._db.flush()
+                self._db.commit()
                 migrated += 1
 
                 # Remove the old key

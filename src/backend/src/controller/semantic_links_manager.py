@@ -195,7 +195,7 @@ class SemanticLinksManager:
         if created_by:
             db_obj.created_by = created_by
             self._db.add(db_obj)
-        self._db.flush()
+        self._db.commit()
         self._db.refresh(db_obj)
         
         # Incrementally update the in-memory RDF graph via the shared manager on app.state

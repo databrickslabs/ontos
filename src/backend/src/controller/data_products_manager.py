@@ -574,7 +574,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             old_status = product_db.status
             product_db.status = new_status_lower
             self._db.add(product_db)
-            self._db.flush()
+            self._db.commit()
             
             logger.info(
                 f"Product {product_id} status transitioned: {old_status} → {new_status_lower}"
@@ -757,7 +757,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_db.published_at = datetime.now(timezone.utc)
             product_db.published_by = current_user
             self._db.add(product_db)
-            self._db.flush()
+            self._db.commit()
 
             # Fire on_publish trigger
             try:

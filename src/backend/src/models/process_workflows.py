@@ -64,6 +64,11 @@ class TriggerType(str, Enum):
     FOR_REQUEST_CERTIFY = "for_request_certify"  # Wizard before certification request (matches ON_REQUEST_CERTIFY)
     FOR_REQUEST_STATUS_CHANGE = "for_request_status_change"  # Wizard before status change request (matches ON_REQUEST_STATUS_CHANGE)
 
+    # User session triggers — fired by the frontend on app mount, not by an
+    # entity action. Used for terms-of-use / acceptable-use disclaimers that
+    # must be acknowledged before the user proceeds.
+    ON_FIRST_ACCESS = "on_first_access"  # User opens the app and hasn't yet accepted this workflow at its current version
+
 
 class EntityType(str, Enum):
     """Entity types that can trigger workflows."""
@@ -80,6 +85,7 @@ class EntityType(str, Enum):
     DATA_ASSET_REVIEW = "data_asset_review"  # For data asset review request workflows
     JOB = "job"  # For background job lifecycle workflows
     SUBSCRIPTION = "subscription"  # For subscription events
+    USER = "user"  # The user themselves — for on_first_access disclaimer/ToU workflows
 
 
 class ScopeType(str, Enum):

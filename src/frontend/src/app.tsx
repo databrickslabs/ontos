@@ -8,7 +8,7 @@ import { RouteErrorBoundary } from './components/layout/route-error-boundary';
 import { useUserStore } from './stores/user-store';
 import { usePermissions } from './stores/permissions-store';
 import { useNotificationsStore } from './stores/notifications-store';
-import WelcomeDisclaimerDialog, { hasWelcomeConsent } from './components/common/welcome-disclaimer-dialog';
+import ApprovalWizardDialog from './components/workflows/approval-wizard-dialog';
 import './i18n/config'; // Initialize i18n
 
 // Import views
@@ -92,12 +92,19 @@ export default function App() {
   const { fetchPermissions, fetchAvailableRoles } = usePermissions();
   const { startPolling: startNotificationPolling, stopPolling: stopNotificationPolling } = useNotificationsStore();
 
-  // Welcome disclaimer (first-open dialog) state. Re-evaluated on every app
-  // mount so a fresh page load / cache clear shows it again until the user
-  // accepts the current text. Visibility is gated by the
-  // `welcome_disclaimer_enabled` server setting + per-text localStorage flag.
-  const [welcomeOpen, setWelcomeOpen] = useState(false);
-  const [welcomeText, setWelcomeText] = useState<string>('');
+  // First-access disclaimer: any active `on_first_access` Approval Workflow the
+  // current user hasn't yet accepted at the workflow's current version is
+  // returned by GET /api/user/pending-approvals. We render the existing
+  // ApprovalWizardDialog against entity_type=user / entity_id=<email>.
+  // Walking the wizard creates an `agreements` row keyed on
+  // (created_by, workflow_id, workflow_version) — that IS the consent record;
+  // no localStorage flag, no separate settings table.
+  const [pendingFirstAccess, setPendingFirstAccess] = useState<{
+    workflow_id: string;
+    workflow_name: string;
+    workflow_version: number;
+  } | null>(null);
+  const [pendingUserEmail, setPendingUserEmail] = useState<string>('');
 
   useEffect(() => {
     console.log("App component mounted, fetching initial user info and permissions...");
@@ -108,21 +115,24 @@ export default function App() {
     console.log("Starting notification polling...");
     startNotificationPolling();
 
-    // Fetch welcome disclaimer config and decide whether to prompt the user.
-    fetch('/api/settings/welcome-disclaimer')
-      .then(async (res) => {
-        if (!res.ok) return;
-        const data = await res.json();
-        const enabled = !!data?.enabled;
-        const text = typeof data?.text === 'string' ? data.text : '';
-        if (enabled && text && !hasWelcomeConsent(text)) {
-          setWelcomeText(text);
-          setWelcomeOpen(true);
+    // Fetch pending on_first_access workflows and (if any) launch the wizard
+    // for the first one. Subsequent items get prompted on the next app mount
+    // after the current one is accepted.
+    Promise.all([
+      fetch('/api/user/pending-approvals').then(r => r.ok ? r.json() : { workflows: [] }),
+      fetch('/api/user/details').then(r => r.ok ? r.json() : null),
+    ])
+      .then(([pending, userDetails]) => {
+        const list = Array.isArray(pending?.workflows) ? pending.workflows : [];
+        const email = (userDetails?.email || userDetails?.user || '') as string;
+        if (list.length > 0 && email) {
+          setPendingUserEmail(email);
+          setPendingFirstAccess(list[0]);
         }
       })
       .catch((err) => {
-        // Non-fatal: welcome disclaimer is best-effort.
-        console.warn('Failed to fetch welcome disclaimer config:', err);
+        // Non-fatal: first-access prompts are best-effort.
+        console.warn('Failed to fetch pending first-access approvals:', err);
       });
 
     return () => {
@@ -251,12 +261,16 @@ export default function App() {
           </Layout>
         </Router>
         <Toaster />
-        {welcomeText && (
-          <WelcomeDisclaimerDialog
-            open={welcomeOpen}
-            onOpenChange={setWelcomeOpen}
-            onAccept={() => setWelcomeOpen(false)}
-            disclaimerText={welcomeText}
+        {pendingFirstAccess && pendingUserEmail && (
+          <ApprovalWizardDialog
+            isOpen={true}
+            onOpenChange={(open) => { if (!open) setPendingFirstAccess(null); }}
+            entityType="user"
+            entityId={pendingUserEmail}
+            entityName={pendingUserEmail}
+            preselectedWorkflowId={pendingFirstAccess.workflow_id}
+            autoStartWithPreselected={true}
+            onComplete={() => setPendingFirstAccess(null)}
           />
         )}
       </TooltipProvider>

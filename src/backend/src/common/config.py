@@ -159,12 +159,6 @@ class Settings(BaseSettings):
     UI_ABOUT_CONTENT: Optional[str] = Field(None, env='UI_ABOUT_CONTENT')  # Custom Markdown content for About page
     UI_CUSTOM_CSS: Optional[str] = Field(None, env='UI_CUSTOM_CSS')  # Custom CSS to inject into the app
 
-    # Welcome Disclaimer settings (first-open dialog, browser-flag-tracked)
-    # When enabled, shown to every user on app open until accepted; changing
-    # the text re-prompts everyone (config_version = hash of disclaimer text).
-    WELCOME_DISCLAIMER_ENABLED: bool = Field(False, env='WELCOME_DISCLAIMER_ENABLED')
-    WELCOME_DISCLAIMER_TEXT: Optional[str] = Field(None, env='WELCOME_DISCLAIMER_TEXT')
-
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(
         env_file=str(DOTENV_FILE), 

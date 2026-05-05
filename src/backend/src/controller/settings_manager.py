@@ -272,15 +272,6 @@ class SettingsManager:
                 self._settings.UI_CUSTOM_CSS = all_settings['UI_CUSTOM_CSS']
                 logger.debug("Loaded UI_CUSTOM_CSS from database")
 
-            # Welcome disclaimer settings (first-open dialog)
-            if 'WELCOME_DISCLAIMER_ENABLED' in all_settings and all_settings['WELCOME_DISCLAIMER_ENABLED'] is not None:
-                self._settings.WELCOME_DISCLAIMER_ENABLED = all_settings['WELCOME_DISCLAIMER_ENABLED'].lower() == 'true'
-                logger.debug(f"Loaded WELCOME_DISCLAIMER_ENABLED from database: {self._settings.WELCOME_DISCLAIMER_ENABLED}")
-
-            if 'WELCOME_DISCLAIMER_TEXT' in all_settings and all_settings['WELCOME_DISCLAIMER_TEXT'] is not None:
-                self._settings.WELCOME_DISCLAIMER_TEXT = all_settings['WELCOME_DISCLAIMER_TEXT']
-                logger.debug("Loaded WELCOME_DISCLAIMER_TEXT from database")
-
             # Connector configurations are now managed via the `connections`
             # table and loaded by ConnectionsManager at startup.
 
@@ -1118,9 +1109,6 @@ class SettingsManager:
             'ui_custom_logo_url': self._settings.UI_CUSTOM_LOGO_URL,
             'ui_about_content': self._settings.UI_ABOUT_CONTENT,
             'ui_custom_css': self._settings.UI_CUSTOM_CSS,
-            # Welcome disclaimer settings (first-open dialog)
-            'welcome_disclaimer_enabled': self._settings.WELCOME_DISCLAIMER_ENABLED,
-            'welcome_disclaimer_text': self._settings.WELCOME_DISCLAIMER_TEXT,
         }
 
     def update_settings(self, settings: dict) -> Settings:
@@ -1426,19 +1414,6 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'UI_CUSTOM_CSS', value)
             self._settings.UI_CUSTOM_CSS = value
             logger.info(f"Updated UI_CUSTOM_CSS")
-
-        # Welcome disclaimer settings (first-open dialog, browser-flag-tracked)
-        if 'welcome_disclaimer_enabled' in settings:
-            value = settings.get('welcome_disclaimer_enabled')
-            app_settings_repo.set(self._db, 'WELCOME_DISCLAIMER_ENABLED', str(value).lower() if value is not None else None)
-            self._settings.WELCOME_DISCLAIMER_ENABLED = bool(value) if value is not None else self._settings.WELCOME_DISCLAIMER_ENABLED
-            logger.info(f"Updated WELCOME_DISCLAIMER_ENABLED to: {value}")
-
-        if 'welcome_disclaimer_text' in settings:
-            value = settings.get('welcome_disclaimer_text') or None
-            app_settings_repo.set(self._db, 'WELCOME_DISCLAIMER_TEXT', value)
-            self._settings.WELCOME_DISCLAIMER_TEXT = value
-            logger.info(f"Updated WELCOME_DISCLAIMER_TEXT")
 
         # Reinitialize Git service if any Git settings were changed
         git_settings_changed = any(key in settings for key in ['git_repo_url', 'git_branch', 'git_username', 'git_password'])

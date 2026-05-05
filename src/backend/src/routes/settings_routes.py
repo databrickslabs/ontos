@@ -107,25 +107,6 @@ async def get_llm_config():
         raise HTTPException(status_code=500, detail="Failed to get LLM config")
 
 
-@router.get('/settings/welcome-disclaimer')
-async def get_welcome_disclaimer_config():
-    """Get welcome disclaimer config (publicly accessible for first-open dialog).
-
-    Returns only the user-facing fields — `enabled` and the markdown `text` —
-    so non-admin users can render the dialog without having to read full
-    settings. Persistence + writes go through the standard PUT /api/settings.
-    """
-    try:
-        app_settings = get_settings()
-        return {
-            "enabled": bool(app_settings.WELCOME_DISCLAIMER_ENABLED),
-            "text": sanitize_markdown_input(app_settings.WELCOME_DISCLAIMER_TEXT) if app_settings.WELCOME_DISCLAIMER_TEXT else "",
-        }
-    except Exception as e:
-        logger.error("Error getting welcome disclaimer config", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get welcome disclaimer config")
-
-
 @router.get('/settings/ui-customization')
 async def get_ui_customization():
     """Get UI customization settings (publicly accessible for UI theming and branding).

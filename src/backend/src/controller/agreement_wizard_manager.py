@@ -1155,6 +1155,46 @@ class AgreementWizardManager:
             "filename": f"agreement-{agreement_id[:8]}.html",
         }
 
+    def get_pending_first_access_workflows(
+        self,
+        user_email: str,
+    ) -> List[Dict[str, Any]]:
+        """Return active ``on_first_access`` workflows the user hasn't yet
+        accepted at their current version.
+
+        Used by the frontend on app mount: each entry becomes a wizard the
+        user must walk through before they can use the app. The "consent
+        record" is the existing ``agreements`` row keyed on
+        ``(created_by=user_email, workflow_id, workflow_version)`` — no
+        new table is required.
+
+        Returns a list of dicts shaped ``{workflow_id, workflow_name,
+        workflow_version}``. The caller (frontend) launches the wizard via
+        the existing ``POST /api/approvals/sessions`` flow with
+        ``entity_type='user'`` and ``entity_id=<user_email>``.
+        """
+        from src.models.process_workflows import EntityType, TriggerType
+        workflows = self._workflows_manager.get_workflows_for_trigger(
+            trigger_type=TriggerType.ON_FIRST_ACCESS,
+            entity_type=EntityType.USER,
+        )
+        pending: List[Dict[str, Any]] = []
+        for wf in workflows:
+            current_version = getattr(wf, 'version', 1) or 1
+            already_signed = agreements_repo.has_user_signed_workflow_at_version(
+                self._db,
+                user_email=user_email,
+                workflow_id=wf.id,
+                workflow_version=current_version,
+            )
+            if not already_signed:
+                pending.append({
+                    "workflow_id": wf.id,
+                    "workflow_name": wf.name,
+                    "workflow_version": current_version,
+                })
+        return pending
+
     def get_completed_session_step_results(
         self,
         entity_type: Optional[str],

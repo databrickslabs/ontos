@@ -1529,3 +1529,53 @@ workflows:
         config:
           message: "Publication workflow failed"
 
+
+  # =========================================================================
+  # ON_FIRST_ACCESS — Welcome / Terms-of-Use disclaimer
+  # =========================================================================
+  # Replaces the legacy hardcoded welcome-disclaimer dialog. End-users see this
+  # workflow as a wizard on app mount when:
+  #   1. is_active = true (admin enables in Designer)
+  #   2. they have no `agreements` row at the workflow's current `version`
+  # When admin edits the legal_document body, workflow.version increments and
+  # every user is re-prompted on next mount. Consent record IS the agreements
+  # row keyed on (created_by=user_email, workflow_id, workflow_version).
+  #
+  # Disabled by default — the seed exists so admins can enable + customise the
+  # text rather than authoring a workflow from scratch. Strings are English
+  # defaults; customise in Designer per deployment language.
+  - id: "first-access-welcome"
+    name: "Welcome — Terms of Use"
+    description: "Shown to every user the first time they open the app, and again when the text changes."
+    workflow_type: "approval"
+    trigger:
+      type: "on_first_access"
+      entity_types: ["user"]
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "tou"
+        name: "Terms of Use"
+        type: "legal_document"
+        config:
+          title: "Welcome to Ontos"
+          description: "Please review the following before continuing."
+          body_markdown: "# Welcome\n\nBy using this application you agree to:\n\n1. Use it only for authorised business purposes.\n2. Treat any data you access as confidential according to your organisation's data classification policy.\n3. Report security concerns to your data governance team.\n\nReplace this text in **Settings → Workflows → Welcome — Terms of Use** to match your organisation's acceptable-use policy."
+          require_scroll_to_end: false
+          require_acknowledgement_checkbox: true
+          acknowledgement_label: "I understand and accept these terms"
+        on_pass: "persist"
+        order: 0
+      - id: "persist"
+        name: "Record Acceptance"
+        type: "persist_agreement"
+        config: {}
+        on_pass: "done"
+        order: 1
+      - id: "done"
+        name: "Complete"
+        type: "pass"
+        config: {}
+        order: 2

@@ -121,5 +121,35 @@ class AgreementsRepository:
         db.refresh(agreement)
         return agreement
 
+    def has_user_signed_workflow_at_version(
+        self,
+        db: Session,
+        *,
+        user_email: str,
+        workflow_id: str,
+        workflow_version: int,
+    ) -> bool:
+        """True iff ``user_email`` already has an agreement for ``workflow_id``
+        at ``workflow_version`` or later. Used by the on_first_access trigger
+        path to decide whether to prompt: a fresh user has no row, a user
+        whose accepted version is older than the workflow's current version
+        also returns False (re-prompt on text changes)."""
+        latest = (
+            db.query(AgreementDb)
+            .filter(
+                AgreementDb.created_by == user_email,
+                AgreementDb.workflow_id == workflow_id,
+            )
+            .order_by(AgreementDb.workflow_version.desc().nulls_last())
+            .first()
+        )
+        if not latest:
+            return False
+        if latest.workflow_version is None:
+            # Legacy agreement without recorded version — treat as accepted
+            # (don't re-prompt unnecessarily on cold-start environments).
+            return True
+        return latest.workflow_version >= workflow_version
+
 
 agreements_repo = AgreementsRepository()

@@ -82,6 +82,34 @@ async def get_user_details(
 
 # --- User Permissions Endpoint --- 
 
+@router.get("/user/pending-approvals")
+async def get_pending_approvals(
+    request: Request,
+    db: DBSessionDep,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+):
+    """Active ``on_first_access`` workflows the current user has not yet
+    accepted at the workflow's current version.
+
+    Used by the frontend on app mount: the welcome / ToU dialog is rendered
+    as a real Approval Workflow wizard rather than a hardcoded settings
+    dialog. Each entry triggers an ApprovalWizardDialog flow against
+    ``entity_type='user'`` and ``entity_id=<user_email>``. When the user
+    completes the wizard, an ``agreements`` row is persisted and the
+    endpoint returns one fewer item on the next reload. If an admin edits
+    the workflow text, ``workflow.version`` increments and every user is
+    re-prompted on next mount.
+
+    Returns ``{"workflows": [{workflow_id, workflow_name, workflow_version}, ...]}``.
+    """
+    from src.controller.agreement_wizard_manager import AgreementWizardManager
+    user_email = user_details.email or user_details.user
+    if not user_email:
+        return {"workflows": []}
+    manager = AgreementWizardManager(db)
+    return {"workflows": manager.get_pending_first_access_workflows(user_email)}
+
+
 @router.get("/user/permissions", response_model=UserPermissions)
 async def get_current_user_permissions(
     request: Request,

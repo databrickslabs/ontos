@@ -22,8 +22,6 @@ interface AppSettings {
   llmEndpoint: string;
   llmSystemPrompt: string;
   llmDisclaimerText: string;
-  welcomeDisclaimerEnabled: boolean;
-  welcomeDisclaimerText: string;
 }
 
 export default function GeneralSettings() {
@@ -44,8 +42,6 @@ export default function GeneralSettings() {
     llmEndpoint: '',
     llmSystemPrompt: '',
     llmDisclaimerText: '',
-    welcomeDisclaimerEnabled: false,
-    welcomeDisclaimerText: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,8 +64,6 @@ export default function GeneralSettings() {
             llmEndpoint: data.llm_endpoint || '',
             llmSystemPrompt: data.llm_system_prompt || '',
             llmDisclaimerText: data.llm_disclaimer_text || '',
-            welcomeDisclaimerEnabled: data.welcome_disclaimer_enabled || false,
-            welcomeDisclaimerText: data.welcome_disclaimer_text || '',
           });
         }
       } catch (error) {
@@ -98,8 +92,6 @@ export default function GeneralSettings() {
           llm_endpoint: settings.llmEndpoint,
           llm_system_prompt: settings.llmSystemPrompt,
           llm_disclaimer_text: settings.llmDisclaimerText,
-          welcome_disclaimer_enabled: settings.welcomeDisclaimerEnabled,
-          welcome_disclaimer_text: settings.welcomeDisclaimerText,
         }),
       });
       if (response.ok) {
@@ -300,53 +292,6 @@ export default function GeneralSettings() {
               />
               <p className="text-sm text-muted-foreground">
                 {t('settings:general.llm.disclaimer.help', 'Disclaimer shown to users when using AI features.')}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Welcome Disclaimer (first-open dialog) */}
-        <div>
-          <h3 className="text-lg font-medium mb-3">
-            {t('settings:general.welcomeDisclaimer.title', 'Welcome Disclaimer')}
-          </h3>
-
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="welcomeDisclaimerEnabled"
-                checked={settings.welcomeDisclaimerEnabled}
-                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, welcomeDisclaimerEnabled: checked }))}
-                disabled={!hasWriteAccess || isLoading}
-              />
-              <Label htmlFor="welcomeDisclaimerEnabled">
-                {t('settings:general.welcomeDisclaimer.enabled.label', 'Enable welcome disclaimer for all users')}
-              </Label>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="welcomeDisclaimerText">
-                {t('settings:general.welcomeDisclaimer.text.label', 'Disclaimer Text')}
-              </Label>
-              <Textarea
-                id="welcomeDisclaimerText"
-                name="welcomeDisclaimerText"
-                value={settings.welcomeDisclaimerText}
-                onChange={handleChange}
-                placeholder={t(
-                  'settings:general.welcomeDisclaimer.text.placeholder',
-                  '## Welcome\n\nBy continuing, you agree to ...'
-                )}
-                disabled={!hasWriteAccess || isLoading || !settings.welcomeDisclaimerEnabled}
-                rows={6}
-              />
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  'settings:general.welcomeDisclaimer.text.help',
-                  'Shown to every user on app open until accepted. Changing the text re-prompts everyone. Plain markdown supported.'
-                )}
               </p>
             </div>
           </div>

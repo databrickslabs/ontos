@@ -39,6 +39,38 @@ export default function OntologyHomeView() {
   const [hiddenRoots, setHiddenRoots] = useState<Set<string>>(new Set());
   const [collections, setCollections] = useState<KnowledgeCollection[]>([]);
 
+  // Build a flat suffix → editable map from the (hierarchical) collection tree.
+  // Concepts carry source_context with the prefix stripped (e.g. "databricks_ontology"),
+  // while collections expose the full IRI ("urn:taxonomy:databricks_ontology"). We
+  // index on the bare suffix so a concept's source_context resolves cleanly.
+  const collectionEditableBySuffix = useMemo(() => {
+    const map = new Map<string, boolean>();
+    const walk = (cs: KnowledgeCollection[]) => {
+      for (const c of cs) {
+        const suffix = c.iri.includes(':') ? c.iri.split(':').pop() ?? c.iri : c.iri;
+        map.set(suffix, c.is_editable !== false);
+        if (c.child_collections?.length) walk(c.child_collections);
+      }
+    };
+    walk(collections);
+    return map;
+  }, [collections]);
+
+  // True when the concept's source collection is editable. Concepts from imported
+  // taxonomies (urn:taxonomy:* with is_editable=false on the backend) return false,
+  // and the right-click menu / detail panel hide their Edit/Delete/Create-Link
+  // actions accordingly. Mirrors the backend's update_concept guard at
+  // semantic_models_manager.py:3208.
+  const isConceptEditable = useCallback(
+    (concept?: OntologyConcept | null) => {
+      if (!concept?.source_context) return true;
+      const editable = collectionEditableBySuffix.get(concept.source_context);
+      // Unknown source → fall through to canWrite gating; backend is the final guard.
+      return editable !== false;
+    },
+    [collectionEditableBySuffix],
+  );
+
   // Concept detail panel state
   const [selectedConceptIri, setSelectedConceptIri] = useState<string | null>(null);
   const [selectedConceptData, setSelectedConceptData] = useState<OntologyConcept | null>(null);
@@ -420,6 +452,8 @@ export default function OntologyHomeView() {
             hiddenRoots={hiddenRoots}
             onToggleRoot={handleToggleRoot}
             onNodeClick={handleNodeClick}
+            // Right-click menu still opens for read-only (internal) concepts; the
+            // menu itself omits Edit/Delete/Create Link based on isConceptEditable.
             onNodeRightClick={canWrite ? handleNodeRightClick : undefined}
             onBackgroundRightClick={canWrite ? handleBackgroundRightClick : undefined}
             linkDrawSource={linkDrawSource?.iri ?? null}
@@ -431,7 +465,9 @@ export default function OntologyHomeView() {
         </div>
       )}
 
-      {/* Graph context menu (right-click on node or background) */}
+      {/* Graph context menu (right-click on node or background).
+          Edit/Delete/Create-Link are also gated on the concept's collection being
+          editable (review point #2 — internal taxonomies stay read-only). */}
       <GraphContextMenu
         position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
         concept={contextMenu?.concept}
@@ -440,20 +476,22 @@ export default function OntologyHomeView() {
           setSelectedConceptIri(concept.iri);
           setSelectedConceptData(concept);
         }}
-        onEdit={canWrite ? handleEditConcept : undefined}
-        onDelete={canWrite ? handleDeleteConcept : undefined}
-        onCreateLink={canWrite ? handleStartLinkDraw : undefined}
+        onEdit={canWrite && isConceptEditable(contextMenu?.concept) ? handleEditConcept : undefined}
+        onDelete={canWrite && isConceptEditable(contextMenu?.concept) ? handleDeleteConcept : undefined}
+        onCreateLink={canWrite && isConceptEditable(contextMenu?.concept) ? handleStartLinkDraw : undefined}
         onCreateConcept={canWrite ? () => { setEditorConcept(null); setEditorOpen(true); } : undefined}
       />
 
-      {/* Concept detail side panel (slides in from right on node click) */}
+      {/* Concept detail side panel (slides in from right on node click).
+          Detail view always available; Edit/Delete only when the concept's
+          collection is editable. */}
       <ConceptDetailPanel
         conceptIri={selectedConceptIri}
         conceptData={selectedConceptData}
         onClose={handleClosePanel}
         onNavigate={(iri) => { setSelectedConceptIri(iri); setSelectedConceptData(null); }}
-        onEdit={canWrite ? handleEditConcept : undefined}
-        onDelete={canWrite ? handleDeleteConcept : undefined}
+        onEdit={canWrite && isConceptEditable(selectedConceptData) ? handleEditConcept : undefined}
+        onDelete={canWrite && isConceptEditable(selectedConceptData) ? handleDeleteConcept : undefined}
       />
 
       {/* Concept editor dialog (create/edit) */}

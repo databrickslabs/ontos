@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ZoomIn, ZoomOut, Maximize, RotateCcw, Expand, Group, Ungroup, ChevronDown, Tag } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, RotateCcw, Expand, Group, Ungroup, ChevronDown, Tag, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -235,6 +235,41 @@ interface GraphData {
   rootColors: Map<string, string>;
   getRootDescendants: (rootIri: string) => Set<string>;
 }
+
+// Banner shown over the graph canvas while in link-draw mode. Rendered inside
+// each cy container's relative wrapper so it sits over the canvas (not the
+// toolbar) and works in both the main view and the fullscreen Dialog.
+const LinkDrawBanner: React.FC<{
+  source: OntologyConcept | null | undefined;
+  selectedLanguage: string;
+  onCancel?: () => void;
+}> = ({ source, selectedLanguage, onCancel }) => {
+  if (!source) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-md border border-pink-300 bg-pink-50 px-4 py-2 text-sm text-pink-900 shadow-sm"
+    >
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pink-400 opacity-75" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-pink-500" />
+      </span>
+      <span>
+        Click a target node to create link from{' '}
+        <strong>{resolveLabel(source, selectedLanguage)}</strong>
+      </span>
+      <button
+        type="button"
+        onClick={onCancel}
+        aria-label="Cancel link draw"
+        className="ml-1 rounded p-0.5 text-pink-700 hover:bg-pink-100 hover:text-pink-900"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+};
 
 export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   concepts,
@@ -658,83 +693,91 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
     }
   }, []);
 
-  // Wire up event handlers
-  useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy) return;
+  // Editing-handler props change frequently; keep a ref so wireCyHandlers stays
+  // referentially stable and we don't have to re-bind listeners on every render.
+  const handlersRef = useRef({
+    onNodeClick,
+    onNodeRightClick,
+    onBackgroundRightClick,
+    linkDrawSource,
+    onLinkDraw,
+    onLinkDrawCancel,
+    concepts,
+  });
+  handlersRef.current = {
+    onNodeClick,
+    onNodeRightClick,
+    onBackgroundRightClick,
+    linkDrawSource,
+    onLinkDraw,
+    onLinkDrawCancel,
+    concepts,
+  };
 
-    // Clear existing handlers
+  // Wire all event handlers (click, right-click, hover) onto a Cytoscape Core.
+  // Called from both the main and fullscreen cy mount callbacks so editing UX
+  // works in either view.
+  const wireCyHandlers = useCallback((cy: Core) => {
     cy.removeAllListeners();
 
-    // Node click handler — branches on link-draw mode
+    // Node click — branches on link-draw mode
     cy.on('tap', 'node.concept-node', (evt) => {
-      const nodeData = evt.target.data();
-      const concept = nodeData.conceptData as OntologyConcept | undefined;
+      const concept = evt.target.data('conceptData') as OntologyConcept | undefined;
       if (!concept) return;
-      if (linkDrawSource && onLinkDraw) {
-        const source = concepts.find((c) => c.iri === linkDrawSource);
+      const h = handlersRef.current;
+      if (h.linkDrawSource && h.onLinkDraw) {
+        const source = h.concepts.find((c) => c.iri === h.linkDrawSource);
         if (source && source.iri !== concept.iri) {
-          onLinkDraw(source, concept);
+          h.onLinkDraw(source, concept);
           return;
         }
       }
-      onNodeClick(concept);
+      h.onNodeClick(concept);
     });
 
-    // Right-click on a node → onNodeRightClick
+    // Right-click on a node → context menu
     cy.on('cxttap', 'node.concept-node', (evt) => {
       const concept = evt.target.data('conceptData') as OntologyConcept | undefined;
-      if (concept && onNodeRightClick) {
-        onNodeRightClick(concept, evt.originalEvent as MouseEvent);
+      const h = handlersRef.current;
+      if (concept && h.onNodeRightClick) {
+        h.onNodeRightClick(concept, evt.originalEvent as MouseEvent);
       }
     });
 
-    // Right-click on empty canvas → onBackgroundRightClick
+    // Right-click on empty canvas → "Create New Concept" menu
     cy.on('cxttap', (evt) => {
-      if (evt.target === cy && onBackgroundRightClick) {
-        onBackgroundRightClick(evt.originalEvent as MouseEvent);
+      const h = handlersRef.current;
+      if (evt.target === cy && h.onBackgroundRightClick) {
+        h.onBackgroundRightClick(evt.originalEvent as MouseEvent);
       }
     });
 
-    // Background click cancels link-draw mode
+    // Background tap cancels link-draw mode
     cy.on('tap', (evt) => {
-      if (evt.target === cy && linkDrawSource && onLinkDrawCancel) {
-        onLinkDrawCancel();
+      const h = handlersRef.current;
+      if (evt.target === cy && h.linkDrawSource && h.onLinkDrawCancel) {
+        h.onLinkDrawCancel();
       }
     });
 
-    // Hover handlers
-    cy.on('mouseover', 'node.concept-node', (evt) => {
-      evt.target.addClass('hover');
-    });
+    // Hover handlers (visual feedback only)
+    cy.on('mouseover', 'node.concept-node', (evt) => evt.target.addClass('hover'));
+    cy.on('mouseout', 'node.concept-node', (evt) => evt.target.removeClass('hover'));
+    cy.on('mouseover', 'edge', (evt) => evt.target.addClass('hover'));
+    cy.on('mouseout', 'edge', (evt) => evt.target.removeClass('hover'));
+  }, []);
 
-    cy.on('mouseout', 'node.concept-node', (evt) => {
-      evt.target.removeClass('hover');
-    });
-
-    cy.on('mouseover', 'edge', (evt) => {
-      evt.target.addClass('hover');
-    });
-
-    cy.on('mouseout', 'edge', (evt) => {
-      evt.target.removeClass('hover');
-    });
-
-    // Cleanup
-    return () => {
-      cy.removeAllListeners();
-    };
-  }, [onNodeClick, onNodeRightClick, onBackgroundRightClick, linkDrawSource, onLinkDraw, onLinkDrawCancel, concepts]);
-
-  // Apply visual treatment to the link-draw source node (pink dashed ring)
+  // Apply .link-draw-source class to BOTH cy instances when in link-draw mode,
+  // so the pink dashed ring shows in whichever view (main or fullscreen) is active.
   useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy) return;
-    cy.nodes('.link-draw-source').removeClass('link-draw-source');
-    if (linkDrawSource) {
-      cy.getElementById(linkDrawSource).addClass('link-draw-source');
+    for (const cy of [cyRef.current, fullscreenCyRef.current]) {
+      if (!cy) continue;
+      cy.nodes('.link-draw-source').removeClass('link-draw-source');
+      if (linkDrawSource) {
+        cy.getElementById(linkDrawSource).addClass('link-draw-source');
+      }
     }
-  }, [linkDrawSource]);
+  }, [linkDrawSource, isFullscreen]);
 
   // Escape key cancels link-draw mode
   useEffect(() => {
@@ -895,10 +938,16 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
 
       {/* Graph */}
       <div className="flex-1 relative" style={{ minHeight: 0 }}>
+        <LinkDrawBanner
+          source={linkDrawSource ? concepts.find((c) => c.iri === linkDrawSource) : null}
+          selectedLanguage={selectedLanguage}
+          onCancel={onLinkDrawCancel}
+        />
         <CytoscapeComponent
           key={`graph-${showDomainBoxes}`}
           cy={(cy: Core) => {
             cyRef.current = cy;
+            wireCyHandlers(cy);
             // Run initial layout only once after mounting
             if (!initialLayoutDoneRef.current) {
               initialLayoutDoneRef.current = true;
@@ -989,11 +1038,21 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
 
           {/* Fullscreen Graph */}
           <div className="flex-1 relative">
+            <LinkDrawBanner
+              source={linkDrawSource ? concepts.find((c) => c.iri === linkDrawSource) : null}
+              selectedLanguage={selectedLanguage}
+              onCancel={onLinkDrawCancel}
+            />
             {isFullscreen && (
               <CytoscapeComponent
                 key={`fullscreen-graph-${showDomainBoxes}`}
                 cy={(cy: Core) => {
                   fullscreenCyRef.current = cy;
+                  wireCyHandlers(cy);
+                  // Re-apply link-draw source highlight to the new cy if active
+                  if (linkDrawSource) {
+                    cy.getElementById(linkDrawSource).addClass('link-draw-source');
+                  }
                   // Run layout only once after mounting in fullscreen
                   if (!fullscreenInitialLayoutDoneRef.current) {
                     fullscreenInitialLayoutDoneRef.current = true;

@@ -5,11 +5,12 @@
  * Navigating between concepts is supported via clickable relationship pills.
  */
 import React, { useEffect, useState, useCallback } from 'react';
-import { X, ExternalLink, Loader2, AlertCircle, Pencil, Trash2 } from 'lucide-react';
+import { ExternalLink, Loader2, AlertCircle, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import type { OntologyConcept } from '@/types/ontology';
 
 // Predicate → accent color for relationship section left borders
@@ -21,12 +22,24 @@ const PREDICATE_ACCENT: Record<string, string> = {
 };
 
 // W3C concept type → colored badge style
-const W3C_TYPE_STYLE: Record<string, { bg: string; border: string; text: string }> = {
-  scheme:   { bg: 'rgba(139,92,246,0.12)', border: 'rgba(139,92,246,0.35)', text: '#8b5cf6' },
-  concept:  { bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.35)',  text: '#3b82f6' },
-  class:    { bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.35)',  text: '#10b981' },
-  property: { bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.35)',  text: '#f59e0b' },
-  term:     { bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.35)',  text: '#3b82f6' },
+// W3C concept-type → Tailwind utility classes for the type badge (background +
+// border + text). Using palette tokens (instead of raw rgba/hex) so dark-mode
+// theme switching and color-token edits flow through automatically.
+const W3C_TYPE_BADGE_CLASS: Record<string, string> = {
+  scheme:   'bg-violet-500/10 border-violet-500/30 text-violet-500',
+  concept:  'bg-blue-500/10 border-blue-500/30 text-blue-500',
+  class:    'bg-emerald-500/10 border-emerald-500/30 text-emerald-500',
+  property: 'bg-amber-500/10 border-amber-500/30 text-amber-500',
+  term:     'bg-blue-500/10 border-blue-500/30 text-blue-500',
+};
+
+// Matching solid colors for the 3px stripe at the panel top.
+const W3C_TYPE_STRIPE_CLASS: Record<string, string> = {
+  scheme:   'bg-violet-500',
+  concept:  'bg-blue-500',
+  class:    'bg-emerald-500',
+  property: 'bg-amber-500',
+  term:     'bg-blue-500',
 };
 
 const W3C_TYPE_LABEL: Record<string, string> = {
@@ -150,74 +163,58 @@ export const ConceptDetailPanel: React.FC<ConceptDetailPanelProps> = ({
     }
   }, [onNavigate]);
 
-  if (!conceptIri) return null;
-
   return (
-    <>
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 z-[100] bg-black/20 dark:bg-black/40"
-        onClick={onClose}
-        data-testid="concept-panel-overlay"
-      />
-
-      {/* Panel */}
-      <div
-        className="fixed top-0 right-0 bottom-0 w-[380px] bg-popover shadow-xl z-[101] flex flex-col border-l"
+    <Sheet open={!!conceptIri} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        side="right"
+        className="w-[380px] sm:max-w-[420px] p-0 flex flex-col gap-0"
         data-testid="concept-detail-panel"
       >
         {/* Colored type stripe */}
         {concept && (
           <div
-            className="h-[3px] flex-shrink-0"
-            style={{ backgroundColor: (W3C_TYPE_STYLE[concept.concept_type] || W3C_TYPE_STYLE.concept).text }}
+            className={`h-[3px] flex-shrink-0 ${W3C_TYPE_STRIPE_CLASS[concept.concept_type] || W3C_TYPE_STRIPE_CLASS.concept}`}
           />
         )}
 
-        {/* Header */}
-        <div className="px-6 pt-5 pb-4 border-b sticky top-0 bg-popover z-10">
-          <div className="absolute top-4 right-4 flex items-center gap-1">
-            {onEdit && concept && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => onEdit(concept)}
-                aria-label="Edit concept"
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            )}
-            {onDelete && concept && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:text-destructive"
-                onClick={() => onDelete(concept)}
-                aria-label="Delete concept"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={onClose}
-              aria-label="Close panel"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+        {/* Header. Edit/Delete sit at right-12 to leave the standard right-4
+            slot free for Sheet's built-in close (X) button — keeps interaction
+            patterns consistent with the rest of the app's slide-in panels. */}
+        <div className="px-6 pt-5 pb-4 border-b sticky top-0 bg-background z-10">
+          {(onEdit || onDelete) && concept && (
+            <div className="absolute top-4 right-12 flex items-center gap-1">
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => onEdit(concept)}
+                  aria-label="Edit concept"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => onDelete(concept)}
+                  aria-label="Delete concept"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          )}
 
           {concept ? (() => {
-            const ts = W3C_TYPE_STYLE[concept.concept_type] || W3C_TYPE_STYLE.concept;
+            const badgeClasses = W3C_TYPE_BADGE_CLASS[concept.concept_type] || W3C_TYPE_BADGE_CLASS.concept;
             return (
               <>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span
-                    className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-medium border"
-                    style={{ backgroundColor: ts.bg, borderColor: ts.border, color: ts.text }}
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${badgeClasses}`}
                   >
                     {W3C_TYPE_LABEL[concept.concept_type] || concept.concept_type}
                   </span>
@@ -397,8 +394,8 @@ export const ConceptDetailPanel: React.FC<ConceptDetailPanelProps> = ({
             )}
           </div>
         </ScrollArea>
-      </div>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 };
 

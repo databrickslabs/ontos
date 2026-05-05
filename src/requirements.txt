@@ -606,6 +606,9 @@ databricks-sqlalchemy==2.0.9 \
     --hash=sha256:9975830df92541485c0560998ee90f1ac0f76d9d3de4940582e951c09b49b9ed \
     --hash=sha256:b2569084942591b91eff749ca3f5cdb101845245d36a665d70fc8ad12005dab9
     # via -r src/backend/requirements.in
+defusedxml==0.7.1 \
+    --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
+    # via fpdf2
 distro==1.9.0 \
     --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
     --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
@@ -703,16 +706,15 @@ fonttools==4.62.1 \
     --hash=sha256:ee91628c08e76f77b533d65feb3fbe6d9dad699f95be51cf0d022db94089cdc4 \
     --hash=sha256:ef46db46c9447103b8f3ff91e8ba009d5fe181b1920a83757a5762551e32bb68 \
     --hash=sha256:fa1d16210b6b10a826d71bed68dd9ec24a9e218d5a5e2797f37c573e7ec215ca
-    # via matplotlib
-defusedxml==0.7.1 \
-    --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
-    # via fpdf2
+    # via
+    #   fpdf2
+    #   matplotlib
 fpdf2==2.8.7 \
     --hash=sha256:d391fc508a3ce02fc43a577c830cda4fe6f37646f2d143d489839940932fbc19 \
     --hash=sha256:7060ccee5a9c7ab0a271fb765a36a23639f83ef8996c34e3d46af0a17ede57f9
     # via
-    #   -r backend/requirements.in
-    #   -r requirements.in
+    #   -r src/backend/requirements.in
+    #   -r src/requirements.in
 frozenlist==1.8.0 \
     --hash=sha256:0325024fe97f94c41c08872db482cf8ac4800d80e79222c6b0b7b162d5b13686 \
     --hash=sha256:032efa2674356903cd0261c4317a561a6850f3ac864a63fc1583147fb05a79b0 \
@@ -1997,6 +1999,7 @@ pillow==12.2.0 \
     --hash=sha256:fb043ee2f06b41473269765c2feae53fc2e2fbf96e5e22ca94fb5ad677856f06 \
     --hash=sha256:fc3d34d4a8fbec3e88a79b92e5465e0f9b842b628675850d860b8bd300b159f5
     # via
+    #   fpdf2
     #   matplotlib
     #   reportlab
 pip-licenses==5.5.5 \

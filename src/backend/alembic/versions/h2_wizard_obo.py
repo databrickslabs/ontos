@@ -1,4 +1,4 @@
-"""Daimler go-live: thread on_behalf_of through wizard auto-subscribe.
+"""Thread on_behalf_of through wizard auto-subscribe.
 
 Adds:
 - ``agreement_wizard_sessions.on_behalf_of_type`` (VARCHAR(50))
@@ -10,12 +10,12 @@ forward it to ``data_products_manager.subscribe()``. Without this, end-users
 going through the approval wizard ended up with subscriptions where
 ``on_behalf_of_type=NULL`` even though they selected a group up front.
 
-Daimler CSV #486363 — gap-fill on top of ``h1_daimler_subscribe_on_behalf``.
+ — gap-fill on top of ``h1_subscribe_on_behalf``.
 
 Idempotent (``ADD COLUMN IF NOT EXISTS``) so partial deploys are safe.
 
 Revision ID: h2_wizard_obo
-Revises: h1_daimler_subscribe_on_behalf
+Revises: h1_subscribe_on_behalf
 Create Date: 2026-05-01
 """
 from typing import Sequence, Union
@@ -24,7 +24,7 @@ from alembic import op
 
 
 revision: str = "h2_wizard_obo"
-down_revision: Union[str, Sequence[str], None] = "h1_daimler_subscribe_on_behalf"
+down_revision: Union[str, Sequence[str], None] = "h1_subscribe_on_behalf"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

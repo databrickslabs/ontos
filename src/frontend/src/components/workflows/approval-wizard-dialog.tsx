@@ -77,7 +77,7 @@ export interface ApprovalWizardDialogProps {
   /** When set (e.g. 'subscribe'), session is created with completion_action; backend runs that after wizard complete. */
   completionAction?: string;
   /**
-   * Daimler #486363 gap-fill: principal the requester is acting on behalf of.
+   * principal the requester is acting on behalf of.
    * Threaded through to the session create call so the backend persists it on
    * the session row and forwards it to data_products_manager.subscribe() when
    * completion_action='subscribe' fires the auto-subscribe in
@@ -135,7 +135,7 @@ export default function ApprovalWizardDialog({
   /** Co-signers: current input value. */
   const [coSignerInput, setCoSignerInput] = useState('');
   /**
-   * on_behalf_of step (Daimler #486363 in-wizard capture):
+   * on_behalf_of step ( in-wizard capture):
    *   - 'self'     → submits {type:'user', value:<requester email>}
    *   - 'my_group' → submits {type:'group', value:<picked group>}
    *   - 'other'    → submits {type:<group|service_principal>, value:<free text>}
@@ -214,7 +214,7 @@ export default function ApprovalWizardDialog({
           setStepNames(visualSteps.map((s) => s.name));
           setCurrentStepIndex(0);
         }
-        // Daimler #486363 gap-fill: thread on_behalf_of through to the session
+        // thread on_behalf_of through to the session
         // create call so _complete_session's auto-subscribe persists OBO on
         // the resulting subscription record.
         const body: Record<string, unknown> = {

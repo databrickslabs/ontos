@@ -40,8 +40,8 @@ logger = get_logger(__name__)
 def _render_template_value(value: Any) -> str:
     """Render a substitution value. Lists/dicts are JSON-serialized so webhook
     body templates can interpolate `${entity.consumer_groups}` and receive a
-    valid JSON array (Daimler go-live: piping consumer_groups + on_behalf_of
-    into the Treasure runbook webhook body)."""
+    valid JSON array (piping consumer_groups + on_behalf_of
+    into the external runbook webhook body)."""
     if value is None:
         return ''
     if isinstance(value, (list, dict)):
@@ -152,7 +152,7 @@ class StepContext:
     workflow_id: str
     workflow_name: str
     step_results: Dict[str, Any]  # Results from previous steps
-    # Daimler go-live: subscribe-on-behalf-of-group/SP. Resolved via
+    # subscribe-on-behalf-of-group/SP. Resolved via
     # ${context.on_behalf_of.value|.type|.display} in webhook bodies +
     # grant_permissions principal_variable. None when subscribing for self.
     on_behalf_of: Optional[Dict[str, str]] = None
@@ -1866,7 +1866,7 @@ class GrantPermissionsStepHandler(StepHandler):
         Supported namespaces:
           step_results.<step_id>.<field>[.<sub>...]
           context.<attr>[.<sub>...]   e.g. context.on_behalf_of.value
-                                            (Daimler subscribe-on-behalf)
+                                            
           entity.<field>[.<sub>...]
         Bare paths default to step_results for backward compatibility with
         existing GrantPermissions configs.
@@ -2004,7 +2004,7 @@ class WorkflowExecutor:
             )
             db_execution = workflow_execution_repo.create(self._db, execution_create)
         
-        # Daimler: pull on_behalf_of off the trigger entity_data if the caller
+        # : pull on_behalf_of off the trigger entity_data if the caller
         # supplied it (e.g. subscribe-on-behalf-of-group). Falls back to None
         # for self-subscribe / non-subscribe triggers.
         on_behalf_of = None
@@ -2209,7 +2209,7 @@ class WorkflowExecutor:
         if trigger_context and trigger_context.entity_data:
             entity_data = trigger_context.entity_data
         
-        # Restore on_behalf_of from persisted entity_data (Daimler subscribe).
+        # Restore on_behalf_of from persisted entity_data (subscribe).
         on_behalf_of = None
         if isinstance(entity_data, dict):
             obo = entity_data.get('on_behalf_of')

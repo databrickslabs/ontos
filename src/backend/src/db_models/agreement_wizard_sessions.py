@@ -21,7 +21,7 @@ class AgreementWizardSessionDb(Base):
     entity_type = Column(String(100), nullable=False, index=True)
     entity_id = Column(String(255), nullable=False, index=True)
     completion_action = Column(String(50), nullable=True)  # e.g. 'subscribe' — run after wizard complete
-    # Daimler #486363: when completion_action='subscribe', the auto-subscribe
+    # when completion_action='subscribe', the auto-subscribe
     # at _complete_session must use the same on_behalf_of the user supplied at
     # the start of the wizard. We persist the principal here so the session is
     # the single source of truth across the wizard's multi-request lifecycle.

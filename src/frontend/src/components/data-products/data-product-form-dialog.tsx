@@ -188,7 +188,7 @@ const createDefaultProduct = (): DataProduct => {
     links: {},
     custom: {},
     tags: [],
-    consumer_groups: [], // Daimler #486448
+    consumer_groups: [], // 
     // updated_at will be set on submit
     updated_at: '' // Placeholder, will be replaced
   };
@@ -1233,7 +1233,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                             </CardContent>
                           </Card>
 
-                          {/* Consumer Groups Card (Daimler #486448) */}
+                          {/* Consumer Groups Card () */}
                           <Card>
                             <CardHeader>
                               <CardTitle>Consumer Groups</CardTitle>

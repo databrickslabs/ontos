@@ -5,7 +5,7 @@ Regression target: both build_agreement_pdf (line ~115) and
 build_agreement_html (line ~258) previously rendered each co-signer entry via
 f-string interpolation / str() on the dict, producing literal
 ``{'type': 'user', 'value': ...}`` text in the persisted artifact (caught
-during inspection of the Daimler demo PDFs in the Volume).
+during inspection of the subscribe-on-behalf demo PDFs in the Volume).
 
 These tests exercise the new ``_format_cosigner`` helper directly plus a
 PDF/HTML smoke test confirming the readable text actually lands in the
@@ -91,7 +91,7 @@ def test_build_agreement_pdf_does_not_leak_dict_repr_for_cosigners():
             "step_id": "cs",
             "payload": {
                 "co_signers": [
-                    {"type": "user", "value": "thomas.mueller@daimler.example",
+                    {"type": "user", "value": "thomas.mueller@.example",
                      "display": "Thomas Mueller"}
                 ]
             },
@@ -117,7 +117,7 @@ def test_build_agreement_pdf_does_not_leak_dict_repr_for_cosigners():
 
     with patch.object(FPDF, "cell", spy_cell):
         out = build_agreement_pdf(
-            workflow_name="Daimler Demo",
+            workflow_name="Demo",
             entity_type="data_product",
             entity_id="entity-1",
             step_results=step_results,
@@ -134,7 +134,7 @@ def test_build_agreement_pdf_does_not_leak_dict_repr_for_cosigners():
         f"co-signer dict-repr leaked into a PDF cell: {joined!r}"
     )
     # Formatted readable text is what reaches the PDF.
-    assert "Thomas Mueller (thomas.mueller@daimler.example)" in joined
+    assert "Thomas Mueller (thomas.mueller@.example)" in joined
 
 
 def test_build_agreement_html_renders_cosigner_display_text():

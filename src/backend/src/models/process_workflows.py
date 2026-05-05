@@ -120,7 +120,7 @@ class StepType(str, Enum):
     PERSIST_AGREEMENT = "persist_agreement"
     DELIVER = "deliver"
     GRANT_PERMISSIONS = "grant_permissions"  # Process workflow: grant UC permissions via SP workspace client
-    ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start (Daimler #486363)
+    ON_BEHALF_OF = "on_behalf_of"  # Approval workflow: capture self/group/SP principal at wizard start ()
 
 
 class ExecutionStatus(str, Enum):
@@ -270,7 +270,7 @@ class OnBehalfOfStepConfig(BaseModel):
     on-behalf-of picker — placing the choice inside the wizard means it lands
     in ``step_results`` (which the workflow snapshot + agreement PDF already
     immortalize) and the session columns ``on_behalf_of_type`` /
-    ``on_behalf_of_value`` (Daimler #486363) get written exactly the same way
+    ``on_behalf_of_value`` () get written exactly the same way
     a direct ``/subscribe`` call writes them.
     """
     title: Optional[str] = Field("Who are you requesting access for?", description="Step title shown in wizard")

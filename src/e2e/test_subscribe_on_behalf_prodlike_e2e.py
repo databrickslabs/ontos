@@ -1,8 +1,8 @@
 """
-Prod-like E2E coverage for the Daimler go-live features (PR #315).
+Prod-like E2E coverage for the subscribe-on-behalf features (PR #315).
 
 Eight scenarios run sequentially against the deployed Ontos app and exercise
-the full Daimler CUJ chain with REAL workspace groups (created by this script
+the full CUJ chain with REAL workspace groups (created by this script
 via SCIM) and REAL Databricks employee emails as co-signers:
 
   S1 — subscribe on_behalf_of group (member)
@@ -29,7 +29,7 @@ Auth:
 
 Usage:
     cd ontos
-    python3 src/e2e/test_daimler_prodlike_e2e.py
+    python3 src/e2e/test__prodlike_e2e.py
 
 Cleanup policy:
     - Created workspace groups (ontos-e2e-finance-team /
@@ -77,8 +77,8 @@ COSIGNER_MANISHA = {"type": "user", "value": "manisha.v@databricks.com", "displa
 REQUESTER_EMAIL = os.environ.get("ONTOS_E2E_REQUESTER_EMAIL", "mikhail.konchits@databricks.com")
 
 # Volume paths (the deployed app's app_files volume).
-VOLUME_DAIMLER = (
-    "/Volumes/mkonchits_account_workspace_catalog/app_ontos/app_files/daimler_demo"
+VOLUME_OBO_DEMO = (
+    "/Volumes/mkonchits_account_workspace_catalog/app_ontos/app_files/_demo"
 )
 VOLUME_PATH_SMART_SKIP = (
     "/Volumes/mkonchits_account_workspace_catalog/app_ontos/app_files/agreements/"
@@ -91,7 +91,7 @@ WEBHOOK_URL = os.environ.get(
 )
 
 RUN_TS = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-RUN_TAG = f"Daimler-ProdE2E-{RUN_TS}-{uuid.uuid4().hex[:6]}"
+RUN_TAG = f"OBOProdE2E-{RUN_TS}-{uuid.uuid4().hex[:6]}"
 
 GROUP_FINANCE = "ontos-e2e-finance-team"
 GROUP_ENGINEERING = "ontos-e2e-engineering-team"
@@ -177,7 +177,7 @@ class ScenarioResults:
 
     def summary(self) -> int:
         print("\n" + "=" * 78)
-        print("SUMMARY — Daimler prod-like E2E (PR #315)")
+        print("SUMMARY — prod-like E2E (PR #315)")
         print("=" * 78)
         total = len(self.LABELS)
         passed_count = sum(1 for k in self.LABELS if self.results.get(k, {}).get("passed"))
@@ -296,11 +296,11 @@ def create_data_product(
         "status": "active",
         "name": name,
         "version": "1.0.0",
-        "domain": "e2e-daimler",
+        "domain": "e2e-",
         "tenant": "e2e-org",
         "consumer_groups": consumer_groups,
         "description": {
-            "purpose": "Daimler prod-like E2E target",
+            "purpose": "prod-like E2E target",
             "limitations": "test-only — auto-cleaned",
             "usage": "subscribed in test",
         },
@@ -514,7 +514,7 @@ def run_s3(
 def build_s4_approval_workflow(name: str) -> Dict[str, Any]:
     return {
         "name": name,
-        "description": "Daimler prod-like S4 approval (full chain)",
+        "description": "prod-like S4 approval (full chain)",
         "workflow_type": "approval",
         "trigger": {"type": "for_subscribe", "entity_types": ["data_product"]},
         "is_active": True,
@@ -592,7 +592,7 @@ def build_s4_approval_workflow(name: str) -> Dict[str, Any]:
                 "step_type": "generate_pdf",
                 "config": {
                     "storage": "volume",
-                    "volume_path": VOLUME_DAIMLER,
+                    "volume_path": VOLUME_OBO_DEMO,
                     "include_step_results": True,
                 },
                 "on_pass": "deliver",
@@ -621,7 +621,7 @@ def build_s4_approval_workflow(name: str) -> Dict[str, Any]:
 
 
 def build_s4_process_workflow(name: str, marker: str) -> Dict[str, Any]:
-    """on_subscribe webhook with all the Daimler vars + a unique marker."""
+    """on_subscribe webhook with all the vars + a unique marker."""
     body_template = (
         "{"
         f'"marker": "{marker}", '
@@ -636,7 +636,7 @@ def build_s4_process_workflow(name: str, marker: str) -> Dict[str, Any]:
     )
     return {
         "name": name,
-        "description": "Daimler prod-like S4 process (on_subscribe webhook)",
+        "description": "prod-like S4 process (on_subscribe webhook)",
         "workflow_type": "process",
         "trigger": {"type": "on_subscribe", "entity_types": ["data_product"]},
         "is_active": True,
@@ -677,8 +677,8 @@ def run_s4(
     """Full chain. Returns context that S5/S6 can reuse (agreement, PDF bytes,
     co-signer payload). On failure, returns None and S5/S6 will record FAIL
     referencing this scenario."""
-    print("\n--- S4: approval -> process workflow chain (full Daimler chain) ---")
-    marker = f"DAIMLER-S4-{uuid.uuid4().hex[:10]}"
+    print("\n--- S4: approval -> process workflow chain (full chain) ---")
+    marker = f"OBO-S4-{uuid.uuid4().hex[:10]}"
     try:
         prod = _create_data_product_with_retry(
             s, name=f"{RUN_TAG}-S4",
@@ -838,7 +838,7 @@ def run_s4(
         # configured volume_path doesn't end in /agreements, the file lands
         # at <volume_path>/agreements/<agreement_id>.pdf.
         # ---------------------------------------------------------------
-        expected_pdf_path = f"{VOLUME_DAIMLER}/agreements/{agreement_id}.pdf"
+        expected_pdf_path = f"{VOLUME_OBO_DEMO}/agreements/{agreement_id}.pdf"
         if agreement.get("pdf_storage_path") != expected_pdf_path:
             # Not always a hard fail — backend may store path differently. Log
             # but verify presence of the actual file too.
@@ -950,7 +950,7 @@ def run_s4(
         # Debug: dump the full result_data to /tmp on assertion failure so we
         # can re-run a haystack search locally instead of guessing.
         try:
-            with open("/tmp/daimler_e2e_s4_rd.json", "w") as f:
+            with open("/tmp/e2e_s4_debug.json", "w") as f:
                 json.dump(rd, f, indent=2, default=str)
         except Exception:
             pass
@@ -1408,7 +1408,7 @@ def run_s8(
 # ---------------------------------------------------------------------------
 def main() -> int:
     started_at = time.time()
-    print(f"\n=== Daimler Prod-like E2E ({RUN_TAG}) ===")
+    print(f"\n=== Prod-like E2E ({RUN_TAG}) ===")
     print(f"Target: {BASE}")
     print(f"Auth profile: {DATABRICKS_PROFILE}")
     print(f"Webhook URL: {WEBHOOK_URL}\n")

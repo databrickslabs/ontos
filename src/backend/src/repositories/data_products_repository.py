@@ -56,7 +56,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
 
         try:
             # 1. Create core DataProduct
-            # Daimler #486448: persist consumer_groups as JSON-encoded TEXT
+            # persist consumer_groups as JSON-encoded TEXT
             # for portability across SQLite/Postgres. None / empty list -> None.
             cg_value = getattr(obj_in, 'consumer_groups', None)
             cg_json: Optional[str] = json.dumps(cg_value) if cg_value else None
@@ -259,7 +259,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.project_id = update_data['project_id']
             if 'max_level_inheritance' in update_data:
                 db_obj.max_level_inheritance = update_data['max_level_inheritance']
-            # Daimler #486448: consumer_groups
+            # consumer_groups
             if 'consumer_groups' in update_data:
                 cg_value = update_data['consumer_groups']
                 db_obj.consumer_groups = json.dumps(cg_value) if cg_value else None
@@ -833,7 +833,7 @@ class DataProductSubscriptionRepository:
     ) -> DataProductSubscriptionDb:
         """Create a new subscription.
 
-        Daimler go-live (#486363): when ``on_behalf_of_type`` is set, the
+        : when ``on_behalf_of_type`` is set, the
         subscription was requested on behalf of a different principal (group
         or service principal). Caller is responsible for validating the
         principal exists in the workspace SCIM directory before calling.

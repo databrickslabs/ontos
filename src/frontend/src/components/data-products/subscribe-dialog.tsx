@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Bell } from 'lucide-react';
 import { useUserStore } from '@/stores/user-store';
 
-// Daimler #486363: subscribe on behalf of group / SP. The form picks one of:
+// subscribe on behalf of group / SP. The form picks one of:
 //   - "self": current user
 //   - "my_group": one of the user's own groups (validated client-side via /user/details)
 //   - "other": free-text group display name or SP applicationId/displayName.

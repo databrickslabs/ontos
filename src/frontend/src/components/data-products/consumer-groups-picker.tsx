@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
 
-// Daimler #486448: multi-select picker backed by /api/workspace/groups.
+// multi-select picker backed by /api/workspace/groups.
 // Accepts free-text additions for groups the SDK can't enumerate (e.g. cross-
 // account groups synced from external IdPs) — falls back gracefully when the
 // endpoint returns nothing.

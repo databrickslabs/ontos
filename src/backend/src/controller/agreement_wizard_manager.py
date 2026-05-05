@@ -153,7 +153,7 @@ class AgreementWizardManager:
         on_behalf_of: optional ``OnBehalfOf`` (or dict-like with ``type``/``value``)
             captured at wizard start. Persisted on the session row so the
             auto-subscribe in ``_complete_session`` can forward it to
-            ``data_products_manager.subscribe()`` (Daimler #486363).
+            ``data_products_manager.subscribe()`` ().
         """
         steps = self._get_workflow_steps(workflow_id)
         if not steps:
@@ -488,7 +488,7 @@ class AgreementWizardManager:
         if current.step_type == StepType.ON_BEHALF_OF:
             # Persist the captured principal on the session row so the
             # auto-subscribe in _complete_session can forward it to
-            # data_products_manager.subscribe() (Daimler #486363). This is the
+            # data_products_manager.subscribe() (). This is the
             # in-wizard equivalent of the legacy SubscribeDialog setting it at
             # session-create time.
             obo_type = (payload or {}).get("type")
@@ -636,7 +636,7 @@ class AgreementWizardManager:
                     # local filesystem path for dev where storage_base_path may
                     # legitimately be a tmp dir.
                     # Smart-skip: if the configured path already ends in
-                    # '/agreements', don't double-append. Daimler demo
+                    # '/agreements', don't double-append. subscribe-on-behalf demo
                     # surfaced /Volumes/.../agreements producing files at
                     # /Volumes/.../agreements/agreements/<id>.pdf.
                     if pdf_volume_path.startswith("/Volumes/"):
@@ -682,7 +682,7 @@ class AgreementWizardManager:
                     from src.controller.data_products_manager import DataProductsManager
                     from src.models.data_products import OnBehalfOf
                     dp_manager = DataProductsManager(self._db)
-                    # Daimler #486363 gap-fill: thread on_behalf_of from the
+                    # thread on_behalf_of from the
                     # session row (captured at wizard start) into the
                     # auto-subscribe so the persisted subscription record
                     # carries the same OBO metadata as the direct

@@ -33,7 +33,7 @@ class AgreementWizardSessionsRepository:
         """Create a new wizard session.
 
         ``on_behalf_of_type`` / ``on_behalf_of_value`` capture the principal
-        the requester is acting on behalf of (Daimler #486363). When
+        the requester is acting on behalf of (). When
         ``completion_action='subscribe'``, ``_complete_session`` reads these
         back and forwards them to ``data_products_manager.subscribe()`` so the
         resulting subscription record carries the correct OBO metadata instead

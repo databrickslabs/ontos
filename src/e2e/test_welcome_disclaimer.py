@@ -48,7 +48,7 @@ DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "account-workspace")
 
 RUN_TS = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
 TEST_TEXT = (
-    f"## Daimler Welcome Disclaimer (E2E {RUN_TS})\n\n"
+    f"## Welcome Disclaimer (E2E {RUN_TS})\n\n"
     "By continuing you acknowledge that this is a controlled environment. "
     "**Do not** upload PII or sensitive data."
 )
@@ -86,7 +86,7 @@ class BehaviorResults:
 
     def summary(self) -> int:
         print("\n" + "=" * 72)
-        print("SUMMARY — Welcome Disclaimer (Daimler go-live)")
+        print("SUMMARY — Welcome Disclaimer ()")
         print("=" * 72)
         total = len(self.LABELS)
         passed_count = sum(1 for k in self.LABELS if self.results.get(k, {}).get("passed"))

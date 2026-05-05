@@ -81,9 +81,9 @@ async def list_workspace_groups(
 
     Used by:
       * the data product publish form's ``consumer_groups`` multi-select
-        (Daimler #486448)
+        ()
       * the subscribe dialog's "for a group I'm part of" picker
-        (Daimler #486363)
+        ()
 
     Returns ``[{id, display_name}, ...]``. Best-effort: SCIM directory may
     contain thousands of groups in large workspaces, so an optional

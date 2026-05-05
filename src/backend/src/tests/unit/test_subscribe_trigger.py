@@ -5,7 +5,7 @@ Trigger firing for on_subscribe used to live in
 auto-subscribe path (``agreement_wizard_manager._complete_session`` →
 ``dp_manager.subscribe``) silently bypassed it — wizard-completed
 subscriptions never fired the corresponding ``on_subscribe`` process
-workflow (no Treasure runbook, no notifications).
+workflow (no external runbook, no notifications).
 
 The refactor moves the trigger fire + entity_data enrichment
 (``on_behalf_of`` flattening, ``consumer_groups`` pull) into
@@ -115,13 +115,13 @@ class TestFireOnSubscribeTrigger:
         }
 
     def test_on_behalf_of_service_principal_display_prefixed(self, manager):
-        obo = OnBehalfOf(type="service_principal", value="treasure-runbook-sp")
+        obo = OnBehalfOf(type="service_principal", value="external-runbook-sp")
         fire_mock = self._call(manager, on_behalf_of=obo)
         ed = fire_mock.call_args.kwargs["entity_data"]
         assert ed["on_behalf_of"] == {
             "type": "service_principal",
-            "value": "treasure-runbook-sp",
-            "display": "SP: treasure-runbook-sp",
+            "value": "external-runbook-sp",
+            "display": "SP: external-runbook-sp",
         }
 
     def test_consumer_groups_surfaced_when_present(self, manager):

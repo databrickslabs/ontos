@@ -1,4 +1,4 @@
-"""Unit tests for Daimler subscribe-on-behalf-of-group/SP (#486363).
+"""Unit tests for subscribe-on-behalf-of (approval workflow OBO).
 
 Covers:
   * Pydantic SubscriptionCreate accepts on_behalf_of payload
@@ -35,7 +35,7 @@ class TestSubscriptionCreatePayload:
 
     def test_with_on_behalf_of_group(self):
         body = SubscriptionCreate(
-            reason="treasure runbook",
+            reason="external runbook",
             on_behalf_of={"type": "group", "value": "sales_consumers"},
         )
         assert body.on_behalf_of is not None
@@ -67,7 +67,7 @@ def manager(db_session):
 
 class TestValidateOnBehalfOfPrincipal:
     def test_user_type_is_not_validated_skips_scim(self, manager):
-        """type=user is intentionally not validated — Daimler explicit ask."""
+        """type=user is intentionally not validated — explicit ask."""
         # The route layer skips this helper for type=user; calling directly
         # with a fake type just to assert behavior of the manager helper.
         # subscribe() never invokes validation for 'user'.
@@ -100,7 +100,7 @@ class TestValidateOnBehalfOfPrincipal:
     def test_workspace_client_unavailable_skips_validation(self, manager):
         """If get_workspace_client() raises, treat as success and move on
         (mirrors GrantPermissionsStepHandler — see its `Workspace client
-        unavailable` branch). Daimler explicitly does not want a 500 when SP
+        unavailable` branch). explicitly does not want a 500 when SP
         creds aren't in the local environment."""
         with patch('src.common.workspace_client.get_workspace_client', side_effect=Exception("no creds")):
             manager._validate_on_behalf_of_principal(OnBehalfOf(type='group', value='whatever'))

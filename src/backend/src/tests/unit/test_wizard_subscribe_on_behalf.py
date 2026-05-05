@@ -1,4 +1,4 @@
-"""Unit test for the Daimler #486363 gap-fill: thread on_behalf_of through
+"""Unit test for the thread on_behalf_of through
 the agreement wizard's auto-subscribe path.
 
 When ``completion_action='subscribe'``, ``_complete_session`` calls
@@ -105,7 +105,7 @@ class TestWizardAutoSubscribeOnBehalfOf:
         """Same path also handles SP principals."""
         session = _make_session(
             on_behalf_of_type="service_principal",
-            on_behalf_of_value="treasure-runbook-sp",
+            on_behalf_of_value="external-runbook-sp",
         )
         dp_instance = _run_complete(session)
 
@@ -113,7 +113,7 @@ class TestWizardAutoSubscribeOnBehalfOf:
         obo = kwargs.get("on_behalf_of")
         assert obo is not None
         assert obo.type == "service_principal"
-        assert obo.value == "treasure-runbook-sp"
+        assert obo.value == "external-runbook-sp"
 
     def test_subscribe_self_when_no_on_behalf_of(self):
         """When the session has no OBO, subscribe() receives None — regression

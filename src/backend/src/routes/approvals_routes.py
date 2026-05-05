@@ -92,7 +92,7 @@ class CreateSessionBody(BaseModel):
     entity_type: str = Field(..., description="Entity type (e.g. data_contract, data_product, dataset)")
     entity_id: str = Field(..., description="Entity ID")
     completion_action: Optional[str] = Field(None, description="Action after complete, e.g. 'subscribe'")
-    # Daimler #486363 gap-fill: when completion_action='subscribe', this OBO
+    # when completion_action='subscribe', this OBO
     # is persisted on the session row and forwarded to dp.subscribe() when the
     # wizard completes — so wizard-completed subscriptions match the direct
     # /api/data-products/{id}/subscribe path.

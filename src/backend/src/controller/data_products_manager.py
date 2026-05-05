@@ -2952,7 +2952,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             subscriber_email: Email of the subscriber
             reason: Optional reason for subscribing
             on_behalf_of: Optional principal that the subscription is for
-                (Daimler #486363). When set, ``type`` ∈ {user, group,
+                (). When set, ``type`` ∈ {user, group,
                 service_principal} and ``value`` is validated against the
                 workspace SCIM directory for non-user types. ``user`` accepts
                 arbitrary strings to cover new hires not yet indexed.
@@ -2990,7 +2990,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Validate on_behalf_of principal exists in workspace SCIM (groups,
             # service principals). User type is intentionally not validated —
-            # covers new hires not yet indexed (Daimler explicit ask).
+            # covers new hires not yet indexed (explicit ask).
             if on_behalf_of and on_behalf_of.type in ('group', 'service_principal'):
                 self._validate_on_behalf_of_principal(on_behalf_of)
 
@@ -3125,7 +3125,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     obo_dict["display"] = f"SP: {on_behalf_of.value}"
                 entity_data["on_behalf_of"] = obo_dict
 
-            # Surface consumer_groups (Daimler #486448) so workflow webhook
+            # Surface consumer_groups () so workflow webhook
             # bodies can pipe them via ${entity.consumer_groups}.
             cg = getattr(product, 'consumer_groups', None) if product is not None else None
             if cg:
@@ -3154,7 +3154,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning("on_subscribe trigger fire failed (non-fatal): %s", e)
 
     # ------------------------------------------------------------------
-    # on_behalf_of validation (Daimler #486363)
+    # on_behalf_of validation ()
     # ------------------------------------------------------------------
     # Tiny in-process cache to avoid hammering SCIM on each subscribe call
     # within the same gunicorn worker. 60s TTL per spec.

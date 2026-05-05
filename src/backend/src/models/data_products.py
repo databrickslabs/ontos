@@ -318,7 +318,7 @@ class DataProduct(BaseModel):
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
 
-    # Daimler go-live (#486448): typed list of group display names that
+    # : typed list of group display names that
     # represent expected consumers of this product. Surfaced in the publish
     # form and exposed to webhook bodies via ${entity.consumer_groups}.
     consumer_groups: Optional[List[str]] = Field(default_factory=list, description="Group display names of expected consumers")
@@ -346,7 +346,7 @@ class DataProduct(BaseModel):
     certification_expires_at: Optional[datetime] = Field(None, description="When certification expires")
     certification_notes: Optional[str] = Field(None, description="Certification notes")
 
-    # Daimler #486448: consumer_groups is stored as JSON-encoded TEXT in DB.
+    # consumer_groups is stored as JSON-encoded TEXT in DB.
     # Decode to a list at read time. Accepts both list (already decoded) and
     # str (raw from SQLite/Postgres TEXT column).
     @field_validator('consumer_groups', mode='before')
@@ -446,7 +446,7 @@ class DataProductCreate(BaseModel):
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
 
-    # Daimler go-live (#486448): consumer groups metadata
+    # : consumer groups metadata
     consumer_groups: Optional[List[str]] = Field(default_factory=list, description="Group display names of expected consumers")
 
     # Field validator to handle string IDs from frontend
@@ -488,7 +488,7 @@ class DataProductUpdate(BaseModel):
     support: Optional[List[Support]] = Field(None, alias="support_channels")
     team: Optional[Team] = None
     max_level_inheritance: Optional[int] = Field(None, ge=0, le=999)
-    # Daimler go-live (#486448): consumer groups metadata
+    # : consumer groups metadata
     consumer_groups: Optional[List[str]] = Field(None, description="Group display names of expected consumers")
 
     # Field validator to handle string IDs from frontend
@@ -516,7 +516,7 @@ class DataProductUpdate(BaseModel):
 # ============================================================================
 
 class OnBehalfOf(BaseModel):
-    """Subscribe-on-behalf-of payload (Daimler #486363).
+    """Subscribe-on-behalf-of payload ().
 
     Allows a user to request a subscription on behalf of a Databricks group
     or service principal. ``type=user`` accepts any string (covers new hires
@@ -543,7 +543,7 @@ class Subscription(BaseModel):
     subscriber_email: str = Field(..., description="Email of the subscriber")
     subscribed_at: datetime = Field(..., description="When the subscription was created")
     subscription_reason: Optional[str] = Field(None, description="Optional reason for subscribing")
-    # Daimler subscribe-on-behalf-of (#486363)
+    # subscribe-on-behalf-of (approval workflow OBO)
     on_behalf_of_type: Optional[str] = Field(None, description="Principal type when subscribed on behalf of another principal")
     on_behalf_of_value: Optional[str] = Field(None, description="Principal identifier when subscribed on behalf of another principal")
 

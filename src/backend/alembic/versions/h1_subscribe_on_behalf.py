@@ -1,17 +1,17 @@
-"""Daimler go-live: subscribe on behalf of group/SP + consumer_groups metadata.
+"""Subscribe on behalf of group/SP + consumer_groups metadata.
 
 Adds:
 - ``data_products.consumer_groups`` (TEXT, JSON-encoded list of group display names)
   Surfaced in publish form + exposed to webhook bodies via
-  ``${entity.consumer_groups}``. Daimler CSV #486448.
+  ``${entity.consumer_groups}``.
 - ``data_product_subscriptions.on_behalf_of_type`` (VARCHAR(50))
 - ``data_product_subscriptions.on_behalf_of_value`` (VARCHAR(255))
   Capture which group / SP / user the subscription was requested for when it
-  differs from the subscriber. Daimler CSV #486363.
+  differs from the subscriber.
 
 Idempotent (``ADD COLUMN IF NOT EXISTS``) so partial deploys are safe.
 
-Revision ID: h1_daimler_subscribe_on_behalf
+Revision ID: h1_subscribe_on_behalf
 Revises: g1_workflow_snapshot
 Create Date: 2026-05-01
 """
@@ -21,7 +21,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "h1_daimler_subscribe_on_behalf"
+revision: str = "h1_subscribe_on_behalf"
 down_revision: Union[str, Sequence[str], None] = "g1_workflow_snapshot"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

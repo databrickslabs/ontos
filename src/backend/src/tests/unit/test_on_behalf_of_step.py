@@ -1,4 +1,4 @@
-"""Unit tests for the in-wizard ``on_behalf_of`` approval step (Daimler #486363).
+"""Unit tests for the in-wizard ``on_behalf_of`` approval step ().
 
 The step lets the workflow author capture self/group/SP intent at the start
 of the wizard rather than via the pre-wizard SubscribeDialog. Validated

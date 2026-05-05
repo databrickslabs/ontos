@@ -259,7 +259,7 @@ export interface DataProduct {
   created_at?: string;
   updated_at?: string;
 
-  // Daimler #486448: typed list of group display names representing the
+  // typed list of group display names representing the
   // expected consumers of this product. Surfaced in publish/edit form.
   consumer_groups?: string[];
 

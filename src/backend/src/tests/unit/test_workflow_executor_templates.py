@@ -206,12 +206,12 @@ class TestSubstituteTemplateMissing:
 
 
 # =========================================================================
-# Daimler go-live: list/dict serialization + nested context paths
+# list/dict serialization + nested context paths
 # =========================================================================
 
-class TestDaimlerSubscribeOnBehalfTemplates:
-    """Resolver fixes required for Daimler subscribe-on-behalf-of-group + the
-    consumer_groups data product metadata. The Treasure runbook webhook body
+class TestSubscribeOnBehalfTemplates:
+    """Resolver fixes required for subscribe-on-behalf-of-group + the
+    consumer_groups data product metadata. The external runbook webhook body
     needs `${context.on_behalf_of.value}` (nested dict) AND
     `${entity.consumer_groups}` (list, JSON-serialized)."""
 
@@ -265,8 +265,8 @@ class TestDaimlerSubscribeOnBehalfTemplates:
         ctx = _make_context(entity_type='data_product')
         assert substitute_template("t=${context.entity_type}", ctx) == "t=data_product"
 
-    def test_webhook_body_template_full_daimler_payload(self):
-        """Realistic Treasure-runbook payload combining both fixes."""
+    def test_webhook_body_template_full__payload(self):
+        """Realistic External-runbook payload combining both fixes."""
         ctx = _make_context(
             entity={
                 'name': 'sales_kpis',

@@ -405,7 +405,7 @@ export const EntityActionNode = memo((props: NodeProps<StepNodeData>) => {
 EntityActionNode.displayName = 'EntityActionNode';
 
 // Legal Document Node
-// On Behalf Of Node — first-step principal capture (Daimler #486363)
+// On Behalf Of Node — first-step principal capture ()
 export const OnBehalfOfNode = memo((props: NodeProps<StepNodeData>) => {
   const title = (props.data.step.config as { title?: string })?.title;
   const styles = nodeColorStyles.on_behalf_of;

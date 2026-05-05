@@ -72,7 +72,7 @@ from src.connectors.bigquery import BigQueryConnector
 logger = get_logger(__name__)
 
 # Demo data SQL file path
-DEMO_DATA_SQL_FILE = Path(__file__).parent.parent / "data" / "demo_data.sql"
+DEMO_DATA_SQL_FILE = Path(__file__).parent.parent / "data" / "demo_data_retail.sql"
 
 
 def load_demo_data_from_sql() -> bool:
@@ -437,8 +437,13 @@ async def startup_event_handler(app: FastAPI):
     """
     Application startup event handler.
     
-    Note: Demo data is loaded on-demand via POST /api/settings/demo-data/load
-    The demo data SQL file is located at: src/backend/src/data/demo_data.sql
+    Note: Demo data is loaded on-demand via POST /api/settings/demo-data/load.
+    Each preset is a standalone self-contained demo pack:
+        - retail (default): src/backend/src/data/demo_data_retail.sql
+        - hls:               src/backend/src/data/demo_data_hls.sql
+        - fsi:               src/backend/src/data/demo_data_fsi.sql
+        - mfg:               src/backend/src/data/demo_data_mfg.sql
+        - auto:              src/backend/src/data/demo_data_auto.sql
     """
     logger.info("Executing application startup event handler...")
     try:

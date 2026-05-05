@@ -26,8 +26,8 @@ FEATURE_ID = 'compliance'
 
 
 # DEPRECATED: Demo data loading has been moved to SQL-based approach.
-# Demo data is now loaded via POST /api/settings/demo-data/load
-# The demo data SQL file is located at: src/backend/src/data/demo_data.sql
+# Demo data is now loaded via POST /api/settings/demo-data/load?preset=<retail|hls|fsi|mfg|auto>.
+# Each preset is a self-contained file: src/backend/src/data/demo_data_{preset}.sql.
 
 
 @router.get("/compliance/policies")

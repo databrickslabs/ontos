@@ -181,8 +181,9 @@ async def startup_event():
         logger.warning(f"Failed initializing Delivery Service: {e}", exc_info=True)
         app.state.delivery_service = None
     
-    # Demo data is loaded on-demand via POST /api/settings/demo-data/load
-    # See: src/backend/src/data/demo_data.sql
+    # Demo data is loaded on-demand via POST /api/settings/demo-data/load?preset=<retail|hls|fsi|mfg|auto>
+    # Each preset is a fully self-contained vertical demo (no implicit content from other packs).
+    # Default preset is 'retail' (file: src/backend/src/data/demo_data_retail.sql).
     
     # Ensure SearchManager is initialized and index built
     try:

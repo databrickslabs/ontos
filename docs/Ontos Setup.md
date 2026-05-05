@@ -283,7 +283,26 @@ Once the app is up, click on the app's URL to open it.
 
 ## Step #5: (Optionally) Load Demo Data
 
-Ontos ships with demo data, which can be loaded on demand. Navigate to the `/docs` page in Ontos (by editing the URL in the browser's address bar):
+Ontos ships with five **standalone demo packs** — one per industry — and the
+`POST /api/settings/demo-data/load` endpoint accepts a `preset` query
+parameter to pick exactly one of them:
+
+| `preset`  | File                       | Vertical flavour                                |
+| --------- | -------------------------- | ----------------------------------------------- |
+| `retail`  | `demo_data_retail.sql`     | Retail / e‑commerce (default)                   |
+| `hls`     | `demo_data_hls.sql`        | Healthcare & Life Sciences (clinical, claims)   |
+| `fsi`     | `demo_data_fsi.sql`        | Financial Services (banking, capital markets)   |
+| `mfg`     | `demo_data_mfg.sql`        | Manufacturing (production, quality, EHS)        |
+| `auto`    | `demo_data_auto.sql`       | Automotive (connected vehicle, ADAS, warranty)  |
+
+Each preset is fully self‑contained: it brings its own data domains, business
+roles, delivery methods, ontology concepts, vertical asset types, tag
+namespaces, workflows, assets, lineage, owners, comments, compliance runs and
+cost items. You can load any preset on top of an empty database without
+needing the retail base.
+
+Navigate to the `/docs` page in Ontos (by editing the URL in the browser's
+address bar) to use them interactively:
 
 ![](images/setup/eab238b2452e97910df4a5f3058e9717.png)
 
@@ -291,9 +310,17 @@ Search for "demo":
 
 ![](images/setup/ea898dadcd3936d9431ce6b8a92eccf9.png)
 
-The two endpoints available are to load and, later, unload the demo data. 
+The two endpoints available are to load and, later, unload the demo data.
 
-Note: The [demo data](https://github.com/databrickslabs/ontos/blob/48167bd2ddb2a9f56971f67bd1ec0e7aa9d275bc/src/backend/src/data/demo_data.sql#L24) is smart about using very specific codes in the UUIDs of the data. That way, we can discern between demo data, and data entered manually by users.
+`POST /api/settings/demo-data/load` accepts a single `preset` query parameter
+(`retail` | `hls` | `fsi` | `mfg` | `auto`, default `retail`). The matching
+`demo_data_{preset}.sql` is the only file executed — there is no implicit
+"base + overlay" layering, so each preset is loaded standalone.
+
+Note: All demo data uses very specific codes in its UUIDs (a per‑preset
+segment such as `0000`, `0001`, `0002`, …) so that we can discern demo
+records from data entered manually by users, and so that `DELETE demo-data`
+can clean up exactly what was inserted.
 
 Open the `POST load` endpoint and click on "Try it out":
 
@@ -311,9 +338,14 @@ Reload the app, it now has demo data:
 
 ![](images/setup/f2d90a46da4aa95addcceceb2931a4d2.png)
 
-Note: The [demo data](https://github.com/databrickslabs/ontos/blob/48167bd2ddb2a9f56971f67bd1ec0e7aa9d275bc/src/backend/src/data/demo_data.sql) comes as SQL file and could be changed to reflect other industries or even individual customers.
+Note: Each preset is delivered as a standalone SQL file under
+`src/backend/src/data/demo_data_{preset}.sql` and can be edited or extended
+to reflect other industries or individual customers without affecting the
+other packs.
 
-Use the `DELETE demo-data` endpoint shown above to delete the demo data.
+Use the `DELETE demo-data` endpoint shown above to clear all demo records
+across every preset (it deletes by demo UUID prefix, so any combination of
+loaded packs is removed).
 
 ## Troubleshooting
 

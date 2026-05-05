@@ -376,6 +376,10 @@ async def handle_role_request_decision(
 
 # --- Demo Data Loading ---
 
+# Allowed presets — one self-contained SQL file per preset.
+DEMO_DATA_PRESETS = ("retail", "hls", "fsi", "mfg", "auto")
+
+
 @router.post("/settings/demo-data/load", status_code=status.HTTP_200_OK)
 async def load_demo_data(
     request: Request,
@@ -384,116 +388,116 @@ async def load_demo_data(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: SettingsManager = Depends(get_settings_manager),
-    industry: Optional[List[str]] = Query(
-        default=None,
-        description="Optional industry-specific demo data to load (e.g. 'hls', 'fsi', 'mfg', 'auto'). "
-                    "Loads demo_data_{industry}.sql in addition to the base demo_data.sql. "
-                    "Pass multiple values to load several industries.",
+    preset: str = Query(
+        default="retail",
+        description=(
+            "Demo preset to load. Each preset is a fully self-contained vertical demo "
+            "(no implicit content from other packs). Allowed values: "
+            f"{', '.join(DEMO_DATA_PRESETS)}. Defaults to 'retail'."
+        ),
     ),
 ):
     """
-    Load demo data from SQL file(s) into the database.
-    
-    Always loads the base `demo_data.sql`. When one or more `industry` query
-    parameters are supplied, the corresponding `demo_data_{industry}.sql`
-    files are loaded afterwards (additive overlay).
-    
-    Example: POST /api/settings/demo-data/load?industry=hls&industry=fsi
-    
-    The SQL uses ON CONFLICT DO NOTHING to avoid duplicate key errors on re-runs.
+    Load a single demo preset from its self-contained SQL file.
+
+    Each preset maps to exactly one SQL file (`demo_data_{preset}.sql`) and is
+    designed to be loaded standalone on an empty database. Loading a preset does
+    not pull in content from any other preset.
+
+    Example: POST /api/settings/demo-data/load?preset=hls
+
+    The SQL uses ON CONFLICT DO NOTHING to make re-runs and clear+reload safe.
     """
     success = False
-    details: Dict[str, Any] = {"action": "load_demo_data", "industries": industry or []}
-    
+    preset_slug = (preset or "").strip().lower()
+    details: Dict[str, Any] = {"action": "load_demo_data", "preset": preset_slug}
+
+    if preset_slug not in DEMO_DATA_PRESETS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Invalid preset '{preset}'. Allowed values: "
+                f"{', '.join(DEMO_DATA_PRESETS)}."
+            ),
+        )
+
     try:
         from pathlib import Path
         from sqlalchemy import text
-        import re
-        
+
         data_dir = Path(__file__).parent.parent / "data"
-        
-        # Build ordered list of SQL files: base first, then per-industry
-        sql_files: List[Path] = [data_dir / "demo_data.sql"]
-        if industry:
-            for ind in industry:
-                slug = re.sub(r'[^a-z0-9_]', '', ind.lower())
-                if not slug:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Invalid industry identifier: '{ind}'",
-                    )
-                sql_files.append(data_dir / f"demo_data_{slug}.sql")
-        
-        # Validate all files exist before executing anything
-        for sql_file in sql_files:
-            if not sql_file.exists():
-                details["exception"] = f"{sql_file.name} not found"
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Demo data SQL file not found: {sql_file.name}",
-                )
-        
+        sql_file: Path = data_dir / f"demo_data_{preset_slug}.sql"
+
+        if not sql_file.exists():
+            details["exception"] = f"{sql_file.name} not found"
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Demo data SQL file not found: {sql_file.name}",
+            )
+
         connection = db.connection()
-        total_executed = 0
-        file_results: List[Dict[str, Any]] = []
-        
-        for sql_file in sql_files:
-            sql_content = sql_file.read_text(encoding="utf-8")
-            
-            statements = []
-            current_statement = []
-            in_dollar_quote = False
-            
-            for line in sql_content.split('\n'):
-                stripped = line.strip()
-                
-                if not stripped or stripped.startswith('--'):
-                    if current_statement:
-                        current_statement.append(line)
-                    continue
-                
-                if "E'" in line or "$$" in line:
-                    in_dollar_quote = not in_dollar_quote if "$$" in line else in_dollar_quote
-                
-                current_statement.append(line)
-                
-                if stripped.endswith(';') and not in_dollar_quote:
-                    full_statement = '\n'.join(current_statement).strip()
-                    if full_statement and not full_statement.startswith('--'):
-                        if full_statement.upper() not in ('BEGIN;', 'COMMIT;'):
-                            statements.append(full_statement)
-                    current_statement = []
-            
-            executed_count = 0
-            for stmt in statements:
-                if stmt.strip():
-                    try:
-                        nested = connection.begin_nested()
-                        connection.execute(text(stmt))
-                        nested.commit()
-                        executed_count += 1
-                    except Exception as stmt_error:
-                        nested.rollback()
-                        logger.warning(f"Statement execution warning ({sql_file.name}): {stmt_error}")
-            
-            total_executed += executed_count
-            file_results.append({"file": sql_file.name, "statements_executed": executed_count})
-        
+        sql_content = sql_file.read_text(encoding="utf-8")
+
+        statements = []
+        current_statement = []
+        in_dollar_quote = False
+
+        for line in sql_content.split('\n'):
+            stripped = line.strip()
+
+            if not stripped or stripped.startswith('--'):
+                if current_statement:
+                    current_statement.append(line)
+                continue
+
+            if "E'" in line or "$$" in line:
+                in_dollar_quote = not in_dollar_quote if "$$" in line else in_dollar_quote
+
+            current_statement.append(line)
+
+            if stripped.endswith(';') and not in_dollar_quote:
+                full_statement = '\n'.join(current_statement).strip()
+                if full_statement and not full_statement.startswith('--'):
+                    if full_statement.upper() not in ('BEGIN;', 'COMMIT;'):
+                        statements.append(full_statement)
+                current_statement = []
+
+        executed_count = 0
+        for stmt in statements:
+            if stmt.strip():
+                try:
+                    nested = connection.begin_nested()
+                    connection.execute(text(stmt))
+                    nested.commit()
+                    executed_count += 1
+                except Exception as stmt_error:
+                    nested.rollback()
+                    logger.warning(
+                        f"Statement execution warning ({sql_file.name}): {stmt_error}"
+                    )
+
         db.commit()
-        
+
         success = True
-        details["statements_executed"] = total_executed
-        details["files"] = file_results
-        
-        logger.info(f"Demo data loaded successfully. Executed {total_executed} statements across {len(sql_files)} file(s).")
-        
+        details["statements_executed"] = executed_count
+        details["file"] = sql_file.name
+
+        logger.info(
+            f"Demo data loaded successfully. Preset='{preset_slug}', "
+            f"file='{sql_file.name}', statements={executed_count}."
+        )
+
         return {
             "status": "success",
-            "message": f"Demo data loaded successfully. Executed {total_executed} SQL statements across {len(sql_files)} file(s).",
-            "statements_executed": total_executed,
-            "files": file_results,
+            "message": (
+                f"Demo data loaded successfully (preset='{preset_slug}'). "
+                f"Executed {executed_count} SQL statements from {sql_file.name}."
+            ),
+            "preset": preset_slug,
+            "file": sql_file.name,
+            "statements_executed": executed_count,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -540,8 +544,11 @@ async def clear_demo_data(
         from sqlalchemy import text
         
         # Delete in reverse dependency order
-        # UUID patterns use type codes in first 3 hex chars (see demo_data.sql for mapping)
-        # Pattern: {type:3}{seq:5}-0000-4000-8000-...
+        # UUID patterns use type codes in first 3 hex chars (see demo_data_retail.sql for mapping)
+        # Pattern: {type:3}{seq:5}-{dataset:4}-4000-8000-...
+        # Dataset segments: 0000=retail, 0001=hls, 0002=fsi, 0003=mfg, 0004=auto.
+        # The LIKE patterns below match by type-code prefix only, so they remove rows
+        # from every preset (the dataset segment is in chars 9-12, not the prefix).
         delete_statements = [
             # Suggested quality checks (02e%) - before data_profiling_runs
             "DELETE FROM suggested_quality_checks WHERE id::text LIKE '02e%'",
@@ -600,12 +607,31 @@ async def clear_demo_data(
             # Dataset assets (021%) — migrated from datasets table
             "DELETE FROM assets WHERE id::text LIKE '021%'",
             
+            # Policy assets (0f1%)
+            "DELETE FROM assets WHERE id::text LIKE '0f1%'",
+            # General catalog assets (0f3%) — Tables, Views, Dashboards, Streams,
+            # Patient Cohorts, ICSR cases, etc. (covers all preset packs).
+            "DELETE FROM assets WHERE id::text LIKE '0f3%'",
+            # Column assets (0f5%)
+            "DELETE FROM assets WHERE id::text LIKE '0f5%'",
             # Business Term assets (0f7%)
             "DELETE FROM assets WHERE id::text LIKE '0f7%'",
             # Logical Entity/Attribute assets (0f8%)
             "DELETE FROM assets WHERE id::text LIKE '0f8%'",
             # Delivery Channel assets (0f9%)
             "DELETE FROM assets WHERE id::text LIKE '0f9%'",
+            # Business Owners — must be removed before business_roles because
+            # of the role_id FK. Retail uses the legacy 0f6% prefix; the
+            # vertical packs (hls/fsi/mfg/auto) use 0fb%.
+            "DELETE FROM business_owners WHERE id::text LIKE '0f6%'",
+            "DELETE FROM business_owners WHERE id::text LIKE '0fb%'",
+            # Vertical-specific asset types (0f2%, demo-only, is_system=false)
+            "DELETE FROM asset_types WHERE id::text LIKE '0f2%' AND is_system = false AND created_by = 'system@demo'",
+            # Demo-inserted business_roles and delivery_methods (0f0%, 0f4%).
+            # Use created_by to avoid touching app-seeded reference rows that
+            # other features may depend on.
+            "DELETE FROM business_roles WHERE id::text LIKE '0f0%' AND created_by = 'system@demo'",
+            "DELETE FROM delivery_methods WHERE id::text LIKE '0f4%' AND created_by = 'system@demo'",
             
             # Legacy: dataset instances (025) and datasets (021) (if old tables still exist)
             "DELETE FROM dataset_instances WHERE id::text LIKE '025%'",
@@ -674,27 +700,67 @@ async def clear_demo_data(
             "DELETE FROM data_domains WHERE id::text LIKE '000%'",
         ]
         
-        deleted_counts = {}
+        # Run each DELETE in its own savepoint so a single failure (e.g. legacy
+        # tables that no longer exist) cannot poison the outer transaction and
+        # silently skip subsequent DELETEs.
+        connection = db.connection()
+        deleted_counts: Dict[str, int] = {}
+        skipped: List[Dict[str, str]] = []
+        # Tables that are expected to be missing on clean installs (legacy
+        # tables retained for backward-compat clears). Failures on these are
+        # reduced to debug log to keep the response clean.
+        legacy_tables = {
+            "dataset_subscriptions",
+            "dataset_custom_properties",
+            "dataset_instances",
+            "datasets",
+        }
         for stmt in delete_statements:
+            table_name = stmt.split("FROM ")[1].split(" ")[0]
             try:
-                result = db.execute(text(stmt))
-                table_name = stmt.split("FROM ")[1].split(" ")[0]
-                deleted_counts[table_name] = result.rowcount
+                nested = connection.begin_nested()
+                result = connection.execute(text(stmt))
+                nested.commit()
+                rowcount = result.rowcount or 0
+                # Only report tables that actually had rows removed; aggregate
+                # multi-statement deletes for the same table.
+                if rowcount > 0:
+                    deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
             except Exception as e:
-                logger.warning(f"Delete statement warning: {e}")
-        
+                try:
+                    nested.rollback()
+                except Exception:
+                    pass
+                err_short = str(e).splitlines()[0][:200]
+                if table_name in legacy_tables and "does not exist" in str(e):
+                    logger.debug(f"Legacy table absent ({table_name}): {err_short}")
+                else:
+                    # Real failure (FK violation, schema drift, etc.) — surface it
+                    # both in the log and in the API response so it cannot hide.
+                    logger.warning(
+                        f"Delete statement FAILED ({table_name}): {err_short} | stmt={stmt}"
+                    )
+                    skipped.append({
+                        "table": table_name,
+                        "statement": stmt,
+                        "error": err_short,
+                    })
+
         db.commit()
-        
+
         success = True
         details["deleted_counts"] = deleted_counts
-        
+        details["skipped"] = skipped
+
         total_deleted = sum(deleted_counts.values())
-        logger.info(f"Demo data cleared. Deleted {total_deleted} records.")
-        
+        skipped_msg = f", {len(skipped)} statements skipped" if skipped else ""
+        logger.info(f"Demo data cleared. Deleted {total_deleted} records{skipped_msg}.")
+
         return {
-            "status": "success",
-            "message": f"Demo data cleared. Deleted {total_deleted} records.",
-            "deleted_counts": deleted_counts
+            "status": "success" if not skipped else "partial",
+            "message": f"Demo data cleared. Deleted {total_deleted} records{skipped_msg}.",
+            "deleted_counts": deleted_counts,
+            "skipped": skipped,
         }
         
     except Exception as e:

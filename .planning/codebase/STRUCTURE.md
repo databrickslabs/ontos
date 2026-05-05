@@ -116,7 +116,9 @@ ucapp/
 - Purpose: Store seed data, demo fixtures, ontology definitions
 - Contains:
   - `taxonomies/` — RDF ontologies (e.g., `ontos-ontology.ttl`)
-  - Demo data files (loaded via POST /api/settings/demo-data/load)
+  - Demo data files: one self-contained pack per preset, named `demo_data_{preset}.sql`
+    (presets: `retail` (default), `hls`, `fsi`, `mfg`, `auto`).
+    Loaded via `POST /api/settings/demo-data/load?preset=<name>`.
 
 **`src/backend/src/tests/`** (Test Suite)
 - Purpose: Unit and integration tests

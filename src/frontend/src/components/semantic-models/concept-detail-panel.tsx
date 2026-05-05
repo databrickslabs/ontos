@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import type { OntologyConcept } from '@/types/ontology';
 
 // Predicate → accent color for relationship section left borders
@@ -169,6 +169,9 @@ export const ConceptDetailPanel: React.FC<ConceptDetailPanelProps> = ({
         side="right"
         className="w-[380px] sm:max-w-[420px] p-0 flex flex-col gap-0"
         data-testid="concept-detail-panel"
+        // No single description fits a panel that scrolls through many SKOS
+        // sections; opt out of Radix's auto-aria-describedby check explicitly.
+        aria-describedby={undefined}
       >
         {/* Colored type stripe */}
         {concept && (
@@ -225,9 +228,9 @@ export const ConceptDetailPanel: React.FC<ConceptDetailPanelProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="text-xl font-bold pr-8 leading-tight">
+                <SheetTitle className="text-xl font-bold pr-8 leading-tight">
                   {concept.label || concept.iri.split(/[/#]/).pop()}
-                </div>
+                </SheetTitle>
                 <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                   {concept.notation && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded bg-muted font-mono text-xs font-semibold text-foreground/80 border border-border tracking-wide">
@@ -241,7 +244,10 @@ export const ConceptDetailPanel: React.FC<ConceptDetailPanelProps> = ({
               </>
             );
           })() : (
-            <div className="text-muted-foreground">Loading...</div>
+            <>
+              <SheetTitle className="sr-only">Concept Details</SheetTitle>
+              <div className="text-muted-foreground">Loading...</div>
+            </>
           )}
         </div>
 

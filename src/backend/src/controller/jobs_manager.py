@@ -472,22 +472,20 @@ class JobsManager:
         # Inject system-level database connection parameters from settings
         # These are required for workflows that connect to the app's database
         if self._settings:
-            # Get Lakebase instance name from app resources (same as database.py)
+            # Get Lakebase identifier from app resources (same as database.py)
             lakebase_instance = ''
             try:
+                from src.common.database import get_lakebase_info
                 app_name = getattr(self._settings, 'DATABRICKS_APP_NAME', None)
                 if app_name and self._client:
-                    app_info = self._client.apps.get(app_name)
-                    if app_info.resources:
-                        for resource in app_info.resources:
-                            if resource.database is not None:
-                                lakebase_instance = resource.database.instance_name
-                                logger.info(f"Auto-detected Lakebase instance: {lakebase_instance}")
-                                break
+                    info = get_lakebase_info(app_name, self._client)
+                    if info:
+                        lakebase_instance = info.identifier
+                        logger.info(f"Auto-detected Lakebase ({info.lakebase_type}): {lakebase_instance}")
                 if not lakebase_instance:
-                    logger.warning(f"Could not auto-detect Lakebase instance name for app '{app_name}'")
+                    logger.warning(f"Could not auto-detect Lakebase info for app '{app_name}'")
             except Exception as e:
-                logger.warning(f"Failed to get Lakebase instance name: {e}")
+                logger.warning(f"Failed to get Lakebase info: {e}")
             
             db_params = {
                 'lakebase_instance_name': lakebase_instance,

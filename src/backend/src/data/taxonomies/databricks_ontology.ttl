@@ -6,7 +6,11 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @base <http://www.databricks.com/ontology/> .
 
-<http://www.databricks.com/ontology> rdf:type owl:Ontology .
+# Ontology document header (rdfs:label used for display title / title-candidate extraction)
+<http://www.databricks.com/ontology> a owl:Ontology ;
+    rdfs:label "Databricks Unity Catalog Ontology"@en ;
+    rdfs:comment "Vocabulary for Unity Catalog assets, workspaces, lineage, and related platform entities; used for governance and semantic linking in Ontos."@en ;
+    owl:versionInfo "1.0" .
 
 #################################################################
 #    Object Properties

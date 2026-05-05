@@ -426,6 +426,7 @@ export default function OntologyHomeView() {
             onLinkDraw={handleLinkDraw}
             onLinkDrawCancel={handleLinkDrawCancel}
             showRootBadges={!groupBySource}
+            selectedLanguage={selectedLanguage}
           />
         </div>
       )}

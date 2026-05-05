@@ -18,6 +18,8 @@ from src.common.dependencies import (
 ) 
 from src.models.users import UserInfo # To type hint current_user
 from src.common.errors import NotFoundError, ConflictError
+from src.common.workflow_triggers import get_trigger_registry, fire_trigger_safe
+from src.models.process_workflows import EntityType
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -65,7 +67,18 @@ async def create_data_domain(
         db.commit()
         success = True
         created_domain_id = str(created_domain.id)
-        
+
+        # Fire on_create workflow trigger
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DOMAIN,
+            entity_id=str(created_domain.id),
+            entity_name=created_domain.name,
+            entity_data={"domain_id": str(created_domain.id), "name": created_domain.name},
+            user_email=current_user.email if current_user else None,
+            blocking=False,
+        )
+
         return created_domain
     except ConflictError as e:
         db.rollback()
@@ -161,7 +174,18 @@ async def update_data_domain(
         )
         db.commit()
         success = True
-        
+
+        # Fire on_update workflow trigger
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DOMAIN,
+            entity_id=str(domain_id),
+            entity_name=getattr(updated_domain, 'name', None),
+            entity_data=domain_in.model_dump(exclude_unset=True),
+            user_email=current_user.email if current_user else None,
+            blocking=False,
+        )
+
         return updated_domain
     except NotFoundError as e:
         db.rollback()
@@ -216,6 +240,18 @@ def delete_data_domain(
         deleted_domain = manager.delete_domain(db=db, domain_id=domain_id, current_user_id=current_user.email)
         db.commit()
         success = True
+
+        # Fire on_delete workflow trigger
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DOMAIN,
+            entity_id=str(domain_id),
+            entity_name=getattr(deleted_domain, 'name', None),
+            entity_data={"domain_id": str(domain_id)},
+            user_email=current_user.email if current_user else None,
+            blocking=False,
+        )
+
         return deleted_domain
     except NotFoundError as e:
         db.rollback()

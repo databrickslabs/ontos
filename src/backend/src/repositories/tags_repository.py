@@ -73,7 +73,6 @@ class TagRepository(CRUDBase[TagDb, TagCreate, TagUpdate]):
             **db_obj_data,
             namespace_id=namespace_id,
             created_by=user_email,
-            possible_values=obj_in.possible_values # Already a list or None
         )
         db.add(db_obj)
         # db.commit() # Commit handled by caller/manager

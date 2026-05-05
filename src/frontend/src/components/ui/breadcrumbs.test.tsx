@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { Breadcrumbs } from './breadcrumbs';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { BreadcrumbSegment as _BreadcrumbSegment } from '@/stores/breadcrumb-store';
 import { act } from '@testing-library/react';
 
-// Wrapper component to provide Router context
+// Wrapper component to provide Router context at a non-root path
+// (Breadcrumbs returns null at '/')
 const RouterWrapper = ({ children }: { children: React.ReactNode }) => (
-  <BrowserRouter>{children}</BrowserRouter>
+  <MemoryRouter initialEntries={['/test-page']}>{children}</MemoryRouter>
 );
 
 describe('Breadcrumbs Component', () => {

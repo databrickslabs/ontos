@@ -37,7 +37,10 @@ from src.db_models.data_contracts import (
     DataContractPricingDb,
     DataContractRolePropertyDb,
     DataProfilingRunDb,
-    SuggestedQualityCheckDb
+    SuggestedQualityCheckDb,
+    SchemaObjectRelationshipDb,
+    SchemaPropertyRelationshipDb,
+    DataContractTeamMetadataDb,
 )
 from src.models.data_contracts_api import (
     DataContractCreate,
@@ -764,23 +767,20 @@ async def handle_contract_certification(
         db.commit()
         db.refresh(contract_db)
 
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import fire_trigger_safe
         from src.models.process_workflows import EntityType
-
-        try:
-            get_trigger_registry(db).on_certify(
-                entity_type=EntityType.DATA_CONTRACT,
-                entity_id=contract_id,
-                entity_name=contract_db.name,
-                entity_data={
-                    "certification_level": certification_level,
-                    "certification_notes": notes,
-                    "certified_by": contract_db.certified_by,
-                },
-                user_email=current_user.email if current_user else None,
-            )
-        except Exception as wf_err:
-            logger.warning("on_certify trigger error (non-fatal): %s", wf_err, exc_info=True)
+        fire_trigger_safe(
+            db, "on_certify",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=contract_db.name,
+            entity_data={
+                "certification_level": certification_level,
+                "certification_notes": notes,
+                "certified_by": contract_db.certified_by,
+            },
+            user_email=current_user.email if current_user else None,
+        )
 
         manager._update_search_index(contract_db, db)
 
@@ -866,19 +866,16 @@ async def certify_contract_direct(
         propagate_certification(db, "DataContract", contract_id)
         db.commit()
 
-        from src.common.workflow_triggers import get_trigger_registry
+        from src.common.workflow_triggers import fire_trigger_safe
         from src.models.process_workflows import EntityType
-
-        try:
-            get_trigger_registry(db).on_certify(
-                EntityType.DATA_CONTRACT,
-                contract_id,
-                entity_name=contract_db.name,
-                entity_data={"certification_level": contract_db.certification_level},
-                user_email=current_user.username if current_user else None,
-            )
-        except Exception as trigger_err:
-            logger.warning("on_certify trigger error (non-fatal): %s", trigger_err)
+        fire_trigger_safe(
+            db, "on_certify",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=contract_db.name,
+            entity_data={"certification_level": contract_db.certification_level},
+            user_email=current_user.username if current_user else None,
+        )
 
         manager._update_search_index(contract_db, db)
 
@@ -894,6 +891,62 @@ async def certify_contract_direct(
         db.rollback()
         logger.exception("Certify contract failed for contract_id=%s", contract_id)
         raise HTTPException(status_code=500, detail="Failed to certify contract")
+
+
+@router.post('/data-contracts/{contract_id}/decertify')
+async def decertify_contract(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(ApprovalChecker('CONTRACTS')),
+):
+    """Remove certification from a data contract."""
+    try:
+        contract_db = data_contract_repo.get(db, id=contract_id)
+        if not contract_db:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+        old_level = contract_db.certification_level
+        contract_db.certification_level = None
+        contract_db.certified_at = None
+        contract_db.certified_by = None
+        contract_db.certification_expires_at = None
+        contract_db.certification_notes = None
+        db.add(contract_db)
+        db.commit()
+
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_decertify",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=contract_db.name,
+            user_email=current_user.username,
+        )
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action='DECERTIFY',
+            success=True,
+            details={'contract_id': contract_id, 'previous_level': old_level},
+        )
+
+        manager._update_search_index(contract_db, db)
+
+        return {'certification_level': None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Decertify contract failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to decertify contract")
 
 
 @router.post('/data-contracts/{contract_id}/set-publication-scope')
@@ -925,6 +978,8 @@ async def set_contract_publication_scope(
                 detail=f"Contract must be active or approved to publish. Current status: {contract_db.status}",
             )
 
+        was_published = (contract_db.publication_scope or "none").lower() != "none"
+
         if scope != "none":
             contract_db.publication_scope = scope
             contract_db.published_at = datetime.now(timezone.utc)
@@ -936,6 +991,18 @@ async def set_contract_publication_scope(
         db.add(contract_db)
         db.commit()
         db.refresh(contract_db)
+
+        # Fire on_unpublish trigger when transitioning from published to unpublished
+        if scope == "none" and was_published:
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType
+            fire_trigger_safe(
+                db, "on_unpublish",
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=contract_id,
+                entity_name=contract_db.name,
+                user_email=current_user.username if current_user else None,
+            )
 
         audit_manager.log_action(
             db=db,
@@ -1124,6 +1191,18 @@ async def create_contract(
         success = True
         created_contract_id = created.id
 
+        # Fire on_create workflow trigger
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_create",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=str(created.id),
+            entity_name=created.name,
+            entity_data={"contract_id": str(created.id), "name": created.name, "status": getattr(created, 'status', 'draft')},
+            user_email=current_user.email if current_user else None,
+        )
+
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return manager._build_contract_api_model(db, created_with_relations)
@@ -1238,6 +1317,34 @@ async def update_contract(
                         )
                         # Continue with update - admin override in effect
 
+        # Run before_update workflow validation
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+            trigger_registry = get_trigger_registry(db)
+            pre_passed, pre_executions = trigger_registry.before_update(
+                entity_type=EntityType.DATA_CONTRACT,
+                entity_id=contract_id,
+                entity_name=getattr(db_obj, 'name', None),
+                entity_data=contract_data.model_dump(exclude_unset=True),
+                user_email=current_user.email if current_user else None,
+            )
+            if not pre_passed:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        'message': 'Pre-update validation failed',
+                        'workflows': [
+                            {'workflow_name': exe.workflow_name, 'status': exe.status.value}
+                            for exe in pre_executions
+                        ],
+                    }
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"before_update trigger failed for contract {contract_id}: {e}")
+
         # Business logic now in manager (delivery handled via DeliveryMixin)
         updated = manager.update_contract_with_relations(
             db=db,
@@ -1248,6 +1355,18 @@ async def update_contract(
         )
 
         success = True
+
+        # Fire on_update workflow trigger
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_update",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_name=getattr(updated, 'name', None),
+            entity_data=contract_data.model_dump(exclude_unset=True),
+            user_email=current_user.email if current_user else None,
+        )
 
         # Load with relationships for full response
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
@@ -1305,6 +1424,18 @@ async def delete_contract(
         db.commit()
         success = True
         response_status_code = 204
+
+        # Fire on_delete workflow trigger
+        from src.common.workflow_triggers import fire_trigger_safe
+        from src.models.process_workflows import EntityType
+        fire_trigger_safe(
+            db, "on_delete",
+            entity_type=EntityType.DATA_CONTRACT,
+            entity_id=contract_id,
+            entity_data={"contract_id": contract_id},
+            user_email=current_user.email if current_user else None,
+        )
+
         return None
     except ValueError as e:
         response_status_code = 404
@@ -3834,6 +3965,341 @@ async def get_my_personal_drafts(
     except Exception as e:
         logger.error("Error fetching personal drafts", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch personal drafts")
+
+
+# ===== ODCS v3.1.0: Schema-Level Relationship CRUD =====
+
+def _relationship_db_to_dict(rel) -> dict:
+    """Convert a relationship DB row to an API-friendly dict."""
+    to_val = rel.to_value
+    try:
+        to_val = json.loads(rel.to_value)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    result = {
+        'id': rel.id,
+        'type': rel.relationship_type,
+        'to': to_val,
+    }
+    if hasattr(rel, 'from_value'):
+        from_val = rel.from_value
+        try:
+            from_val = json.loads(rel.from_value)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        result['from'] = from_val
+    if hasattr(rel, 'schema_object_id'):
+        result['schema_object_id'] = rel.schema_object_id
+    if hasattr(rel, 'property_id'):
+        result['property_id'] = rel.property_id
+    if rel.custom_properties_json:
+        try:
+            result['customProperties'] = json.loads(rel.custom_properties_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return result
+
+
+@router.get('/data-contracts/{contract_id}/schemas/{schema_id}/relationships', response_model=List[dict])
+async def list_schema_relationships(
+    contract_id: str,
+    schema_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    schema_obj = db.query(SchemaObjectDb).filter(
+        SchemaObjectDb.id == schema_id,
+        SchemaObjectDb.contract_id == contract_id
+    ).first()
+    if not schema_obj:
+        raise HTTPException(404, "Schema object not found")
+    rels = db.query(SchemaObjectRelationshipDb).filter(
+        SchemaObjectRelationshipDb.schema_object_id == schema_id
+    ).all()
+    return [_relationship_db_to_dict(r) for r in rels]
+
+
+@router.post('/data-contracts/{contract_id}/schemas/{schema_id}/relationships', response_model=dict, status_code=201)
+async def create_schema_relationship(
+    contract_id: str,
+    schema_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    schema_obj = db.query(SchemaObjectDb).filter(
+        SchemaObjectDb.id == schema_id,
+        SchemaObjectDb.contract_id == contract_id
+    ).first()
+    if not schema_obj:
+        raise HTTPException(404, "Schema object not found")
+
+    from_val = body.get('from', '')
+    to_val = body.get('to', '')
+    rel = SchemaObjectRelationshipDb(
+        id=str(uuid4()),
+        schema_object_id=schema_id,
+        relationship_type=body.get('type', 'foreignKey'),
+        from_value=json.dumps(from_val) if isinstance(from_val, list) else str(from_val),
+        to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
+        custom_properties_json=json.dumps(body['customProperties']) if body.get('customProperties') else None,
+    )
+    db.add(rel)
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.put('/data-contracts/{contract_id}/schemas/{schema_id}/relationships/{rel_id}', response_model=dict)
+async def update_schema_relationship(
+    contract_id: str,
+    schema_id: str,
+    rel_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    rel = db.query(SchemaObjectRelationshipDb).filter(
+        SchemaObjectRelationshipDb.id == rel_id,
+        SchemaObjectRelationshipDb.schema_object_id == schema_id
+    ).first()
+    if not rel:
+        raise HTTPException(404, "Relationship not found")
+
+    if 'type' in body:
+        rel.relationship_type = body['type']
+    if 'from' in body:
+        from_val = body['from']
+        rel.from_value = json.dumps(from_val) if isinstance(from_val, list) else str(from_val)
+    if 'to' in body:
+        to_val = body['to']
+        rel.to_value = json.dumps(to_val) if isinstance(to_val, list) else str(to_val)
+    if 'customProperties' in body:
+        rel.custom_properties_json = json.dumps(body['customProperties']) if body['customProperties'] else None
+
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/relationships/{rel_id}', status_code=204)
+async def delete_schema_relationship(
+    contract_id: str,
+    schema_id: str,
+    rel_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    deleted = db.query(SchemaObjectRelationshipDb).filter(
+        SchemaObjectRelationshipDb.id == rel_id,
+        SchemaObjectRelationshipDb.schema_object_id == schema_id
+    ).delete()
+    if not deleted:
+        raise HTTPException(404, "Relationship not found")
+    db.commit()
+
+
+# ===== ODCS v3.1.0: Property-Level Relationship CRUD =====
+
+@router.get('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships', response_model=List[dict])
+async def list_property_relationships(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    prop = db.query(SchemaPropertyDb).filter(
+        SchemaPropertyDb.id == prop_id,
+        SchemaPropertyDb.object_id == schema_id
+    ).first()
+    if not prop:
+        raise HTTPException(404, "Property not found")
+    rels = db.query(SchemaPropertyRelationshipDb).filter(
+        SchemaPropertyRelationshipDb.property_id == prop_id
+    ).all()
+    return [_relationship_db_to_dict(r) for r in rels]
+
+
+@router.post('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships', response_model=dict, status_code=201)
+async def create_property_relationship(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    prop = db.query(SchemaPropertyDb).filter(
+        SchemaPropertyDb.id == prop_id,
+        SchemaPropertyDb.object_id == schema_id
+    ).first()
+    if not prop:
+        raise HTTPException(404, "Property not found")
+
+    to_val = body.get('to', '')
+    rel = SchemaPropertyRelationshipDb(
+        id=str(uuid4()),
+        property_id=prop_id,
+        relationship_type=body.get('type', 'foreignKey'),
+        to_value=json.dumps(to_val) if isinstance(to_val, list) else str(to_val),
+        custom_properties_json=json.dumps(body['customProperties']) if body.get('customProperties') else None,
+    )
+    db.add(rel)
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.put('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships/{rel_id}', response_model=dict)
+async def update_property_relationship(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    rel_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    rel = db.query(SchemaPropertyRelationshipDb).filter(
+        SchemaPropertyRelationshipDb.id == rel_id,
+        SchemaPropertyRelationshipDb.property_id == prop_id
+    ).first()
+    if not rel:
+        raise HTTPException(404, "Relationship not found")
+
+    if 'type' in body:
+        rel.relationship_type = body['type']
+    if 'to' in body:
+        to_val = body['to']
+        rel.to_value = json.dumps(to_val) if isinstance(to_val, list) else str(to_val)
+    if 'customProperties' in body:
+        rel.custom_properties_json = json.dumps(body['customProperties']) if body['customProperties'] else None
+
+    db.commit()
+    db.refresh(rel)
+    return _relationship_db_to_dict(rel)
+
+
+@router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{prop_id}/relationships/{rel_id}', status_code=204)
+async def delete_property_relationship(
+    contract_id: str,
+    schema_id: str,
+    prop_id: str,
+    rel_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    deleted = db.query(SchemaPropertyRelationshipDb).filter(
+        SchemaPropertyRelationshipDb.id == rel_id,
+        SchemaPropertyRelationshipDb.property_id == prop_id
+    ).delete()
+    if not deleted:
+        raise HTTPException(404, "Relationship not found")
+    db.commit()
+
+
+# ===== ODCS v3.1.0: Team Metadata =====
+
+@router.get('/data-contracts/{contract_id}/team-metadata', response_model=dict)
+async def get_team_metadata(
+    contract_id: str,
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(404, "Contract not found")
+
+    meta = db.query(DataContractTeamMetadataDb).filter(
+        DataContractTeamMetadataDb.contract_id == contract_id
+    ).first()
+    if not meta:
+        return {'contract_id': contract_id, 'name': None, 'description': None}
+
+    result = {
+        'id': meta.id,
+        'contract_id': meta.contract_id,
+        'stable_id': meta.stable_id,
+        'name': meta.name,
+        'description': meta.description,
+    }
+    if meta.tags_json:
+        try:
+            result['tags'] = json.loads(meta.tags_json)
+        except (json.JSONDecodeError, TypeError):
+            result['tags'] = None
+    if meta.custom_properties_json:
+        try:
+            result['customProperties'] = json.loads(meta.custom_properties_json)
+        except (json.JSONDecodeError, TypeError):
+            result['customProperties'] = None
+    if meta.authoritative_definitions_json:
+        try:
+            result['authoritativeDefinitions'] = json.loads(meta.authoritative_definitions_json)
+        except (json.JSONDecodeError, TypeError):
+            result['authoritativeDefinitions'] = None
+    return result
+
+
+@router.put('/data-contracts/{contract_id}/team-metadata', response_model=dict)
+async def update_team_metadata(
+    contract_id: str,
+    body: dict = Body(...),
+    db: DBSessionDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(404, "Contract not found")
+
+    meta = db.query(DataContractTeamMetadataDb).filter(
+        DataContractTeamMetadataDb.contract_id == contract_id
+    ).first()
+    if not meta:
+        meta = DataContractTeamMetadataDb(
+            id=str(uuid4()),
+            contract_id=contract_id,
+        )
+        db.add(meta)
+
+    if 'name' in body:
+        meta.name = body['name']
+    if 'description' in body:
+        meta.description = body['description']
+    if 'tags' in body:
+        meta.tags_json = json.dumps(body['tags']) if body['tags'] else None
+    if 'customProperties' in body:
+        meta.custom_properties_json = json.dumps(body['customProperties']) if body['customProperties'] else None
+    if 'authoritativeDefinitions' in body:
+        meta.authoritative_definitions_json = json.dumps(body['authoritativeDefinitions']) if body['authoritativeDefinitions'] else None
+
+    db.commit()
+    db.refresh(meta)
+
+    result = {
+        'id': meta.id,
+        'contract_id': meta.contract_id,
+        'stable_id': meta.stable_id,
+        'name': meta.name,
+        'description': meta.description,
+    }
+    if meta.tags_json:
+        try:
+            result['tags'] = json.loads(meta.tags_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if meta.custom_properties_json:
+        try:
+            result['customProperties'] = json.loads(meta.custom_properties_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if meta.authoritative_definitions_json:
+        try:
+            result['authoritativeDefinitions'] = json.loads(meta.authoritative_definitions_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return result
 
 
 def register_routes(app):

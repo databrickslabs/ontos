@@ -12,6 +12,8 @@ from src.models.ontology import (
     ConceptSearchResult
 )
 from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate
+from src.utils.semantic_model_title_candidates import extract_title_candidates, pick_auto_display_name
+from src.utils.rdf_serialization_display import serialization_label_for_graph_taxonomy
 from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep, AuditCurrentUserDep
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
@@ -80,14 +82,29 @@ async def get_semantic_models(
             # Skip if name matches (either original or sanitized version)
             if tax.name in db_model_names or tax.name in db_model_names_sanitized:
                 continue
+            serialization = serialization_label_for_graph_taxonomy(
+                source_type=tax.source_type,
+                graph_format=tax.format,
+            )
+            size_bytes = None
+            if tax.source_type == 'file':
+                size_bytes = manager.bundled_taxonomy_file_size_bytes(tax.name)
+            if serialization == 'Turtle':
+                content_type = 'text/turtle'
+            elif serialization == 'RDF/XML':
+                content_type = 'application/rdf+xml'
+            else:
+                content_type = None
             # Create a pseudo-model for file-based/schema taxonomies
             combined.append({
                 'id': f'file-{tax.name}',  # Pseudo-ID for file-based
                 'name': tax.name,
-                'format': tax.format or 'skos',
+                'display_name': tax.display_name,
+                'format': tax.format,
+                'serialization': serialization,
                 'original_filename': tax.name,
-                'content_type': 'text/turtle' if tax.format == 'ttl' else 'application/rdf+xml',
-                'size_bytes': None,
+                'content_type': content_type,
+                'size_bytes': size_bytes,
                 'enabled': True,  # File-based are always enabled
                 'created_by': 'system@file' if tax.source_type == 'file' else f'system@{tax.source_type}',
                 'updated_by': None,
@@ -239,9 +256,12 @@ async def upload_semantic_model(
                 detail=f"Failed to parse ontology file. Please check the file format and syntax. Error: {str(parse_error)}"
             )
         
-        # Create semantic model in database
+        # Create semantic model in database (optional display title from ontology header)
+        title_candidates = extract_title_candidates(content_text, format_type)
+        auto_display_name = pick_auto_display_name(title_candidates)
         create_data = SemanticModelCreate(
             name=safe_filename,
+            display_name=auto_display_name,
             format=format_type,
             content_text=content_text,
             original_filename=safe_filename,
@@ -309,7 +329,10 @@ async def update_semantic_model(
     
     try:
         # Update the model
-        updated_model = manager.update(model_id, update_data, updated_by=current_user.username)
+        try:
+            updated_model = manager.update(model_id, update_data, updated_by=current_user.username)
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve)) from ve
         
         if not updated_model:
             audit_manager.log_action(
@@ -455,6 +478,20 @@ async def get_semantic_model_content(
     except Exception as e:
         logger.error(f"Error retrieving semantic model content for {model_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve semantic model content")
+
+
+@router.get('/semantic-models/{model_id}/title-candidates')
+async def get_semantic_model_title_candidates(
+    model_id: str,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker("semantic-models", FeatureAccessLevel.READ_ONLY)),
+) -> dict:
+    """Suggest display titles from owl:Ontology / skos:ConceptScheme header metadata."""
+    candidates = manager.get_title_candidates(model_id)
+    if candidates is None:
+        raise HTTPException(status_code=404, detail="Semantic model not found")
+    return {"candidates": candidates}
+
 
 @router.get('/semantic-models/concepts')
 async def list_simple_concepts(
@@ -943,6 +980,8 @@ async def update_knowledge_collection(
         if not collection:
             raise HTTPException(status_code=404, detail=f"Collection not found: {collection_iri}")
         return collection
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -963,6 +1002,8 @@ async def delete_knowledge_collection(
         if not success:
             raise HTTPException(status_code=404, detail=f"Collection not found: {collection_iri}")
         return {'success': True, 'message': f"Collection deleted: {collection_iri}"}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1043,6 +1084,8 @@ async def update_concept(
         if not concept:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1063,6 +1106,8 @@ async def delete_concept(
         if not success:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return {'success': True, 'message': f"Concept deleted: {concept_iri}"}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1085,15 +1130,25 @@ async def add_concept_owner(
     """Add an owner to a concept."""
     try:
         data = await request.json()
+        # Accept user_email directly or extract from user_uri (e.g. "mailto:user@example.com")
+        user_email = data.get('user_email')
+        if not user_email:
+            user_uri = data.get('user_uri', '')
+            if user_uri.startswith('mailto:'):
+                user_email = user_uri[len('mailto:'):]
+            elif user_uri:
+                user_email = user_uri
         concept = manager.add_concept_owner(
             concept_iri=concept_iri,
-            user_email=data.get('user_email'),
+            user_email=user_email,
             role=data.get('role'),
             assigned_by=current_user.email,
         )
         if not concept:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1119,6 +1174,8 @@ async def remove_concept_owner(
         if not concept:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1140,7 +1197,10 @@ async def submit_concept_for_review(
 ) -> dict:
     """Submit a concept for review."""
     try:
-        data = await request.json()
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
         review_data = manager.submit_concept_for_review(
             concept_iri=concept_iri,
             reviewer_email=data.get('reviewer_email'),
@@ -1155,11 +1215,39 @@ async def submit_concept_for_review(
             updated_by=current_user.email,
         )
         return {'review_data': review_data, 'concept': updated}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error submitting for review: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to submit for review")
+
+
+@router.post('/knowledge/concepts/{concept_iri:path}/approve')
+async def approve_concept(
+    concept_iri: str,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Approve a concept that is under review."""
+    try:
+        concept = manager.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="approved",
+            updated_by=current_user.email,
+        )
+        if not concept:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error approving concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to approve concept")
 
 
 @router.post('/knowledge/concepts/{concept_iri:path}/publish')
@@ -1169,8 +1257,20 @@ async def publish_concept(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Publish an approved concept."""
+    """Publish an approved concept.
+
+    If the concept is currently ``under_review``, it is automatically
+    approved first so callers do not need a separate ``/approve`` step.
+    """
     try:
+        # Auto-approve if still under_review so publish works in one step
+        existing = manager.get_concept(concept_iri)
+        if existing and existing.get("status") == "under_review":
+            manager.update_concept_status(
+                concept_iri=concept_iri,
+                new_status="approved",
+                updated_by=current_user.email,
+            )
         concept = manager.update_concept_status(
             concept_iri=concept_iri,
             new_status="published",
@@ -1179,6 +1279,8 @@ async def publish_concept(
         if not concept:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1203,6 +1305,8 @@ async def certify_concept(
         if not concept:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1227,6 +1331,8 @@ async def deprecate_concept(
         if not concept:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1251,6 +1357,8 @@ async def archive_concept(
         if not concept:
             raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1280,6 +1388,8 @@ async def promote_concept(
             promoted_by=current_user.email,
         )
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1305,6 +1415,8 @@ async def migrate_concept(
             migrated_by=current_user.email,
         )
         return concept
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -1,0 +1,13 @@
+# E2E Test Configuration
+# Copy this file to config.local.yaml and adjust values for your environment.
+# config.local.yaml is gitignored and will override these defaults.
+
+# The base URL of the deployed Ontos application to test against.
+# For Databricks Apps: https://<app-name>-<workspace-id>.<cloud>.databricksapps.com
+# For local development: http://localhost:8000
+base_url: "http://localhost:8000"
+
+# Databricks authentication settings (used to obtain an OAuth token via the CLI).
+databricks:
+  host: "https://e2-demo-field-eng.cloud.databricks.com"
+  profile: "DEFAULT"

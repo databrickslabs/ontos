@@ -290,7 +290,7 @@ class Team(BaseModel):
 class DataProduct(BaseModel):
     """ODPS v1.0.0 Data Product"""
     # ODPS v1.0.0 required fields
-    apiVersion: str = Field("v1.0.0", description="Version of the ODPS standard")
+    apiVersion: str = Field("v1.0.0", alias="api_version", description="Version of the ODPS standard")
     kind: str = Field("DataProduct", description="Resource type")
     id: str = Field(..., description="Unique identifier")
     status: str = Field(..., description="Status (proposed, draft, active, deprecated, retired)")
@@ -304,9 +304,9 @@ class DataProduct(BaseModel):
     owner_team_name: Optional[str] = Field(None, description="Owner team name (resolved at query time)")
     project_id: Optional[str] = Field(None, description="Project association")
     project_name: Optional[str] = Field(None, description="Project name (resolved at query time)")
-    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, alias="authoritative_definitions", description="Authoritative definitions")
     description: Optional[Description] = Field(None, description="Structured description")
-    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    customProperties: Optional[List[CustomProperty]] = Field(None, alias="custom_properties", description="Custom properties")
     tags: Optional[List[Union[AssignedTag, AssignedTagCreate]]] = Field(default_factory=list, description="List of assigned tags (full metadata or IDs for creation)")
     inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports", description="Input ports")
     outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports", description="Output ports")
@@ -415,7 +415,10 @@ class DataProductCreate(BaseModel):
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
     support: Optional[List[Support]] = Field(None, alias="support_channels", description="Support channels")
     team: Optional[Team] = Field(None, description="Team")
-    
+
+    # Versioning
+    parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")
+
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
 

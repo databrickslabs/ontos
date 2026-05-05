@@ -166,5 +166,33 @@
       "title": "Create Link",
       "description": "Define a relationship between two concepts"
     }
+  },
+  "rdfSources": {
+    "syntaxColumn": "Syntax",
+    "serializationUnknown": "—",
+    "serializationTurtle": "Turtle",
+    "serializationRdfXml": "RDF/XML",
+    "serializationJsonLd": "JSON-LD",
+    "serializationNTriples": "N-Triples",
+    "serializationTriG": "TriG",
+    "viewRawDescription": "Raw RDF content ({{syntax}}).",
+    "viewRawDescriptionFallback": "Raw RDF content.",
+    "nameColumn": "Name",
+    "editDisplayTitle": "Edit display title",
+    "titleDialog": "RDF source title",
+    "titleDialogDescription": "Pick a label from the ontology header or enter a custom title. The file name remains the internal graph key.",
+    "suggestedFromFile": "Suggested from file",
+    "customTitle": "Custom title",
+    "useFilename": "Use file name",
+    "titleSaved": "Display title updated",
+    "loadSuggestionsFailed": "Failed to load title suggestions",
+    "fileBackedReadOnly": "Built-in file sources use the file name as the title.",
+    "systemNamespaces": {
+      "metaSources": "Source registry metadata",
+      "semanticLinks": "Semantic links",
+      "rdflibDefault": "Default graph",
+      "appEntities": "App Entities",
+      "demoGraph": "Demo business concepts"
+    }
   }
 }

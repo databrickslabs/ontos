@@ -439,6 +439,52 @@ By contributing to Ontos, you agree that your contributions will be licensed und
 
 ---
 
+## Supply Chain Security
+
+This project follows GitHub Actions supply chain security best practices as required for `databrickslabs` repos.
+
+### Action Pinning
+
+All GitHub Actions in `.github/workflows/` must be pinned to full SHA commits with a version comment:
+
+```yaml
+# Correct
+uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+# Incorrect
+uses: actions/checkout@v4
+```
+
+Dependabot (`.github/dependabot.yml`) will automatically open PRs when new action versions are available.
+
+### Python Dependency Pinning
+
+Python dependencies use a two-file pattern:
+
+- `requirements.in` - Source constraint files with version ranges (what you edit)
+- `requirements.txt` - Locked files with exact versions and hashes (what CI installs)
+
+To regenerate locked files after updating `.in` files:
+
+```bash
+./scripts/lock-requirements.sh
+```
+
+This requires [uv](https://github.com/astral-sh/uv) and PyPI access. The script runs `uv pip compile --generate-hashes` for all three requirement sets (`src/`, `src/backend/`, `src/e2e/`).
+
+### Workflow Permissions
+
+All workflows must declare a minimal `permissions` block at the workflow level:
+
+```yaml
+permissions:
+  contents: read
+```
+
+Only add additional permissions (e.g., `issues: write`) if the workflow genuinely requires them.
+
+---
+
 ## Questions?
 
 - Open an issue for bugs or feature requests

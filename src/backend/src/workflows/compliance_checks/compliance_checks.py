@@ -29,32 +29,41 @@ from databricks.sdk import WorkspaceClient
 # ============================================================================
 
 def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str, str]:
-    """Generate OAuth token for the service principal to access Lakebase Postgres."""
+    """Generate OAuth token for the service principal to access Lakebase Postgres.
+
+    ``instance_name`` is either a provisioned instance name or an autoscale
+    endpoint resource name (``projects/…/endpoints/…``).  The correct SDK API
+    is chosen automatically.
+    """
     if not instance_name or instance_name == 'None' or instance_name == '':
         raise RuntimeError(
-            "Lakebase instance name is required but was not provided.\n"
+            "Lakebase identifier is required but was not provided.\n"
             "This is auto-detected from the Databricks App resources.\n"
             "Ensure your app has a Lakebase database resource configured."
         )
 
-    print(f"  Generating OAuth token for instance: {instance_name}")
+    is_autoscale = instance_name.startswith("projects/")
+    print(f"  Generating OAuth token for {'autoscale' if is_autoscale else 'provisioned'} Lakebase: {instance_name}")
 
-    # Get current service principal
     current_user = ws_client.current_user.me().user_name
     print(f"  Service Principal: {current_user}")
 
-    # Generate token
     try:
-        cred = ws_client.database.generate_database_credential(
-            request_id=str(uuid4()),
-            instance_names=[instance_name],
-        )
+        if is_autoscale:
+            cred = ws_client.postgres.generate_database_credential(
+                endpoint=instance_name,
+            )
+        else:
+            cred = ws_client.database.generate_database_credential(
+                request_id=str(uuid4()),
+                instance_names=[instance_name],
+            )
     except AttributeError as e:
         raise RuntimeError(
             f"Failed to generate OAuth token: {e}\n"
             "This may indicate that the Databricks SDK version doesn't support database OAuth,\n"
             "or that the workspace client is not properly initialized.\n"
-            "Please ensure you're using a recent version of the databricks-sdk package."
+            "Please ensure you're using databricks-sdk >= 0.81.0."
         )
 
     print(f"  ✓ Successfully generated OAuth token")

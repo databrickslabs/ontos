@@ -51,7 +51,7 @@ resources:
             permission: "CAN_USE"
       permissions:
         - user_name: "*"
-          level: "CAN_VIEW"
+          level: "CAN_USE"
 
 targets:
   dev:

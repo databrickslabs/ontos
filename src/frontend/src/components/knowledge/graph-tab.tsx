@@ -13,6 +13,7 @@ interface GraphTabProps {
   onLinkDraw?: (source: OntologyConcept, target: OntologyConcept) => void;
   onLinkDrawCancel?: () => void;
   showRootBadges?: boolean;
+  selectedLanguage?: string;
 }
 
 export const GraphTab: React.FC<GraphTabProps> = ({
@@ -26,6 +27,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({
   onLinkDraw,
   onLinkDrawCancel,
   showRootBadges = true,
+  selectedLanguage = 'en',
 }) => {
   return (
     <div className="h-[800px] flex flex-col">
@@ -42,6 +44,7 @@ export const GraphTab: React.FC<GraphTabProps> = ({
           onLinkDraw={onLinkDraw}
           onLinkDrawCancel={onLinkDrawCancel}
           showRootBadges={showRootBadges}
+          selectedLanguage={selectedLanguage}
         />
       </div>
     </div>

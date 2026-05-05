@@ -212,6 +212,59 @@ export const ALL_STEP_TYPES: StepType[] = [
 ];
 
 /**
+ * Maps each trigger type to the entity types it is wired to fire for in the backend.
+ * Used to warn users when they configure a workflow with an unwired combination.
+ *
+ * Updated for issue #200 — reflects all wired triggers as of this commit.
+ */
+export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
+  // CRUD triggers
+  on_create: ['catalog', 'schema', 'table', 'data_contract', 'data_product', 'domain'],
+  on_update: ['data_contract', 'data_product', 'domain'],
+  on_delete: ['data_contract', 'data_product', 'domain'],
+  before_create: ['catalog', 'schema', 'table'],
+  before_update: ['data_contract'],
+  // Status & lifecycle
+  before_status_change: ['data_contract', 'data_product'],
+  on_status_change: ['data_contract', 'data_product', 'data_asset_review'],
+  on_publish: ['data_contract', 'data_product'],
+  on_unpublish: ['data_contract', 'data_product'],
+  // Certification
+  on_request_certify: ['data_contract', 'data_product'],
+  on_certify: ['data_contract', 'data_product'],
+  on_decertify: ['data_contract', 'data_product'],
+  // Request triggers
+  on_request_review: ['data_contract', 'data_product', 'data_asset_review'],
+  on_request_access: ['access_grant', 'role', 'project'],
+  on_request_publish: ['data_contract', 'data_product'],
+  on_request_status_change: ['data_product'],
+  // Job triggers
+  on_job_success: ['job'],
+  on_job_failure: ['job'],
+  // Subscription triggers
+  on_subscribe: ['subscription'],
+  on_unsubscribe: ['subscription'],
+  // Access lifecycle
+  on_expiring: ['access_grant'],
+  on_revoke: ['access_grant'],
+  // Manual/scheduled — always supported (no entity dependency)
+  scheduled: [],
+  manual: [],
+};
+
+/**
+ * Check if a trigger-entity combination is wired in the backend.
+ * Returns true if supported, false if the combination will silently do nothing.
+ */
+export function isTriggerEntitySupported(triggerType: string, entityType: string): boolean {
+  const supported = SUPPORTED_TRIGGER_ENTITY_MAP[triggerType];
+  if (!supported) return false;
+  // Empty array means all entities are valid (scheduled, manual)
+  if (supported.length === 0) return true;
+  return supported.includes(entityType);
+}
+
+/**
  * Special recipient values that are not role UUIDs.
  */
 export const SPECIAL_RECIPIENTS: Record<string, string> = {

@@ -6,7 +6,7 @@ environments:
   - environment_key: "mdm-env"
     spec:
       dependencies:
-        - "databricks-sdk>=0.60.0"
+        - "databricks-sdk>=0.81.0"
         - "sqlalchemy"
         - "psycopg2-binary"
         - "fuzzywuzzy"

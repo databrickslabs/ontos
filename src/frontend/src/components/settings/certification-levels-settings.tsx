@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, GripVertical, Pencil, Trash2, Shield, ShieldCheck, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Shield, ShieldCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,7 +51,6 @@ const ICON_MAP: Record<string, typeof Shield> = {
 const COLOR_OPTIONS = ['amber', 'slate', 'yellow', 'green', 'blue', 'purple', 'red', 'emerald'];
 
 export default function CertificationLevelsSettings() {
-  const { t } = useTranslation(['settings']);
   const { toast } = useToast();
   const { get, post, put, delete: apiDelete } = useApi();
 

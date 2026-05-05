@@ -36,19 +36,28 @@ except ImportError as e:
 # ============================================================================
 
 def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str, str]:
-    """Generate OAuth token for the service principal to access Lakebase Postgres."""
-    print(f"  Generating OAuth token for instance: {instance_name}")
-    
-    # Get current service principal
+    """Generate OAuth token for the service principal to access Lakebase Postgres.
+
+    ``instance_name`` is either a provisioned instance name or an autoscale
+    endpoint resource name (``projects/…/endpoints/…``).  The correct SDK API
+    is chosen automatically.
+    """
+    is_autoscale = instance_name.startswith("projects/")
+    print(f"  Generating OAuth token for {'autoscale' if is_autoscale else 'provisioned'} Lakebase: {instance_name}")
+
     current_user = ws_client.current_user.me().user_name
     print(f"  Service Principal: {current_user}")
-    
-    # Generate token
-    cred = ws_client.database.generate_database_credential(
-        request_id=str(uuid4()),
-        instance_names=[instance_name],
-    )
-    
+
+    if is_autoscale:
+        cred = ws_client.postgres.generate_database_credential(
+            endpoint=instance_name,
+        )
+    else:
+        cred = ws_client.database.generate_database_credential(
+            request_id=str(uuid4()),
+            instance_names=[instance_name],
+        )
+
     print(f"  ✓ Successfully generated OAuth token")
     return current_user, cred.token
 

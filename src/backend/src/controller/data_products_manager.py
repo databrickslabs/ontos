@@ -122,31 +122,36 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         db: Optional[Session] = None,
         user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
+        preserve_source_id: bool = False,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
-        
+
         Args:
             product_data: Dictionary containing product data
             db: Optional database session to use. If not provided, uses self._db
             user: Optional user who created the product (for delivery tracking)
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
+            preserve_source_id: If True, preserve the original non-UUID id as a
+                sourceId custom property (used during batch upload/import)
         """
         from src.controller.delivery_service import DeliveryChangeType
-        
+
         logger.debug(f"Manager creating ODPS product from data: {product_data}")
         # Use provided session or fall back to instance session
         db_session = db if db is not None else self._db
         try:
             # Preserve original external ID (e.g. URN) as a custom property
-            original_id = product_data.get('id')
-            if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
-                custom_props = product_data.get('customProperties', [])
-                if isinstance(custom_props, list):
-                    custom_props.append({"property": SOURCE_ID_PROPERTY, "value": original_id})
-                elif isinstance(custom_props, dict):
-                    custom_props[SOURCE_ID_PROPERTY] = original_id
-                product_data['customProperties'] = custom_props
-                logger.info(f"Preserved original ID '{original_id}' as {SOURCE_ID_PROPERTY} custom property")
+            # Only when explicitly requested (e.g. during batch upload/import)
+            if preserve_source_id:
+                original_id = product_data.get('id')
+                if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
+                    custom_props = product_data.get('customProperties', [])
+                    if isinstance(custom_props, list):
+                        custom_props.append({"property": SOURCE_ID_PROPERTY, "value": original_id})
+                    elif isinstance(custom_props, dict):
+                        custom_props[SOURCE_ID_PROPERTY] = original_id
+                    product_data['customProperties'] = custom_props
+                    logger.info(f"Preserved original ID '{original_id}' as {SOURCE_ID_PROPERTY} custom property")
 
             # Always generate a UUID for the product ID
             product_data['id'] = str(uuid.uuid4())
@@ -603,10 +608,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 new_status=new_status_lower
             )
             
+            # Fire on_status_change workflow trigger
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType
+            fire_trigger_safe(
+                self._db, "on_status_change",
+                entity_type=EntityType.DATA_PRODUCT,
+                entity_id=product_id,
+                from_status=current_status,
+                to_status=new_status_lower,
+                entity_name=product_db.name,
+                entity_data={"name": product_db.name, "status": new_status_lower},
+                user_email=current_user,
+            )
+
             result = self._load_product_with_tags(product_db)
             self._update_search_index(result)
             return result
-            
+
         except SQLAlchemyError as e:
             logger.error(f"Database error transitioning product {product_id} status: {e}")
             raise
@@ -1268,9 +1287,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 continue
 
             try:
-                # create_product() always generates a UUID and preserves
-                # any non-UUID original id as a sourceId custom property
-                created_product = self.create_product(product_data)
+                # create_product() always generates a UUID; preserve_source_id=True
+                # stores any non-UUID original id as a sourceId custom property
+                created_product = self.create_product(product_data, preserve_source_id=True)
                 created_products.append(created_product)
                 logger.info(f"Successfully created product {created_product.id} from batch upload")
 
@@ -1305,6 +1324,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Generate new ID and set new version
         new_product_data['id'] = str(uuid.uuid4())
         new_product_data['version'] = request.new_version
+
+        # Link new version back to the original product
+        new_product_data['parent_product_id'] = original_product_id
 
         # Reset status to DRAFT
         new_product_data['status'] = DataProductStatus.DRAFT.value
@@ -2768,7 +2790,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise ValueError(f"Product {product_id} not found")
         
         # Fetch team with members
-        team = team_repo.get_with_members(self.db, id=team_id)
+        team = team_repo.get_with_members(self._db, id=team_id)
         if not team:
             raise ValueError(f"Team {team_id} not found")
         

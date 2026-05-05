@@ -59,9 +59,12 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             db.rollback()
             raise
 
-    def create(self, db: Session, *, obj_in: CreateSchemaType) -> ModelType:
+    def create(self, db: Session, *, obj_in: Union[CreateSchemaType, Dict[str, Any]]) -> ModelType:
         logger.debug(f"Creating new {self.model.__name__}")
-        obj_in_data = obj_in.dict()
+        if isinstance(obj_in, dict):
+            obj_in_data = obj_in
+        else:
+            obj_in_data = obj_in.dict()
         db_obj = self.model(**obj_in_data)  # type: ignore
         try:
             db.add(db_obj)

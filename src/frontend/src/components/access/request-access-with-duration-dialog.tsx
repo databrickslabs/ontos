@@ -31,7 +31,6 @@ export interface RequestAccessWithDurationDialogProps {
 const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   data_product: 'Data Product',
   data_contract: 'Data Contract',
-  dataset: 'Dataset',
   table: 'Table',
   schema: 'Schema',
   catalog: 'Catalog',
@@ -40,7 +39,6 @@ const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
 const ENTITY_TYPE_ICONS: Record<EntityType, React.ReactNode> = {
   data_product: <Package className="h-5 w-5 text-primary" />,
   data_contract: <FileText className="h-5 w-5 text-primary" />,
-  dataset: <Table2 className="h-5 w-5 text-primary" />,
   table: <Table2 className="h-5 w-5 text-primary" />,
   schema: <Database className="h-5 w-5 text-primary" />,
   catalog: <Database className="h-5 w-5 text-primary" />,

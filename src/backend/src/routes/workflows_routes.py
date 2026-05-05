@@ -178,24 +178,47 @@ async def list_roles_for_workflows(
     db: DBSessionDep,
     _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ) -> List[Dict[str, Any]]:
-    """List app roles for workflow designer selection.
-    
-    Returns roles with their UUIDs for use in approval/notification step configuration.
-    Using UUIDs ensures referential integrity if roles are renamed.
+    """List roles available for workflow approver/recipient selection.
+
+    Returns both app roles (RBAC) and business roles (governance) that are
+    marked as approvers. Each role includes a 'source' field to distinguish
+    between app and business roles.
     """
     from src.db_models.settings import AppRoleDb
-    
-    roles = db.query(AppRoleDb).order_by(AppRoleDb.name).all()
-    
-    return [
-        {
-            "id": r.id,
+    from src.db_models.business_roles import BusinessRoleDb
+
+    # App roles (RBAC)
+    app_roles = db.query(AppRoleDb).order_by(AppRoleDb.name).all()
+
+    # Business roles marked as approvers
+    business_roles = (
+        db.query(BusinessRoleDb)
+        .filter(BusinessRoleDb.is_approver.is_(True), BusinessRoleDb.status == "active")
+        .order_by(BusinessRoleDb.name)
+        .all()
+    )
+
+    result = []
+
+    for r in app_roles:
+        result.append({
+            "id": str(r.id),
             "name": r.name,
             "description": r.description,
-            "has_groups": bool(r.assigned_groups),  # Indicate if role is configured
-        }
-        for r in roles
-    ]
+            "source": "app",
+            "has_groups": bool(r.assigned_groups),
+        })
+
+    for r in business_roles:
+        result.append({
+            "id": f"business:{r.id}",
+            "name": r.name,
+            "description": r.description,
+            "source": "business",
+            "category": r.category,
+        })
+
+    return result
 
 
 @router.get("/roles/{role_id}")
@@ -206,15 +229,30 @@ async def get_role_by_id(
 ) -> Dict[str, Any]:
     """Get a single role by UUID for display purposes."""
     from src.db_models.settings import AppRoleDb
-    
+    from src.db_models.business_roles import BusinessRoleDb
+
+    # Check if it's a business role (prefixed with "business:")
+    if role_id.startswith("business:"):
+        br_id = role_id[len("business:"):]
+        role = db.query(BusinessRoleDb).filter(BusinessRoleDb.id == br_id).first()
+        if not role:
+            raise HTTPException(status_code=404, detail="Business role not found")
+        return {
+            "id": f"business:{role.id}",
+            "name": role.name,
+            "description": role.description,
+            "source": "business",
+        }
+
     role = db.query(AppRoleDb).filter(AppRoleDb.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    
+
     return {
-        "id": role.id,
+        "id": str(role.id),
         "name": role.name,
         "description": role.description,
+        "source": "app",
     }
 
 

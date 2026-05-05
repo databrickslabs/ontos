@@ -4,17 +4,18 @@ import { useTranslation } from 'react-i18next';
 import ReactFlow, {
   Node,
   Edge,
+  Connection,
   Controls,
   Background,
   MiniMap,
   useNodesState,
   useEdgesState,
-  // addEdge - unused
-  // Connection - unused
-  // NodeChange - unused
-  // EdgeChange - unused
   MarkerType,
   Panel,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
+  type EdgeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
@@ -28,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -97,10 +98,11 @@ import type {
   HttpConnectionRef,
 } from '@/types/process-workflow';
 import { 
-  getTriggerTypeLabel, 
-  getEntityTypeLabel, 
-  ALL_TRIGGER_TYPES, 
-  ALL_ENTITY_TYPES 
+  getTriggerTypeLabel,
+  getEntityTypeLabel,
+  ALL_TRIGGER_TYPES,
+  ALL_ENTITY_TYPES,
+  isTriggerEntitySupported,
 } from '@/lib/workflow-labels';
 
 // Node types registry (default = fallback for unknown step_type e.g. generate_pdf)
@@ -120,6 +122,57 @@ const nodeTypes = {
   webhook: WebhookNode,
   entity_action: EntityActionNode,
   default: DefaultStepNode,
+};
+
+// Custom edge with visible delete button when selected
+function DeletableEdge({
+  id, sourceX, sourceY, targetX, targetY,
+  sourcePosition, targetPosition, style, label, labelStyle, markerEnd, selected, data,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
+  });
+
+  return (
+    <>
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      <EdgeLabelRenderer>
+        <div
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+            pointerEvents: 'all',
+          }}
+          className="nodrag nopan flex items-center gap-1"
+        >
+          {label && (
+            <span className="text-xs font-medium" style={{ ...labelStyle, color: (labelStyle as any)?.fill || (labelStyle as any)?.color }}>
+              {label}
+            </span>
+          )}
+          {selected && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                data?.onDelete?.(id);
+              }}
+              className="flex items-center justify-center w-5 h-5 rounded-full
+                bg-red-500 hover:bg-red-600 text-white text-xs leading-none
+                shadow-sm transition-colors dark:bg-red-600 dark:hover:bg-red-700"
+              title="Delete connection"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+// Edge types registry
+const edgeTypes = {
+  deletable: DeletableEdge,
 };
 
 // Layout helper
@@ -191,6 +244,7 @@ const workflowToElements = (
       id: 'trigger-to-first',
       source: 'trigger',
       target: workflow.steps[0].step_id,
+      type: 'deletable',
       markerEnd: { type: MarkerType.ArrowClosed },
     });
   }
@@ -203,6 +257,7 @@ const workflowToElements = (
         source: step.step_id,
         sourceHandle: 'pass',
         target: step.on_pass,
+        type: 'deletable',
         label: 'Pass',
         labelStyle: { fill: '#22c55e', fontWeight: 500 },
         markerEnd: { type: MarkerType.ArrowClosed },
@@ -215,6 +270,7 @@ const workflowToElements = (
         source: step.step_id,
         sourceHandle: 'fail',
         target: step.on_fail,
+        type: 'deletable',
         label: 'Fail',
         labelStyle: { fill: '#ef4444', fontWeight: 500 },
         markerEnd: { type: MarkerType.ArrowClosed },
@@ -249,7 +305,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
-  const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; has_groups: boolean }[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   
@@ -263,6 +319,60 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [isActive, setIsActive] = useState(true);
   const [steps, setSteps] = useState<WorkflowStepCreate[]>([]);
   
+  // Helper to render roles grouped by source type
+  const renderGroupedRoles = (roles: typeof availableRoles, includeSpecialItems?: { requester?: boolean; owner?: boolean }) => {
+    const appRoles = roles.filter(r => r.source === 'app');
+    const businessRoles = roles.filter(r => r.source === 'business');
+
+    return (
+      <>
+        {includeSpecialItems?.requester && (
+          <SelectGroup>
+            <SelectLabel>Special</SelectLabel>
+            <SelectItem value="requester">Requester (Original User)</SelectItem>
+            {includeSpecialItems?.owner && (
+              <SelectItem value="owner">Owner (Entity Owner)</SelectItem>
+            )}
+          </SelectGroup>
+        )}
+        {appRoles.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>App Roles</SelectLabel>
+            {appRoles.map((role) => (
+              <SelectItem key={role.id} value={role.id}>
+                <div className="flex items-center gap-2">
+                  <span>{role.name}</span>
+                  {!role.has_groups && (
+                    <Badge variant="outline" className="text-xs text-amber-600">
+                      No groups
+                    </Badge>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
+        {businessRoles.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>Business Roles</SelectLabel>
+            {businessRoles.map((role) => (
+              <SelectItem key={role.id} value={role.id}>
+                <div className="flex items-center gap-2">
+                  <span>{role.name}</span>
+                  {role.category && (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                      {role.category}
+                    </Badge>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        )}
+      </>
+    );
+  };
+
   // Track initial state for dirty checking
   interface OriginalState {
     name: string;
@@ -276,8 +386,42 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState([]);
+
+  // Wrap onEdgesChange to sync step on_pass/on_fail when edges are removed
+  const onEdgesChange = useCallback((changes: import('reactflow').EdgeChange[]) => {
+    onEdgesChangeBase(changes);
+    for (const change of changes) {
+      if (change.type === 'remove') {
+        const removed = edges.find(e => e.id === change.id);
+        if (removed) {
+          const field = removed.sourceHandle === 'fail' ? 'on_fail' : 'on_pass';
+          setSteps(prev => prev.map(s =>
+            s.step_id === removed.source ? { ...s, [field]: undefined } : s
+          ));
+        }
+      }
+    }
+  }, [onEdgesChangeBase, edges]);
+
+  // Delete edge handler — removes edge and syncs step on_pass/on_fail
+  const onDeleteEdge = useCallback((edgeId: string) => {
+    const target = edges.find(e => e.id === edgeId);
+    if (target) {
+      const field = target.sourceHandle === 'fail' ? 'on_fail' : 'on_pass';
+      setSteps(prev => prev.map(s =>
+        s.step_id === target.source ? { ...s, [field]: undefined } : s
+      ));
+    }
+    setEdges(prev => prev.filter(e => e.id !== edgeId));
+  }, [edges, setEdges]);
+
+  // Inject onDelete callback into every edge's data so DeletableEdge can call it
+  const edgesWithDelete = useMemo(
+    () => edges.map(e => ({ ...e, data: { ...e.data, onDelete: onDeleteEdge } })),
+    [edges, onDeleteEdge],
+  );
+
   // Compute dirty state - compare current values to original
   const isDirty = useMemo(() => {
     if (!originalState) {
@@ -363,7 +507,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       
       // Load available roles for approval/notification step selectors
       try {
-        const rolesResponse = await get<{ id: string; name: string; has_groups: boolean }[]>('/api/workflows/roles');
+        const rolesResponse = await get<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>('/api/workflows/roles');
         if (rolesResponse.data && Array.isArray(rolesResponse.data)) {
           setAvailableRoles(rolesResponse.data);
         } else {
@@ -490,6 +634,70 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     setSelectedNodeId(node.id);
   }, []);
 
+  // Handle edge reconnection (drag an existing edge endpoint to a different node)
+  const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    if (!newConnection.source || !newConnection.target) return;
+    const handleType = oldEdge.sourceHandle || 'pass';
+    const isPass = handleType !== 'fail';
+
+    // Remove old edge and add reconnected edge
+    setEdges(prev => {
+      const filtered = prev.filter(e => e.id !== oldEdge.id);
+      const reconnectedEdge: Edge = {
+        id: `${newConnection.source}-${handleType}-to-${newConnection.target}`,
+        source: newConnection.source!,
+        sourceHandle: handleType,
+        target: newConnection.target!,
+        type: 'deletable',
+        label: isPass ? 'Pass' : 'Fail',
+        labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: isPass ? '#22c55e' : '#ef4444' },
+      };
+      return [...filtered, reconnectedEdge];
+    });
+
+    // Clear old target, set new target in step data
+    setSteps(prev => prev.map(s => {
+      if (s.step_id === oldEdge.source) {
+        return { ...s, [isPass ? 'on_pass' : 'on_fail']: newConnection.target };
+      }
+      return s;
+    }));
+  }, [setEdges]);
+
+  // Handle manual edge creation (drag from handle to handle)
+  const onConnect = useCallback((connection: Connection) => {
+    if (!connection.source || !connection.target) return;
+    const handleType = connection.sourceHandle || 'pass';
+    const isPass = handleType !== 'fail';
+
+    // Remove any existing edge from the same source handle
+    setEdges(prev => prev.filter(e =>
+      !(e.source === connection.source && e.sourceHandle === handleType)
+    ));
+
+    const newEdge: Edge = {
+      id: `${connection.source}-${handleType}-to-${connection.target}`,
+      source: connection.source,
+      sourceHandle: handleType,
+      target: connection.target,
+      type: 'deletable',
+      label: isPass ? 'Pass' : 'Fail',
+      labelStyle: { fill: isPass ? '#22c55e' : '#ef4444', fontWeight: 500 },
+      markerEnd: { type: MarkerType.ArrowClosed },
+      style: { stroke: isPass ? '#22c55e' : '#ef4444' },
+    };
+    setEdges(prev => [...prev, newEdge]);
+
+    // Update the step's on_pass or on_fail
+    setSteps(prev => prev.map(s =>
+      s.step_id === connection.source
+        ? { ...s, [isPass ? 'on_pass' : 'on_fail']: connection.target }
+        : s
+    ));
+  }, [setEdges]);
+
   // Add new step
   const addStep = (type: StepType) => {
     const stepId = `step-${Date.now()}`;
@@ -520,6 +728,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         source: lastNode.id,
         sourceHandle: lastNode.id === 'trigger' ? undefined : 'pass',
         target: stepId,
+        type: 'deletable',
         markerEnd: { type: MarkerType.ArrowClosed },
       };
       setEdges(prev => [...prev, newEdge]);
@@ -692,11 +901,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         <div className="flex-1">
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={edgesWithDelete}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onReconnect={onReconnect}
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            defaultEdgeOptions={{ interactionWidth: 20 }}
+            deleteKeyCode={['Backspace', 'Delete']}
+            edgesUpdatable
+            edgesFocusable
             fitView
             fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
             minZoom={0.3}
@@ -827,6 +1043,11 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       ))}
                     </div>
                   </div>
+                  {entityTypes.length > 0 && entityTypes.some(et => !isTriggerEntitySupported(triggerType, et)) && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                      <span className="font-medium">Warning:</span> This trigger–entity combination is not wired in the backend. The workflow will save but never fire automatically.
+                    </div>
+                  )}
                   {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -1160,20 +1381,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectValue placeholder="Select recipients" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="requester">Requester (Original User)</SelectItem>
-                            <SelectItem value="owner">Owner (Entity Owner)</SelectItem>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{role.name}</span>
-                                  {!role.has_groups && (
-                                    <Badge variant="outline" className="text-xs text-amber-600">
-                                      No groups
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {renderGroupedRoles(availableRoles, { requester: true, owner: true })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1288,24 +1496,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectValue placeholder="Select role" />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{role.name}</span>
-                                  {!role.has_groups && (
-                                    <Badge variant="outline" className="text-xs text-amber-600">
-                                      No groups
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                            <SelectItem value="requester">Requester (Original User)</SelectItem>
+                            {renderGroupedRoles(availableRoles, { requester: true })}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Role UUIDs ensure referential integrity if roles are renamed.
-                        </p>
                       </div>
                       <div>
                         <Label>Timeout (days)</Label>
@@ -1334,18 +1527,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectValue placeholder="Select reviewer role" />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.id} value={role.id}>
-                                <div className="flex items-center gap-2">
-                                  <span>{role.name}</span>
-                                  {!role.has_groups && (
-                                    <Badge variant="outline" className="text-xs text-amber-600">
-                                      No groups
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {renderGroupedRoles(availableRoles)}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground mt-1">

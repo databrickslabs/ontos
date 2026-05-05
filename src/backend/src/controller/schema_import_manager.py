@@ -178,6 +178,33 @@ class SchemaImportManager:
         except Exception as exc:
             logger.debug(f"list_assets at path '{path}' failed (OK for top-level): {exc}")
 
+        # Enrich with column nodes when the current path identifies a leaf asset
+        # whose metadata exposes a column schema. Columns are not "listable"
+        # siblings — they live inside the asset's metadata. Failures here must
+        # degrade silently to listing-only nodes (see PRD: Failure model).
+        if path:
+            try:
+                metadata = connector.get_asset_metadata(path)
+                schema_info = getattr(metadata, "schema_info", None) if metadata else None
+                columns = getattr(schema_info, "columns", None) if schema_info else None
+                if columns:
+                    existing_paths = {n.path for n in nodes}
+                    for col in columns:
+                        col_path = f"{path}.{col.name}"
+                        if col_path in existing_paths:
+                            continue
+                        nodes.append(BrowseNode(
+                            name=col.name,
+                            node_type="column",
+                            path=col_path,
+                            has_children=False,
+                            description=getattr(col, "description", None),
+                            connector_type=connector.connector_type,
+                        ))
+                        existing_paths.add(col_path)
+            except Exception as exc:
+                logger.debug(f"Column enrichment for path '{path}' failed: {exc}")
+
         return BrowseResponse(
             connection_id=connection_id,
             path=path,

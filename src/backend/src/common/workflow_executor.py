@@ -151,6 +151,97 @@ class ValidationStepHandler(StepHandler):
             )
 
 
+def _resolve_role_to_users(
+    db: Session,
+    role_spec: str,
+    context: 'StepContext',
+) -> List[tuple]:
+    """Resolve a role specification to a list of (identifier, role_id_or_None) tuples.
+
+    Handles:
+    - 'requester' → original user email
+    - 'owner' → entity owner
+    - 'business:<uuid>' → business role → look up entity owners from business_owners table
+    - '<uuid>' → app role UUID
+    - 'user@email.com' → direct email
+    - Legacy aliases like 'domain_owners', 'admins', etc.
+    """
+    from src.db_models.settings import AppRoleDb
+    from src.db_models.business_roles import BusinessRoleDb
+    from src.db_models.business_owners import BusinessOwnerDb
+
+    # Map shorthand names to role names (legacy support)
+    role_aliases = {
+        'domain_owners': 'DomainOwner',
+        'project_owners': 'ProjectOwner',
+        'data_stewards': 'DataSteward',
+        'admins': 'Admin',
+    }
+
+    if role_spec == 'requester':
+        return [(context.user_email, None)] if context.user_email else []
+
+    if role_spec == 'owner':
+        owner = context.entity.get('owner') if context.entity else None
+        return [(owner, None)] if owner else []
+
+    if role_spec in role_aliases:
+        role_name = role_aliases[role_spec]
+        role = db.query(AppRoleDb).filter(AppRoleDb.name == role_name).first()
+        if not role:
+            # Try normalized match
+            normalized = role_name.lower().replace(' ', '')
+            for r in db.query(AppRoleDb).all():
+                if r.name.lower().replace(' ', '') == normalized:
+                    return [(r.name, r.id)]
+        return [(role_name, role.id if role else None)]
+
+    if '@' in role_spec:
+        return [(e.strip(), None) for e in role_spec.split(',')]
+
+    # Business role: prefixed with "business:"
+    if role_spec.startswith('business:'):
+        br_id = role_spec[len('business:'):]
+        br = db.query(BusinessRoleDb).filter(BusinessRoleDb.id == br_id).first()
+        if not br:
+            logger.warning(f"Business role {br_id} not found")
+            return []
+
+        # Runtime resolution: look up who holds this business role for this entity
+        owners = (
+            db.query(BusinessOwnerDb)
+            .filter(
+                BusinessOwnerDb.role_id == br.id,
+                BusinessOwnerDb.object_id == context.entity_id,
+                BusinessOwnerDb.is_active.is_(True),
+            )
+            .all()
+        )
+
+        if not owners:
+            # No one assigned this role for this entity
+            logger.warning(
+                f"No active {br.name} assigned to {context.entity_type} "
+                f"{context.entity_id} ({context.entity_name})"
+            )
+            return []
+
+        return [(o.user_email, str(br.id)) for o in owners]
+
+    # App role UUID (preferred new format)
+    role_by_id = db.query(AppRoleDb).filter(AppRoleDb.id == role_spec).first()
+    if role_by_id:
+        return [(role_by_id.name, role_by_id.id)]
+
+    # Fallback: role name (legacy)
+    normalized = role_spec.lower().replace(' ', '')
+    for r in db.query(AppRoleDb).all():
+        if r.name.lower().replace(' ', '') == normalized:
+            return [(r.name, r.id)]
+
+    return [(role_spec, None)]
+
+
 class ApprovalStepHandler(StepHandler):
     """Handler for approval steps - creates actionable notifications and pauses workflow."""
 
@@ -245,62 +336,9 @@ class ApprovalStepHandler(StepHandler):
             logger.exception(f"Approval step failed: {e}")
             return StepResult(passed=False, error=str(e))
 
-    def _lookup_role_id(self, role_name: str) -> Optional[str]:
-        """Look up a role by name (flexible matching) and return its UUID."""
-        from src.db_models.settings import AppRoleDb
-        
-        # Try exact match first
-        role = self._db.query(AppRoleDb).filter(AppRoleDb.name == role_name).first()
-        if role:
-            return role.id
-        
-        # Try normalized match (case-insensitive, no spaces)
-        normalized = role_name.lower().replace(' ', '')
-        all_roles = self._db.query(AppRoleDb).all()
-        for r in all_roles:
-            if r.name.lower().replace(' ', '') == normalized:
-                return r.id
-        
-        return None
-
     def _resolve_approvers(self, approvers: str, context: StepContext) -> List[tuple]:
-        """Resolve approver specification to list of (identifier, role_uuid) tuples.
-        
-        Returns:
-            List of (identifier, role_uuid) where:
-            - identifier: email, username, or role name for display
-            - role_uuid: UUID if this is a role-based approver, None for direct users
-        """
-        from src.db_models.settings import AppRoleDb
-        
-        # Map shorthand names to role names (legacy support)
-        role_aliases = {
-            'domain_owners': 'DomainOwner',
-            'project_owners': 'ProjectOwner',
-            'data_stewards': 'DataSteward',
-            'admins': 'Admin',
-        }
-        
-        if approvers == 'requester':
-            return [(context.user_email, None)] if context.user_email else []
-        elif approvers in role_aliases:
-            # Legacy: shorthand alias
-            role_name = role_aliases[approvers]
-            role_id = self._lookup_role_id(role_name)
-            return [(role_name, role_id)]
-        elif '@' in approvers:
-            # Assume it's an email or comma-separated emails
-            return [(e.strip(), None) for e in approvers.split(',')]
-        else:
-            # Check if it's a role UUID (preferred - new format)
-            role_by_id = self._db.query(AppRoleDb).filter(AppRoleDb.id == approvers).first()
-            if role_by_id:
-                # It's a UUID - use role name for display, UUID for matching
-                return [(role_by_id.name, role_by_id.id)]
-            
-            # Fallback: Assume it's a role name (legacy support)
-            role_id = self._lookup_role_id(approvers)
-            return [(approvers, role_id)]
+        """Resolve approver specification to list of (identifier, role_uuid) tuples."""
+        return _resolve_role_to_users(self._db, approvers, context)
 
 
 class NotificationStepHandler(StepHandler):
@@ -453,55 +491,9 @@ class NotificationStepHandler(StepHandler):
             pass
         return ["in_app"]
 
-    def _lookup_role_id(self, role_name: str) -> Optional[str]:
-        """Look up a role by name (flexible matching) and return its UUID."""
-        from src.db_models.settings import AppRoleDb
-        
-        # Try exact match first
-        role = self._db.query(AppRoleDb).filter(AppRoleDb.name == role_name).first()
-        if role:
-            return role.id
-        
-        # Try normalized match (case-insensitive, no spaces)
-        normalized = role_name.lower().replace(' ', '')
-        all_roles = self._db.query(AppRoleDb).all()
-        for r in all_roles:
-            if r.name.lower().replace(' ', '') == normalized:
-                return r.id
-        
-        return None
-
     def _resolve_recipients(self, recipients: str, context: StepContext) -> List[tuple]:
         """Resolve recipient specification to list of (identifier, role_uuid) tuples."""
-        from src.db_models.settings import AppRoleDb
-        
-        role_aliases = {
-            'domain_owners': 'DomainOwner',
-            'data_stewards': 'DataSteward',
-        }
-        
-        if recipients == 'requester':
-            return [(context.user_email, None)] if context.user_email else []
-        elif recipients == 'owner':
-            owner = context.entity.get('owner')
-            return [(owner, None)] if owner else []
-        elif recipients in role_aliases:
-            # Legacy: shorthand alias
-            role_name = role_aliases[recipients]
-            role_id = self._lookup_role_id(role_name)
-            return [(role_name, role_id)]
-        elif '@' in recipients:
-            return [(e.strip(), None) for e in recipients.split(',')]
-        else:
-            # Check if it's a role UUID (preferred - new format)
-            role_by_id = self._db.query(AppRoleDb).filter(AppRoleDb.id == recipients).first()
-            if role_by_id:
-                # It's a UUID - use role name for display, UUID for matching
-                return [(role_by_id.name, role_by_id.id)]
-            
-            # Fallback: Assume it's a role name (legacy support)
-            role_id = self._lookup_role_id(recipients)
-            return [(recipients, role_id)]
+        return _resolve_role_to_users(self._db, recipients, context)
 
     def _get_template_title(self, template: str, context: StepContext) -> str:
         """Get notification title from template."""

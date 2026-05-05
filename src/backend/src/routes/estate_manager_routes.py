@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from src.common.authorization import PermissionChecker
-from src.common.config import Settings, get_settings
+from src.common.config import Settings
 from src.common.features import FeatureAccessLevel
-from src.common.workspace_client import get_workspace_client, WorkspaceClient
+from src.common.workspace_client import get_workspace_client
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.models.estate import Estate, CloudType, SyncStatus
 from src.controller.estate_manager import EstateManager
@@ -13,11 +13,13 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Estates"])
 
-def get_estate_manager(client: WorkspaceClient = Depends(get_workspace_client), settings: Settings = Depends(get_settings)) -> EstateManager:
+def get_estate_manager(request: Request) -> EstateManager:
     """Dependency provider for EstateManager.
-    
+
     Manager auto-loads estates from YAML if file exists in data/estates.yaml.
     """
+    settings = request.app.state.settings
+    client = get_workspace_client(settings=settings)
     return EstateManager(client, settings)
 
 @router.get("/estates", response_model=list[Estate])
@@ -43,7 +45,7 @@ async def get_estate(
 
 @router.post("/estates", response_model=Estate)
 async def create_estate(
-    estate: Estate,
+    payload: Estate,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
@@ -55,22 +57,22 @@ async def create_estate(
     success = False
     details = {
         "params": {
-            "estate_id": estate.id,
-            "name": estate.name,
-            "cloud_type": estate.cloud.value if estate.cloud else None,
-            "enabled": estate.enabled
+            "estate_id": payload.id,
+            "name": payload.name,
+            "cloud_type": payload.cloud_type.value if payload.cloud_type else None,
+            "enabled": payload.is_enabled
         }
     }
 
     try:
-        result = await estate_manager.create_estate(estate)
+        result = await estate_manager.create_estate(payload)
         success = True
         return result
     except HTTPException as e:
         details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
-        logger.exception("Failed creating estate %s", estate.id)
+        logger.exception("Failed creating estate %s", payload.id)
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to create estate")
     finally:
@@ -87,7 +89,7 @@ async def create_estate(
 @router.put("/estates/{estate_id}", response_model=Estate)
 async def update_estate(
     estate_id: str,
-    estate: Estate,
+    payload: Estate,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
@@ -100,13 +102,13 @@ async def update_estate(
     details = {
         "params": {
             "estate_id": estate_id,
-            "name": estate.name,
-            "enabled": estate.enabled
+            "name": payload.name,
+            "enabled": payload.is_enabled
         }
     }
 
     try:
-        updated_estate = await estate_manager.update_estate(estate_id, estate)
+        updated_estate = await estate_manager.update_estate(estate_id, payload)
         if not updated_estate:
             raise HTTPException(status_code=404, detail="Estate not found")
         success = True

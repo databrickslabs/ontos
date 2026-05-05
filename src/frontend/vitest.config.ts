@@ -45,11 +45,14 @@ export default defineConfig({
         'vite.config.ts',
       ],
       all: true,
-      // Coverage thresholds disabled for now
-      // lines: 80,
-      // functions: 80,
-      // branches: 80,
-      // statements: 80,
+      // Gates set to current baseline floors to prevent regressions.
+      // Ratchet up as coverage improves toward the 80% goal.
+      thresholds: {
+        lines: 3,
+        functions: 25,
+        branches: 55,
+        statements: 3,
+      },
     },
   },
 });

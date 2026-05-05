@@ -7,6 +7,7 @@ export interface BusinessRoleRead {
   description?: string | null;
   category?: BusinessRoleCategory | null;
   is_system: boolean;
+  is_approver: boolean;
   status: BusinessRoleStatus;
   created_by?: string | null;
   created_at: string;
@@ -18,6 +19,7 @@ export interface BusinessRoleCreate {
   description?: string | null;
   category?: BusinessRoleCategory | null;
   is_system?: boolean;
+  is_approver?: boolean;
   status?: BusinessRoleStatus;
 }
 
@@ -26,5 +28,6 @@ export interface BusinessRoleUpdate {
   description?: string | null;
   category?: BusinessRoleCategory | null;
   is_system?: boolean | null;
+  is_approver?: boolean | null;
   status?: BusinessRoleStatus | null;
 }

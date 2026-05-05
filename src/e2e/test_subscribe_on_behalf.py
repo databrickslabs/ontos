@@ -2,7 +2,7 @@
 variable substitution end-to-end.
 
 Maps the items: subscribe-on-behalf (on-behalf-of), consumer_groups,
-#486341/486353 (webhook → external runbook).
+external-runbook webhook integration.
 
 Flow tested:
   1. Producer creates a data product with consumer_groups=["users"]
@@ -216,8 +216,17 @@ class TestSubscribeOnBehalfOf:
         while time.time() < deadline:
             ex_resp = api.get(url(f"/api/workflows/{wf_id}/executions"))
             if ex_resp.status_code == 200:
-                executions = ex_resp.json().get("executions") or ex_resp.json()
-                if isinstance(executions, list) and executions:
+                # The endpoint returns either {"executions": [...]} when the
+                # process workflow has fired or `null` if it hasn't yet —
+                # don't crash on the second case.
+                body = ex_resp.json()
+                if isinstance(body, dict):
+                    executions = body.get("executions") or []
+                elif isinstance(body, list):
+                    executions = body
+                else:
+                    executions = []
+                if executions:
                     execution = executions[0]
                     if execution.get("status") in ("succeeded", "failed"):
                         break

@@ -64,15 +64,15 @@ BASE = os.environ.get(
 )
 DATABRICKS_HOST = os.environ.get(
     "DATABRICKS_HOST",
-    "https://fevm-mkonchits-account-workspace.cloud.databricks.com",
+    "https://your-ontos-app.example.databricksapps.com",
 )
-DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "account-workspace")
+DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 
 # Volume path used by B3's Volume-write assertion. The trailing path is
 # relative to the Volume root and is created on demand by the Files API.
 E2E_VOLUME_BASE_PATH = os.environ.get(
     "ONTOS_E2E_VOLUME_BASE_PATH",
-    "/Volumes/mkonchits_account_workspace_catalog/app_ontos/app_files/agreements/e2e_volume_test",
+    "/Volumes/<your_catalog>/<your_schema>/<your_volume>/agreements/e2e_volume_test",
 )
 
 RUN_TS = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
@@ -976,7 +976,7 @@ def run() -> int:
                         "name": "Approve",
                         "step_type": "approval",
                         "config": {
-                            "approvers": "mikhail.konchits@databricks.com",
+                            "approvers": "",
                             "timeout_days": 7,
                         },
                         "on_pass": "notify",

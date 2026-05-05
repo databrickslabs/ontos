@@ -45,9 +45,9 @@ BASE = os.environ.get(
 )
 DATABRICKS_HOST = os.environ.get(
     "DATABRICKS_HOST",
-    "https://fevm-mkonchits-account-workspace.cloud.databricks.com",
+    "https://your-ontos-app.example.databricksapps.com",
 )
-DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "account-workspace")
+DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 
 WEBHOOK_URL = os.environ.get(
     "ONTOS_E2E_WEBHOOK_URL",

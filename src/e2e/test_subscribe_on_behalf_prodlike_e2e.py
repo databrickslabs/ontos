@@ -65,23 +65,23 @@ BASE = os.environ.get(
 )
 DATABRICKS_HOST = os.environ.get(
     "DATABRICKS_HOST",
-    "https://fevm-mkonchits-account-workspace.cloud.databricks.com",
+    "https://your-ontos-app.example.databricksapps.com",
 )
-DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "account-workspace")
+DATABRICKS_PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 
 # Real Databricks employee emails the user (Mikhail) explicitly chose to use
 # as co-signers in S4/S5. These are REAL inboxes — picking employees we know
 # exist in the workspace SCIM directory.
 COSIGNER_LARS = {"type": "user", "value": "lars.george@databricks.com", "display": "Lars George"}
 COSIGNER_MANISHA = {"type": "user", "value": "manisha.v@databricks.com", "display": "Manisha V"}
-REQUESTER_EMAIL = os.environ.get("ONTOS_E2E_REQUESTER_EMAIL", "mikhail.konchits@databricks.com")
+REQUESTER_EMAIL = os.environ.get("ONTOS_E2E_REQUESTER_EMAIL", "")
 
 # Volume paths (the deployed app's app_files volume).
 VOLUME_OBO_DEMO = (
-    "/Volumes/mkonchits_account_workspace_catalog/app_ontos/app_files/_demo"
+    "/Volumes/<your_catalog>/<your_schema>/<your_volume>/_demo"
 )
 VOLUME_PATH_SMART_SKIP = (
-    "/Volumes/mkonchits_account_workspace_catalog/app_ontos/app_files/agreements/"
+    "/Volumes/<your_catalog>/<your_schema>/<your_volume>/agreements/"
     "prodlike_e2e_path_test/agreements"
 )
 

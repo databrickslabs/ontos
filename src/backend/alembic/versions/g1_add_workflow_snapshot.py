@@ -4,7 +4,7 @@ Captures an immutable JSON snapshot of the workflow definition at session creati
 so historical agreements reflect what the signer actually saw (PRD #242, user stories #12-14, #23).
 
 Revision ID: g1_workflow_snapshot
-Revises: f1_merge_aa9_e2, 76a5bca4ce65
+Revises: f1_merge_aa9_e2, v4_wizard_completion_act
 Create Date: 2026-04-24
 """
 from typing import Sequence, Union
@@ -14,7 +14,11 @@ import sqlalchemy as sa
 
 
 revision: str = "g1_workflow_snapshot"
-down_revision: Union[str, Sequence[str], None] = ("f1_merge_aa9_e2", "76a5bca4ce65")
+# Merges the f1 head (aa9 + e2) with the v4 wizard-schema head — g1 needs the
+# `agreement_wizard_sessions` / `agreements` tables introduced by v4 to add
+# its `workflow_snapshot` and `workflow_name` columns. Both parents are real
+# revisions in this repo (verified at revise-time).
+down_revision: Union[str, Sequence[str], None] = ("f1_merge_aa9_e2", "v4_wizard_completion_act")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

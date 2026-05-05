@@ -987,3 +987,191 @@ class AgreementWizardManager:
             return False
         agreement_wizard_sessions_repo.set_abandoned(self._db, session_id)
         return True
+
+    # ------------------------------------------------------------------
+    # Read-side surface (moved out of approvals_routes per PR #315 review)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _agreement_has_pdf_step(agreement: Any) -> bool:
+        """True iff the agreement's workflow snapshot contains a generate_pdf step."""
+        snapshot = getattr(agreement, 'workflow_snapshot', None)
+        if not snapshot:
+            return False
+        try:
+            data = json.loads(snapshot) if isinstance(snapshot, str) else snapshot
+            return any(s.get('step_type') == 'generate_pdf' for s in data.get('steps', []))
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            return False
+
+    def list_sessions(self, limit: int = 50) -> Dict[str, Any]:
+        """List recent approval wizard sessions, newest first."""
+        sessions = agreement_wizard_sessions_repo.list_recent(self._db, limit=limit)
+        return {"sessions": sessions, "total": len(sessions)}
+
+    def list_agreements(
+        self,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """List recent agreements, optionally filtered by entity type/id."""
+        agreements = agreements_repo.list_recent(
+            self._db, entity_type=entity_type, entity_id=entity_id, limit=limit
+        )
+        return {"agreements": agreements, "total": len(agreements)}
+
+    def get_agreement(self, agreement_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a single agreement and shape it for the API response.
+
+        Returns ``None`` if the agreement doesn't exist (caller raises 404).
+        """
+        agreement = agreements_repo.get(self._db, agreement_id)
+        if not agreement:
+            return None
+        step_results: List[Dict[str, Any]] = []
+        if agreement.step_results:
+            try:
+                parsed = (
+                    json.loads(agreement.step_results)
+                    if isinstance(agreement.step_results, str)
+                    else agreement.step_results
+                )
+                if isinstance(parsed, list):
+                    step_results = parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+        has_pdf = self._agreement_has_pdf_step(agreement)
+        return {
+            "id": agreement.id,
+            "entity_type": agreement.entity_type,
+            "entity_id": agreement.entity_id,
+            "workflow_id": agreement.workflow_id,
+            "workflow_name": agreement.workflow_name,
+            "wizard_session_id": agreement.wizard_session_id,
+            "step_results": step_results,
+            "pdf_storage_path": agreement.pdf_storage_path,
+            "created_by": agreement.created_by,
+            "created_at": agreement.created_at.isoformat() if agreement.created_at else None,
+            "pdf_url": f"/api/approvals/agreements/{agreement.id}/pdf" if has_pdf else None,
+        }
+
+    def get_agreement_pdf(self, agreement_id: str) -> Dict[str, Any]:
+        """Resolve and return the agreement document.
+
+        Returns a dict ``{"kind": "pdf"|"html"|"not_found"|"no_pdf_step", "content": ..., "filename": ...}``
+        so the route layer can map onto the right ``Response`` type without
+        knowing about repos, the SDK Files API, or fpdf2.
+
+        Resolution priority:
+        1. Pre-generated file at ``pdf_storage_path`` (Volumes via SDK; local fs otherwise)
+        2. On-the-fly PDF via fpdf2
+        3. HTML fallback when fpdf2 is unavailable
+        """
+        from src.utils.agreement_pdf_builder import (
+            build_agreement_pdf,
+            build_agreement_html,
+            _HAS_FPDF,
+        )
+
+        agreement = agreements_repo.get(self._db, agreement_id)
+        if not agreement:
+            return {"kind": "not_found"}
+
+        # Only honor PDF download when the workflow includes a generate_pdf step
+        # OR a stored path exists (legacy / explicit upload).
+        if not self._agreement_has_pdf_step(agreement) and not getattr(agreement, 'pdf_storage_path', None):
+            return {"kind": "no_pdf_step"}
+
+        filename = f"agreement-{agreement_id[:8]}.pdf"
+        stored_path = agreement.pdf_storage_path
+
+        # 1. Pre-generated file
+        if stored_path:
+            if stored_path.startswith("/Volumes/"):
+                try:
+                    from src.common.workspace_client import get_workspace_client
+                    ws = get_workspace_client()
+                    resp = ws.files.download(file_path=stored_path)
+                    if hasattr(resp, "contents") and resp.contents is not None:
+                        pdf_bytes = resp.contents.read()
+                    else:
+                        pdf_bytes = resp.read()  # type: ignore[union-attr]
+                    return {"kind": "pdf", "content": pdf_bytes, "filename": filename}
+                except Exception as e:
+                    logger.warning(
+                        "Volume download failed for %s: %s — regenerating",
+                        stored_path,
+                        e,
+                    )
+                    # Fall through to regeneration
+            else:
+                import os
+                if os.path.isfile(stored_path):
+                    with open(stored_path, "rb") as f:
+                        return {"kind": "pdf", "content": f.read(), "filename": filename}
+
+        # Parse step_results for regeneration
+        step_results: List[Dict[str, Any]] = []
+        if agreement.step_results:
+            try:
+                parsed = (
+                    json.loads(agreement.step_results)
+                    if isinstance(agreement.step_results, str)
+                    else agreement.step_results
+                )
+                if isinstance(parsed, list):
+                    step_results = parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # 2. fpdf2 regeneration
+        if _HAS_FPDF:
+            pdf_bytes = build_agreement_pdf(
+                workflow_name=agreement.workflow_name or "Agreement",
+                entity_type=agreement.entity_type,
+                entity_id=agreement.entity_id,
+                step_results=step_results,
+                snapshot=agreement.workflow_snapshot,
+                created_by=agreement.created_by,
+                created_at=agreement.created_at,
+                workflow_version=getattr(agreement, 'workflow_version', None),
+            )
+            return {"kind": "pdf", "content": bytes(pdf_bytes), "filename": filename}
+
+        # 3. HTML fallback
+        html = build_agreement_html(
+            workflow_name=agreement.workflow_name or "Agreement",
+            entity_type=agreement.entity_type,
+            entity_id=agreement.entity_id,
+            step_results=step_results,
+            snapshot=agreement.workflow_snapshot,
+            created_by=agreement.created_by,
+            created_at=agreement.created_at,
+        )
+        return {
+            "kind": "html",
+            "content": html,
+            "filename": f"agreement-{agreement_id[:8]}.html",
+        }
+
+    def get_completed_session_step_results(
+        self,
+        entity_type: Optional[str],
+        entity_id: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """Return step_results from the latest completed wizard session for an entity.
+
+        Used by the workflow executor to merge wizard-collected user input into
+        the process workflow's ``step_results`` namespace so subsequent steps can
+        reference values via ``${step_results.<approval_step>.<field>}``. Returns
+        an empty list when no completed session exists.
+        """
+        if not (entity_type and entity_id):
+            return []
+        session = agreement_wizard_sessions_repo.get_latest_completed_by_entity(
+            self._db, entity_type=entity_type, entity_id=entity_id
+        )
+        if not session:
+            return []
+        return agreement_wizard_sessions_repo.get_step_results(session)

@@ -1,25 +1,26 @@
 """
-Unit tests for the PDF download endpoint's Volume-fetch branch.
+Unit tests for the PDF resolution branch (Volume vs local fs).
 
-Regression target: download_agreement_pdf used os.path.isfile() + raw
-open() on the persisted pdf_storage_path. Inside the Databricks Apps
-runtime, /Volumes/... is not a real filesystem mount — isfile() returned
-False and the endpoint silently fell through to fpdf2 regeneration,
-producing a PDF with a different /CreationDate than the one persisted.
+Regression target: `download_agreement_pdf` originally used `os.path.isfile()` +
+raw `open()` on the persisted `pdf_storage_path`. Inside the Databricks Apps
+runtime, `/Volumes/...` is not a real filesystem mount — `isfile()` returned
+False and the endpoint silently fell through to fpdf2 regeneration, producing
+a PDF with a different `/CreationDate` than the one persisted.
 
-The fix routes /Volumes/ paths through WorkspaceClient.files.download()
-while keeping the plain open() path for local-dev (non-/Volumes/) paths.
+The fix routes `/Volumes/` paths through `WorkspaceClient.files.download()`
+while keeping the plain `open()` path for local-dev (non-`/Volumes/`) paths.
+
+Per PR #315 review: the resolution + generation logic moved out of the route
+handler and into ``AgreementWizardManager.get_agreement_pdf``. These tests
+target the manager method directly (where the branching lives).
 """
 from __future__ import annotations
 
-import asyncio
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from src.routes.approvals_routes import download_agreement_pdf
+from src.controller.agreement_wizard_manager import AgreementWizardManager
 
 
 def _make_agreement(*, pdf_storage_path: str | None, with_pdf_step: bool = True):
@@ -45,7 +46,7 @@ def _make_agreement(*, pdf_storage_path: str | None, with_pdf_step: bool = True)
 
 
 class TestPdfDownloadVolumeBranch:
-    """Verify download_agreement_pdf routes /Volumes/ paths through the SDK."""
+    """Verify get_agreement_pdf routes /Volumes/ paths through the SDK."""
 
     def test_volume_path_uses_files_api(self):
         """When pdf_storage_path is /Volumes/..., SDK download is used."""
@@ -53,37 +54,27 @@ class TestPdfDownloadVolumeBranch:
         volume_path = "/Volumes/cat/sch/vol/agreements/agr-12345678.pdf"
         agreement = _make_agreement(pdf_storage_path=volume_path)
 
-        # Mock SDK: ws.files.download(file_path=...) -> resp with .contents.read()
         mock_resp = MagicMock()
         mock_resp.contents = BytesIO(fake_pdf)
         mock_ws = MagicMock()
         mock_ws.files.download = MagicMock(return_value=mock_resp)
 
-        repo_instance = MagicMock()
-        repo_instance.get = MagicMock(return_value=agreement)
+        manager = AgreementWizardManager(db=MagicMock())
 
         with patch(
-            "src.repositories.agreements_repository.AgreementsRepository",
-            return_value=repo_instance,
+            "src.controller.agreement_wizard_manager.agreements_repo.get",
+            return_value=agreement,
         ), patch(
             "src.common.workspace_client.get_workspace_client",
             return_value=mock_ws,
         ):
-            response = asyncio.run(
-                download_agreement_pdf(
-                    agreement_id="agr-12345678",
-                    db=MagicMock(),
-                    _=True,
-                )
-            )
+            result = manager.get_agreement_pdf("agr-12345678")
 
         # SDK was called with the stored Volume path
         mock_ws.files.download.assert_called_once_with(file_path=volume_path)
-        # And the response contains the SDK-fetched bytes (not regenerated ones)
-        assert response.media_type == "application/pdf"
-        assert response.body == fake_pdf
-        cd = response.headers.get("content-disposition") or response.headers.get("Content-Disposition")
-        assert cd is not None and "attachment" in cd
+        # And the result contains the SDK-fetched bytes (not regenerated ones)
+        assert result["kind"] == "pdf"
+        assert result["content"] == fake_pdf
 
     def test_volume_download_failure_falls_through_to_regeneration(self):
         """If the SDK download raises, regeneration is the final fallback."""
@@ -93,14 +84,13 @@ class TestPdfDownloadVolumeBranch:
         mock_ws = MagicMock()
         mock_ws.files.download = MagicMock(side_effect=Exception("Permission denied"))
 
-        repo_instance = MagicMock()
-        repo_instance.get = MagicMock(return_value=agreement)
-
         regenerated_pdf = b"%PDF-1.4 regenerated"
 
+        manager = AgreementWizardManager(db=MagicMock())
+
         with patch(
-            "src.repositories.agreements_repository.AgreementsRepository",
-            return_value=repo_instance,
+            "src.controller.agreement_wizard_manager.agreements_repo.get",
+            return_value=agreement,
         ), patch(
             "src.common.workspace_client.get_workspace_client",
             return_value=mock_ws,
@@ -110,19 +100,13 @@ class TestPdfDownloadVolumeBranch:
             "src.utils.agreement_pdf_builder.build_agreement_pdf",
             return_value=bytearray(regenerated_pdf),
         ):
-            response = asyncio.run(
-                download_agreement_pdf(
-                    agreement_id="agr-12345678",
-                    db=MagicMock(),
-                    _=True,
-                )
-            )
+            result = manager.get_agreement_pdf("agr-12345678")
 
         # SDK was attempted
         mock_ws.files.download.assert_called_once()
-        # Response is the regenerated bytes — endpoint did not 5xx
-        assert response.media_type == "application/pdf"
-        assert response.body == regenerated_pdf
+        # Result is the regenerated bytes — manager did not raise
+        assert result["kind"] == "pdf"
+        assert result["content"] == regenerated_pdf
 
     def test_local_path_uses_open_fallback(self, tmp_path):
         """For non-/Volumes/ paths, raw open() is still used (dev compat)."""
@@ -133,26 +117,19 @@ class TestPdfDownloadVolumeBranch:
         agreement = _make_agreement(pdf_storage_path=str(local_pdf))
 
         mock_ws = MagicMock()  # must NOT be invoked
-        repo_instance = MagicMock()
-        repo_instance.get = MagicMock(return_value=agreement)
+        manager = AgreementWizardManager(db=MagicMock())
 
         with patch(
-            "src.repositories.agreements_repository.AgreementsRepository",
-            return_value=repo_instance,
+            "src.controller.agreement_wizard_manager.agreements_repo.get",
+            return_value=agreement,
         ), patch(
             "src.common.workspace_client.get_workspace_client",
             return_value=mock_ws,
         ):
-            response = asyncio.run(
-                download_agreement_pdf(
-                    agreement_id="agr-12345678",
-                    db=MagicMock(),
-                    _=True,
-                )
-            )
+            result = manager.get_agreement_pdf("agr-12345678")
 
         assert not mock_ws.files.download.called, (
             "SDK Files API must not be called for non-/Volumes/ paths"
         )
-        assert response.media_type == "application/pdf"
-        assert response.body == fake_pdf
+        assert result["kind"] == "pdf"
+        assert result["content"] == fake_pdf

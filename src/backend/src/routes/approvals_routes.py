@@ -1,5 +1,3 @@
-import json
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -14,17 +12,6 @@ from src.controller.agreement_wizard_manager import AgreementWizardManager
 from src.models.data_products import OnBehalfOf
 from src.common.logging import get_logger
 
-
-def _agreement_has_pdf_step(agreement) -> bool:
-    """Check if the agreement's workflow snapshot includes a generate_pdf step."""
-    snapshot = getattr(agreement, 'workflow_snapshot', None)
-    if not snapshot:
-        return False
-    try:
-        data = json.loads(snapshot) if isinstance(snapshot, str) else snapshot
-        return any(s.get('step_type') == 'generate_pdf' for s in data.get('steps', []))
-    except (json.JSONDecodeError, TypeError, AttributeError):
-        return False
 
 logger = get_logger(__name__)
 
@@ -57,16 +44,12 @@ def get_agreement_wizard_manager(
 
 @router.get('/approvals/sessions')
 async def list_approval_sessions(
-    request: Request,
-    db: DBSessionDep,
     limit: int = Query(50, ge=1, le=100),
+    wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
     _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ):
     """List recent approval wizard sessions."""
-    from src.repositories.agreement_wizard_sessions_repository import AgreementWizardSessionsRepository
-    repo = AgreementWizardSessionsRepository()
-    sessions = repo.list_recent(db, limit=limit)
-    return {"sessions": sessions, "total": len(sessions)}
+    return wizard_manager.list_sessions(limit=limit)
 
 
 @router.get('/approvals/queue')
@@ -185,172 +168,58 @@ async def abort_approval_session(
 
 @router.get('/approvals/agreements')
 async def list_agreements(
-    request: Request,
-    db: DBSessionDep,
     entity_type: Optional[str] = Query(None),
     entity_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=100),
+    wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
     _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ):
     """List agreements, optionally filtered by entity type/id."""
-    from src.repositories.agreements_repository import AgreementsRepository
-    repo = AgreementsRepository()
-    agreements = repo.list_recent(db, entity_type=entity_type, entity_id=entity_id, limit=limit)
-    return {"agreements": agreements, "total": len(agreements)}
+    return wizard_manager.list_agreements(
+        entity_type=entity_type, entity_id=entity_id, limit=limit
+    )
 
 
 @router.get('/approvals/agreements/{agreement_id}')
 async def get_agreement(
     agreement_id: str,
-    db: DBSessionDep,
+    wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
     _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ):
     """Get a single agreement by ID."""
-    from src.repositories.agreements_repository import AgreementsRepository
-    repo = AgreementsRepository()
-    agreement = repo.get(db, agreement_id)
-    if not agreement:
+    result = wizard_manager.get_agreement(agreement_id)
+    if result is None:
         raise HTTPException(status_code=404, detail="Agreement not found")
-    step_results = []
-    if agreement.step_results:
-        try:
-            step_results = json.loads(agreement.step_results) if isinstance(agreement.step_results, str) else agreement.step_results
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {
-        "id": agreement.id,
-        "entity_type": agreement.entity_type,
-        "entity_id": agreement.entity_id,
-        "workflow_id": agreement.workflow_id,
-        "workflow_name": agreement.workflow_name,
-        "wizard_session_id": agreement.wizard_session_id,
-        "step_results": step_results,
-        "pdf_storage_path": agreement.pdf_storage_path,
-        "created_by": agreement.created_by,
-        "created_at": agreement.created_at.isoformat() if agreement.created_at else None,
-        "pdf_url": f"/api/approvals/agreements/{agreement.id}/pdf" if _agreement_has_pdf_step(agreement) else None,
-    }
+    return result
 
 
 @router.get('/approvals/agreements/{agreement_id}/pdf')
 async def download_agreement_pdf(
     agreement_id: str,
-    db: DBSessionDep,
+    wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
     _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ):
     """Download the agreement as a PDF document.
 
-    Generation priority:
-    1. Pre-generated PDF file on disk (if ``pdf_storage_path`` exists).
-    2. On-the-fly PDF via fpdf2 (``build_agreement_pdf``).
-    3. Fallback to styled HTML if fpdf2 is not installed.
+    Resolution + generation logic lives in
+    :py:meth:`AgreementWizardManager.get_agreement_pdf`; the route maps the
+    manager's discriminated-result onto the appropriate ``Response`` type.
     """
-    from src.repositories.agreements_repository import AgreementsRepository
-    from src.utils.agreement_pdf_builder import build_agreement_pdf, build_agreement_html, _HAS_FPDF
-
-    repo = AgreementsRepository()
-    agreement = repo.get(db, agreement_id)
-    if not agreement:
+    result = wizard_manager.get_agreement_pdf(agreement_id)
+    kind = result.get("kind")
+    if kind == "not_found":
         raise HTTPException(status_code=404, detail="Agreement not found")
-
-    # Only generate PDF if the workflow included a generate_pdf step
-    if not _agreement_has_pdf_step(agreement) and not getattr(agreement, 'pdf_storage_path', None):
-        raise HTTPException(status_code=404, detail="This agreement does not have PDF generation enabled")
-
-    # If a pre-generated PDF was persisted, serve it directly. Inside the
-    # Databricks Apps runtime, /Volumes/... is NOT a real filesystem mount —
-    # raw os.path.isfile() returns False and open() raises EACCES, so the
-    # endpoint would silently fall through to fpdf2 regeneration and serve a
-    # PDF with a different /CreationDate than the persisted one. Mirror the
-    # upload-side fix: use the SDK Files API for /Volumes/ paths and keep the
-    # plain filesystem path for local dev where pdf_storage_path may
-    # legitimately be a tmp dir.
-    stored_path = agreement.pdf_storage_path
-    if stored_path:
-        if stored_path.startswith("/Volumes/"):
-            try:
-                from src.common.workspace_client import get_workspace_client
-                ws = get_workspace_client()
-                resp = ws.files.download(file_path=stored_path)
-                # SDK returns a DownloadResponse with .contents stream-like obj
-                if hasattr(resp, "contents") and resp.contents is not None:
-                    pdf_bytes = resp.contents.read()
-                else:
-                    pdf_bytes = resp.read()  # type: ignore[union-attr]
-                return Response(
-                    content=pdf_bytes,
-                    media_type="application/pdf",
-                    headers={
-                        "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
-                    },
-                )
-            except Exception as e:
-                logger.warning(
-                    "Volume download failed for %s: %s — regenerating",
-                    stored_path,
-                    e,
-                )
-                # Fall through to regeneration below
-        else:
-            import os
-            if os.path.isfile(stored_path):
-                with open(stored_path, "rb") as f:
-                    pdf_bytes = f.read()
-                return Response(
-                    content=pdf_bytes,
-                    media_type="application/pdf",
-                    headers={
-                        "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
-                    },
-                )
-
-    # Parse step_results from the agreement record
-    step_results: list = []
-    if agreement.step_results:
-        try:
-            parsed = json.loads(agreement.step_results) if isinstance(agreement.step_results, str) else agreement.step_results
-            if isinstance(parsed, list):
-                step_results = parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    # Try real PDF generation via fpdf2
-    if _HAS_FPDF:
-        pdf_bytes = build_agreement_pdf(
-            workflow_name=agreement.workflow_name or "Agreement",
-            entity_type=agreement.entity_type,
-            entity_id=agreement.entity_id,
-            step_results=step_results,
-            snapshot=agreement.workflow_snapshot,
-            created_by=agreement.created_by,
-            created_at=agreement.created_at,
-            workflow_version=getattr(agreement, 'workflow_version', None),
+    if kind == "no_pdf_step":
+        raise HTTPException(
+            status_code=404,
+            detail="This agreement does not have PDF generation enabled",
         )
-        return Response(
-            content=bytes(pdf_bytes),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.pdf"',
-            },
-        )
-
-    # Fallback to on-the-fly HTML generation when fpdf2 is not available
-    html = build_agreement_html(
-        workflow_name=agreement.workflow_name or "Agreement",
-        entity_type=agreement.entity_type,
-        entity_id=agreement.entity_id,
-        step_results=step_results,
-        snapshot=agreement.workflow_snapshot,
-        created_by=agreement.created_by,
-        created_at=agreement.created_at,
-    )
-
-    return HTMLResponse(
-        content=html,
-        headers={
-            "Content-Disposition": f'attachment; filename="agreement-{agreement_id[:8]}.html"',
-        },
-    )
+    headers = {"Content-Disposition": f'attachment; filename="{result["filename"]}"'}
+    if kind == "pdf":
+        return Response(content=result["content"], media_type="application/pdf", headers=headers)
+    if kind == "html":
+        return HTMLResponse(content=result["content"], headers=headers)
+    raise HTTPException(status_code=500, detail=f"Unexpected agreement-pdf result: {kind}")
 
 
 def register_routes(app):

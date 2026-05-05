@@ -2241,52 +2241,40 @@ class WorkflowExecutor:
         # wizard step_results into context.step_results under the approval step's
         # step_id so subsequent process-workflow steps can reference them via
         # ${step_results.<approval_step_id>.<field>}.
+        # Per PR #315 review: the executor goes through AgreementWizardManager
+        # rather than the wizard-sessions repo directly. The manager method
+        # encapsulates the lookup + step_results extraction.
         if trigger_context and step_result:
             try:
-                from src.repositories.agreement_wizard_sessions_repository import (
-                    agreement_wizard_sessions_repo,
+                from src.controller.agreement_wizard_manager import AgreementWizardManager
+
+                wizard_mgr = AgreementWizardManager(self._db)
+                wizard_results = wizard_mgr.get_completed_session_step_results(
+                    entity_type=trigger_context.entity_type,
+                    entity_id=trigger_context.entity_id,
                 )
-
-                entity_type_for_lookup = trigger_context.entity_type
-                entity_id_for_lookup = trigger_context.entity_id
-
-                if entity_type_for_lookup and entity_id_for_lookup:
-                    wizard_session = (
-                        agreement_wizard_sessions_repo.get_latest_completed_by_entity(
-                            self._db,
-                            entity_type=entity_type_for_lookup,
-                            entity_id=entity_id_for_lookup,
+                if wizard_results:
+                    # Flatten all wizard-collected fields under the
+                    # approval step's ID.  Keys from later wizard steps
+                    # override earlier ones if they collide (last-write
+                    # wins), which matches user expectation that the most
+                    # recent input is authoritative.
+                    merged: Dict[str, str] = {}
+                    for wr in wizard_results:
+                        wizard_payload = wr.get("payload", {})
+                        for key, value in wizard_payload.items():
+                            if isinstance(value, (str, int, float, bool)):
+                                merged[key] = str(value)
+                    if merged:
+                        approval_entry = context.step_results.setdefault(
+                            current_step_id, {}
                         )
-                    )
-                    if wizard_session:
-                        wizard_results = (
-                            agreement_wizard_sessions_repo.get_step_results(
-                                wizard_session
-                            )
+                        approval_entry.update(merged)
+                        logger.info(
+                            "Merged %d wizard field(s) into step_results.%s",
+                            len(merged),
+                            current_step_id,
                         )
-                        # Flatten all wizard-collected fields under the
-                        # approval step's ID.  Keys from later wizard steps
-                        # override earlier ones if they collide (last-write
-                        # wins), which matches user expectation that the most
-                        # recent input is authoritative.
-                        merged: Dict[str, str] = {}
-                        for wr in wizard_results:
-                            wizard_payload = wr.get("payload", {})
-                            for key, value in wizard_payload.items():
-                                if isinstance(value, (str, int, float, bool)):
-                                    merged[key] = str(value)
-                        if merged:
-                            approval_entry = context.step_results.setdefault(
-                                current_step_id, {}
-                            )
-                            approval_entry.update(merged)
-                            logger.info(
-                                "Merged %d wizard field(s) from session %s "
-                                "into step_results.%s",
-                                len(merged),
-                                wizard_session.id,
-                                current_step_id,
-                            )
             except Exception as e:
                 # Non-fatal: workflow continues even if propagation fails
                 logger.warning(

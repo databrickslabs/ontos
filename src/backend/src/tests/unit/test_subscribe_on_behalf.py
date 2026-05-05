@@ -59,10 +59,7 @@ def manager(db_session):
     exercise create_product / persistence in these tests; only the helper."""
     from src.controller.data_products_manager import DataProductsManager
 
-    mgr = DataProductsManager(db=db_session)
-    # Reset the per-process cache between tests so they are independent.
-    mgr._OBO_CACHE.clear()
-    return mgr
+    return DataProductsManager(db=db_session)
 
 
 class TestValidateOnBehalfOfPrincipal:
@@ -104,20 +101,6 @@ class TestValidateOnBehalfOfPrincipal:
         creds aren't in the local environment."""
         with patch('src.common.workspace_client.get_workspace_client', side_effect=Exception("no creds")):
             manager._validate_on_behalf_of_principal(OnBehalfOf(type='group', value='whatever'))
-
-    def test_cache_short_circuits_repeated_lookups(self, manager):
-        """Second call within 60s should not hit SCIM again."""
-        fake_ws = MagicMock()
-        fake_ws.groups.list.return_value = iter([MagicMock(display_name="users")])
-        with patch('src.common.workspace_client.get_workspace_client', return_value=fake_ws) as gw:
-            obo = OnBehalfOf(type='group', value='users')
-            manager._validate_on_behalf_of_principal(obo)
-            # Reset return so a second SDK call would hand back a fresh empty iter
-            fake_ws.groups.list.return_value = iter([MagicMock(display_name="users")])
-            manager._validate_on_behalf_of_principal(obo)
-            # Workspace client fetched once; SCIM list called once.
-            assert gw.call_count == 1
-            assert fake_ws.groups.list.call_count == 1
 
     def test_service_principal_lookup_falls_back_to_application_id(self, manager):
         """When displayName lookup is empty, retry by applicationId."""

@@ -1021,6 +1021,17 @@ workflows:
   # Used when user subscribes via the approval wizard; completion_action=subscribe runs subscribe after wizard.
   # Looked up by trigger type for_subscribe; name is for display only.
   # Demonstrates the full approval step catalog: legal_document → acknowledgement_checklist → user_action → pass.
+  #
+  # i18n note (PR #315 review): user-facing strings in this seed workflow
+  # (titles, descriptions, ack labels, item labels, body markdown) are English
+  # defaults intended to be customised per-deployment by the data governance
+  # team using the Workflow Designer UI. They are NOT loaded through the app's
+  # i18n bundles because the workflow definition itself is mutable customer
+  # content — once saved to the DB, the strings are part of the workflow
+  # snapshot and audit trail. Operators replacing these defaults are expected
+  # to localise into their organisation's language; the framework supports it
+  # because every visible string is configurable, not because the seed file
+  # is locale-aware.
   - id: "subscription"
     name: "Subscription Agreement"
     description: "Full approval workflow for subscribing to a data product — terms review, acknowledgements, and agreement."

@@ -1,8 +1,28 @@
 -- ============================================================================
--- Schema Migration: COMPREHENSIVE — all missing columns and tables
+-- Schema catchup helper for older Ontos deployments
 -- ============================================================================
--- Loaded via: POST /api/settings/demo-data/load?industry=migrate
--- Safe to re-run (IF NOT EXISTS / ADD COLUMN IF NOT EXISTS).
+-- WHAT
+--   ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS for columns the
+--   ORM/code now expects but that may be missing on environments where
+--   alembic migrations weren't fully applied (e.g. dev workspaces that
+--   started before a particular revision landed).
+--
+-- WHY THIS LIVES IN data/ AND NOT alembic/
+--   These statements DO mirror what alembic migrations do at runtime —
+--   `e2_semantic_models_display_name`, `aa9_add_is_approver_to_business_roles`,
+--   etc. — but they're kept here as a manual fallback because the loader
+--   surface is reachable from the running app (POST /api/settings/demo-data/load
+--   ?industry=migrate, admin-only) without needing alembic CLI access. Useful
+--   when a deployed app is in a stuck-migration state and the operator wants a
+--   non-destructive idempotent fixup.
+--
+-- HOW TO USE
+--   POST /api/settings/demo-data/load?industry=migrate (Admin role required).
+--   Safe to re-run (IF NOT EXISTS / ADD COLUMN IF NOT EXISTS guards).
+--
+-- IS THIS DEMO DATA? No. Despite the file naming convention shared with
+--   demo_data_*.sql, this contains zero seed rows — only schema additions.
+--   The naming reflects the loader endpoint shape, not the file's purpose.
 -- ============================================================================
 
 BEGIN;

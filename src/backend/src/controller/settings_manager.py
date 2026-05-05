@@ -179,107 +179,107 @@ class SettingsManager:
             # WORKSPACE_DEPLOYMENT_PATH
             if 'WORKSPACE_DEPLOYMENT_PATH' in all_settings and all_settings['WORKSPACE_DEPLOYMENT_PATH'] is not None:
                 self._settings.WORKSPACE_DEPLOYMENT_PATH = all_settings['WORKSPACE_DEPLOYMENT_PATH']
-                logger.info(f"Loaded WORKSPACE_DEPLOYMENT_PATH from database: {all_settings['WORKSPACE_DEPLOYMENT_PATH']}")
+                logger.debug(f"Loaded WORKSPACE_DEPLOYMENT_PATH from database: {all_settings['WORKSPACE_DEPLOYMENT_PATH']}")
             
             # Databricks Unity Catalog settings
             if 'DATABRICKS_CATALOG' in all_settings and all_settings['DATABRICKS_CATALOG']:
                 self._settings.DATABRICKS_CATALOG = all_settings['DATABRICKS_CATALOG']
-                logger.info(f"Loaded DATABRICKS_CATALOG from database: {all_settings['DATABRICKS_CATALOG']}")
+                logger.debug(f"Loaded DATABRICKS_CATALOG from database: {all_settings['DATABRICKS_CATALOG']}")
             
             if 'DATABRICKS_SCHEMA' in all_settings and all_settings['DATABRICKS_SCHEMA']:
                 self._settings.DATABRICKS_SCHEMA = all_settings['DATABRICKS_SCHEMA']
-                logger.info(f"Loaded DATABRICKS_SCHEMA from database: {all_settings['DATABRICKS_SCHEMA']}")
+                logger.debug(f"Loaded DATABRICKS_SCHEMA from database: {all_settings['DATABRICKS_SCHEMA']}")
             
             if 'DATABRICKS_VOLUME' in all_settings and all_settings['DATABRICKS_VOLUME']:
                 self._settings.DATABRICKS_VOLUME = all_settings['DATABRICKS_VOLUME']
-                logger.info(f"Loaded DATABRICKS_VOLUME from database: {all_settings['DATABRICKS_VOLUME']}")
+                logger.debug(f"Loaded DATABRICKS_VOLUME from database: {all_settings['DATABRICKS_VOLUME']}")
             
             # Audit log directory
             if 'APP_AUDIT_LOG_DIR' in all_settings and all_settings['APP_AUDIT_LOG_DIR']:
                 self._settings.APP_AUDIT_LOG_DIR = all_settings['APP_AUDIT_LOG_DIR']
-                logger.info(f"Loaded APP_AUDIT_LOG_DIR from database: {all_settings['APP_AUDIT_LOG_DIR']}")
+                logger.debug(f"Loaded APP_AUDIT_LOG_DIR from database: {all_settings['APP_AUDIT_LOG_DIR']}")
             
             # LLM settings
             if 'LLM_ENABLED' in all_settings and all_settings['LLM_ENABLED'] is not None:
                 self._settings.LLM_ENABLED = all_settings['LLM_ENABLED'].lower() == 'true'
-                logger.info(f"Loaded LLM_ENABLED from database: {self._settings.LLM_ENABLED}")
+                logger.debug(f"Loaded LLM_ENABLED from database: {self._settings.LLM_ENABLED}")
             
             if 'LLM_ENDPOINT' in all_settings and all_settings['LLM_ENDPOINT'] is not None:
                 self._settings.LLM_ENDPOINT = all_settings['LLM_ENDPOINT']
-                logger.info(f"Loaded LLM_ENDPOINT from database: {all_settings['LLM_ENDPOINT']}")
+                logger.debug(f"Loaded LLM_ENDPOINT from database: {all_settings['LLM_ENDPOINT']}")
             
             if 'LLM_SYSTEM_PROMPT' in all_settings and all_settings['LLM_SYSTEM_PROMPT'] is not None:
                 self._settings.LLM_SYSTEM_PROMPT = all_settings['LLM_SYSTEM_PROMPT']
-                logger.info("Loaded LLM_SYSTEM_PROMPT from database")
+                logger.debug("Loaded LLM_SYSTEM_PROMPT from database")
             
             if 'LLM_DISCLAIMER_TEXT' in all_settings and all_settings['LLM_DISCLAIMER_TEXT'] is not None:
                 self._settings.LLM_DISCLAIMER_TEXT = all_settings['LLM_DISCLAIMER_TEXT']
-                logger.info("Loaded LLM_DISCLAIMER_TEXT from database")
+                logger.debug("Loaded LLM_DISCLAIMER_TEXT from database")
             
             # Tag display format setting (stored in DB only, not in Settings model)
             # Valid values: 'short' (default), 'long'
             if 'TAG_DISPLAY_FORMAT' in all_settings and all_settings['TAG_DISPLAY_FORMAT'] is not None:
-                logger.info(f"Loaded TAG_DISPLAY_FORMAT from database: {all_settings['TAG_DISPLAY_FORMAT']}")
+                logger.debug(f"Loaded TAG_DISPLAY_FORMAT from database: {all_settings['TAG_DISPLAY_FORMAT']}")
             
             # Delivery mode settings
             if 'DELIVERY_MODE_DIRECT' in all_settings and all_settings['DELIVERY_MODE_DIRECT'] is not None:
                 self._settings.DELIVERY_MODE_DIRECT = all_settings['DELIVERY_MODE_DIRECT'].lower() == 'true'
-                logger.info(f"Loaded DELIVERY_MODE_DIRECT from database: {self._settings.DELIVERY_MODE_DIRECT}")
+                logger.debug(f"Loaded DELIVERY_MODE_DIRECT from database: {self._settings.DELIVERY_MODE_DIRECT}")
             
             if 'DELIVERY_MODE_INDIRECT' in all_settings and all_settings['DELIVERY_MODE_INDIRECT'] is not None:
                 self._settings.DELIVERY_MODE_INDIRECT = all_settings['DELIVERY_MODE_INDIRECT'].lower() == 'true'
-                logger.info(f"Loaded DELIVERY_MODE_INDIRECT from database: {self._settings.DELIVERY_MODE_INDIRECT}")
+                logger.debug(f"Loaded DELIVERY_MODE_INDIRECT from database: {self._settings.DELIVERY_MODE_INDIRECT}")
             
             if 'DELIVERY_MODE_MANUAL' in all_settings and all_settings['DELIVERY_MODE_MANUAL'] is not None:
                 self._settings.DELIVERY_MODE_MANUAL = all_settings['DELIVERY_MODE_MANUAL'].lower() == 'true'
-                logger.info(f"Loaded DELIVERY_MODE_MANUAL from database: {self._settings.DELIVERY_MODE_MANUAL}")
+                logger.debug(f"Loaded DELIVERY_MODE_MANUAL from database: {self._settings.DELIVERY_MODE_MANUAL}")
             
             if 'DELIVERY_DIRECT_DRY_RUN' in all_settings and all_settings['DELIVERY_DIRECT_DRY_RUN'] is not None:
                 self._settings.DELIVERY_DIRECT_DRY_RUN = all_settings['DELIVERY_DIRECT_DRY_RUN'].lower() == 'true'
-                logger.info(f"Loaded DELIVERY_DIRECT_DRY_RUN from database: {self._settings.DELIVERY_DIRECT_DRY_RUN}")
+                logger.debug(f"Loaded DELIVERY_DIRECT_DRY_RUN from database: {self._settings.DELIVERY_DIRECT_DRY_RUN}")
             
             # Git settings for indirect mode
             if 'GIT_REPO_URL' in all_settings and all_settings['GIT_REPO_URL'] is not None:
                 self._settings.GIT_REPO_URL = all_settings['GIT_REPO_URL']
-                logger.info("Loaded GIT_REPO_URL from database")
+                logger.debug("Loaded GIT_REPO_URL from database")
             
             if 'GIT_BRANCH' in all_settings and all_settings['GIT_BRANCH'] is not None:
                 self._settings.GIT_BRANCH = all_settings['GIT_BRANCH']
-                logger.info(f"Loaded GIT_BRANCH from database: {all_settings['GIT_BRANCH']}")
+                logger.debug(f"Loaded GIT_BRANCH from database: {all_settings['GIT_BRANCH']}")
             
             if 'GIT_USERNAME' in all_settings and all_settings['GIT_USERNAME'] is not None:
                 self._settings.GIT_USERNAME = all_settings['GIT_USERNAME']
-                logger.info("Loaded GIT_USERNAME from database")
+                logger.debug("Loaded GIT_USERNAME from database")
             
             if 'GIT_PASSWORD' in all_settings and all_settings['GIT_PASSWORD'] is not None:
                 self._settings.GIT_PASSWORD = all_settings['GIT_PASSWORD']
-                logger.info("Loaded GIT_PASSWORD from database (masked)")
+                logger.debug("Loaded GIT_PASSWORD from database (masked)")
             
             # UI Customization settings
             if 'UI_I18N_ENABLED' in all_settings and all_settings['UI_I18N_ENABLED'] is not None:
                 self._settings.UI_I18N_ENABLED = all_settings['UI_I18N_ENABLED'].lower() == 'true'
-                logger.info(f"Loaded UI_I18N_ENABLED from database: {self._settings.UI_I18N_ENABLED}")
+                logger.debug(f"Loaded UI_I18N_ENABLED from database: {self._settings.UI_I18N_ENABLED}")
             
             if 'UI_CUSTOM_LOGO_URL' in all_settings and all_settings['UI_CUSTOM_LOGO_URL'] is not None:
                 self._settings.UI_CUSTOM_LOGO_URL = all_settings['UI_CUSTOM_LOGO_URL']
-                logger.info("Loaded UI_CUSTOM_LOGO_URL from database")
+                logger.debug("Loaded UI_CUSTOM_LOGO_URL from database")
             
             if 'UI_ABOUT_CONTENT' in all_settings and all_settings['UI_ABOUT_CONTENT'] is not None:
                 self._settings.UI_ABOUT_CONTENT = all_settings['UI_ABOUT_CONTENT']
-                logger.info("Loaded UI_ABOUT_CONTENT from database")
+                logger.debug("Loaded UI_ABOUT_CONTENT from database")
             
             if 'UI_CUSTOM_CSS' in all_settings and all_settings['UI_CUSTOM_CSS'] is not None:
                 self._settings.UI_CUSTOM_CSS = all_settings['UI_CUSTOM_CSS']
-                logger.info("Loaded UI_CUSTOM_CSS from database")
+                logger.debug("Loaded UI_CUSTOM_CSS from database")
 
             # Welcome disclaimer settings (first-open dialog)
             if 'WELCOME_DISCLAIMER_ENABLED' in all_settings and all_settings['WELCOME_DISCLAIMER_ENABLED'] is not None:
                 self._settings.WELCOME_DISCLAIMER_ENABLED = all_settings['WELCOME_DISCLAIMER_ENABLED'].lower() == 'true'
-                logger.info(f"Loaded WELCOME_DISCLAIMER_ENABLED from database: {self._settings.WELCOME_DISCLAIMER_ENABLED}")
+                logger.debug(f"Loaded WELCOME_DISCLAIMER_ENABLED from database: {self._settings.WELCOME_DISCLAIMER_ENABLED}")
 
             if 'WELCOME_DISCLAIMER_TEXT' in all_settings and all_settings['WELCOME_DISCLAIMER_TEXT'] is not None:
                 self._settings.WELCOME_DISCLAIMER_TEXT = all_settings['WELCOME_DISCLAIMER_TEXT']
-                logger.info("Loaded WELCOME_DISCLAIMER_TEXT from database")
+                logger.debug("Loaded WELCOME_DISCLAIMER_TEXT from database")
 
             # Connector configurations are now managed via the `connections`
             # table and loaded by ConnectionsManager at startup.
@@ -432,7 +432,7 @@ class SettingsManager:
                 )
                 self._installations[db_inst.workflow_id] = installation
 
-            logger.info(f"Loaded {len(self._installations)} workflow installations from database")
+            logger.debug(f"Loaded {len(self._installations)} workflow installations from database")
         except Exception as e:
             logger.error(f"Error loading installations from database: {e}")
 

@@ -3154,30 +3154,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning("on_subscribe trigger fire failed (non-fatal): %s", e)
 
     # ------------------------------------------------------------------
-    # on_behalf_of validation ()
+    # on_behalf_of validation
     # ------------------------------------------------------------------
-    # Tiny in-process cache to avoid hammering SCIM on each subscribe call
-    # within the same gunicorn worker. 60s TTL per spec.
-    _OBO_CACHE: Dict[str, tuple] = {}  # key -> (timestamp, exists_bool)
-    _OBO_CACHE_TTL_SECONDS = 60
-
     def _validate_on_behalf_of_principal(self, on_behalf_of: OnBehalfOf) -> None:
         """Look up the principal in the workspace SCIM directory.
 
-        Raises ValueError (caller maps to HTTP 400) if not found. Cached for
-        60s to stay friendly with workspaces that have thousands of groups.
+        Raises ValueError (caller maps to HTTP 400) if not found. Underlying
+        SDK calls go through ``CachingWorkspaceClient`` which already caches
+        SCIM responses — no manager-side cache needed (per PR #315 review).
         """
-        import time
-        cache_key = f"{on_behalf_of.type}:{on_behalf_of.value}"
-        now = time.time()
-        cached = self._OBO_CACHE.get(cache_key)
-        if cached and (now - cached[0]) < self._OBO_CACHE_TTL_SECONDS:
-            if not cached[1]:
-                raise ValueError(
-                    f"{on_behalf_of.type} '{on_behalf_of.value}' not found in workspace directory"
-                )
-            return
-
         try:
             # Late import: workspace_client is heavyweight and may be mocked
             # in unit tests via dependency override.
@@ -3213,7 +3198,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             exists = False
 
-        self._OBO_CACHE[cache_key] = (now, exists)
         if not exists:
             raise ValueError(
                 f"{on_behalf_of.type} '{on_behalf_of.value}' not found in workspace directory"

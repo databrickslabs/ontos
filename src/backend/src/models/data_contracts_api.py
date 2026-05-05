@@ -69,7 +69,9 @@ class ColumnProperty(BaseModel):
     encryptedName: Optional[str] = None
     criticalDataElement: Optional[bool] = None
     transformLogic: Optional[str] = None
-    transformSourceObjects: Optional[str] = None
+    # ODCS v3.1.0 defines transformSourceObjects as an array of strings; accept a
+    # plain string for backward compatibility with earlier Ontos uploads.
+    transformSourceObjects: Optional[Union[List[str], str]] = None
     transformDescription: Optional[str] = None
 
     # ODCS v3.1.0 relationships (property-level FKs)

@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Braces,
   Library,
+  HardDrive,
   X,
   Search,
   AlertCircle,
@@ -57,7 +58,10 @@ const nodeIconMap: Record<string, typeof Database> = {
   view: Eye,
   column: Columns3,
   routine: Braces,
+  function: Braces,
+  procedure: Braces,
   model: Box,
+  volume: HardDrive,
 };
 
 function getNodeIcon(nodeType: string) {

@@ -866,31 +866,97 @@ class SchemaImportManager:
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+# Per-asset-type display labels for the browse tree (drives the
+# `node_type` field on BrowseNode and the icon picked by the frontend).
+#
+# Distinct from `_TYPE_MAP` on purpose: `_TYPE_MAP` collapses source-system
+# concepts to a smaller Ontos asset-type vocabulary used at *import* time
+# (e.g. UC_FUNCTION/UC_VOLUME -> "System"), but at *browse* time we want
+# to preserve the source label so users can tell a function from a volume.
+_DISPLAY_TYPE_MAP: Dict[str, str] = {
+    # Databricks / Unity Catalog
+    UnifiedAssetType.UC_CATALOG.value: "catalog",
+    UnifiedAssetType.UC_SCHEMA.value: "schema",
+    UnifiedAssetType.UC_TABLE.value: "table",
+    UnifiedAssetType.UC_VIEW.value: "view",
+    UnifiedAssetType.UC_MATERIALIZED_VIEW.value: "view",
+    UnifiedAssetType.UC_STREAMING_TABLE.value: "table",
+    UnifiedAssetType.UC_FUNCTION.value: "function",
+    UnifiedAssetType.UC_MODEL.value: "model",
+    UnifiedAssetType.UC_VOLUME.value: "volume",
+    # BigQuery
+    UnifiedAssetType.BQ_PROJECT.value: "project",
+    UnifiedAssetType.BQ_DATASET.value: "dataset",
+    UnifiedAssetType.BQ_TABLE.value: "table",
+    UnifiedAssetType.BQ_VIEW.value: "view",
+    UnifiedAssetType.BQ_MATERIALIZED_VIEW.value: "view",
+    UnifiedAssetType.BQ_EXTERNAL_TABLE.value: "table",
+    UnifiedAssetType.BQ_ROUTINE.value: "routine",
+    UnifiedAssetType.BQ_MODEL.value: "model",
+    # Snowflake
+    UnifiedAssetType.SNOWFLAKE_DATABASE.value: "database",
+    UnifiedAssetType.SNOWFLAKE_SCHEMA.value: "schema",
+    UnifiedAssetType.SNOWFLAKE_TABLE.value: "table",
+    UnifiedAssetType.SNOWFLAKE_VIEW.value: "view",
+    UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW.value: "view",
+    UnifiedAssetType.SNOWFLAKE_FUNCTION.value: "function",
+    UnifiedAssetType.SNOWFLAKE_PROCEDURE.value: "procedure",
+}
+
+
 def _display_type(asset_type: Optional[UnifiedAssetType]) -> str:
-    """Human-friendly type label for browse nodes."""
+    """Human-friendly type label for browse nodes.
+
+    Drives the `node_type` field returned to the UI, which selects the
+    Lucide icon and the small label printed next to each node name.
+    """
     if asset_type is None:
         return "unknown"
-    mapping = _TYPE_MAP.get(asset_type.value)
-    if mapping:
-        return mapping[0].lower()
+    label = _DISPLAY_TYPE_MAP.get(asset_type.value)
+    if label:
+        return label
+    # Last-resort fallback for newly-added asset types: take the trailing
+    # segment of the enum value (e.g. "powerbi_dashboard" -> "dashboard").
     return asset_type.value.split("_")[-1].lower()
 
 
 def _has_children(asset_type: Optional[UnifiedAssetType]) -> bool:
-    """Whether an asset type may have child nodes (e.g., columns)."""
+    """Whether an asset type may have child nodes (e.g., columns).
+
+    Used to set ``BrowseNode.has_children`` so the UI renders an expand
+    chevron. The set must include every leaf type whose
+    ``get_asset_metadata().schema_info`` is populated by the connector,
+    otherwise the user has no way to drill into its columns/parameters.
+
+    Excluded by design: models, volumes, datasets — they have no
+    column-level schema, so an expand chevron would yield an empty list.
+    """
     if asset_type is None:
         return False
     return asset_type.value in {
+        # Containers
         UnifiedAssetType.UC_CATALOG.value,
         UnifiedAssetType.UC_SCHEMA.value,
-        UnifiedAssetType.UC_TABLE.value,
-        UnifiedAssetType.UC_VIEW.value,
         UnifiedAssetType.BQ_PROJECT.value,
         UnifiedAssetType.BQ_DATASET.value,
-        UnifiedAssetType.BQ_TABLE.value,
-        UnifiedAssetType.BQ_VIEW.value,
         UnifiedAssetType.SNOWFLAKE_DATABASE.value,
         UnifiedAssetType.SNOWFLAKE_SCHEMA.value,
+        # UC leaves with column-bearing metadata
+        UnifiedAssetType.UC_TABLE.value,
+        UnifiedAssetType.UC_VIEW.value,
+        UnifiedAssetType.UC_MATERIALIZED_VIEW.value,
+        UnifiedAssetType.UC_STREAMING_TABLE.value,
+        UnifiedAssetType.UC_FUNCTION.value,
+        # BigQuery leaves with column-bearing metadata
+        UnifiedAssetType.BQ_TABLE.value,
+        UnifiedAssetType.BQ_VIEW.value,
+        UnifiedAssetType.BQ_MATERIALIZED_VIEW.value,
+        UnifiedAssetType.BQ_EXTERNAL_TABLE.value,
+        UnifiedAssetType.BQ_ROUTINE.value,
+        # Snowflake leaves with column-bearing metadata
         UnifiedAssetType.SNOWFLAKE_TABLE.value,
         UnifiedAssetType.SNOWFLAKE_VIEW.value,
+        UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW.value,
+        UnifiedAssetType.SNOWFLAKE_FUNCTION.value,
+        UnifiedAssetType.SNOWFLAKE_PROCEDURE.value,
     }

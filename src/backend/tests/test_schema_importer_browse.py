@@ -28,7 +28,11 @@ from src.connectors.databricks import (
     DatabricksConnector,
     DatabricksConnectorConfig,
 )
-from src.controller.schema_import_manager import SchemaImportManager
+from src.controller.schema_import_manager import (
+    SchemaImportManager,
+    _display_type,
+    _has_children,
+)
 from src.models.assets import (
     AssetInfo,
     AssetMetadata,
@@ -313,3 +317,81 @@ class TestSchemaImporterBrowseColumnEnrichment:
 
         assert response.error is None
         assert [n.path for n in response.nodes] == ["cat"]
+
+    def test_listing_marks_column_bearing_leaves_as_expandable(self):
+        """`_has_children` must return True for leaf types whose
+        `get_asset_metadata().schema_info` is populated, otherwise the UI
+        renders no expand chevron and the user can never see columns or
+        function parameters.
+
+        Anchored to the bug in https://github.com/databrickslabs/ontos/pull/289
+        where `system.ai.python_exec` (a UC function) appeared as `has_children=false`.
+        """
+        expandable = {
+            # UC: tables + view variants + function parameters
+            UnifiedAssetType.UC_TABLE,
+            UnifiedAssetType.UC_VIEW,
+            UnifiedAssetType.UC_MATERIALIZED_VIEW,
+            UnifiedAssetType.UC_STREAMING_TABLE,
+            UnifiedAssetType.UC_FUNCTION,
+            # BigQuery
+            UnifiedAssetType.BQ_TABLE,
+            UnifiedAssetType.BQ_VIEW,
+            UnifiedAssetType.BQ_MATERIALIZED_VIEW,
+            UnifiedAssetType.BQ_EXTERNAL_TABLE,
+            UnifiedAssetType.BQ_ROUTINE,
+            # Snowflake
+            UnifiedAssetType.SNOWFLAKE_TABLE,
+            UnifiedAssetType.SNOWFLAKE_VIEW,
+            UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW,
+            UnifiedAssetType.SNOWFLAKE_FUNCTION,
+            UnifiedAssetType.SNOWFLAKE_PROCEDURE,
+        }
+        for at in expandable:
+            assert _has_children(at) is True, f"expected {at} to be expandable"
+
+    def test_listing_marks_non_column_leaves_as_non_expandable(self):
+        """Models, volumes, datasets etc. must stay non-expandable — there is
+        nothing under them, and a chevron would just yield an empty list."""
+        non_expandable = {
+            UnifiedAssetType.UC_MODEL,
+            UnifiedAssetType.UC_VOLUME,
+            UnifiedAssetType.BQ_MODEL,
+            # None case
+        }
+        for at in non_expandable:
+            assert _has_children(at) is False, f"expected {at} to be non-expandable"
+        assert _has_children(None) is False
+
+    def test_display_type_distinguishes_functions_models_volumes(self):
+        """Browse-time labels must preserve source-system semantics.
+
+        Before this fix `_display_type` went through `_TYPE_MAP` which
+        collapses functions/volumes/procedures to the import-time
+        Ontos type "System" — leaving the user with a tree that
+        labels every UC function and volume as "system". The display
+        map keeps them distinct so the right icon is picked and the
+        label next to the name is meaningful.
+        """
+        cases = {
+            # UC
+            UnifiedAssetType.UC_TABLE: "table",
+            UnifiedAssetType.UC_VIEW: "view",
+            UnifiedAssetType.UC_MATERIALIZED_VIEW: "view",
+            UnifiedAssetType.UC_STREAMING_TABLE: "table",
+            UnifiedAssetType.UC_FUNCTION: "function",
+            UnifiedAssetType.UC_MODEL: "model",
+            UnifiedAssetType.UC_VOLUME: "volume",
+            # BQ
+            UnifiedAssetType.BQ_ROUTINE: "routine",
+            UnifiedAssetType.BQ_MODEL: "model",
+            UnifiedAssetType.BQ_EXTERNAL_TABLE: "table",
+            # Snowflake
+            UnifiedAssetType.SNOWFLAKE_FUNCTION: "function",
+            UnifiedAssetType.SNOWFLAKE_PROCEDURE: "procedure",
+            UnifiedAssetType.SNOWFLAKE_MATERIALIZED_VIEW: "view",
+        }
+        for at, expected in cases.items():
+            assert _display_type(at) == expected, f"{at} -> {_display_type(at)}, want {expected}"
+
+        assert _display_type(None) == "unknown"

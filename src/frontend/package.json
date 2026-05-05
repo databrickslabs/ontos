@@ -47,6 +47,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "cytoscape": "^3.33.1",
+    "cytoscape-fcose": "^2.2.0",
     "date-fns": "^4.1.0",
     "framer-motion": "12.38.0",
     "i18next": "^25.5.3",

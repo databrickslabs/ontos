@@ -1,7 +1,17 @@
 import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 // @ts-expect-error - react-cytoscapejs doesn't have type declarations
 import CytoscapeComponent from 'react-cytoscapejs';
+import cytoscape from 'cytoscape';
 import type { Core, ElementDefinition, LayoutOptions } from 'cytoscape';
+// @ts-expect-error - cytoscape-fcose ships its own types but they're not picked up cleanly
+import fcose from 'cytoscape-fcose';
+
+// fcose ("fast compound spring embedder") is a modern force-directed layout
+// extension. Compared to the built-in `cose`, it produces more aesthetic node
+// distributions out of the box, handles compound nodes (showDomainBoxes) more
+// gracefully, and converges faster with less manual tuning. Registration is
+// idempotent — calling cytoscape.use() multiple times is a no-op.
+cytoscape.use(fcose);
 import type { OntologyConcept } from '@/types/ontology';
 import { resolveLabel } from '@/lib/ontology-utils';
 import { Button } from '@/components/ui/button';
@@ -41,7 +51,7 @@ const DOMAIN_COLORS = [
 // Threshold for switching from badges to dropdown
 const ROOT_BADGE_THRESHOLD = 10;
 
-export type LayoutType = 'circle' | 'cose' | 'grid' | 'breadthfirst' | 'concentric';
+export type LayoutType = 'fcose' | 'circle' | 'cose' | 'grid' | 'breadthfirst' | 'concentric';
 
 // Props for the RootNodeFilter component
 interface RootNodeFilterProps {
@@ -289,7 +299,8 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   const layoutRef = useRef<{ stop: () => void } | null>(null);
   const initialLayoutDoneRef = useRef(false);
   const fullscreenInitialLayoutDoneRef = useRef(false);
-  const [layout, setLayout] = useState<LayoutType>('cose');
+  // fcose is the new default — better aesthetics + faster convergence than cose.
+  const [layout, setLayout] = useState<LayoutType>('fcose');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDomainBoxes, setShowDomainBoxes] = useState(true);
@@ -668,6 +679,27 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
     };
 
     switch (layoutName) {
+      case 'fcose':
+        // Modern force-directed layout. quality='proof' converges further than
+        // 'default' for a tidier final state; randomize=false uses current
+        // positions as a starting point so re-layouts don't visually thrash.
+        // tile=false because compound domain nodes already cluster children.
+        return {
+          name: 'fcose',
+          ...baseConfig,
+          quality: 'proof',
+          randomize: false,
+          animate: animate ? 'end' : false,
+          animationEasing: 'ease-out',
+          nodeRepulsion: () => 8000,
+          idealEdgeLength: () => 90,
+          edgeElasticity: () => 0.45,
+          gravity: 0.25,
+          gravityRangeCompound: 1.5,
+          numIter: 2500,
+          tile: false,
+          packComponents: true,
+        } as LayoutOptions;
       case 'circle':
         return {
           name: 'circle',
@@ -910,8 +942,9 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
               <SelectValue placeholder="Layout" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="fcose">Force-Directed</SelectItem>
+              <SelectItem value="cose">Force-Directed (legacy)</SelectItem>
               <SelectItem value="circle">Circular</SelectItem>
-              <SelectItem value="cose">Force-Directed</SelectItem>
               <SelectItem value="grid">Grid</SelectItem>
               <SelectItem value="breadthfirst">Hierarchical</SelectItem>
               <SelectItem value="concentric">Concentric</SelectItem>

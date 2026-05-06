@@ -80,10 +80,10 @@ async def list_workspace_groups(
     """List Databricks workspace groups for use in pickers.
 
     Used by:
-      * the data product publish form's ``consumer_groups`` multi-select
-        ()
+      * the data product publish form's ``consumer_principals`` multi-select
+        (each selected group becomes a ``{type: "group", value: <name>}``
+        principal)
       * the subscribe dialog's "for a group I'm part of" picker
-        ()
 
     Returns ``[{id, display_name}, ...]``. Best-effort: SCIM directory may
     contain thousands of groups in large workspaces, so an optional

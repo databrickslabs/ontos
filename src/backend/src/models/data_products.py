@@ -53,6 +53,24 @@ def parse_json_if_string(v: Any) -> Any:
 
 
 # ============================================================================
+# Consumer Principal (typed identity reference)
+# ============================================================================
+
+class ConsumerPrincipal(BaseModel):
+    """Typed principal for ``consumer_principals``.
+
+    Default ``type="group"`` keeps the common case (workspace group display
+    names) terse, but the shape is intentionally extensible to non-group
+    identity methods (service principals, IdP roles, OAuth scopes) without a
+    future breaking migration.
+    """
+    type: str = Field("group", description="Principal type: 'group' (default), 'service_principal', 'role', 'scope', etc.")
+    value: str = Field(..., description="Principal identifier (group display name, SP applicationId, role name, scope, ...)")
+
+    model_config = {"from_attributes": True}
+
+
+# ============================================================================
 # ODPS v1.0.0 Core Models
 # ============================================================================
 
@@ -318,10 +336,12 @@ class DataProduct(BaseModel):
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
 
-    # : typed list of group display names that
-    # represent expected consumers of this product. Surfaced in the publish
-    # form and exposed to webhook bodies via ${entity.consumer_groups}.
-    consumer_groups: Optional[List[str]] = Field(default_factory=list, description="Group display names of expected consumers")
+    # Typed list of principals representing the expected consumers of this
+    # product. Default ``type="group"`` covers the common case; the shape is
+    # extensible to service principals, roles, scopes, etc. Surfaced in the
+    # publish form and exposed to webhook bodies via
+    # ``${entity.consumer_principals}``.
+    consumer_principals: Optional[List[ConsumerPrincipal]] = Field(default_factory=list, description="Typed principals (groups by default) representing expected consumers")
 
     # Audit fields (not in ODPS, but useful)
     created_at: Optional[datetime] = Field(None, description="Record creation timestamp")
@@ -346,24 +366,33 @@ class DataProduct(BaseModel):
     certification_expires_at: Optional[datetime] = Field(None, description="When certification expires")
     certification_notes: Optional[str] = Field(None, description="Certification notes")
 
-    # consumer_groups is stored as JSON-encoded TEXT in DB.
-    # Decode to a list at read time. Accepts both list (already decoded) and
-    # str (raw from SQLite/Postgres TEXT column).
-    @field_validator('consumer_groups', mode='before')
-    def parse_consumer_groups(cls, value):
+    # consumer_principals is stored as JSON-encoded TEXT in DB. Decode to a
+    # list of dicts at read time so Pydantic can build ConsumerPrincipal
+    # entries. Accepts:
+    #   * already-decoded list of ConsumerPrincipal (passthrough)
+    #   * list of dicts {type, value}
+    #   * legacy list of strings (any local dev DB written before the
+    #     rename) — coerced to {type: "group", value: <str>}
+    #   * raw JSON string from a TEXT column (any of the above shapes)
+    @field_validator('consumer_principals', mode='before')
+    def parse_consumer_principals(cls, value):
         if value is None or value == '':
             return []
-        if isinstance(value, list):
-            return value
         if isinstance(value, str):
             try:
-                parsed = json.loads(value)
-                if isinstance(parsed, list):
-                    return parsed
+                value = json.loads(value)
             except (json.JSONDecodeError, ValueError):
-                pass
+                return []
+        if not isinstance(value, list):
             return []
-        return value or []
+        # Coerce legacy strings to {type: "group", value: s}
+        coerced: List[Any] = []
+        for item in value:
+            if isinstance(item, str):
+                coerced.append({"type": "group", "value": item})
+            else:
+                coerced.append(item)
+        return coerced
 
     # Field validators to parse JSON strings from database
     @field_validator('tags', mode='before')
@@ -446,8 +475,8 @@ class DataProductCreate(BaseModel):
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
 
-    # : consumer groups metadata
-    consumer_groups: Optional[List[str]] = Field(default_factory=list, description="Group display names of expected consumers")
+    # Typed consumer principals (default type="group")
+    consumer_principals: Optional[List[ConsumerPrincipal]] = Field(default_factory=list, description="Typed principals (groups by default) representing expected consumers")
 
     # Field validator to handle string IDs from frontend
     @field_validator('tags', mode='before')
@@ -462,6 +491,25 @@ class DataProductCreate(BaseModel):
         if isinstance(value, list) and value and isinstance(value[0], str):
             return value
         return value
+
+    @field_validator('consumer_principals', mode='before')
+    def parse_consumer_principals(cls, value):
+        if value is None or value == '':
+            return []
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, ValueError):
+                return []
+        if not isinstance(value, list):
+            return []
+        coerced: List[Any] = []
+        for item in value:
+            if isinstance(item, str):
+                coerced.append({"type": "group", "value": item})
+            else:
+                coerced.append(item)
+        return coerced
 
     model_config = {
         "from_attributes": True,
@@ -488,8 +536,8 @@ class DataProductUpdate(BaseModel):
     support: Optional[List[Support]] = Field(None, alias="support_channels")
     team: Optional[Team] = None
     max_level_inheritance: Optional[int] = Field(None, ge=0, le=999)
-    # : consumer groups metadata
-    consumer_groups: Optional[List[str]] = Field(None, description="Group display names of expected consumers")
+    # Typed consumer principals (default type="group")
+    consumer_principals: Optional[List[ConsumerPrincipal]] = Field(None, description="Typed principals (groups by default) representing expected consumers")
 
     # Field validator to handle string IDs from frontend
     @field_validator('tags', mode='before')
@@ -504,6 +552,27 @@ class DataProductUpdate(BaseModel):
         if isinstance(value, list) and value and isinstance(value[0], str):
             return value
         return value
+
+    @field_validator('consumer_principals', mode='before')
+    def parse_consumer_principals(cls, value):
+        if value is None:
+            return None
+        if value == '':
+            return []
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, ValueError):
+                return []
+        if not isinstance(value, list):
+            return []
+        coerced: List[Any] = []
+        for item in value:
+            if isinstance(item, str):
+                coerced.append({"type": "group", "value": item})
+            else:
+                coerced.append(item)
+        return coerced
 
     model_config = {
         "from_attributes": True,

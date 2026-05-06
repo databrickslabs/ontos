@@ -188,7 +188,7 @@ const createDefaultProduct = (): DataProduct => {
     links: {},
     custom: {},
     tags: [],
-    consumer_groups: [], // 
+    consumer_principals: [], // Typed list of {type, value} principals (default type="group")
     // updated_at will be set on submit
     updated_at: '' // Placeholder, will be replaced
   };
@@ -1233,17 +1233,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                             </CardContent>
                           </Card>
 
-                          {/* Consumer Groups Card () */}
+                          {/* Consumer Groups Card */}
                           <Card>
                             <CardHeader>
                               <CardTitle>Consumer Groups</CardTitle>
                               <CardDescription>
-                                Workspace groups that represent the expected consumers of this product. Surfaced to subscribe webhooks via <code className="text-xs">${'{'}entity.consumer_groups{'}'}</code>.
+                                Workspace groups that represent the expected consumers of this product. Each entry is stored as a typed principal <code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>; surfaced to subscribe webhooks via <code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
                               </CardDescription>
                             </CardHeader>
                             <CardContent>
                               <Controller
-                                name="consumer_groups"
+                                name="consumer_principals"
                                 control={control}
                                 render={({ field }) => (
                                   <ConsumerGroupsPicker

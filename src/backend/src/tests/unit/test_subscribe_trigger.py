@@ -8,7 +8,7 @@ subscriptions never fired the corresponding ``on_subscribe`` process
 workflow (no external runbook, no notifications).
 
 The refactor moves the trigger fire + entity_data enrichment
-(``on_behalf_of`` flattening, ``consumer_groups`` pull) into
+(``on_behalf_of`` flattening, ``consumer_principals`` pull) into
 ``DataProductsManager._fire_on_subscribe_trigger``, called from inside
 ``subscribe()`` after the persistence is committed. Both code paths fire
 it: new-subscription path AND the "already subscribed" early return path
@@ -18,7 +18,8 @@ These tests target the helper directly so we don't need a full
 end-to-end persistence harness:
   * entity_data has the expected shape for each on_behalf_of type
     (user / group / service_principal) — including the ``display`` field
-  * entity_data.consumer_groups is populated when the product has them
+  * entity_data.consumer_principals is populated (as list of {type, value}
+    dicts) when the product has them
   * entity_type is EntityType.SUBSCRIPTION
   * subscription_id is preferred over product_id when present
   * Trigger errors are swallowed (non-fatal)
@@ -37,12 +38,18 @@ import pytest
 from src.models.data_products import OnBehalfOf
 
 
-def _make_product(consumer_groups=None):
+def _make_product(consumer_principals=None):
     """Minimal product-like object the helper inspects via getattr."""
     return SimpleNamespace(
         id="prod-123",
-        consumer_groups=consumer_groups,
+        consumer_principals=consumer_principals,
     )
+
+
+def _principal(value, type_="group"):
+    """Build a ConsumerPrincipal-like object exposing model_dump()."""
+    from src.models.data_products import ConsumerPrincipal
+    return ConsumerPrincipal(type=type_, value=value)
 
 
 @pytest.fixture
@@ -72,7 +79,7 @@ class TestFireOnSubscribeTrigger:
             )
         return fire_mock
 
-    def test_no_on_behalf_of_no_consumer_groups(self, manager):
+    def test_no_on_behalf_of_no_consumer_principals(self, manager):
         fire_mock = self._call(manager, reason="for dashboards")
         assert fire_mock.call_count == 1
         kwargs = fire_mock.call_args.kwargs
@@ -92,7 +99,7 @@ class TestFireOnSubscribeTrigger:
         assert ed["subscriber_email"] == "consumer@example.com"
         assert ed["reason"] == "for dashboards"
         assert "on_behalf_of" not in ed
-        assert "consumer_groups" not in ed
+        assert "consumer_principals" not in ed
 
     def test_on_behalf_of_user_display_is_value(self, manager):
         obo = OnBehalfOf(type="user", value="alice@example.com")
@@ -124,17 +131,36 @@ class TestFireOnSubscribeTrigger:
             "display": "SP: external-runbook-sp",
         }
 
-    def test_consumer_groups_surfaced_when_present(self, manager):
-        product = _make_product(consumer_groups=["analysts", "ml_team"])
+    def test_consumer_principals_surfaced_when_present(self, manager):
+        product = _make_product(consumer_principals=[
+            _principal("analysts"),
+            _principal("ml_team"),
+        ])
         fire_mock = self._call(manager, product=product)
         ed = fire_mock.call_args.kwargs["entity_data"]
-        assert ed["consumer_groups"] == ["analysts", "ml_team"]
+        # Helper dumps each principal to a {type, value} dict so the
+        # workflow_executor's JSON serializer renders cleanly.
+        assert ed["consumer_principals"] == [
+            {"type": "group", "value": "analysts"},
+            {"type": "group", "value": "ml_team"},
+        ]
 
-    def test_consumer_groups_omitted_when_empty(self, manager):
-        product = _make_product(consumer_groups=[])
+    def test_consumer_principals_accepts_plain_dicts(self, manager):
+        """Pre-dumped dicts (e.g. from JSON-decoded TEXT) pass through too."""
+        product = _make_product(consumer_principals=[
+            {"type": "service_principal", "value": "external-runbook-sp"},
+        ])
         fire_mock = self._call(manager, product=product)
         ed = fire_mock.call_args.kwargs["entity_data"]
-        assert "consumer_groups" not in ed
+        assert ed["consumer_principals"] == [
+            {"type": "service_principal", "value": "external-runbook-sp"},
+        ]
+
+    def test_consumer_principals_omitted_when_empty(self, manager):
+        product = _make_product(consumer_principals=[])
+        fire_mock = self._call(manager, product=product)
+        ed = fire_mock.call_args.kwargs["entity_data"]
+        assert "consumer_principals" not in ed
 
     def test_entity_id_is_product_id(self, manager):
         """entity_id is always the data product id so workflows
@@ -179,13 +205,13 @@ class TestSubscribeFiresTriggerOncePerCall:
     wizard auto-subscribe never fired the trigger at all."""
 
     def _setup(self, db_session, *, existing=None, created=None,
-               consumer_groups=None):
+               consumer_principals=None):
         """Common patches; returns (manager, fire_helper_mock)."""
         from src.controller.data_products_manager import DataProductsManager
 
         mgr = DataProductsManager(db=db_session)
         mock_product = SimpleNamespace(
-            id="prod-x", status="active", consumer_groups=consumer_groups,
+            id="prod-x", status="active", consumer_principals=consumer_principals,
         )
 
         # Patch Subscription + SubscriptionResponse to bypass pydantic
@@ -254,7 +280,7 @@ class TestSubscribeFiresTriggerOncePerCall:
         )
         mgr, fire_helper = self._setup(
             db_session, existing=None, created=created,
-            consumer_groups=["analysts"],
+            consumer_principals=[_principal("analysts")],
         )
 
         mgr.subscribe(

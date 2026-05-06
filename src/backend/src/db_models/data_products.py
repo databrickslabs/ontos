@@ -46,10 +46,13 @@ class DataProductDb(Base):
     # Default 99 means inherit almost everything that's marked inheritable.
     max_level_inheritance = Column(Integer, nullable=False, default=99)
 
-    # ==================== consumer_groups ====================
-    # JSON array of group display names. Stored as JSON text for portability
-    # across SQLite (dev) + Postgres (prod). The migration adds JSONB on PG.
-    consumer_groups = Column(Text, nullable=True)
+    # ==================== consumer_principals ====================
+    # JSON array of typed principals: [{type: "group"|..., value: "..."}, ...].
+    # Stored as JSON text for portability across SQLite (dev) + Postgres (prod).
+    # type defaults to "group"; the model is intentionally extensible to non-
+    # group identity methods (service principals, IdP roles, OAuth scopes)
+    # without a future breaking migration.
+    consumer_principals = Column(Text, nullable=True)
 
     # ==================== Audit Fields ====================
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

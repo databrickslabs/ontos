@@ -3096,8 +3096,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         Builds the entity_data payload that the executor flattens into
         StepContext (.on_behalf_of for ${context.on_behalf_of.value} in
-        webhook bodies / grant_permissions principals; .consumer_groups for
-        ${entity.consumer_groups}).
+        webhook bodies / grant_permissions principals; .consumer_principals
+        for ${entity.consumer_principals}).
 
         Wrapped in try/except — a trigger fire failure must not break the
         subscribe response.
@@ -3125,11 +3125,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     obo_dict["display"] = f"SP: {on_behalf_of.value}"
                 entity_data["on_behalf_of"] = obo_dict
 
-            # Surface consumer_groups () so workflow webhook
-            # bodies can pipe them via ${entity.consumer_groups}.
-            cg = getattr(product, 'consumer_groups', None) if product is not None else None
-            if cg:
-                entity_data["consumer_groups"] = cg
+            # Surface consumer_principals so workflow webhook bodies can pipe
+            # them via ${entity.consumer_principals}. Each principal is dumped
+            # to a plain {type, value} dict so _render_template_value's JSON
+            # serializer produces a clean array of objects in the rendered
+            # webhook body.
+            principals = getattr(product, 'consumer_principals', None) if product is not None else None
+            if principals:
+                entity_data["consumer_principals"] = [
+                    p.model_dump() if hasattr(p, 'model_dump') else p
+                    for p in principals
+                ]
 
             # Fire with entity_type=DATA_PRODUCT (NOT SUBSCRIPTION). Process
             # workflows register with entity_types=["data_product"] because

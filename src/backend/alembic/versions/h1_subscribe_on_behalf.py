@@ -1,9 +1,12 @@
-"""Subscribe on behalf of group/SP + consumer_groups metadata.
+"""Subscribe on behalf of group/SP + consumer_principals metadata.
 
 Adds:
-- ``data_products.consumer_groups`` (TEXT, JSON-encoded list of group display names)
+- ``data_products.consumer_principals`` (TEXT, JSON-encoded list of typed
+  principals: ``[{type: "group"|..., value: "..."}, ...]``).
   Surfaced in publish form + exposed to webhook bodies via
-  ``${entity.consumer_groups}``.
+  ``${entity.consumer_principals}``. Default ``type="group"``; the shape is
+  intentionally extensible to non-group identity methods (service principals,
+  IdP roles, OAuth scopes) without a future breaking migration.
 - ``data_product_subscriptions.on_behalf_of_type`` (VARCHAR(50))
 - ``data_product_subscriptions.on_behalf_of_value`` (VARCHAR(255))
   Capture which group / SP / user the subscription was requested for when it
@@ -28,12 +31,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # data_products.consumer_groups (JSON-encoded list of group display names).
-    # Stored as TEXT for portability across SQLite (dev) and Postgres (prod);
-    # backend serializes to JSON via Pydantic + a parse hook in the repository.
+    # data_products.consumer_principals (JSON-encoded list of {type, value}
+    # principals). Stored as TEXT for portability across SQLite (dev) and
+    # Postgres (prod); backend serializes to JSON via Pydantic + a parse hook
+    # in the repository.
     op.execute(
         "ALTER TABLE data_products "
-        "ADD COLUMN IF NOT EXISTS consumer_groups TEXT"
+        "ADD COLUMN IF NOT EXISTS consumer_principals TEXT"
     )
 
     # data_product_subscriptions: subscribe-on-behalf-of metadata.
@@ -50,4 +54,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("data_product_subscriptions", "on_behalf_of_value")
     op.drop_column("data_product_subscriptions", "on_behalf_of_type")
-    op.drop_column("data_products", "consumer_groups")
+    op.drop_column("data_products", "consumer_principals")

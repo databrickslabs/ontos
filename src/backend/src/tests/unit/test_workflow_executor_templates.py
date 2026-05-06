@@ -211,22 +211,28 @@ class TestSubstituteTemplateMissing:
 
 class TestSubscribeOnBehalfTemplates:
     """Resolver fixes required for subscribe-on-behalf-of-group + the
-    consumer_groups data product metadata. The external runbook webhook body
-    needs `${context.on_behalf_of.value}` (nested dict) AND
-    `${entity.consumer_groups}` (list, JSON-serialized)."""
+    consumer_principals data product metadata. The external runbook webhook
+    body needs `${context.on_behalf_of.value}` (nested dict) AND
+    `${entity.consumer_principals}` (list, JSON-serialized)."""
 
     def test_entity_list_serialized_as_json(self):
         """${entity.<list_field>} renders as a JSON array string."""
         ctx = _make_context(entity={
             'name': 'sales_kpis',
-            'consumer_groups': ['sales_consumers', 'finance_readers'],
+            'consumer_principals': [
+                {'type': 'group', 'value': 'sales_consumers'},
+                {'type': 'group', 'value': 'finance_readers'},
+            ],
         })
-        out = substitute_template("groups=${entity.consumer_groups}", ctx)
-        assert out == 'groups=["sales_consumers", "finance_readers"]'
+        out = substitute_template("principals=${entity.consumer_principals}", ctx)
+        assert out == (
+            'principals=[{"type": "group", "value": "sales_consumers"}, '
+            '{"type": "group", "value": "finance_readers"}]'
+        )
 
     def test_entity_empty_list_serializes(self):
-        ctx = _make_context(entity={'consumer_groups': []})
-        assert substitute_template("${entity.consumer_groups}", ctx) == "[]"
+        ctx = _make_context(entity={'consumer_principals': []})
+        assert substitute_template("${entity.consumer_principals}", ctx) == "[]"
 
     def test_entity_dict_serialized_as_json(self):
         """${entity.<dict_field>} renders as a JSON object string."""
@@ -270,21 +276,27 @@ class TestSubscribeOnBehalfTemplates:
         ctx = _make_context(
             entity={
                 'name': 'sales_kpis',
-                'consumer_groups': ['sales_consumers', 'finance_readers'],
+                'consumer_principals': [
+                    {'type': 'group', 'value': 'sales_consumers'},
+                    {'type': 'group', 'value': 'finance_readers'},
+                ],
             },
             on_behalf_of={'type': 'group', 'value': 'sales_consumers', 'display': 'Group: sales_consumers'},
         )
         body_template = (
             '{"product": "${entity_name}", '
             '"on_behalf_of": "${context.on_behalf_of.value}", '
-            '"groups": ${entity.consumer_groups}}'
+            '"principals": ${entity.consumer_principals}}'
         )
         rendered = substitute_template(body_template, ctx)
         import json as _json
         payload = _json.loads(rendered)
         assert payload['product'] == 'test_table'
         assert payload['on_behalf_of'] == 'sales_consumers'
-        assert payload['groups'] == ['sales_consumers', 'finance_readers']
+        assert payload['principals'] == [
+            {'type': 'group', 'value': 'sales_consumers'},
+            {'type': 'group', 'value': 'finance_readers'},
+        ]
 
 
 # =========================================================================

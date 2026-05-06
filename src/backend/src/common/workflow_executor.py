@@ -39,9 +39,9 @@ logger = get_logger(__name__)
 
 def _render_template_value(value: Any) -> str:
     """Render a substitution value. Lists/dicts are JSON-serialized so webhook
-    body templates can interpolate `${entity.consumer_groups}` and receive a
-    valid JSON array (piping consumer_groups + on_behalf_of
-    into the external runbook webhook body)."""
+    body templates can interpolate `${entity.consumer_principals}` and receive
+    a valid JSON array of `{type, value}` objects (piping consumer_principals
+    + on_behalf_of into the external runbook webhook body)."""
     if value is None:
         return ''
     if isinstance(value, (list, dict)):

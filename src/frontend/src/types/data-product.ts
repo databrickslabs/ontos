@@ -7,6 +7,17 @@ import { AssignedTag } from '@/components/ui/tag-chip';
  */
 
 // ============================================================================
+// Consumer Principal (typed identity reference)
+// ============================================================================
+
+// Default `type` is "group" today — extensible to non-group identity methods
+// (service principals, IdP roles, OAuth scopes) without a breaking migration.
+export interface ConsumerPrincipal {
+  type: string;
+  value: string;
+}
+
+// ============================================================================
 // ODPS v1.0.0 Enums
 // ============================================================================
 
@@ -259,9 +270,12 @@ export interface DataProduct {
   created_at?: string;
   updated_at?: string;
 
-  // typed list of group display names representing the
-  // expected consumers of this product. Surfaced in publish/edit form.
-  consumer_groups?: string[];
+  // Typed list of principals representing the expected consumers of this
+  // product. Default `type: "group"` covers the common case; the shape is
+  // extensible to service principals, roles, scopes, etc. Surfaced in
+  // publish/edit form and exposed to webhook bodies via
+  // `${entity.consumer_principals}`.
+  consumer_principals?: ConsumerPrincipal[];
 
   // Databricks extension
   project_id?: string;

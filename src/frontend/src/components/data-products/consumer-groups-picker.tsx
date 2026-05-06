@@ -3,8 +3,15 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { X, Loader2 } from 'lucide-react';
+import { ConsumerPrincipal } from '@/types/data-product';
 
-// multi-select picker backed by /api/workspace/groups.
+// Multi-select picker backed by /api/workspace/groups, surfacing workspace
+// group display names and packaging each selection as a typed
+// `{type: "group", value: <name>}` ConsumerPrincipal. Today the picker only
+// collects groups; the typed shape leaves room to add other principal types
+// (service principals, IdP roles, OAuth scopes) in the same widget later
+// without a wire-format break.
+//
 // Accepts free-text additions for groups the SDK can't enumerate (e.g. cross-
 // account groups synced from external IdPs) — falls back gracefully when the
 // endpoint returns nothing.
@@ -15,8 +22,8 @@ interface WorkspaceGroup {
 }
 
 interface Props {
-  value: string[];
-  onChange: (next: string[]) => void;
+  value: ConsumerPrincipal[];
+  onChange: (next: ConsumerPrincipal[]) => void;
 }
 
 export function ConsumerGroupsPicker({ value, onChange }: Props) {
@@ -53,17 +60,24 @@ export function ConsumerGroupsPicker({ value, onChange }: Props) {
     };
   }, [search]);
 
-  const selectedSet = useMemo(() => new Set(value), [value]);
-  const candidates = available.filter((g) => !selectedSet.has(g.display_name));
+  // Selected-set keyed on the {type:"group"} pair so we don't double-add a
+  // group that's already selected, while leaving room for other principal
+  // types in the future.
+  const selectedGroupNames = useMemo(
+    () => new Set(value.filter((p) => p.type === 'group').map((p) => p.value)),
+    [value],
+  );
+  const candidates = available.filter((g) => !selectedGroupNames.has(g.display_name));
 
   const addGroup = (name: string) => {
     const trimmed = name.trim();
-    if (!trimmed || selectedSet.has(trimmed)) return;
-    onChange([...value, trimmed]);
+    if (!trimmed || selectedGroupNames.has(trimmed)) return;
+    onChange([...value, { type: 'group', value: trimmed }]);
   };
 
   const removeGroup = (name: string) => {
-    onChange(value.filter((g) => g !== name));
+    // Match on value AND type — leaves non-group principals untouched.
+    onChange(value.filter((p) => !(p.type === 'group' && p.value === name)));
   };
 
   return (
@@ -71,14 +85,14 @@ export function ConsumerGroupsPicker({ value, onChange }: Props) {
       {/* Selected chips */}
       {value.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {value.map((g) => (
-            <Badge key={g} variant="secondary" className="flex items-center gap-1">
-              {g}
+          {value.map((p) => (
+            <Badge key={`${p.type}:${p.value}`} variant="secondary" className="flex items-center gap-1">
+              {p.value}
               <button
                 type="button"
-                aria-label={`Remove ${g}`}
+                aria-label={`Remove ${p.value}`}
                 className="hover:text-destructive"
-                onClick={() => removeGroup(g)}
+                onClick={() => removeGroup(p.value)}
               >
                 <X className="h-3 w-3" />
               </button>

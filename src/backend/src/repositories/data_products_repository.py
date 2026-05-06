@@ -56,10 +56,16 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
 
         try:
             # 1. Create core DataProduct
-            # persist consumer_groups as JSON-encoded TEXT
-            # for portability across SQLite/Postgres. None / empty list -> None.
-            cg_value = getattr(obj_in, 'consumer_groups', None)
-            cg_json: Optional[str] = json.dumps(cg_value) if cg_value else None
+            # Persist consumer_principals as JSON-encoded TEXT for portability
+            # across SQLite/Postgres. None / empty list -> None. Each principal
+            # is dumped via model_dump() so we get plain {type, value} dicts.
+            cp_value = getattr(obj_in, 'consumer_principals', None)
+            cp_serializable = (
+                [p.model_dump() if hasattr(p, 'model_dump') else p for p in cp_value]
+                if cp_value
+                else None
+            )
+            cp_json: Optional[str] = json.dumps(cp_serializable) if cp_serializable else None
 
             db_obj = self.model(
                 id=obj_in.id,
@@ -77,7 +83,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 base_name=getattr(obj_in, 'base_name', None),
                 change_summary=getattr(obj_in, 'change_summary', None),
                 draft_owner_id=getattr(obj_in, 'draft_owner_id', None),
-                consumer_groups=cg_json,
+                consumer_principals=cp_json,
             )
 
             # 2. Create Structured Description (One-to-One)
@@ -259,10 +265,16 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.project_id = update_data['project_id']
             if 'max_level_inheritance' in update_data:
                 db_obj.max_level_inheritance = update_data['max_level_inheritance']
-            # consumer_groups
-            if 'consumer_groups' in update_data:
-                cg_value = update_data['consumer_groups']
-                db_obj.consumer_groups = json.dumps(cg_value) if cg_value else None
+            # consumer_principals — incoming list-of-dicts from
+            # model_dump(by_alias=True) above; serialize as JSON TEXT.
+            if 'consumer_principals' in update_data:
+                cp_value = update_data['consumer_principals']
+                cp_serializable = (
+                    [p.model_dump() if hasattr(p, 'model_dump') else p for p in cp_value]
+                    if cp_value
+                    else None
+                )
+                db_obj.consumer_principals = json.dumps(cp_serializable) if cp_serializable else None
 
             # 2. Update Structured Description
             if 'description' in update_data:

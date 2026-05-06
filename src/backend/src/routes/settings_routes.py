@@ -588,11 +588,6 @@ async def clear_demo_data(
             # Entity relationships (0f6%) — hasColumn
             "DELETE FROM entity_relationships WHERE id::text LIKE '0f6%'",
             
-            # Legacy: dataset subscriptions/custom properties (if old tables still exist)
-            "DELETE FROM dataset_subscriptions WHERE id::text LIKE '022%'",
-            "DELETE FROM dataset_subscriptions WHERE id::text LIKE '0260%'",
-            "DELETE FROM dataset_custom_properties WHERE id::text LIKE '024%'",
-            
             # Physical assets (025%) — migrated from dataset_instances
             "DELETE FROM assets WHERE id::text LIKE '025%'",
             
@@ -605,10 +600,9 @@ async def clear_demo_data(
             "DELETE FROM assets WHERE id::text LIKE '0f8%'",
             # Delivery Channel assets (0f9%)
             "DELETE FROM assets WHERE id::text LIKE '0f9%'",
-            
-            # Legacy: dataset instances (025) and datasets (021) (if old tables still exist)
-            "DELETE FROM dataset_instances WHERE id::text LIKE '025%'",
-            "DELETE FROM datasets WHERE id::text LIKE '021%'",
+            # Note: legacy dataset_subscriptions / dataset_custom_properties /
+            # dataset_instances / datasets tables were dropped by migration
+            # c1_drop_legacy_dataset_tables.py — no DELETEs needed.
             
             # Data contract servers (srv pattern for server IDs)
             "DELETE FROM data_contract_servers WHERE id::text LIKE 'srv%'",
@@ -673,14 +667,20 @@ async def clear_demo_data(
             "DELETE FROM data_domains WHERE id::text LIKE '000%'",
         ]
         
-        deleted_counts = {}
+        # Wrap each statement in a SAVEPOINT so that a single failing
+        # DELETE (e.g. against a table dropped by a later migration) does
+        # not poison the surrounding transaction and silently abort all
+        # subsequent deletes. Accumulate rowcounts per table since several
+        # patterns target the same table (e.g. entity_relationships).
+        deleted_counts: Dict[str, int] = {}
         for stmt in delete_statements:
+            table_name = stmt.split("FROM ")[1].split(" ")[0]
             try:
-                result = db.execute(text(stmt))
-                table_name = stmt.split("FROM ")[1].split(" ")[0]
-                deleted_counts[table_name] = result.rowcount
+                with db.begin_nested():
+                    result = db.execute(text(stmt))
+                deleted_counts[table_name] = deleted_counts.get(table_name, 0) + (result.rowcount or 0)
             except Exception as e:
-                logger.warning(f"Delete statement warning: {e}")
+                logger.warning(f"Delete statement warning ({table_name}): {e}")
         
         db.commit()
         

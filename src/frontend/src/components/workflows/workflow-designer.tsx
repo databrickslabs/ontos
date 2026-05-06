@@ -1572,7 +1572,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       <div>
                         <Label>Mode</Label>
                         <Select 
-                          value={(selectedStep.config as { connection_name?: string })?.connection_name ? 'connection' : 'inline'}
+                          value={(selectedStep.config as { connection_name?: string })?.connection_name !== undefined ? 'connection' : 'inline'}
                           onValueChange={(v) => {
                             if (v === 'connection') {
                               updateStep(selectedStep.step_id, { 

@@ -35,6 +35,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["Settings"])
 
 SETTINGS_FEATURE_ID = "settings" # Define a feature ID for settings
+ROLE_NOT_FOUND = "Role not found"
 
 @router.get('/settings')
 async def get_settings_route(manager: SettingsManager = Depends(get_settings_manager)):
@@ -236,7 +237,7 @@ async def get_role(
     try:
         role = manager.get_app_role(role_id)
         if role is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ROLE_NOT_FOUND)
         return role
     except Exception as e:
         logger.error("Error getting role %s", role_id, exc_info=True)
@@ -265,8 +266,8 @@ async def update_role(
             background_tasks=background_tasks,
         )
         if updated_role is None:
-            details["exception"] = "Role not found"
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+            details["exception"] = ROLE_NOT_FOUND
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ROLE_NOT_FOUND)
         success = True
         
         return updated_role
@@ -307,8 +308,8 @@ async def delete_role(
     try:
         deleted = manager.delete_app_role(role_id)
         if not deleted:
-            details["exception"] = "Role not found"
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+            details["exception"] = ROLE_NOT_FOUND
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ROLE_NOT_FOUND)
         success = True
         return None # Return None for 204
     except ValueError as e: # Catch potential error like deleting admin role

@@ -42,7 +42,7 @@ async def get_settings_route(manager: SettingsManager = Depends(get_settings_man
     try:
         settings_data = manager.get_settings() # Renamed variable to avoid conflict
         return settings_data
-    except Exception as e:
+    except Exception:
         logger.error("Error getting settings", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get settings")
 
@@ -102,7 +102,7 @@ async def get_llm_config():
             "disclaimer_text": sanitize_markdown_input(app_settings.LLM_DISCLAIMER_TEXT) if app_settings.LLM_DISCLAIMER_TEXT else None,
             # Do not expose system_prompt or injection_check_prompt to frontend
         }
-    except Exception as e:
+    except Exception:
         logger.error("Error getting LLM config", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get LLM config")
 
@@ -125,7 +125,7 @@ async def get_ui_customization():
             "about_content": sanitize_markdown_input(app_settings.UI_ABOUT_CONTENT) if app_settings.UI_ABOUT_CONTENT else None,
             "custom_css": app_settings.UI_CUSTOM_CSS,
         }
-    except Exception as e:
+    except Exception:
         logger.error("Error getting UI customization settings", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get UI customization settings")
 
@@ -147,7 +147,7 @@ async def list_job_clusters(manager: SettingsManager = Depends(get_settings_mana
     """List all available job clusters"""
     try:
         return manager.get_job_clusters()
-    except Exception as e:
+    except Exception:
         logger.error("Error fetching job clusters", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch job clusters")
 
@@ -159,7 +159,7 @@ async def get_features_config(manager: SettingsManager = Depends(get_settings_ma
     try:
         features = manager.get_features_with_access_levels()
         return features
-    except Exception as e:
+    except Exception:
         logger.error("Error getting features configuration", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get features configuration")
 
@@ -169,7 +169,7 @@ async def list_roles(manager: SettingsManager = Depends(get_settings_manager)):
     try:
         roles = manager.list_app_roles()
         return roles
-    except Exception as e:
+    except Exception:
         logger.error("Error listing roles", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list roles")
 
@@ -179,7 +179,7 @@ async def list_roles_summary(manager: SettingsManager = Depends(get_settings_man
     try:
         roles = manager.list_app_roles()
         return [{"name": role.name} for role in roles]
-    except Exception as e:
+    except Exception:
         logger.error("Error listing roles summary", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list roles summary")
 
@@ -238,7 +238,7 @@ async def get_role(
         if role is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
         return role
-    except Exception as e:
+    except Exception:
         logger.error("Error getting role %s", role_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get role")
 
@@ -739,7 +739,7 @@ async def get_compliance_mapping():
         return data or {}
     except FileNotFoundError:
         return {}
-    except Exception as e:
+    except Exception:
         logger.error("Error loading compliance mapping", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to load compliance mapping")
 
@@ -770,7 +770,7 @@ async def save_compliance_mapping(
         )
         
         return {"status": "ok"}
-    except Exception as e:
+    except Exception:
         logger.error("Error saving compliance mapping", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to save compliance mapping")
 
@@ -795,7 +795,7 @@ async def list_available_docs(manager: SettingsManager = Depends(get_settings_ma
                 entry["category"] = doc_info["category"]
             result[doc_key] = entry
         return result
-    except Exception as e:
+    except Exception:
         logger.error("Error listing documentation", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list documentation")
 
@@ -825,7 +825,7 @@ async def get_database_schema(manager: SettingsManager = Depends(get_settings_ma
     """Extract database schema from SQLAlchemy models for ERD visualization"""
     try:
         return manager.extract_database_schema()
-    except Exception as e:
+    except Exception:
         logger.error("Error extracting database schema", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to extract database schema")
 
@@ -846,7 +846,7 @@ async def get_search_config():
         loader = get_search_config_loader()
         config = loader.load()
         return SearchConfigResponse.from_config(config)
-    except Exception as e:
+    except Exception:
         logger.error("Error getting search config", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get search configuration")
 

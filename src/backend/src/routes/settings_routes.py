@@ -675,10 +675,14 @@ async def clear_demo_data(
         
         deleted_counts = {}
         for stmt in delete_statements:
+            # Use a SAVEPOINT per statement so a failure (e.g. a legacy table
+            # that no longer exists post-migration) doesn't abort the whole
+            # transaction and cascade-fail every subsequent DELETE.
             try:
-                result = db.execute(text(stmt))
-                table_name = stmt.split("FROM ")[1].split(" ")[0]
-                deleted_counts[table_name] = result.rowcount
+                with db.begin_nested():
+                    result = db.execute(text(stmt))
+                    table_name = stmt.split("FROM ")[1].split(" ")[0]
+                    deleted_counts[table_name] = result.rowcount
             except Exception as e:
                 logger.warning(f"Delete statement warning: {e}")
         

@@ -1654,11 +1654,10 @@ class SettingsManager:
                         updated_any = True
 
             if updated_any:
-                # Flush once after backfill
                 try:
-                    self._db.flush()
+                    self._db.commit()
                 except Exception:
-                    pass
+                    self._db.rollback()
 
             return [self._map_db_to_api(role_db) for role_db in roles_db]
         except SQLAlchemyError as e:
@@ -1726,9 +1725,7 @@ class SettingsManager:
                     self._db, str(role_db.id), role.approver_roles
                 )
             
-            # Commit is handled by the request lifecycle or calling function
-            # self._db.commit() # Remove commit from manager method
-            # self._db.refresh(role_db) # Refresh is handled in repo
+            self._db.commit()
             logger.info(f"Successfully created role '{role.name}' with ID {role_db.id}")
             result = self._map_db_to_api(role_db)
             
@@ -1873,7 +1870,7 @@ class SettingsManager:
                     self._db, role_id, role_update.approver_roles
                 )
             
-            # Commit handled by request lifecycle
+            self._db.commit()
             logger.info(f"Successfully updated role (ID: {role_id})")
             result = self._map_db_to_api(updated_role_db)
             
@@ -1913,8 +1910,7 @@ class SettingsManager:
             #    raise ValueError("Cannot delete the default Admin role.")
 
             self.app_role_repo.remove(db=self._db, id=role_id)
-            # Commit handled by request lifecycle
-            # self._db.commit()
+            self._db.commit()
             logger.info(f"Successfully deleted role with ID: {role_id}")
             return True
         except SQLAlchemyError as e:

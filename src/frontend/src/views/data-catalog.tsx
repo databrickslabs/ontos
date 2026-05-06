@@ -1,36 +1,38 @@
 /**
  * Data Catalog / Data Dictionary View
- * 
- * Main view for browsing all columns across Unity Catalog tables.
+ *
+ * Column-centric view for browsing all columns across Data Contracts and Assets.
  * Features:
- * - Flat table of all columns (Data Dictionary style)
- * - Table filter dropdown
- * - Column name search
- * - Sortable columns
- * - Click-through to table details
+ * - Server-side pagination
+ * - Faceted filters (Asset Type, System, Catalog, Schema)
+ * - Full-field search
+ * - Sortable columns (client-side within page)
+ * - Source provenance badges
+ * - Click-through to table/contract details
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { 
-  BookOpen, 
-  Search, 
-  Loader2, 
+import {
+  BookOpen,
+  Search,
+  Loader2,
   Table as TableIcon,
   Eye,
   ArrowUpDown,
-  // ChevronDown, // Available for future use
   Database,
   RefreshCw,
-  Tag
+  Tag,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-// CardHeader, CardTitle, CardDescription - Available for future use
 import {
   Table,
   TableBody,
@@ -51,11 +53,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
-import type { 
-  ColumnDictionaryEntry, 
+import type {
+  ColumnDictionaryEntry,
   DataDictionaryResponse,
-  TableListResponse,
-  TableListItem
+  ColumnSearchResponse,
+  HierarchyFilters,
 } from '@/types/data-catalog';
 
 // =============================================================================
@@ -75,7 +77,6 @@ interface SortConfig {
 // =============================================================================
 
 const DataCatalog: React.FC = () => {
-  console.log("DataCatalog component rendering");
   const { t } = useTranslation(['data-catalog', 'common']);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -83,160 +84,203 @@ const DataCatalog: React.FC = () => {
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
-  // Get initial search from URL params (supports both 'search' and 'concept' for semantic links)
   const initialSearch = searchParams.get('search') || searchParams.get('concept') || '';
 
-  // State
+  // Data state
   const [columns, setColumns] = useState<ColumnDictionaryEntry[]>([]);
-  const [tables, setTables] = useState<TableListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Filters - initialize from URL if available
+
+  // Pagination
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [tableCount, setTableCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
+  // Filters
   const [searchQuery, setSearchQuery] = useState(initialSearch);
-  const [selectedTable, setSelectedTable] = useState<string>('all');
-  
-  // Sorting
+  const [hierarchyFilters, setHierarchyFilters] = useState<HierarchyFilters | null>(null);
+  const [selectedAssetType, setSelectedAssetType] = useState<string>('all');
+  const [selectedSystem, setSelectedSystem] = useState<string>('all');
+  const [selectedCatalog, setSelectedCatalog] = useState<string>('all');
+  const [selectedSchema, setSelectedSchema] = useState<string>('all');
+
+  // Sorting (client-side within page)
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'column_name',
-    direction: 'asc'
+    direction: 'asc',
   });
-  
-  // Stats
-  const [tableCount, setTableCount] = useState(0);
-  const [columnCount, setColumnCount] = useState(0);
 
   // Set breadcrumbs
   useEffect(() => {
     setStaticSegments([
       { label: t('common:home'), path: '/' },
-      { label: t('data-catalog:title', 'Data Catalog'), path: '/data-catalog' }
+      { label: t('data-catalog:title', 'Data Catalog'), path: '/data-catalog' },
     ]);
     setDynamicTitle('');
   }, [setStaticSegments, setDynamicTitle, t]);
 
-  // Fetch table list for dropdown
-  const fetchTableList = useCallback(async () => {
+  // Fetch hierarchy filter values
+  const fetchHierarchy = useCallback(async () => {
     try {
-      const response = await fetch('/api/data-catalog/tables');
-      if (!response.ok) throw new Error('Failed to fetch tables');
-      const data: TableListResponse = await response.json();
-      setTables(data.tables);
+      const response = await fetch('/api/data-catalog/hierarchy');
+      if (!response.ok) return;
+      const data: HierarchyFilters = await response.json();
+      setHierarchyFilters(data);
     } catch (err) {
-      console.error('Error fetching table list:', err);
+      console.error('Error fetching hierarchy filters:', err);
     }
   }, []);
 
-  // Fetch columns
-  const fetchColumns = useCallback(async (tableFilter?: string) => {
+  // Build query params for API calls
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (selectedAssetType !== 'all') params.append('asset_type', selectedAssetType);
+    if (selectedSystem !== 'all') params.append('system', selectedSystem);
+    if (selectedCatalog !== 'all') params.append('catalog', selectedCatalog);
+    if (selectedSchema !== 'all') params.append('schema', selectedSchema);
+    return params;
+  }, [selectedAssetType, selectedSystem, selectedCatalog, selectedSchema]);
+
+  // Fetch columns (paginated)
+  const fetchColumns = useCallback(async (currentOffset: number) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      const params = new URLSearchParams();
-      if (tableFilter && tableFilter !== 'all') {
-        params.append('table', tableFilter);
-      }
-      
-      const url = `/api/data-catalog/columns${params.toString() ? '?' + params.toString() : ''}`;
-      const response = await fetch(url);
-      
+      const params = buildFilterParams();
+      params.set('offset', String(currentOffset));
+      params.set('limit', String(pageSize));
+
+      const response = await fetch(`/api/data-catalog/columns?${params.toString()}`);
+
       if (!response.ok) {
         throw new Error(`Failed to fetch columns: ${response.statusText}`);
       }
-      
+
       const data: DataDictionaryResponse = await response.json();
       setColumns(data.columns);
       setTableCount(data.table_count);
-      setColumnCount(data.column_count);
+      setTotalCount(data.column_count);
+      setHasMore(data.has_more);
+      setOffset(data.offset);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(message);
       toast({
         title: t('common:error'),
         description: message,
-        variant: 'destructive'
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
     }
-  }, [t, toast]);
+  }, [buildFilterParams, pageSize, t, toast]);
 
-  // Search columns
-  const searchColumns = useCallback(async (query: string) => {
+  // Search columns (paginated)
+  const searchColumns = useCallback(async (query: string, currentOffset: number) => {
     if (!query.trim()) {
-      fetchColumns(selectedTable !== 'all' ? selectedTable : undefined);
+      fetchColumns(0);
       return;
     }
-    
+
     setIsSearching(true);
-    
+
     try {
-      const params = new URLSearchParams({ q: query });
-      if (selectedTable && selectedTable !== 'all') {
-        params.append('table', selectedTable);
-      }
-      
+      const params = buildFilterParams();
+      params.set('q', query);
+      params.set('offset', String(currentOffset));
+      params.set('limit', String(pageSize));
+
       const response = await fetch(`/api/data-catalog/columns/search?${params.toString()}`);
       if (!response.ok) throw new Error('Search failed');
-      
-      const data = await response.json();
+
+      const data: ColumnSearchResponse = await response.json();
       setColumns(data.columns);
-      setColumnCount(data.total_count);
+      setTotalCount(data.total_count);
+      setHasMore(data.has_more);
+      setOffset(data.offset);
     } catch (err) {
       console.error('Search error:', err);
     } finally {
       setIsSearching(false);
+      setIsLoading(false);
     }
-  }, [selectedTable, fetchColumns]);
+  }, [buildFilterParams, fetchColumns, pageSize]);
 
-  // Initial load - also trigger search if URL param was provided
+  // Initial load
   useEffect(() => {
-    fetchTableList();
+    fetchHierarchy();
     if (initialSearch) {
-      // If we have a search from URL, trigger the search
-      searchColumns(initialSearch);
+      searchColumns(initialSearch, 0);
     } else {
-      fetchColumns();
+      fetchColumns(0);
     }
-  }, [fetchTableList, fetchColumns, initialSearch, searchColumns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Handle table filter change
+  // Re-fetch when filters change
   useEffect(() => {
-    if (selectedTable === 'all') {
-      fetchColumns();
+    setOffset(0);
+    if (searchQuery.trim()) {
+      searchColumns(searchQuery, 0);
     } else {
-      fetchColumns(selectedTable);
+      fetchColumns(0);
     }
-  }, [selectedTable, fetchColumns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAssetType, selectedSystem, selectedCatalog, selectedSchema, pageSize]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery) {
-        searchColumns(searchQuery);
+      setOffset(0);
+      if (searchQuery.trim()) {
+        searchColumns(searchQuery, 0);
+      } else {
+        fetchColumns(0);
       }
     }, 300);
-    
+
     return () => clearTimeout(timer);
-  }, [searchQuery, searchColumns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    const newOffset = offset + pageSize;
+    if (searchQuery.trim()) {
+      searchColumns(searchQuery, newOffset);
+    } else {
+      fetchColumns(newOffset);
+    }
+  };
+
+  const handlePrevPage = () => {
+    const newOffset = Math.max(0, offset - pageSize);
+    if (searchQuery.trim()) {
+      searchColumns(searchQuery, newOffset);
+    } else {
+      fetchColumns(newOffset);
+    }
+  };
 
   // Sort handler
   const handleSort = (field: SortField) => {
-    setSortConfig(prev => ({
+    setSortConfig((prev) => ({
       field,
-      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc'
+      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
   };
 
-  // Sorted columns
+  // Sorted columns (client-side within page)
   const sortedColumns = useMemo(() => {
     const sorted = [...columns];
     sorted.sort((a, b) => {
-      let aVal: string = '';
-      let bVal: string = '';
-      
+      let aVal = '';
+      let bVal = '';
+
       switch (sortConfig.field) {
         case 'column_label':
           aVal = a.column_label || a.column_name;
@@ -255,27 +299,42 @@ const DataCatalog: React.FC = () => {
           bVal = b.column_type;
           break;
       }
-      
+
       const comparison = aVal.localeCompare(bVal);
       return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
     return sorted;
   }, [columns, sortConfig]);
 
+  // Clear all filters
+  const clearFilters = () => {
+    setSelectedAssetType('all');
+    setSelectedSystem('all');
+    setSelectedCatalog('all');
+    setSelectedSchema('all');
+    setSearchQuery('');
+  };
+
+  const hasActiveFilters =
+    selectedAssetType !== 'all' ||
+    selectedSystem !== 'all' ||
+    selectedCatalog !== 'all' ||
+    selectedSchema !== 'all';
+
   // Navigate to table details or contract details
   const handleRowClick = (entry: ColumnDictionaryEntry) => {
     if (entry.table_type === 'CONTRACT' && entry.contract_id) {
-      // Navigate to Data Contract details page
       navigate(`/data-contracts/${entry.contract_id}`);
+    } else if (entry.asset_id) {
+      navigate(`/assets/${entry.asset_id}`);
     } else {
-      // Navigate to Data Catalog table details for actual UC tables
       navigate(`/data-catalog/${encodeURIComponent(entry.table_full_name)}`);
     }
   };
 
-  // Render sort header
+  // Render helpers
   const SortHeader: React.FC<{ field: SortField; children: React.ReactNode }> = ({ field, children }) => (
-    <TableHead 
+    <TableHead
       className="cursor-pointer hover:bg-muted/50 select-none"
       onClick={() => handleSort(field)}
     >
@@ -286,17 +345,31 @@ const DataCatalog: React.FC = () => {
     </TableHead>
   );
 
-  // Get display label for column
   const getDisplayLabel = (entry: ColumnDictionaryEntry): string => {
     return entry.column_label || entry.column_name;
   };
 
-  // Truncate description
   const truncateDescription = (desc: string | null, maxLength: number = 100): string => {
     if (!desc) return '—';
     if (desc.length <= maxLength) return desc;
     return desc.substring(0, maxLength) + '...';
   };
+
+  const getSourceBadge = (source: string) => {
+    switch (source) {
+      case 'both':
+        return <Badge variant="default" className="text-[10px] px-1.5 py-0">Both</Badge>;
+      case 'asset':
+        return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Asset</Badge>;
+      case 'contract':
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0">Contract</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const currentPage = Math.floor(offset / pageSize) + 1;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
     <div className="flex flex-col h-full p-6 gap-6">
@@ -306,7 +379,7 @@ const DataCatalog: React.FC = () => {
           <BookOpen className="h-8 w-8 text-primary" />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              {t('data-catalog:title', 'Data Dictionary')} 
+              {t('data-catalog:title', 'Data Catalog')}
               {!isLoading && <span className="text-muted-foreground ml-2">({tableCount} Tables)</span>}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -314,14 +387,13 @@ const DataCatalog: React.FC = () => {
             </p>
           </div>
         </div>
-        
+
         <Button
           variant="outline"
           size="sm"
           onClick={() => {
-            setSearchQuery('');
-            setSelectedTable('all');
-            fetchColumns();
+            clearFilters();
+            fetchColumns(0);
           }}
           disabled={isLoading}
         >
@@ -330,45 +402,79 @@ const DataCatalog: React.FC = () => {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4">
-        {/* Table Filter Dropdown */}
-        <Select value={selectedTable} onValueChange={setSelectedTable}>
-          <SelectTrigger className="w-[300px]">
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-muted-foreground" />
-              <SelectValue>
-                {selectedTable === 'all' 
-                  ? `All Tables (${columnCount} Columns)` 
-                  : tables.find(t => t.full_name === selectedTable)?.name || selectedTable}
-              </SelectValue>
-            </div>
+      {/* Faceted Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Asset Type */}
+        <Select value={selectedAssetType} onValueChange={setSelectedAssetType}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Asset Type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">
-              <div className="flex items-center justify-between w-full gap-4">
-                <span>All Tables</span>
-                <Badge variant="secondary" className="ml-auto">{columnCount}</Badge>
-              </div>
-            </SelectItem>
-            {tables.map((table) => (
-              <SelectItem key={table.full_name} value={table.full_name}>
-                <div className="flex items-center justify-between w-full gap-4">
-                  <span className="truncate max-w-[200px]" title={table.full_name}>
-                    {table.name}
-                  </span>
-                  <Badge variant="secondary" className="ml-auto">{table.column_count}</Badge>
-                </div>
-              </SelectItem>
+            <SelectItem value="all">All Types</SelectItem>
+            {hierarchyFilters?.asset_types.map((type) => (
+              <SelectItem key={type} value={type}>{type}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
+        {/* System */}
+        {hierarchyFilters && hierarchyFilters.systems.length > 0 && (
+          <Select value={selectedSystem} onValueChange={setSelectedSystem}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="System" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Systems</SelectItem>
+              {hierarchyFilters.systems.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Catalog */}
+        {hierarchyFilters && hierarchyFilters.catalogs.length > 0 && (
+          <Select value={selectedCatalog} onValueChange={setSelectedCatalog}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Catalog" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Catalogs</SelectItem>
+              {hierarchyFilters.catalogs.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Schema */}
+        {hierarchyFilters && hierarchyFilters.schemas.length > 0 && (
+          <Select value={selectedSchema} onValueChange={setSelectedSchema}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Schema" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Schemas</SelectItem>
+              {hierarchyFilters.schemas.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Clear filters */}
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            <X className="h-4 w-4 mr-1" />
+            Clear
+          </Button>
+        )}
+
         {/* Search */}
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 max-w-md ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={t('data-catalog:searchPlaceholder', 'Search columns...')}
+            placeholder={t('data-catalog:searchPlaceholder', 'Search columns, tables, terms...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -403,7 +509,7 @@ const DataCatalog: React.FC = () => {
               <TableIcon className="h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg mb-2">{t('data-catalog:noResults', 'No columns found')}</p>
               <p className="text-sm">
-                {searchQuery 
+                {searchQuery
                   ? t('data-catalog:tryDifferentSearch', 'Try a different search term')
                   : t('data-catalog:noTablesAccessible', 'No tables accessible in Unity Catalog')}
               </p>
@@ -416,7 +522,7 @@ const DataCatalog: React.FC = () => {
                     <SortHeader field="column_label">
                       {t('data-catalog:columns.label', 'Label')}
                     </SortHeader>
-                    <TableHead className="min-w-[300px]">
+                    <TableHead className="min-w-[250px]">
                       {t('data-catalog:columns.description', 'Description')}
                     </TableHead>
                     <SortHeader field="column_name">
@@ -425,18 +531,19 @@ const DataCatalog: React.FC = () => {
                     <SortHeader field="column_type">
                       {t('data-catalog:columns.type', 'Type')}
                     </SortHeader>
-                    <TableHead className="min-w-[150px]">
+                    <TableHead className="min-w-[120px]">
                       {t('data-catalog:columns.businessTerms', 'Business Terms')}
                     </TableHead>
                     <SortHeader field="table_name">
                       {t('data-catalog:columns.tableName', 'Table Name')}
                     </SortHeader>
-                    <TableHead className="w-[50px]"></TableHead>
+                    <TableHead className="w-[70px]">Source</TableHead>
+                    <TableHead className="w-[40px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedColumns.map((entry, idx) => (
-                    <TableRow 
+                    <TableRow
                       key={`${entry.table_full_name}-${entry.column_name}-${idx}`}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleRowClick(entry)}
@@ -460,7 +567,7 @@ const DataCatalog: React.FC = () => {
                       <TableCell>
                         {entry.business_terms && entry.business_terms.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {entry.business_terms.map((term, termIdx) => (
+                            {entry.business_terms.slice(0, 2).map((term, termIdx) => (
                               <Badge
                                 key={`${term.iri}-${termIdx}`}
                                 variant="secondary"
@@ -475,6 +582,11 @@ const DataCatalog: React.FC = () => {
                                 {term.label || term.iri.split('#').pop()?.split('/').pop() || 'Term'}
                               </Badge>
                             ))}
+                            {entry.business_terms.length > 2 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{entry.business_terms.length - 2}
+                              </Badge>
+                            )}
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -484,6 +596,9 @@ const DataCatalog: React.FC = () => {
                         <span className="text-sm" title={entry.table_full_name}>
                           {entry.table_name}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        {getSourceBadge(entry.source)}
                       </TableCell>
                       <TableCell>
                         <Eye className="h-4 w-4 text-muted-foreground" />
@@ -497,11 +612,53 @@ const DataCatalog: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Footer stats */}
-      {!isLoading && !error && (
-        <div className="text-sm text-muted-foreground">
-          {t('data-catalog:showingColumns', 'Showing {{count}} columns', { count: sortedColumns.length })}
-          {searchQuery && ` ${t('data-catalog:matchingSearch', 'matching')} "${searchQuery}"`}
+      {/* Pagination Footer */}
+      {!isLoading && !error && totalCount > 0 && (
+        <div className="flex items-center justify-between text-sm">
+          <div className="text-muted-foreground">
+            Showing {offset + 1}–{Math.min(offset + pageSize, totalCount)} of {totalCount.toLocaleString()} columns
+            {searchQuery && ` matching "${searchQuery}"`}
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Page size selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Per page:</span>
+              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                <SelectTrigger className="w-[70px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Page navigation */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrevPage}
+                disabled={offset === 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={!hasMore}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -509,4 +666,3 @@ const DataCatalog: React.FC = () => {
 };
 
 export default DataCatalog;
-

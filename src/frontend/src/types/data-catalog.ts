@@ -40,14 +40,20 @@ export interface ColumnDictionaryEntry {
   classification?: string | null;
   /** Short table/schema object name */
   table_name: string;
-  /** Fully qualified name: contract.schema_object */
+  /** Fully qualified name: contract.schema_object or catalog.schema.table */
   table_full_name: string;
   /** Schema/Contract name */
   schema_name: string;
   /** Catalog/Version */
   catalog_name: string;
-  /** TABLE, VIEW, or CONTRACT */
+  /** TABLE, VIEW, DATASET, or CONTRACT */
   table_type: string;
+  /** Data source provenance: 'contract', 'asset', or 'both' */
+  source: 'contract' | 'asset' | 'both';
+  /** Source Asset ID when from Asset DB */
+  asset_id?: string | null;
+  /** Parent System name in asset hierarchy */
+  system_name?: string | null;
   /** ID of the source Data Contract */
   contract_id?: string | null;
   /** Name of the source Data Contract */
@@ -132,6 +138,9 @@ export interface DataDictionaryResponse {
   table_count: number;
   column_count: number;
   columns: ColumnDictionaryEntry[];
+  offset: number;
+  limit: number;
+  has_more: boolean;
   table_filter?: string | null;
 }
 
@@ -143,11 +152,25 @@ export interface ColumnSearchResponse {
   total_count: number;
   columns: ColumnDictionaryEntry[];
   has_more: boolean;
+  offset: number;
+  limit: number;
   filters_applied: {
     catalog?: string | null;
     schema?: string | null;
     table?: string | null;
+    asset_type?: string | null;
+    system?: string | null;
   };
+}
+
+/**
+ * Available filter values for the faceted filter UI.
+ */
+export interface HierarchyFilters {
+  asset_types: string[];
+  systems: string[];
+  catalogs: string[];
+  schemas: string[];
 }
 
 /**

@@ -2,8 +2,9 @@
 Data Catalog / Data Dictionary Routes
 
 Provides REST API endpoints for:
-- Column dictionary browsing (all columns across tables)
-- Column search
+- Column dictionary browsing (paginated, multi-source)
+- Column search (full-field, uncapped)
+- Hierarchy filter values
 - Table details
 - Lineage visualization
 - Impact analysis
@@ -29,6 +30,7 @@ from src.models.data_catalog import (
     ColumnSearchResponse,
     TableListResponse,
     TableInfo,
+    HierarchyFilters,
     LineageGraph,
     ImpactAnalysis,
 )
@@ -40,44 +42,26 @@ router = APIRouter(prefix="/api/data-catalog", tags=["Data Catalog"])
 DATA_CATALOG_FEATURE_ID = "data-catalog"
 
 
-def get_data_catalog_manager(
+def _get_manager(
     request: Request,
-    db: Session = Depends(lambda: None),  # Will be replaced by route-level dep
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    db: DBSessionDep,
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> DataCatalogManager:
-    """
-    Get or create DataCatalogManager instance.
-    
-    Uses OBO client and queries ONLY registered assets from the database.
-    Does NOT scan the entire Unity Catalog.
-    """
+    """Helper to create manager with all dependencies."""
     settings = getattr(request.app.state, 'settings', None)
     contracts_manager = getattr(request.app.state, 'data_contracts_manager', None)
-    
+
     return DataCatalogManager(
         obo_client=obo_client,
         db_session=db,
         contracts_manager=contracts_manager,
-        settings=settings
+        settings=settings,
     )
 
 
 # =============================================================================
 # Column Dictionary Endpoints
 # =============================================================================
-
-def _get_manager(request: Request, db: DBSessionDep, obo_client: WorkspaceClient = Depends(get_obo_workspace_client)) -> DataCatalogManager:
-    """Helper to create manager with all dependencies."""
-    settings = getattr(request.app.state, 'settings', None)
-    contracts_manager = getattr(request.app.state, 'data_contracts_manager', None)
-    
-    return DataCatalogManager(
-        obo_client=obo_client,
-        db_session=db,
-        contracts_manager=contracts_manager,
-        settings=settings
-    )
-
 
 @router.get(
     "/columns",
@@ -89,24 +73,28 @@ async def get_all_columns(
     db: DBSessionDep,
     catalog: Optional[str] = Query(None, description="Filter to specific catalog"),
     schema: Optional[str] = Query(None, description="Filter to specific schema"),
-    table: Optional[str] = Query(None, description="Filter to specific table (FQN)"),
-    limit: int = Query(2000, ge=1, le=5000, description="Maximum columns to return"),
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    table: Optional[str] = Query(None, description="Filter to specific table (FQN or name)"),
+    asset_type: Optional[str] = Query(None, description="Filter by asset type (Table, View, Dataset, CONTRACT)"),
+    system: Optional[str] = Query(None, description="Filter by parent System name"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    limit: int = Query(50, ge=1, le=500, description="Page size"),
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> DataDictionaryResponse:
     """
-    Get all columns from REGISTERED assets for the Data Dictionary view.
-    
-    Only returns columns from tables that are registered as Datasets.
-    Does NOT scan the entire Unity Catalog.
+    Get paginated columns from registered Data Contracts and Assets.
+
+    Merges columns from both sources, deduplicates, and applies filters.
     """
     try:
         manager = _get_manager(request, db, obo_client)
-        logger.info(f"Getting columns from registered assets (catalog={catalog}, schema={schema}, table={table})")
         return manager.get_all_columns(
             catalog_filter=catalog,
             schema_filter=schema,
             table_filter=table,
-            limit=limit
+            asset_type_filter=asset_type,
+            system_filter=system,
+            offset=offset,
+            limit=limit,
         )
     except Exception as e:
         logger.error(f"Error getting columns: {e}", exc_info=True)
@@ -121,32 +109,63 @@ async def get_all_columns(
 async def search_columns(
     request: Request,
     db: DBSessionDep,
-    q: str = Query(..., min_length=1, description="Search query for column name"),
+    q: str = Query(..., min_length=1, description="Search query"),
     catalog: Optional[str] = Query(None, description="Filter to specific catalog"),
     schema: Optional[str] = Query(None, description="Filter to specific schema"),
-    table: Optional[str] = Query(None, description="Filter to specific table (FQN)"),
-    limit: int = Query(500, ge=1, le=2000, description="Maximum results"),
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    table: Optional[str] = Query(None, description="Filter to specific table (FQN or name)"),
+    asset_type: Optional[str] = Query(None, description="Filter by asset type"),
+    system: Optional[str] = Query(None, description="Filter by parent System name"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    limit: int = Query(50, ge=1, le=500, description="Page size"),
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> ColumnSearchResponse:
     """
-    Search columns by name across REGISTERED assets only.
-    
-    Use this to find all registered tables containing a column with a specific name.
-    Does NOT scan the entire Unity Catalog.
+    Search columns across all fields (name, description, business terms, parent table, etc.).
+
+    Searches the full dataset with no hidden cap.
     """
     try:
         manager = _get_manager(request, db, obo_client)
-        logger.info(f"Searching columns in registered assets: q='{q}'")
         return manager.search_columns(
             query=q,
             catalog_filter=catalog,
             schema_filter=schema,
             table_filter=table,
-            limit=limit
+            asset_type_filter=asset_type,
+            system_filter=system,
+            offset=offset,
+            limit=limit,
         )
     except Exception as e:
         logger.error(f"Error searching columns: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to search columns: {str(e)}")
+
+
+# =============================================================================
+# Hierarchy / Filter Values
+# =============================================================================
+
+@router.get(
+    "/hierarchy",
+    response_model=HierarchyFilters,
+    dependencies=[Depends(PermissionChecker(DATA_CATALOG_FEATURE_ID, FeatureAccessLevel.READ_ONLY))]
+)
+async def get_hierarchy_filters(
+    request: Request,
+    db: DBSessionDep,
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
+) -> HierarchyFilters:
+    """
+    Get available filter values for the faceted filter UI.
+
+    Returns distinct asset types, systems, catalogs, and schemas.
+    """
+    try:
+        manager = _get_manager(request, db, obo_client)
+        return manager.get_hierarchy_filters()
+    except Exception as e:
+        logger.error(f"Error getting hierarchy filters: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get hierarchy filters: {str(e)}")
 
 
 # =============================================================================
@@ -163,21 +182,12 @@ async def get_table_list(
     db: DBSessionDep,
     catalog: Optional[str] = Query(None, description="Filter to specific catalog"),
     schema: Optional[str] = Query(None, description="Filter to specific schema"),
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> TableListResponse:
-    """
-    Get list of REGISTERED tables for the filter dropdown.
-    
-    Only returns tables registered as Datasets.
-    Does NOT scan the entire Unity Catalog.
-    """
+    """Get list of tables/schema objects for the filter dropdown."""
     try:
         manager = _get_manager(request, db, obo_client)
-        logger.info(f"Getting registered table list (catalog={catalog}, schema={schema})")
-        return manager.get_table_list(
-            catalog_filter=catalog,
-            schema_filter=schema
-        )
+        return manager.get_table_list(catalog_filter=catalog, schema_filter=schema)
     except Exception as e:
         logger.error(f"Error getting table list: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get table list: {str(e)}")
@@ -192,17 +202,11 @@ async def get_table_details(
     request: Request,
     db: DBSessionDep,
     table_fqn: str,
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> TableInfo:
-    """
-    Get full table details including all columns.
-    
-    Args:
-        table_fqn: Fully qualified table name (catalog.schema.table)
-    """
+    """Get full table details including all columns."""
     try:
         manager = _get_manager(request, db, obo_client)
-        logger.info(f"Getting table details: {table_fqn}")
         result = manager.get_table_details(table_fqn)
         if not result:
             raise HTTPException(status_code=404, detail=f"Table not found: {table_fqn}")
@@ -227,18 +231,12 @@ async def get_table_lineage(
     request: Request,
     db: DBSessionDep,
     table_fqn: str,
-    direction: str = Query("both", regex="^(upstream|downstream|both)$", description="Lineage direction"),
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    direction: str = Query("both", regex="^(upstream|downstream|both)$"),
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> LineageGraph:
-    """
-    Get lineage graph for a table.
-    
-    Returns nodes and edges for visualization of upstream and/or
-    downstream dependencies.
-    """
+    """Get lineage graph for a table."""
     try:
         manager = _get_manager(request, db, obo_client)
-        logger.info(f"Getting lineage for {table_fqn}, direction={direction}")
         return manager.get_table_lineage(table_fqn, direction)
     except Exception as e:
         logger.error(f"Error getting lineage: {e}", exc_info=True)
@@ -255,18 +253,12 @@ async def get_column_lineage(
     db: DBSessionDep,
     table_fqn: str,
     column_name: str,
-    direction: str = Query("both", regex="^(upstream|downstream|both)$", description="Lineage direction"),
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    direction: str = Query("both", regex="^(upstream|downstream|both)$"),
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> LineageGraph:
-    """
-    Get column-level lineage.
-    
-    Traces lineage for a specific column, showing how data flows
-    through transformations.
-    """
+    """Get column-level lineage."""
     try:
         manager = _get_manager(request, db, obo_client)
-        logger.info(f"Getting column lineage for {table_fqn}.{column_name}")
         return manager.get_column_lineage(table_fqn, column_name, direction)
     except Exception as e:
         logger.error(f"Error getting column lineage: {e}", exc_info=True)
@@ -274,7 +266,7 @@ async def get_column_lineage(
 
 
 # =============================================================================
-# Impact Analysis Endpoints
+# Impact Analysis
 # =============================================================================
 
 @router.get(
@@ -287,17 +279,11 @@ async def get_table_impact(
     db: DBSessionDep,
     table_fqn: str,
     column: Optional[str] = Query(None, description="Optional column for column-level impact"),
-    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client),
 ) -> ImpactAnalysis:
-    """
-    Get impact analysis for changing a table or column.
-    
-    Analyzes all downstream dependencies that would be affected
-    by a change to this table or column.
-    """
+    """Get impact analysis for changing a table or column."""
     try:
         manager = _get_manager(request, db, obo_client)
-        logger.info(f"Getting impact analysis for {table_fqn}" + (f".{column}" if column else ""))
         return manager.get_impact_analysis(table_fqn, column)
     except Exception as e:
         logger.error(f"Error getting impact analysis: {e}", exc_info=True)
@@ -312,4 +298,3 @@ def register_routes(app):
     """Register data catalog routes with the FastAPI app."""
     app.include_router(router)
     logger.info("Data Catalog routes registered")
-

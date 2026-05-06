@@ -58,10 +58,15 @@ class ColumnDictionaryEntry(BaseModel):
     
     # Table/Schema context
     table_name: str = Field(..., description="Short table/schema object name")
-    table_full_name: str = Field(..., description="Fully qualified name: contract.schema_object")
+    table_full_name: str = Field(..., description="Fully qualified name: contract.schema_object or catalog.schema.table")
     schema_name: str = Field(..., description="Schema/Contract name")
     catalog_name: str = Field(..., description="Catalog/Version")
-    table_type: str = Field("TABLE", description="TABLE, VIEW, or CONTRACT")
+    table_type: str = Field("TABLE", description="TABLE, VIEW, DATASET, or CONTRACT")
+    
+    # Provenance
+    source: str = Field("contract", description="Data source: 'contract', 'asset', or 'both'")
+    asset_id: Optional[str] = Field(None, description="Source Asset ID when sourced from Asset DB")
+    system_name: Optional[str] = Field(None, description="Parent System name in the asset hierarchy")
     
     # Contract context (when sourced from Data Contracts)
     contract_id: Optional[str] = Field(None, description="ID of the source Data Contract")
@@ -172,6 +177,8 @@ class ColumnSearchResponse(BaseModel):
     total_count: int
     columns: List[ColumnDictionaryEntry]
     has_more: bool = False
+    offset: int = 0
+    limit: int = 50
     filters_applied: Dict[str, Optional[str]] = Field(default_factory=dict)
 
 
@@ -295,6 +302,11 @@ class DataDictionaryResponse(BaseModel):
     column_count: int
     columns: List[ColumnDictionaryEntry]
     
+    # Pagination
+    offset: int = 0
+    limit: int = 50
+    has_more: bool = False
+    
     # Filter state
     table_filter: Optional[str] = None
     
@@ -306,6 +318,16 @@ class TableListResponse(BaseModel):
     tables: List[TableListItem]
     total_count: int
     total_column_count: int
+    
+    model_config = {"from_attributes": True}
+
+
+class HierarchyFilters(BaseModel):
+    """Available filter values for the faceted filter UI."""
+    asset_types: List[str] = Field(default_factory=list, description="Available asset types (Table, View, Dataset)")
+    systems: List[str] = Field(default_factory=list, description="Available System names")
+    catalogs: List[str] = Field(default_factory=list, description="Available Catalog names")
+    schemas: List[str] = Field(default_factory=list, description="Available Schema names")
     
     model_config = {"from_attributes": True}
 

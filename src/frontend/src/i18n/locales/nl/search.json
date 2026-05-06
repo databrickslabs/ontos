@@ -82,6 +82,7 @@
       "selectEntityType": "Selecteer entity type...",
       "dataProduct": "Dataproduct",
       "dataContract": "Datacontract",
+      "asset": "Asset",
       "dataDomain": "Datadomein",
       "selectEntity": "Selecteer {{entityType}}..."
     },

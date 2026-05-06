@@ -8,6 +8,29 @@
   "newTerm": "Neuer Begriff",
   "searchPlaceholder": "Begriffe suchen...",
   "loading": "Semantische Modelle werden geladen...",
+  "linkedObjects": {
+    "title": "Verknüpfte Entitäten",
+    "assign": "Entität zuweisen",
+    "loading": "Verknüpfte Entitäten werden geladen...",
+    "empty": "Keine Entitäten mit diesem Konzept verknüpft.",
+    "removed": "Verknüpfung zu \"{{label}}\" entfernt.",
+    "removeFailed": "Verknüpfung konnte nicht entfernt werden.",
+    "removeAria": "Verknüpfte Entität entfernen"
+  },
+  "relations": {
+    "title": "Beziehungen",
+    "loading": "Beziehungen werden geladen...",
+    "empty": "Keine Beziehungen gefunden.",
+    "outgoingTooltip": "Dieses Konzept → Ziel",
+    "incomingTooltip": "Quelle → dieses Konzept"
+  },
+  "neighborhood": {
+    "title": "Konzeptumgebung",
+    "loading": "Umgebung wird geladen...",
+    "empty": "Keine verwandten Konzepte.",
+    "moreParents": "+{{count}} weitere",
+    "moreChildren": "+{{count}} weitere"
+  },
   "filters": {
     "allGlossaries": "Alle Glossare",
     "allStatus": "Alle Status",
@@ -43,10 +66,10 @@
     "retired": "Stillgelegt"
   },
   "details": {
-    "backToList": "Zurück zu Begriffen",
+    "backToList": "Zurück zu Konzepten",
     "edit": "Bearbeiten",
     "delete": "Löschen",
-    "notFound": "Begriff nicht gefunden",
+    "notFound": "Konzept nicht gefunden",
     "loading": "Wird geladen...",
     "linkedAssets": "Verknüpfte Assets",
     "synonyms": "Synonyme",

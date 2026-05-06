@@ -19,6 +19,7 @@ import DataProductDetails from './views/data-product-details';
 import DataContracts from './views/data-contracts';
 import DataContractDetails from './views/data-contract-details';
 import BusinessTermsView from './views/business-terms';
+import ConceptDetailView from './views/concept-detail';
 import Compliance from './views/compliance';
 import CompliancePolicyDetails from './views/compliance-policy-details';
 import ComplianceRunDetails from './views/compliance-run-details';
@@ -184,6 +185,7 @@ export default function App() {
                 <Route index element={<Navigate to="/concepts/browser" replace />} />
                 <Route path="collections" element={<CollectionsView />} />
                 <Route path="browser" element={<BusinessTermsView />} />
+                <Route path="browser/:iri" element={<ConceptDetailView />} />
                 <Route path="search" element={<OntologySearchView />} />
                 <Route path="graph" element={<OntologyHomeView />} />
                 <Route path="hierarchy" element={<HierarchyBrowserView />} />

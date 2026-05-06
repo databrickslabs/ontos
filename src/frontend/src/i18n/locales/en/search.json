@@ -92,6 +92,7 @@
       "selectEntityType": "Select entity type...",
       "dataProduct": "Data Product",
       "dataContract": "Data Contract",
+      "asset": "Asset",
       "dataDomain": "Data Domain",
       "dataset": "Dataset",
       "ucCatalog": "UC Catalog",

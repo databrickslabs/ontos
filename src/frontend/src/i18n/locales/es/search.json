@@ -82,6 +82,7 @@
       "selectEntityType": "Seleccionar tipo de entidad...",
       "dataProduct": "Producto de Datos",
       "dataContract": "Contrato de Datos",
+      "asset": "Activo",
       "dataDomain": "Dominio de Datos",
       "selectEntity": "Seleccionar {{entityType}}..."
     },

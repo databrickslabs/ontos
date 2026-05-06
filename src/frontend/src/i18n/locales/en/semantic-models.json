@@ -20,6 +20,29 @@
     "individual": "Individual",
     "term": "Term"
   },
+  "linkedObjects": {
+    "title": "Linked Entities",
+    "assign": "Assign Entity",
+    "loading": "Loading linked entities...",
+    "empty": "No entities linked to this concept.",
+    "removed": "Removed link to \"{{label}}\".",
+    "removeFailed": "Failed to remove link.",
+    "removeAria": "Remove linked entity"
+  },
+  "neighborhood": {
+    "title": "Concept Neighbourhood",
+    "loading": "Loading neighbourhood...",
+    "empty": "No related concepts.",
+    "moreParents": "+{{count}} more",
+    "moreChildren": "+{{count}} more"
+  },
+  "relations": {
+    "title": "Relations",
+    "loading": "Loading relations...",
+    "empty": "No relations found.",
+    "outgoingTooltip": "This concept → target",
+    "incomingTooltip": "Source → this concept"
+  },
   "filters": {
     "allGlossaries": "All Glossaries",
     "allStatus": "All Status",
@@ -91,10 +114,10 @@
     "retired": "Retired"
   },
   "details": {
-    "backToList": "Back to Terms",
+    "backToList": "Back to Concepts",
     "edit": "Edit",
     "delete": "Delete",
-    "notFound": "Term not found",
+    "notFound": "Concept not found",
     "loading": "Loading...",
     "linkedAssets": "Linked Assets",
     "synonyms": "Synonyms",

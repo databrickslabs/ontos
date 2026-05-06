@@ -87,6 +87,7 @@
       "selectEntityType": "Entitätstyp auswählen...",
       "dataProduct": "Datenprodukt",
       "dataContract": "Datenvertrag",
+      "asset": "Asset",
       "dataDomain": "Datendomäne",
       "dataset": "Datensatz",
       "ucCatalog": "UC-Katalog",

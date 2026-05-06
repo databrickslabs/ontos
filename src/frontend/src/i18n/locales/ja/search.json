@@ -82,6 +82,7 @@
       "selectEntityType": "エンティティタイプを選択...",
       "dataProduct": "データ製品",
       "dataContract": "データ契約",
+      "asset": "アセット",
       "dataDomain": "データドメイン",
       "selectEntity": "{{entityType}}を選択..."
     },

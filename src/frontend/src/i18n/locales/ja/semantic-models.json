@@ -8,6 +8,29 @@
   "newTerm": "新規用語",
   "searchPlaceholder": "用語を検索...",
   "loading": "セマンティックモデルを読み込み中...",
+  "linkedObjects": {
+    "title": "関連エンティティ",
+    "assign": "エンティティを割り当てる",
+    "loading": "関連エンティティを読み込み中...",
+    "empty": "このコンセプトに関連付けられたエンティティはありません。",
+    "removed": "「{{label}}」へのリンクを削除しました。",
+    "removeFailed": "リンクを削除できませんでした。",
+    "removeAria": "関連エンティティを削除"
+  },
+  "relations": {
+    "title": "関係",
+    "loading": "関係を読み込み中...",
+    "empty": "関係が見つかりません。",
+    "outgoingTooltip": "このコンセプト → 対象",
+    "incomingTooltip": "ソース → このコンセプト"
+  },
+  "neighborhood": {
+    "title": "コンセプトの近傍",
+    "loading": "近傍を読み込み中...",
+    "empty": "関連するコンセプトはありません。",
+    "moreParents": "他 {{count}} 件",
+    "moreChildren": "他 {{count}} 件"
+  },
   "filters": {
     "allGlossaries": "すべての用語集",
     "allStatus": "すべてのステータス",
@@ -43,10 +66,10 @@
     "retired": "廃止"
   },
   "details": {
-    "backToList": "用語一覧に戻る",
+    "backToList": "コンセプト一覧に戻る",
     "edit": "編集",
     "delete": "削除",
-    "notFound": "用語が見つかりません",
+    "notFound": "コンセプトが見つかりません",
     "loading": "読み込み中...",
     "linkedAssets": "リンクされたアセット",
     "synonyms": "同義語",

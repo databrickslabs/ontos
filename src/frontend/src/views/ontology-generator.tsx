@@ -29,6 +29,7 @@ import {
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import type { Connection } from '@/types/connections';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
 
@@ -78,6 +79,7 @@ export default function OntologyGeneratorView() {
   const { toast } = useToast();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
+  const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce);
 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [isLoadingConnections, setIsLoadingConnections] = useState(true);
@@ -227,6 +229,9 @@ export default function OntologyGeneratorView() {
         setIsSaveDialogOpen(false);
         setCollectionName('');
         setCollectionDescription('');
+        // Refresh any open Concepts/Graph views so the new collection
+        // appears without requiring a manual reload.
+        bumpKnowledgeGraphRefresh('ontology-save');
       } else {
         toast({
           title: 'Save failed',

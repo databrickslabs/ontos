@@ -8,6 +8,29 @@
   "newTerm": "Nieuwe Term",
   "searchPlaceholder": "Zoek termen...",
   "loading": "Semantische modellen laden...",
+  "linkedObjects": {
+    "title": "Gekoppelde entiteiten",
+    "assign": "Entiteit koppelen",
+    "loading": "Gekoppelde entiteiten laden...",
+    "empty": "Geen entiteiten gekoppeld aan dit concept.",
+    "removed": "Koppeling naar \"{{label}}\" verwijderd.",
+    "removeFailed": "Kan koppeling niet verwijderen.",
+    "removeAria": "Gekoppelde entiteit verwijderen"
+  },
+  "relations": {
+    "title": "Relaties",
+    "loading": "Relaties laden...",
+    "empty": "Geen relaties gevonden.",
+    "outgoingTooltip": "Dit concept → doel",
+    "incomingTooltip": "Bron → dit concept"
+  },
+  "neighborhood": {
+    "title": "Concept-omgeving",
+    "loading": "Omgeving laden...",
+    "empty": "Geen gerelateerde concepten.",
+    "moreParents": "+{{count}} meer",
+    "moreChildren": "+{{count}} meer"
+  },
   "filters": {
     "allGlossaries": "Alle Glossaries",
     "allStatus": "Alle Status",
@@ -45,10 +68,10 @@
     "retired": "Buiten Gebruik"
   },
   "details": {
-    "backToList": "Terug naar Termen",
+    "backToList": "Terug naar Concepten",
     "edit": "Bewerken",
     "delete": "Verwijderen",
-    "notFound": "Term niet gevonden",
+    "notFound": "Concept niet gevonden",
     "loading": "Laden...",
     "linkedAssets": "Gekoppelde Assets",
     "synonyms": "Synoniemen",

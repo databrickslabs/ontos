@@ -16,6 +16,13 @@ interface GlossaryPreferencesState {
   
   // UI state
   isFilterExpanded: boolean;
+
+  // Concepts list-view UI state. Persisted so the user's tree exploration
+  // survives navigation into a concept detail page and back, plus full
+  // page reloads.
+  expandedConceptGroups: string[];
+  conceptListScrollTop: number;
+  conceptListSearch: string;
   
   // Actions
   toggleSource: (source: string) => void;
@@ -26,6 +33,10 @@ interface GlossaryPreferencesState {
   setGroupByDomain: (enabled: boolean) => void;
   isSourceVisible: (source: string) => boolean;
   setFilterExpanded: (expanded: boolean) => void;
+  setExpandedConceptGroups: (groups: string[]) => void;
+  toggleConceptGroup: (group: string) => void;
+  setConceptListScrollTop: (scrollTop: number) => void;
+  setConceptListSearch: (search: string) => void;
 }
 
 export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
@@ -36,6 +47,9 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
       showProperties: false,
       groupByDomain: false,
       isFilterExpanded: true,
+      expandedConceptGroups: ['root'],
+      conceptListScrollTop: 0,
+      conceptListSearch: '',
 
       toggleSource: (source: string) => {
         set((state) => {
@@ -83,6 +97,32 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
       setFilterExpanded: (expanded: boolean) => {
         set({ isFilterExpanded: expanded });
       },
+
+      setExpandedConceptGroups: (groups: string[]) => {
+        set({ expandedConceptGroups: groups });
+      },
+
+      toggleConceptGroup: (group: string) => {
+        set((state) => {
+          const isExpanded = state.expandedConceptGroups.includes(group);
+          if (isExpanded) {
+            return {
+              expandedConceptGroups: state.expandedConceptGroups.filter((g) => g !== group),
+            };
+          }
+          return {
+            expandedConceptGroups: [...state.expandedConceptGroups, group],
+          };
+        });
+      },
+
+      setConceptListScrollTop: (scrollTop: number) => {
+        set({ conceptListScrollTop: scrollTop });
+      },
+
+      setConceptListSearch: (search: string) => {
+        set({ conceptListSearch: search });
+      },
     }),
     {
       name: 'glossary-preferences-storage',
@@ -93,6 +133,12 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
         showProperties: state.showProperties,
         groupByDomain: state.groupByDomain,
         isFilterExpanded: state.isFilterExpanded,
+        expandedConceptGroups: state.expandedConceptGroups,
+        // Scroll position is intentionally NOT persisted across reloads --
+        // it is only kept across in-app navigation while the store stays
+        // in memory. Persisting it would scroll users to stale offsets
+        // after a refresh when the underlying data changed.
+        conceptListSearch: state.conceptListSearch,
       }),
     }
   )
@@ -108,4 +154,3 @@ export const useGlossaryPreferencesActions = () =>
     setShowProperties: state.setShowProperties,
     setGroupByDomain: state.setGroupByDomain,
   }));
-

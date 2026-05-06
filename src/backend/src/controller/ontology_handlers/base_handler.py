@@ -25,6 +25,7 @@ from src.models.industry_ontology import (
     MaturityLevel,
 )
 from src.common.logging import get_logger
+from src.owl.owl_parser import clean_truncated_turtle
 
 logger = get_logger(__name__)
 
@@ -311,14 +312,18 @@ class OntologyHandler(ABC):
         }
         fmt = format_map.get(fmt, fmt)
         
+        cleaned_content = clean_truncated_turtle(content) if fmt in ('turtle', 'n3') else content
         try:
-            g.parse(data=content, format=fmt)
+            g.parse(data=cleaned_content, format=fmt)
         except Exception as e:
             # Try alternative formats
             for alt_fmt in ['turtle', 'xml', 'json-ld', 'nt']:
                 if alt_fmt != fmt:
                     try:
-                        g.parse(data=content, format=alt_fmt)
+                        alt_content = (
+                            clean_truncated_turtle(content) if alt_fmt in ('turtle', 'n3') else content
+                        )
+                        g.parse(data=alt_content, format=alt_fmt)
                         logger.debug(f"Parsed as {alt_fmt} after {fmt} failed")
                         break
                     except Exception:

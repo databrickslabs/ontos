@@ -8,6 +8,29 @@
   "newTerm": "Nuevo Término",
   "searchPlaceholder": "Buscar términos...",
   "loading": "Cargando modelos semánticos...",
+  "linkedObjects": {
+    "title": "Entidades vinculadas",
+    "assign": "Asignar entidad",
+    "loading": "Cargando entidades vinculadas...",
+    "empty": "Ninguna entidad vinculada a este concepto.",
+    "removed": "Se eliminó el vínculo con \"{{label}}\".",
+    "removeFailed": "No se pudo eliminar el vínculo.",
+    "removeAria": "Eliminar entidad vinculada"
+  },
+  "relations": {
+    "title": "Relaciones",
+    "loading": "Cargando relaciones...",
+    "empty": "No se encontraron relaciones.",
+    "outgoingTooltip": "Este concepto → destino",
+    "incomingTooltip": "Origen → este concepto"
+  },
+  "neighborhood": {
+    "title": "Vecindario del concepto",
+    "loading": "Cargando vecindario...",
+    "empty": "Sin conceptos relacionados.",
+    "moreParents": "+{{count}} más",
+    "moreChildren": "+{{count}} más"
+  },
   "filters": {
     "allGlossaries": "Todos los Glosarios",
     "allStatus": "Todos los Estados",
@@ -43,10 +66,10 @@
     "retired": "Retirado"
   },
   "details": {
-    "backToList": "Volver a Términos",
+    "backToList": "Volver a Conceptos",
     "edit": "Editar",
     "delete": "Eliminar",
-    "notFound": "Término no encontrado",
+    "notFound": "Concepto no encontrado",
     "loading": "Cargando...",
     "linkedAssets": "Activos Vinculados",
     "synonyms": "Sinónimos",

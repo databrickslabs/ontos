@@ -28,6 +28,9 @@ interface NodeLinksPanelProps {
   onRefresh: () => Promise<void>;
   canEdit: boolean;
   selectedLanguage?: string;
+  // When set, the outgoing/incoming lists scroll internally past this row
+  // count instead of growing the page. ~36px per row, so 10 ≈ 360px.
+  maxVisibleRows?: number;
 }
 
 interface LinkInfo {
@@ -59,7 +62,13 @@ export const NodeLinksPanel: React.FC<NodeLinksPanelProps> = ({
   onRefresh,
   canEdit,
   selectedLanguage = 'en',
+  maxVisibleRows,
 }) => {
+  // Approx row height for the list rows below (py-1.5 + gap + text-sm ≈ 36px).
+  const ROW_HEIGHT_PX = 36;
+  const listMaxHeight = maxVisibleRows
+    ? { maxHeight: ROW_HEIGHT_PX * maxVisibleRows }
+    : undefined;
   const { t } = useTranslation(['semantic-models', 'common']);
   const { toast } = useToast();
   const [outgoingOpen, setOutgoingOpen] = useState(true);
@@ -390,7 +399,10 @@ export const NodeLinksPanel: React.FC<NodeLinksPanelProps> = ({
           </CollapsibleTrigger>
           
           <CollapsibleContent>
-            <div className="border-t px-2 py-1">
+            <div
+              className={`border-t px-2 py-1 ${maxVisibleRows ? 'overflow-y-auto' : ''}`}
+              style={listMaxHeight}
+            >
               {outgoingLinks.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2 px-2">
                   {t('semantic-models:links.noOutgoing')}
@@ -439,7 +451,10 @@ export const NodeLinksPanel: React.FC<NodeLinksPanelProps> = ({
           </CollapsibleTrigger>
           
           <CollapsibleContent>
-            <div className="border-t px-2 py-1">
+            <div
+              className={`border-t px-2 py-1 ${maxVisibleRows ? 'overflow-y-auto' : ''}`}
+              style={listMaxHeight}
+            >
               {incomingLinks.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2 px-2">
                   {t('semantic-models:links.noIncoming')}

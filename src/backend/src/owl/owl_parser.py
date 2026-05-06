@@ -18,6 +18,54 @@ logger = get_logger(__name__)
 ONTOBRICKS_NS = Namespace("http://ontobricks.com/schema#")
 
 
+def clean_truncated_turtle(content: str) -> str:
+    """Defensively trim incomplete trailing statements from Turtle/N3 content.
+
+    LLM-generated Turtle is often cut off mid-statement (token-limit truncation).
+    Feeding such content to rdflib's notation3 parser produces obscure crashes
+    (e.g. ``IndexError: string index out of range`` deep inside ``path()``).
+    This helper trims trailing lines that do not end a statement (``.``/``]``)
+    so the remainder parses cleanly. It is a no-op for content that already
+    ends in ``.``, ``]``, or ``>`` (covering Turtle, blank-node-list, and
+    RDF/XML closing tags), so it is safe to call on well-formed input.
+
+    Args:
+        content: Raw RDF text (typically Turtle).
+
+    Returns:
+        The original content if it looks complete, otherwise the longest prefix
+        whose last non-blank, non-comment line ends a Turtle statement.
+    """
+    if not content:
+        return content
+    content_stripped = content.strip()
+    if not content_stripped:
+        return content
+    if (
+        content_stripped.endswith(".")
+        or content_stripped.endswith("]")
+        or content_stripped.endswith(">")
+    ):
+        return content
+
+    lines = content_stripped.split("\n")
+    while lines and not (
+        lines[-1].strip().endswith(".")
+        or lines[-1].strip().endswith("]")
+        or lines[-1].strip() == ""
+        or lines[-1].strip().startswith("#")
+    ):
+        lines.pop()
+
+    if not lines:
+        return content
+
+    cleaned = "\n".join(lines)
+    if cleaned != content:
+        logger.warning("Content appeared truncated, removed incomplete statements")
+    return cleaned
+
+
 class OntologyParser:
     """Parse OWL ontologies to extract classes and properties."""
 
@@ -29,24 +77,7 @@ class OntologyParser:
         """
         self.graph = Graph()
 
-        # Check for truncated content (common with LLM generation)
-        content_stripped = owl_content.strip()
-        if content_stripped and not (
-            content_stripped.endswith(".")
-            or content_stripped.endswith("]")
-            or content_stripped.endswith(">")
-        ):
-            lines = content_stripped.split("\n")
-            while lines and not (
-                lines[-1].strip().endswith(".")
-                or lines[-1].strip().endswith("]")
-                or lines[-1].strip() == ""
-                or lines[-1].strip().startswith("#")
-            ):
-                lines.pop()
-            if lines:
-                owl_content = "\n".join(lines)
-                logger.warning("Content appeared truncated, removed incomplete statements")
+        owl_content = clean_truncated_turtle(owl_content)
 
         # Try turtle first, then XML
         turtle_error = None

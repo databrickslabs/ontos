@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import OntologyLibraryDialog from '@/components/settings/ontology-library-dialog';
 import { usePermissions } from '@/stores/permissions-store';
+import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -75,6 +76,7 @@ export default function SemanticModelsSettings() {
   const canWriteSemantic = !permissionsLoading && hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
   const { get, post, delete: deleteApi } = useApi();
   const { toast } = useToast();
+  const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce);
   const [items, setItems] = useState<SemanticModel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -136,6 +138,8 @@ export default function SemanticModelsSettings() {
       } else {
         toast({ title: 'Success', description: res.data?.message ?? 'Knowledge graph refreshed successfully' });
         await fetchItems();
+        // Notify other Concepts/Graph views that cached data is now stale.
+        bumpKnowledgeGraphRefresh('rebuild-graph');
       }
     } catch (e: any) {
       toast({ title: 'Error', description: e.message ?? 'Failed to refresh knowledge graph', variant: 'destructive' });

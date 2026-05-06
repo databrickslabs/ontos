@@ -12,6 +12,7 @@ import type {
 } from '@/types/ontology';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
+import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import {
   GraphTab,
   GlossaryFilterPanel,
@@ -151,6 +152,15 @@ export default function OntologyHomeView() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Refetch when other views (Settings rebuild, ontology generator save,
+  // collection/concept edits) bump the global knowledge-graph nonce.
+  const knowledgeGraphRefreshNonce = useKnowledgeGraphStore((s) => s.refreshNonce);
+  useEffect(() => {
+    if (knowledgeGraphRefreshNonce > 0) {
+      fetchData();
+    }
+  }, [knowledgeGraphRefreshNonce, fetchData]);
 
   // Navigate to concept in Business Terms view on node click
   const handleNodeClick = useCallback((concept: OntologyConcept) => {

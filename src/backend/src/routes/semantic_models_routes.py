@@ -18,6 +18,7 @@ from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDe
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
+from src.owl.owl_parser import clean_truncated_turtle
 from rdflib import ConjunctiveGraph, RDF
 
 # Configure logging
@@ -203,7 +204,7 @@ async def upload_semantic_model(
         try:
             temp_graph = ConjunctiveGraph()
             if format_type == "skos":
-                temp_graph.parse(data=content_text, format="turtle")
+                temp_graph.parse(data=clean_truncated_turtle(content_text), format="turtle")
             else:
                 temp_graph.parse(data=content_text, format="xml")
             

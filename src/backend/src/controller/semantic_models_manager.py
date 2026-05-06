@@ -41,6 +41,7 @@ from src.utils.semantic_model_title_candidates import (
     extract_title_candidates,
 )
 from src.utils.rdf_serialization_display import serialization_label_for_stored_model
+from src.owl.owl_parser import clean_truncated_turtle
 
 
 logger = get_logger(__name__)
@@ -165,7 +166,12 @@ class SemanticModelsManager:
                 else:
                     # Default based on format field
                     fmt = 'turtle' if data.format in ('skos', 'rdfs') else 'xml'
-                temp_graph.parse(data=data.content_text, format=fmt)
+                content_for_parse = (
+                    clean_truncated_turtle(data.content_text)
+                    if fmt == 'turtle'
+                    else data.content_text
+                )
+                temp_graph.parse(data=content_for_parse, format=fmt)
                 
                 if len(temp_graph) == 0:
                     raise ValueError("Content parsed but contains no triples")
@@ -266,7 +272,10 @@ class SemanticModelsManager:
             # Import new triples
             temp_graph = Graph()
             fmt = 'turtle' if db_obj.format == 'skos' else 'xml'
-            temp_graph.parse(data=content_text, format=fmt)
+            content_for_parse = (
+                clean_truncated_turtle(content_text) if fmt == 'turtle' else content_text
+            )
+            temp_graph.parse(data=content_for_parse, format=fmt)
             self._import_graph_to_db(
                 graph=temp_graph,
                 context_name=context_name,
@@ -425,7 +434,9 @@ class SemanticModelsManager:
         else:
             # Default to turtle for modern ontologies
             parse_format = 'turtle'
-        
+
+        if parse_format == 'turtle':
+            content_text = clean_truncated_turtle(content_text)
         self._graph.parse(data=content_text, format=parse_format)
 
     def _parse_into_graph_context(self, content_text: str, fmt: str, context: Graph) -> None:
@@ -448,7 +459,9 @@ class SemanticModelsManager:
         else:
             # Default to turtle for modern ontologies
             parse_format = 'turtle'
-        
+
+        if parse_format == 'turtle':
+            content_text = clean_truncated_turtle(content_text)
         context.parse(data=content_text, format=parse_format)
 
     # --- RDF Triple Persistence Methods ---
@@ -867,7 +880,23 @@ class SemanticModelsManager:
         """
         logger.info("Starting to rebuild graph from database and dynamic sources")
         self._graph = ConjunctiveGraph()
-        
+
+        # Defensively null every cached snapshot BEFORE we start mutating
+        # state. If any subsequent step raises, callers must not see stale
+        # data — they should see "no cache yet" and fall back to recompute.
+        self._cache.clear()
+        self._cached_concepts = None
+        self._cached_taxonomies = None
+        self._cached_stats = None
+
+        # The singleton manager keeps a long-lived SQLAlchemy session; expire
+        # any identity-map entries so it picks up triples that other request-
+        # scoped sessions have just committed.
+        try:
+            self._db.expire_all()
+        except Exception as e:
+            logger.warning(f"Failed to expire DB session during rebuild: {e}")
+
         # Step 1: Sync bundled taxonomy files to database (idempotent)
         # This ensures any new/missing files are imported
         try:
@@ -1162,10 +1191,18 @@ class SemanticModelsManager:
             logger.error(f"Failed to rebuild RDF graph: {e}")
 
     def _invalidate_cache(self) -> None:
-        """Clear all cache entries (in-memory and persistent file cache)."""
+        """Clear all cache entries (in-memory + persistent file cache).
+
+        Resets every cache pointer so subsequent reads recompute from the
+        DB-backed graph. Critical for keeping the Concepts UI consistent
+        after collection/concept/link mutations.
+        """
         self._cache.clear()
-        
-        # Also delete persistent cache files so they get rebuilt on next read
+
+        self._cached_concepts = None
+        self._cached_taxonomies = None
+        self._cached_stats = None
+
         cache_dir = self._data_dir / "cache"
         if cache_dir.exists():
             for cache_file in ["concepts_all.json", "taxonomies.json", "stats.json"]:
@@ -1176,8 +1213,37 @@ class SemanticModelsManager:
                         logger.debug(f"Deleted persistent cache file: {cache_file}")
                     except Exception as e:
                         logger.warning(f"Failed to delete cache file {cache_file}: {e}")
-        
+
         logger.info("Semantic models cache invalidated (in-memory and persistent)")
+
+    @staticmethod
+    def _extract_source_context(context_name: str) -> Optional[str]:
+        """Map a named-graph IRI (`context_name`) to the human-friendly
+        source bucket label used by `concepts-grouped` and the collection
+        counters.
+
+        Keep this as the single source of truth: every URN prefix the app
+        understands MUST be handled here, otherwise concepts get dropped
+        into the catch-all "Unassigned" bucket and their owning collection
+        appears empty (Bug 4).
+        """
+        if not context_name:
+            return None
+        prefix_map = (
+            ("urn:taxonomy:", None),
+            ("urn:semantic-model:", None),
+            ("urn:schema:", None),
+            ("urn:glossary:", None),
+            ("urn:ontology:", None),
+        )
+        for prefix, _ in prefix_map:
+            if context_name.startswith(prefix):
+                return context_name[len(prefix):]
+        if context_name.startswith("urn:demo"):
+            return "Demo Data"
+        if context_name.startswith("urn:app-entities"):
+            return "Application Entities"
+        return None
 
     def _get_cached(self, key: str) -> Optional[Any]:
         """Get cached value if still valid"""
@@ -1963,20 +2029,7 @@ class SemanticModelsManager:
                         ]):
                             parent_concepts.append(parent_type_str)
 
-                    # Extract source context name
-                    source_context = None
-                    if context_name.startswith("urn:taxonomy:"):
-                        source_context = context_name.replace("urn:taxonomy:", "")
-                    elif context_name.startswith("urn:semantic-model:"):
-                        source_context = context_name.replace("urn:semantic-model:", "")
-                    elif context_name.startswith("urn:schema:"):
-                        source_context = context_name.replace("urn:schema:", "")
-                    elif context_name.startswith("urn:glossary:"):
-                        source_context = context_name.replace("urn:glossary:", "")
-                    elif context_name.startswith("urn:demo"):
-                        source_context = "Demo Data"
-                    elif context_name.startswith("urn:app-entities"):
-                        source_context = "Application Entities"
+                    source_context = self._extract_source_context(context_name)
 
                     # For properties, extract domain/range
                     domain_val = None
@@ -2110,21 +2163,8 @@ class SemanticModelsManager:
             for child in context.subjects(RDF.type, concept_uri):
                 child_concepts.append(str(child))
             
-            # Extract source context
-            source_context = None
-            if context_name.startswith("urn:taxonomy:"):
-                source_context = context_name.replace("urn:taxonomy:", "")
-            elif context_name.startswith("urn:semantic-model:"):
-                source_context = context_name.replace("urn:semantic-model:", "")
-            elif context_name.startswith("urn:schema:"):
-                source_context = context_name.replace("urn:schema:", "")
-            elif context_name.startswith("urn:glossary:"):
-                source_context = context_name.replace("urn:glossary:", "")
-            elif context_name.startswith("urn:demo"):
-                source_context = "Demo Data"
-            elif context_name.startswith("urn:app-entities"):
-                source_context = "Application Entities"
-            
+            source_context = self._extract_source_context(context_name)
+
             concept = OntologyConcept(
                 iri=concept_iri,
                 label=label,
@@ -2340,23 +2380,7 @@ class SemanticModelsManager:
                 continue
             context_name = str(context_id)
 
-            # Extract source context name (same logic as concepts)
-            source_context = None
-            if context_name.startswith("urn:taxonomy:"):
-                source_context = context_name.replace("urn:taxonomy:", "")
-            elif context_name.startswith("urn:semantic-model:"):
-                source_context = context_name.replace("urn:semantic-model:", "")
-            elif context_name.startswith("urn:schema:"):
-                source_context = context_name.replace("urn:schema:", "")
-            elif context_name.startswith("urn:glossary:"):
-                source_context = context_name.replace("urn:glossary:", "")
-            elif context_name.startswith("urn:demo"):
-                source_context = "Demo Data"
-            elif context_name.startswith("urn:app-entities"):
-                source_context = "Application Entities"
-
-            if not source_context:
-                source_context = "Unassigned"
+            source_context = self._extract_source_context(context_name) or "Unassigned"
 
             # Query properties in this context
             try:
@@ -3585,10 +3609,18 @@ class SemanticModelsManager:
         if not collection.get("is_editable"):
             raise ValueError(f"Collection is not editable: {collection_iri}")
         
-        # Parse the content
+        # Parse the content. LLM-generated Turtle is often truncated mid-statement,
+        # which crashes rdflib's notation3 parser with an IndexError. Apply the
+        # shared cleanup heuristic before parsing and translate parse failures
+        # into ValueError so the route returns a 400 instead of a 500.
         temp_graph = Graph()
         rdf_format = "turtle" if format.lower() in ("ttl", "turtle") else "xml"
-        temp_graph.parse(data=content, format=rdf_format)
+        if rdf_format == "turtle":
+            content = clean_truncated_turtle(content)
+        try:
+            temp_graph.parse(data=content, format=rdf_format)
+        except Exception as e:
+            raise ValueError(f"Invalid {rdf_format} content: {e}")
         
         # Import to database
         count = self._import_graph_to_db(
@@ -3894,8 +3926,4 @@ class SemanticModelsManager:
             elif isinstance(obj, str) and (obj.startswith("urn:") or obj.startswith("http")):
                 return obj
         return None
-
-    def _invalidate_cache(self):
-        """Invalidate all cached results."""
-        self._cache.clear()
 

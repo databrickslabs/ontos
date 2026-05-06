@@ -212,6 +212,9 @@ class SemanticLinksManager:
                 manager = None
             if manager is not None:
                 manager.add_entity_semantic_link_to_graph(payload.entity_type, payload.entity_id, payload.iri, created_by=created_by)
+                # The new triple changes which entities resolve to a concept,
+                # so any cached concept/property/stat snapshot is now stale.
+                manager._invalidate_cache()
             else:
                 # As a safe fallback, perform a lightweight rebuild using a temp instance
                 from src.controller.semantic_models_manager import SemanticModelsManager
@@ -247,6 +250,9 @@ class SemanticLinksManager:
                 manager = None
             if removed and manager is not None:
                 manager.remove_entity_semantic_link_from_graph(removed.entity_type, removed.entity_id, removed.iri)
+                # Mirror of the add path: the removed triple invalidates
+                # cached concepts/properties/stats and the inferred-link cache.
+                manager._invalidate_cache()
             else:
                 from src.controller.semantic_models_manager import SemanticModelsManager
                 SemanticModelsManager(db=self._db).on_models_changed()

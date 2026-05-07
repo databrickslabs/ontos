@@ -29,6 +29,10 @@ interface RequestProductActionDialogProps {
   onSuccess?: () => void;
   /** If true, status changes are applied directly without approval workflow */
   canDirectStatusChange?: boolean;
+  /** Initial request type to select when the dialog opens. Defaults to 'access',
+   * since access requests are the most common entry point. Call sites that open
+   * the dialog from a status-change-specific affordance should pass 'status_change'. */
+  defaultRequestType?: RequestType;
 }
 
 // ODPS lifecycle transitions
@@ -74,13 +78,14 @@ export default function RequestProductActionDialog({
   productName,
   productStatus,
   onSuccess,
-  canDirectStatusChange = false
+  canDirectStatusChange = false,
+  defaultRequestType = 'access'
 }: RequestProductActionDialogProps) {
   const { post, get } = useApi();
   const { toast } = useToast();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
-  
-  const [requestType, setRequestType] = useState<RequestType>('status_change');
+
+  const [requestType, setRequestType] = useState<RequestType>(defaultRequestType);
   const [message, setMessage] = useState('');
   const [justification, setJustification] = useState('');
   const [targetStatus, setTargetStatus] = useState('');
@@ -100,7 +105,7 @@ export default function RequestProductActionDialog({
   // Reset form when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
-      setRequestType('status_change');
+      setRequestType(defaultRequestType);
       setMessage('');
       setJustification('');
       setTargetStatus('');
@@ -109,7 +114,7 @@ export default function RequestProductActionDialog({
       setCertificationLevel(null);
       setPublicationScope('organization');
     }
-  }, [isOpen]);
+  }, [isOpen, defaultRequestType]);
 
   const getRequestTypeConfig = (type: RequestType) => {
     switch (type) {

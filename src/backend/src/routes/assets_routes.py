@@ -21,6 +21,10 @@ from src.common.dependencies import (
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
+from src.common.data_product_asset_scope import (
+    is_asset_accessible,
+    resolve_accessible_asset_ids,
+)
 
 logger = get_logger(__name__)
 
@@ -31,6 +35,47 @@ FEATURE_ID = "assets"
 
 def get_assets_manager():
     return assets_manager
+
+
+def _get_data_products_manager(request: Request):
+    """Pull the DataProductsManager singleton from app.state.
+
+    Returns None when not configured (e.g. early in tests); callers must
+    handle that defensively rather than raising — scoping should fail closed
+    (i.e. return empty for non-admins) rather than 500.
+    """
+    return getattr(request.app.state, "data_products_manager", None)
+
+
+def _user_has_assets_feature(request: Request, current_user, level: FeatureAccessLevel) -> bool:
+    """Check whether the current user has the ``assets`` feature at ``level``.
+
+    Used for branching: when a Data Consumer lacks the feature, we still
+    allow DP-scoped reads of linked assets (issue #347), but block writes.
+    """
+    try:
+        auth_manager = getattr(request.app.state, "authorization_manager", None)
+        settings_manager = getattr(request.app.state, "settings_manager", None)
+        if not auth_manager or not current_user:
+            return False
+        applied_role_id = None
+        if settings_manager:
+            try:
+                applied_role_id = settings_manager.get_applied_role_override_for_user(
+                    current_user.email
+                )
+            except Exception:
+                applied_role_id = None
+        if applied_role_id and settings_manager:
+            effective = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+        else:
+            effective = auth_manager.get_user_effective_permissions(
+                current_user.groups or [], None
+            )
+        return auth_manager.has_permission(effective, FEATURE_ID, level)
+    except Exception:
+        logger.exception("Failed to check assets feature for user")
+        return False
 
 
 # ===================== Asset Types =====================
@@ -254,10 +299,11 @@ def create_asset(
 @assets_router.get(
     "",
     response_model=PaginatedAssetSummary,
-    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )
 def get_all_assets(
+    request: Request,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     manager=Depends(get_assets_manager),
     skip: int = 0,
     limit: int = 100,
@@ -268,26 +314,88 @@ def get_all_assets(
     asset_status: Optional[str] = Query(None, alias="status"),
     name: Optional[str] = Query(None),
 ):
-    """Lists all assets with optional filters. Returns paginated results."""
+    """Lists all assets with optional filters. Returns paginated results.
+
+    Authorization (issue #347):
+    - Users with ``assets:READ_WRITE`` or higher (Producers, Admins): see
+      all assets, unscoped — preserves existing behaviour.
+    - Users below ``READ_WRITE`` (typically Data Consumers): scoped to
+      assets linked to Data Products they can access (least-privilege).
+      This branch also handles users with no ``assets`` feature at all —
+      they still see DP-linked assets so the DP detail view's Linked
+      Assets surface keeps working without granting the broader feature.
+    """
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication required.",
+        )
+
+    # Producers + Admins (READ_WRITE+) keep full visibility.
+    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
+
+    if not is_unscoped:
+        dpm = _get_data_products_manager(request)
+        if dpm is None:
+            # Fail closed: no DP context available, scoped users see nothing.
+            logger.warning("DataProductsManager unavailable; returning empty asset list for scoped user")
+            return PaginatedAssetSummary(items=[], total=0, skip=skip, limit=limit)
+        # Pass is_admin=False to force scoping logic; the helper itself doesn't
+        # check group membership — it only branches on the boolean we pass in.
+        restrict_ids = resolve_accessible_asset_ids(
+            db, data_products_manager=dpm, is_admin=False,
+        )
+    else:
+        restrict_ids = None  # unrestricted
+
     type_names_list = [t.strip() for t in asset_type_names.split(",")] if asset_type_names else None
     return manager.get_all_assets(
         db=db, skip=skip, limit=limit,
         asset_type_id=asset_type_id, asset_type_names=type_names_list,
         platform=platform, domain_id=domain_id, status=asset_status, name=name,
+        restrict_to_ids=restrict_ids,
     )
 
 
 @assets_router.get(
     "/{asset_id}",
     response_model=AssetRead,
-    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )
 def get_asset(
     asset_id: UUID,
+    request: Request,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     manager=Depends(get_assets_manager),
 ):
-    """Gets a specific asset by ID with relationships."""
+    """Gets a specific asset by ID with relationships.
+
+    Authorization (issue #347):
+    - Users with ``assets:READ_WRITE`` or higher (Producers, Admins): always
+      allowed — preserves existing behaviour.
+    - Users below that (Consumers, no-``assets``-feature): allowed iff the
+      asset is linked (directly or via an OutputPort) to a Data Product
+      the user can access. This enables Linked Assets navigation from a
+      DP detail view even without the broader ``assets`` feature granted.
+    """
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication required.",
+        )
+
+    is_unscoped = _user_has_assets_feature(request, current_user, FeatureAccessLevel.READ_WRITE)
+
+    if not is_unscoped:
+        dpm = _get_data_products_manager(request)
+        if dpm is None or not is_asset_accessible(
+            db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Asset is not linked to a Data Product accessible to this user.",
+            )
+
     result = manager.get_asset(db=db, asset_id=asset_id)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")

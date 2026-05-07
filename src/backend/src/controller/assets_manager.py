@@ -244,11 +244,18 @@ class AssetsManager(SearchableAsset):
         asset_type_id: Optional[UUID] = None, asset_type_names: Optional[List[str]] = None,
         platform: Optional[str] = None, domain_id: Optional[str] = None,
         status: Optional[str] = None, name: Optional[str] = None,
+        restrict_to_ids: Optional[List[UUID]] = None,
     ) -> PaginatedAssetSummary:
-        """Gets a paginated page of asset summaries."""
+        """Gets a paginated page of asset summaries.
+
+        ``restrict_to_ids`` (when not None) limits results to the given asset
+        UUIDs — used by role-aware Data Product scoping. An empty list
+        intentionally yields zero results.
+        """
         filter_kwargs = dict(
             asset_type_id=asset_type_id, asset_type_names=asset_type_names,
             platform=platform, domain_id=domain_id, status=status, name=name,
+            restrict_to_ids=restrict_to_ids,
         )
         db_assets = self._asset_repo.get_multi_filtered(
             db, skip=skip, limit=limit, **filter_kwargs,

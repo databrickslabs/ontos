@@ -1107,6 +1107,79 @@ async def get_product_datasets(
         )
 
 
+@router.get('/data-products/{product_id}/assets')
+async def get_product_linked_assets(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    skip: int = 0,
+    limit: int = 200,
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """Return the assets linked to this Data Product via entity relationships.
+
+    Issue #347 — gated by ``data-products`` only (NOT ``assets``), so Data
+    Consumers can see Linked Assets in the DP detail view even when the
+    ``assets`` feature is not granted to them. The caller's access to the
+    Data Product itself is the implicit authorization here.
+    """
+    from src.controller.assets_manager import assets_manager
+    from src.common.data_product_asset_scope import (
+        get_asset_ids_linked_to_products,
+        get_output_port_ids_for_products,
+    )
+
+    # The PermissionChecker decorator above already verifies the caller has
+    # data-products:READ_ONLY at minimum. To prevent a Consumer from peeking
+    # at a DP they have no listing access to, additionally check that the
+    # DP is in the user's accessible set — unless they have admin-level
+    # data-products access (admins / data-product admins see all).
+    auth_manager = getattr(request.app.state, "authorization_manager", None)
+    settings_manager = getattr(request.app.state, "settings_manager", None)
+    is_dp_admin = False
+    try:
+        if auth_manager and current_user:
+            applied_role_id = None
+            if settings_manager:
+                applied_role_id = settings_manager.get_applied_role_override_for_user(
+                    current_user.email
+                )
+            if applied_role_id and settings_manager:
+                eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+            else:
+                eff = auth_manager.get_user_effective_permissions(current_user.groups or [], None)
+            is_dp_admin = auth_manager.has_permission(
+                eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
+            )
+    except Exception:
+        logger.exception("Failed to determine data-products admin level for DP-assets scoping")
+        is_dp_admin = False
+
+    if not is_dp_admin:
+        dpm = getattr(request.app.state, "data_products_manager", None)
+        if dpm is None:
+            raise HTTPException(status_code=503, detail="Data Products service unavailable")
+        try:
+            accessible = dpm.list_products(skip=0, limit=10_000, is_admin=False)
+            accessible_ids = {str(p.id) for p in accessible if getattr(p, "id", None)}
+        except Exception:
+            logger.exception("Failed to list products for DP-asset scoping")
+            raise HTTPException(status_code=500, detail="Failed to authorize DP access")
+        if product_id not in accessible_ids:
+            raise HTTPException(status_code=403, detail="Data Product not accessible")
+
+    port_ids = get_output_port_ids_for_products(db, product_ids=[product_id])
+    asset_ids = list(get_asset_ids_linked_to_products(
+        db, product_ids=[product_id], port_ids=port_ids,
+    ))
+    # Use AssetsManager directly (admin path — the DP membership check above
+    # is the authorization, not the assets feature).
+    return assets_manager.get_all_assets(
+        db=db, skip=skip, limit=limit, restrict_to_ids=asset_ids,
+    )
+
+
 @router.get('/data-products/{product_id}/hierarchy')
 async def get_product_hierarchy(
     product_id: str,

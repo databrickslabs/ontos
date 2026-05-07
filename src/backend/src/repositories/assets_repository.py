@@ -81,8 +81,14 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             raise
 
     def _apply_filters(self, query, *, asset_type_id=None, asset_type_names=None,
-                        platform=None, domain_id=None, status=None, name=None):
-        """Apply common filter predicates to a query."""
+                        platform=None, domain_id=None, status=None, name=None,
+                        restrict_to_ids=None):
+        """Apply common filter predicates to a query.
+
+        ``restrict_to_ids`` is an optional iterable of asset UUIDs to scope
+        results to (used for role-based DP-link scoping). An empty iterable
+        intentionally yields zero results — pass None for "no restriction".
+        """
         if asset_type_id:
             query = query.filter(self.model.asset_type_id == asset_type_id)
         if asset_type_names:
@@ -97,6 +103,14 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             query = query.filter(self.model.status == status)
         if name:
             query = query.filter(self.model.name.ilike(f"%{name}%"))
+        if restrict_to_ids is not None:
+            # Empty set must yield zero rows, not be ignored.
+            ids = list(restrict_to_ids)
+            if not ids:
+                # Force empty result.
+                query = query.filter(self.model.id.is_(None))
+            else:
+                query = query.filter(self.model.id.in_(ids))
         return query
 
     def get_multi_filtered(
@@ -104,6 +118,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
         asset_type_id: Optional[UUID] = None, asset_type_names: Optional[list] = None,
         platform: Optional[str] = None, domain_id: Optional[str] = None,
         status: Optional[str] = None, name: Optional[str] = None,
+        restrict_to_ids: Optional[list] = None,
     ) -> List[AssetDb]:
         """Gets multiple assets with optional filters."""
         try:
@@ -119,6 +134,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             query = self._apply_filters(
                 query, asset_type_id=asset_type_id, asset_type_names=asset_type_names,
                 platform=platform, domain_id=domain_id, status=status, name=name,
+                restrict_to_ids=restrict_to_ids,
             )
             return query.offset(skip).limit(limit).all()
         except SQLAlchemyError as e:
@@ -131,6 +147,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
         asset_type_id: Optional[UUID] = None, asset_type_names: Optional[list] = None,
         platform: Optional[str] = None, domain_id: Optional[str] = None,
         status: Optional[str] = None, name: Optional[str] = None,
+        restrict_to_ids: Optional[list] = None,
     ) -> int:
         """Returns the total count of assets matching the given filters."""
         try:
@@ -139,6 +156,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             query = self._apply_filters(
                 query, asset_type_id=asset_type_id, asset_type_names=asset_type_names,
                 platform=platform, domain_id=domain_id, status=status, name=name,
+                restrict_to_ids=restrict_to_ids,
             )
             return query.scalar() or 0
         except SQLAlchemyError as e:

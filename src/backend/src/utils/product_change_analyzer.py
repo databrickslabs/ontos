@@ -92,38 +92,43 @@ class ProductChangeAnalyzer:
         self._reset()
 
         # Analyze port changes (most critical for products)
+        # NOTE on `(x.get('k') or default)`: chained `.get('k', default).get(...)`
+        # only falls back to `default` when the key is MISSING. When the key is
+        # present but the value is None (common when the API serializes optional
+        # nullable relationships), the fallback is skipped and `.get(...)` crashes
+        # on NoneType. The `or` form covers both missing-key and None-value.
         self._analyze_port_changes(
-            old_product.get('inputPorts', []),
-            new_product.get('inputPorts', []),
+            old_product.get('inputPorts') or [],
+            new_product.get('inputPorts') or [],
             'input'
         )
         self._analyze_port_changes(
-            old_product.get('outputPorts', []),
-            new_product.get('outputPorts', []),
+            old_product.get('outputPorts') or [],
+            new_product.get('outputPorts') or [],
             'output'
         )
         self._analyze_port_changes(
-            old_product.get('managementPorts', []),
-            new_product.get('managementPorts', []),
+            old_product.get('managementPorts') or [],
+            new_product.get('managementPorts') or [],
             'management'
         )
 
         # Analyze team changes
         self._analyze_team_changes(
-            old_product.get('team', {}).get('members', []),
-            new_product.get('team', {}).get('members', [])
+            (old_product.get('team') or {}).get('members') or [],
+            (new_product.get('team') or {}).get('members') or []
         )
 
         # Analyze support channel changes
         self._analyze_support_changes(
-            old_product.get('support', []),
-            new_product.get('support', [])
+            old_product.get('support') or [],
+            new_product.get('support') or []
         )
 
         # Analyze description changes (minor/patch)
         self._analyze_description_changes(
-            old_product.get('description', {}),
-            new_product.get('description', {})
+            old_product.get('description') or {},
+            new_product.get('description') or {}
         )
 
         # Determine change type and version bump
@@ -155,8 +160,10 @@ class ProductChangeAnalyzer:
 
     def _analyze_port_changes(self, old_ports: List[Dict], new_ports: List[Dict], port_type: str):
         """Analyze changes in ports (input/output/management)"""
-        old_port_map = {p.get('name'): p for p in old_ports}
-        new_port_map = {p.get('name'): p for p in new_ports}
+        # Filter out None entries defensively; serialized port lists from
+        # partially-populated products can contain holes.
+        old_port_map = {p.get('name'): p for p in (old_ports or []) if p}
+        new_port_map = {p.get('name'): p for p in (new_ports or []) if p}
 
         old_names = set(old_port_map.keys())
         new_names = set(new_port_map.keys())
@@ -265,8 +272,16 @@ class ProductChangeAnalyzer:
 
     def _analyze_team_changes(self, old_members: List[Dict], new_members: List[Dict]):
         """Analyze changes in team members"""
-        old_member_map = {m.get('name', m.get('email', '')): m for m in old_members}
-        new_member_map = {m.get('name', m.get('email', '')): m for m in new_members}
+        # `m.get('name', m.get('email', ''))` keys on name, falling back to email.
+        # `or ''` guards against a stored member with name=None / email=None.
+        old_member_map = {
+            (m.get('name') or m.get('email') or ''): m
+            for m in (old_members or []) if m
+        }
+        new_member_map = {
+            (m.get('name') or m.get('email') or ''): m
+            for m in (new_members or []) if m
+        }
 
         old_keys = set(old_member_map.keys())
         new_keys = set(new_member_map.keys())
@@ -274,8 +289,8 @@ class ProductChangeAnalyzer:
         # Removed members
         for removed_key in old_keys - new_keys:
             old_member = old_member_map[removed_key]
-            role = old_member.get('role', 'unknown')
-            
+            role = old_member.get('role') or 'unknown'
+
             # Removing owner or critical roles could be breaking
             if role.lower() in ('owner', 'productOwner', 'product_owner'):
                 self.breaking_changes.append(f"Removed team member with critical role: {removed_key} ({role})")
@@ -291,7 +306,7 @@ class ProductChangeAnalyzer:
         # Added members (always a feature)
         for added_key in new_keys - old_keys:
             new_member = new_member_map[added_key]
-            role = new_member.get('role', 'unknown')
+            role = new_member.get('role') or 'unknown'
             self.new_features.append(f"Added team member: {added_key} ({role})")
             self.team_changes.append({
                 'type': 'added',
@@ -301,8 +316,14 @@ class ProductChangeAnalyzer:
 
     def _analyze_support_changes(self, old_support: List[Dict], new_support: List[Dict]):
         """Analyze changes in support channels"""
-        old_channel_map = {s.get('channel', s.get('type', '')): s for s in old_support}
-        new_channel_map = {s.get('channel', s.get('type', '')): s for s in new_support}
+        old_channel_map = {
+            (s.get('channel') or s.get('type') or ''): s
+            for s in (old_support or []) if s
+        }
+        new_channel_map = {
+            (s.get('channel') or s.get('type') or ''): s
+            for s in (new_support or []) if s
+        }
 
         old_channels = set(old_channel_map.keys())
         new_channels = set(new_channel_map.keys())

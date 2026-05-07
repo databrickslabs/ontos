@@ -1,16 +1,30 @@
 -- ============================================================================
--- Industry Demo Data: Financial Services Industry (FSI)
+-- FSI Demo Data — preset=fsi
 -- ============================================================================
--- Additive overlay loaded via: POST /api/settings/demo-data/load?industry=fsi
+-- Standalone demo pack loaded via:
+--   POST /api/settings/demo-data/load?preset=fsi
 --
--- Adds FSI-specific data domains, teams, contracts, products, and compliance
--- policies covering banking, capital markets, risk, and regulatory reporting.
+-- This pack is fully self-contained: loading it on an empty database produces
+-- a complete Financial Services vertical demo with no implicit content from
+-- any other preset.
 --
 -- Dataset identifier: 0002 (second UUID group)
 -- UUID Format: {type:3}{seq:5}-0002-4000-8000-00000000000N
 -- ============================================================================
 
 BEGIN;
+
+-- ============================================================================
+-- 0. SHARED PARENT ROWS (idempotent foundation)
+-- ============================================================================
+-- FSI data_domains FK to base "Core" parent below. Inserted ON CONFLICT DO
+-- NOTHING so it is safe to load this preset on top of an empty DB or alongside
+-- other presets.
+
+INSERT INTO data_domains (id, name, description, parent_id, created_by, created_at, updated_at) VALUES
+('00000001-0000-4000-8000-000000000001', 'Core', 'General, cross-company business concepts.', NULL, 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
 
 -- ============================================================================
 -- 1. DATA DOMAINS (FSI-specific, children of Core)
@@ -322,8 +336,332 @@ INSERT INTO link_metadata (id, entity_id, entity_type, title, short_description,
 ON CONFLICT (id) DO NOTHING;
 
 
+-- ============================================================================
+-- 9. BUSINESS ROLES (FSI-specific, type=0f0)
+-- ============================================================================
+
+INSERT INTO business_roles (id, name, description, category, is_system, is_approver, status, created_by, created_at, updated_at) VALUES
+('0f000001-0002-4000-8000-000000000001', 'Chief Risk Officer',          'Accountable for the firm-wide risk framework and BCBS 239 attestation.',                                'governance',  false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000002-0002-4000-8000-000000000002', 'Head of Compliance',          'Owns AML/KYC, sanctions screening, and MAR/MiFID II surveillance programmes.',                          'governance',  false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000003-0002-4000-8000-000000000003', 'Model Risk Manager',          'Validates and monitors quantitative models per SR 11-7 and EU model risk guidance.',                     'governance',  false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000004-0002-4000-8000-000000000004', 'Trading Desk Head',           'Senior trader accountable for desk P&L, risk limits, and best execution.',                              'business',    false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000005-0002-4000-8000-000000000005', 'Regulatory Reporting Lead',   'Owns submissions for FR Y-14, Call Report, LCR/NSFR, FRTB and other prudential filings.',                'operational', false, false, 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 10. DELIVERY METHODS (FSI-specific, type=0f4)
+-- ============================================================================
+
+INSERT INTO delivery_methods (id, name, description, category, is_system, status, created_by, created_at, updated_at) VALUES
+('0f400001-0002-4000-8000-000000000001', 'FIX Protocol Feed',     'Delivers execution and order events via Financial Information eXchange (FIX 4.4/5.0SP2).',         'streaming', false, 'active', 'system@demo', NOW(), NOW()),
+('0f400002-0002-4000-8000-000000000002', 'SWIFT MT Messages',     'Delivers payments and securities messages via SWIFT MT/MX.',                                       'streaming', false, 'active', 'system@demo', NOW(), NOW()),
+('0f400003-0002-4000-8000-000000000003', 'Regulatory Portal Submission', 'Submits XBRL-tagged regulatory reports to supervisor portals (Fed, FFIEC, EBA).',          'export',    false, 'active', 'system@demo', NOW(), NOW()),
+('0f400004-0002-4000-8000-000000000004', 'Risk Aggregation Cube', 'Materialised cube exposing aggregated risk metrics for CRO dashboards and stress tests.',          'access',    false, 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 11. VERTICAL ASSET TYPES (FSI-specific, is_system=false)
+-- ============================================================================
+
+INSERT INTO asset_types (id, name, description, category, icon, required_fields, optional_fields, is_system, status, created_by, created_at, updated_at) VALUES
+('0f200101-0002-4000-8000-000000000001', 'Trading Position',  'Open trading position carried on the firm''s books.',                                              'data', 'trending-up',   NULL, NULL, false, 'active', 'system@demo', NOW(), NOW()),
+('0f200102-0002-4000-8000-000000000002', 'Risk Limit',        'Configured risk limit (notional, VaR, sensitivity-based) attached to a desk or book.',             'data', 'gauge',         NULL, NULL, false, 'active', 'system@demo', NOW(), NOW()),
+('0f200103-0002-4000-8000-000000000003', 'Regulatory Filing', 'Discrete regulatory filing (FR Y-14, FFIEC Call Report, LCR, etc.) with submission lifecycle.',     'data', 'file-text',     NULL, NULL, false, 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+
+-- ============================================================================
+-- 12. TAG NAMESPACES + TAGS (FSI governance vocabulary)
+-- ============================================================================
+
+INSERT INTO tag_namespaces (id, name, description, created_by, created_at, updated_at) VALUES
+('02601001-0002-4000-8000-000000000001', 'fsi-regulatory', 'Banking and capital markets regulatory frameworks.', 'system@demo', NOW(), NOW()),
+('02601002-0002-4000-8000-000000000002', 'fsi-risk',       'Risk types and tiering conventions.',                'system@demo', NOW(), NOW()),
+('02601003-0002-4000-8000-000000000003', 'fsi-data',       'FSI data classification and lifecycle.',             'system@demo', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO tags (id, name, description, possible_values, status, version, namespace_id, parent_id, created_by, created_at, updated_at) VALUES
+-- Regulatory
+('02700101-0002-4000-8000-000000000001', 'bcbs-239',       'Subject to Basel BCBS 239 risk data aggregation principles.', NULL, 'active', 'v1.0', '02601001-0002-4000-8000-000000000001', NULL, 'system@demo', NOW(), NOW()),
+('02700102-0002-4000-8000-000000000002', 'mifid-ii',       'Subject to MiFID II / MiFIR transaction reporting.',          NULL, 'active', 'v1.0', '02601001-0002-4000-8000-000000000001', NULL, 'system@demo', NOW(), NOW()),
+('02700103-0002-4000-8000-000000000003', 'frtb',           'Subject to Fundamental Review of the Trading Book rules.',    NULL, 'active', 'v1.0', '02601001-0002-4000-8000-000000000001', NULL, 'system@demo', NOW(), NOW()),
+('02700104-0002-4000-8000-000000000004', 'aml-monitored',  'Subject to AML/transaction-monitoring obligations.',          NULL, 'active', 'v1.0', '02601001-0002-4000-8000-000000000001', NULL, 'system@demo', NOW(), NOW()),
+-- Risk
+('02700105-0002-4000-8000-000000000005', 'risk-tier-1',    'Tier-1 critical for daily risk reporting.',                   NULL, 'active', 'v1.0', '02601002-0002-4000-8000-000000000002', NULL, 'system@demo', NOW(), NOW()),
+('02700106-0002-4000-8000-000000000006', 'market-risk',    'Market risk relevant.',                                       NULL, 'active', 'v1.0', '02601002-0002-4000-8000-000000000002', NULL, 'system@demo', NOW(), NOW()),
+('02700107-0002-4000-8000-000000000007', 'credit-risk',    'Credit risk relevant.',                                       NULL, 'active', 'v1.0', '02601002-0002-4000-8000-000000000002', NULL, 'system@demo', NOW(), NOW()),
+-- Data
+('02700108-0002-4000-8000-000000000008', 'mnpi',           'Material non-public information.',                            NULL, 'active', 'v1.0', '02601003-0002-4000-8000-000000000003', NULL, 'system@demo', NOW(), NOW()),
+('02700109-0002-4000-8000-000000000009', 'transaction-data','Atomic transaction-level data (no aggregation).',            NULL, 'active', 'v1.0', '02601003-0002-4000-8000-000000000003', NULL, 'system@demo', NOW(), NOW())
+ON CONFLICT (namespace_id, name) DO NOTHING;
+
+INSERT INTO tag_namespace_permissions (id, namespace_id, group_id, access_level, created_by, created_at, updated_at) VALUES
+('02800101-0002-4000-8000-000000000001', '02601001-0002-4000-8000-000000000001', 'reg-reporting',     'admin',     'system@demo', NOW(), NOW()),
+('02800102-0002-4000-8000-000000000002', '02601002-0002-4000-8000-000000000002', 'risk-quant',        'admin',     'system@demo', NOW(), NOW()),
+('02800103-0002-4000-8000-000000000003', '02601002-0002-4000-8000-000000000002', 'trading-desk',      'read_only', 'system@demo', NOW(), NOW()),
+('02800104-0002-4000-8000-000000000004', '02601003-0002-4000-8000-000000000003', 'compliance',        'admin',     'system@demo', NOW(), NOW())
+ON CONFLICT (namespace_id, group_id) DO NOTHING;
+
+
+-- ============================================================================
+-- 13. RDF TRIPLES — FSI concept graph (type=020)
+-- ============================================================================
+
+INSERT INTO rdf_triples (id, subject_uri, predicate_uri, object_value, object_is_uri, context_name, source_type, source_identifier, created_by, created_at) VALUES
+('02000101-0002-4000-8000-000000000001', 'http://demo.ontos.app/fsi#Trade',           'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000102-0002-4000-8000-000000000002', 'http://demo.ontos.app/fsi#Trade',           'http://www.w3.org/2000/01/rdf-schema#label',       'Trade',                                         false, 'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000103-0002-4000-8000-000000000003', 'http://demo.ontos.app/fsi#Position',        'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000104-0002-4000-8000-000000000004', 'http://demo.ontos.app/fsi#Position',        'http://www.w3.org/2000/01/rdf-schema#label',       'Position',                                      false, 'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000105-0002-4000-8000-000000000005', 'http://demo.ontos.app/fsi#Counterparty',    'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000106-0002-4000-8000-000000000006', 'http://demo.ontos.app/fsi#Counterparty',    'http://www.w3.org/2000/01/rdf-schema#label',       'Counterparty',                                  false, 'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000107-0002-4000-8000-000000000007', 'http://demo.ontos.app/fsi#MarketRisk',      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000108-0002-4000-8000-000000000008', 'http://demo.ontos.app/fsi#MarketRisk',      'http://www.w3.org/2000/01/rdf-schema#label',       'Market Risk',                                   false, 'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('02000109-0002-4000-8000-000000000009', 'http://demo.ontos.app/fsi#CreditRisk',      'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('0200010a-0002-4000-8000-000000000010', 'http://demo.ontos.app/fsi#CreditRisk',      'http://www.w3.org/2000/01/rdf-schema#label',       'Credit Risk',                                   false, 'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('0200010b-0002-4000-8000-000000000011', 'http://demo.ontos.app/fsi#AMLAlert',        'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('0200010c-0002-4000-8000-000000000012', 'http://demo.ontos.app/fsi#AMLAlert',        'http://www.w3.org/2000/01/rdf-schema#label',       'AML Alert',                                     false, 'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('0200010d-0002-4000-8000-000000000013', 'http://demo.ontos.app/fsi#RegulatoryFiling','http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW()),
+('0200010e-0002-4000-8000-000000000014', 'http://demo.ontos.app/fsi#RegulatoryFiling','http://www.w3.org/2000/01/rdf-schema#label',       'Regulatory Filing',                             false, 'urn:demo', 'demo', 'demo_data_fsi.sql', 'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 14. ENTITY SEMANTIC LINKS (type=015)
+-- ============================================================================
+
+INSERT INTO entity_semantic_links (id, entity_id, entity_type, iri, label, created_by, created_at) VALUES
+('01500101-0002-4000-8000-000000000001', '00700001-0002-4000-8000-000000000001', 'data_product', 'http://demo.ontos.app/fsi#Trade',            'Trade',             'system@demo', NOW()),
+('01500102-0002-4000-8000-000000000002', '00700001-0002-4000-8000-000000000001', 'data_product', 'http://demo.ontos.app/fsi#Position',         'Position',          'system@demo', NOW()),
+('01500103-0002-4000-8000-000000000003', '00700002-0002-4000-8000-000000000002', 'data_product', 'http://demo.ontos.app/fsi#MarketRisk',       'Market Risk',       'system@demo', NOW()),
+('01500104-0002-4000-8000-000000000004', '00700002-0002-4000-8000-000000000002', 'data_product', 'http://demo.ontos.app/fsi#CreditRisk',       'Credit Risk',       'system@demo', NOW()),
+('01500105-0002-4000-8000-000000000005', '00700003-0002-4000-8000-000000000003', 'data_product', 'http://demo.ontos.app/fsi#AMLAlert',         'AML Alert',         'system@demo', NOW()),
+('01500106-0002-4000-8000-000000000006', '00700004-0002-4000-8000-000000000004', 'data_product', 'http://demo.ontos.app/fsi#RegulatoryFiling', 'Regulatory Filing', 'system@demo', NOW()),
+('01500107-0002-4000-8000-000000000007', '00700005-0002-4000-8000-000000000005', 'data_product', 'http://demo.ontos.app/fsi#Counterparty',     'Counterparty',      'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 15. ASSETS — FSI catalog objects (type=0f3)
+-- ============================================================================
+
+INSERT INTO assets (id, name, description, asset_type_id, platform, location, domain_id, properties, tags, status, created_by, created_at, updated_at) VALUES
+-- Trading
+('0f300101-0002-4000-8000-000000000001',
+ 'lakehouse.fsi.trading.executions',
+ 'FIX-protocol execution reports for equities and FX desks (intraday, sub-second).',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.fsi.trading.executions',
+ '00000002-0002-4000-8000-000000000002',
+ '{"catalog": "lakehouse", "schema": "fsi_trading", "table_name": "executions", "row_count": 92000000, "format": "delta"}',
+ '["transaction-data", "mifid-ii"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Trading Position (vertical asset type)
+('0f300102-0002-4000-8000-000000000002',
+ 'positions.equities.eod_2026_05_01',
+ 'End-of-day equity positions snapshot for May 1 2026.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Trading Position' LIMIT 1), '0f200101-0002-4000-8000-000000000001'), 'Databricks', 'positions.equities.eod_2026_05_01',
+ '00000002-0002-4000-8000-000000000002',
+ '{"asset_class": "equities", "snapshot_date": "2026-05-01", "instrument_count": 8400}',
+ '["risk-tier-1", "market-risk"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Risk Limit (vertical asset type)
+('0f300103-0002-4000-8000-000000000003',
+ 'limit.equities.var_99_1d',
+ 'Equities desk 99% / 1-day VaR limit.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Risk Limit' LIMIT 1), '0f200102-0002-4000-8000-000000000002'), 'Risk System', 'limits/equities/var_99_1d',
+ '00000003-0002-4000-8000-000000000003',
+ '{"limit_type": "VaR", "confidence": 0.99, "horizon_days": 1, "limit_usd": 25000000}',
+ '["risk-tier-1", "market-risk"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Risk aggregation table
+('0f300104-0002-4000-8000-000000000004',
+ 'lakehouse.fsi.risk.aggregated_var',
+ 'Aggregated VaR metrics (firm-wide, by desk, by asset class) feeding CRO dashboard.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.fsi.risk.aggregated_var',
+ '00000003-0002-4000-8000-000000000003',
+ '{"catalog": "lakehouse", "schema": "fsi_risk", "table_name": "aggregated_var", "format": "delta"}',
+ '["bcbs-239", "risk-tier-1"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- AML stream
+('0f300105-0002-4000-8000-000000000005',
+ 'kafka.fsi.aml.transaction_alerts',
+ 'Real-time stream of AML scenario hits and ML anomaly alerts.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Stream' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts',
+ '00000004-0002-4000-8000-000000000004',
+ '{"topic": "aml.transaction_alerts", "throughput_msgs_per_sec": 600}',
+ '["aml-monitored", "transaction-data"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Regulatory Filing (vertical asset type)
+('0f300106-0002-4000-8000-000000000006',
+ 'FFIEC-Call-Report-2026-Q1',
+ 'FFIEC Call Report quarterly submission for 2026 Q1.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Regulatory Filing' LIMIT 1), '0f200103-0002-4000-8000-000000000003'), 'Reg Portal', 'filings/ffiec/2026-Q1',
+ '00000004-0002-4000-8000-000000000004',
+ '{"filing_type": "FFIEC Call Report", "period": "2026-Q1", "status": "submitted", "submission_date": "2026-04-30"}',
+ '["bcbs-239"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Customer table
+('0f300107-0002-4000-8000-000000000007',
+ 'lakehouse.fsi.banking.customer_master',
+ 'Banking customer master with KYC tier and segment classifications.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.fsi.banking.customer_master',
+ '00000001-0002-4000-8000-000000000001',
+ '{"catalog": "lakehouse", "schema": "fsi_banking", "table_name": "customer_master", "row_count": 4200000, "format": "delta"}',
+ '["aml-monitored"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Dashboard
+('0f300108-0002-4000-8000-000000000008',
+ 'CRO Risk Dashboard',
+ 'Daily firm-wide risk metrics, breach summary, and stress test results.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Dashboard' LIMIT 1), '0f200002-0000-4000-8000-000000000002'), 'Databricks', 'https://bi.bank.com/dashboards/cro-risk-v1',
+ '00000003-0002-4000-8000-000000000003',
+ '{"refresh_schedule": "hourly", "audience": "cro-team"}',
+ '["bcbs-239", "risk-tier-1"]',
+ 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 16. ENTITY RELATIONSHIPS — FSI lineage (type=0fa)
+-- ============================================================================
+
+INSERT INTO entity_relationships (id, source_type, source_id, target_type, target_id, relationship_type, created_by, created_at) VALUES
+('0fa00101-0002-4000-8000-000000000001', 'data_product', '00700001-0002-4000-8000-000000000001', 'asset', '0f300101-0002-4000-8000-000000000001', 'derives_from', 'system@demo', NOW()),
+('0fa00102-0002-4000-8000-000000000002', 'data_product', '00700001-0002-4000-8000-000000000001', 'asset', '0f300102-0002-4000-8000-000000000002', 'derives_from', 'system@demo', NOW()),
+('0fa00103-0002-4000-8000-000000000003', 'data_product', '00700002-0002-4000-8000-000000000002', 'asset', '0f300104-0002-4000-8000-000000000004', 'derives_from', 'system@demo', NOW()),
+('0fa00104-0002-4000-8000-000000000004', 'data_product', '00700002-0002-4000-8000-000000000002', 'asset', '0f300103-0002-4000-8000-000000000003', 'consumes',     'system@demo', NOW()),
+('0fa00105-0002-4000-8000-000000000005', 'data_product', '00700003-0002-4000-8000-000000000003', 'asset', '0f300105-0002-4000-8000-000000000005', 'derives_from', 'system@demo', NOW()),
+('0fa00106-0002-4000-8000-000000000006', 'data_product', '00700004-0002-4000-8000-000000000004', 'asset', '0f300106-0002-4000-8000-000000000006', 'produces',     'system@demo', NOW()),
+('0fa00107-0002-4000-8000-000000000007', 'data_product', '00700005-0002-4000-8000-000000000005', 'asset', '0f300107-0002-4000-8000-000000000007', 'derives_from', 'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 17. ENTITY TAG ASSOCIATIONS (FSI, type=029)
+-- ============================================================================
+
+INSERT INTO entity_tag_associations (id, tag_id, entity_id, entity_type, assigned_value, assigned_by, assigned_at) VALUES
+-- Trading Analytics
+('02900101-0002-4000-8000-000000000001', '02700102-0002-4000-8000-000000000002', '00700001-0002-4000-8000-000000000001', 'data_product', NULL, 'system@demo', NOW()),
+('02900102-0002-4000-8000-000000000002', '02700106-0002-4000-8000-000000000006', '00700001-0002-4000-8000-000000000001', 'data_product', NULL, 'system@demo', NOW()),
+-- Enterprise Risk Aggregation
+('02900103-0002-4000-8000-000000000003', '02700101-0002-4000-8000-000000000001', '00700002-0002-4000-8000-000000000002', 'data_product', NULL, 'system@demo', NOW()),
+('02900104-0002-4000-8000-000000000004', '02700105-0002-4000-8000-000000000005', '00700002-0002-4000-8000-000000000002', 'data_product', NULL, 'system@demo', NOW()),
+('02900105-0002-4000-8000-000000000005', '02700103-0002-4000-8000-000000000003', '00700002-0002-4000-8000-000000000002', 'data_product', NULL, 'system@demo', NOW()),
+-- AML Monitoring
+('02900106-0002-4000-8000-000000000006', '02700104-0002-4000-8000-000000000004', '00700003-0002-4000-8000-000000000003', 'data_product', NULL, 'system@demo', NOW()),
+-- Regulatory Reporting
+('02900107-0002-4000-8000-000000000007', '02700101-0002-4000-8000-000000000001', '00700004-0002-4000-8000-000000000004', 'data_product', NULL, 'system@demo', NOW()),
+-- Customer 360 Banking
+('02900108-0002-4000-8000-000000000008', '02700104-0002-4000-8000-000000000004', '00700005-0002-4000-8000-000000000005', 'data_product', NULL, 'system@demo', NOW())
+ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
+
+
+-- ============================================================================
+-- 18. PROCESS WORKFLOWS + STEPS (FSI-specific)
+-- ============================================================================
+
+INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
+('02a00101-0002-4000-8000-000000000001', 'BCBS 239 Pre-Publish Attestation',
+ 'Requires CRO sign-off before any risk product is published, per BCBS 239 principles.',
+ '{"type": "before_publish", "entity_types": ["data_product"]}',
+ '{"type": "domain", "ids": ["00000003-0002-4000-8000-000000000003"]}',
+ true, true, 1, 'system@demo', 'system@demo', NOW(), NOW()),
+('02a00102-0002-4000-8000-000000000002', 'AML Model Validation Gate',
+ 'Blocks deployment of AML monitoring updates without independent model validation.',
+ '{"type": "before_update", "entity_types": ["data_product"]}',
+ '{"type": "domain", "ids": ["00000004-0002-4000-8000-000000000004"]}',
+ true, false, 1, 'system@demo', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
+('02b00101-0002-4000-8000-000000000001', '02a00101-0002-4000-8000-000000000001', 'lineage_check',     'BCBS 239 Lineage Coverage',
+ 'policy_check',
+ '{"policy_id": "01100001-0002-4000-8000-000000000001"}',
+ 'cro_attest', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
+('02b00102-0002-4000-8000-000000000002', '02a00101-0002-4000-8000-000000000001', 'cro_attest',        'CRO Attestation',
+ 'manual_approval',
+ '{"approver_role": "0f000001-0002-4000-8000-000000000001"}',
+ 'approve', 'reject', 2, '{"x": 300, "y": 100}', NOW(), NOW()),
+('02b00103-0002-4000-8000-000000000003', '02a00102-0002-4000-8000-000000000002', 'mrm_review',        'Model Risk Manager Review',
+ 'manual_approval',
+ '{"approver_role": "0f000003-0002-4000-8000-000000000003"}',
+ 'approve', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 19. COMPLIANCE RUNS + RESULTS (FSI)
+-- ============================================================================
+
+INSERT INTO compliance_runs (id, policy_id, status, started_at, finished_at, success_count, failure_count, score) VALUES
+('01200101-0002-4000-8000-000000000001', '01100001-0002-4000-8000-000000000001', 'completed', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days' + INTERVAL '15 minutes', 5, 1, 0.833),
+('01200102-0002-4000-8000-000000000002', '01100002-0002-4000-8000-000000000002', 'completed', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days' + INTERVAL '6 minutes',  3, 0, 1.000)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO compliance_results (id, run_id, object_type, object_id, object_name, passed, message, created_at) VALUES
+('01300101-0002-4000-8000-000000000001', '01200101-0002-4000-8000-000000000001', 'data_product', '00700002-0002-4000-8000-000000000002', 'Enterprise Risk Aggregation v1', true,  'Risk aggregation lineage covers all 11 BCBS 239 principles.', NOW() - INTERVAL '4 days'),
+('01300102-0002-4000-8000-000000000002', '01200101-0002-4000-8000-000000000001', 'data_product', '00700001-0002-4000-8000-000000000001', 'Trading Analytics Dashboard v1', false, 'Reconciliation lineage missing between FIX feed and EOD positions snapshot.', NOW() - INTERVAL '4 days'),
+('01300103-0002-4000-8000-000000000003', '01200102-0002-4000-8000-000000000002', 'data_product', '00700003-0002-4000-8000-000000000003', 'AML Transaction Monitoring v1', true,  'Sanctions screening cycle within 1-day SLA.', NOW() - INTERVAL '2 days')
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 20. COST ITEMS (FSI)
+-- ============================================================================
+
+INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
+('01400101-0002-4000-8000-000000000001', 'data_product', '00700001-0002-4000-8000-000000000001', 'Market Data Subscriptions', 'Refinitiv + Bloomberg market-data feeds for trading analytics.', 'tools', NULL, 9800000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0002-4000-8000-000000000002', 'data_product', '00700002-0002-4000-8000-000000000002', 'Risk Compute (DBU)',        'Daily Monte Carlo VaR + stress scenarios.',                       'infrastructure', NULL, 4200000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0002-4000-8000-000000000003', 'data_product', '00700003-0002-4000-8000-000000000003', 'AML Tooling License',       'Annual AML detection and case management tooling.',               'tools', NULL, 1800000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 21. COMMENTS & RATINGS (FSI)
+-- ============================================================================
+
+INSERT INTO comments (id, entity_type, entity_id, comment, comment_type, rating, status, created_by, created_at, updated_at) VALUES
+('02c00101-0002-4000-8000-000000000001', 'data_product', '00700001-0002-4000-8000-000000000001', 'Real-time TCA is best in class. Latency is excellent.',                       'rating', 5, 'active', 'desk-head@bank.com',         NOW() - INTERVAL '12 days', NOW() - INTERVAL '12 days'),
+('02c00102-0002-4000-8000-000000000002', 'data_product', '00700002-0002-4000-8000-000000000002', 'BCBS 239 lineage gaps still tracked in Jira; product otherwise excellent.',  'rating', 4, 'active', 'cro@bank.com',               NOW() - INTERVAL '8 days',  NOW() - INTERVAL '8 days'),
+('02c00103-0002-4000-8000-000000000003', 'data_product', '00700003-0002-4000-8000-000000000003', 'False-positive rate dropped 38% after ML migration.',                          'rating', 5, 'active', 'aml-lead@bank.com',          NOW() - INTERVAL '5 days',  NOW() - INTERVAL '5 days'),
+('02c00104-0002-4000-8000-000000000004', 'data_product', '00700005-0002-4000-8000-000000000005', 'Customer 360 RM desktop loads quickly; KYC tier integration is great.',       'rating', 4, 'active', 'rm-lead@bank.com',           NOW() - INTERVAL '2 days',  NOW() - INTERVAL '2 days')
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 22. BUSINESS OWNERS (FSI)
+-- ============================================================================
+
+INSERT INTO business_owners (id, object_type, object_id, user_email, user_name, role_id, is_active, assigned_at, removed_at, removal_reason, created_by, created_at, updated_at) VALUES
+('0fb00101-0002-4000-8000-000000000001', 'data_product',  '00700001-0002-4000-8000-000000000001', 'desk-head@bank.com',     'Trading Desk Head',          '0f000004-0002-4000-8000-000000000004', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW()),
+('0fb00102-0002-4000-8000-000000000002', 'data_product',  '00700002-0002-4000-8000-000000000002', 'cro@bank.com',           'Chief Risk Officer',         '0f000001-0002-4000-8000-000000000001', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW()),
+('0fb00103-0002-4000-8000-000000000003', 'data_product',  '00700003-0002-4000-8000-000000000003', 'aml-lead@bank.com',      'Head of Compliance',         '0f000002-0002-4000-8000-000000000002', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW()),
+('0fb00104-0002-4000-8000-000000000004', 'data_product',  '00700004-0002-4000-8000-000000000004', 'reg-reporting@bank.com', 'Regulatory Reporting Lead',  '0f000005-0002-4000-8000-000000000005', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 23. ENTITY SUBSCRIPTIONS (FSI)
+-- ============================================================================
+
+INSERT INTO entity_subscriptions (id, entity_type, entity_id, subscriber_email, subscription_reason, created_at) VALUES
+('02200101-0002-4000-8000-000000000001', 'data_product', '00700002-0002-4000-8000-000000000002', 'cro@bank.com',           'owner',    NOW() - INTERVAL '60 days'),
+('02200102-0002-4000-8000-000000000002', 'data_product', '00700004-0002-4000-8000-000000000004', 'reg-reporting@bank.com', 'owner',    NOW() - INTERVAL '60 days'),
+('02200103-0002-4000-8000-000000000003', 'data_product', '00700001-0002-4000-8000-000000000001', 'risk-quant@bank.com',    'consumer', NOW() - INTERVAL '15 days')
+ON CONFLICT DO NOTHING;
+
+
 COMMIT;
 
 -- ============================================================================
--- End of FSI Industry Demo Data
+-- End of FSI Demo Data — preset=fsi
 -- ============================================================================

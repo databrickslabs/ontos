@@ -1,16 +1,31 @@
 -- ============================================================================
--- Industry Demo Data: Manufacturing (MFG)
+-- MFG Demo Data — preset=mfg
 -- ============================================================================
--- Additive overlay loaded via: POST /api/settings/demo-data/load?industry=mfg
+-- Standalone demo pack loaded via:
+--   POST /api/settings/demo-data/load?preset=mfg
 --
--- Adds manufacturing-specific data domains, teams, contracts, products, and
--- compliance policies covering production, quality, maintenance, and safety.
+-- This pack is fully self-contained: loading it on an empty database produces
+-- a complete Manufacturing vertical demo with no implicit content from any
+-- other preset.
 --
 -- Dataset identifier: 0003 (second UUID group)
 -- UUID Format: {type:3}{seq:5}-0003-4000-8000-00000000000N
 -- ============================================================================
 
 BEGIN;
+
+-- ============================================================================
+-- 0. SHARED PARENT ROWS (idempotent foundation)
+-- ============================================================================
+-- MFG data_domains FK to base "Core" and "Supply Chain" parents below.
+-- Inserted ON CONFLICT DO NOTHING so it is safe to load this preset on top of
+-- an empty DB or alongside other presets.
+
+INSERT INTO data_domains (id, name, description, parent_id, created_by, created_at, updated_at) VALUES
+('00000001-0000-4000-8000-000000000001', 'Core', 'General, cross-company business concepts.', NULL, 'system@demo', NOW(), NOW()),
+('00000006-0000-4000-8000-000000000006', 'Supply Chain', 'Logistics, inventory management, reordering, and supplier relations.', '00000001-0000-4000-8000-000000000001', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
 
 -- ============================================================================
 -- 1. DATA DOMAINS (MFG-specific, children of Core)
@@ -329,8 +344,313 @@ INSERT INTO link_metadata (id, entity_id, entity_type, title, short_description,
 ON CONFLICT (id) DO NOTHING;
 
 
+-- ============================================================================
+-- 9. BUSINESS ROLES (MFG-specific, type=0f0)
+-- ============================================================================
+
+INSERT INTO business_roles (id, name, description, category, is_system, is_approver, status, created_by, created_at, updated_at) VALUES
+('0f000001-0003-4000-8000-000000000001', 'Plant Manager',           'Site leader accountable for production volume, quality, and safety.',                          'business',    false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000002-0003-4000-8000-000000000002', 'Quality Manager',         'Owns SPC, NCR/CAPA processes, and ISO 9001 compliance.',                                       'governance',  false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000003-0003-4000-8000-000000000003', 'Maintenance Engineer',    'Owns asset health, predictive maintenance models, and CMMS data quality.',                     'technical',   false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000004-0003-4000-8000-000000000004', 'EHS Officer',             'Environmental, Health and Safety leadership — incident reporting, OSHA compliance.',           'governance',  false, true,  'active', 'system@demo', NOW(), NOW()),
+('0f000005-0003-4000-8000-000000000005', 'Supply Chain Coordinator','Ensures material availability, supplier OTD performance, and WIP flow.',                       'operational', false, false, 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 10. DELIVERY METHODS (MFG-specific, type=0f4)
+-- ============================================================================
+
+INSERT INTO delivery_methods (id, name, description, category, is_system, status, created_by, created_at, updated_at) VALUES
+('0f400001-0003-4000-8000-000000000001', 'OPC UA Telemetry',  'Streams equipment telemetry from PLCs/SCADA via OPC UA.',                                 'streaming', false, 'active', 'system@demo', NOW(), NOW()),
+('0f400002-0003-4000-8000-000000000002', 'MES Integration',   'Pulls work orders, routings, and run data from the Manufacturing Execution System.',     'access',    false, 'active', 'system@demo', NOW(), NOW()),
+('0f400003-0003-4000-8000-000000000003', 'CMMS Feed',         'Synchronises asset events from the Computerised Maintenance Management System.',          'access',    false, 'active', 'system@demo', NOW(), NOW()),
+('0f400004-0003-4000-8000-000000000004', 'Shop Floor Display','Renders KPIs to plant-floor TVs and Andon boards.',                                       'endpoint',  false, 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 11. VERTICAL ASSET TYPES (MFG-specific, is_system=false)
+-- ============================================================================
+
+INSERT INTO asset_types (id, name, description, category, icon, required_fields, optional_fields, is_system, status, created_by, created_at, updated_at) VALUES
+('0f200101-0003-4000-8000-000000000001', 'Production Line',     'Physical production line composed of stations and equipment.',          'data', 'factory',     NULL, NULL, false, 'active', 'system@demo', NOW(), NOW()),
+('0f200102-0003-4000-8000-000000000002', 'Equipment Asset',     'Physical machine, motor, robot, or test cell with sensor telemetry.',   'data', 'cog',         NULL, NULL, false, 'active', 'system@demo', NOW(), NOW()),
+('0f200103-0003-4000-8000-000000000003', 'Quality Inspection',  'Discrete quality inspection record (CMM, vision, manual).',             'data', 'check-circle',NULL, NULL, false, 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+
+-- ============================================================================
+-- 12. TAG NAMESPACES + TAGS (MFG governance vocabulary)
+-- ============================================================================
+
+INSERT INTO tag_namespaces (id, name, description, created_by, created_at, updated_at) VALUES
+('02601001-0003-4000-8000-000000000001', 'mfg-quality',  'Quality system terms (SPC, NCR, CAPA, ISO).',         'system@demo', NOW(), NOW()),
+('02601002-0003-4000-8000-000000000002', 'mfg-asset',    'Asset health and maintenance lifecycle.',             'system@demo', NOW(), NOW()),
+('02601003-0003-4000-8000-000000000003', 'mfg-ehs',      'Environment, Health and Safety classification.',      'system@demo', NOW(), NOW())
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO tags (id, name, description, possible_values, status, version, namespace_id, parent_id, created_by, created_at, updated_at) VALUES
+-- Quality
+('02700101-0003-4000-8000-000000000001', 'iso-9001',       'Subject to ISO 9001 QMS scope.',                              NULL, 'active', 'v1.0', '02601001-0003-4000-8000-000000000001', NULL, 'system@demo', NOW(), NOW()),
+('02700102-0003-4000-8000-000000000002', 'spc-controlled', 'Operates under Statistical Process Control.',                NULL, 'active', 'v1.0', '02601001-0003-4000-8000-000000000001', NULL, 'system@demo', NOW(), NOW()),
+('02700103-0003-4000-8000-000000000003', 'capa-source',    'Generates CAPA / NCR records.',                               NULL, 'active', 'v1.0', '02601001-0003-4000-8000-000000000001', NULL, 'system@demo', NOW(), NOW()),
+-- Asset
+('02700104-0003-4000-8000-000000000004', 'critical-asset', 'Critical asset for production continuity.',                   NULL, 'active', 'v1.0', '02601002-0003-4000-8000-000000000002', NULL, 'system@demo', NOW(), NOW()),
+('02700105-0003-4000-8000-000000000005', 'pm-eligible',    'Eligible for predictive maintenance modelling.',              NULL, 'active', 'v1.0', '02601002-0003-4000-8000-000000000002', NULL, 'system@demo', NOW(), NOW()),
+('02700106-0003-4000-8000-000000000006', 'iiot-instrumented','Has IIoT sensor instrumentation.',                          NULL, 'active', 'v1.0', '02601002-0003-4000-8000-000000000002', NULL, 'system@demo', NOW(), NOW()),
+-- EHS
+('02700107-0003-4000-8000-000000000007', 'osha-recordable','Records relevant to OSHA 300 reporting.',                     NULL, 'active', 'v1.0', '02601003-0003-4000-8000-000000000003', NULL, 'system@demo', NOW(), NOW()),
+('02700108-0003-4000-8000-000000000008', 'iso-14001',      'Subject to ISO 14001 environmental scope.',                   NULL, 'active', 'v1.0', '02601003-0003-4000-8000-000000000003', NULL, 'system@demo', NOW(), NOW())
+ON CONFLICT (namespace_id, name) DO NOTHING;
+
+INSERT INTO tag_namespace_permissions (id, namespace_id, group_id, access_level, created_by, created_at, updated_at) VALUES
+('02800101-0003-4000-8000-000000000001', '02601001-0003-4000-8000-000000000001', 'quality-team',  'admin',     'system@demo', NOW(), NOW()),
+('02800102-0003-4000-8000-000000000002', '02601002-0003-4000-8000-000000000002', 'maintenance',   'admin',     'system@demo', NOW(), NOW()),
+('02800103-0003-4000-8000-000000000003', '02601003-0003-4000-8000-000000000003', 'ehs-team',      'admin',     'system@demo', NOW(), NOW()),
+('02800104-0003-4000-8000-000000000004', '02601001-0003-4000-8000-000000000001', 'plant-ops',     'read_only', 'system@demo', NOW(), NOW())
+ON CONFLICT (namespace_id, group_id) DO NOTHING;
+
+
+-- ============================================================================
+-- 13. RDF TRIPLES — MFG concept graph (type=020)
+-- ============================================================================
+
+INSERT INTO rdf_triples (id, subject_uri, predicate_uri, object_value, object_is_uri, context_name, source_type, source_identifier, created_by, created_at) VALUES
+('02000101-0003-4000-8000-000000000001', 'http://demo.ontos.app/mfg#WorkOrder',     'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000102-0003-4000-8000-000000000002', 'http://demo.ontos.app/mfg#WorkOrder',     'http://www.w3.org/2000/01/rdf-schema#label',       'Work Order',                                    false, 'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000103-0003-4000-8000-000000000003', 'http://demo.ontos.app/mfg#Equipment',     'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000104-0003-4000-8000-000000000004', 'http://demo.ontos.app/mfg#Equipment',     'http://www.w3.org/2000/01/rdf-schema#label',       'Equipment',                                     false, 'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000105-0003-4000-8000-000000000005', 'http://demo.ontos.app/mfg#OEE',           'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000106-0003-4000-8000-000000000006', 'http://demo.ontos.app/mfg#OEE',           'http://www.w3.org/2000/01/rdf-schema#label',       'Overall Equipment Effectiveness',                false, 'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000107-0003-4000-8000-000000000007', 'http://demo.ontos.app/mfg#Defect',        'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000108-0003-4000-8000-000000000008', 'http://demo.ontos.app/mfg#Defect',        'http://www.w3.org/2000/01/rdf-schema#label',       'Defect',                                        false, 'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('02000109-0003-4000-8000-000000000009', 'http://demo.ontos.app/mfg#NCR',           'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('0200010a-0003-4000-8000-000000000010', 'http://demo.ontos.app/mfg#NCR',           'http://www.w3.org/2000/01/rdf-schema#label',       'Non-Conformance Report',                        false, 'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('0200010b-0003-4000-8000-000000000011', 'http://demo.ontos.app/mfg#SafetyIncident','http://www.w3.org/1999/02/22-rdf-syntax-ns#type',  'http://www.w3.org/2004/02/skos/core#Concept', true,  'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW()),
+('0200010c-0003-4000-8000-000000000012', 'http://demo.ontos.app/mfg#SafetyIncident','http://www.w3.org/2000/01/rdf-schema#label',       'Safety Incident',                               false, 'urn:demo', 'demo', 'demo_data_mfg.sql', 'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 14. ENTITY SEMANTIC LINKS (type=015)
+-- ============================================================================
+
+INSERT INTO entity_semantic_links (id, entity_id, entity_type, iri, label, created_by, created_at) VALUES
+('01500101-0003-4000-8000-000000000001', '00700001-0003-4000-8000-000000000001', 'data_product', 'http://demo.ontos.app/mfg#OEE',            'OEE',                       'system@demo', NOW()),
+('01500102-0003-4000-8000-000000000002', '00700001-0003-4000-8000-000000000001', 'data_product', 'http://demo.ontos.app/mfg#WorkOrder',      'Work Order',                'system@demo', NOW()),
+('01500103-0003-4000-8000-000000000003', '00700002-0003-4000-8000-000000000002', 'data_product', 'http://demo.ontos.app/mfg#Defect',         'Defect',                    'system@demo', NOW()),
+('01500104-0003-4000-8000-000000000004', '00700002-0003-4000-8000-000000000002', 'data_product', 'http://demo.ontos.app/mfg#NCR',            'Non-Conformance Report',    'system@demo', NOW()),
+('01500105-0003-4000-8000-000000000005', '00700003-0003-4000-8000-000000000003', 'data_product', 'http://demo.ontos.app/mfg#Equipment',      'Equipment',                 'system@demo', NOW()),
+('01500106-0003-4000-8000-000000000006', '00700005-0003-4000-8000-000000000005', 'data_product', 'http://demo.ontos.app/mfg#SafetyIncident', 'Safety Incident',           'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 15. ASSETS — MFG catalog objects (type=0f3)
+-- ============================================================================
+
+INSERT INTO assets (id, name, description, asset_type_id, platform, location, domain_id, properties, tags, status, created_by, created_at, updated_at) VALUES
+-- Production Line (vertical asset type)
+('0f300101-0003-4000-8000-000000000001',
+ 'plant.detroit.line.assembly_3',
+ 'Assembly line 3 at Detroit plant — engine sub-assembly.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Production Line' LIMIT 1), '0f200101-0003-4000-8000-000000000001'), 'MES', 'plant://detroit/line/assembly_3',
+ '00000001-0003-4000-8000-000000000001',
+ '{"plant": "detroit", "line_id": "assembly_3", "shift_pattern": "3x8", "design_capacity_per_hr": 320}',
+ '["spc-controlled", "iso-9001"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Equipment Asset (vertical asset type)
+('0f300102-0003-4000-8000-000000000002',
+ 'eq.detroit.cnc_42',
+ 'CNC mill #42 — high-precision crankshaft machining.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Equipment Asset' LIMIT 1), '0f200102-0003-4000-8000-000000000002'), 'CMMS', 'cmms://eq/cnc_42',
+ '00000003-0003-4000-8000-000000000003',
+ '{"equipment_id": "CNC_42", "manufacturer": "DMG Mori", "install_year": 2019, "vibration_sensor": true}',
+ '["critical-asset", "pm-eligible", "iiot-instrumented"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Quality Inspection (vertical asset type)
+('0f300103-0003-4000-8000-000000000003',
+ 'qi.detroit.cmm.batch-2026-04-30',
+ 'CMM inspection batch April 30 2026 — crankshaft dimensional checks.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Quality Inspection' LIMIT 1), '0f200103-0003-4000-8000-000000000003'), 'CMM', 'cmm://detroit/batch/2026-04-30',
+ '00000002-0003-4000-8000-000000000002',
+ '{"batch_id": "2026-04-30-A", "parts_inspected": 320, "defects_found": 2, "Cpk": 1.62}',
+ '["spc-controlled", "capa-source"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Telemetry stream
+('0f300104-0003-4000-8000-000000000004',
+ 'kafka.factory.telemetry.equipment',
+ 'Real-time OPC UA equipment telemetry stream (vibration, temperature, current).',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Stream' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Kafka', 'kafka://broker.factory:9092/telemetry.equipment',
+ '00000003-0003-4000-8000-000000000003',
+ '{"topic": "telemetry.equipment", "throughput_msgs_per_sec": 18000}',
+ '["iiot-instrumented"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- WIP table
+('0f300105-0003-4000-8000-000000000005',
+ 'lakehouse.mfg.wip.work_orders',
+ 'Work-in-process work orders with current station and status.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.mfg.wip.work_orders',
+ '00000001-0003-4000-8000-000000000001',
+ '{"catalog": "lakehouse", "schema": "mfg_wip", "table_name": "work_orders", "row_count": 86000, "format": "delta"}',
+ '["iso-9001"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Quality table
+('0f300106-0003-4000-8000-000000000006',
+ 'lakehouse.mfg.quality.defect_log',
+ 'Defect log with classification, root cause, and CAPA linkage.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.mfg.quality.defect_log',
+ '00000002-0003-4000-8000-000000000002',
+ '{"catalog": "lakehouse", "schema": "mfg_quality", "table_name": "defect_log", "row_count": 9400, "format": "delta"}',
+ '["spc-controlled", "capa-source"]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- Dashboard
+('0f300107-0003-4000-8000-000000000007',
+ 'Plant OEE Dashboard',
+ 'Live OEE by plant, line, and shift with downtime Pareto.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Dashboard' LIMIT 1), '0f200002-0000-4000-8000-000000000002'), 'Databricks', 'https://bi.factory.com/dashboards/oee-v1',
+ '00000001-0003-4000-8000-000000000001',
+ '{"refresh_schedule": "1 minute", "audience": "plant-ops"}',
+ '[]',
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- EHS table
+('0f300108-0003-4000-8000-000000000008',
+ 'lakehouse.mfg.ehs.incidents',
+ 'EHS incident reports including near-miss observations.',
+ COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.mfg.ehs.incidents',
+ '00000004-0003-4000-8000-000000000004',
+ '{"catalog": "lakehouse", "schema": "mfg_ehs", "table_name": "incidents", "row_count": 1280, "format": "delta"}',
+ '["osha-recordable", "iso-14001"]',
+ 'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 16. ENTITY RELATIONSHIPS — MFG lineage (type=0fa)
+-- ============================================================================
+
+INSERT INTO entity_relationships (id, source_type, source_id, target_type, target_id, relationship_type, created_by, created_at) VALUES
+('0fa00101-0003-4000-8000-000000000001', 'data_product', '00700001-0003-4000-8000-000000000001', 'asset', '0f300101-0003-4000-8000-000000000001', 'derives_from', 'system@demo', NOW()),
+('0fa00102-0003-4000-8000-000000000002', 'data_product', '00700001-0003-4000-8000-000000000001', 'asset', '0f300105-0003-4000-8000-000000000005', 'derives_from', 'system@demo', NOW()),
+('0fa00103-0003-4000-8000-000000000003', 'data_product', '00700002-0003-4000-8000-000000000002', 'asset', '0f300103-0003-4000-8000-000000000003', 'derives_from', 'system@demo', NOW()),
+('0fa00104-0003-4000-8000-000000000004', 'data_product', '00700002-0003-4000-8000-000000000002', 'asset', '0f300106-0003-4000-8000-000000000006', 'derives_from', 'system@demo', NOW()),
+('0fa00105-0003-4000-8000-000000000005', 'data_product', '00700003-0003-4000-8000-000000000003', 'asset', '0f300102-0003-4000-8000-000000000002', 'consumes',     'system@demo', NOW()),
+('0fa00106-0003-4000-8000-000000000006', 'data_product', '00700003-0003-4000-8000-000000000003', 'asset', '0f300104-0003-4000-8000-000000000004', 'derives_from', 'system@demo', NOW()),
+('0fa00107-0003-4000-8000-000000000007', 'data_product', '00700005-0003-4000-8000-000000000005', 'asset', '0f300108-0003-4000-8000-000000000008', 'derives_from', 'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 17. ENTITY TAG ASSOCIATIONS (MFG, type=029)
+-- ============================================================================
+
+INSERT INTO entity_tag_associations (id, tag_id, entity_id, entity_type, assigned_value, assigned_by, assigned_at) VALUES
+('02900101-0003-4000-8000-000000000001', '02700101-0003-4000-8000-000000000001', '00700001-0003-4000-8000-000000000001', 'data_product', NULL, 'system@demo', NOW()),
+('02900102-0003-4000-8000-000000000002', '02700102-0003-4000-8000-000000000002', '00700002-0003-4000-8000-000000000002', 'data_product', NULL, 'system@demo', NOW()),
+('02900103-0003-4000-8000-000000000003', '02700103-0003-4000-8000-000000000003', '00700002-0003-4000-8000-000000000002', 'data_product', NULL, 'system@demo', NOW()),
+('02900104-0003-4000-8000-000000000004', '02700105-0003-4000-8000-000000000005', '00700003-0003-4000-8000-000000000003', 'data_product', NULL, 'system@demo', NOW()),
+('02900105-0003-4000-8000-000000000005', '02700106-0003-4000-8000-000000000006', '00700003-0003-4000-8000-000000000003', 'data_product', NULL, 'system@demo', NOW()),
+('02900106-0003-4000-8000-000000000006', '02700107-0003-4000-8000-000000000007', '00700005-0003-4000-8000-000000000005', 'data_product', NULL, 'system@demo', NOW()),
+('02900107-0003-4000-8000-000000000007', '02700108-0003-4000-8000-000000000008', '00700005-0003-4000-8000-000000000005', 'data_product', NULL, 'system@demo', NOW())
+ON CONFLICT (tag_id, entity_id, entity_type) DO NOTHING;
+
+
+-- ============================================================================
+-- 18. PROCESS WORKFLOWS + STEPS (MFG-specific)
+-- ============================================================================
+
+INSERT INTO process_workflows (id, name, description, trigger_config, scope_config, is_active, is_default, version, created_by, updated_by, created_at, updated_at) VALUES
+('02a00101-0003-4000-8000-000000000001', 'Quality Hold Approval',
+ 'Routes a NCR-driven quality hold to Quality Manager and Plant Manager for approval.',
+ '{"type": "on_create", "entity_types": ["data_product"]}',
+ '{"type": "domain", "ids": ["00000002-0003-4000-8000-000000000002"]}',
+ true, true, 1, 'system@demo', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
+('02b00101-0003-4000-8000-000000000001', '02a00101-0003-4000-8000-000000000001', 'qm_review',    'Quality Manager Review',
+ 'manual_approval',
+ '{"approver_role": "0f000002-0003-4000-8000-000000000002"}',
+ 'pm_review', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
+('02b00102-0003-4000-8000-000000000002', '02a00101-0003-4000-8000-000000000001', 'pm_review',    'Plant Manager Approval',
+ 'manual_approval',
+ '{"approver_role": "0f000001-0003-4000-8000-000000000001"}',
+ 'approve', 'reject', 2, '{"x": 300, "y": 100}', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 19. COMPLIANCE RUNS + RESULTS (MFG)
+-- ============================================================================
+
+INSERT INTO compliance_runs (id, policy_id, status, started_at, finished_at, success_count, failure_count, score) VALUES
+('01200101-0003-4000-8000-000000000001', '01100001-0003-4000-8000-000000000001', 'completed', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days' + INTERVAL '7 minutes', 4, 1, 0.800),
+('01200102-0003-4000-8000-000000000002', '01100002-0003-4000-8000-000000000002', 'completed', NOW() - INTERVAL '1 days', NOW() - INTERVAL '1 days' + INTERVAL '5 minutes', 3, 0, 1.000)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO compliance_results (id, run_id, object_type, object_id, object_name, passed, message, created_at) VALUES
+('01300101-0003-4000-8000-000000000001', '01200101-0003-4000-8000-000000000001', 'data_product', '00700002-0003-4000-8000-000000000002', 'Quality Analytics Platform v1', true,  'SPC rules and Cpk thresholds documented and current.', NOW() - INTERVAL '3 days'),
+('01300102-0003-4000-8000-000000000002', '01200101-0003-4000-8000-000000000001', 'data_product', '00700003-0003-4000-8000-000000000003', 'Predictive Maintenance v1',    false, 'Vibration sensors on 3 critical assets show 12+ hours of missing data.', NOW() - INTERVAL '3 days'),
+('01300103-0003-4000-8000-000000000003', '01200102-0003-4000-8000-000000000002', 'data_product', '00700005-0003-4000-8000-000000000005', 'EHS Safety Analytics v1',     true,  'OSHA 300 log reconciles with HRIS injury records.', NOW() - INTERVAL '1 days')
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 20. COST ITEMS (MFG)
+-- ============================================================================
+
+INSERT INTO cost_items (id, entity_type, entity_id, title, description, cost_center, custom_center_name, amount_cents, currency, start_month, created_by, created_at, updated_at) VALUES
+('01400101-0003-4000-8000-000000000001', 'data_product', '00700001-0003-4000-8000-000000000001', 'MES Integration FTE', 'Two FTE for MES connectivity and master data alignment.', 'hr',             NULL, 3600000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400102-0003-4000-8000-000000000002', 'data_product', '00700003-0003-4000-8000-000000000003', 'IIoT Sensor Refresh', 'Annual sensor refresh and calibration programme.',        'infrastructure', NULL, 1500000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW()),
+('01400103-0003-4000-8000-000000000003', 'data_product', '00700004-0003-4000-8000-000000000004', 'Supply Chain Tooling','Annual SCM platform license and integrations.',           'tools',          NULL, 1200000, 'USD', '2026-01-01', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 21. COMMENTS & RATINGS (MFG)
+-- ============================================================================
+
+INSERT INTO comments (id, entity_type, entity_id, comment, comment_type, rating, status, created_by, created_at, updated_at) VALUES
+('02c00101-0003-4000-8000-000000000001', 'data_product', '00700001-0003-4000-8000-000000000001', 'Best OEE dashboard we''ve had on the floor — drilldown to station is fast.',     'rating', 5, 'active', 'pm-detroit@factory.com',  NOW() - INTERVAL '11 days', NOW() - INTERVAL '11 days'),
+('02c00102-0003-4000-8000-000000000002', 'data_product', '00700002-0003-4000-8000-000000000002', 'SPC visualisation is excellent; would like CMM image integration.',              'rating', 4, 'active', 'qm-detroit@factory.com',  NOW() - INTERVAL '7 days',  NOW() - INTERVAL '7 days'),
+('02c00103-0003-4000-8000-000000000003', 'data_product', '00700003-0003-4000-8000-000000000003', 'Predictive lead times exceed expectations on the bearing models.',                 'rating', 5, 'active', 'maint-eng@factory.com',   NOW() - INTERVAL '4 days',  NOW() - INTERVAL '4 days'),
+('02c00104-0003-4000-8000-000000000004', 'data_product', '00700005-0003-4000-8000-000000000005', 'Near-miss reporting trends are very actionable.',                                  'rating', 4, 'active', 'ehs-officer@factory.com', NOW() - INTERVAL '2 days',  NOW() - INTERVAL '2 days')
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 22. BUSINESS OWNERS (MFG)
+-- ============================================================================
+
+INSERT INTO business_owners (id, object_type, object_id, user_email, user_name, role_id, is_active, assigned_at, removed_at, removal_reason, created_by, created_at, updated_at) VALUES
+('0fb00101-0003-4000-8000-000000000001', 'data_product',  '00700001-0003-4000-8000-000000000001', 'pm-detroit@factory.com',  'Plant Manager (Detroit)',     '0f000001-0003-4000-8000-000000000001', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW()),
+('0fb00102-0003-4000-8000-000000000002', 'data_product',  '00700002-0003-4000-8000-000000000002', 'qm-detroit@factory.com',  'Quality Manager (Detroit)',   '0f000002-0003-4000-8000-000000000002', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW()),
+('0fb00103-0003-4000-8000-000000000003', 'data_product',  '00700003-0003-4000-8000-000000000003', 'maint-eng@factory.com',   'Maintenance Engineer Lead',   '0f000003-0003-4000-8000-000000000003', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW()),
+('0fb00104-0003-4000-8000-000000000004', 'data_product',  '00700005-0003-4000-8000-000000000005', 'ehs-officer@factory.com', 'EHS Officer',                 '0f000004-0003-4000-8000-000000000004', true, NOW() - INTERVAL '60 days', NULL, NULL, 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 23. ENTITY SUBSCRIPTIONS (MFG)
+-- ============================================================================
+
+INSERT INTO entity_subscriptions (id, entity_type, entity_id, subscriber_email, subscription_reason, created_at) VALUES
+('02200101-0003-4000-8000-000000000001', 'data_product', '00700001-0003-4000-8000-000000000001', 'pm-detroit@factory.com', 'owner',    NOW() - INTERVAL '60 days'),
+('02200102-0003-4000-8000-000000000002', 'data_product', '00700002-0003-4000-8000-000000000002', 'qm-detroit@factory.com', 'owner',    NOW() - INTERVAL '60 days'),
+('02200103-0003-4000-8000-000000000003', 'data_product', '00700003-0003-4000-8000-000000000003', 'maint-eng@factory.com',  'owner',    NOW() - INTERVAL '60 days')
+ON CONFLICT DO NOTHING;
+
+
 COMMIT;
 
 -- ============================================================================
--- End of MFG Industry Demo Data
+-- End of MFG Demo Data — preset=mfg
 -- ============================================================================

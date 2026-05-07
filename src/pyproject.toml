@@ -74,13 +74,17 @@ pythonpath = [
   "backend",
   "backend/src"
 ]
-testpaths = ["backend/tests"]
+# NOTE: backend/src/tests/unit/ holds the bulk of the unit tests. The legacy
+# backend/tests/ dir is kept for the few suites that haven't migrated yet.
+# importlib mode lets us collect both trees without test-module name collisions.
+testpaths = ["backend/src/tests/unit", "backend/tests"]
 addopts = [
     "--cov=backend/src",
     "--cov-report=html",
     "--cov-report=term-missing",
     "--cov-report=xml",
-    "-v"
+    "--import-mode=importlib",
+    "-v",
 ]
 
 [tool.coverage.run]

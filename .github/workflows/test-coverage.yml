@@ -103,9 +103,11 @@ jobs:
           DATABRICKS_VOLUME: test_volume
           APP_AUDIT_LOG_DIR: /tmp/audit_logs
         run: |
-          # Gate set to current baseline (~8%) to prevent regressions.
-          # Ratchet up as coverage improves toward the 80% goal.
-          hatch -e dev run coverage report --fail-under=8
+          # Gate set to current baseline (~33.7%) minus a small buffer.
+          # Coverage jumped because pytest now collects backend/src/tests/unit/
+          # in addition to backend/tests/. Ratchet up toward the 80% goal as
+          # quarantined modules in tests/unit/conftest.py are fixed.
+          hatch -e dev run coverage report --fail-under=30
 
   frontend-tests:
     name: Frontend Tests

@@ -710,8 +710,8 @@ fonttools==4.62.1 \
     #   fpdf2
     #   matplotlib
 fpdf2==2.8.7 \
-    --hash=sha256:d391fc508a3ce02fc43a577c830cda4fe6f37646f2d143d489839940932fbc19 \
-    --hash=sha256:7060ccee5a9c7ab0a271fb765a36a23639f83ef8996c34e3d46af0a17ede57f9
+    --hash=sha256:7060ccee5a9c7ab0a271fb765a36a23639f83ef8996c34e3d46af0a17ede57f9 \
+    --hash=sha256:d391fc508a3ce02fc43a577c830cda4fe6f37646f2d143d489839940932fbc19
     # via
     #   -r src/backend/requirements.in
     #   -r src/requirements.in
@@ -2465,9 +2465,9 @@ python-dotenv==1.2.2 \
     #   -r src/backend/requirements.in
     #   mlflow-skinny
     #   pydantic-settings
-python-multipart==0.0.24 \
-    --hash=sha256:9574c97e1c026e00bc30340ef7c7d76739512ab4dfd428fec8c330fa6a5cc3c8 \
-    --hash=sha256:9b110a98db707df01a53c194f0af075e736a770dc5058089650d70b4a182f950
+python-multipart==0.0.27 \
+    --hash=sha256:6fccfad17a27334bd0193681b369f476eda3409f17381a2d65aa7df3f7275645 \
+    --hash=sha256:9870a6a8c5a20a5bf4f07c017bd1489006ff8836cff097b6933355ee2b49b602
     # via -r src/backend/requirements.in
 pytz==2026.1.post1 \
     --hash=sha256:3378dde6a0c3d26719182142c56e60c7f9af7e968076f31aae569d72a0358ee1 \

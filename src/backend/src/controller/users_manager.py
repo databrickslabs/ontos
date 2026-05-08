@@ -21,6 +21,56 @@ class UsersManager:
         if not self._ws_client:
             logger.warning("WorkspaceClient was not provided to UsersManager. SDK operations will fail.")
 
+    @staticmethod
+    def _extract_group_displays(databricks_user: DatabricksUser) -> List[str]:
+        """Extract display names from a SCIM user.groups list (skipping entries with no display)."""
+        if not databricks_user or not databricks_user.groups:
+            return []
+        return [g.display for g in databricks_user.groups if getattr(g, "display", None)]
+
+    @staticmethod
+    def _resolve_scim_groups(
+        client: WorkspaceClient,
+        databricks_user: DatabricksUser,
+        user_label: str,
+    ) -> List[str]:
+        """Resolve real workspace SCIM group memberships for a user.
+
+        ``current_user.me()`` does not always populate ``groups`` (depends on
+        token scope / SCIM attribute defaults). When the initial SCIM payload
+        omits groups but we have a user id, re-fetch the full SCIM record via
+        ``users.get(id)`` — that endpoint reliably returns the user's group
+        memberships for the calling identity itself, even without admin
+        permissions.
+
+        Returns ``[]`` on any failure so the caller can fall back to the
+        email-as-implicit-group behaviour.
+        """
+        groups = UsersManager._extract_group_displays(databricks_user)
+        if groups:
+            return groups
+
+        user_id = getattr(databricks_user, "id", None)
+        if not user_id:
+            logger.debug("No user id on initial SCIM response for %s; cannot re-fetch groups.", user_label)
+            return []
+
+        try:
+            full_user = client.users.get(user_id)
+            groups = UsersManager._extract_group_displays(full_user)
+            if groups:
+                logger.info("Resolved %d SCIM group(s) for %s via users.get(id).", len(groups), user_label)
+            else:
+                logger.info("users.get(id) returned no groups for %s.", user_label)
+            return groups
+        except Exception as e:  # noqa: BLE001 — preserve fallback path for any SDK/permission error
+            logger.warning(
+                "Failed to re-fetch SCIM groups via users.get(id) for %s: %s. Falling back to implicit-group behaviour.",
+                user_label,
+                e,
+            )
+            return []
+
     def get_user_details_by_email(self, user_email: str, real_ip: Optional[str]) -> UserInfo:
         """
         Looks up a user by email using the Databricks SDK and maps the result
@@ -64,17 +114,18 @@ class UsersManager:
 
             logger.info(f"UsersManager: Successfully retrieved SDK user info for: {databricks_user.user_name}")
 
-            # Extract group names — always include user email as implicit group
-            # so that role assigned_groups can match on email directly
-            group_names: List[str] = []
-            if databricks_user.groups:
-                group_names = [group.display for group in databricks_user.groups if group.display]
-                logger.info(f"Extracted groups for {user_email}: {group_names}")
-            else:
-                logger.info(f"No group information found for {user_email} in SDK response.")
-            # Always add user email as implicit group for direct role assignment
-            if user_email and user_email not in group_names:
-                group_names.append(user_email)
+            # Resolve real workspace SCIM groups (with users.get(id) fallback if
+            # the listing payload omitted them). Only fall back to
+            # email-as-implicit-group when no real groups can be resolved.
+            group_names: List[str] = self._resolve_scim_groups(
+                self._ws_client, databricks_user, user_email
+            )
+            if not group_names and user_email:
+                logger.info(
+                    "Falling back to email-as-implicit-group for %s (no SCIM groups resolved).",
+                    user_email,
+                )
+                group_names = [user_email]
 
             # Map DatabricksUser fields to UserInfo model
             user_info_response = UserInfo(
@@ -126,17 +177,26 @@ class UsersManager:
 
             logger.info(f"UsersManager: Successfully retrieved current user info for: {databricks_user.user_name}")
 
-            # Extract group names — always include user email as implicit group
-            group_names: List[str] = []
-            if databricks_user.groups:
-                group_names = [group.display for group in databricks_user.groups if group.display]
-                logger.info(f"Extracted groups for current user: {group_names}")
-            else:
-                logger.info("No group information found for current user in SDK response.")
-            # Always add user email as implicit group for direct role assignment
-            user_email_resolved = (databricks_user.emails[0].value if databricks_user.emails else databricks_user.user_name)
-            if user_email_resolved and user_email_resolved not in group_names:
-                group_names.append(user_email_resolved)
+            # Resolve real workspace SCIM groups. ``current_user.me()`` often returns
+            # groups=[] depending on token scope; in that case re-fetch via
+            # users.get(id) so the picker / permissions layer sees actual group
+            # memberships rather than only the email-as-implicit-group fallback.
+            user_email_resolved = (
+                databricks_user.emails[0].value if databricks_user.emails else databricks_user.user_name
+            )
+            user_label = user_email_resolved or databricks_user.user_name or "<unknown>"
+            group_names: List[str] = self._resolve_scim_groups(obo_client, databricks_user, user_label)
+
+            # Fallback: if SCIM gave us nothing, preserve the legacy
+            # email-as-implicit-group behaviour so role rules that match on
+            # email continue to work in FEVM-style workspaces where SCIM
+            # group reads aren't available.
+            if not group_names and user_email_resolved:
+                logger.info(
+                    "Falling back to email-as-implicit-group for %s (no SCIM groups resolved).",
+                    user_label,
+                )
+                group_names = [user_email_resolved]
 
             # Map DatabricksUser fields to UserInfo model
             user_info_response = UserInfo(

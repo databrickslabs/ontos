@@ -69,6 +69,30 @@ import { ApprovalEntity } from '@/types/settings';
 type ViewMode = 'minimal' | 'medium' | 'large'
 const VIEW_MODE_STORAGE_KEY = 'data-product-view-mode'
 
+/**
+ * Output port → asset relationship predicates.
+ *
+ * Mirrors the `portHas*` predicates declared in `ontos-ontology.ttl` (lines
+ * 838–891). The ontology intentionally restricts these relationships to
+ * *deliverable* asset types — not container types like Catalog or Schema.
+ * The picker filter and the POST predicate selection both flow from this map,
+ * so they stay in lock-step with the ontology.
+ *
+ * If a new deliverable type is added to the TTL, add it here. If a caller
+ * tries to link an unsupported type the POST is skipped with a warning;
+ * the backend at `entity_relationships_manager.py` is the actual security
+ * gate and will return 422 for any invalid (predicate, range) tuple.
+ */
+export const PORT_TO_ASSET_PREDICATE: Readonly<Record<string, string>> = {
+  Table: 'portHasTable',
+  View: 'portHasView',
+  Dataset: 'portHasDataset',
+  APIEndpoint: 'portHasEndpoint',
+  MLModel: 'portHasModel',
+};
+
+const PORT_DELIVERABLE_ASSET_TYPES = Object.keys(PORT_TO_ASSET_PREDICATE);
+
 type CheckApiResponseFn = <T>(
   response: { data?: T | { detail?: string }, error?: string | null | undefined },
   name: string
@@ -121,21 +145,35 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
 
   const handleLinkAssets = async (assets: any[]) => {
     try {
+      let linkedCount = 0;
       for (const asset of assets) {
+        const assetType = asset.asset_type_name;
+        // The picker is filtered to the keys of this map, but be defensive:
+        // if an asset of an unsupported type slips through, skip + warn rather
+        // than build a `portHas<X>` predicate that the backend will 422 on.
+        const predicate = assetType ? PORT_TO_ASSET_PREDICATE[assetType] : undefined;
+        if (!predicate) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[link-asset] Skipping asset ${asset.id}: type "${assetType}" has no port relationship in the ontology.`
+          );
+          continue;
+        }
         const res = await fetch('/api/entity-relationships', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             source_type: 'OutputPort',
             source_id: portId,
-            target_type: asset.asset_type_name || 'Table',
+            target_type: assetType,
             target_id: asset.id,
-            relationship_type: asset.relationshipType || `portHas${asset.asset_type_name || 'Table'}`,
+            relationship_type: predicate,
           }),
         });
         if (!res.ok) throw new Error(`Failed to link asset: ${res.statusText}`);
+        linkedCount += 1;
       }
-      toast({ title: 'Assets linked', description: `${assets.length} asset(s) linked to ${portName}` });
+      toast({ title: 'Assets linked', description: `${linkedCount} asset(s) linked to ${portName}` });
       fetchRelationships();
     } catch (error: any) {
       toast({ title: 'Error', description: error?.message || 'Failed to link assets', variant: 'destructive' });
@@ -203,10 +241,10 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
             isOpen={isAssetSelectorOpen}
             onOpenChange={setIsAssetSelectorOpen}
             onConfirm={handleLinkAssets}
-            relationshipType="portHasTable"
             relationshipLabel="linked to port"
+            targetAssetTypes={PORT_DELIVERABLE_ASSET_TYPES}
             title={`Link Assets to "${portName}"`}
-            description="Select assets to link to this deliverable"
+            description="Only deliverable asset types (Table, View, Dataset, API Endpoint, ML Model) can be linked to an output port."
           />
         </>
       )}

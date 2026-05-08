@@ -161,7 +161,7 @@ describe('DataProductCreateDialog — Consumer Groups picker wiring', () => {
         return u.startsWith('/api/data-products/') && init?.method === 'PUT';
       });
       expect(putCall).toBeTruthy();
-      const body = JSON.parse(putCall![1].body as string);
+      const body = JSON.parse(putCall![1]!.body as string);
       expect(body.consumer_principals).toEqual([
         { type: 'group', value: 'account-ops-users' },
       ]);

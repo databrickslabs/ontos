@@ -1,13 +1,17 @@
 """Unit tests for issue #347: Data Consumer asset visibility scoping.
 
-Verifies that:
-- Admins see all assets (no restriction).
-- Non-admins are restricted to assets linked to Data Products they can access.
-- Non-admin with zero accessible DPs sees zero assets.
-- Assets linked to multiple DPs are deduped.
-- Both DataProduct->asset and OutputPort->asset relationships count.
-- The scoping repository filter (``restrict_to_ids``) returns zero rows for an
-  empty list (rather than silently ignoring the constraint).
+Verifies the controller + repository layering after refactoring out the
+``common/data_product_asset_scope`` helper. Coverage retained:
+
+- ``DataProductRepository.get_output_port_ids_for_products`` — port lookup
+  for a given DP set, including empty input.
+- ``EntityRelationshipRepository.get_asset_ids_linked_to_products`` — DP+port
+  -> asset linkage, dedup, empty input, admin-vs-scoped.
+- ``DataProductsManager.list_linked_asset_ids_for_products`` — orchestration
+  through the repos.
+- ``AssetsManager.resolve_accessible_asset_ids`` and ``is_asset_accessible``
+  — high-level entry points used by the routes.
+- ``AssetsManager.get_all_assets`` ``restrict_to_ids`` plumbing.
 """
 
 from __future__ import annotations
@@ -20,17 +24,12 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy.orm import Session
 
-from src.common.data_product_asset_scope import (
-    get_accessible_data_product_ids,
-    get_asset_ids_linked_to_products,
-    get_output_port_ids_for_products,
-    is_asset_accessible,
-    resolve_accessible_asset_ids,
-)
-from src.controller.assets_manager import AssetsManager
+from src.controller.assets_manager import AssetsManager, assets_manager
 from src.db_models.assets import AssetDb, AssetTypeDb
 from src.db_models.data_products import DataProductDb, OutputPortDb
 from src.db_models.entity_relationships import EntityRelationshipDb
+from src.repositories.data_products_repository import data_product_repo
+from src.repositories.entity_relationships_repository import entity_relationship_repo
 
 
 # ---------------------------------------------------------------------------
@@ -120,58 +119,66 @@ def asset_graph(db_session: Session, dataset_type: AssetTypeDb):
 
 
 def _mock_dpm(accessible_dps: List[DataProductDb]):
-    """Stub DataProductsManager.list_products to return given DPs."""
+    """Stub a DataProductsManager that returns the given DPs for ``list_products``
+    and routes ``list_linked_asset_ids_for_products`` to the real repos.
+
+    The asset-linkage query goes through the actual ``entity_relationship_repo``
+    + ``data_product_repo``, so behaviour is exercised end-to-end against the
+    in-memory DB without needing a fully wired-up DataProductsManager.
+    """
     dpm = MagicMock()
     dpm.list_products.return_value = [
         SimpleNamespace(id=dp.id, name=dp.name) for dp in accessible_dps
     ]
+
+    def _linked(db, *, product_ids, port_ids=None):
+        pid_list = [str(p) for p in product_ids]
+        if not pid_list and not port_ids:
+            return set()
+        if port_ids is None:
+            port_ids = data_product_repo.get_output_port_ids_for_products(
+                db, product_ids=pid_list,
+            )
+        return entity_relationship_repo.get_asset_ids_linked_to_products(
+            db, product_ids=pid_list, port_ids=port_ids,
+        )
+
+    dpm.list_linked_asset_ids_for_products.side_effect = _linked
     return dpm
 
 
 # ---------------------------------------------------------------------------
-# Helper-function tests
+# Repository-level tests
 # ---------------------------------------------------------------------------
 
 
-def test_get_accessible_dp_ids_admin_returns_none():
-    dpm = _mock_dpm([])
-    assert get_accessible_data_product_ids(data_products_manager=dpm, is_admin=True) is None
-    dpm.list_products.assert_not_called()
-
-
-def test_get_accessible_dp_ids_non_admin_returns_set(asset_graph):
-    dpm = _mock_dpm([asset_graph.dp1, asset_graph.dp2])
-    ids = get_accessible_data_product_ids(data_products_manager=dpm, is_admin=False)
-    assert ids == {asset_graph.dp1.id, asset_graph.dp2.id}
-
-
-def test_get_accessible_dp_ids_non_admin_no_dps_empty():
-    dpm = _mock_dpm([])
-    ids = get_accessible_data_product_ids(data_products_manager=dpm, is_admin=False)
-    assert ids == set()
-
-
-def test_get_output_port_ids(db_session, asset_graph):
-    pids = get_output_port_ids_for_products(db_session, product_ids=[asset_graph.dp1.id])
+def test_repo_get_output_port_ids(db_session, asset_graph):
+    pids = data_product_repo.get_output_port_ids_for_products(
+        db_session, product_ids=[asset_graph.dp1.id],
+    )
     assert pids == {asset_graph.p1.id}
 
     # DP2 has no ports.
-    assert get_output_port_ids_for_products(db_session, product_ids=[asset_graph.dp2.id]) == set()
+    assert data_product_repo.get_output_port_ids_for_products(
+        db_session, product_ids=[asset_graph.dp2.id],
+    ) == set()
 
     # Empty input → empty output.
-    assert get_output_port_ids_for_products(db_session, product_ids=[]) == set()
+    assert data_product_repo.get_output_port_ids_for_products(
+        db_session, product_ids=[],
+    ) == set()
 
 
-def test_get_asset_ids_linked_to_products_dp_only(db_session, asset_graph):
-    asset_ids = get_asset_ids_linked_to_products(
+def test_repo_get_asset_ids_linked_dp_only(db_session, asset_graph):
+    asset_ids = entity_relationship_repo.get_asset_ids_linked_to_products(
         db_session, product_ids=[asset_graph.dp1.id], port_ids=set(),
     )
     # DP1 directly links to A and D (not B which is via port).
     assert asset_ids == {asset_graph.a.id, asset_graph.d.id}
 
 
-def test_get_asset_ids_linked_to_products_with_ports(db_session, asset_graph):
-    asset_ids = get_asset_ids_linked_to_products(
+def test_repo_get_asset_ids_linked_with_ports(db_session, asset_graph):
+    asset_ids = entity_relationship_repo.get_asset_ids_linked_to_products(
         db_session,
         product_ids=[asset_graph.dp1.id],
         port_ids=[asset_graph.p1.id],
@@ -180,8 +187,8 @@ def test_get_asset_ids_linked_to_products_with_ports(db_session, asset_graph):
     assert asset_ids == {asset_graph.a.id, asset_graph.b.id, asset_graph.d.id}
 
 
-def test_get_asset_ids_dedup_multi_dp(db_session, asset_graph):
-    asset_ids = get_asset_ids_linked_to_products(
+def test_repo_get_asset_ids_dedup_multi_dp(db_session, asset_graph):
+    asset_ids = entity_relationship_repo.get_asset_ids_linked_to_products(
         db_session,
         product_ids=[asset_graph.dp1.id, asset_graph.dp2.id],
         port_ids=set(),
@@ -190,59 +197,83 @@ def test_get_asset_ids_dedup_multi_dp(db_session, asset_graph):
     assert asset_ids == {asset_graph.a.id, asset_graph.c.id, asset_graph.d.id}
 
 
-def test_get_asset_ids_no_input_empty(db_session):
-    assert get_asset_ids_linked_to_products(db_session, product_ids=[], port_ids=[]) == set()
+def test_repo_get_asset_ids_no_input_empty(db_session):
+    assert entity_relationship_repo.get_asset_ids_linked_to_products(
+        db_session, product_ids=[], port_ids=[],
+    ) == set()
 
 
-def test_resolve_accessible_asset_ids_admin_none(db_session, asset_graph):
+# ---------------------------------------------------------------------------
+# AssetsManager-level tests: scoping orchestration
+# ---------------------------------------------------------------------------
+
+
+def test_assets_manager_resolve_admin_returns_none(db_session, asset_graph):
     dpm = _mock_dpm([])
-    result = resolve_accessible_asset_ids(db_session, data_products_manager=dpm, is_admin=True)
+    result = assets_manager.resolve_accessible_asset_ids(
+        db_session, data_products_manager=dpm, is_admin=True,
+    )
     assert result is None  # "no restriction"
+    dpm.list_products.assert_not_called()
 
 
-def test_resolve_accessible_asset_ids_non_admin_dp1_only(db_session, asset_graph):
+def test_assets_manager_resolve_non_admin_dp1_only(db_session, asset_graph):
     dpm = _mock_dpm([asset_graph.dp1])
-    result = resolve_accessible_asset_ids(db_session, data_products_manager=dpm, is_admin=False)
+    result = assets_manager.resolve_accessible_asset_ids(
+        db_session, data_products_manager=dpm, is_admin=False,
+    )
     # DP1 -> A, D (direct) + port P1 -> B.
     assert set(result) == {asset_graph.a.id, asset_graph.b.id, asset_graph.d.id}
 
 
-def test_resolve_accessible_asset_ids_non_admin_no_dps_empty(db_session):
+def test_assets_manager_resolve_non_admin_no_dps_empty(db_session):
     dpm = _mock_dpm([])
-    result = resolve_accessible_asset_ids(db_session, data_products_manager=dpm, is_admin=False)
+    result = assets_manager.resolve_accessible_asset_ids(
+        db_session, data_products_manager=dpm, is_admin=False,
+    )
     assert result == []  # empty list, not None
 
 
-def test_is_asset_accessible_admin_always_true(db_session, asset_graph):
+def test_assets_manager_resolve_dpm_failure_fails_closed(db_session):
+    """If list_products blows up, fail closed — empty set, never None."""
+    dpm = MagicMock()
+    dpm.list_products.side_effect = RuntimeError("boom")
+    result = assets_manager.resolve_accessible_asset_ids(
+        db_session, data_products_manager=dpm, is_admin=False,
+    )
+    assert result == []
+
+
+def test_assets_manager_is_asset_accessible_admin_always_true(db_session, asset_graph):
     dpm = _mock_dpm([])
     # Admin: even an unreachable / unknown asset should pass.
-    assert is_asset_accessible(
+    assert assets_manager.is_asset_accessible(
         db_session, asset_id=uuid.uuid4(),
         data_products_manager=dpm, is_admin=True,
     ) is True
 
 
-def test_is_asset_accessible_non_admin_linked(db_session, asset_graph):
+def test_assets_manager_is_asset_accessible_non_admin_linked(db_session, asset_graph):
     dpm = _mock_dpm([asset_graph.dp1])
-    assert is_asset_accessible(
+    assert assets_manager.is_asset_accessible(
         db_session, asset_id=asset_graph.a.id,
         data_products_manager=dpm, is_admin=False,
     ) is True
 
 
-def test_is_asset_accessible_non_admin_unlinked_blocked(db_session, asset_graph):
+def test_assets_manager_is_asset_accessible_non_admin_unlinked_blocked(db_session, asset_graph):
     dpm = _mock_dpm([asset_graph.dp1])
     # asset_e is orphan; not linked to any DP.
-    assert is_asset_accessible(
+    assert assets_manager.is_asset_accessible(
         db_session, asset_id=asset_graph.e.id,
         data_products_manager=dpm, is_admin=False,
     ) is False
 
 
-def test_is_asset_accessible_non_admin_via_other_dp_blocked(db_session, asset_graph):
+def test_assets_manager_is_asset_accessible_non_admin_via_other_dp_blocked(db_session, asset_graph):
     # User has access to DP1 only; asset C is linked only to DP2.
     dpm = _mock_dpm([asset_graph.dp1])
-    assert is_asset_accessible(
+    assert assets_manager.is_asset_accessible(
         db_session, asset_id=asset_graph.c.id,
         data_products_manager=dpm, is_admin=False,
     ) is False

@@ -1,6 +1,6 @@
 """Repository for the cross-tier entity relationship table."""
 
-from typing import List, Optional
+from typing import Iterable, List, Optional, Set
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -19,6 +19,68 @@ class EntityRelationshipRepository(CRUDBase[EntityRelationshipDb, EntityRelation
     def __init__(self):
         super().__init__(EntityRelationshipDb)
         logger.info("EntityRelationshipRepository initialized.")
+
+    @staticmethod
+    def _to_uuid(value: object) -> Optional[UUID]:
+        """Best-effort conversion of an entity_relationship target_id to UUID.
+
+        Returns None when the target_id is not UUID-shaped (asset IDs always are,
+        but some legacy rows may store synthetic IDs).
+        """
+        if value is None:
+            return None
+        if isinstance(value, UUID):
+            return value
+        try:
+            return UUID(str(value))
+        except (ValueError, TypeError, AttributeError):
+            return None
+
+    def get_asset_ids_linked_to_products(
+        self,
+        db: Session,
+        *,
+        product_ids: Iterable[str],
+        port_ids: Optional[Iterable[str]] = None,
+    ) -> Set[UUID]:
+        """Return the set of asset UUIDs linked to the given DPs / OutputPorts via
+        ``entity_relationships``.
+
+        Considers outgoing relationships where source is DataProduct/OutputPort.
+        Asset-tier target IDs are stored as UUIDs (string form) in target_id.
+        """
+        pid_list = [str(p) for p in product_ids]
+        port_list = [str(p) for p in (port_ids or [])]
+        if not pid_list and not port_list:
+            return set()
+
+        try:
+            clauses = []
+            if pid_list:
+                clauses.append(
+                    (self.model.source_type == "DataProduct")
+                    & self.model.source_id.in_(pid_list)
+                )
+            if port_list:
+                clauses.append(
+                    (self.model.source_type == "OutputPort")
+                    & self.model.source_id.in_(port_list)
+                )
+
+            rows = (
+                db.query(self.model.target_id)
+                .filter(or_(*clauses))
+                .all()
+            )
+            result: Set[UUID] = set()
+            for (target_id,) in rows:
+                uid = self._to_uuid(target_id)
+                if uid is not None:
+                    result.add(uid)
+            return result
+        except SQLAlchemyError:
+            logger.exception("Failed to resolve DP-linked asset IDs")
+            return set()
 
     def get_by_source(
         self, db: Session, *, source_type: str, source_id: str

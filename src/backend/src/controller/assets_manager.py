@@ -239,6 +239,71 @@ class AssetsManager(SearchableAsset):
             return None
         return self._asset_to_read(db_asset)
 
+    # --- Data-Product asset scoping (issue #347) ---
+    #
+    # Data Consumers (and other non-admin users) should only see assets linked
+    # to Data Products they can access. Admins are exempt — they see all assets.
+    # The orchestration lives here on the Assets controller; the underlying DB
+    # queries live on the data-products + entity-relationships repositories.
+
+    def resolve_accessible_asset_ids(
+        self,
+        db: Session,
+        *,
+        data_products_manager,
+        is_admin: bool,
+    ) -> Optional[List[UUID]]:
+        """Return asset UUIDs accessible to the current user.
+
+        - Returns ``None`` to indicate "no restriction" (admin path).
+        - Returns a (possibly empty) list of asset UUIDs the user is allowed
+          to see (Producers + Consumers).
+
+        Reuses ``DataProductsManager.list_products`` so there is one source of
+        truth for "which DPs can this user access" — that listing already
+        applies project-membership and admin filters.
+        """
+        if is_admin:
+            return None
+        try:
+            products = data_products_manager.list_products(
+                skip=0, limit=10_000, is_admin=False,
+            )
+        except Exception:
+            logger.exception("Failed to list accessible data products for scoping")
+            return []
+
+        dp_ids = {str(p.id) for p in products if getattr(p, "id", None)}
+        if not dp_ids:
+            return []
+
+        asset_ids = data_products_manager.list_linked_asset_ids_for_products(
+            db, product_ids=dp_ids,
+        )
+        return list(asset_ids)
+
+    def is_asset_accessible(
+        self,
+        db: Session,
+        *,
+        asset_id: UUID,
+        data_products_manager,
+        is_admin: bool,
+    ) -> bool:
+        """Single-asset variant for ``GET /api/assets/{id}``.
+
+        Admins always pass. Non-admins pass iff the asset is linked to at least
+        one accessible DP/OutputPort.
+        """
+        if is_admin:
+            return True
+        accessible_ids = self.resolve_accessible_asset_ids(
+            db, data_products_manager=data_products_manager, is_admin=False,
+        )
+        if accessible_ids is None:
+            return True
+        return asset_id in set(accessible_ids)
+
     def get_all_assets(
         self, db: Session, *, skip: int = 0, limit: int = 100,
         asset_type_id: Optional[UUID] = None, asset_type_names: Optional[List[str]] = None,

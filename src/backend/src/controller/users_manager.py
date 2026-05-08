@@ -94,8 +94,15 @@ class UsersManager:
 
         logger.info(f"UsersManager: Attempting to find user details via SDK for email: {user_email}")
         try:
-            # Use users.list as users.get requires the Databricks user ID
-            user_iterator = self._ws_client.users.list(filter=f'userName eq "{user_email}"')
+            # Use users.list as users.get requires the Databricks user ID.
+            # Explicitly request the ``groups`` attribute — without this the
+            # SCIM list endpoint can return user records with groups omitted,
+            # which would force the email-as-implicit-group fallback even when
+            # real groups are available.
+            user_iterator = self._ws_client.users.list(
+                filter=f'userName eq "{user_email}"',
+                attributes="id,userName,displayName,emails,groups,active",
+            )
             
             databricks_user: DatabricksUser | None = None
             try:

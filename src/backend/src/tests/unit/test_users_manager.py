@@ -178,9 +178,11 @@ class TestUsersManager:
 
         manager.get_user_details_by_email("test@example.com", "192.168.1.1")
 
-        # Verify filter was used
+        # Verify filter was used AND groups attribute is explicitly requested
+        # so the SCIM list endpoint actually returns group memberships.
         mock_ws_client.users.list.assert_called_once_with(
-            filter='userName eq "test@example.com"'
+            filter='userName eq "test@example.com"',
+            attributes="id,userName,displayName,emails,groups,active",
         )
 
     def test_get_user_details_by_email_none_ip(

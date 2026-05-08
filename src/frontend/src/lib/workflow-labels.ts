@@ -183,6 +183,8 @@ export const ALL_TRIGGER_TYPES: TriggerType[] = [
   'on_unpublish',
   'on_expiring',
   'on_revoke',
+  // User session triggers
+  'on_first_access',
   // App-known UI actions (approval workflows, 1:1 match with ON_*)
   'for_approval_response',
   'for_subscribe',
@@ -210,6 +212,7 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
   'data_asset_review',
   'job',
   'subscription',
+  'user',
 ];
 
 /**
@@ -277,6 +280,8 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   // Access lifecycle
   on_expiring: ['access_grant'],
   on_revoke: ['access_grant'],
+  // User session triggers — fire on app mount for terms-of-use / disclaimers
+  on_first_access: ['user'],
   // Manual/scheduled — always supported (no entity dependency)
   scheduled: [],
   manual: [],

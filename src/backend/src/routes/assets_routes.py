@@ -21,10 +21,6 @@ from src.common.dependencies import (
 )
 from src.common.errors import NotFoundError, ConflictError, ValidationError
 from src.common.logging import get_logger
-from src.common.data_product_asset_scope import (
-    is_asset_accessible,
-    resolve_accessible_asset_ids,
-)
 
 logger = get_logger(__name__)
 
@@ -340,9 +336,9 @@ def get_all_assets(
             # Fail closed: no DP context available, scoped users see nothing.
             logger.warning("DataProductsManager unavailable; returning empty asset list for scoped user")
             return PaginatedAssetSummary(items=[], total=0, skip=skip, limit=limit)
-        # Pass is_admin=False to force scoping logic; the helper itself doesn't
+        # Pass is_admin=False to force scoping logic; the manager itself doesn't
         # check group membership — it only branches on the boolean we pass in.
-        restrict_ids = resolve_accessible_asset_ids(
+        restrict_ids = manager.resolve_accessible_asset_ids(
             db, data_products_manager=dpm, is_admin=False,
         )
     else:
@@ -388,7 +384,7 @@ def get_asset(
 
     if not is_unscoped:
         dpm = _get_data_products_manager(request)
-        if dpm is None or not is_asset_accessible(
+        if dpm is None or not manager.is_asset_accessible(
             db, asset_id=asset_id, data_products_manager=dpm, is_admin=False,
         ):
             raise HTTPException(

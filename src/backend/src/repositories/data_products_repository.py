@@ -7,7 +7,7 @@ Handles mapping between API models (Pydantic) and DB models (SQLAlchemy).
 
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, distinct, or_, and_
-from typing import List, Optional, Any, Dict, Union
+from typing import Iterable, List, Optional, Any, Dict, Set, Union
 import json
 
 from src.common.repository import CRUDBase
@@ -608,6 +608,24 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         except Exception as e:
             logger.error(f"Error querying distinct ODPS product types: {e}", exc_info=True)
             return []
+
+    def get_output_port_ids_for_products(
+        self, db: Session, *, product_ids: Iterable[str]
+    ) -> Set[str]:
+        """Return the set of OutputPort IDs belonging to the given DataProducts."""
+        pids = list(product_ids)
+        if not pids:
+            return set()
+        try:
+            rows = (
+                db.query(OutputPortDb.id)
+                .filter(OutputPortDb.product_id.in_(pids))
+                .all()
+            )
+            return {str(r[0]) for r in rows}
+        except Exception:
+            logger.exception("Failed to fetch output port IDs for product scoping")
+            return set()
 
     def get_distinct_owners(self, db: Session) -> List[str]:
         """Get distinct owner names from ODPS Data Product teams."""

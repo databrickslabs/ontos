@@ -1125,10 +1125,6 @@ async def get_product_linked_assets(
     Data Product itself is the implicit authorization here.
     """
     from src.controller.assets_manager import assets_manager
-    from src.common.data_product_asset_scope import (
-        get_asset_ids_linked_to_products,
-        get_output_port_ids_for_products,
-    )
 
     # The PermissionChecker decorator above already verifies the caller has
     # data-products:READ_ONLY at minimum. To prevent a Consumer from peeking
@@ -1169,12 +1165,15 @@ async def get_product_linked_assets(
         if product_id not in accessible_ids:
             raise HTTPException(status_code=403, detail="Data Product not accessible")
 
-    port_ids = get_output_port_ids_for_products(db, product_ids=[product_id])
-    asset_ids = list(get_asset_ids_linked_to_products(
-        db, product_ids=[product_id], port_ids=port_ids,
+    # The DP membership check above is the authorization here, not the assets
+    # feature — so we ask the data-products manager for the asset linkage and
+    # then list via AssetsManager with an explicit restriction.
+    dpm = getattr(request.app.state, "data_products_manager", None)
+    if dpm is None:
+        raise HTTPException(status_code=503, detail="Data Products service unavailable")
+    asset_ids = list(dpm.list_linked_asset_ids_for_products(
+        db, product_ids=[product_id],
     ))
-    # Use AssetsManager directly (admin path — the DP membership check above
-    # is the authorization, not the assets feature).
     return assets_manager.get_all_assets(
         db=db, skip=skip, limit=limit, restrict_to_ids=asset_ids,
     )

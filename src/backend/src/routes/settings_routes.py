@@ -596,11 +596,6 @@ async def clear_demo_data(
             # Entity relationships (0f6%) — hasColumn
             "DELETE FROM entity_relationships WHERE id::text LIKE '0f6%'",
             
-            # Legacy: dataset subscriptions/custom properties (if old tables still exist)
-            "DELETE FROM dataset_subscriptions WHERE id::text LIKE '022%'",
-            "DELETE FROM dataset_subscriptions WHERE id::text LIKE '0260%'",
-            "DELETE FROM dataset_custom_properties WHERE id::text LIKE '024%'",
-            
             # Physical assets (025%) — migrated from dataset_instances
             "DELETE FROM assets WHERE id::text LIKE '025%'",
             
@@ -620,22 +615,9 @@ async def clear_demo_data(
             "DELETE FROM assets WHERE id::text LIKE '0f8%'",
             # Delivery Channel assets (0f9%)
             "DELETE FROM assets WHERE id::text LIKE '0f9%'",
-            # Business Owners — must be removed before business_roles because
-            # of the role_id FK. Retail uses the legacy 0f6% prefix; the
-            # vertical packs (hls/fsi/mfg/auto) use 0fb%.
-            "DELETE FROM business_owners WHERE id::text LIKE '0f6%'",
-            "DELETE FROM business_owners WHERE id::text LIKE '0fb%'",
-            # Vertical-specific asset types (0f2%, demo-only, is_system=false)
-            "DELETE FROM asset_types WHERE id::text LIKE '0f2%' AND is_system = false AND created_by = 'system@demo'",
-            # Demo-inserted business_roles and delivery_methods (0f0%, 0f4%).
-            # Use created_by to avoid touching app-seeded reference rows that
-            # other features may depend on.
-            "DELETE FROM business_roles WHERE id::text LIKE '0f0%' AND created_by = 'system@demo'",
-            "DELETE FROM delivery_methods WHERE id::text LIKE '0f4%' AND created_by = 'system@demo'",
-            
-            # Legacy: dataset instances (025) and datasets (021) (if old tables still exist)
-            "DELETE FROM dataset_instances WHERE id::text LIKE '025%'",
-            "DELETE FROM datasets WHERE id::text LIKE '021%'",
+            # Note: legacy dataset_subscriptions / dataset_custom_properties /
+            # dataset_instances / datasets tables were dropped by migration
+            # c1_drop_legacy_dataset_tables.py — no DELETEs needed.
             
             # Data contract servers (srv pattern for server IDs)
             "DELETE FROM data_contract_servers WHERE id::text LIKE 'srv%'",
@@ -700,52 +682,21 @@ async def clear_demo_data(
             "DELETE FROM data_domains WHERE id::text LIKE '000%'",
         ]
         
-        # Run each DELETE in its own savepoint so a single failure (e.g. legacy
-        # tables that no longer exist) cannot poison the outer transaction and
-        # silently skip subsequent DELETEs.
-        connection = db.connection()
+        # Wrap each statement in a SAVEPOINT so that a single failing
+        # DELETE (e.g. against a table dropped by a later migration) does
+        # not poison the surrounding transaction and silently abort all
+        # subsequent deletes. Accumulate rowcounts per table since several
+        # patterns target the same table (e.g. entity_relationships).
         deleted_counts: Dict[str, int] = {}
-        skipped: List[Dict[str, str]] = []
-        # Tables that are expected to be missing on clean installs (legacy
-        # tables retained for backward-compat clears). Failures on these are
-        # reduced to debug log to keep the response clean.
-        legacy_tables = {
-            "dataset_subscriptions",
-            "dataset_custom_properties",
-            "dataset_instances",
-            "datasets",
-        }
         for stmt in delete_statements:
             table_name = stmt.split("FROM ")[1].split(" ")[0]
             try:
-                nested = connection.begin_nested()
-                result = connection.execute(text(stmt))
-                nested.commit()
-                rowcount = result.rowcount or 0
-                # Only report tables that actually had rows removed; aggregate
-                # multi-statement deletes for the same table.
-                if rowcount > 0:
-                    deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
+                with db.begin_nested():
+                    result = db.execute(text(stmt))
+                deleted_counts[table_name] = deleted_counts.get(table_name, 0) + (result.rowcount or 0)
             except Exception as e:
-                try:
-                    nested.rollback()
-                except Exception:
-                    pass
-                err_short = str(e).splitlines()[0][:200]
-                if table_name in legacy_tables and "does not exist" in str(e):
-                    logger.debug(f"Legacy table absent ({table_name}): {err_short}")
-                else:
-                    # Real failure (FK violation, schema drift, etc.) — surface it
-                    # both in the log and in the API response so it cannot hide.
-                    logger.warning(
-                        f"Delete statement FAILED ({table_name}): {err_short} | stmt={stmt}"
-                    )
-                    skipped.append({
-                        "table": table_name,
-                        "statement": stmt,
-                        "error": err_short,
-                    })
-
+                logger.warning(f"Delete statement warning ({table_name}): {e}")
+        
         db.commit()
 
         success = True

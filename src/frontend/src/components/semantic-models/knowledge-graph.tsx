@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ZoomIn, ZoomOut, Maximize, RotateCcw, Expand, Group, Ungroup, ChevronDown, Tag } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, RotateCcw, Expand, Group, Ungroup, ChevronDown, Tag, Workflow, CircleDot, MoveHorizontal } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -244,7 +245,10 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDomainBoxes, setShowDomainBoxes] = useState(true);
-  const [showLabels, setShowLabels] = useState(false);
+  const [showNodeLabels, setShowNodeLabels] = useState(false);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(false);
+  const [nodeSize, setNodeSize] = useState(24);
+  const [spacing, setSpacing] = useState(80);
   
   // Handler for toggling domain boxes
   const handleToggleDomainBoxes = useCallback(() => {
@@ -434,6 +438,8 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
               id: `edge_${concept.iri}_${childIri}`,
               source: concept.iri,
               target: childIri,
+              // Generic hierarchy relation; future: derive from RDF predicate when typed edges land.
+              label: 'subClassOf',
             },
             classes: 'hierarchy-edge',
           });
@@ -473,20 +479,20 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
         selector: '.concept-node',
         style: {
           'shape': 'ellipse',
-          'width': 24,
-          'height': 24,
+          'width': nodeSize,
+          'height': nodeSize,
           'background-color': 'data(color)',
           'border-width': 2,
           'border-color': isDarkMode ? 'rgba(30,30,30,0.8)' : 'rgba(255,255,255,0.9)',
-          'label': showLabels ? 'data(label)' : '',
+          'label': showNodeLabels ? 'data(label)' : '',
         },
       },
       // Concept node hover
       {
         selector: '.concept-node.hover',
         style: {
-          'width': 32,
-          'height': 32,
+          'width': nodeSize * 1.33,
+          'height': nodeSize * 1.33,
           'border-width': 3,
           'label': 'data(label)',
           'font-size': 13,
@@ -498,8 +504,8 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
       {
         selector: '.concept-node:selected',
         style: {
-          'width': 40,
-          'height': 40,
+          'width': nodeSize * 1.67,
+          'height': nodeSize * 1.67,
           'border-width': 4,
           'border-color': '#FFD700',
           'label': 'data(label)',
@@ -512,22 +518,22 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
         selector: '.property-node',
         style: {
           'shape': 'diamond',
-          'width': 20,
-          'height': 20,
+          'width': nodeSize * 0.83,
+          'height': nodeSize * 0.83,
         },
       },
       {
         selector: '.property-node.hover',
         style: {
-          'width': 28,
-          'height': 28,
+          'width': nodeSize * 1.17,
+          'height': nodeSize * 1.17,
         },
       },
       {
         selector: '.property-node:selected',
         style: {
-          'width': 36,
-          'height': 36,
+          'width': nodeSize * 1.5,
+          'height': nodeSize * 1.5,
         },
       },
       // Domain compound nodes (no label to avoid redundancy with contained nodes)
@@ -555,6 +561,14 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           'arrow-scale': 0.8,
           'curve-style': 'bezier',
           'opacity': 0.6,
+          'label': showEdgeLabels ? 'data(label)' : '',
+          'font-size': 9,
+          'font-family': 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+          'color': textColor,
+          'text-outline-width': 1,
+          'text-outline-color': textOutlineColor,
+          'text-rotation': 'autorotate',
+          'text-background-opacity': 0,
         },
       },
       // Edge hover
@@ -568,7 +582,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
         },
       },
     ];
-  }, [isDarkMode, showLabels]);
+  }, [isDarkMode, showNodeLabels, showEdgeLabels, nodeSize]);
 
   // Layout configurations
   const getLayoutConfig = useCallback((layoutName: LayoutType, animate = true): LayoutOptions => {
@@ -579,21 +593,25 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
       animationDuration: animate ? 500 : 0,
     };
 
+    // Scale layout-level spacing knobs from the single user slider (default 80).
+    const spacingFactor = (spacing / 80) * 1.5;
+
     switch (layoutName) {
       case 'circle':
         return {
           name: 'circle',
           ...baseConfig,
           avoidOverlap: true,
-          spacingFactor: 1.5,
+          spacingFactor,
         };
       case 'cose':
         return {
           name: 'cose',
           ...baseConfig,
-          idealEdgeLength: () => 80,
+          idealEdgeLength: () => spacing,
           nodeOverlap: 20,
-          nodeRepulsion: () => 400000,
+          // Preserves 80 → 400000 ratio so default behavior matches pre-slider.
+          nodeRepulsion: () => spacing * 5000,
           edgeElasticity: () => 100,
           nestingFactor: 5,
           gravity: 80,
@@ -608,7 +626,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           name: 'grid',
           ...baseConfig,
           avoidOverlap: true,
-          avoidOverlapPadding: 10,
+          avoidOverlapPadding: Math.max(4, spacing / 8),
           condense: false,
         };
       case 'breadthfirst':
@@ -616,7 +634,7 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           name: 'breadthfirst',
           ...baseConfig,
           directed: true,
-          spacingFactor: 1.5,
+          spacingFactor,
           avoidOverlap: true,
           maximal: false,
         };
@@ -625,14 +643,14 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           name: 'concentric',
           ...baseConfig,
           avoidOverlap: true,
-          minNodeSpacing: 20,
+          minNodeSpacing: Math.max(8, spacing / 4),
           concentric: (node: any) => node.degree(),
           levelWidth: () => 2,
         };
       default:
         return { name: 'circle', ...baseConfig };
     }
-  }, []);
+  }, [spacing]);
 
   // Wire up event handlers
   useEffect(() => {
@@ -771,24 +789,96 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
           
           <Button
             variant={showDomainBoxes ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
+            size="sm"
+            className="h-8 gap-1.5"
             onClick={handleToggleDomainBoxes}
             title={showDomainBoxes ? "Hide domain groups" : "Show domain groups"}
           >
             {showDomainBoxes ? <Group className="h-4 w-4" /> : <Ungroup className="h-4 w-4" />}
+            <span>Groups</span>
           </Button>
 
           <Button
-            variant={showLabels ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setShowLabels(prev => !prev)}
-            title={showLabels ? "Hide labels" : "Show labels"}
+            variant={showNodeLabels ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => setShowNodeLabels(prev => !prev)}
+            title={showNodeLabels ? "Hide node labels" : "Show node labels"}
           >
             <Tag className="h-4 w-4" />
+            <span>Node labels</span>
           </Button>
-          
+
+          <Button
+            variant={showEdgeLabels ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => setShowEdgeLabels(prev => !prev)}
+            title={showEdgeLabels ? "Hide edge labels" : "Show edge labels"}
+          >
+            <Workflow className="h-4 w-4" />
+            <span>Edge labels</span>
+          </Button>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node size">
+                <CircleDot className="h-4 w-4" />
+                <span>Size</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Node size</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground tabular-nums w-6 text-right">{nodeSize}</span>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setNodeSize(24)}>
+                    Reset
+                  </Button>
+                </div>
+              </div>
+              <Slider
+                value={[nodeSize]}
+                onValueChange={(v) => setNodeSize(v[0])}
+                min={12}
+                max={48}
+                step={2}
+                aria-label="Node size"
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node spacing">
+                <MoveHorizontal className="h-4 w-4" />
+                <span>Spacing</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Spacing</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{spacing}</span>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSpacing(80)}>
+                    Reset
+                  </Button>
+                </div>
+              </div>
+              <Slider
+                value={[spacing]}
+                onValueChange={(v) => setSpacing(v[0])}
+                min={40}
+                max={240}
+                step={10}
+                aria-label="Node spacing"
+              />
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Re-runs layout. Affects edge length and node repulsion.
+              </p>
+            </PopoverContent>
+          </Popover>
+
           <Badge variant="secondary" className="text-xs">
             {graphData.elements.filter(e => e.classes?.includes('concept-node')).length} concepts
           </Badge>
@@ -877,22 +967,91 @@ export const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({
                 </Select>
                 <Button
                   variant={showDomainBoxes ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
+                  size="sm"
+                  className="h-8 gap-1.5"
                   onClick={handleToggleDomainBoxes}
                   title={showDomainBoxes ? "Hide domain groups" : "Show domain groups"}
                 >
                   {showDomainBoxes ? <Group className="h-4 w-4" /> : <Ungroup className="h-4 w-4" />}
+                  <span>Groups</span>
                 </Button>
                 <Button
-                  variant={showLabels ? "secondary" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setShowLabels(prev => !prev)}
-                  title={showLabels ? "Hide labels" : "Show labels"}
+                  variant={showNodeLabels ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => setShowNodeLabels(prev => !prev)}
+                  title={showNodeLabels ? "Hide node labels" : "Show node labels"}
                 >
                   <Tag className="h-4 w-4" />
+                  <span>Node labels</span>
                 </Button>
+                <Button
+                  variant={showEdgeLabels ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => setShowEdgeLabels(prev => !prev)}
+                  title={showEdgeLabels ? "Hide edge labels" : "Show edge labels"}
+                >
+                  <Workflow className="h-4 w-4" />
+                  <span>Edge labels</span>
+                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node size">
+                      <CircleDot className="h-4 w-4" />
+                      <span>Size</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3" align="end">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Node size</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground tabular-nums w-6 text-right">{nodeSize}</span>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setNodeSize(24)}>
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
+                    <Slider
+                      value={[nodeSize]}
+                      onValueChange={(v) => setNodeSize(v[0])}
+                      min={12}
+                      max={48}
+                      step={2}
+                      aria-label="Node size"
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 gap-1.5" title="Node spacing">
+                      <MoveHorizontal className="h-4 w-4" />
+                      <span>Spacing</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3" align="end">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Spacing</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{spacing}</span>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSpacing(80)}>
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
+                    <Slider
+                      value={[spacing]}
+                      onValueChange={(v) => setSpacing(v[0])}
+                      min={40}
+                      max={240}
+                      step={10}
+                      aria-label="Node spacing"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-2">
+                      Re-runs layout. Affects edge length and node repulsion.
+                    </p>
+                  </PopoverContent>
+                </Popover>
                 <Badge variant="secondary" className="text-xs">
                   {graphData.elements.filter(e => e.classes?.includes('concept-node')).length} concepts
                 </Badge>

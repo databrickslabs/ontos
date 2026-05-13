@@ -116,13 +116,12 @@ import type {
   HttpConnectionRef,
   WorkflowTypeValue,
 } from '@/types/process-workflow';
-import { 
-  getTriggerTypeLabel,
-  getEntityTypeLabel,
-  ALL_TRIGGER_TYPES,
+import {
   ALL_ENTITY_TYPES,
   isTriggerEntitySupported,
 } from '@/lib/workflow-labels';
+import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
+import { EntityTypeMultiselect } from './entity-type-multiselect';
 
 // Node types registry (default = fallback for unknown step_type)
 const nodeTypes = {
@@ -525,6 +524,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
+  const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
   
   // Form state
@@ -709,6 +709,17 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         }
       } catch (error) {
         console.error('Failed to load step types:', error);
+      }
+
+      // Load trigger-type catalog (powers the grouped picker + entity-type
+      // multiselect — single source of truth, mirrors the backend enum).
+      try {
+        const triggerTypesResponse = await get<TriggerTypeOption[]>('/api/workflows/trigger-types');
+        if (triggerTypesResponse.data && Array.isArray(triggerTypesResponse.data)) {
+          setTriggerTypeOptions(triggerTypesResponse.data);
+        }
+      } catch (error) {
+        console.error('Failed to load trigger types:', error);
       }
       
       // Load compliance policies for policy_check step selector
@@ -1244,45 +1255,36 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                 <>
                   <div>
                     <Label>{t('common:labels.type')}</Label>
-                    <Select value={triggerType} onValueChange={(v) => setTriggerType(v as TriggerType)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ALL_TRIGGER_TYPES.map(tt => (
-                          <SelectItem key={tt} value={tt}>
-                            {getTriggerTypeLabel(tt, t)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <TriggerPicker
+                      value={triggerType}
+                      onChange={(v) => {
+                        setTriggerType(v as TriggerType);
+                        // Reset entity_types when trigger changes so the
+                        // multiselect re-prefills against the new
+                        // supported set instead of carrying over a stale
+                        // (and possibly unsupported) selection.
+                        setEntityTypes([]);
+                      }}
+                      workflowType={workflowType === 'approval' ? 'approval' : 'process'}
+                      options={triggerTypeOptions.length > 0 ? triggerTypeOptions : undefined}
+                    />
                   </div>
                   <div>
                     <Label>{t('common:labels.category')}</Label>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {ALL_ENTITY_TYPES.map(et => (
-                        <Badge
-                          key={et}
-                          variant={entityTypes.includes(et) ? 'default' : 'outline'}
-                          className="cursor-pointer"
-                          onClick={() => {
-                            if (entityTypes.includes(et)) {
-                              setEntityTypes(prev => prev.filter(e => e !== et));
-                            } else {
-                              setEntityTypes(prev => [...prev, et]);
-                            }
-                          }}
-                        >
-                          {getEntityTypeLabel(et, t)}
-                        </Badge>
-                      ))}
-                    </div>
+                    <EntityTypeMultiselect
+                      triggerType={triggerType}
+                      value={entityTypes as string[]}
+                      onChange={(next) => setEntityTypes(next as EntityType[])}
+                      supportedEntityTypes={
+                        triggerTypeOptions.find((o) => o.value === triggerType)?.entity_types
+                        // Fallback to the static FE map when the catalog
+                        // is still loading or unavailable. Keeps the
+                        // multiselect non-empty so saved configs are
+                        // visible during the first render.
+                        ?? ALL_ENTITY_TYPES.filter((et) => isTriggerEntitySupported(triggerType, et))
+                      }
+                    />
                   </div>
-                  {entityTypes.length > 0 && entityTypes.some(et => !isTriggerEntitySupported(triggerType, et)) && (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-                      <span className="font-medium">Warning:</span> This trigger–entity combination is not wired in the backend. The workflow will save but never fire automatically.
-                    </div>
-                  )}
                   {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>

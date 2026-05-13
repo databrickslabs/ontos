@@ -73,6 +73,9 @@ import {
   KeyRound,
 } from 'lucide-react';
 
+import RequiredFieldsEditor, {
+  type RequiredField,
+} from './required-fields-editor';
 import {
   TriggerNode,
   ValidationNode,
@@ -1538,8 +1541,24 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           Field checked for &quot;Requires input&quot; and minimum length. Default: first required field or &quot;reason&quot;.
                         </p>
                       </div>
+                      <RequiredFieldsEditor
+                        value={
+                          ((selectedStep.config as { required_fields?: RequiredField[] })
+                            ?.required_fields ?? []) as RequiredField[]
+                        }
+                        onChange={(next) =>
+                          updateStep(selectedStep.step_id, {
+                            config: {
+                              ...selectedStep.config,
+                              required_fields: next,
+                            },
+                          })
+                        }
+                        idPrefix={`rfe-${selectedStep.step_id}`}
+                      />
                       <p className="text-xs text-muted-foreground">
-                        User Action steps collect input in approval workflows (e.g. reason, acceptances). Use required_fields in YAML for custom field definitions.
+                        User Action steps collect input in approval workflows (e.g. reason, acceptances).
+                        Add custom fields above; they will appear in the wizard for requesters to fill in.
                       </p>
                     </>
                   )}

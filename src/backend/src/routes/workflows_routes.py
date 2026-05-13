@@ -74,6 +74,179 @@ async def get_step_types(
     return manager.get_step_type_schemas()
 
 
+# ---------------------------------------------------------------------------
+# Trigger-type catalog
+# ---------------------------------------------------------------------------
+#
+# Returns a UI-friendly catalog of every TriggerType enum member so the
+# workflow-authoring form can:
+#   1. Render human-readable labels (no more raw enum values in the picker).
+#   2. Group triggers (lifecycle / request_flow / validation_gates /
+#      system_scheduled).
+#   3. Show approval (for_*) vs process (on_* / before_* / scheduled / manual)
+#      based on the workflow being authored.
+#   4. Pre-populate the entity_types multiselect with the entity types each
+#      trigger is wired for in the backend.
+#   5. Gate "advanced" triggers behind a toggle (today only
+#      for_approval_response).
+#
+# Wire-format contract: every TriggerType member appears exactly once.
+# `value` is the raw enum string (used as the FK in stored trigger configs).
+# Labels here are the canonical source of truth; the FE getTriggerLabel()
+# helper mirrors them so existing labels keep working if the endpoint is
+# unavailable.
+#
+# entity_types mapping mirrors SUPPORTED_TRIGGER_ENTITY_MAP in the FE
+# (src/frontend/src/lib/workflow-labels.ts) — keep them in sync. An empty
+# list means "any entity type" (manual, scheduled, on_first_access).
+
+_TRIGGER_LABELS: Dict[str, str] = {
+    "for_subscribe": "When a user subscribes (wizard)",
+    "on_subscribe": "After a subscription is created",
+    "for_request_access": "When a user requests access (wizard)",
+    "on_request_access": "After an access request is submitted",
+    "for_request_review": "When a user requests review (wizard)",
+    "on_request_review": "After a review request is submitted",
+    "for_request_publish": "When a user requests publish (wizard)",
+    "on_request_publish": "After a publish request is submitted",
+    "for_request_certify": "When a user requests certification (wizard)",
+    "on_request_certify": "After a certification request is submitted",
+    "for_request_status_change": "When a user requests status change (wizard)",
+    "on_request_status_change": "After a status change request is submitted",
+    "for_approval_response": "Approval response dialog (advanced)",
+    "before_create": "Before entity is created (validation)",
+    "before_update": "Before entity is updated (validation)",
+    "before_status_change": "Before status changes (validation)",
+    "on_create": "After entity is created",
+    "on_update": "After entity is updated",
+    "on_delete": "After entity is deleted",
+    "on_status_change": "After status changes",
+    "on_publish": "After entity is published",
+    "on_unpublish": "After entity is unpublished",
+    "on_revoke": "After access is revoked",
+    "on_expiring": "When access is about to expire",
+    "on_first_access": "First time a user accesses (consent)",
+    "on_unsubscribe": "After a user unsubscribes",
+    "on_job_success": "After a background job succeeds",
+    "on_job_failure": "After a background job fails",
+    "scheduled": "On a schedule (cron)",
+    # Fallbacks for enum members that are not part of the user-approved table.
+    # These keep the catalog 1:1 with the enum without expanding the table.
+    "manual": "Manually triggered",
+    "on_certify": "After entity is certified",
+    "on_decertify": "After entity is decertified",
+}
+
+# Group assignment per the design brief. Anything not listed falls back to
+# "lifecycle" for process workflows.
+_TRIGGER_GROUPS_REQUEST_FLOW = {
+    "for_subscribe", "for_request_access", "for_request_review",
+    "for_request_publish", "for_request_certify",
+    "for_request_status_change", "for_approval_response",
+    "on_subscribe", "on_unsubscribe",
+    "on_request_access", "on_request_review", "on_request_publish",
+    "on_request_certify", "on_request_status_change",
+    "on_revoke", "on_expiring", "on_first_access",
+}
+_TRIGGER_GROUPS_LIFECYCLE = {
+    "on_create", "on_update", "on_delete", "on_status_change",
+    "on_publish", "on_unpublish",
+    # on_certify / on_decertify are lifecycle in spirit — they describe an
+    # entity transitioning state, not a request flow.
+    "on_certify", "on_decertify",
+}
+_TRIGGER_GROUPS_VALIDATION = {
+    "before_create", "before_update", "before_status_change",
+}
+_TRIGGER_GROUPS_SYSTEM_SCHEDULED = {
+    "on_job_success", "on_job_failure", "scheduled", "manual",
+}
+
+# Entity types each trigger CAN fire for, derived from the dispatch sites in
+# src/backend/src/common/workflow_triggers.py and the existing FE map
+# (SUPPORTED_TRIGGER_ENTITY_MAP). Empty list = "any entity" (no constraint).
+_TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
+    # CRUD / lifecycle
+    "on_create": ["catalog", "schema", "table", "data_contract", "data_product", "domain"],
+    "on_update": ["data_contract", "data_product", "domain"],
+    "on_delete": ["data_contract", "data_product", "domain"],
+    "on_status_change": ["data_contract", "data_product", "data_asset_review"],
+    "on_publish": ["data_contract", "data_product"],
+    "on_unpublish": ["data_contract", "data_product"],
+    "on_certify": ["data_contract", "data_product"],
+    "on_decertify": ["data_contract", "data_product"],
+    # Validation gates
+    "before_create": ["catalog", "schema", "table"],
+    "before_update": ["data_contract"],
+    "before_status_change": ["data_contract", "data_product"],
+    # Request flow — process side
+    "on_request_review": ["data_contract", "data_product", "data_asset_review"],
+    "on_request_access": ["access_grant", "project", "role"],
+    "on_request_publish": ["data_contract", "data_product"],
+    "on_request_certify": ["data_contract", "data_product"],
+    "on_request_status_change": ["data_product"],
+    "on_subscribe": ["subscription", "data_product", "data_contract"],
+    "on_unsubscribe": ["subscription", "data_product", "data_contract"],
+    "on_revoke": ["access_grant"],
+    "on_expiring": ["access_grant"],
+    "on_first_access": ["user"],
+    # Request flow — approval (for_*) side. These mirror the matching on_*
+    # trigger's entity scope so the wizard targets the same kinds of objects.
+    "for_subscribe": ["data_product", "data_contract"],
+    "for_request_access": ["access_grant", "project", "role"],
+    "for_request_review": ["data_contract", "data_product", "data_asset_review"],
+    "for_request_publish": ["data_contract", "data_product"],
+    "for_request_certify": ["data_contract", "data_product"],
+    "for_request_status_change": ["data_product"],
+    "for_approval_response": [],  # system trigger — any entity
+    # Background jobs
+    "on_job_success": ["job"],
+    "on_job_failure": ["job"],
+    # Scheduled / manual — no entity binding
+    "scheduled": [],
+    "manual": [],
+}
+
+
+def _trigger_group(value: str) -> str:
+    if value in _TRIGGER_GROUPS_REQUEST_FLOW:
+        return "request_flow"
+    if value in _TRIGGER_GROUPS_VALIDATION:
+        return "validation_gates"
+    if value in _TRIGGER_GROUPS_SYSTEM_SCHEDULED:
+        return "system_scheduled"
+    if value in _TRIGGER_GROUPS_LIFECYCLE:
+        return "lifecycle"
+    # Safe fallback — should never hit if mappings stay in sync with the enum.
+    return "lifecycle"
+
+
+@router.get("/trigger-types", response_model=List[Dict[str, Any]])
+async def get_trigger_types(
+    request: Request,
+    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+) -> List[Dict[str, Any]]:
+    """Get the UI catalog of all trigger types.
+
+    Returns one entry per TriggerType enum member with the metadata the
+    workflow-authoring picker needs (label, group, workflow_type,
+    entity_types, is_advanced). See module-level comments for the contract.
+    """
+    out: List[Dict[str, Any]] = []
+    for tt in TriggerType:
+        value = tt.value
+        workflow_type = "approval" if value.startswith("for_") else "process"
+        out.append({
+            "value": value,
+            "label": _TRIGGER_LABELS.get(value, value.replace("_", " ").title()),
+            "workflow_type": workflow_type,
+            "entity_types": list(_TRIGGER_ENTITY_TYPES.get(value, [])),
+            "is_advanced": value == "for_approval_response",
+            "group": _trigger_group(value),
+        })
+    return out
+
+
 @router.get("/executions", response_model=WorkflowExecutionListResponse)
 async def list_executions(
     request: Request,

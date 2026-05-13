@@ -111,6 +111,64 @@ export function getTriggerTypeLabel(type: TriggerType, t: TFunction): string {
 }
 
 /**
+ * Canonical, user-approved labels for every TriggerType — the same strings
+ * the backend GET /api/workflows/trigger-types endpoint returns. Used by:
+ *
+ *  - The new workflow trigger picker, as an offline fallback if the
+ *    endpoint is unavailable.
+ *  - Anywhere we render a trigger label without an i18n context (the
+ *    legacy getTriggerTypeLabel needs a TFunction).
+ *
+ * Keep in sync with _TRIGGER_LABELS in
+ * src/backend/src/routes/workflows_routes.py.
+ */
+export const TRIGGER_LABELS: Record<string, string> = {
+  for_subscribe: 'When a user subscribes (wizard)',
+  on_subscribe: 'After a subscription is created',
+  for_request_access: 'When a user requests access (wizard)',
+  on_request_access: 'After an access request is submitted',
+  for_request_review: 'When a user requests review (wizard)',
+  on_request_review: 'After a review request is submitted',
+  for_request_publish: 'When a user requests publish (wizard)',
+  on_request_publish: 'After a publish request is submitted',
+  for_request_certify: 'When a user requests certification (wizard)',
+  on_request_certify: 'After a certification request is submitted',
+  for_request_status_change: 'When a user requests status change (wizard)',
+  on_request_status_change: 'After a status change request is submitted',
+  for_approval_response: 'Approval response dialog (advanced)',
+  before_create: 'Before entity is created (validation)',
+  before_update: 'Before entity is updated (validation)',
+  before_status_change: 'Before status changes (validation)',
+  on_create: 'After entity is created',
+  on_update: 'After entity is updated',
+  on_delete: 'After entity is deleted',
+  on_status_change: 'After status changes',
+  on_publish: 'After entity is published',
+  on_unpublish: 'After entity is unpublished',
+  on_revoke: 'After access is revoked',
+  on_expiring: 'When access is about to expire',
+  on_first_access: 'First time a user accesses (consent)',
+  on_unsubscribe: 'After a user unsubscribes',
+  on_job_success: 'After a background job succeeds',
+  on_job_failure: 'After a background job fails',
+  scheduled: 'On a schedule (cron)',
+  // Fallback labels for enum members not in the user-approved table.
+  manual: 'Manually triggered',
+  on_certify: 'After entity is certified',
+  on_decertify: 'After entity is decertified',
+};
+
+/**
+ * Get the user-facing label for a trigger value. Doesn't require i18n —
+ * uses the canonical TRIGGER_LABELS table that mirrors the backend
+ * trigger-types endpoint. Falls back to a Title-Cased version of the raw
+ * value if not found (handles future enum members gracefully).
+ */
+export function getTriggerLabel(value: string): string {
+  return TRIGGER_LABELS[value] ?? formatFallback(value);
+}
+
+/**
  * Get a human-readable label for an entity type.
  */
 export function getEntityTypeLabel(type: EntityType, t: TFunction): string {

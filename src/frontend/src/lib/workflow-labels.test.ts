@@ -1,8 +1,11 @@
 /**
  * Unit tests for workflow-labels helpers.
  *
- * Created alongside the for_* trigger entity-map update so the "trigger–entity
- * combination is not wired" warning does not fire for valid wizard combos.
+ * Covers:
+ *   - isTriggerEntitySupported + SUPPORTED_TRIGGER_ENTITY_MAP (PR #353 wizard wiring)
+ *   - resolveRecipientDisplay (workflow recipient resolver)
+ *   - ALL_TRIGGER_TYPES / ALL_ENTITY_TYPES sync invariants
+ *   - getTriggerLabel + TRIGGER_LABELS (user-approved canonical labels)
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -11,6 +14,8 @@ import {
   SUPPORTED_TRIGGER_ENTITY_MAP,
   ALL_TRIGGER_TYPES,
   ALL_ENTITY_TYPES,
+  getTriggerLabel,
+  TRIGGER_LABELS,
 } from './workflow-labels';
 
 describe('isTriggerEntitySupported', () => {
@@ -163,5 +168,60 @@ describe('workflow-labels', () => {
     it('reports on_first_access + table as unsupported', () => {
       expect(isTriggerEntitySupported('on_first_access', 'table')).toBe(false);
     });
+  });
+});
+
+describe('getTriggerLabel', () => {
+  // (value, expected) — one row per TriggerType, matching the backend
+  // _TRIGGER_LABELS dict and the user-approved table in the PR brief.
+  const expected: Array<[string, string]> = [
+    ['for_subscribe', 'When a user subscribes (wizard)'],
+    ['on_subscribe', 'After a subscription is created'],
+    ['for_request_access', 'When a user requests access (wizard)'],
+    ['on_request_access', 'After an access request is submitted'],
+    ['for_request_review', 'When a user requests review (wizard)'],
+    ['on_request_review', 'After a review request is submitted'],
+    ['for_request_publish', 'When a user requests publish (wizard)'],
+    ['on_request_publish', 'After a publish request is submitted'],
+    ['for_request_certify', 'When a user requests certification (wizard)'],
+    ['on_request_certify', 'After a certification request is submitted'],
+    ['for_request_status_change', 'When a user requests status change (wizard)'],
+    ['on_request_status_change', 'After a status change request is submitted'],
+    ['for_approval_response', 'Approval response dialog (advanced)'],
+    ['before_create', 'Before entity is created (validation)'],
+    ['before_update', 'Before entity is updated (validation)'],
+    ['before_status_change', 'Before status changes (validation)'],
+    ['on_create', 'After entity is created'],
+    ['on_update', 'After entity is updated'],
+    ['on_delete', 'After entity is deleted'],
+    ['on_status_change', 'After status changes'],
+    ['on_publish', 'After entity is published'],
+    ['on_unpublish', 'After entity is unpublished'],
+    ['on_revoke', 'After access is revoked'],
+    ['on_expiring', 'When access is about to expire'],
+    ['on_first_access', 'First time a user accesses (consent)'],
+    ['on_unsubscribe', 'After a user unsubscribes'],
+    ['on_job_success', 'After a background job succeeds'],
+    ['on_job_failure', 'After a background job fails'],
+    ['scheduled', 'On a schedule (cron)'],
+    ['manual', 'Manually triggered'],
+    ['on_certify', 'After entity is certified'],
+    ['on_decertify', 'After entity is decertified'],
+  ];
+
+  it.each(expected)('returns canonical label for %s', (value, label) => {
+    expect(getTriggerLabel(value)).toBe(label);
+  });
+
+  it('falls back to title-cased value for unknown triggers', () => {
+    // Forward-compat: if a new trigger is added to the enum before the
+    // table is updated, we should still render something reasonable.
+    expect(getTriggerLabel('on_brand_new_event')).toBe('On Brand New Event');
+  });
+
+  it('every value in ALL_TRIGGER_TYPES has a canonical label', () => {
+    for (const value of ALL_TRIGGER_TYPES) {
+      expect(TRIGGER_LABELS[value]).toBeTruthy();
+    }
   });
 });

@@ -615,6 +615,17 @@ async def clear_demo_data(
             "DELETE FROM assets WHERE id::text LIKE '0f8%'",
             # Delivery Channel assets (0f9%)
             "DELETE FROM assets WHERE id::text LIKE '0f9%'",
+            # Business Owners — must be removed before business_roles because
+            # of the role_id FK. Retail uses the 0f6% prefix; the vertical
+            # packs (hls/fsi/mfg/auto) use 0fb%.
+            "DELETE FROM business_owners WHERE id::text LIKE '0f6%'",
+            "DELETE FROM business_owners WHERE id::text LIKE '0fb%'",
+            # Vertical-specific demo asset types (0f2%, is_system=false)
+            "DELETE FROM asset_types WHERE id::text LIKE '0f2%' AND is_system = false AND created_by = 'system@demo'",
+            # Demo-inserted business_roles and delivery_methods — scoped by
+            # created_by to avoid touching app-seeded reference rows.
+            "DELETE FROM business_roles WHERE id::text LIKE '0f0%' AND created_by = 'system@demo'",
+            "DELETE FROM delivery_methods WHERE id::text LIKE '0f4%' AND created_by = 'system@demo'",
             # Note: legacy dataset_subscriptions / dataset_custom_properties /
             # dataset_instances / datasets tables were dropped by migration
             # c1_drop_legacy_dataset_tables.py — no DELETEs needed.
@@ -688,14 +699,25 @@ async def clear_demo_data(
         # subsequent deletes. Accumulate rowcounts per table since several
         # patterns target the same table (e.g. entity_relationships).
         deleted_counts: Dict[str, int] = {}
+        skipped: List[Dict[str, str]] = []
         for stmt in delete_statements:
             table_name = stmt.split("FROM ")[1].split(" ")[0]
             try:
                 with db.begin_nested():
                     result = db.execute(text(stmt))
-                deleted_counts[table_name] = deleted_counts.get(table_name, 0) + (result.rowcount or 0)
+                rowcount = result.rowcount or 0
+                if rowcount > 0:
+                    deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
             except Exception as e:
-                logger.warning(f"Delete statement warning ({table_name}): {e}")
+                err_short = str(e).splitlines()[0][:200]
+                logger.warning(
+                    f"Delete statement FAILED ({table_name}): {err_short} | stmt={stmt}"
+                )
+                skipped.append({
+                    "table": table_name,
+                    "statement": stmt,
+                    "error": err_short,
+                })
         
         db.commit()
 

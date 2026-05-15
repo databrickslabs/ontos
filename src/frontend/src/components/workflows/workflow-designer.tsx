@@ -75,6 +75,7 @@ import {
 
 import RequiredFieldsEditor, {
   type RequiredField,
+  isPrimaryFieldValid,
 } from './required-fields-editor';
 import {
   TriggerNode,
@@ -1230,14 +1231,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
         {/* Properties panel */}
         <Sheet open={!!selectedNodeId} onOpenChange={() => setSelectedNodeId(null)}>
-          <SheetContent className="w-[400px]">
-            <SheetHeader>
+          <SheetContent className="w-[480px] sm:max-w-[560px] flex flex-col p-0">
+            <SheetHeader className="px-6 pt-6 pb-2 shrink-0">
               <SheetTitle>
                 {selectedNodeId === 'trigger' ? 'Trigger Configuration' : 'Step Configuration'}
               </SheetTitle>
             </SheetHeader>
-            
-            <div className="mt-6 space-y-4">
+
+            <div className="mt-2 space-y-4 px-6 pb-6 overflow-y-auto flex-1 min-h-0">
               {selectedNodeId === 'trigger' ? (
                 // Trigger configuration
                 <>
@@ -1528,19 +1529,6 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           Minimum characters for the primary field (leave empty for no minimum).
                         </p>
                       </div>
-                      <div>
-                        <Label>Primary field ID</Label>
-                        <Input
-                          value={(selectedStep.config as { primary_field_id?: string })?.primary_field_id || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, primary_field_id: e.target.value || undefined },
-                          })}
-                          placeholder="e.g. reason (default)"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Field checked for &quot;Requires input&quot; and minimum length. Default: first required field or &quot;reason&quot;.
-                        </p>
-                      </div>
                       <RequiredFieldsEditor
                         value={
                           ((selectedStep.config as { required_fields?: RequiredField[] })
@@ -1554,11 +1542,25 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             },
                           })
                         }
+                        primaryFieldId={
+                          (selectedStep.config as { primary_field_id?: string })?.primary_field_id
+                        }
+                        onPrimaryFieldIdChange={(nextId) =>
+                          updateStep(selectedStep.step_id, {
+                            config: {
+                              ...selectedStep.config,
+                              primary_field_id: nextId,
+                            },
+                          })
+                        }
+                        requiresInput={
+                          (selectedStep.config as { requires_input?: boolean })?.requires_input ?? false
+                        }
                         idPrefix={`rfe-${selectedStep.step_id}`}
                       />
                       <p className="text-xs text-muted-foreground">
                         User Action steps collect input in approval workflows (e.g. reason, acceptances).
-                        Add custom fields above; they will appear in the wizard for requesters to fill in.
+                        Add fields above and tick &quot;Primary&quot; on the one the user&apos;s main input lands in.
                       </p>
                     </>
                   )}
@@ -1993,22 +1995,43 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
                   <Separator />
 
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1"
-                      onClick={() => setSelectedNodeId(null)}
-                    >
-                      Done
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      size="icon"
-                      onClick={() => deleteStep(selectedStep.step_id)}
-                      title="Delete Step"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {(() => {
+                    // Gate Done on the missing-primary rule for user_action steps.
+                    // For other step types the gate is always satisfied (true).
+                    const userActionInvalid =
+                      selectedStep.step_type === 'user_action' &&
+                      !isPrimaryFieldValid(
+                        ((selectedStep.config as { required_fields?: RequiredField[] })
+                          ?.required_fields ?? []) as RequiredField[],
+                        (selectedStep.config as { primary_field_id?: string })?.primary_field_id,
+                        (selectedStep.config as { requires_input?: boolean })?.requires_input ?? false,
+                      );
+                    return (
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1"
+                          onClick={() => setSelectedNodeId(null)}
+                          disabled={userActionInvalid}
+                          title={
+                            userActionInvalid
+                              ? 'Pick a primary field above before closing.'
+                              : undefined
+                          }
+                          data-testid="step-config-done"
+                        >
+                          Done
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => deleteStep(selectedStep.step_id)}
+                          title="Delete Step"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : null}
             </div>

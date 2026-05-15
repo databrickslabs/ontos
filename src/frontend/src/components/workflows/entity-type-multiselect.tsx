@@ -18,10 +18,32 @@
  *    fires regardless of entity type — no checkboxes.
  *  - Selecting zero options is allowed, since the backend treats `[]` as
  *    "any entity" (back-compat with existing rows).
+ *  - The wire format stays snake_case (`access_grant`, `data_product`, …)
+ *    so we don't break round-trips. `prettyEntityTypeLabel` only affects
+ *    what the user sees in the checkbox rows.
  */
 import { useEffect } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+
+/**
+ * Convert a snake_case entity-type wire value to Sentence case for display.
+ *
+ *   "access_grant"       → "Access grant"
+ *   "data_product"       → "Data product"
+ *   "data_asset_review"  → "Data asset review"
+ *   "role"               → "Role"
+ *   ""                   → ""
+ *
+ * Pure / side-effect free / exported for tests. Display only — callers
+ * must keep using the raw `value` for any wire-format work (FK lookups,
+ * persisted state, etc.).
+ */
+export function prettyEntityTypeLabel(value: string): string {
+  if (!value) return value;
+  const spaced = value.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
 export interface EntityTypeMultiselectProps {
   /** The currently-selected trigger value (for context only). */
@@ -88,7 +110,7 @@ export function EntityTypeMultiselect({
                 onCheckedChange={() => toggle(et)}
               />
               <Label htmlFor={id} className="text-sm font-normal cursor-pointer">
-                {et}
+                {prettyEntityTypeLabel(et)}
               </Label>
             </div>
           );

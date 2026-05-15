@@ -11,7 +11,6 @@
  *  - We group entries with <SelectGroup> instead of a flat list, so the
  *    25-ish triggers stop reading as duplicates ("on_subscribe" /
  *    "for_subscribe" now sit under the same group with disambiguated labels).
- *  - We hide the advanced "for_approval_response" trigger behind a toggle.
  *
  * The grouping/filtering logic is exported separately as
  * `partitionTriggers` so it can be unit-tested without dragging Radix into
@@ -19,8 +18,6 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -47,7 +44,6 @@ export interface TriggerTypeOption {
   label: string;
   workflow_type: 'approval' | 'process';
   entity_types: string[];
-  is_advanced: boolean;
   group: 'lifecycle' | 'request_flow' | 'validation_gates' | 'system_scheduled';
 }
 
@@ -77,14 +73,9 @@ export function partitionTriggers(
   options: TriggerTypeOption[],
   args: {
     workflowType: 'approval' | 'process';
-    showAdvanced: boolean;
   },
 ): Array<{ group: TriggerTypeOption['group']; label: string; items: TriggerTypeOption[] }> {
-  const visible = options.filter((o) => {
-    if (o.workflow_type !== args.workflowType) return false;
-    if (o.is_advanced && !args.showAdvanced) return false;
-    return true;
-  });
+  const visible = options.filter((o) => o.workflow_type === args.workflowType);
   return TRIGGER_GROUP_ORDER
     .map((g) => ({
       group: g,
@@ -113,7 +104,6 @@ export function TriggerPicker({
 }: TriggerPickerProps) {
   const { get } = useApi();
   const [options, setOptions] = useState<TriggerTypeOption[]>(optionsProp ?? []);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     if (optionsProp) {
@@ -139,58 +129,43 @@ export function TriggerPicker({
   }, [get, optionsProp]);
 
   const groups = useMemo(
-    () => partitionTriggers(options, { workflowType, showAdvanced }),
-    [options, workflowType, showAdvanced],
+    () => partitionTriggers(options, { workflowType }),
+    [options, workflowType],
   );
 
   return (
-    <div className="space-y-2">
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue>
-            {value ? getTriggerLabel(value) : 'Select a trigger…'}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {groups.map(({ group, label, items }) => (
-            <SelectGroup key={group}>
-              <SelectLabel>{label}</SelectLabel>
-              {items.map((opt) => (
-                <TooltipProvider key={opt.value} delayDuration={400}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SelectItem value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <code className="text-xs">{opt.value}</code>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
-            </SelectGroup>
-          ))}
-          {groups.length === 0 && (
-            <div className="px-2 py-1.5 text-sm text-muted-foreground">
-              No trigger types available.
-            </div>
-          )}
-        </SelectContent>
-      </Select>
-      <div className="flex items-center gap-2">
-        <Switch
-          id="trigger-picker-show-advanced"
-          checked={showAdvanced}
-          onCheckedChange={setShowAdvanced}
-        />
-        <Label
-          htmlFor="trigger-picker-show-advanced"
-          className="text-xs text-muted-foreground cursor-pointer"
-        >
-          Show advanced triggers
-        </Label>
-      </div>
-    </div>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue>
+          {value ? getTriggerLabel(value) : 'Select a trigger…'}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {groups.map(({ group, label, items }) => (
+          <SelectGroup key={group}>
+            <SelectLabel>{label}</SelectLabel>
+            {items.map((opt) => (
+              <TooltipProvider key={opt.value} delayDuration={400}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SelectItem value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <code className="text-xs">{opt.value}</code>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ))}
+          </SelectGroup>
+        ))}
+        {groups.length === 0 && (
+          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+            No trigger types available.
+          </div>
+        )}
+      </SelectContent>
+    </Select>
   );
 }

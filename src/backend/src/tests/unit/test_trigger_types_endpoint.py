@@ -43,7 +43,7 @@ def test_every_trigger_type_represented_exactly_once() -> None:
 
 def test_response_shape() -> None:
     payload = _call_endpoint()
-    required_keys = {"value", "label", "workflow_type", "entity_types", "is_advanced", "group"}
+    required_keys = {"value", "label", "workflow_type", "entity_types", "group"}
     for entry in payload:
         assert required_keys.issubset(entry.keys()), (
             f"Trigger-types entry missing keys: {required_keys - entry.keys()} "
@@ -55,10 +55,22 @@ def test_response_shape() -> None:
         assert isinstance(entry["entity_types"], list)
         for et in entry["entity_types"]:
             assert isinstance(et, str)
-        assert isinstance(entry["is_advanced"], bool)
         assert entry["group"] in {
             "lifecycle", "request_flow", "validation_gates", "system_scheduled",
         }
+
+
+def test_is_advanced_not_in_response() -> None:
+    """The is_advanced field was removed when the "Show advanced triggers"
+    toggle was dropped from the picker — for_approval_response is now shown
+    inline alongside the other approval triggers. Guard against it sneaking
+    back in.
+    """
+    payload = _call_endpoint()
+    for entry in payload:
+        assert "is_advanced" not in entry, (
+            f"is_advanced should not be returned anymore (entry={entry})"
+        )
 
 
 def test_for_triggers_are_approval_workflow_type() -> None:
@@ -69,14 +81,6 @@ def test_for_triggers_are_approval_workflow_type() -> None:
             assert entry["workflow_type"] == "approval", entry
         else:
             assert entry["workflow_type"] == "process", entry
-
-
-def test_only_for_approval_response_is_advanced() -> None:
-    payload = _call_endpoint()
-    advanced = [e["value"] for e in payload if e["is_advanced"]]
-    assert advanced == ["for_approval_response"], (
-        f"Only for_approval_response should be advanced today, got: {advanced}"
-    )
 
 
 def test_approval_triggers_are_in_request_flow_group() -> None:

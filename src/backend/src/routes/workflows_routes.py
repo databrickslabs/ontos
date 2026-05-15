@@ -87,8 +87,6 @@ async def get_step_types(
 #      based on the workflow being authored.
 #   4. Pre-populate the entity_types multiselect with the entity types each
 #      trigger is wired for in the backend.
-#   5. Gate "advanced" triggers behind a toggle (today only
-#      for_approval_response).
 #
 # Wire-format contract: every TriggerType member appears exactly once.
 # `value` is the raw enum string (used as the FK in stored trigger configs).
@@ -101,19 +99,19 @@ async def get_step_types(
 # list means "any entity type" (manual, scheduled, on_first_access).
 
 _TRIGGER_LABELS: Dict[str, str] = {
-    "for_subscribe": "When a user subscribes (wizard)",
+    "for_subscribe": "When a user subscribes",
     "on_subscribe": "After a subscription is created",
-    "for_request_access": "When a user requests access (wizard)",
+    "for_request_access": "When a user requests access",
     "on_request_access": "After an access request is submitted",
-    "for_request_review": "When a user requests review (wizard)",
+    "for_request_review": "When a user requests review",
     "on_request_review": "After a review request is submitted",
-    "for_request_publish": "When a user requests publish (wizard)",
+    "for_request_publish": "When a user requests publish",
     "on_request_publish": "After a publish request is submitted",
-    "for_request_certify": "When a user requests certification (wizard)",
+    "for_request_certify": "When a user requests certification",
     "on_request_certify": "After a certification request is submitted",
-    "for_request_status_change": "When a user requests status change (wizard)",
+    "for_request_status_change": "When a user requests status change",
     "on_request_status_change": "After a status change request is submitted",
-    "for_approval_response": "Approval response dialog (advanced)",
+    "for_approval_response": "Approval response dialog",
     "before_create": "Before entity is created (validation)",
     "before_update": "Before entity is updated (validation)",
     "before_status_change": "Before status changes (validation)",
@@ -230,7 +228,7 @@ async def get_trigger_types(
 
     Returns one entry per TriggerType enum member with the metadata the
     workflow-authoring picker needs (label, group, workflow_type,
-    entity_types, is_advanced). See module-level comments for the contract.
+    entity_types). See module-level comments for the contract.
     """
     out: List[Dict[str, Any]] = []
     for tt in TriggerType:
@@ -241,7 +239,6 @@ async def get_trigger_types(
             "label": _TRIGGER_LABELS.get(value, value.replace("_", " ").title()),
             "workflow_type": workflow_type,
             "entity_types": list(_TRIGGER_ENTITY_TYPES.get(value, [])),
-            "is_advanced": value == "for_approval_response",
             "group": _trigger_group(value),
         })
     return out

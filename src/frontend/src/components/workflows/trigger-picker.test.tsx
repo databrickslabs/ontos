@@ -19,7 +19,6 @@ const CATALOG: TriggerTypeOption[] = [
     label: 'After entity is created',
     workflow_type: 'process',
     entity_types: ['table'],
-    is_advanced: false,
     group: 'lifecycle',
   },
   {
@@ -27,7 +26,6 @@ const CATALOG: TriggerTypeOption[] = [
     label: 'After entity is updated',
     workflow_type: 'process',
     entity_types: ['data_product'],
-    is_advanced: false,
     group: 'lifecycle',
   },
   {
@@ -35,7 +33,6 @@ const CATALOG: TriggerTypeOption[] = [
     label: 'Before entity is created (validation)',
     workflow_type: 'process',
     entity_types: ['table'],
-    is_advanced: false,
     group: 'validation_gates',
   },
   {
@@ -43,7 +40,6 @@ const CATALOG: TriggerTypeOption[] = [
     label: 'After an access request is submitted',
     workflow_type: 'process',
     entity_types: ['access_grant'],
-    is_advanced: false,
     group: 'request_flow',
   },
   {
@@ -51,41 +47,34 @@ const CATALOG: TriggerTypeOption[] = [
     label: 'On a schedule (cron)',
     workflow_type: 'process',
     entity_types: [],
-    is_advanced: false,
     group: 'system_scheduled',
   },
   {
     value: 'for_subscribe',
-    label: 'When a user subscribes (wizard)',
+    label: 'When a user subscribes',
     workflow_type: 'approval',
     entity_types: ['data_product'],
-    is_advanced: false,
     group: 'request_flow',
   },
   {
     value: 'for_request_access',
-    label: 'When a user requests access (wizard)',
+    label: 'When a user requests access',
     workflow_type: 'approval',
     entity_types: ['access_grant'],
-    is_advanced: false,
     group: 'request_flow',
   },
   {
     value: 'for_approval_response',
-    label: 'Approval response dialog (advanced)',
+    label: 'Approval response dialog',
     workflow_type: 'approval',
     entity_types: [],
-    is_advanced: true,
     group: 'request_flow',
   },
 ];
 
 describe('partitionTriggers', () => {
   it('hides approval entries when authoring a process workflow', () => {
-    const buckets = partitionTriggers(CATALOG, {
-      workflowType: 'process',
-      showAdvanced: false,
-    });
+    const buckets = partitionTriggers(CATALOG, { workflowType: 'process' });
     const allValues = buckets.flatMap((b) => b.items.map((i) => i.value));
     for (const v of allValues) {
       const entry = CATALOG.find((c) => c.value === v)!;
@@ -97,10 +86,7 @@ describe('partitionTriggers', () => {
   });
 
   it('hides process entries when authoring an approval workflow', () => {
-    const buckets = partitionTriggers(CATALOG, {
-      workflowType: 'approval',
-      showAdvanced: false,
-    });
+    const buckets = partitionTriggers(CATALOG, { workflowType: 'approval' });
     const allValues = buckets.flatMap((b) => b.items.map((i) => i.value));
     for (const v of allValues) {
       const entry = CATALOG.find((c) => c.value === v)!;
@@ -109,29 +95,16 @@ describe('partitionTriggers', () => {
     expect(allValues).not.toContain('on_create');
   });
 
-  it('hides advanced triggers by default', () => {
-    const buckets = partitionTriggers(CATALOG, {
-      workflowType: 'approval',
-      showAdvanced: false,
-    });
-    const allValues = buckets.flatMap((b) => b.items.map((i) => i.value));
-    expect(allValues).not.toContain('for_approval_response');
-  });
-
-  it('reveals advanced triggers when toggle is on', () => {
-    const buckets = partitionTriggers(CATALOG, {
-      workflowType: 'approval',
-      showAdvanced: true,
-    });
+  it('shows for_approval_response alongside other approval triggers (no advanced gating)', () => {
+    const buckets = partitionTriggers(CATALOG, { workflowType: 'approval' });
     const allValues = buckets.flatMap((b) => b.items.map((i) => i.value));
     expect(allValues).toContain('for_approval_response');
+    expect(allValues).toContain('for_subscribe');
+    expect(allValues).toContain('for_request_access');
   });
 
   it('produces groups in the canonical order', () => {
-    const buckets = partitionTriggers(CATALOG, {
-      workflowType: 'process',
-      showAdvanced: false,
-    });
+    const buckets = partitionTriggers(CATALOG, { workflowType: 'process' });
     const groupOrder = buckets.map((b) => b.group);
     // Process catalog above has lifecycle + validation_gates + request_flow + system_scheduled
     expect(groupOrder).toEqual([
@@ -144,10 +117,7 @@ describe('partitionTriggers', () => {
 
   it('omits groups that have no visible items', () => {
     // Approval catalog has nothing in lifecycle / validation_gates / system_scheduled
-    const buckets = partitionTriggers(CATALOG, {
-      workflowType: 'approval',
-      showAdvanced: false,
-    });
+    const buckets = partitionTriggers(CATALOG, { workflowType: 'approval' });
     expect(buckets).toHaveLength(1);
     expect(buckets[0].group).toBe('request_flow');
     expect(buckets[0].label).toBe(TRIGGER_GROUP_LABELS.request_flow);

@@ -27,9 +27,24 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 /**
+ * Display overrides for entity-type wire values. The default rule is
+ * snake_case → Sentence case, but some wire values read as internal
+ * jargon when surfaced to authors. Add entries here to override on a
+ * case-by-case basis without touching the wire format itself.
+ *
+ *   access_grant → "Data object"
+ *     (Reads naturally next to "When a user requests access — Applies to: …")
+ *
+ * Order matters: overrides win over the snake_case fallback.
+ */
+const PRETTY_ENTITY_TYPE_OVERRIDES: Record<string, string> = {
+  access_grant: 'Data object',
+};
+
+/**
  * Convert a snake_case entity-type wire value to Sentence case for display.
  *
- *   "access_grant"       → "Access grant"
+ *   "access_grant"       → "Data object"       (override)
  *   "data_product"       → "Data product"
  *   "data_asset_review"  → "Data asset review"
  *   "role"               → "Role"
@@ -41,9 +56,15 @@ import { Label } from '@/components/ui/label';
  */
 export function prettyEntityTypeLabel(value: string): string {
   if (!value) return value;
+  if (PRETTY_ENTITY_TYPE_OVERRIDES[value]) return PRETTY_ENTITY_TYPE_OVERRIDES[value];
   const spaced = value.replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
+
+/** Field-label constants for the entity-type multiselect. Exported so
+ * the parent form and tests can reference the same source of truth. */
+export const ENTITY_TYPE_MULTISELECT_LABEL = 'Applies to';
+export const ENTITY_TYPE_MULTISELECT_HELPER = 'Which kinds of objects this fires on';
 
 export interface EntityTypeMultiselectProps {
   /** The currently-selected trigger value (for context only). */
@@ -79,9 +100,12 @@ export function EntityTypeMultiselect({
 
   if (supportedEntityTypes.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        This trigger fires regardless of entity type.
-      </p>
+      <div className="space-y-1">
+        <Label>{ENTITY_TYPE_MULTISELECT_LABEL}</Label>
+        <p className="text-xs text-muted-foreground">
+          This trigger fires regardless of entity type.
+        </p>
+      </div>
     );
   }
 
@@ -95,8 +119,9 @@ export function EntityTypeMultiselect({
 
   return (
     <div className="space-y-1">
+      <Label>{ENTITY_TYPE_MULTISELECT_LABEL}</Label>
       <p className="text-xs text-muted-foreground">
-        Which entity types should this trigger fire on?
+        {ENTITY_TYPE_MULTISELECT_HELPER}
       </p>
       <div className="flex flex-col gap-1 rounded-md border p-2">
         {supportedEntityTypes.map((et) => {

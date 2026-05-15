@@ -15,6 +15,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 import {
   EntityTypeMultiselect,
+  ENTITY_TYPE_MULTISELECT_LABEL,
   prettyEntityTypeLabel,
 } from './entity-type-multiselect';
 
@@ -25,9 +26,15 @@ describe('prettyEntityTypeLabel', () => {
   });
 
   it('converts snake_case to Sentence case (only first letter capitalized)', () => {
-    expect(prettyEntityTypeLabel('access_grant')).toBe('Access grant');
     expect(prettyEntityTypeLabel('data_product')).toBe('Data product');
     expect(prettyEntityTypeLabel('data_contract')).toBe('Data contract');
+  });
+
+  it('applies display overrides for wire values that read as internal jargon', () => {
+    // access_grant is overridden — "Access grant" reads as internal jargon
+    // when surfaced as a "kind of object". "Data object" reads naturally
+    // next to "When a user requests access — Applies to: Data object".
+    expect(prettyEntityTypeLabel('access_grant')).toBe('Data object');
   });
 
   it('handles multi-underscore values', () => {
@@ -60,7 +67,7 @@ describe('<EntityTypeMultiselect>', () => {
     expect(screen.getByText('Table')).toBeInTheDocument();
   });
 
-  it('renders snake_case multi-word values pretty-printed', () => {
+  it('renders snake_case multi-word values pretty-printed (with overrides applied)', () => {
     render(
       <EntityTypeMultiselect
         triggerType="for_request_access"
@@ -69,8 +76,22 @@ describe('<EntityTypeMultiselect>', () => {
         supportedEntityTypes={['access_grant', 'data_product']}
       />,
     );
-    expect(screen.getByText('Access grant')).toBeInTheDocument();
+    // access_grant is overridden to "Data object"; data_product follows
+    // the default snake_case → Sentence case rule.
+    expect(screen.getByText('Data object')).toBeInTheDocument();
     expect(screen.getByText('Data product')).toBeInTheDocument();
+  });
+
+  it('renders the "Applies to" field label above the checkboxes', () => {
+    render(
+      <EntityTypeMultiselect
+        triggerType="on_create"
+        value={[]}
+        onChange={vi.fn()}
+        supportedEntityTypes={['catalog']}
+      />,
+    );
+    expect(screen.getByText(ENTITY_TYPE_MULTISELECT_LABEL)).toBeInTheDocument();
   });
 
   it('renders the placeholder when the trigger fires regardless of entity', () => {

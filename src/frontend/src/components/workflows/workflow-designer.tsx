@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import ReactFlow, {
   Node,
   Edge,
@@ -511,7 +510,6 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   const { get, post, put } = useApi();
   const { toast } = useToast();
-  const { t } = useTranslation(['common']);
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
@@ -1254,7 +1252,6 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                 // Trigger configuration
                 <>
                   <div>
-                    <Label>{t('common:labels.type')}</Label>
                     <TriggerPicker
                       value={triggerType}
                       onChange={(v) => {
@@ -1270,7 +1267,6 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                     />
                   </div>
                   <div>
-                    <Label>{t('common:labels.category')}</Label>
                     <EntityTypeMultiselect
                       triggerType={triggerType}
                       value={entityTypes as string[]}

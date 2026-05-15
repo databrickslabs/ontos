@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   partitionTriggers,
   TRIGGER_GROUP_LABELS,
+  TRIGGER_PICKER_LABEL,
   type TriggerTypeOption,
 } from './trigger-picker';
 
@@ -128,5 +129,14 @@ describe('partitionTriggers', () => {
     expect(TRIGGER_GROUP_LABELS.request_flow).toBe('Request flow');
     expect(TRIGGER_GROUP_LABELS.validation_gates).toBe('Validation gates');
     expect(TRIGGER_GROUP_LABELS.system_scheduled).toBe('System & scheduled');
+  });
+});
+
+describe('TRIGGER_PICKER_LABEL', () => {
+  // We cannot render <TriggerPicker> in jsdom (Radix <Select> hangs — see
+  // file header), so we assert on the exported label constant the
+  // component renders verbatim above the Select.
+  it('exposes the "Fires on" field label so the parent form does not need a duplicate', () => {
+    expect(TRIGGER_PICKER_LABEL).toBe('Fires on');
   });
 });

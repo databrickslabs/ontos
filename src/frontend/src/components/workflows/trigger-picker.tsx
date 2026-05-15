@@ -18,6 +18,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -34,6 +35,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getTriggerLabel } from '@/lib/workflow-labels';
+
+/** Field-label constants for the trigger picker. Exported so the parent
+ * form and tests can reference the same source of truth. */
+export const TRIGGER_PICKER_LABEL = 'Fires on';
+export const TRIGGER_PICKER_HELPER = 'What action makes this workflow run';
 
 /**
  * Wire-format entry from GET /api/workflows/trigger-types.
@@ -134,38 +140,42 @@ export function TriggerPicker({
   );
 
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger>
-        <SelectValue>
-          {value ? getTriggerLabel(value) : 'Select a trigger…'}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {groups.map(({ group, label, items }) => (
-          <SelectGroup key={group}>
-            <SelectLabel>{label}</SelectLabel>
-            {items.map((opt) => (
-              <TooltipProvider key={opt.value} delayDuration={400}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SelectItem value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    <code className="text-xs">{opt.value}</code>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
-          </SelectGroup>
-        ))}
-        {groups.length === 0 && (
-          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-            No trigger types available.
-          </div>
-        )}
-      </SelectContent>
-    </Select>
+    <div className="space-y-1">
+      <Label>{TRIGGER_PICKER_LABEL}</Label>
+      <p className="text-xs text-muted-foreground">{TRIGGER_PICKER_HELPER}</p>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue>
+            {value ? getTriggerLabel(value) : 'Select a trigger…'}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {groups.map(({ group, label, items }) => (
+            <SelectGroup key={group}>
+              <SelectLabel>{label}</SelectLabel>
+              {items.map((opt) => (
+                <TooltipProvider key={opt.value} delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SelectItem value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <code className="text-xs">{opt.value}</code>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            </SelectGroup>
+          ))}
+          {groups.length === 0 && (
+            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+              No trigger types available.
+            </div>
+          )}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

@@ -23,12 +23,13 @@
  *
  * Props in, props out — parent owns state.
  */
-import { useMemo } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useRef } from 'react';
+import { Plus, Trash2, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -72,6 +73,21 @@ export interface RequiredFieldsEditorProps {
   idPrefix?: string;
   /** Initial collapsed state. Defaults to expanded if any fields exist, otherwise collapsed. */
   defaultOpen?: boolean;
+  /**
+   * The current primary field id on the parent step's config.
+   * The editor renders an `isPrimary` checkbox per row that is checked iff
+   * `row.id === primaryFieldId`. Marking a row as primary calls
+   * `onPrimaryFieldIdChange(row.id)`. Unchecking the current primary calls
+   * `onPrimaryFieldIdChange(undefined)`. Editing the primary row's id keeps
+   * `primaryFieldId` in lockstep; deleting the primary row clears it.
+   */
+  primaryFieldId?: string;
+  onPrimaryFieldIdChange?: (next: string | undefined) => void;
+  /**
+   * When true, the editor renders a missing-primary error if no row matches
+   * `primaryFieldId`. Used by the parent step's `requires_input` toggle.
+   */
+  requiresInput?: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -94,6 +110,26 @@ export function duplicateIds(fields: RequiredField[]): Set<string> {
     if (count > 1) dupes.add(id);
   }
   return dupes;
+}
+
+/**
+ * Pure: is the user_action config valid w.r.t. the primary-field rule?
+ *
+ * Rule: when `requiresInput` is true, exactly one row must be marked primary
+ * (i.e. `primaryFieldId` must be non-empty AND must match some row's id).
+ * When `requiresInput` is false, any state is valid.
+ *
+ * NOTE: this does NOT check id-slug or id-duplicate validity — those are
+ * separate concerns surfaced inline next to each row's id input.
+ */
+export function isPrimaryFieldValid(
+  fields: RequiredField[],
+  primaryFieldId: string | undefined,
+  requiresInput: boolean,
+): boolean {
+  if (!requiresInput) return true;
+  if (!primaryFieldId) return false;
+  return fields.some((f) => f.id === primaryFieldId);
 }
 
 /** Suggest an unused field id like `field_1`, `field_2`, ... */
@@ -155,20 +191,81 @@ export default function RequiredFieldsEditor({
   onChange,
   idPrefix = 'rfe',
   defaultOpen,
+  primaryFieldId,
+  onPrimaryFieldIdChange,
+  requiresInput = false,
 }: RequiredFieldsEditorProps) {
   const fields = value ?? [];
   const dupes = useMemo(() => duplicateIds(fields), [fields]);
   const initiallyOpen = defaultOpen ?? fields.length > 0;
+  const primaryValid = isPrimaryFieldValid(fields, primaryFieldId, requiresInput);
+
+  // Track which row position is "the primary row" so that renames survive the
+  // userEvent-style sequence of clear → type-char-by-char (which transiently
+  // makes the row id empty). Resolved from props on every render where the
+  // primary id matches a row, then used as a fallback inside `updateField`.
+  const primaryIndexRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!primaryFieldId) {
+      // Don't reset to null on a transient clear — only when explicitly cleared
+      // (no id at all on any row matches). The check happens against current
+      // fields: if some row IS still in flight (e.g. empty after a clear),
+      // keep the existing pointer so the lockstep can fire when the user
+      // finishes typing the new id.
+      return;
+    }
+    const idx = fields.findIndex((f) => f.id === primaryFieldId);
+    if (idx !== -1) primaryIndexRef.current = idx;
+  }, [primaryFieldId, fields]);
 
   // ── Mutation helpers ──────────────────────────────────────────────────────
 
+  /**
+   * Keep `primary_field_id` in lockstep when the primary row's id is edited.
+   * If the row being patched is the current primary AND its `id` is changing,
+   * forward the new id to the parent so the binding stays intact across renames.
+   */
   const updateField = (index: number, patch: Partial<RequiredField>) => {
+    const current = fields[index];
     const next = fields.map((f, i) => (i === index ? { ...f, ...patch } : f));
     onChange(next);
+    if (
+      onPrimaryFieldIdChange &&
+      typeof patch.id === 'string' &&
+      patch.id !== current?.id
+    ) {
+      // Was this row the primary at the moment of the change? Two signals:
+      //   (a) current id-match: `current.id === primaryFieldId` (steady state)
+      //   (b) position-match via ref: `primaryIndexRef.current === index`
+      //       (covers the transient state during userEvent clear+retype where
+      //       primaryFieldId has briefly drifted to undefined / empty)
+      const wasPrimaryById =
+        !!primaryFieldId && current?.id === primaryFieldId;
+      const wasPrimaryByPosition = primaryIndexRef.current === index;
+      if (wasPrimaryById || wasPrimaryByPosition) {
+        // Empty string means "no primary"; we forward undefined to match the
+        // parent's optional config shape (primary_field_id?: string).
+        onPrimaryFieldIdChange(patch.id === '' ? undefined : patch.id);
+      }
+    }
   };
 
   const removeField = (index: number) => {
+    const removed = fields[index];
+    const removedWasPrimary =
+      (!!removed?.id && removed.id === primaryFieldId) ||
+      primaryIndexRef.current === index;
     onChange(fields.filter((_, i) => i !== index));
+    if (removedWasPrimary) {
+      primaryIndexRef.current = null;
+      if (onPrimaryFieldIdChange) onPrimaryFieldIdChange(undefined);
+    } else if (
+      primaryIndexRef.current !== null &&
+      primaryIndexRef.current > index
+    ) {
+      // Indices shift down by 1 when an earlier row is removed.
+      primaryIndexRef.current -= 1;
+    }
   };
 
   const addField = () => {
@@ -179,6 +276,35 @@ export default function RequiredFieldsEditor({
       required: false,
     };
     onChange([...fields, newField]);
+    // Auto-mark the first row primary when starting from empty and no
+    // primary is currently bound. After that, explicit user action only.
+    if (
+      onPrimaryFieldIdChange &&
+      fields.length === 0 &&
+      (!primaryFieldId || primaryFieldId === '')
+    ) {
+      primaryIndexRef.current = 0;
+      onPrimaryFieldIdChange(newField.id);
+    }
+  };
+
+  /**
+   * Toggle the isPrimary checkbox on a row. Enforces the mutex (only one
+   * primary at a time) by forwarding the row's id to the parent — the parent
+   * holds `primary_field_id`, which is a single scalar by construction.
+   * Unchecking the current primary clears the binding.
+   */
+  const togglePrimary = (index: number, checked: boolean) => {
+    if (!onPrimaryFieldIdChange) return;
+    const row = fields[index];
+    if (!row) return;
+    if (checked) {
+      primaryIndexRef.current = index;
+      onPrimaryFieldIdChange(row.id || undefined);
+    } else if (row.id === primaryFieldId || primaryIndexRef.current === index) {
+      primaryIndexRef.current = null;
+      onPrimaryFieldIdChange(undefined);
+    }
   };
 
   // Change type and clean up type-specific keys so we don't leak `options`
@@ -259,6 +385,20 @@ export default function RequiredFieldsEditor({
           </p>
         )}
 
+        {requiresInput && !primaryValid && (
+          <div
+            role="alert"
+            data-testid={`${idPrefix}-primary-error`}
+            className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          >
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              Pick a primary field — the user&apos;s main input goes there.
+              Required because &quot;Requires input&quot; is on.
+            </span>
+          </div>
+        )}
+
         {fields.map((field, idx) => {
           const idInvalid = field.id !== '' && !isValidSlug(field.id);
           const idEmpty = field.id === '';
@@ -277,9 +417,12 @@ export default function RequiredFieldsEditor({
               data-testid={rowTestId}
               className="border rounded-md p-3 space-y-2 bg-muted/20"
             >
-              {/* Top row: id / label / type / required / delete */}
-              <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-3 space-y-1">
+              {/* Top row: id / label / type / required / isPrimary / delete.
+                  Stacks on narrow viewports; switches to a wide grid at lg.
+                  Column allocation: id ~25%, label ~30%, type ~20%, the three
+                  compact controls share the remainder. */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-end">
+                <div className="lg:col-span-3 space-y-1 min-w-0">
                   <Label htmlFor={`${idPrefix}-${idx}-id`} className="text-xs">
                     Field ID
                   </Label>
@@ -289,11 +432,11 @@ export default function RequiredFieldsEditor({
                     value={field.id}
                     onChange={(e) => updateField(idx, { id: e.target.value })}
                     placeholder="e.g. target_group"
-                    className={idError ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    className={`w-full ${idError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                     aria-invalid={idError != null}
                   />
                 </div>
-                <div className="col-span-4 space-y-1">
+                <div className="lg:col-span-4 space-y-1 min-w-0">
                   <Label htmlFor={`${idPrefix}-${idx}-label`} className="text-xs">
                     Label
                   </Label>
@@ -303,15 +446,16 @@ export default function RequiredFieldsEditor({
                     value={field.label}
                     onChange={(e) => updateField(idx, { label: e.target.value })}
                     placeholder="Shown to requester"
+                    className="w-full"
                   />
                 </div>
-                <div className="col-span-3 space-y-1">
+                <div className="lg:col-span-2 space-y-1 min-w-0">
                   <Label className="text-xs">Type</Label>
                   <Select
                     value={field.type}
                     onValueChange={(v) => changeFieldType(idx, v as RequiredFieldType)}
                   >
-                    <SelectTrigger data-testid={`${rowTestId}-type`}>
+                    <SelectTrigger data-testid={`${rowTestId}-type`} className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -320,7 +464,7 @@ export default function RequiredFieldsEditor({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="col-span-1 flex flex-col items-center gap-1 pb-1">
+                <div className="lg:col-span-1 flex flex-col items-center gap-1 pb-1">
                   <Label className="text-xs">Req.</Label>
                   <Switch
                     data-testid={`${rowTestId}-required`}
@@ -328,7 +472,23 @@ export default function RequiredFieldsEditor({
                     onCheckedChange={(checked) => updateField(idx, { required: checked })}
                   />
                 </div>
-                <div className="col-span-1 flex justify-end pb-1">
+                <div className="lg:col-span-1 flex flex-col items-center gap-1 pb-1">
+                  <Label
+                    htmlFor={`${idPrefix}-${idx}-primary`}
+                    className="text-xs cursor-pointer"
+                    title="Mark this row as the step's primary input field"
+                  >
+                    Primary
+                  </Label>
+                  <Checkbox
+                    id={`${idPrefix}-${idx}-primary`}
+                    data-testid={`${rowTestId}-primary`}
+                    checked={!!field.id && field.id === primaryFieldId}
+                    onCheckedChange={(checked) => togglePrimary(idx, checked === true)}
+                    aria-label="Primary field"
+                  />
+                </div>
+                <div className="lg:col-span-1 flex justify-end pb-1">
                   <Button
                     type="button"
                     variant="ghost"

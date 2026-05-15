@@ -20,6 +20,7 @@ import RequiredFieldsEditor, {
   type RequiredField,
   applyOptionsModeChange,
   duplicateIds,
+  isPrimaryFieldValid,
   isValidSlug,
 } from './required-fields-editor';
 
@@ -70,6 +71,53 @@ function Harness({
 
 function readState(): RequiredField[] {
   return JSON.parse(screen.getByTestId('state-dump').textContent || '[]');
+}
+
+/**
+ * Variant of Harness that also owns `primary_field_id` and `requires_input` —
+ * mirrors the way `workflow-designer.tsx` wires the user_action step. Used
+ * by the primary-field tests below; kept separate to avoid disturbing the
+ * 31 pre-existing tests that don't need it.
+ */
+function PrimaryHarness({
+  initialFields,
+  initialPrimary,
+  requiresInput = false,
+  onPrimaryChangeSpy,
+}: {
+  initialFields: RequiredField[];
+  initialPrimary?: string;
+  requiresInput?: boolean;
+  onPrimaryChangeSpy?: (next: string | undefined) => void;
+}) {
+  const [fields, setFields] = useState<RequiredField[]>(initialFields);
+  const [primary, setPrimary] = useState<string | undefined>(initialPrimary);
+  return (
+    <div>
+      <RequiredFieldsEditor
+        value={fields}
+        onChange={setFields}
+        primaryFieldId={primary}
+        onPrimaryFieldIdChange={(next) => {
+          setPrimary(next);
+          onPrimaryChangeSpy?.(next);
+        }}
+        requiresInput={requiresInput}
+        defaultOpen
+      />
+      <pre data-testid="fields-dump">{JSON.stringify(fields)}</pre>
+      <pre data-testid="primary-dump">{primary ?? ''}</pre>
+    </div>
+  );
+}
+
+function readPrimary(): string | undefined {
+  const txt = screen.getByTestId('primary-dump').textContent ?? '';
+  return txt === '' ? undefined : txt;
+}
+
+function readFields(): RequiredField[] {
+  return JSON.parse(screen.getByTestId('fields-dump').textContent || '[]');
 }
 
 // ─── Pure helper tests ──────────────────────────────────────────────────────
@@ -444,6 +492,196 @@ describe('RequiredFieldsEditor', () => {
       'Why are you requesting this?',
     );
     expect(state[0].label).toBe('New label');
+  });
+});
+
+// ─── Primary-field tests ───────────────────────────────────────────────────
+//
+// These cover the unified Primary-field-in-row builder added in PR #368
+// follow-up: the standalone "Primary field ID" input went away; the editor
+// now carries an isPrimary checkbox per row that round-trips through the
+// parent's `primary_field_id` scalar.
+
+describe('isPrimaryFieldValid', () => {
+  it('returns true when requiresInput is off, regardless of primary state', () => {
+    expect(isPrimaryFieldValid([], undefined, false)).toBe(true);
+    expect(isPrimaryFieldValid([{ id: 'r', label: '', type: 'text' }], 'r', false)).toBe(true);
+    expect(isPrimaryFieldValid([{ id: 'r', label: '', type: 'text' }], 'missing', false)).toBe(true);
+  });
+
+  it('returns false when requiresInput is on and primary is empty', () => {
+    expect(isPrimaryFieldValid([{ id: 'r', label: '', type: 'text' }], undefined, true)).toBe(false);
+    expect(isPrimaryFieldValid([{ id: 'r', label: '', type: 'text' }], '', true)).toBe(false);
+  });
+
+  it('returns false when requiresInput is on and primary does not match any row', () => {
+    expect(
+      isPrimaryFieldValid([{ id: 'r', label: '', type: 'text' }], 'stale_id', true),
+    ).toBe(false);
+  });
+
+  it('returns true when requiresInput is on and primary matches a row', () => {
+    expect(
+      isPrimaryFieldValid(
+        [
+          { id: 'a', label: '', type: 'text' },
+          { id: 'b', label: '', type: 'text' },
+        ],
+        'b',
+        true,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('RequiredFieldsEditor — primary field', () => {
+  it('mutex: checking isPrimary on row B un-checks row A (only one primary)', () => {
+    render(
+      <PrimaryHarness
+        initialFields={[
+          { id: 'a', label: 'A', type: 'text' },
+          { id: 'b', label: 'B', type: 'text' },
+        ]}
+        initialPrimary="a"
+      />,
+    );
+    // Initially row 0 is primary.
+    const row0Primary = screen.getByTestId('rfe-row-0-primary');
+    const row1Primary = screen.getByTestId('rfe-row-1-primary');
+    expect(row0Primary).toHaveAttribute('data-state', 'checked');
+    expect(row1Primary).toHaveAttribute('data-state', 'unchecked');
+
+    // Check row 1.
+    fireEvent.click(row1Primary);
+    // Mutex: only one row primary at a time.
+    expect(readPrimary()).toBe('b');
+    expect(screen.getByTestId('rfe-row-0-primary')).toHaveAttribute('data-state', 'unchecked');
+    expect(screen.getByTestId('rfe-row-1-primary')).toHaveAttribute('data-state', 'checked');
+  });
+
+  it('sync: editing the primary row\'s id updates primary_field_id in lockstep', async () => {
+    const user = userEvent.setup();
+    render(
+      <PrimaryHarness
+        initialFields={[{ id: 'reason', label: 'Reason', type: 'text' }]}
+        initialPrimary="reason"
+      />,
+    );
+    expect(readPrimary()).toBe('reason');
+
+    const idInput = screen.getByTestId('rfe-row-0-id') as HTMLInputElement;
+    await user.clear(idInput);
+    await user.type(idInput, 'justification');
+    expect(readFields()[0].id).toBe('justification');
+    expect(readPrimary()).toBe('justification');
+  });
+
+  it('sync: deleting the primary row clears primary_field_id', async () => {
+    const user = userEvent.setup();
+    render(
+      <PrimaryHarness
+        initialFields={[
+          { id: 'a', label: 'A', type: 'text' },
+          { id: 'b', label: 'B', type: 'text' },
+        ]}
+        initialPrimary="a"
+      />,
+    );
+    expect(readPrimary()).toBe('a');
+    await user.click(screen.getByTestId('rfe-row-0-delete'));
+    expect(readPrimary()).toBeUndefined();
+    // Row b is still present and not auto-promoted — explicit user action only.
+    expect(readFields()).toHaveLength(1);
+    expect(readFields()[0].id).toBe('b');
+  });
+
+  it('auto-default: first row added when starting empty is auto-primary', async () => {
+    const user = userEvent.setup();
+    render(<PrimaryHarness initialFields={[]} initialPrimary={undefined} />);
+    expect(readPrimary()).toBeUndefined();
+    await user.click(screen.getByTestId('rfe-add-field'));
+    // Auto-promoted to the new row's id (suggestNewId → field_1 for empty list).
+    expect(readPrimary()).toBe('field_1');
+    // Subsequent adds do NOT change primary — explicit user action only.
+    await user.click(screen.getByTestId('rfe-add-field'));
+    expect(readPrimary()).toBe('field_1');
+  });
+
+  it('validation: requires_input=true + no primary shows the inline error', () => {
+    render(
+      <PrimaryHarness
+        initialFields={[{ id: 'reason', label: 'Reason', type: 'text' }]}
+        initialPrimary={undefined}
+        requiresInput
+      />,
+    );
+    expect(screen.getByTestId('rfe-primary-error')).toBeInTheDocument();
+    expect(screen.getByTestId('rfe-primary-error')).toHaveTextContent(/pick a primary field/i);
+  });
+
+  it('validation: requires_input=true + stale primary (no row match) shows error', () => {
+    render(
+      <PrimaryHarness
+        initialFields={[{ id: 'reason', label: 'Reason', type: 'text' }]}
+        initialPrimary="missing"
+        requiresInput
+      />,
+    );
+    expect(screen.getByTestId('rfe-primary-error')).toBeInTheDocument();
+  });
+
+  it('validation: requires_input=true + primary matches a row → no error', () => {
+    render(
+      <PrimaryHarness
+        initialFields={[{ id: 'reason', label: 'Reason', type: 'text' }]}
+        initialPrimary="reason"
+        requiresInput
+      />,
+    );
+    expect(screen.queryByTestId('rfe-primary-error')).not.toBeInTheDocument();
+  });
+
+  it('validation: requires_input=false + no primary is valid (no error)', () => {
+    render(
+      <PrimaryHarness
+        initialFields={[{ id: 'reason', label: 'Reason', type: 'text' }]}
+        initialPrimary={undefined}
+        requiresInput={false}
+      />,
+    );
+    expect(screen.queryByTestId('rfe-primary-error')).not.toBeInTheDocument();
+  });
+
+  it('unchecking the current primary clears primary_field_id', () => {
+    render(
+      <PrimaryHarness
+        initialFields={[{ id: 'a', label: 'A', type: 'text' }]}
+        initialPrimary="a"
+      />,
+    );
+    expect(readPrimary()).toBe('a');
+    fireEvent.click(screen.getByTestId('rfe-row-0-primary'));
+    expect(readPrimary()).toBeUndefined();
+  });
+
+  it('data shape: isPrimary is NOT persisted on the row (derived UI state only)', async () => {
+    const user = userEvent.setup();
+    render(
+      <PrimaryHarness
+        initialFields={[
+          { id: 'a', label: 'A', type: 'text' },
+          { id: 'b', label: 'B', type: 'text' },
+        ]}
+        initialPrimary="a"
+      />,
+    );
+    // Toggle primary B/A around — the row objects must never gain an `isPrimary` key.
+    fireEvent.click(screen.getByTestId('rfe-row-1-primary'));
+    fireEvent.click(screen.getByTestId('rfe-row-0-primary'));
+    await user.type(screen.getByTestId('rfe-row-0-label'), '!');
+    for (const row of readFields()) {
+      expect(Object.prototype.hasOwnProperty.call(row, 'isPrimary')).toBe(false);
+    }
   });
 });
 

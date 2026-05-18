@@ -23,36 +23,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Get JFrog OIDC token
-        run: |
-          set -euo pipefail
-          ID_TOKEN=$(curl -sLS \
-            -H "User-Agent: actions/oidc-client" \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=jfrog-github" | jq .value | tr -d '"')
-          echo "::add-mask::${ID_TOKEN}"
-          ACCESS_TOKEN=$(curl -sLS -XPOST -H "Content-Type: application/json" \
-            "https://databricks.jfrog.io/access/api/v1/oidc/token" \
-            -d "{\"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\", \"subject_token_type\":\"urn:ietf:params:oauth:token-type:id_token\", \"subject_token\": \"${ID_TOKEN}\", \"provider_name\": \"github-actions\"}" | jq .access_token | tr -d '"')
-          echo "::add-mask::${ACCESS_TOKEN}"
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "FAIL: Could not extract JFrog access token"
-            exit 1
-          fi
-          echo "JFROG_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
-          echo "JFrog OIDC token obtained successfully"
-
-      - name: Configure pip
-        run: |
-          set -euo pipefail
-          echo "PIP_INDEX_URL=https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "$GITHUB_ENV"
-          echo "pip configured to use JFrog registry"
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: ./.github/actions/setup-python-jfrog
         with:
           python-version: '3.10'
-          cache: 'pip'
 
       - name: Install dependencies
         working-directory: ./src
@@ -120,46 +93,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Get JFrog OIDC token
-        run: |
-          set -euo pipefail
-          ID_TOKEN=$(curl -sLS \
-            -H "User-Agent: actions/oidc-client" \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=jfrog-github" | jq .value | tr -d '"')
-          echo "::add-mask::${ID_TOKEN}"
-          ACCESS_TOKEN=$(curl -sLS -XPOST -H "Content-Type: application/json" \
-            "https://databricks.jfrog.io/access/api/v1/oidc/token" \
-            -d "{\"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\", \"subject_token_type\":\"urn:ietf:params:oauth:token-type:id_token\", \"subject_token\": \"${ID_TOKEN}\", \"provider_name\": \"github-actions\"}" | jq .access_token | tr -d '"')
-          echo "::add-mask::${ACCESS_TOKEN}"
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "FAIL: Could not extract JFrog access token"
-            exit 1
-          fi
-          echo "JFROG_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
-          echo "JFrog OIDC token obtained successfully"
-
-      - name: Configure npm
-        run: |
-          set -euo pipefail
-          cat > ~/.npmrc << EOF
-          registry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/
-          //databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${JFROG_ACCESS_TOKEN}
-          always-auth=true
-          EOF
-          echo "npm configured to use JFrog registry"
-          # yarn 1 with --frozen-lockfile honors `resolved` URLs in yarn.lock,
-          # bypassing the configured registry. Rewrite them to JFrog so CI
-          # (which has no egress to registry.yarnpkg.com) can fetch tarballs.
-          sed -i 's|https://registry.yarnpkg.com/|https://databricks.jfrog.io/artifactory/api/npm/db-npm/|g' src/frontend/yarn.lock
-          echo "yarn.lock registry URLs rewritten for JFrog"
-
-      - name: Set up Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-node-jfrog
         with:
           node-version: '24'
-          cache: 'yarn'
-          cache-dependency-path: './src/frontend/yarn.lock'
 
       - name: Install dependencies
         working-directory: ./src/frontend
@@ -218,58 +154,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Get JFrog OIDC token
-        run: |
-          set -euo pipefail
-          ID_TOKEN=$(curl -sLS \
-            -H "User-Agent: actions/oidc-client" \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=jfrog-github" | jq .value | tr -d '"')
-          echo "::add-mask::${ID_TOKEN}"
-          ACCESS_TOKEN=$(curl -sLS -XPOST -H "Content-Type: application/json" \
-            "https://databricks.jfrog.io/access/api/v1/oidc/token" \
-            -d "{\"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\", \"subject_token_type\":\"urn:ietf:params:oauth:token-type:id_token\", \"subject_token\": \"${ID_TOKEN}\", \"provider_name\": \"github-actions\"}" | jq .access_token | tr -d '"')
-          echo "::add-mask::${ACCESS_TOKEN}"
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "FAIL: Could not extract JFrog access token"
-            exit 1
-          fi
-          echo "JFROG_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
-          echo "JFrog OIDC token obtained successfully"
-
-      - name: Configure pip
-        run: |
-          set -euo pipefail
-          echo "PIP_INDEX_URL=https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "$GITHUB_ENV"
-          echo "pip configured to use JFrog registry"
-
-      - name: Configure npm
-        run: |
-          set -euo pipefail
-          cat > ~/.npmrc << EOF
-          registry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/
-          //databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${JFROG_ACCESS_TOKEN}
-          always-auth=true
-          EOF
-          echo "npm configured to use JFrog registry"
-          # yarn 1 with --frozen-lockfile honors `resolved` URLs in yarn.lock,
-          # bypassing the configured registry. Rewrite them to JFrog so CI
-          # (which has no egress to registry.yarnpkg.com) can fetch tarballs.
-          sed -i 's|https://registry.yarnpkg.com/|https://databricks.jfrog.io/artifactory/api/npm/db-npm/|g' src/frontend/yarn.lock
-          echo "yarn.lock registry URLs rewritten for JFrog"
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: ./.github/actions/setup-python-jfrog
         with:
           python-version: '3.11'
-          cache: 'pip'
 
-      - name: Set up Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-node-jfrog
         with:
           node-version: '24'
-          cache: 'yarn'
-          cache-dependency-path: './src/frontend/yarn.lock'
 
       - name: Install backend dependencies
         working-directory: ./src
@@ -367,46 +258,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Get JFrog OIDC token
-        run: |
-          set -euo pipefail
-          ID_TOKEN=$(curl -sLS \
-            -H "User-Agent: actions/oidc-client" \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=jfrog-github" | jq .value | tr -d '"')
-          echo "::add-mask::${ID_TOKEN}"
-          ACCESS_TOKEN=$(curl -sLS -XPOST -H "Content-Type: application/json" \
-            "https://databricks.jfrog.io/access/api/v1/oidc/token" \
-            -d "{\"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\", \"subject_token_type\":\"urn:ietf:params:oauth:token-type:id_token\", \"subject_token\": \"${ID_TOKEN}\", \"provider_name\": \"github-actions\"}" | jq .access_token | tr -d '"')
-          echo "::add-mask::${ACCESS_TOKEN}"
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "FAIL: Could not extract JFrog access token"
-            exit 1
-          fi
-          echo "JFROG_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
-          echo "JFrog OIDC token obtained successfully"
-
-      - name: Configure npm
-        run: |
-          set -euo pipefail
-          cat > ~/.npmrc << EOF
-          registry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/
-          //databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${JFROG_ACCESS_TOKEN}
-          always-auth=true
-          EOF
-          echo "npm configured to use JFrog registry"
-          # yarn 1 with --frozen-lockfile honors `resolved` URLs in yarn.lock,
-          # bypassing the configured registry. Rewrite them to JFrog so CI
-          # (which has no egress to registry.yarnpkg.com) can fetch tarballs.
-          sed -i 's|https://registry.yarnpkg.com/|https://databricks.jfrog.io/artifactory/api/npm/db-npm/|g' src/frontend/yarn.lock
-          echo "yarn.lock registry URLs rewritten for JFrog"
-
-      - name: Set up Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-node-jfrog
         with:
           node-version: '24'
-          cache: 'yarn'
-          cache-dependency-path: './src/frontend/yarn.lock'
 
       - name: Install dependencies
         working-directory: ./src/frontend
@@ -437,35 +291,11 @@ jobs:
           # checkout when the secret isn't configured (older forks, etc.).
           token: ${{ secrets.LOCKFILE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Get JFrog OIDC token
-        run: |
-          set -euo pipefail
-          ID_TOKEN=$(curl -sLS \
-            -H "User-Agent: actions/oidc-client" \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=jfrog-github" | jq .value | tr -d '"')
-          echo "::add-mask::${ID_TOKEN}"
-          ACCESS_TOKEN=$(curl -sLS -XPOST -H "Content-Type: application/json" \
-            "https://databricks.jfrog.io/access/api/v1/oidc/token" \
-            -d "{\"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\", \"subject_token_type\":\"urn:ietf:params:oauth:token-type:id_token\", \"subject_token\": \"${ID_TOKEN}\", \"provider_name\": \"github-actions\"}" | jq .access_token | tr -d '"')
-          echo "::add-mask::${ACCESS_TOKEN}"
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "FAIL: Could not extract JFrog access token"
-            exit 1
-          fi
-          echo "JFROG_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
-          echo "JFrog OIDC token obtained successfully"
-
-      - name: Configure uv
-        run: |
-          set -euo pipefail
-          echo "UV_DEFAULT_INDEX=https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "$GITHUB_ENV"
-          echo "uv configured to use JFrog registry"
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      - uses: ./.github/actions/setup-python-jfrog
         with:
           python-version: '3.10'
+          installer: uv
+          cache: ''
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
@@ -533,46 +363,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Get JFrog OIDC token
-        run: |
-          set -euo pipefail
-          ID_TOKEN=$(curl -sLS \
-            -H "User-Agent: actions/oidc-client" \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=jfrog-github" | jq .value | tr -d '"')
-          echo "::add-mask::${ID_TOKEN}"
-          ACCESS_TOKEN=$(curl -sLS -XPOST -H "Content-Type: application/json" \
-            "https://databricks.jfrog.io/access/api/v1/oidc/token" \
-            -d "{\"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\", \"subject_token_type\":\"urn:ietf:params:oauth:token-type:id_token\", \"subject_token\": \"${ID_TOKEN}\", \"provider_name\": \"github-actions\"}" | jq .access_token | tr -d '"')
-          echo "::add-mask::${ACCESS_TOKEN}"
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "FAIL: Could not extract JFrog access token"
-            exit 1
-          fi
-          echo "JFROG_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
-          echo "JFrog OIDC token obtained successfully"
-
-      - name: Configure npm
-        run: |
-          set -euo pipefail
-          cat > ~/.npmrc << EOF
-          registry=https://databricks.jfrog.io/artifactory/api/npm/db-npm/
-          //databricks.jfrog.io/artifactory/api/npm/db-npm/:_authToken=${JFROG_ACCESS_TOKEN}
-          always-auth=true
-          EOF
-          echo "npm configured to use JFrog registry"
-          # yarn 1 with --frozen-lockfile honors `resolved` URLs in yarn.lock,
-          # bypassing the configured registry. Rewrite them to JFrog so CI
-          # (which has no egress to registry.yarnpkg.com) can fetch tarballs.
-          sed -i 's|https://registry.yarnpkg.com/|https://databricks.jfrog.io/artifactory/api/npm/db-npm/|g' src/frontend/yarn.lock
-          echo "yarn.lock registry URLs rewritten for JFrog"
-
-      - name: Set up Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: ./.github/actions/setup-node-jfrog
         with:
           node-version: '24'
-          cache: 'yarn'
-          cache-dependency-path: './src/frontend/yarn.lock'
 
       - name: Install dependencies
         working-directory: ./src/frontend

@@ -133,7 +133,12 @@ jobs:
       labels: linux-ubuntu-latest
     timeout-minutes: 20
     # Run E2E tests only on pushes to main (not on PRs)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # TEMP: also run for this branch's PR to verify the E2E fixes land green
+    # before merge. Revert this block to a single condition before merging.
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'fix/e2e-workflow-editor-and-cert-publication') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/fix/e2e-workflow-editor-and-cert-publication')
 
     services:
       postgres:

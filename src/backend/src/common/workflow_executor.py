@@ -269,12 +269,44 @@ def _resolve_role_to_users(
             logger.warning(f"Business role {br_id} not found")
             return []
 
+        # Some trigger contexts carry a "proxy" entity that stands in for the
+        # real entity that Business Owners are assigned to. For example:
+        #   - on_request_access fires on entity_type=access_grant, where
+        #     context.entity_id is the access-grant request's UUID, NOT the
+        #     underlying data product. Business Owners are assigned to data
+        #     products, so a naive lookup by context.entity_id returns [].
+        # For these proxy entity types, the trigger firer puts the underlying
+        # entity's id under context.entity['entity_id']. We traverse to that
+        # so the BusinessOwnerDb lookup hits the right object.
+        # NOTE: on_subscribe already fires with entity_type=data_product +
+        # entity_id=<product_id> directly (see data_products_manager
+        # ._fire_on_subscribe_trigger), so subscription proxying is not needed
+        # here. The traversal list is intentionally narrow.
+        PROXY_ENTITY_TYPES = {'access_grant'}
+        lookup_object_id = context.entity_id
+        if context.entity_type in PROXY_ENTITY_TYPES and context.entity:
+            underlying_id = context.entity.get('entity_id')
+            if underlying_id:
+                logger.info(
+                    f"Business role resolver: traversing proxy "
+                    f"entity_type={context.entity_type} entity_id={context.entity_id} "
+                    f"-> underlying {context.entity.get('entity_type', '?')}={underlying_id} "
+                    f"for Business Owner lookup"
+                )
+                lookup_object_id = underlying_id
+            else:
+                logger.warning(
+                    f"Business role resolver: proxy entity_type={context.entity_type} "
+                    f"has no entity.entity_id to traverse to; falling back to "
+                    f"context.entity_id={context.entity_id} (lookup will likely return [])"
+                )
+
         # Runtime resolution: look up who holds this business role for this entity
         owners = (
             db.query(BusinessOwnerDb)
             .filter(
                 BusinessOwnerDb.role_id == br.id,
-                BusinessOwnerDb.object_id == context.entity_id,
+                BusinessOwnerDb.object_id == lookup_object_id,
                 BusinessOwnerDb.is_active.is_(True),
             )
             .all()
@@ -283,8 +315,9 @@ def _resolve_role_to_users(
         if not owners:
             # No one assigned this role for this entity
             logger.warning(
-                f"No active {br.name} assigned to {context.entity_type} "
-                f"{context.entity_id} ({context.entity_name})"
+                f"No active {br.name} assigned to object_id={lookup_object_id} "
+                f"(triggered on {context.entity_type} {context.entity_id} / "
+                f"{context.entity_name})"
             )
             return []
 

@@ -17,7 +17,7 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 1. Workflow editor loads with step toolbar
   // -------------------------------------------------------------------------
   test('workflow editor loads with step toolbar and canvas', async ({ page }) => {
-    await page.goto('/workflows/new');
+    await page.goto('/workflows/new?type=process');
 
     // "Add Step" label in the toolbar panel
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
@@ -37,7 +37,7 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 2. Add nodes and verify auto-connection edge
   // -------------------------------------------------------------------------
   test('adding steps auto-creates connecting edges', async ({ page }) => {
-    await page.goto('/workflows/new');
+    await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
 
     // Start with just the trigger node
@@ -61,7 +61,7 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 3. Edge selection and visual feedback
   // -------------------------------------------------------------------------
   test('clicking an edge selects it and shows delete button', async ({ page }) => {
-    await page.goto('/workflows/new');
+    await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
 
     // Add two steps to get an edge between them
@@ -87,7 +87,7 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 4. Edge deletion via delete button
   // -------------------------------------------------------------------------
   test('clicking the delete button removes the edge', async ({ page }) => {
-    await page.goto('/workflows/new');
+    await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
 
     // Build a small graph: trigger → approval → notification
@@ -112,7 +112,7 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 5. Approval node has pass (green) and fail (red) source handles
   // -------------------------------------------------------------------------
   test('approval node exposes pass and fail handles', async ({ page }) => {
-    await page.goto('/workflows/new');
+    await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
 
     // Add an Approval step
@@ -132,7 +132,7 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 6. Drag from fail handle to create a fail edge
   // -------------------------------------------------------------------------
   test('drag from fail handle creates a fail-labeled edge', async ({ page }) => {
-    await page.goto('/workflows/new');
+    await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
 
     // Add Approval + two Notification nodes
@@ -189,7 +189,7 @@ test.describe('Workflow Editor — Edge Management', () => {
   // 7. Save workflow with connections — no errors
   // -------------------------------------------------------------------------
   test('save workflow with steps and connections succeeds', async ({ page }) => {
-    await page.goto('/workflows/new');
+    await page.goto('/workflows/new?type=process');
     await expect(page.getByText('Add Step')).toBeVisible({ timeout: 15_000 });
 
     // Fill in the workflow name (the inline Input with placeholder "Workflow name")

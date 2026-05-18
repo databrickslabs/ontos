@@ -379,11 +379,21 @@ def initialize_managers(app: FastAPI):
         # Defer SearchManager initialization until after initial data loading completes
         logger.info("Deferring SearchManager initialization until after initial data load.")
         
-        # --- Ensure default roles exist using the manager method --- 
+        # --- Ensure default roles exist using the manager method ---
         app.state.settings_manager.ensure_default_roles_exist()
-        
+
         # --- Ensure default team and project exist for admins ---
         app.state.settings_manager.ensure_default_team_and_project()
+
+        # --- Seed default certification levels (Bronze, Silver, Gold) if empty ---
+        # Lifecycle routes (handle-certify, /certify) resolve the requested
+        # certification_level by level_order; without seeds the table is empty
+        # and they 404.
+        try:
+            from src.repositories.certification_levels_repository import certification_levels_repo
+            certification_levels_repo.seed_defaults(db_session)
+        except Exception as e:
+            logger.error(f"Failed to seed default certification levels: {e}", exc_info=True)
 
         # --- Commit session potentially used for default role creation ---
         # This commit is crucial AFTER all managers are initialized AND

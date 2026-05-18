@@ -1,0 +1,127 @@
+name: Alembic Migration Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  alembic-check:
+    name: Verify migrations match models
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ontos_test
+          POSTGRES_PASSWORD: ontos_test_pw
+          POSTGRES_DB: app_ontos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Get JFrog OIDC token
+        run: |
+          set -euo pipefail
+          ID_TOKEN=$(curl -sLS \
+            -H "User-Agent: actions/oidc-client" \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=jfrog-github" | jq .value | tr -d '"')
+          echo "::add-mask::${ID_TOKEN}"
+          ACCESS_TOKEN=$(curl -sLS -XPOST -H "Content-Type: application/json" \
+            "https://databricks.jfrog.io/access/api/v1/oidc/token" \
+            -d "{\"grant_type\": \"urn:ietf:params:oauth:grant-type:token-exchange\", \"subject_token_type\":\"urn:ietf:params:oauth:token-type:id_token\", \"subject_token\": \"${ID_TOKEN}\", \"provider_name\": \"github-actions\"}" | jq .access_token | tr -d '"')
+          echo "::add-mask::${ACCESS_TOKEN}"
+          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
+            echo "FAIL: Could not extract JFrog access token"
+            exit 1
+          fi
+          echo "JFROG_ACCESS_TOKEN=${ACCESS_TOKEN}" >> "$GITHUB_ENV"
+          echo "JFrog OIDC token obtained successfully"
+
+      - name: Configure pip
+        run: |
+          set -euo pipefail
+          echo "PIP_INDEX_URL=https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "$GITHUB_ENV"
+          echo "pip configured to use JFrog registry"
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: ./src
+        run: |
+          python -m pip install --upgrade pip
+          pip install "virtualenv<21" hatch==1.16.3
+          hatch -e dev run pip install --require-hashes -r backend/requirements.txt
+
+      - name: Prepare audit log dir
+        run: mkdir -p /tmp/audit_logs
+
+      # Apply the full migration chain to the ephemeral Postgres, then
+      # ask alembic to autogenerate a candidate revision against the
+      # current SQLAlchemy models. If `alembic check` detects any
+      # difference between the live schema and the models, it exits
+      # non-zero — that's drift, and CI fails.
+      #
+      # ENV=LOCAL forces _use_password_auth() in src/common/database.py
+      # onto the password branch, so env.py never tries to construct a
+      # Databricks workspace client during alembic startup.
+      #
+      # alembic.ini lives at src/backend/alembic.ini with a relative
+      # script_location, so we cd into src/backend before invoking it.
+      # hatch resolves the dev env via the project pyproject.toml at
+      # src/pyproject.toml regardless of the cwd within the project.
+      - name: Run alembic upgrade head
+        working-directory: ./src/backend
+        env:
+          ENV: LOCAL
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: ontos_test
+          POSTGRES_PASSWORD: ontos_test_pw
+          POSTGRES_DB: app_ontos
+          DATABRICKS_HOST: https://mock.databricks.com
+          DATABRICKS_WAREHOUSE_ID: mock_warehouse_id
+          DATABRICKS_CATALOG: test_catalog
+          DATABRICKS_SCHEMA: test_schema
+          DATABRICKS_VOLUME: test_volume
+          APP_AUDIT_LOG_DIR: /tmp/audit_logs
+        run: hatch -e dev run alembic upgrade head
+
+      - name: Run alembic check
+        working-directory: ./src/backend
+        env:
+          ENV: LOCAL
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: ontos_test
+          POSTGRES_PASSWORD: ontos_test_pw
+          POSTGRES_DB: app_ontos
+          DATABRICKS_HOST: https://mock.databricks.com
+          DATABRICKS_WAREHOUSE_ID: mock_warehouse_id
+          DATABRICKS_CATALOG: test_catalog
+          DATABRICKS_SCHEMA: test_schema
+          DATABRICKS_VOLUME: test_volume
+          APP_AUDIT_LOG_DIR: /tmp/audit_logs
+        run: hatch -e dev run alembic check

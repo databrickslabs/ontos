@@ -1,0 +1,94 @@
+name: Deploy to Test Workspace
+
+# Optional, manually-triggered deploy of Ontos to a Databricks workspace.
+# Run from the Actions tab → "Deploy to Test Workspace" → "Run workflow".
+#
+# Workspace selection is driven by GitHub Environments. Each Environment supplies:
+#   var    DATABRICKS_HOST   — workspace URL (e.g. https://...cloud.databricks.com)
+#   secret DATABRICKS_TOKEN  — PAT (or OAuth M2M token) for that workspace
+#
+# To add a new workspace: create a new Environment in repo Settings → Environments,
+# set the host/token, and add its name to the `environment` choice list below.
+#
+# Notes on what this workflow does NOT do:
+#   - Does not build the frontend. Databricks Apps detects package.json on the
+#     workspace side and runs `npm install` + `npm run build` at deploy time
+#     (see scripts/build_static.sh). The frontend-build job in test-coverage.yml
+#     already gates build correctness on every push/PR to main.
+#   - Does not install Python deps. `databricks bundle deploy` uploads source;
+#     the workspace builds the app from there.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment (selects workspace host + token)"
+        type: choice
+        options:
+          - ontos-test
+        default: ontos-test
+      target:
+        description: "Bundle target (from src/databricks.yaml)"
+        type: choice
+        options: [dev, prod]
+        default: dev
+      start_app:
+        description: "Start the app after deploy (databricks bundle run)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 15
+
+    env:
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      BUNDLE_TARGET: ${{ inputs.target }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Verify auth
+        run: |
+          databricks current-user me \
+            | jq -r '"Authenticated as: \(.userName) on \(env.DATABRICKS_HOST)"'
+
+      - name: Validate bundle
+        working-directory: src
+        run: databricks bundle validate -t "$BUNDLE_TARGET"
+
+      - name: Deploy bundle
+        working-directory: src
+        run: databricks bundle deploy -t "$BUNDLE_TARGET"
+
+      - name: Start app
+        if: ${{ inputs.start_app }}
+        working-directory: src
+        run: databricks bundle run -t "$BUNDLE_TARGET" ontos
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Ontos deploy"
+            echo ""
+            echo "- **Environment:** ${{ inputs.environment }}"
+            echo "- **Workspace:**   ${DATABRICKS_HOST}"
+            echo "- **Target:**      ${BUNDLE_TARGET}"
+            echo "- **App started:** ${{ inputs.start_app }}"
+          } >> "$GITHUB_STEP_SUMMARY"

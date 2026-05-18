@@ -61,21 +61,21 @@ async def list_workflows(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     workflow_type: Optional[str] = Query(None, description="Filter by workflow_type: process | approval"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
+    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowListResponse:
-    """List process workflows (or approval workflows when workflow_type=approval).
+    """List all process workflows (or approval workflows when workflow_type=approval).
 
-    Authenticated-only (no feature-permission gate). Rationale: the
-    approval-wizard-dialog fetches this list as part of launching ANY
-    wizard (subscribe, request_access, request_review, etc.) — it is the
-    chooser the user sees when picking which approval workflow to run.
-    Gating it as ``settings:READ_ONLY`` silently 403s end users (e.g.
-    Data Consumer) who legitimately need to invoke a wizard, even after
-    PR A's per-trigger dispatch unblocks the wizard's launch endpoint.
+    Admin-only enumeration (``settings:READ_ONLY``). End users MUST NOT
+    use this endpoint — the full payload includes every step's ``config``
+    which can carry webhook URLs, script content, internal recipient
+    lists, and other implementation detail that shouldn't leak.
 
-    The data exposed here is workflow metadata (name, type, steps,
-    triggers) — same shape as what's already visible to anyone who can
-    invoke a workflow. Writes (POST/PUT/DELETE) on this router remain
-    gated behind ``settings:READ_WRITE``.
+    For end-user wizard flows use:
+      - ``GET /api/workflows/for-trigger/{trigger_type}`` — per-trigger
+        dispatch via ``WIZARD_PERMISSION_DISPATCH`` (PR A).
+      - ``GET /api/workflows/{workflow_id}`` — when the workflow is an
+        approval workflow, dispatched on its trigger; otherwise still
+        ``settings:READ_ONLY``.
     """
     wf_type = WorkflowType(workflow_type) if workflow_type in ('process', 'approval') else None
     workflows = manager.list_workflows(is_active=is_active, workflow_type=wf_type)
@@ -647,12 +647,41 @@ async def get_workflow(
     request: Request,
     workflow_id: str,
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
 ) -> ProcessWorkflow:
-    """Get a specific workflow by ID."""
+    """Get a specific workflow by ID.
+
+    Permission model is dispatched on the workflow's shape:
+
+      * **Approval workflows** (``workflow_type == 'approval'``) — gated
+        via ``WIZARD_PERMISSION_DISPATCH[trigger.type]``. Mirrors
+        ``/for-trigger/{type}`` so the approval-wizard-dialog can fetch
+        a single workflow by id without the caller needing
+        ``settings:READ_ONLY``. The wizard already obtained the id from
+        ``/for-trigger/{type}`` (same dispatch), so this is symmetric.
+      * **Process workflows** — gated by ``settings:READ_ONLY`` (admin
+        configuration), unchanged.
+
+    A workflow whose trigger isn't in the dispatch table falls back to
+    ``settings:READ_ONLY`` (fail-closed).
+    """
     workflow = manager.get_workflow(workflow_id)
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # Dispatch the permission check on the workflow's actual trigger.
+    trigger_type = workflow.trigger.type.value if workflow.trigger and workflow.trigger.type else None
+    is_approval = getattr(workflow, "workflow_type", None) == WorkflowType.APPROVAL
+    if is_approval and trigger_type and trigger_type in WIZARD_PERMISSION_DISPATCH:
+        # Reuse PR A's dispatch — None entries (e.g. on_first_access)
+        # short-circuit to authenticated-only.
+        await enforce_wizard_permission(trigger_type, user_details, request, raise_on_unknown=False)
+    else:
+        # Process workflows, or approval workflows whose trigger isn't in
+        # the dispatch table — keep the original admin-config gate.
+        await enforce_feature_permission(
+            'settings', FeatureAccessLevel.READ_ONLY, user_details, request,
+        )
     return workflow
 
 

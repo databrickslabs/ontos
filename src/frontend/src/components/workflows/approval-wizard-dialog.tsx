@@ -298,10 +298,35 @@ export default function ApprovalWizardDialog({
       fetchUserInfo().catch(() => {});
     }
     let cancelled = false;
-    get<{ workflows: ApprovalWorkflowRef[]; total: number }>('/api/workflows?workflow_type=approval')
-      .then((res) => {
-        if (cancelled || !res.data) return;
-        const wfs = Array.isArray(res.data?.workflows) ? res.data.workflows : [];
+    // Two fetch shapes depending on how the wizard was launched:
+    //
+    //  (a) ``preselectedWorkflowId`` is set — the caller already resolved the
+    //      workflow id via ``GET /api/workflows/for-trigger/{trigger}`` (the
+    //      trigger-dispatched endpoint from PR A). We only need that one
+    //      workflow's shape (for step-count + chooser membership check), and
+    //      we should NOT call ``GET /api/workflows?workflow_type=approval``
+    //      because that endpoint is admin-only (it enumerates every approval
+    //      workflow's full step config, incl. webhook URLs / scripts).
+    //      Fetch via ``GET /api/workflows/{id}`` which is trigger-dispatched
+    //      for approval workflows.
+    //
+    //  (b) No ``preselectedWorkflowId`` — fall back to the chooser pattern
+    //      (admin-style use: pick from all approval workflows). Only callers
+    //      with ``settings:READ_ONLY`` can succeed here; ordinary end-user
+    //      launch paths always pass a preselected id.
+    const fetchPromise = preselectedWorkflowId
+      ? get<ApprovalWorkflowRef>(`/api/workflows/${preselectedWorkflowId}`).then((res) => {
+          if (!res.data) return { workflows: [], total: 0 };
+          return { workflows: [res.data], total: 1 };
+        })
+      : get<{ workflows: ApprovalWorkflowRef[]; total: number }>(
+          '/api/workflows?workflow_type=approval',
+        ).then((res) => res.data ?? { workflows: [], total: 0 });
+
+    fetchPromise
+      .then((data) => {
+        if (cancelled) return;
+        const wfs = Array.isArray(data?.workflows) ? data.workflows : [];
         setWorkflows(wfs);
         setWorkflowsLoaded(true);
         // No-workflow fallback: if no workflows exist, close dialog and notify caller

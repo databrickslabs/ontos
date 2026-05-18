@@ -350,7 +350,14 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         port_obj.description = port_dict.get('description')
                         port_obj.port_type = port_dict.get('type')
                         port_obj.contract_id = port_dict.get('contract_id')
-                        port_obj.delivery_method_id = port_dict.get('delivery_method_id')
+                        # Preserve existing delivery_method_id on partial updates: only
+                        # write if the caller explicitly included the key. Caller can still
+                        # clear the FK by sending an explicit null. Without this guard, any
+                        # update payload built from a UI that does not surface the delivery
+                        # method field (e.g. a name/description edit) would silently NULL
+                        # the FK on every save.
+                        if 'delivery_method_id' in port_dict:
+                            port_obj.delivery_method_id = port_dict.get('delivery_method_id')
                         port_obj.asset_type = port_dict.get('asset_type')
                         port_obj.asset_identifier = port_dict.get('asset_identifier')
                         port_obj.status = port_dict.get('status')

@@ -1776,11 +1776,36 @@ class SettingsManager:
             raise
 
     def _validate_permissions(self, permissions: Dict[str, FeatureAccessLevel]):
-        """Validates that assigned permission levels are allowed for each feature."""
+        """Validate (and clean) the permissions dict assigned to a role.
+
+        Behavior:
+          * Unknown feature IDs (e.g. features that have been renamed or
+            removed since this role was last saved) are dropped from
+            ``permissions`` in place and logged as a warning. The role can
+            still be saved — the next persisted state will no longer carry
+            the stale key. This is the path that historically 400'd with
+            "Invalid role data" on any role that predated a feature rename
+            (e.g. the legacy ``datasets`` feature ID lingering on roles
+            installed before the rename to ``data-products``).
+          * Unknown access levels for a known feature remain a hard error
+            (this indicates a client bug or schema mismatch, not drift
+            between releases, so it should not be silently swallowed).
+
+        Mutates ``permissions`` in place so the caller's subsequent
+        ``repository.update`` writes the cleaned dict and the stale key
+        does not survive the round-trip.
+        """
         feature_config = get_feature_config()
+        # Iterate over a snapshot — we delete keys during the loop.
+        stale_feature_ids = [fid for fid in permissions if fid not in feature_config]
+        for fid in stale_feature_ids:
+            logger.warning(
+                "Dropping unknown feature_id '%s' from role permissions "
+                "(feature was likely renamed or removed in a prior release).",
+                fid,
+            )
+            permissions.pop(fid)
         for feature_id, level in permissions.items():
-            if feature_id not in feature_config:
-                raise ValueError(f"Invalid feature ID provided in permissions: '{feature_id}'")
             allowed_levels = feature_config[feature_id].get('allowed_levels', [])
             if level not in allowed_levels:
                 allowed_str = [lvl.value for lvl in allowed_levels]

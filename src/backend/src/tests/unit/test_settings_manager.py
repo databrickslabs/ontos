@@ -392,3 +392,49 @@ class TestSettingsManager:
         assert result.description == "Updated description only"
         assert result.name == sample_role_db.name  # Name unchanged
 
+    # =====================================================================
+    # _validate_permissions Tests (stale feature_id tolerance)
+    # =====================================================================
+    #
+    # Pre-existing roles can carry feature_ids that were renamed or removed
+    # between releases (e.g. the legacy 'datasets' feature, renamed to
+    # 'data-products'). The frontend echoes back the full permissions dict on
+    # save, which historically 400'd with "Invalid role data" — making the role
+    # uneditable until someone fixed the DB row by hand. The validator now
+    # drops unknown keys in place with a warning so the next save persists a
+    # cleaned dict. Real client bugs (unknown access *level* for a known
+    # feature) remain a hard error.
+
+    def test_validate_permissions_drops_unknown_feature_id(self, manager, caplog):
+        """Unknown feature_ids are dropped from the dict in place + warned."""
+        # Arrange — mix one valid, one stale (the historical 'datasets' key)
+        perms = {
+            "data-products": FeatureAccessLevel.READ_ONLY,
+            "datasets":      FeatureAccessLevel.READ_ONLY,  # stale
+        }
+
+        # Act
+        manager._validate_permissions(perms)
+
+        # Assert — stale key dropped, valid key preserved
+        assert "datasets" not in perms
+        assert perms["data-products"] == FeatureAccessLevel.READ_ONLY
+        assert any("datasets" in rec.getMessage() for rec in caplog.records)
+
+    def test_validate_permissions_still_rejects_invalid_level(self, manager):
+        """An unknown access *level* for a known feature is still a hard error."""
+        # Arrange — known feature, but pick a level it does not allow.
+        # 'security-features' is admin-only, so READ_WRITE is not in its
+        # allowed_levels.
+        perms = {"security-features": FeatureAccessLevel.READ_WRITE}
+
+        # Act / Assert
+        with pytest.raises(ValueError, match="Invalid access level"):
+            manager._validate_permissions(perms)
+
+    def test_validate_permissions_empty_dict_noop(self, manager):
+        """Empty permissions dict validates cleanly (regression guard)."""
+        perms = {}
+        manager._validate_permissions(perms)
+        assert perms == {}
+

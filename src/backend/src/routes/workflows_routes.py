@@ -12,8 +12,13 @@ from sqlalchemy.orm import Session
 
 from src.common.database import get_db
 from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
-from src.common.authorization import PermissionChecker
+from src.common.authorization import (
+    PermissionChecker,
+    enforce_feature_permission,
+    get_user_details_from_sdk,
+)
 from src.common.features import FeatureAccessLevel
+from src.models.users import UserInfo
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
 from src.common.workflow_executor import WorkflowExecutor
@@ -522,25 +527,99 @@ APP_ACTION_TRIGGER_TYPES = frozenset({
 })
 
 
+# Per-trigger permission gate for wizard endpoints. Maps each app-action
+# trigger to the FEATURE permission a user needs to interact with that
+# wizard (look it up, start a session, advance steps).
+#
+# None = authenticated only (no feature permission required). Used for
+# first-login onboarding screens that must work for users with zero
+# feature permissions.
+#
+# Customers control who can run each wizard by adjusting role-feature
+# permissions in the Settings UI — the same lever they already use for
+# every other feature in Ontos. The mapping below describes the SEMANTIC
+# IDENTITY of each wizard (which feature it belongs to), not customer
+# policy.
+#
+# Background: previously every wizard endpoint required
+# `settings:READ_ONLY` (or `data-contracts:READ_WRITE` on session POSTs),
+# which gated wizards behind admin-style permissions even when the
+# wizard's actual feature was something a Data Consumer could already
+# touch (e.g. requesting access to a data product). Two customer incidents
+# in May 2026 hit this: Data Consumers couldn't open the access-request
+# wizard because they didn't have `settings` read.
+WIZARD_PERMISSION_DISPATCH: Dict[str, Optional[tuple]] = {
+    TriggerType.FOR_REQUEST_ACCESS.value:        ("access-grants",  FeatureAccessLevel.READ_ONLY),
+    TriggerType.FOR_SUBSCRIBE.value:             ("data-products",  FeatureAccessLevel.READ_ONLY),
+    TriggerType.FOR_REQUEST_REVIEW.value:        ("data-contracts", FeatureAccessLevel.READ_ONLY),
+    TriggerType.FOR_REQUEST_PUBLISH.value:       ("data-products",  FeatureAccessLevel.READ_WRITE),
+    TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
+    TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
+    TriggerType.ON_FIRST_ACCESS.value:           None,  # authenticated only — first-login welcome screen
+    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("settings",       FeatureAccessLevel.READ_ONLY),
+    # `for_approval_response` has an additional per-request approvers-list
+    # check INSIDE the session handler (already present, leave intact).
+}
+
+
+async def enforce_wizard_permission(
+    trigger_type: str,
+    user_details: UserInfo,
+    request: Request,
+    *,
+    raise_on_unknown: bool = True,
+) -> None:
+    """Enforce the per-trigger permission gate from ``WIZARD_PERMISSION_DISPATCH``.
+
+    Raises ``HTTPException(403)`` if the user lacks the required feature
+    permission. No-op when the dispatch entry is ``None`` (authenticated-only
+    triggers like ``on_first_access``).
+
+    If ``trigger_type`` isn't in the dispatch and ``raise_on_unknown`` is True
+    (default), raises 400. Set to False for callers that have already
+    validated the trigger (e.g. session handlers reading a stored workflow).
+    """
+    if trigger_type not in WIZARD_PERMISSION_DISPATCH:
+        if raise_on_unknown:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown wizard trigger type: {trigger_type}",
+            )
+        return
+    gate = WIZARD_PERMISSION_DISPATCH[trigger_type]
+    if gate is None:
+        # Authenticated-only trigger; no feature permission required.
+        return
+    feature_id, required_level = gate
+    await enforce_feature_permission(feature_id, required_level, user_details, request)
+
+
 @router.get("/for-trigger/{trigger_type}", response_model=ProcessWorkflow)
 async def get_workflow_for_trigger(
     request: Request,
     trigger_type: str,
     entity_type: Optional[str] = Query(None, description="Optional entity type to match against workflow trigger entity_types"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
 ) -> ProcessWorkflow:
     """Get the first active workflow that declares this trigger type.
 
     Trigger type is the stable contract; workflow names are for display only.
     Optionally pass ?entity_type= to narrow the match to workflows whose
     trigger.entity_types includes the value (or is empty, meaning "all").
+
+    Permission gate is dispatched per trigger type via
+    ``WIZARD_PERMISSION_DISPATCH`` — see the comment on that table for the
+    rationale. Previously hard-coded to ``settings:READ_ONLY`` which gated
+    e.g. the access-request wizard behind admin-style permissions.
     """
     if trigger_type not in APP_ACTION_TRIGGER_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid trigger_type. Allowed: {sorted(APP_ACTION_TRIGGER_TYPES)}",
         )
+    # Per-trigger permission check — replaces the blanket settings:READ_ONLY gate.
+    await enforce_wizard_permission(trigger_type, user_details, request)
     workflow = manager.get_workflow_by_trigger_type(trigger_type, entity_type=entity_type)
     if not workflow:
         raise HTTPException(

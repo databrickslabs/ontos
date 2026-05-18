@@ -312,6 +312,92 @@ class ProjectAccessChecker:
         return
 
 
+async def enforce_feature_permission(
+    feature_id: str,
+    required_level: FeatureAccessLevel,
+    user_details: UserInfo,
+    request: Request,
+) -> None:
+    """Programmatic equivalent of :class:`PermissionChecker` for use inside
+    route handler bodies.
+
+    Raises ``HTTPException(403)`` if the user lacks the required permission
+    level for the given feature. Reuses the same precedence as
+    ``PermissionChecker.__call__``: explicit role override > team role
+    override > group-based effective permissions.
+
+    Exists because some endpoints (notably the wizard endpoints) need to
+    dispatch the feature_id at request time based on path/body data, which
+    can't be done with FastAPI's ``Depends`` (resolved before the handler
+    runs).
+    """
+    if not user_details.groups:
+        logger.warning(
+            "User '%s' has no groups. Denying access for '%s'",
+            user_details.user or user_details.email,
+            feature_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User has no assigned groups, cannot determine permissions.",
+        )
+
+    auth_manager: AuthorizationManager = getattr(request.app.state, "authorization_manager", None)
+    if not auth_manager:
+        logger.critical("AuthorizationManager not found in app state during enforce_feature_permission")
+        raise HTTPException(status_code=503, detail="Authorization service not configured.")
+
+    try:
+        # Mirror PermissionChecker.__call__: team override → applied role override → group merge.
+        team_role_override = await get_user_team_role_overrides(
+            user_details.email,
+            user_details.groups or [],
+            request,
+        )
+
+        applied_role_id = None
+        settings_manager = getattr(request.app.state, "settings_manager", None)
+        try:
+            if settings_manager:
+                applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
+        except Exception:
+            applied_role_id = None
+
+        if applied_role_id and settings_manager:
+            effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+        else:
+            effective_permissions = auth_manager.get_user_effective_permissions(
+                user_details.groups,
+                team_role_override,
+            )
+
+        if not auth_manager.has_permission(effective_permissions, feature_id, required_level):
+            user_level = effective_permissions.get(feature_id, FeatureAccessLevel.NONE)
+            logger.warning(
+                "Permission denied for user '%s' on feature '%s'. Required: '%s', Found: '%s'",
+                user_details.user or user_details.email,
+                feature_id,
+                required_level.value,
+                user_level.value,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient permissions for feature '{feature_id}'. Required level: {required_level.value}.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error(
+            "Unexpected error during enforce_feature_permission for feature '%s'",
+            feature_id,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error checking user permissions.",
+        )
+
+
 class PermissionChecker:
     """FastAPI Dependency to check user permissions for a feature."""
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):

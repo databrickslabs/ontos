@@ -187,8 +187,9 @@ class TestDataProductRepository:
 
     def test_get_multi_empty(self, db_session: Session):
         """Test listing products when none exist."""
-        # Act
-        result = data_product_repo.get_multi(db=db_session)
+        # Act — use is_admin=True to exercise the listing mechanics rather
+        # than the (separately-tested) ownership scope filter.
+        result = data_product_repo.get_multi(db=db_session, is_admin=True)
 
         # Assert
         assert isinstance(result, list)
@@ -207,7 +208,7 @@ class TestDataProductRepository:
             data_product_repo.create(db=db_session, obj_in=model)
 
         # Act
-        result = data_product_repo.get_multi(db=db_session)
+        result = data_product_repo.get_multi(db=db_session, is_admin=True)
 
         # Assert
         assert len(result) == 3
@@ -225,7 +226,7 @@ class TestDataProductRepository:
             data_product_repo.create(db=db_session, obj_in=model)
 
         # Act - Get second page (skip 5, limit 3)
-        result = data_product_repo.get_multi(db=db_session, skip=5, limit=3)
+        result = data_product_repo.get_multi(db=db_session, skip=5, limit=3, is_admin=True)
 
         # Assert
         assert len(result) == 3
@@ -243,7 +244,7 @@ class TestDataProductRepository:
             data_product_repo.create(db=db_session, obj_in=model)
 
         # Act
-        result = data_product_repo.get_multi(db=db_session, limit=5)
+        result = data_product_repo.get_multi(db=db_session, limit=5, is_admin=True)
 
         # Assert
         assert len(result) == 5

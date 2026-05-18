@@ -528,21 +528,48 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         skip: int = 0,
         limit: int = 100,
         project_id: Optional[str] = None,
-        is_admin: bool = False
+        is_admin: bool = False,
+        caller_email: Optional[str] = None,
+        caller_team_ids: Optional[List[str]] = None,
+        caller_project_ids: Optional[List[str]] = None,
     ) -> List[DataProductDb]:
         """Get multiple ODPS v1.0.0 Data Products with all relationships eagerly loaded.
+
+        Authorization cascade for non-admins (any condition grants visibility):
+          - ``project_id`` IN ``caller_project_ids``
+          - ``owner_team_id`` IN ``caller_team_ids``
+          - ``draft_owner_id`` == ``caller_email``  (creator ownership — works
+            for drafts AND non-drafts, so the same field serves "single-user
+            ownership" without a separate column)
+
+        If the caller is not admin AND none of the scope inputs are provided
+        (no email, no teams, no projects), this returns an empty list — i.e.
+        fail-closed. The same applies transitively to legacy / orphan rows
+        (no project_id, no owner_team_id, no draft_owner_id): a non-admin
+        never sees them. They can be promoted by an admin later.
 
         Args:
             db: Database session
             skip: Number of records to skip
             limit: Maximum number of records to return
-            project_id: Optional project ID to filter by (ignored if is_admin=True)
-            is_admin: If True, return all products regardless of project_id
+            project_id: Optional query-param project filter (applied AFTER
+                scoping, as a narrowing filter). Ignored when ``is_admin``.
+            is_admin: If True, return all products regardless of scope.
+            caller_email: Caller's email (matched against ``draft_owner_id``).
+            caller_team_ids: Caller's team memberships (matched against
+                ``owner_team_id``).
+            caller_project_ids: Caller's accessible project IDs (matched
+                against ``project_id``).
 
         Returns:
             List of DataProductDb objects
         """
-        logger.debug(f"Fetching multiple ODPS v1.0.0 DataProducts (skip: {skip}, limit: {limit}, project_id: {project_id}, is_admin: {is_admin})")
+        logger.debug(
+            f"Fetching multiple ODPS v1.0.0 DataProducts (skip: {skip}, limit: {limit}, "
+            f"project_id: {project_id}, is_admin: {is_admin}, caller_email: {caller_email}, "
+            f"teams: {len(caller_team_ids) if caller_team_ids else 0}, "
+            f"projects: {len(caller_project_ids) if caller_project_ids else 0})"
+        )
         try:
             query = db.query(self.model).options(
                 selectinload(self.model.description),
@@ -556,13 +583,53 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 selectinload(self.model.team).selectinload(DataProductTeamDb.members)
             )
 
-            # Apply project filtering only if not admin and project_id is provided
-            if not is_admin and project_id:
-                logger.debug(f"Filtering products by project_id: {project_id}")
-                # Include products with matching project_id OR null project_id (legacy/unassigned)
+            if not is_admin:
+                # Build ownership-scope filter from caller context. Each clause
+                # is appended only when the corresponding input is populated so
+                # we never produce a SQL-level ``IN ()`` (which Postgres rejects
+                # and SQLite treats as always-false anyway).
+                scope_clauses = []
+                if caller_project_ids:
+                    scope_clauses.append(self.model.project_id.in_(caller_project_ids))
+                if caller_team_ids:
+                    scope_clauses.append(self.model.owner_team_id.in_(caller_team_ids))
+                if caller_email:
+                    scope_clauses.append(self.model.draft_owner_id == caller_email)
+
+                if not scope_clauses:
+                    # Fail-closed: non-admin with no resolvable scope sees
+                    # nothing. This is the safe behavior when route hasn't
+                    # plumbed scope through (back-compat call sites), or when
+                    # the caller genuinely owns no project/team/draft.
+                    logger.debug(
+                        "Non-admin caller has no scope (no email/teams/projects); "
+                        "returning empty list (fail-closed)"
+                    )
+                    return []
+
+                query = query.filter(or_(*scope_clauses))
+
+                # Optional fast-path narrowing by query-param project_id.
+                # Applied ON TOP of the scope filter (an AND), not in place of
+                # it. We keep the legacy "null project_id" allowance so users
+                # can still see legacy products they own via team/email even
+                # when filtering by a specific project.
+                if project_id:
+                    logger.debug(f"Additionally filtering products by project_id query param: {project_id}")
+                    query = query.filter(
+                        or_(
+                            self.model.project_id == project_id,
+                            self.model.project_id.is_(None),
+                        )
+                    )
+            elif project_id:
+                # Admin with explicit project filter — keep prior semantics
+                logger.debug(f"Admin filtering products by project_id: {project_id}")
                 query = query.filter(
-                    (self.model.project_id == project_id) |
-                    (self.model.project_id.is_(None))
+                    or_(
+                        self.model.project_id == project_id,
+                        self.model.project_id.is_(None),
+                    )
                 )
 
             return query.offset(skip).limit(limit).all()

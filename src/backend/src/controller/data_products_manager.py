@@ -242,15 +242,30 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         skip: int = 0,
         limit: int = 100,
         project_id: Optional[str] = None,
-        is_admin: bool = False
+        is_admin: bool = False,
+        caller_email: Optional[str] = None,
+        caller_team_ids: Optional[List[str]] = None,
+        caller_project_ids: Optional[List[str]] = None,
     ) -> List[DataProductApi]:
         """List ODPS v1.0.0 data products.
+
+        For non-admin callers, results are filtered by the ownership cascade
+        described on ``DataProductsRepository.get_multi``: a product is
+        visible if it matches the caller's project membership, team
+        membership, or creator (``draft_owner_id``).
+
+        Back-compat: existing call sites that pass only ``is_admin`` (or
+        nothing) continue to compile. Non-admin calls with no scope inputs
+        intentionally return an empty list — fail-closed.
 
         Args:
             skip: Number of records to skip
             limit: Maximum number of records to return
             project_id: Optional project ID to filter by (ignored if is_admin=True)
-            is_admin: If True, return all products regardless of project_id
+            is_admin: If True, return all products regardless of scope
+            caller_email: Caller email — matched against ``draft_owner_id``
+            caller_team_ids: Caller team memberships — matched against ``owner_team_id``
+            caller_project_ids: Caller's accessible projects — matched against ``project_id``
 
         Returns:
             List of DataProduct API models
@@ -261,7 +276,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 skip=skip,
                 limit=limit,
                 project_id=project_id,
-                is_admin=is_admin
+                is_admin=is_admin,
+                caller_email=caller_email,
+                caller_team_ids=caller_team_ids,
+                caller_project_ids=caller_project_ids,
             )
             products_with_tags = []
             for product_db in products_db:
@@ -414,12 +432,28 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         user_groups: List[str],
         db: Optional[Session] = None,
         background_tasks: Optional[Any] = None,
+        caller_team_ids: Optional[List[str]] = None,
     ) -> Optional[DataProductApi]:
         """
-        Update a data product with project membership authorization check.
+        Update a data product with ownership-scope authorization.
 
-        If the product belongs to a project, verifies that the user is a member
-        of that project before allowing the update.
+        Authorization cascade for non-admin callers (any condition allows):
+          1. Project membership — caller is a member of any team assigned to
+             ``existing_product_db.project_id`` (when set).
+          2. Team ownership — ``existing_product_db.owner_team_id`` is in the
+             caller's ``caller_team_ids``.
+          3. Creator / single-user ownership — ``existing_product_db.draft_owner_id``
+             matches ``user_email``. This serves drafts AND non-drafts: a user
+             who created a product and never assigned it to a team still owns
+             it.
+
+        Admins always pass. If none of the above conditions match, raises
+        ``PermissionError`` with a generic message that does not disclose
+        which check failed.
+
+        Legacy / orphan rows (no project_id, no owner_team_id, no
+        draft_owner_id) fail closed for non-admins. An admin can promote
+        them later by setting an owner.
 
         Args:
             product_id: ID of product to update
@@ -428,12 +462,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             user_groups: List of groups the user belongs to
             db: Optional database session. If not provided, uses self._db
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
+            caller_team_ids: Caller's team memberships (UUIDs from teams_manager).
+                Optional — back-compat call sites that don't pass it lose the
+                team-ownership branch but keep project-membership and
+                draft-owner branches.
 
         Returns:
             Updated product if successful, None if not found
 
         Raises:
-            PermissionError: If user is not a project member (when product has project_id)
+            PermissionError: If caller has no ownership claim on the product
             ValueError: If validation fails
             SQLAlchemyError: If database operation fails
         """
@@ -441,34 +479,64 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         db_session = db if db is not None else self._db
 
         try:
-            # Get existing product to check project membership
             existing_product_db = self._repo.get(db=db_session, id=product_id)
             if not existing_product_db:
                 logger.warning(f"Product not found for update: {product_id}")
                 return None
 
-            # Check project membership if product belongs to a project
-            if existing_product_db.project_id:
-                from src.controller.projects_manager import projects_manager
-                from src.common.config import get_settings
+            from src.controller.projects_manager import projects_manager
+            from src.common.authorization import is_user_admin
+            from src.common.config import get_settings
 
-                settings = get_settings()
-                is_member = projects_manager.is_user_project_member(
+            settings = get_settings()
+
+            # Admin always allowed (short-circuit, also matches existing
+            # is_user_project_member behavior).
+            if is_user_admin(user_groups, settings):
+                logger.debug(f"User {user_email} is admin — bypassing ownership cascade")
+                return self.update_product(
+                    product_id,
+                    product_data_dict,
+                    db=db_session,
+                    user=user_email,
+                    background_tasks=background_tasks,
+                )
+
+            authorized = False
+
+            # 1. Project membership (preserves prior fast-path semantics)
+            if existing_product_db.project_id:
+                if projects_manager.is_user_project_member(
                     db=db_session,
                     user_identifier=user_email,
                     user_groups=user_groups,
                     project_id=existing_product_db.project_id,
-                    settings=settings
-                )
+                    settings=settings,
+                ):
+                    authorized = True
 
-                if not is_member:
-                    logger.warning(
-                        f"User {user_email} denied update access to product {product_id} "
-                        f"(project: {existing_product_db.project_id}) - not a project member"
-                    )
-                    raise PermissionError(
-                        "You must be a member of the project to edit this data product"
-                    )
+            # 2. Team ownership
+            if not authorized and existing_product_db.owner_team_id and caller_team_ids:
+                if existing_product_db.owner_team_id in caller_team_ids:
+                    authorized = True
+
+            # 3. Creator / single-user ownership (drafts AND non-drafts).
+            #    Case-insensitive email match — emails are not case-sensitive.
+            if not authorized and existing_product_db.draft_owner_id and user_email:
+                if existing_product_db.draft_owner_id.lower() == user_email.lower():
+                    authorized = True
+
+            if not authorized:
+                logger.warning(
+                    f"User {user_email} denied update on product {product_id} "
+                    f"(project_id={existing_product_db.project_id}, "
+                    f"owner_team_id={existing_product_db.owner_team_id}, "
+                    f"draft_owner_id={existing_product_db.draft_owner_id})"
+                )
+                # Generic message — do not leak which sub-check failed.
+                raise PermissionError(
+                    "Insufficient permissions to edit this data product"
+                )
 
             # Perform update (validation happens inside update_product)
             return self.update_product(
@@ -1233,7 +1301,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             SQLAlchemyError: If database operation fails
         """
         try:
-            all_products = self.list_products(skip=skip, limit=limit)
+            # Marketplace-visibility helper: ``publication_scope`` is the
+            # authoritative permission for these products, NOT the
+            # per-user ownership cascade. Bypass the cascade so published
+            # products surface regardless of who's asking.
+            all_products = self.list_products(skip=skip, limit=limit, is_admin=True)
             published_products = [
                 product for product in all_products
                 if product.publication_scope and product.publication_scope.lower() != 'none'
@@ -1977,9 +2049,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 logger.error(f"Failed to persist error: {persist_error}")
 
     def save_to_yaml(self, yaml_path: str) -> bool:
-        """Save current ODPS v1.0.0 data products to a YAML file."""
+        """Save current ODPS v1.0.0 data products to a YAML file.
+
+        System-level export — bypasses per-user ownership scope.
+        """
         try:
-            all_products_api = self.list_products(limit=10000)
+            all_products_api = self.list_products(limit=10000, is_admin=True)
             products_list = [p.model_dump(by_alias=True) for p in all_products_api]
 
             with open(yaml_path, 'w') as file:
@@ -2113,11 +2188,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             self._notify_index_upsert(item)
 
     def get_search_index_items(self) -> List[SearchIndexItem]:
-        """Fetches ODPS v1.0.0 data products and maps them to SearchIndexItem format."""
+        """Fetches ODPS v1.0.0 data products and maps them to SearchIndexItem format.
+
+        System-level caller (search indexer) — uses ``is_admin=True`` to bypass
+        the per-user ownership scope. Per-user filtering happens at query time
+        in the search route, not at index-build time.
+        """
         logger.info("Fetching ODPS products for search indexing...")
         items = []
         try:
-            products_api = self.list_products(limit=10000)
+            products_api = self.list_products(limit=10000, is_admin=True)
             for product in products_api:
                 item = self._build_search_index_item(product)
                 if item:

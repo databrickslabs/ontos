@@ -1156,8 +1156,40 @@ async def get_product_linked_assets(
         dpm = getattr(request.app.state, "data_products_manager", None)
         if dpm is None:
             raise HTTPException(status_code=503, detail="Data Products service unavailable")
+        # Compute caller's ownership scope so list_products returns the
+        # accessible set (instead of empty, which would 403 every DP for
+        # non-admins after the repository scoping change).
+        caller_email = current_user.email if current_user else None
+        user_groups = current_user.groups if current_user else []
+        caller_team_ids: list = []
+        caller_project_ids: list = []
         try:
-            accessible = dpm.list_products(skip=0, limit=10_000, is_admin=False)
+            from src.controller.teams_manager import teams_manager
+            from src.controller.projects_manager import projects_manager
+
+            user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
+            caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
+            user_projects = projects_manager.get_user_projects(
+                db, caller_email, user_groups
+            )
+            caller_project_ids = [
+                p.id for p in user_projects.projects if getattr(p, "id", None)
+            ]
+        except Exception:
+            logger.exception(
+                f"Failed to resolve ownership scope for {caller_email} in DP-asset access; "
+                f"will fall back to draft-owner branch only"
+            )
+
+        try:
+            accessible = dpm.list_products(
+                skip=0,
+                limit=10_000,
+                is_admin=False,
+                caller_email=caller_email,
+                caller_team_ids=caller_team_ids,
+                caller_project_ids=caller_project_ids,
+            )
             accessible_ids = {str(p.id) for p in accessible if getattr(p, "id", None)}
         except Exception:
             logger.exception("Failed to list products for DP-asset scoping")
@@ -1580,6 +1612,7 @@ async def upload_data_products(
 async def get_data_products(
     project_id: Optional[str] = None,
     current_user: CurrentUserDep = None,
+    db: DBSessionDep = None,
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
@@ -1595,7 +1628,43 @@ async def get_data_products(
 
         logger.info(f"User {current_user.email if current_user else 'unknown'} is_admin: {is_admin}")
 
-        products = manager.list_products(project_id=project_id, is_admin=is_admin)
+        # Resolve ownership scope for non-admin callers. Admins skip scoping
+        # entirely; we still pass the inputs harmlessly so the call site is
+        # uniform.
+        caller_email = current_user.email if current_user else None
+        caller_team_ids: List[str] = []
+        caller_project_ids: List[str] = []
+        if not is_admin and current_user:
+            try:
+                from src.controller.teams_manager import teams_manager
+                from src.controller.projects_manager import projects_manager
+
+                user_teams = teams_manager.get_teams_for_user(
+                    db, caller_email, user_groups
+                )
+                caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
+
+                user_projects = projects_manager.get_user_projects(
+                    db, caller_email, user_groups
+                )
+                caller_project_ids = [
+                    p.id for p in user_projects.projects if getattr(p, "id", None)
+                ]
+            except Exception:
+                # Scope-resolution failure is non-fatal but yields fail-closed
+                # behavior downstream (empty list), which is the safe default.
+                logger.exception(
+                    f"Failed to resolve ownership scope for user {caller_email}; "
+                    f"caller will see only their draft-owned products"
+                )
+
+        products = manager.list_products(
+            project_id=project_id,
+            is_admin=is_admin,
+            caller_email=caller_email,
+            caller_team_ids=caller_team_ids,
+            caller_project_ids=caller_project_ids,
+        )
         logger.info(f"Retrieved {len(products)} data products")
         return [p.model_dump() for p in products]
     except Exception as e:
@@ -1899,6 +1968,22 @@ async def update_data_product(
         # unmodified Optional column (delivery_method_id, contract_id, etc).
         product_dict = product_update.model_dump(exclude_unset=True)
 
+        # Resolve caller's team memberships so the manager can run the
+        # team-ownership branch of the cascade. Failure here is non-fatal —
+        # the manager still has project-membership + draft-owner branches.
+        caller_team_ids: List[str] = []
+        try:
+            from src.controller.teams_manager import teams_manager
+            user_teams = teams_manager.get_teams_for_user(
+                db, current_user.email, user_groups
+            )
+            caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
+        except Exception:
+            logger.exception(
+                f"Failed to resolve teams for user {current_user.email} on update; "
+                f"continuing without team-ownership branch"
+            )
+
         updated_product_response = manager.update_product_with_auth(
             product_id=product_id,
             product_data_dict=product_dict,
@@ -1906,6 +1991,7 @@ async def update_data_product(
             user_groups=user_groups,
             db=db,
             background_tasks=background_tasks,
+            caller_team_ids=caller_team_ids,
         )
 
         if not updated_product_response:

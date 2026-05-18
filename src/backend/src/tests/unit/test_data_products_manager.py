@@ -202,8 +202,9 @@ class TestDataProductsManager:
 
     def test_list_products_empty(self, manager):
         """Test listing products when none exist."""
-        # Act
-        result = manager.list_products()
+        # Act — use is_admin=True to exercise listing mechanics rather than
+        # the (separately-tested) ownership scope filter.
+        result = manager.list_products(is_admin=True)
 
         # Assert
         assert isinstance(result, list)
@@ -221,7 +222,7 @@ class TestDataProductsManager:
             manager.create_product(product_data, db=db_session)
 
         # Act
-        result = manager.list_products()
+        result = manager.list_products(is_admin=True)
 
         # Assert
         assert len(result) == 3
@@ -239,7 +240,7 @@ class TestDataProductsManager:
             manager.create_product(product_data, db=db_session)
 
         # Act - Get second page
-        result = manager.list_products(skip=5, limit=3)
+        result = manager.list_products(skip=5, limit=3, is_admin=True)
 
         # Assert
         assert len(result) == 3

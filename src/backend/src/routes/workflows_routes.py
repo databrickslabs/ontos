@@ -61,9 +61,22 @@ async def list_workflows(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     workflow_type: Optional[str] = Query(None, description="Filter by workflow_type: process | approval"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowListResponse:
-    """List all process workflows (or approval workflows when workflow_type=approval)."""
+    """List process workflows (or approval workflows when workflow_type=approval).
+
+    Authenticated-only (no feature-permission gate). Rationale: the
+    approval-wizard-dialog fetches this list as part of launching ANY
+    wizard (subscribe, request_access, request_review, etc.) — it is the
+    chooser the user sees when picking which approval workflow to run.
+    Gating it as ``settings:READ_ONLY`` silently 403s end users (e.g.
+    Data Consumer) who legitimately need to invoke a wizard, even after
+    PR A's per-trigger dispatch unblocks the wizard's launch endpoint.
+
+    The data exposed here is workflow metadata (name, type, steps,
+    triggers) — same shape as what's already visible to anyone who can
+    invoke a workflow. Writes (POST/PUT/DELETE) on this router remain
+    gated behind ``settings:READ_WRITE``.
+    """
     wf_type = WorkflowType(workflow_type) if workflow_type in ('process', 'approval') else None
     workflows = manager.list_workflows(is_active=is_active, workflow_type=wf_type)
     return WorkflowListResponse(workflows=workflows, total=len(workflows))

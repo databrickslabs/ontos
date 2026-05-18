@@ -105,7 +105,6 @@ def get_all_owners(
 @router.get(
     "/by-object/{object_type}/{object_id}",
     response_model=List[BusinessOwnerRead],
-    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )
 def get_owners_for_object(
     object_type: str,
@@ -114,7 +113,20 @@ def get_owners_for_object(
     manager=Depends(get_business_owners_manager),
     active_only: bool = Query(True),
 ):
-    """Gets all owners for a specific object."""
+    """Gets all owners for a specific object.
+
+    Authenticated-only (no feature-permission gate). Rationale: a user who
+    can already view an entity (e.g. a data product in the marketplace)
+    needs to see who owns it for the access-request flow — the Data
+    Consumer role hits this endpoint as a side-effect of opening the data
+    product detail page, and gating it as ``business-owners:READ_ONLY``
+    silently 403s the entire owners panel on a page they otherwise have
+    legitimate access to.
+
+    Write operations on this router (POST/PATCH/DELETE) remain gated
+    behind ``business-owners:READ_WRITE`` so only roles with explicit
+    permission can change ownership assignments.
+    """
     return manager.get_owners_for_object(
         db=db, object_type=object_type, object_id=object_id, active_only=active_only
     )

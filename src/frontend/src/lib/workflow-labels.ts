@@ -169,6 +169,40 @@ export function getTriggerLabel(value: string): string {
 }
 
 /**
+ * Required feature permission per wizard trigger type.
+ *
+ * TEMPORARY: this mirrors the backend WIZARD_PERMISSION_DISPATCH constant
+ * defined in src/backend/src/routes/workflows_routes.py. Once the backend
+ * extends GET /api/workflows/trigger-types to expose `required_permission`
+ * per row (planned follow-up to the dispatch PR), replace this constant
+ * with reads from that endpoint response. KEEP IN SYNC with the backend
+ * table until then.
+ *
+ * `null` = authenticated-only (no feature permission required).
+ */
+export const TRIGGER_REQUIRED_PERMISSION: Record<string, { feature: string; level: string } | null> = {
+  for_request_access:        { feature: 'access-grants',  level: 'Read-only' },
+  for_subscribe:             { feature: 'data-products',  level: 'Read-only' },
+  for_request_review:        { feature: 'data-contracts', level: 'Read-only' },
+  for_request_publish:       { feature: 'data-products',  level: 'Read/Write' },
+  for_request_certify:       { feature: 'data-contracts', level: 'Read/Write' },
+  for_request_status_change: { feature: 'data-products',  level: 'Read/Write' },
+  on_first_access:           null,
+  for_approval_response:     { feature: 'settings',       level: 'Read-only' },
+};
+
+/**
+ * Helper for component use. Returns the required permission for a wizard
+ * trigger, or null if the trigger has no requirement (authenticated-only)
+ * or is not in the dispatch table.
+ */
+export function getRequiredPermission(
+  triggerValue: string,
+): { feature: string; level: string } | null {
+  return TRIGGER_REQUIRED_PERMISSION[triggerValue] ?? null;
+}
+
+/**
  * Get a human-readable label for an entity type.
  */
 export function getEntityTypeLabel(type: EntityType, t: TFunction): string {

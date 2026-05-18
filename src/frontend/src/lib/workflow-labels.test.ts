@@ -16,6 +16,8 @@ import {
   ALL_ENTITY_TYPES,
   getTriggerLabel,
   TRIGGER_LABELS,
+  TRIGGER_REQUIRED_PERMISSION,
+  getRequiredPermission,
 } from './workflow-labels';
 
 describe('isTriggerEntitySupported', () => {
@@ -223,5 +225,33 @@ describe('getTriggerLabel', () => {
     for (const value of ALL_TRIGGER_TYPES) {
       expect(TRIGGER_LABELS[value]).toBeTruthy();
     }
+  });
+});
+
+describe('TRIGGER_REQUIRED_PERMISSION + getRequiredPermission', () => {
+  // Pin each row of the dispatch mirror so any drift from the backend
+  // table is caught by tests. Keep in sync with WIZARD_PERMISSION_DISPATCH
+  // in src/backend/src/routes/workflows_routes.py.
+  const expected: Array<[string, { feature: string; level: string } | null]> = [
+    ['for_request_access',        { feature: 'access-grants',  level: 'Read-only' }],
+    ['for_subscribe',             { feature: 'data-products',  level: 'Read-only' }],
+    ['for_request_review',        { feature: 'data-contracts', level: 'Read-only' }],
+    ['for_request_publish',       { feature: 'data-products',  level: 'Read/Write' }],
+    ['for_request_certify',       { feature: 'data-contracts', level: 'Read/Write' }],
+    ['for_request_status_change', { feature: 'data-products',  level: 'Read/Write' }],
+    ['on_first_access',           null],
+    ['for_approval_response',     { feature: 'settings',       level: 'Read-only' }],
+  ];
+
+  it.each(expected)('TRIGGER_REQUIRED_PERMISSION[%s] matches expected', (trigger, value) => {
+    expect(TRIGGER_REQUIRED_PERMISSION[trigger]).toEqual(value);
+  });
+
+  it.each(expected)('getRequiredPermission(%s) returns the dispatch row', (trigger, value) => {
+    expect(getRequiredPermission(trigger)).toEqual(value);
+  });
+
+  it('returns null for unknown trigger', () => {
+    expect(getRequiredPermission('not_a_real_trigger')).toBeNull();
   });
 });

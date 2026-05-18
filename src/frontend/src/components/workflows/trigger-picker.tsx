@@ -34,7 +34,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getTriggerLabel } from '@/lib/workflow-labels';
+import { getTriggerLabel, getRequiredPermission } from '@/lib/workflow-labels';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 
 /** Field-label constants for the trigger picker. Exported so the parent
  * form and tests can reference the same source of truth. */
@@ -176,6 +178,27 @@ export function TriggerPicker({
           )}
         </SelectContent>
       </Select>
+      {value && (() => {
+        const required = getRequiredPermission(value);
+        return (
+          <Alert className="mt-2" data-testid="trigger-required-permission">
+            <Info className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              {required ? (
+                <>
+                  <strong>Required permission:</strong> users need{' '}
+                  <code className="text-xs">
+                    {required.feature}: {required.level}
+                  </code>{' '}
+                  or higher to see and run this workflow. Set this in Settings → Roles.
+                </>
+              ) : (
+                <>Available to any authenticated user.</>
+              )}
+            </AlertDescription>
+          </Alert>
+        );
+      })()}
     </div>
   );
 }

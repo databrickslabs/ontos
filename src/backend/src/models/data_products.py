@@ -12,7 +12,7 @@ from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 import json
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
@@ -206,6 +206,32 @@ class OutputPort(BaseModel):
     autoApprove: bool = Field(False, alias="auto_approve", description="Auto-approve flag")
 
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
+
+    @field_validator('deliveryMethodId', mode='before')
+    @classmethod
+    def _coerce_delivery_method_id_to_str(cls, v):
+        # The DB column `delivery_method_id` is PG `UUID(as_uuid=True)`, so
+        # SQLAlchemy hands back `uuid.UUID` instances when this model is
+        # loaded via `from_attributes=True`. Pydantic v2 refuses to coerce
+        # `UUID(...)` against the declared `Optional[str]` type, returning
+        # 500 on POST and 400 on PUT for `/api/data-products` whenever an
+        # output port carries a delivery method.
+        #
+        # Coerce on input so the validator accepts UUID instances; the
+        # Pydantic field TYPE intentionally stays `Optional[str]` — flipping
+        # it to `Optional[UUID]` would change the wire format and break
+        # clients that depend on a JSON string. See @field_serializer below
+        # for defense in depth on the response side.
+        import uuid as _uuid
+        if isinstance(v, _uuid.UUID):
+            return str(v)
+        return v
+
+    @field_serializer('deliveryMethodId')
+    def _serialize_delivery_method_id(self, v):
+        # Defense in depth: if a UUID somehow reaches the serializer (e.g.,
+        # bypassing validation via `model_construct`), still emit a string.
+        return str(v) if v is not None else None
 
     model_config = {
         "from_attributes": True,

@@ -185,16 +185,32 @@ async def set_role_override(
     audit_manager: AuditManagerDep,
     payload: RoleOverrideRequest,
     user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     settings_manager: SettingsManager = Depends(get_settings_manager)
 ):
     """Set or clear the applied role override for the current user.
 
     Body: { "role_id": "<uuid>" } or { "role_id": null } to clear.
+
+    Authorization: admins may override to any role (impersonation). Non-admins may only
+    override to a role whose assigned_groups intersect their own groups. Clearing is
+    always allowed.
     """
     role_id = payload.role_id
+    # Determine if caller has admin-level settings permissions (matches the UI's gate
+    # for "is admin actual"). Computed from groups so the override cannot bootstrap admin.
+    actual_perms = auth_manager.get_user_effective_permissions(user_details.groups or [])
+    settings_level = actual_perms.get('settings', FeatureAccessLevel.NONE)
+    caller_is_admin = settings_level == FeatureAccessLevel.ADMIN
+
     try:
-        settings_manager.set_applied_role_override_for_user(user_details.email, role_id)
-        
+        settings_manager.set_applied_role_override_for_user(
+            user_details.email,
+            role_id,
+            caller_groups=user_details.groups,
+            caller_is_admin=caller_is_admin,
+        )
+
         audit_manager.log_action(
             db=db,
             username=user_details.username if user_details else 'unknown',
@@ -204,8 +220,23 @@ async def set_role_override(
             success=True,
             details={'role_id': role_id}
         )
-        
+
         return {"status": "ok"}
+    except PermissionError as e:
+        logger.warning(
+            "Forbidden role override for user %s -> role_id=%s: %s",
+            user_details.email, role_id, e,
+        )
+        audit_manager.log_action(
+            db=db,
+            username=user_details.username if user_details else 'unknown',
+            ip_address=request.client.host if request.client else None,
+            feature='user',
+            action='SET_ROLE_OVERRIDE',
+            success=False,
+            details={'role_id': role_id, 'reason': 'not_a_member'},
+        )
+        raise HTTPException(status_code=403, detail="Not a member of the requested role")
     except ValueError as e:
         logger.error("Invalid role override request for user %s: %s", user_details.email, e)
         raise HTTPException(status_code=400, detail="Invalid role override request")

@@ -279,11 +279,29 @@ class SettingsManager:
             logger.warning(f"Failed to load persisted settings from database: {e}")
 
     # --- Role override helpers (in-memory persistence) ---
-    def set_applied_role_override_for_user(self, user_email: Optional[str], role_id: Optional[str]) -> None:
+    def set_applied_role_override_for_user(
+        self,
+        user_email: Optional[str],
+        role_id: Optional[str],
+        caller_groups: Optional[List[str]] = None,
+        caller_is_admin: bool = False,
+    ) -> None:
         """Sets or clears the applied role override for a user.
 
         When role_id is None, the override is cleared and the user's actual group-based
         permissions are used. This stores state in-memory for the backend process lifetime.
+
+        Defense-in-depth: when caller_is_admin is False, the target role_id must intersect
+        with caller_groups (i.e., the user must be a member of a group assigned to that role).
+        Admins retain the impersonation power and may set any role_id. Clearing the override
+        (role_id=None) is always allowed.
+
+        Args:
+            user_email: target user's email.
+            role_id: role identifier to set, or None to clear.
+            caller_groups: groups for membership validation (non-admin path). If omitted on
+                a non-admin call, validation cannot pass and a PermissionError is raised.
+            caller_is_admin: when True, skip membership validation.
         """
         if not user_email:
             raise ValueError("User email is required to set role override")
@@ -293,6 +311,16 @@ class SettingsManager:
         role = self.get_app_role(role_id)
         if not role:
             raise ValueError(f"Role with id '{role_id}' not found")
+
+        # Membership validation for non-admin callers
+        if not caller_is_admin:
+            group_set = {(g or '').lower() for g in (caller_groups or [])}
+            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
+            if not group_set or not role_groups.intersection(group_set):
+                raise PermissionError(
+                    f"User is not a member of any group assigned to role '{role.name}'"
+                )
+
         self._applied_role_overrides[user_email] = role_id
 
     def get_applied_role_override_for_user(self, user_email: Optional[str]) -> Optional[str]:

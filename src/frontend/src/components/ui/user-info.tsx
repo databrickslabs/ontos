@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -153,7 +153,24 @@ export default function UserInfo() {
   const isLocalDev = userInfo?.username === 'localdev';
   const actualSettingsLevel = actualPermissions['settings'] ?? FeatureAccessLevel.NONE;
   const isAdminActual = ACCESS_LEVEL_ORDER[actualSettingsLevel] >= ACCESS_LEVEL_ORDER[FeatureAccessLevel.ADMIN];
-  const canSwitchRoles = !permissionsLoading && (isLocalDev || isAdminActual);
+
+  // Membership-scoped role set: roles whose assigned_groups intersect the user's groups.
+  // Fix for regression where end users belonging to 2+ roles could not switch between them —
+  // the previous gate was admin-only, so non-admin multi-role users saw no switcher at all.
+  // Group comparison is case-insensitive because `assigned_groups` and `userInfo.groups` may
+  // originate from different sources (settings.yaml vs SCIM/identity headers).
+  const myRoles = useMemo<AppRole[]>(() => {
+      const groups = userInfo?.groups;
+      if (!groups || groups.length === 0) return [];
+      const groupSet = new Set(groups.map(g => (g || '').toLowerCase()));
+      return availableRoles.filter(role =>
+          (role.assigned_groups || []).some(g => groupSet.has((g || '').toLowerCase()))
+      );
+  }, [userInfo?.groups, availableRoles]);
+
+  // Admins/localdev keep the impersonation power (all roles); non-admins with 2+ membership-matched
+  // roles get a membership-scoped switcher. Single-role users still don't see the switcher.
+  const canSwitchRoles = !permissionsLoading && (isLocalDev || isAdminActual || myRoles.length >= 2);
 
   const displayName = userInfo?.user || userInfo?.username || userInfo?.email || 'Loading...';
   const initials = displayName === 'Loading...' ? '?' : displayName.charAt(0).toUpperCase();
@@ -178,8 +195,11 @@ export default function UserInfo() {
   }
 
   // Filter available roles to exclude the one matching the highest actual canonical name
-  // Hide the canonical actual role from the override list to avoid duplication with the "Actual" entry
-  const filteredRolesForOverride = availableRoles.filter((role) => role.name !== (canonicalActualRoleName || ''));
+  // Hide the canonical actual role from the override list to avoid duplication with the "Actual" entry.
+  // Admins/localdev see all roles minus canonical (impersonation power preserved).
+  // Non-admin multi-role users see ONLY roles they belong to, minus canonical.
+  const baseRolesForOverride = (isAdminActual || isLocalDev) ? availableRoles : myRoles;
+  const filteredRolesForOverride = baseRolesForOverride.filter((role) => role.name !== (canonicalActualRoleName || ''));
 
   // Handle RadioGroup changes
   const handleRoleChange = async (value: string) => {

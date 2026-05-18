@@ -321,6 +321,7 @@
       "on_unsubscribe": "Unsubscription",
       "on_expiring": "Expiring Soon",
       "on_revoke": "Access Revoked",
+      "on_first_access": "On First Access",
       "for_approval_response": "Approval Response (Wizard)",
       "for_subscribe": "Subscribe (Wizard)",
       "for_request_review": "Request Review (Wizard)",
@@ -343,7 +344,8 @@
       "role": "Role",
       "data_asset_review": "Asset Review",
       "job": "Job",
-      "subscription": "Subscription"
+      "subscription": "Subscription",
+      "user": "User"
     },
     "stepTypes": {
       "validation": "Validation",

@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import SubscribeDialog from '@/components/data-products/subscribe-dialog';
 import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
-import { useApi } from '@/hooks/use-api';
+import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { RatingBadge } from '@/components/ratings';
 import CertificationBadge from '@/components/common/certification-badge';
@@ -82,7 +82,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   const [subscriptionWorkflowId, setSubscriptionWorkflowId] = useState<string | null>(null);
   const [checkingSubscription, setCheckingSubscription] = useState(false);
   const [productIsSubscribed, setProductIsSubscribed] = useState(false);
-  const api = useApi();
+  const { lookupWorkflowId } = useApprovalWizardTrigger();
 
   useEffect(() => {
     let cancelled = false;
@@ -326,15 +326,11 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   // Handle subscribe button in info dialog: try approval wizard (subscription workflow), fallback to old dialog
   const handleSubscribeClick = async () => {
     setInfoDialogOpen(false);
-    try {
-      const res = await api.get<{ id: string }>('/api/workflows/for-trigger/for_subscribe');
-      if (res.data?.id) {
-        setSubscriptionWorkflowId(res.data.id);
-        setSubscriptionWizardOpen(true);
-      } else {
-        setSubscribeDialogOpen(true);
-      }
-    } catch {
+    const workflowId = await lookupWorkflowId('for_subscribe');
+    if (workflowId) {
+      setSubscriptionWorkflowId(workflowId);
+      setSubscriptionWizardOpen(true);
+    } else {
       setSubscribeDialogOpen(true);
     }
   };

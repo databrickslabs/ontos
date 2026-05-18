@@ -272,8 +272,15 @@ def _verify_workspace_client(ws: WorkspaceClient, skip_cluster_check: bool = Fal
             ws.clusters.select_spark_version()
             logger.info("Workspace connectivity verified successfully")
         except Exception as e:
-            logger.error(f"Failed to verify workspace connectivity: {e}")
-            raise
+            # Some workspaces (e.g. gov/restricted) deny clusters API to app SPs even
+            # when basic auth is fine. Fall back to current_user.me() before giving up.
+            logger.warning(f"Cluster API check failed ({e}); falling back to current_user.me()")
+            try:
+                ws.current_user.me()
+                logger.info("Workspace connectivity verified successfully (fallback mode)")
+            except Exception as fallback_e:
+                logger.error(f"Failed to verify workspace connectivity: {fallback_e}")
+                raise
 
     return ws
 

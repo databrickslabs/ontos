@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AccessGrantRequestStatus(str, Enum):
@@ -40,13 +40,34 @@ class PermissionLevel(str, Enum):
 # ============================================================================
 
 class AccessGrantRequestCreate(BaseModel):
-    """Request payload for creating a new access grant request."""
+    """Request payload for creating a new access grant request.
+
+    Path-B portable wizard launch: when a ``for_request_access`` approval
+    workflow is configured, the FE captures the wizard's ``user_action`` fields
+    and posts them in ``wizard_data``. ``model_config = extra='allow'`` keeps
+    the surface flexible for any other deployment-specific fields the workflow
+    author defines without requiring per-customer model edits. The
+    ``AccessGrantsManager`` then forwards ``wizard_data`` into the
+    ``on_request_access`` trigger's ``entity_data`` so Process workflow steps
+    can reference values via ``${entity.<field_id>}``.
+    """
+    model_config = ConfigDict(extra="allow")
+
     entity_type: str = Field(..., description="Type of asset (data_product, dataset, table, etc.)")
     entity_id: str = Field(..., description="ID of the asset")
     entity_name: Optional[str] = Field(None, description="Display name of the asset")
     requested_duration_days: int = Field(..., ge=1, le=365, description="Requested access duration in days")
     permission_level: PermissionLevel = Field(default=PermissionLevel.READ, description="Level of access requested")
     reason: Optional[str] = Field(None, min_length=10, description="Justification for the request")
+    wizard_data: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Custom fields collected from the configured for_request_access "
+            "approval wizard's user_action steps. Forwarded into the "
+            "on_request_access trigger's entity_data so Process workflows can "
+            "reference values via ${entity.<field_id>}."
+        ),
+    )
 
     @field_validator('entity_type')
     @classmethod

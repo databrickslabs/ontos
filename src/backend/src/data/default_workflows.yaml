@@ -1579,3 +1579,44 @@ workflows:
         type: "pass"
         config: {}
         order: 2
+
+  # =========================================================================
+  # ON_REQUEST_ACCESS — Reference grant_permissions Process workflow
+  # =========================================================================
+  # Reference shape for a Process workflow that grants UC permissions to the
+  # requester after an access-grant request is submitted. Disabled by default —
+  # the seed exists so admins can copy + customise rather than authoring from
+  # scratch.
+  #
+  # Pattern: the FQN of the UC securable to grant on must be passed via the
+  # wizard's ``wizard_data.target_full_name`` field (or computed in a
+  # preceding step) and read here via ``target_variable: entity.target_full_name``.
+  # ``target_source: from_entity`` does NOT work for this trigger because the
+  # trigger entity is the access-grant request itself (a UUID), not a UC object.
+  #
+  # ⚠ Deployment requirement (caught during PR #353 E2E, 2026-05-08):
+  # the app's service principal must have explicit ``MANAGE`` on every UC
+  # securable Ontos will grant on. ``ALL_PRIVILEGES`` alone is NOT sufficient on
+  # AWS UC — the platform rejects the grant call with ``"User does not have MANAGE"``.
+  # Document this in customer deployment runbooks alongside the SP setup steps.
+  - id: "on-request-access-grant-permissions-reference"
+    name: "Reference — Grant UC SELECT to requester (on_request_access)"
+    description: "After an access-grant request is submitted, grants SELECT on the requested UC securable to the requester. The FQN must be passed via wizard_data.target_full_name."
+    workflow_type: "process"
+    trigger:
+      type: "on_request_access"
+      entity_types: ["access_grant"]
+    scope:
+      type: "all"
+    is_active: false
+    is_default: true
+    steps:
+      - id: "grant"
+        name: "Grant SELECT to requester"
+        type: "grant_permissions"
+        config:
+          permission_type: "SELECT"
+          target_source: "from_variable"
+          target_variable: "entity.target_full_name"
+          principal_source: "requester"
+        order: 0

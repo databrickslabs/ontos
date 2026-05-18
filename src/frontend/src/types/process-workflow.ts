@@ -36,6 +36,8 @@ export type TriggerType =
   // Access lifecycle triggers
   | 'on_expiring'
   | 'on_revoke'
+  // User session triggers — fired by the frontend on app mount (e.g. terms-of-use disclaimers)
+  | 'on_first_access'
   // App-known UI actions (approval workflows looked up by trigger type, 1:1 match with ON_*)
   | 'for_approval_response'
   | 'for_subscribe'
@@ -64,7 +66,8 @@ export type EntityType =
   | 'role'
   | 'data_asset_review'
   | 'job'
-  | 'subscription';
+  | 'subscription'
+  | 'user';
 
 export type ScopeType = 'all' | 'project' | 'catalog' | 'domain';
 

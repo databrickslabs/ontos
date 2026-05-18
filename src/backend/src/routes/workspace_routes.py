@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Any, Dict, List, Optional
 
 from databricks.sdk.errors import PermissionDenied, DatabricksError
@@ -13,6 +13,92 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Workspace"])
+
+
+def _derive_workspace_descriptor_from_host(host: Optional[str]) -> Dict[str, Any]:
+    """Derive a best-effort workspace descriptor from the configured DATABRICKS_HOST.
+
+    When account-level credentials aren't available we can still surface the
+    *current* workspace (the one the app is running in) as a single-element
+    dropdown — sufficient for deployment-specific configuration where the
+    request is necessarily scoped to the workspace the user is already in.
+
+    Returns a dict with ``id`` (deployment name slug used as id), ``name`` (the
+    deployment subdomain — the user-visible workspace alias), and
+    ``deployment_name`` (same as name; kept distinct from ``id`` so callers
+    that want the numeric workspace id can swap it in once we have it).
+    """
+    if not host:
+        return {"id": "current", "name": "Current workspace", "deployment_name": "current"}
+    h = host.strip().rstrip("/")
+    if h.startswith("https://"):
+        h = h[len("https://"):]
+    elif h.startswith("http://"):
+        h = h[len("http://"):]
+    # First label of the host is the deployment subdomain (e.g.
+    # "ontos-7474659920352264.aws.databricksapps.com" → "ontos-7474659920352264").
+    deployment = h.split(".", 1)[0] if h else "current"
+    return {"id": deployment, "name": deployment, "deployment_name": deployment}
+
+
+@router.get("/workspace/accessible-workspaces")
+async def list_accessible_workspaces(
+    request: Request,
+    data_product_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional data product id used to filter the result by the underlying "
+            "catalog's workspace bindings (NICE-TO-HAVE; current implementation "
+            "ignores the filter and returns all accessible workspaces)."
+        ),
+    ),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY)),
+):
+    """List Databricks workspaces the requester can use.
+
+    Used by the approval-wizard portable launch path: when a configured
+    workflow's ``user_action`` step declares a ``select`` field with
+    ``options_endpoint: /api/workspace/accessible-workspaces``, the FE renders
+    a dropdown so the requester can pick the workspace they intend to consume
+    the access from.
+
+    OBO behavior: when the request carries an ``x-forwarded-access-token``
+    header (the standard Databricks Apps user-token forwarding contract), we
+    return workspaces visible to the user. Listing workspaces requires
+    account-level credentials, which the user token typically does NOT have —
+    so the practical v1 returns the *current* workspace derived from the
+    configured ``DATABRICKS_HOST``. That's deliberate: in a single-workspace
+    deployment this is the right answer, and the endpoint shape supports
+    expanding to a true multi-workspace listing when account credentials are
+    wired in.
+
+    SP fallback: same behavior — derive current workspace from
+    ``DATABRICKS_HOST``. Always returns at least one entry so the dropdown
+    isn't empty in a working deployment.
+
+    Returns ``[{id, name, deployment_name}, ...]``.
+    """
+    settings = getattr(request.app.state, 'settings', None)
+    host = getattr(settings, 'DATABRICKS_HOST', None) if settings else None
+
+    obo_token_present = bool(request.headers.get('x-forwarded-access-token'))
+    user_email = (
+        request.headers.get('X-Forwarded-Email')
+        or request.headers.get('X-Forwarded-User')
+        or 'unknown'
+    )
+    logger.info(
+        "accessible-workspaces lookup: user=%s obo=%s data_product_id=%s host=%s",
+        user_email, obo_token_present, data_product_id, host,
+    )
+
+    # Future enhancement: when account-level credentials become available
+    # (e.g. via a configured AccountClient), branch here on ``obo_token_present``
+    # to call ``account.workspaces.list()`` and filter to ones the user is
+    # assigned to. For now we surface the current workspace only — sufficient
+    # for the wizard dropdown in a single-workspace deployment.
+    descriptor = _derive_workspace_descriptor_from_host(host)
+    return [descriptor]
 
 @router.get("/workspace/assets/search", response_model=List[WorkspaceAsset])
 async def search_workspace_assets(

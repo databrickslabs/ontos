@@ -27,10 +27,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { DataProduct, DataProductStatus } from '@/types/data-product';
+import { ConsumerPrincipal, DataProduct, DataProductStatus } from '@/types/data-product';
 import { useDomains } from '@/hooks/use-domains';
 import { useTeams } from '@/hooks/use-teams';
 import TagSelector from '@/components/ui/tag-selector';
+import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 import { useProjectContext } from '@/stores/project-store';
 
 /**
@@ -55,6 +56,9 @@ const dataProductCreateSchema = z.object({
   limitations: z.string().optional(),
   usage: z.string().optional(),
   tags: z.array(z.union([z.string(), z.any()])).optional(),
+  consumer_principals: z
+    .array(z.object({ type: z.string(), value: z.string() }))
+    .optional(),
 });
 
 type FormData = z.infer<typeof dataProductCreateSchema>;
@@ -96,6 +100,7 @@ export default function DataProductCreateDialog({
       limitations: '',
       usage: '',
       tags: [],
+      consumer_principals: [],
     },
   });
 
@@ -125,6 +130,7 @@ export default function DataProductCreateDialog({
           limitations: product.description?.limitations || '',
           usage: product.description?.usage || '',
           tags: product.tags || [],
+          consumer_principals: product.consumer_principals || [],
         });
       } else {
         // Reset to defaults for create mode, default to current project
@@ -141,6 +147,7 @@ export default function DataProductCreateDialog({
           limitations: '',
           usage: '',
           tags: [],
+          consumer_principals: [],
         });
       }
     }
@@ -187,6 +194,7 @@ export default function DataProductCreateDialog({
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
           tags: normalizedTags, // Use normalized tags from form
+          consumer_principals: data.consumer_principals || [],
           description: {
             purpose: data.purpose || undefined,
             limitations: data.limitations || undefined,
@@ -249,6 +257,9 @@ export default function DataProductCreateDialog({
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
           tags: normalizedTags.length > 0 ? normalizedTags : undefined,
+          consumer_principals: (data.consumer_principals && data.consumer_principals.length > 0)
+            ? data.consumer_principals
+            : undefined,
           description: {
             purpose: data.purpose || undefined,
             limitations: data.limitations || undefined,
@@ -554,6 +565,24 @@ export default function DataProductCreateDialog({
             <p className="text-xs text-muted-foreground">
               Add tags to categorize and organize this data product
             </p>
+          </div>
+
+          {/* Consumer Groups Section */}
+          <div className="space-y-2 border-t pt-4">
+            <Label>Consumer Groups</Label>
+            <p className="text-xs text-muted-foreground">
+              Workspace groups that represent the expected consumers of this product. Each entry is stored as a typed principal <code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>; surfaced to subscribe webhooks via <code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
+            </p>
+            <Controller
+              name="consumer_principals"
+              control={form.control}
+              render={({ field }) => (
+                <ConsumerGroupsPicker
+                  value={field.value || []}
+                  onChange={(next: ConsumerPrincipal[]) => field.onChange(next)}
+                />
+              )}
+            />
           </div>
 
           <DialogFooter>

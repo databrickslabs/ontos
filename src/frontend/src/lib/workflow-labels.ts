@@ -183,6 +183,8 @@ export const ALL_TRIGGER_TYPES: TriggerType[] = [
   'on_unpublish',
   'on_expiring',
   'on_revoke',
+  // User session triggers
+  'on_first_access',
   // App-known UI actions (approval workflows, 1:1 match with ON_*)
   'for_approval_response',
   'for_subscribe',
@@ -210,6 +212,7 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
   'data_asset_review',
   'job',
   'subscription',
+  'user',
 ];
 
 /**
@@ -277,6 +280,18 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   // Access lifecycle
   on_expiring: ['access_grant'],
   on_revoke: ['access_grant'],
+  // Wizard (user-action-triggered) variants — PR #353
+  // These triggers fire on user action (button click), not platform event,
+  // and the workflow runs *before* the underlying record is created. Entity
+  // types reflect the contexts from which the action can be invoked today.
+  for_subscribe: ['data_product'],
+  for_request_access: ['data_product', 'access_grant'],
+  for_request_review: ['data_product', 'data_contract', 'data_asset_review'],
+  for_request_publish: ['data_product', 'data_contract'],
+  for_request_certify: ['data_product', 'data_contract'],
+  for_request_status_change: ['data_product'],
+  // User session triggers — fire on app mount for terms-of-use / disclaimers
+  on_first_access: ['user'],
   // Manual/scheduled — always supported (no entity dependency)
   scheduled: [],
   manual: [],
@@ -308,24 +323,46 @@ export const SPECIAL_RECIPIENTS: Record<string, string> = {
 
 /**
  * Resolve an approver/recipient identifier to a display name.
- * Handles both UUIDs (resolved via roles map) and special values.
+ *
+ * Handles three identifier shapes:
+ *  - special keys (`requester`, `owner`, `admins`, …) → human label
+ *  - `business:<uuid>` → business role name (with " (business role)" suffix)
+ *  - bare UUID / `business:<uuid>` lookup in `rolesMap` (the workflow designer's
+ *    flat map populated from `/api/workflows/roles`, which already namespaces
+ *    business role IDs with the `business:` prefix on the backend)
+ *
+ * The optional `businessRolesMap` is a fallback for call sites that hold a map
+ * keyed by raw business role UUIDs (e.g., loaded from `/api/business-roles`
+ * directly). It lets the same helper resolve a `business:<uuid>` value even
+ * when the unified `rolesMap` is not available.
  */
 export function resolveRecipientDisplay(
   value: string | undefined,
-  rolesMap: Record<string, string>
+  rolesMap: Record<string, string>,
+  businessRolesMap?: Record<string, string>
 ): string {
   if (!value) return 'Not configured';
-  
+
   // Check special values first
   if (value in SPECIAL_RECIPIENTS) {
     return SPECIAL_RECIPIENTS[value];
   }
-  
-  // Check if it's a role UUID
+
+  // Check the unified rolesMap (which already includes `business:<uuid>` keys
+  // when populated from /api/workflows/roles)
   if (value in rolesMap) {
     return rolesMap[value];
   }
-  
+
+  // Explicit business: prefix handling — works even if only a flat
+  // businessRolesMap (keyed by raw UUID) was provided.
+  if (value.startsWith('business:')) {
+    const uuid = value.slice('business:'.length);
+    const name = businessRolesMap?.[uuid];
+    if (name) return `${name} (business role)`;
+    return value;
+  }
+
   // Fallback: return raw value (might be email or legacy role name)
   return value;
 }

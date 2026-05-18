@@ -66,6 +66,104 @@ interface WizardStep {
 /** Step types that require no user interaction and should auto-advance. */
 const NON_VISUAL_STEP_TYPES = new Set(['persist_agreement', 'generate_pdf', 'deliver']);
 
+/**
+ * Field shape carried in ``required_fields`` on a ``user_action`` step. Mirrors
+ * the BE config shape; ``options_endpoint`` is the new addition for portable
+ * dropdowns whose options are fetched from a backend endpoint at render time
+ * (e.g. ``/api/workspace/accessible-workspaces``).
+ */
+interface UserActionField {
+  id: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  /** When ``type === 'select'``, fetch options from this endpoint at render time. */
+  options_endpoint?: string;
+  /** Static options for ``type === 'select'`` (alternative to ``options_endpoint``). */
+  options?: Array<{ value: string; label: string }>;
+}
+
+/**
+ * Select field whose options are fetched from an endpoint. Kept inline as a
+ * small component so it owns its own loading/error state without coupling to
+ * the wizard's larger state machine. Used for ``type: select`` user_action
+ * fields that declare an ``options_endpoint``. Exported for unit testing —
+ * not part of the public component API.
+ */
+export function FetchedSelectField(props: {
+  field: UserActionField;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  fetcher: <T,>(url: string) => Promise<{ data?: T; error?: string | null }>;
+}) {
+  const { field, value, onChange, disabled, fetcher } = props;
+  const [options, setOptions] = useState<Array<{ value: string; label: string }>>(field.options ?? []);
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!field.options_endpoint) {
+      setOptions(field.options ?? []);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    setFetchError(null);
+    (async () => {
+      try {
+        // Endpoint is expected to return ``[{id|value, name|label, ...}]``.
+        // We accept both shapes so portable workflow configs can point at
+        // existing endpoints (e.g. /api/workspace/accessible-workspaces returns
+        // ``{id, name, deployment_name}``) without a per-endpoint adapter.
+        const res = await fetcher<Array<Record<string, unknown>>>(field.options_endpoint!);
+        if (cancelled) return;
+        if (res.error) {
+          setFetchError(res.error);
+          return;
+        }
+        const raw = Array.isArray(res.data) ? res.data : [];
+        const normalized = raw
+          .map((opt) => {
+            const value = (opt.value ?? opt.id ?? opt.deployment_name) as string | undefined;
+            const label = (opt.label ?? opt.name ?? opt.display_name ?? value) as string | undefined;
+            if (!value) return null;
+            return { value: String(value), label: String(label ?? value) };
+          })
+          .filter((o): o is { value: string; label: string } => o !== null);
+        setOptions(normalized);
+      } catch (e: any) {
+        if (!cancelled) setFetchError(e?.message ?? 'Failed to load options');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [field.options_endpoint, field.options, fetcher]);
+
+  return (
+    <Select value={value} onValueChange={onChange} disabled={disabled || isLoading}>
+      <SelectTrigger id={field.id}>
+        <SelectValue placeholder={isLoading ? 'Loading…' : (field.label ?? 'Select…')} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </SelectItem>
+        ))}
+        {options.length === 0 && !isLoading && (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+            {fetchError ?? 'No options available'}
+          </div>
+        )}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export interface ApprovalWizardDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -87,7 +185,20 @@ export interface ApprovalWizardDialogProps {
   onBehalfOf?: { type: string; value: string } | null;
   /** When true and preselectedWorkflowId is set, start session immediately without showing workflow list. */
   autoStartWithPreselected?: boolean;
-  onComplete?: (agreementId: string | null, pdfStoragePath: string | null) => void;
+  /**
+   * Fired when the wizard completes (or when the user closes after success).
+   *
+   * ``wizardFields`` is an aggregated map of every field collected from
+   * ``user_action`` steps across the session — keyed by ``required_fields[].id``.
+   * It is the FE pass-through that lets request-action call sites merge custom
+   * fields the workflow author defined into the eventual API submit body
+   * without the call site needing to know the workflow shape.
+   */
+  onComplete?: (
+    agreementId: string | null,
+    pdfStoragePath: string | null,
+    wizardFields?: Record<string, unknown>,
+  ) => void;
   /** Called when no workflow is available so the caller can proceed directly. */
   onNoWorkflow?: () => void;
 }
@@ -124,6 +235,13 @@ export default function ApprovalWizardDialog({
   const [workflowsLoaded, setWorkflowsLoaded] = useState(false);
   /** Ref to prevent duplicate auto-submit for non-visual steps. */
   const autoSubmitRef = useRef<string | null>(null);
+  /**
+   * Aggregated map of every field collected from ``user_action`` steps across
+   * the session, keyed by ``required_fields[].id``. Surfaced via ``onComplete``
+   * so request-action call sites can merge wizard-collected fields into the
+   * eventual API submit body without knowing the workflow shape.
+   */
+  const collectedFieldsRef = useRef<Record<string, unknown>>({});
   /** Legal document: tracks whether user scrolled to bottom. */
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   /** Legal document: tracks acknowledgement checkbox state. */
@@ -163,6 +281,7 @@ export default function ApprovalWizardDialog({
     setStepNames([]);
     setWorkflowsLoaded(false);
     autoSubmitRef.current = null;
+    collectedFieldsRef.current = {};
     setScrolledToEnd(false);
     setAcknowledged(false);
     setChecklistState({});
@@ -358,6 +477,11 @@ export default function ApprovalWizardDialog({
     setLoading(true);
     try {
       const submissionPayload = currentStep.step_type === 'user_action' ? payload : stepValidation.payload;
+      // Aggregate user_action fields into collectedFieldsRef so onComplete can
+      // surface them to request-action call sites for pass-through.
+      if (currentStep.step_type === 'user_action' && submissionPayload && typeof submissionPayload === 'object') {
+        collectedFieldsRef.current = { ...collectedFieldsRef.current, ...submissionPayload };
+      }
       const res = await post<{ complete?: boolean; agreement_id?: string; pdf_storage_path?: string; pdf_url?: string; current_step?: WizardStep; step_results?: unknown[] }>(
         `/api/approvals/sessions/${sessionId}/steps`,
         { step_id: currentStep.step_id, payload: submissionPayload },
@@ -434,7 +558,7 @@ export default function ApprovalWizardDialog({
   const handleDialogOpenChange = (open: boolean) => {
     if (!open && completeResult) {
       // Closing after completion — fire onComplete
-      onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path);
+      onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path, { ...collectedFieldsRef.current });
     } else if (!open && !completeResult) {
       // User closed via X or escape mid-flow — treat as cancel
       toast({ title: 'Cancelled', variant: 'default' });
@@ -521,7 +645,7 @@ export default function ApprovalWizardDialog({
             )}
             <DialogFooter>
               <Button onClick={() => {
-                onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path);
+                onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path, { ...collectedFieldsRef.current });
                 onOpenChange(false);
               }}>Close</Button>
             </DialogFooter>
@@ -577,10 +701,17 @@ export default function ApprovalWizardDialog({
               </div>
             )}
 
-            {/* === user_action renderer === */}
+            {/* === user_action renderer ===
+                Field types:
+                  - 'text': Textarea
+                  - 'select': dropdown (static ``options`` or fetched via
+                    ``options_endpoint``) — used for portable dropdowns like
+                    target-workspace pickers driven by deployment-specific
+                    backend endpoints (e.g. /api/workspace/accessible-workspaces)
+                  - default: single-line Input */}
             {currentStep.step_type === 'user_action' && (
               <div className="space-y-2">
-                {requiredFields.map((f) => (
+                {(requiredFields as UserActionField[]).map((f) => (
                   <div key={f.id} className="space-y-1">
                     <Label htmlFor={f.id}>{f.label}{f.required ? ' *' : ''}</Label>
                     {f.type === 'text' ? (
@@ -591,6 +722,14 @@ export default function ApprovalWizardDialog({
                         placeholder={f.label}
                         rows={2}
                         disabled={loading}
+                      />
+                    ) : f.type === 'select' ? (
+                      <FetchedSelectField
+                        field={f}
+                        value={payload[f.id] ?? ''}
+                        onChange={(v) => setPayload((p) => ({ ...p, [f.id]: v }))}
+                        disabled={loading}
+                        fetcher={get}
                       />
                     ) : (
                       <Input

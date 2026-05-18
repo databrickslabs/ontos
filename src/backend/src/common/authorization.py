@@ -115,8 +115,20 @@ async def get_user_details_from_sdk(
 
     # Try using OBO client with current_user.me() first (no admin permissions required)
     obo_token = request.headers.get('x-forwarded-access-token')
+    # Diagnostic: surface which forwarded headers actually arrive from the
+    # Databricks Apps proxy. Without these at INFO level we can't tell the
+    # difference between "OBO header missing" vs "OBO header present but empty"
+    # vs "scope not granted" when triaging a deployed app.
+    fwd_email = request.headers.get('X-Forwarded-Email')
+    fwd_user = request.headers.get('X-Forwarded-User')
+    logger.info(
+        "auth.headers: x-forwarded-access-token=%s, X-Forwarded-Email=%s, X-Forwarded-User=%s",
+        "present" if obo_token else "MISSING",
+        fwd_email or "<none>",
+        fwd_user or "<none>",
+    )
     if obo_token:
-        logger.debug("Using OBO token with current_user.me() for user lookup (no admin permissions required).")
+        logger.info("Using OBO token with current_user.me() for user lookup (no admin permissions required).")
         try:
             obo_client = get_obo_workspace_client(request, settings)
             user_info_response = manager.get_current_user(obo_client=obo_client, real_ip=real_ip)
@@ -132,7 +144,10 @@ async def get_user_details_from_sdk(
             raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
     # Fallback: Use get_user_details_by_email if no OBO token (requires admin permissions)
-    logger.debug("No OBO token available, falling back to get_user_details_by_email (requires admin permissions).")
+    logger.info(
+        "No OBO token (x-forwarded-access-token) on request, falling back to SP-scoped get_user_details_by_email. "
+        "If groups appear missing in the response, the app's user_authorization scopes likely need iam.current-user:read."
+    )
     user_email = request.headers.get("X-Forwarded-Email")
     if not user_email:
         user_email = request.headers.get("X-Forwarded-User")

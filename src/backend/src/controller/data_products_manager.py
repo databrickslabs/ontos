@@ -8,7 +8,8 @@ Handles product creation, updates, versioning, contract integration, and search 
 import asyncio
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, Iterable, List, Optional, Any, Set
+from uuid import UUID
 from pathlib import Path
 
 SOURCE_ID_PROPERTY = "sourceId"
@@ -273,6 +274,37 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Unexpected error listing products: {e}")
             raise
+
+    def list_output_port_ids_for_products(
+        self, db: Session, *, product_ids: Iterable[str]
+    ) -> Set[str]:
+        """Return OutputPort IDs belonging to the given Data Products."""
+        return self._repo.get_output_port_ids_for_products(db, product_ids=product_ids)
+
+    def list_linked_asset_ids_for_products(
+        self,
+        db: Session,
+        *,
+        product_ids: Iterable[str],
+        port_ids: Optional[Iterable[str]] = None,
+    ) -> Set[UUID]:
+        """Return asset UUIDs linked to the given Data Products / OutputPorts.
+
+        Asset linkage is materialized in ``entity_relationships`` (DataProduct ->
+        asset, OutputPort -> asset). When ``port_ids`` is None, the manager looks
+        them up via the data-products repository so callers can pass just the
+        accessible product set.
+        """
+        pid_list = [str(p) for p in product_ids]
+        if not pid_list and not port_ids:
+            return set()
+        if port_ids is None:
+            port_ids = self._repo.get_output_port_ids_for_products(
+                db, product_ids=pid_list
+            )
+        return entity_relationship_repo.get_asset_ids_linked_to_products(
+            db, product_ids=pid_list, port_ids=port_ids,
+        )
 
     def update_product(
         self,

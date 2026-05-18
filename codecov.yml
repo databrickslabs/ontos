@@ -1,0 +1,42 @@
+codecov:
+  require_ci_to_pass: false
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        informational: true
+    patch:
+      default:
+        informational: true
+
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: backend
+      paths:
+        - src/backend/
+    - name: frontend
+      paths:
+        - src/frontend/
+
+# Test runners emit paths relative to their working directory, not the repo
+# root, so Codecov can't resolve them against the file tree:
+#   - vitest runs from src/frontend  → "src/app.tsx"
+#   - pytest runs from src           → "backend/src/..."
+# Rewrite both back to repo-root paths.
+fixes:
+  - "src/::src/frontend/src/"
+  - "backend/::src/backend/"
+
+ignore:
+  - "**/node_modules/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "src/frontend/src/test/**"
+  - "src/frontend/src/components/ui/**"

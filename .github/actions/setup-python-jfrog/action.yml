@@ -1,0 +1,44 @@
+name: "Set up Python with JFrog pip/uv"
+description: >
+  Fetches a JFrog OIDC token, sets up Python, and configures either pip or uv
+  to install packages from databricks.jfrog.io/artifactory/api/pypi/db-pypi.
+
+inputs:
+  python-version:
+    description: "Python version (e.g., '3.10', '3.11')"
+    required: true
+  installer:
+    description: "Which package installer to point at JFrog: pip, uv, or none"
+    required: false
+    default: pip
+  cache:
+    description: "Cache key for actions/setup-python (e.g., 'pip', or empty to disable)"
+    required: false
+    default: pip
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/jfrog-auth
+
+    - name: Set up Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: ${{ inputs.cache }}
+
+    - name: Configure pip via JFrog
+      if: inputs.installer == 'pip'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "PIP_INDEX_URL=https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "$GITHUB_ENV"
+        echo "pip configured to use JFrog registry"
+
+    - name: Configure uv via JFrog
+      if: inputs.installer == 'uv'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "UV_DEFAULT_INDEX=https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "$GITHUB_ENV"
+        echo "uv configured to use JFrog registry"

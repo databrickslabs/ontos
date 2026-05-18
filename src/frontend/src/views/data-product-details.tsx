@@ -11,6 +11,7 @@ import SupportChannelFormDialog from '@/components/data-products/support-channel
 import ImportExportDialog from '@/components/data-products/import-export-dialog';
 import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog';
 import { useApi } from '@/hooks/use-api';
+import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound, Plus, FileText, Download, Bell, BellOff, Users, ShieldCheck, Globe } from 'lucide-react';
@@ -69,6 +70,220 @@ import { ApprovalEntity } from '@/types/settings';
 type ViewMode = 'minimal' | 'medium' | 'large'
 const VIEW_MODE_STORAGE_KEY = 'data-product-view-mode'
 
+const VIEW_MODES: ReadonlyArray<ViewMode> = ['minimal', 'medium', 'large'];
+
+/**
+ * Parse a value retrieved from `localStorage[VIEW_MODE_STORAGE_KEY]`. Returns
+ * the value when it's one of the known modes, otherwise `null` so the caller
+ * can apply its default.
+ */
+export function parseStoredViewMode(stored: string | null | undefined): ViewMode | null {
+  if (!stored) return null;
+  return (VIEW_MODES as ReadonlyArray<string>).includes(stored) ? (stored as ViewMode) : null;
+}
+
+/**
+ * Pure helper that maps (product owner team membership, permission level)
+ * to the default ViewMode. Owner-team members get the full 'large' view;
+ * write/admin users get 'medium'; everyone else 'minimal'.
+ */
+export function computeDefaultViewMode(args: {
+  ownerTeamId?: string | null;
+  userGroups?: ReadonlyArray<string> | null;
+  permissionLevel?: FeatureAccessLevel | null;
+}): ViewMode {
+  const { ownerTeamId, userGroups, permissionLevel } = args;
+  if (ownerTeamId && userGroups && userGroups.includes(ownerTeamId)) {
+    return 'large';
+  }
+  if (
+    permissionLevel === FeatureAccessLevel.READ_WRITE ||
+    permissionLevel === FeatureAccessLevel.ADMIN ||
+    permissionLevel === FeatureAccessLevel.FULL
+  ) {
+    return 'medium';
+  }
+  return 'minimal';
+}
+
+/**
+ * Pure ViewMode → section visibility predicate. The component-level wrapper
+ * just closes over the current `viewMode`.
+ */
+export function shouldShowSectionForViewMode(viewMode: ViewMode, section: string): boolean {
+  switch (viewMode) {
+    case 'minimal':
+      return ['deliverables', 'description', 'hierarchy'].includes(section);
+    case 'medium':
+      return !['management-ports', 'support-channels', 'metadata-panel', 'ratings', 'costs', 'quality'].includes(section);
+    case 'large':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Format an ISO date string for display. Falls back to `fallback` when input
+ * is empty / undefined, and to a literal `Invalid Date` when `Date` rejects it.
+ */
+export function formatDateString(dateString: string | undefined | null, fallback: string = 'N/A'): string {
+  if (!dateString) return fallback;
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'Invalid Date';
+    return d.toLocaleString();
+  } catch {
+    return 'Invalid Date';
+  }
+}
+
+/**
+ * Map a Data Product status string to a Shadcn Badge variant.
+ * Lower-cased internally so `Active`, `ACTIVE`, `active` all map identically.
+ */
+export function getStatusBadgeVariant(
+  status: string | undefined | null,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  const lowerStatus = status?.toLowerCase() || '';
+  if (lowerStatus === 'active') return 'default';
+  if (lowerStatus === 'draft' || lowerStatus === 'proposed') return 'secondary';
+  if (lowerStatus === 'retired' || lowerStatus === 'deprecated') return 'outline';
+  return 'default';
+}
+
+/**
+ * Statuses where a Data Product can still be edited in-place. Anything with a
+ * higher lifecycle status (`active`, `retired`, `deprecated`) must be cloned
+ * for editing instead.
+ */
+export const IN_PLACE_EDITABLE_STATUSES: ReadonlyArray<string> = [
+  'draft',
+  'sandbox',
+  'proposed',
+  'under_review',
+  'approved',
+];
+
+export function isStatusEditableInPlace(status: string | undefined | null): boolean {
+  if (!status) return false;
+  return IN_PLACE_EDITABLE_STATUSES.includes(status.toLowerCase());
+}
+
+/**
+ * A "personal draft" is a product owned by a single user (not a team) — these
+ * stay editable for that user even when the product status would otherwise be
+ * locked. The signal is a non-null `draftOwnerId` on the product.
+ */
+export function isPersonalDraftProduct(product: { draftOwnerId?: string | null } | null | undefined): boolean {
+  return product != null && product.draftOwnerId != null;
+}
+
+/**
+ * Read-only iff the user is not an admin AND the product is neither
+ * editable-in-place nor a personal draft. Pure function over the three flags.
+ */
+export function isProductReadOnly(args: {
+  canAdmin: boolean;
+  canEditInPlace: boolean;
+  isPersonalDraft: boolean;
+}): boolean {
+  return !args.canAdmin && !args.canEditInPlace && !args.isPersonalDraft;
+}
+
+/**
+ * Final "can the user modify this product" gate combining role + status flags.
+ * Admins can always modify; write-class users can modify when the product is
+ * editable-in-place or a personal draft.
+ */
+export function canUserModifyProduct(args: {
+  canAdmin: boolean;
+  canWrite: boolean;
+  canEditInPlace: boolean;
+  isPersonalDraft: boolean;
+}): boolean {
+  if (args.canAdmin) return true;
+  return args.canWrite && (args.canEditInPlace || args.isPersonalDraft);
+}
+
+/**
+ * Resolve the human-readable domain label for a product. Falls back to the
+ * raw domain id when the lookup misses, and to a "not assigned" sentinel when
+ * the product has no domain at all.
+ */
+export function resolveDomainLabel(args: {
+  domain: string | undefined | null;
+  resolveName: (id: string) => string | undefined | null;
+  notAssignedLabel: string;
+}): string {
+  const { domain, resolveName, notAssignedLabel } = args;
+  if (!domain) return notAssignedLabel;
+  return resolveName(domain) || domain;
+}
+
+/**
+ * Whether the product is in the "active" lifecycle state. Centralised so the
+ * "active" magic string lives in one place — used by the lifecycle approve /
+ * deprecate gates.
+ */
+export function isProductActive(status: string | undefined | null): boolean {
+  return (status?.toLowerCase() || '') === 'active';
+}
+
+/**
+ * Output port → asset relationship predicates.
+ *
+ * Mirrors the `portHas*` predicates declared in `ontos-ontology.ttl` (lines
+ * 838–891). The ontology intentionally restricts these relationships to
+ * *deliverable* asset types — not container types like Catalog or Schema.
+ * The picker filter and the POST predicate selection both flow from this map,
+ * so they stay in lock-step with the ontology.
+ *
+ * If a new deliverable type is added to the TTL, add it here. If a caller
+ * tries to link an unsupported type the POST is skipped with a warning;
+ * the backend at `entity_relationships_manager.py` is the actual security
+ * gate and will return 422 for any invalid (predicate, range) tuple.
+ */
+export const PORT_TO_ASSET_PREDICATE: Readonly<Record<string, string>> = {
+  Table: 'portHasTable',
+  View: 'portHasView',
+  Dataset: 'portHasDataset',
+  APIEndpoint: 'portHasEndpoint',
+  MLModel: 'portHasModel',
+};
+
+const PORT_DELIVERABLE_ASSET_TYPES = Object.keys(PORT_TO_ASSET_PREDICATE);
+
+/**
+ * Look up the ontology predicate for a port → asset relationship.
+ * Returns `undefined` for unsupported / missing asset types so callers can
+ * skip the POST instead of building a `portHas<X>` the backend will 422 on.
+ */
+export function selectPortAssetPredicate(assetTypeName: string | undefined | null): string | undefined {
+  if (!assetTypeName) return undefined;
+  return PORT_TO_ASSET_PREDICATE[assetTypeName];
+}
+
+/**
+ * Build the POST body for `/api/entity-relationships` from an asset and the
+ * owning port id. Returns `null` when the asset type has no port predicate
+ * in the ontology — caller should skip + warn rather than send the request.
+ */
+export function buildLinkAssetRequestBody(
+  asset: any,
+  portId: string,
+): { source_type: string; source_id: string; target_type: string; target_id: string; relationship_type: string } | null {
+  const predicate = selectPortAssetPredicate(asset?.asset_type_name);
+  if (!predicate) return null;
+  return {
+    source_type: 'OutputPort',
+    source_id: portId,
+    target_type: asset.asset_type_name,
+    target_id: asset.id,
+    relationship_type: predicate,
+  };
+}
+
 type CheckApiResponseFn = <T>(
   response: { data?: T | { detail?: string }, error?: string | null | undefined },
   name: string
@@ -121,21 +336,28 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
 
   const handleLinkAssets = async (assets: any[]) => {
     try {
+      let linkedCount = 0;
       for (const asset of assets) {
+        // The picker is filtered to deliverable types, but be defensive:
+        // if an asset of an unsupported type slips through, skip + warn rather
+        // than build a `portHas<X>` predicate that the backend will 422 on.
+        const body = buildLinkAssetRequestBody(asset, portId);
+        if (!body) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[link-asset] Skipping asset ${asset.id}: type "${asset.asset_type_name}" has no port relationship in the ontology.`
+          );
+          continue;
+        }
         const res = await fetch('/api/entity-relationships', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            source_type: 'OutputPort',
-            source_id: portId,
-            target_type: asset.asset_type_name || 'Table',
-            target_id: asset.id,
-            relationship_type: asset.relationshipType || `portHas${asset.asset_type_name || 'Table'}`,
-          }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(`Failed to link asset: ${res.statusText}`);
+        linkedCount += 1;
       }
-      toast({ title: 'Assets linked', description: `${assets.length} asset(s) linked to ${portName}` });
+      toast({ title: 'Assets linked', description: `${linkedCount} asset(s) linked to ${portName}` });
       fetchRelationships();
     } catch (error: any) {
       toast({ title: 'Error', description: error?.message || 'Failed to link assets', variant: 'destructive' });
@@ -203,10 +425,10 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
             isOpen={isAssetSelectorOpen}
             onOpenChange={setIsAssetSelectorOpen}
             onConfirm={handleLinkAssets}
-            relationshipType="portHasTable"
             relationshipLabel="linked to port"
+            targetAssetTypes={PORT_DELIVERABLE_ASSET_TYPES}
             title={`Link Assets to "${portName}"`}
-            description="Select assets to link to this deliverable"
+            description="Only deliverable asset types (Table, View, Dataset, API Endpoint, ML Model) can be linked to an output port."
           />
         </>
       )}
@@ -222,6 +444,7 @@ export default function DataProductDetails() {
   const listPath = pathname.replace(/\/[^/]+$/, '');
   const api = useApi();
   const { get, post, delete: deleteApi } = api;
+  const { lookupWorkflowId } = useApprovalWizardTrigger();
   const { toast } = useToast();
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
@@ -310,33 +533,24 @@ export default function DataProductDetails() {
   // Versioned editing: determine if product can be edited in place based on status
   // Products with status 'draft', 'sandbox', 'proposed' can be edited directly
   // Products with status 'active' and above must be cloned for editing
-  const canEditInPlace = product?.status && ['draft', 'sandbox', 'proposed', 'under_review', 'approved'].includes(product.status.toLowerCase());
-  const isPersonalDraft = product?.draftOwnerId != null;
-  const isReadOnly = !canAdmin && !canEditInPlace && !isPersonalDraft;
+  const canEditInPlace = isStatusEditableInPlace(product?.status);
+  const isPersonalDraft = isPersonalDraftProduct(product);
+  const isReadOnly = isProductReadOnly({ canAdmin, canEditInPlace, isPersonalDraft });
 
   // Combined permission check: admin can always edit; others need write + editable status
-  const canModify = canAdmin || (canWrite && (canEditInPlace || isPersonalDraft));
+  const canModify = canUserModifyProduct({ canAdmin, canWrite, canEditInPlace, isPersonalDraft });
 
   // View mode state for filtering sections - initialize from localStorage
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    if (stored && ['minimal', 'medium', 'large'].includes(stored)) {
-      return stored as ViewMode;
-    }
-    return 'minimal';
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => parseStoredViewMode(localStorage.getItem(VIEW_MODE_STORAGE_KEY)) ?? 'minimal',
+  );
 
   const getDefaultViewMode = useCallback((): ViewMode => {
-    if (product?.owner_team_id && userInfo?.groups?.includes(product.owner_team_id)) {
-      return 'large';
-    }
-    const permissionLevel = getPermissionLevel('data-products');
-    if (permissionLevel === FeatureAccessLevel.READ_WRITE ||
-        permissionLevel === FeatureAccessLevel.ADMIN ||
-        permissionLevel === FeatureAccessLevel.FULL) {
-      return 'medium';
-    }
-    return 'minimal';
+    return computeDefaultViewMode({
+      ownerTeamId: product?.owner_team_id,
+      userGroups: userInfo?.groups,
+      permissionLevel: getPermissionLevel('data-products'),
+    });
   }, [product?.owner_team_id, userInfo?.groups, getPermissionLevel]);
 
   useEffect(() => {
@@ -368,22 +582,10 @@ export default function DataProductDetails() {
     product ? { type: 'data_product', name: product.name || 'Unnamed', id: productId || '' } : null,
   );
 
-  const formatDate = (dateString: string | undefined, fallback: string = 'N/A'): string => {
-    if (!dateString) return fallback;
-    try {
-      return new Date(dateString).toLocaleString();
-    } catch (e) {
-      return 'Invalid Date';
-    }
-  };
+  const formatDate = (dateString: string | undefined, fallback: string = 'N/A'): string =>
+    formatDateString(dateString, fallback);
 
-  const getStatusColor = (status: string | undefined): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    const lowerStatus = status?.toLowerCase() || '';
-    if (lowerStatus === 'active') return 'default';
-    if (lowerStatus === 'draft' || lowerStatus === 'proposed') return 'secondary';
-    if (lowerStatus === 'retired' || lowerStatus === 'deprecated') return 'outline';
-    return 'default';
-  };
+  const getStatusColor = getStatusBadgeVariant;
 
   const fetchProductDetails = async () => {
     if (!productId) {
@@ -569,20 +771,11 @@ export default function DataProductDetails() {
   // Subscription: open approval wizard (or fallback to direct subscribe)
   const handleSubscribeClick = async () => {
     if (!productId) return;
-    try {
-      const res = await get<{ id: string }>('/api/workflows/for-trigger/for_subscribe');
-      if (res.data?.id) {
-        setSubscriptionWorkflowId(res.data.id);
-        setSubscriptionWizardOpen(true);
-      } else {
-        toast({
-          title: 'Approval workflow not configured',
-          description: 'Subscribing directly. Load default workflows in Settings to use the approval flow.',
-          variant: 'default',
-        });
-        await handleSubscribeDirect();
-      }
-    } catch {
+    const workflowId = await lookupWorkflowId('for_subscribe');
+    if (workflowId) {
+      setSubscriptionWorkflowId(workflowId);
+      setSubscriptionWizardOpen(true);
+    } else {
       toast({
         title: 'Approval workflow not configured',
         description: 'Subscribing directly. Load default workflows in Settings to use the approval flow.',
@@ -1193,18 +1386,8 @@ export default function DataProductDetails() {
     }
   };
 
-  const shouldShowSection = (section: string): boolean => {
-    switch (viewMode) {
-      case 'minimal':
-        return ['deliverables', 'description', 'hierarchy'].includes(section);
-      case 'medium':
-        return !['management-ports', 'support-channels', 'metadata-panel', 'ratings', 'costs', 'quality'].includes(section);
-      case 'large':
-        return true;
-      default:
-        return false;
-    }
-  };
+  const shouldShowSection = (section: string): boolean =>
+    shouldShowSectionForViewMode(viewMode, section);
 
   if (loading || permissionsLoading) {
     return <DetailViewSkeleton cards={5} actionButtons={5} />;
@@ -1227,7 +1410,11 @@ export default function DataProductDetails() {
     );
   }
 
-  const domainLabel = product.domain ? (getDomainName(product.domain) || product.domain) : t('common:states.notAssigned');
+  const domainLabel = resolveDomainLabel({
+    domain: product.domain,
+    resolveName: getDomainName,
+    notAssignedLabel: t('common:states.notAssigned'),
+  });
 
   return (
     <div className="py-6 space-y-6">
@@ -1270,7 +1457,7 @@ export default function DataProductDetails() {
           <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm">
             <KeyRound className="mr-2 h-4 w-4" /> Request...
           </Button>
-          {product.status?.toLowerCase() === 'active' && canApproveProductLifecycle && (
+          {isProductActive(product.status) && canApproveProductLifecycle && (
             <Button
               variant="outline"
               size="sm"
@@ -1283,7 +1470,7 @@ export default function DataProductDetails() {
               <ShieldCheck className="mr-2 h-4 w-4" /> Certify
             </Button>
           )}
-          {product.status?.toLowerCase() === 'active' && canWrite && (
+          {isProductActive(product.status) && canWrite && (
             <Button
               variant="outline"
               size="sm"

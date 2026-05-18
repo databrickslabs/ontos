@@ -347,6 +347,7 @@ APP_ACTION_TRIGGER_TYPES = frozenset({
     TriggerType.FOR_REQUEST_REVIEW.value,
     TriggerType.FOR_REQUEST_ACCESS.value,
     TriggerType.FOR_REQUEST_PUBLISH.value,
+    TriggerType.FOR_REQUEST_CERTIFY.value,
     TriggerType.FOR_REQUEST_STATUS_CHANGE.value,
 })
 

@@ -144,21 +144,47 @@ class AccessGrantsManager:
         
         db.commit()
         
-        # Fire the ON_REQUEST_ACCESS trigger
+        # Fire the ON_REQUEST_ACCESS trigger.
+        # Path-B portable wizard launch: the FE merges fields collected by the
+        # ``for_request_access`` approval wizard's ``user_action`` steps into
+        # ``data.wizard_data``. We splat that dict at the top level of
+        # ``entity_data`` so Process workflow steps can reference each field
+        # via ``${entity.<field_id>}`` without the workflow author needing to
+        # know the wrapper key. First-class fields take precedence on
+        # collision (workflow authors should namespace custom field ids).
+        # Pydantic ``extra='allow'`` may also bag other ad-hoc fields onto the
+        # model — we forward those too to keep the surface flexible.
+        entity_data: Dict[str, object] = {
+            "request_id": str(request_db.id),
+            "entity_type": data.entity_type,
+            "entity_id": data.entity_id,
+            "entity_name": data.entity_name,
+            "requested_duration_days": data.requested_duration_days,
+            "permission_level": data.permission_level.value,
+            "reason": data.reason,
+        }
+        wizard_data = getattr(data, "wizard_data", None) or {}
+        if isinstance(wizard_data, dict) and wizard_data:
+            for k, v in wizard_data.items():
+                if k not in entity_data:
+                    entity_data[k] = v
+            # Preserve the original namespaced bag too so workflow authors who
+            # prefer ``${entity.wizard_data.<id>}`` over the splatted form can
+            # use either. Only set when non-empty so legacy callers without a
+            # wizard see the original ``entity_data`` shape unchanged.
+            entity_data["wizard_data"] = wizard_data
+        # Forward any other ``extra='allow'`` fields from the request body.
+        extra_fields = getattr(data, "model_extra", None) or {}
+        for k, v in extra_fields.items():
+            if k != "wizard_data" and k not in entity_data:
+                entity_data[k] = v
+
         trigger_registry = get_trigger_registry(db)
         executions = trigger_registry.on_request_access(
             entity_type=EntityType.ACCESS_GRANT,
             entity_id=str(request_db.id),
             entity_name=data.entity_name,
-            entity_data={
-                "request_id": str(request_db.id),
-                "entity_type": data.entity_type,
-                "entity_id": data.entity_id,
-                "entity_name": data.entity_name,
-                "requested_duration_days": data.requested_duration_days,
-                "permission_level": data.permission_level.value,
-                "reason": data.reason,
-            },
+            entity_data=entity_data,
             user_email=requester_email,
         )
         

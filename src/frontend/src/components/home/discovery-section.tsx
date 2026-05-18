@@ -13,7 +13,7 @@ import { DataDomain } from '@/types/data-domain';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { useApi } from '@/hooks/use-api';
+import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Badge } from '@/components/ui/badge';
 
 interface DiscoverySectionProps {
@@ -48,7 +48,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   const [subscriptionWizardOpen, setSubscriptionWizardOpen] = useState(false);
   const [subscriptionWorkflowId, setSubscriptionWorkflowId] = useState<string | null>(null);
 
-  const api = useApi();
+  const { lookupWorkflowId } = useApprovalWizardTrigger();
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -218,15 +218,11 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   // Handle subscribe button click
   const handleSubscribeClick = async (product: DataProduct) => {
     setSelectedProduct(product);
-    try {
-      const res = await api.get<{ id: string }>('/api/workflows/for-trigger/for_subscribe');
-      if (res.data?.id) {
-        setSubscriptionWorkflowId(res.data.id);
-        setSubscriptionWizardOpen(true);
-      } else {
-        setSubscribeDialogOpen(true);
-      }
-    } catch {
+    const workflowId = await lookupWorkflowId('for_subscribe');
+    if (workflowId) {
+      setSubscriptionWorkflowId(workflowId);
+      setSubscriptionWizardOpen(true);
+    } else {
       setSubscribeDialogOpen(true);
     }
   };

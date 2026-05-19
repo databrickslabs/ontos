@@ -497,6 +497,15 @@ class DataProductCreate(BaseModel):
 
     # Versioning
     parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")
+    # The following three columns exist on DataProductDb but were missing
+    # from the create schema, so Pydantic v2 silently stripped them from
+    # incoming POSTs (model_config does not set extra="allow"). The
+    # repository's getattr() fallback then returned None on every
+    # create. Declaring them here makes the create round-trip honor
+    # the input. No DB migration needed — columns already exist.
+    draft_owner_id: Optional[str] = Field(None, description="Creator / single-user owner email for personal drafts and non-team-owned products")
+    base_name: Optional[str] = Field(None, description="Stable base name shared across versions of the same product family")
+    change_summary: Optional[str] = Field(None, description="Free-text summary of changes in this version")
 
     # Metadata inheritance
     max_level_inheritance: int = Field(99, ge=0, le=999, description="Maximum metadata level to inherit from contracts")
@@ -562,6 +571,12 @@ class DataProductUpdate(BaseModel):
     support: Optional[List[Support]] = Field(None, alias="support_channels")
     team: Optional[Team] = None
     max_level_inheritance: Optional[int] = Field(None, ge=0, le=999)
+    # Mirror of DataProductCreate — these columns exist on DataProductDb
+    # but were missing from the update schema, so PUTs that included them
+    # were silently stripped. No DB migration needed.
+    draft_owner_id: Optional[str] = Field(None, description="Creator / single-user owner email; clearing this promotes a personal draft")
+    base_name: Optional[str] = Field(None, description="Stable base name shared across versions of the same product family")
+    change_summary: Optional[str] = Field(None, description="Free-text summary of changes in this version")
     # Typed consumer principals (default type="group")
     consumer_principals: Optional[List[ConsumerPrincipal]] = Field(None, description="Typed principals (groups by default) representing expected consumers")
 

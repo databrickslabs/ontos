@@ -132,7 +132,7 @@ alembic==1.18.4 \
     --hash=sha256:a5ed4adcf6d8a4cb575f3d759f071b03cd6e5c7618eb796cb52497be25bfe19a \
     --hash=sha256:cb6e1fd84b6174ab8dbb2329f86d631ba9559dd78df550b57804d607672cedbc
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow
 annotated-types==0.7.0 \
     --hash=sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53 \
@@ -145,6 +145,10 @@ anyio==4.13.0 \
     #   httpx
     #   openai
     #   starlette
+async-timeout==5.0.1 \
+    --hash=sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c \
+    --hash=sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3
+    # via aiohttp
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \
     --hash=sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32
@@ -155,7 +159,7 @@ attrs==26.1.0 \
 bleach==6.3.0 \
     --hash=sha256:6f3b91b1c0a02bb9a78b5a454c92506aa0fdf197e1d5e114d2e00c6f64306d22 \
     --hash=sha256:fe10ec77c93ddf3d13a73b035abaac7a9f5e436513864ccdad516693213c65d6
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 blinker==1.9.0 \
     --hash=sha256:b4ce2265a7abece45e7cc896e98dbebe6cead56bcf805a3d23136d145f5445bf \
     --hash=sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc
@@ -521,19 +525,19 @@ databricks-sdk==0.110.0 \
     --hash=sha256:8a23db05be7a304bea43b4fa78b437051ed0f3755b19594429c649ee4159b546 \
     --hash=sha256:b62d806982b37f8160f700d657c37b3bd586c649eb5c8c4c1216090d888c5820
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow-skinny
     #   mlflow-tracing
 databricks-sql-connector==4.2.6 \
     --hash=sha256:61e0f425c990a0ec52c31165ea7dd0582cc0ad90c5fbd5fc9bea59bb38faeb00 \
     --hash=sha256:65e59f08e55dcc563c05e02e2321d5171dd9482e5792328d99ac097377795d01
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   databricks-sqlalchemy
 databricks-sqlalchemy==2.0.9 \
     --hash=sha256:9975830df92541485c0560998ee90f1ac0f76d9d3de4940582e951c09b49b9ed \
     --hash=sha256:b2569084942591b91eff749ca3f5cdb101845245d36a665d70fc8ad12005dab9
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 defusedxml==0.7.1 \
     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
@@ -558,11 +562,15 @@ et-xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
     --hash=sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54
     # via openpyxl
+exceptiongroup==1.3.1 \
+    --hash=sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219 \
+    --hash=sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598
+    # via anyio
 fastapi==0.118.3 \
     --hash=sha256:5bf36d9bb0cd999e1aefcad74985a6d6a1fc3a35423d497f9e1317734633411d \
     --hash=sha256:8b9673dc083b4b9d3d295d49ba1c0a2abbfb293d34ba210fd9b0a90d5f39981e
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow-skinny
 flask==3.1.3 \
     --hash=sha256:0ef0e52b8a9cd932855379197dd8f94047b359ca0a78695144304cb45f87c9eb \
@@ -574,7 +582,7 @@ flask-cors==6.0.2 \
     --hash=sha256:6e118f3698249ae33e429760db98ce032a8bf9913638d085ca0f4c5534ad2423 \
     --hash=sha256:e57544d415dfd7da89a9564e1e3a9e515042df76e12130641ca6f3f2f03b699a
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow
 fonttools==4.62.1 \
     --hash=sha256:0aa72c43a601cfa9273bb1ae0518f1acadc01ee181a6fc60cd758d7fdadffc04 \
@@ -633,7 +641,7 @@ fonttools==4.62.1 \
 fpdf2==2.8.7 \
     --hash=sha256:7060ccee5a9c7ab0a271fb765a36a23639f83ef8996c34e3d46af0a17ede57f9 \
     --hash=sha256:d391fc508a3ce02fc43a577c830cda4fe6f37646f2d143d489839940932fbc19
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 frozenlist==1.8.0 \
     --hash=sha256:0325024fe97f94c41c08872db482cf8ac4800d80e79222c6b0b7b162d5b13686 \
     --hash=sha256:032efa2674356903cd0261c4317a561a6850f3ac864a63fc1583147fb05a79b0 \
@@ -776,7 +784,7 @@ gitpython==3.1.46 \
     --hash=sha256:400124c7d0ef4ea03f7310ac2fbf7151e09ff97f2a3288d64a440c584a29c37f \
     --hash=sha256:79812ed143d9d25b6d176a10bb511de0f9c67b1fa641d82097b0ab90398a2058
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow-skinny
 google-auth==2.49.1 \
     --hash=sha256:16d40da1c3c5a0533f57d268fe72e0ebb0ae1cc3b567024122651c045d879b64 \
@@ -875,7 +883,7 @@ httpx==0.28.1 \
     --hash=sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   openai
 huey==2.6.0 \
     --hash=sha256:1b9df9d370b49c6d5721ba8a01ac9a787cf86b3bdc584e4679de27b920395c3f \
@@ -896,6 +904,10 @@ importlib-metadata==8.7.1 \
     # via
     #   mlflow-skinny
     #   opentelemetry-api
+isodate==0.7.2 \
+    --hash=sha256:28009937d8031054830160fce6d409ed342816b543597cece116d966c6d99e15 \
+    --hash=sha256:4cd1aa0f43ca76f4a6c6c0292a85f40b35ec2e43e315b59f06e6d32171a953e6
+    # via rdflib
 itsdangerous==2.2.0 \
     --hash=sha256:c6242fc49e35958c8b15141343aa660db5fc54d4f13a1db01a3f5891b98700ef \
     --hash=sha256:e0050c0b7da1eea53ffaf149c0cfbb5c6e2e2b69c4bef22c81fa6eb73e5f6173
@@ -1015,7 +1027,7 @@ joblib==1.5.3 \
 jsonschema==4.26.0 \
     --hash=sha256:0c26707e2efad8aa1bfc5b7ce170f3fccc2e4918ff85989ba9ffa9facb2be326 \
     --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 jsonschema-specifications==2025.9.1 \
     --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe \
     --hash=sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d
@@ -1357,7 +1369,7 @@ matplotlib==3.10.8 \
 mlflow==3.11.1 \
     --hash=sha256:84e54c4be91b5b2a19039a2673fe688b1d7307ceddacc08af51f8df05b19ee56 \
     --hash=sha256:8f6bf1238ac04f97664c229dd480380c5c254a78bdb3c0e433e3a0397508b1af
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 mlflow-skinny==3.11.1 \
     --hash=sha256:82ffd5f6980320b4ac19f741e7a754faa1d01707e632b002ea68e04fd25a0535 \
     --hash=sha256:86ce63491349f6713afc8a4ef0bf77a8314d0e79e03753cb150d6c860a0b0475
@@ -1573,7 +1585,7 @@ numpy==2.2.6 \
     --hash=sha256:fe27749d33bb772c80dcd84ae7e8df2adc920ae8297400dabec45f0dedb3f6de \
     --hash=sha256:fee4236c876c4e8369388054d02d0e9bb84821feb1a64dd59e137e6511a551f8
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   contourpy
     #   matplotlib
     #   mlflow
@@ -1588,7 +1600,7 @@ oauthlib==3.3.1 \
 openai==2.30.0 \
     --hash=sha256:92f7661c990bda4b22a941806c83eabe4896c3094465030dd882a71abe80c885 \
     --hash=sha256:9a5ae616888eb2748ec5e0c5b955a51592e0b201a11f4262db920f2a78c5231d
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 openpyxl==3.1.5 \
     --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2 \
     --hash=sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050
@@ -1683,7 +1695,7 @@ pandas==2.3.3 \
     --hash=sha256:f086f6fe114e19d92014a1966f43a3e62285109afe874f067f5abbdcbb10e59c \
     --hash=sha256:f8bfc0e12dc78f777f323f55c58649591b2cd0c43534e8355c51d3fede5f4dee
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   databricks-sql-connector
     #   mlflow
 pillow==12.2.0 \
@@ -1784,7 +1796,7 @@ pillow==12.2.0 \
 pip-licenses==5.5.5 \
     --hash=sha256:60750c006adf7a0910347b726e8ee9fee3bc8d2e7c8307a5c4ec0776c8e2a276 \
     --hash=sha256:f4c4c6d9e6a03612cf59f29f19dc8ab54904d82e055b8e191498f2279a224e14
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 prettytable==3.17.0 \
     --hash=sha256:59f2590776527f3c9e8cf9fe7b66dd215837cca96a9c39567414cbc632e8ddb0 \
     --hash=sha256:aad69b294ddbe3e1f95ef8886a060ed1666a0b83018bbf56295f6f226c43d287
@@ -2001,7 +2013,7 @@ psycopg2-binary==2.9.12 \
     --hash=sha256:f921f3cd87035ef7df233383011d7a53ea1d346224752c1385f1edfd790ceb6a \
     --hash=sha256:fb1828cf3da68f99e45ebce1355d65d2d12b6a78fb5dfb16247aad6bdef5f5d2 \
     --hash=sha256:ffdd7dc5463ccd61845ac37b7012d0f35a1548df9febe14f8dd549be4a0bc81e
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 pyarrow==23.0.1 \
     --hash=sha256:00be9576d970c31defb5c32eb72ef585bf600ef6d0a82d5eccaae96639cf9d07 \
     --hash=sha256:07deae7783782ac7250989a7b2ecde9b3c343a643f82e8a4df03d93b633006f0 \
@@ -2054,7 +2066,7 @@ pyarrow==23.0.1 \
     --hash=sha256:fa8e51cb04b9f8c9c5ace6bab63af9a1f88d35c0d6cbf53e8c17c098552285e1 \
     --hash=sha256:fed7020203e9ef273360b9e45be52a2a47d3103caf156a30ace5247ffb51bdbd
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   databricks-sqlalchemy
     #   mlflow
 pyasn1==0.6.3 \
@@ -2073,11 +2085,11 @@ pycparser==3.0 \
     --hash=sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29 \
     --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992
     # via cffi
-pydantic[email]==2.13.3 \
+pydantic==2.13.3 \
     --hash=sha256:6db14ac8dfc9a1e57f87ea2c0de670c251240f43cb0c30a5130e9720dc612927 \
     --hash=sha256:af09e9d1d09f4e7fe37145c1f577e1d61ceb9a41924bf0094a36506285d0a84d
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   fastapi
     #   mlflow-skinny
     #   mlflow-tracing
@@ -2208,7 +2220,7 @@ pydantic-core==2.46.3 \
 pydantic-settings==2.13.1 \
     --hash=sha256:b4c11847b15237fb0171e1462bf540e294affb9b86db4d9aa5c01730bdbe4025 \
     --hash=sha256:d56fd801823dbeae7f0975e1f8c8e25c258eb75d278ea7abb5d9cebb01b56237
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 pyjwt==2.12.1 \
     --hash=sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c \
     --hash=sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b
@@ -2223,7 +2235,7 @@ python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   databricks-sql-connector
     #   graphene
     #   matplotlib
@@ -2232,18 +2244,18 @@ python-dotenv==1.2.2 \
     --hash=sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a \
     --hash=sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow-skinny
     #   pydantic-settings
 python-multipart==0.0.27 \
     --hash=sha256:6fccfad17a27334bd0193681b369f476eda3409f17381a2d65aa7df3f7275645 \
     --hash=sha256:9870a6a8c5a20a5bf4f07c017bd1489006ff8836cff097b6933355ee2b49b602
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 pytz==2026.1.post1 \
     --hash=sha256:3378dde6a0c3d26719182142c56e60c7f9af7e968076f31aae569d72a0358ee1 \
     --hash=sha256:f2fd16142fda348286a75e1a524be810bb05d444e5a081f37f7affc635035f7a
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   pandas
 pyyaml==6.0.3 \
     --hash=sha256:00c4bdeba853cc34e7dd471f16b4114f4162dc03e6b7afcc2128711f0eca823c \
@@ -2320,12 +2332,12 @@ pyyaml==6.0.3 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow-skinny
 rdflib==7.6.0 \
     --hash=sha256:30c0a3ebf4c0e09215f066be7246794b6492e054e782d7ac2a34c9f70a15e0dd \
     --hash=sha256:6c831288d5e4a5a7ece85d0ccde9877d512a3d0f02d7c06455d00d6d0ea379df
-    # via -r backend/requirements.in
+    # via -r src/backend/requirements.in
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \
     --hash=sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8
@@ -2336,7 +2348,7 @@ requests==2.33.1 \
     --hash=sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517 \
     --hash=sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   databricks-sdk
     #   databricks-sql-connector
     #   docker
@@ -2550,7 +2562,7 @@ six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   python-dateutil
 skops==0.13.0 \
     --hash=sha256:55e2cccb18c86f5916e4cfe5acf55ed7b0eecddf08a151906414c092fa5926dc \
@@ -2629,7 +2641,7 @@ sqlalchemy==2.0.49 \
     --hash=sha256:ec44cfa7ef1a728e88ad41674de50f6db8cfdb3e2af84af86e0041aaf02d43d0 \
     --hash=sha256:fb37f15714ec2652d574f021d479e78cd4eb9d04396dca36568fdfffb3487982
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   alembic
     #   databricks-sqlalchemy
     #   mlflow
@@ -2648,6 +2660,57 @@ threadpoolctl==3.6.0 \
 thrift==0.22.0 \
     --hash=sha256:42e8276afbd5f54fe1d364858b6877bc5e5a4a5ed69f6a005b94ca4918fe1466
     # via databricks-sql-connector
+tomli==2.4.1 \
+    --hash=sha256:01f520d4f53ef97964a240a035ec2a869fe1a37dde002b57ebc4417a27ccd853 \
+    --hash=sha256:0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe \
+    --hash=sha256:136443dbd7e1dee43c68ac2694fde36b2849865fa258d39bf822c10e8068eac5 \
+    --hash=sha256:1d8591993e228b0c930c4bb0db464bdad97b3289fb981255d6c9a41aedc84b2d \
+    --hash=sha256:2190f2e9dd7508d2a90ded5ed369255980a1bcdd58e52f7fe24b8162bf9fedbd \
+    --hash=sha256:2c1c351919aca02858f740c6d33adea0c5deea37f9ecca1cc1ef9e884a619d26 \
+    --hash=sha256:36d2bd2ad5fb9eaddba5226aa02c8ec3fa4f192631e347b3ed28186d43be6b54 \
+    --hash=sha256:3d48a93ee1c9b79c04bb38772ee1b64dcf18ff43085896ea460ca8dec96f35f6 \
+    --hash=sha256:47149d5bd38761ac8be13a84864bf0b7b70bc051806bc3669ab1cbc56216b23c \
+    --hash=sha256:4ab97e64ccda8756376892c53a72bd1f964e519c77236368527f758fbc36a53a \
+    --hash=sha256:4b605484e43cdc43f0954ddae319fb75f04cc10dd80d830540060ee7cd0243cd \
+    --hash=sha256:504aa796fe0569bb43171066009ead363de03675276d2d121ac1a4572397870f \
+    --hash=sha256:51529d40e3ca50046d7606fa99ce3956a617f9b36380da3b7f0dd3dd28e68cb5 \
+    --hash=sha256:52c8ef851d9a240f11a88c003eacb03c31fc1c9c4ec64a99a0f922b93874fda9 \
+    --hash=sha256:559db847dc486944896521f68d8190be1c9e719fced785720d2216fe7022b662 \
+    --hash=sha256:5a881ab208c0baf688221f8cecc5401bd291d67e38a1ac884d6736cbcd8247e9 \
+    --hash=sha256:5cb41aa38891e073ee49d55fbc7839cfdb2bc0e600add13874d048c94aadddd1 \
+    --hash=sha256:5e262d41726bc187e69af7825504c933b6794dc3fbd5945e41a79bb14c31f585 \
+    --hash=sha256:5ee18d9ebdb417e384b58fe414e8d6af9f4e7a0ae761519fb50f721de398dd4e \
+    --hash=sha256:7008df2e7655c495dd12d2a4ad038ff878d4ca4b81fccaf82b714e07eae4402c \
+    --hash=sha256:734e20b57ba95624ecf1841e72b53f6e186355e216e5412de414e3c51e5e3c41 \
+    --hash=sha256:7c7e1a961a0b2f2472c1ac5b69affa0ae1132c39adcb67aba98568702b9cc23f \
+    --hash=sha256:7f86fd587c4ed9dd76f318225e7d9b29cfc5a9d43de44e5754db8d1128487085 \
+    --hash=sha256:7f94b27a62cfad8496c8d2513e1a222dd446f095fca8987fceef261225538a15 \
+    --hash=sha256:88dceee75c2c63af144e456745e10101eb67361050196b0b6af5d717254dddf7 \
+    --hash=sha256:8a650c2dbafa08d42e51ba0b62740dae4ecb9338eefa093aa5c78ceb546fcd5c \
+    --hash=sha256:8d65a2fbf9d2f8352685bc1364177ee3923d6baf5e7f43ea4959d7d8bc326a36 \
+    --hash=sha256:96481a5786729fd470164b47cdb3e0e58062a496f455ee41b4403be77cb5a076 \
+    --hash=sha256:a120733b01c45e9a0c34aeef92bf0cf1d56cfe81ed9d47d562f9ed591a9828ac \
+    --hash=sha256:b1d22e6e9387bf4739fbe23bfa80e93f6b0373a7f1b96c6227c32bef95a4d7a8 \
+    --hash=sha256:b8c198f8c1805dc42708689ed6864951fd2494f924149d3e4bce7710f8eb5232 \
+    --hash=sha256:c2541745709bad0264b7d4705ad453b76ccd191e64aa6f0fc66b69a293a45ece \
+    --hash=sha256:c742f741d58a28940ce01d58f0ab2ea3ced8b12402f162f4d534dfe18ba1cd6a \
+    --hash=sha256:c7f2c7f2b9ca6bdeef8f0fa897f8e05085923eb091721675170254cbc5b02897 \
+    --hash=sha256:d312ef37c91508b0ab2cee7da26ec0b3ed2f03ce12bd87a588d771ae15dcf82d \
+    --hash=sha256:d4d8fe59808a54658fcc0160ecfb1b30f9089906c50b23bcb4c69eddc19ec2b4 \
+    --hash=sha256:da25dc3563bff5965356133435b757a795a17b17d01dbc0f42fb32447ddfd917 \
+    --hash=sha256:eab21f45c7f66c13f2a9e0e1535309cee140182a9cdae1e041d02e47291e8396 \
+    --hash=sha256:eb0dc4e38e6a1fd579e5d50369aa2e10acfc9cace504579b2faabb478e76941a \
+    --hash=sha256:ec9bfaf3ad2df51ace80688143a6a4ebc09a248f6ff781a9945e51937008fcbc \
+    --hash=sha256:ede3e6487c5ef5d28634ba3f31f989030ad6af71edfb0055cbbd14189ff240ba \
+    --hash=sha256:f3c6818a1a86dd6dca7ddcaaf76947d5ba31aecc28cb1b67009a5877c9a64f3f \
+    --hash=sha256:f758f1b9299d059cc3f6546ae2af89670cb1c4d48ea29c3cacc4fe7de3058257 \
+    --hash=sha256:f8f0fc26ec2cc2b965b7a3b87cd19c5c6b8c5e5f436b984e85f486d652285c30 \
+    --hash=sha256:fd0409a3653af6c147209d267a0e4243f0ae46b011aa978b1080359fddc9b6cf \
+    --hash=sha256:ff18e6a727ee0ab0388507b89d1bc6a22b138d1e2fa56d1ad494586d61d2eae9 \
+    --hash=sha256:ff2983983d34813c1aeb0fa89091e76c3a22889ee83ab27c5eeb45100560c049
+    # via
+    #   alembic
+    #   pip-licenses
 tqdm==4.67.3 \
     --hash=sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb \
     --hash=sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf
@@ -2656,23 +2719,28 @@ typing-extensions==4.15.0 \
     --hash=sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466 \
     --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   aiosignal
     #   alembic
     #   anyio
+    #   cryptography
+    #   exceptiongroup
     #   fastapi
     #   graphene
     #   mlflow-skinny
+    #   multidict
     #   openai
     #   opentelemetry-api
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
+    #   pyjwt
     #   referencing
     #   sqlalchemy
     #   starlette
     #   typing-inspection
+    #   uvicorn
 typing-inspection==0.4.2 \
     --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7 \
     --hash=sha256:ba561c48a67c5958007083d386c3295464928b01faa735ab8547c5692e87f464
@@ -2694,7 +2762,7 @@ uvicorn==0.46.0 \
     --hash=sha256:bbebbcbed972d162afca128605223022bedd345b7bc7855ce66deb31487a9048 \
     --hash=sha256:fb9da0926999cc6cb22dc7cd71a94a632f078e6ae47ff683c5c420750fb7413d
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   mlflow-skinny
 wcwidth==0.6.0 \
     --hash=sha256:1a3a1e510b553315f8e146c54764f4fb6264ffad731b3d78088cdb1478ffbdad \
@@ -2708,7 +2776,7 @@ werkzeug==3.1.8 \
     --hash=sha256:63a77fb8892bf28ebc3178683445222aa500e48ebad5ec77b0ad80f8726b1f50 \
     --hash=sha256:9bad61a4268dac112f1c5cd4630a56ede601b6ed420300677a869083d70a4c44
     # via
-    #   -r backend/requirements.in
+    #   -r src/backend/requirements.in
     #   flask
     #   flask-cors
 yarl==1.23.0 \

@@ -453,37 +453,15 @@ async def list_http_connections_for_workflows(
     _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
 ) -> List[Dict[str, Any]]:
     """List Unity Catalog HTTP connections for webhook step configuration.
-    
+
     Returns HTTP-type connections that can be used with the webhook step type.
     These connections are pre-configured in Unity Catalog with credentials.
     """
     from src.common.workspace_client import get_obo_workspace_client
-    
-    try:
-        ws = get_obo_workspace_client(request)
-        connections = []
-        
-        # List all connections and filter for HTTP type
-        for conn in ws.connections.list():
-            # Check if connection is HTTP type
-            # ConnectionType.HTTP may not be available in all SDK versions
-            conn_type = str(conn.connection_type) if conn.connection_type else ''
-            if 'HTTP' in conn_type.upper():
-                connections.append({
-                    "name": conn.name,
-                    "connection_type": conn_type,
-                    "comment": conn.comment,
-                    "owner": conn.owner,
-                    "created_at": conn.created_at,
-                    "updated_at": conn.updated_at,
-                })
-        
-        return connections
-        
-    except Exception as e:
-        logger.warning(f"Failed to list HTTP connections: {e}")
-        # Return empty list on error - connections may not be available
-        return []
+    from src.common.uc_connections import list_http_connections
+
+    ws = get_obo_workspace_client(request)
+    return list_http_connections(ws)
 
 
 @router.get("/policy-usage/{policy_id}")

@@ -25,6 +25,7 @@ from src.controller.business_roles_manager import BusinessRolesManager
 from src.controller.business_owners_manager import BusinessOwnersManager
 from src.controller.delivery_methods_manager import DeliveryMethodsManager
 from src.controller.ontology_generator_manager import OntologyGeneratorManager
+from src.controller.directory_manager import DirectoryManager
 
 # Import base dependencies
 from src.common.database import get_session_factory # Import the factory function
@@ -55,6 +56,7 @@ from src.common.manager_dependencies import (
     get_business_owners_manager,
     get_delivery_methods_manager,
     get_ontology_generator_manager,
+    get_directory_manager,
 )
 # Import workspace client getter separately as it might be structured differently
 from src.common.workspace_client import get_workspace_client_dependency  # Fixed to use proper wrapper
@@ -132,6 +134,7 @@ BusinessRolesManagerDep = Annotated[BusinessRolesManager, Depends(get_business_r
 BusinessOwnersManagerDep = Annotated[BusinessOwnersManager, Depends(get_business_owners_manager)]
 DeliveryMethodsManagerDep = Annotated[DeliveryMethodsManager, Depends(get_delivery_methods_manager)]
 OntologyGeneratorManagerDep = Annotated[OntologyGeneratorManager, Depends(get_ontology_generator_manager)]
+DirectoryManagerDep = Annotated[DirectoryManager, Depends(get_directory_manager)]
 
 # Permission Checker Dependency
 PermissionCheckerDep = AuthorizationManagerDep 

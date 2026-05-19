@@ -29,6 +29,7 @@ from src.controller.business_roles_manager import BusinessRolesManager
 from src.controller.business_owners_manager import BusinessOwnersManager
 from src.controller.delivery_methods_manager import DeliveryMethodsManager
 from src.controller.ontology_generator_manager import OntologyGeneratorManager
+from src.controller.directory_manager import DirectoryManager
 
 # Import other dependencies needed by these providers
 from src.common.database import get_db
@@ -219,6 +220,13 @@ def get_ontology_generator_manager(request: Request) -> OntologyGeneratorManager
     if not manager:
         logger.critical("OntologyGeneratorManager not found in application state!")
         raise HTTPException(status_code=503, detail="Ontology Generator service not configured.")
+    return manager
+
+def get_directory_manager(request: Request) -> DirectoryManager:
+    manager = getattr(request.app.state, "directory_manager", None)
+    if not manager:
+        logger.critical("DirectoryManager not found in application state!")
+        raise HTTPException(status_code=503, detail="Directory service not configured.")
     return manager
 
 # --- Add other manager getters if needed --- #

@@ -374,6 +374,13 @@ def initialize_managers(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize EntitySubscriptionsManager: {e}", exc_info=True)
 
+        try:
+            from src.controller.directory_manager import DirectoryManager
+            app.state.directory_manager = DirectoryManager()
+            logger.info("DirectoryManager initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize DirectoryManager: {e}", exc_info=True)
+
         logger.info("All managers instantiated and stored in app.state.")
 
         # Defer SearchManager initialization until after initial data loading completes

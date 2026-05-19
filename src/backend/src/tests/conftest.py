@@ -1,8 +1,17 @@
 # Set test environment variables BEFORE any app imports
 # This prevents the app from running startup tasks (database init, etc.) during import
 import os
+import tempfile as _tempfile
+
 os.environ['TESTING'] = 'true'
 os.environ['SKIP_STARTUP_TASKS'] = 'true'
+
+# Provide non-secret defaults for required Settings fields so the suite
+# is runnable without a local .env. Real environments (CI or developer
+# .env) still take precedence via setdefault.
+os.environ.setdefault('DATABRICKS_HOST', 'https://test-databricks.local')
+os.environ.setdefault('DATABRICKS_WAREHOUSE_ID', 'test-warehouse')
+os.environ.setdefault('APP_AUDIT_LOG_DIR', _tempfile.gettempdir())
 
 import pytest
 from fastapi.testclient import TestClient

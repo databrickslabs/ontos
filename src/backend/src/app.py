@@ -74,6 +74,7 @@ from src.routes import (
     readiness_routes,
     suggestion_routes,
     certification_levels_routes,
+    directory_routes,
 )
 
 from src.common.database import init_db, get_session_factory, SQLAlchemySession
@@ -383,6 +384,7 @@ mcp_tokens_routes.register_routes(app)
 self_service_routes.register_routes(app)
 workflows_routes.register_routes(app)
 settings_routes.register_routes(app)
+directory_routes.register_routes(app)
 connection_routes.register_routes(app)
 schema_import_routes.register_routes(app)
 

@@ -1602,55 +1602,103 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                             db.add(new_ic)
             
             # Clone Output Ports
+            #
+            # Earlier versions of this block referenced ``port.expectation``
+            # and ``port.dataset_name`` — neither of which exist on
+            # ``OutputPortDb`` (the columns were dropped before delivery_method
+            # landed). Cloning any product with output ports therefore raised
+            # AttributeError. Fix: replicate only the columns currently on the
+            # model (see db_models/data_products.py:193). Includes the
+            # Databricks extensions (asset_type, asset_identifier, server,
+            # contains_pii, auto_approve) so clones stay faithful to source.
             if source_product.output_ports:
                 for port in source_product.output_ports:
                     new_port = OutputPortDb(
                         product_id=new_id,
                         name=port.name,
                         version=port.version,
+                        description=port.description,
+                        port_type=port.port_type,
                         contract_id=port.contract_id,
-                        expectation=port.expectation,
-                        dataset_name=port.dataset_name
+                        delivery_method_id=port.delivery_method_id,
+                        asset_type=port.asset_type,
+                        asset_identifier=port.asset_identifier,
+                        status=port.status,
+                        server=port.server,
+                        contains_pii=port.contains_pii,
+                        auto_approve=port.auto_approve,
                     )
                     db.add(new_port)
                     db.flush()
-                    
-                    # Clone SBOMs
-                    if hasattr(port, 'sboms') and port.sboms:
-                        for sbom in port.sboms:
+
+                    # Clone SBOMs. The earlier code asked for ``port.sboms``
+                    # (plural); the actual relationship on ``OutputPortDb`` is
+                    # ``sbom`` (singular, see line 222 of db_models). Because
+                    # ``hasattr`` returned False, the block silently no-op'd
+                    # and SBOMs were never carried over. The earlier code also
+                    # referenced four nonexistent SBOMDb columns
+                    # (``spdx_version``, ``spdx_id``, ``name``,
+                    # ``creation_info_created``); ``SBOMDb`` only has ``type``
+                    # and ``url`` today.
+                    if port.sbom:
+                        for sbom in port.sbom:
                             new_sbom = SBOMDb(
                                 output_port_id=new_port.id,
-                                spdx_version=sbom.spdx_version,
-                                spdx_id=sbom.spdx_id,
-                                name=sbom.name,
-                                creation_info_created=sbom.creation_info_created
+                                type=sbom.type,
+                                url=sbom.url,
                             )
                             db.add(new_sbom)
-            
+
+                    # Clone input contracts on output ports too. The
+                    # relationship is declared on OutputPortDb as
+                    # ``input_contracts`` (line 223 of db_models).
+                    if port.input_contracts:
+                        for ic in port.input_contracts:
+                            new_ic = InputContractDb(
+                                output_port_id=new_port.id,
+                                contract_id=ic.contract_id,
+                                contract_version=ic.contract_version,
+                            )
+                            db.add(new_ic)
+
             # Clone Management Ports
+            #
+            # Earlier code referenced ``port.type`` and ``port.endpoint``;
+            # neither exists on ``ManagementPortDb`` (real fields are
+            # ``port_type`` and ``url``). It also omitted the required
+            # ``content`` column (nullable=False), which would have raised
+            # IntegrityError on commit had the AttributeError not fired first.
             if source_product.management_ports:
                 for port in source_product.management_ports:
                     new_port = ManagementPortDb(
                         product_id=new_id,
                         name=port.name,
-                        type=port.type,
+                        content=port.content,
+                        port_type=port.port_type,
+                        url=port.url,
+                        channel=port.channel,
                         description=port.description,
-                        server=port.server,
-                        endpoint=port.endpoint
                     )
                     db.add(new_port)
-            
+
             # Clone Support Channels
+            #
+            # Earlier code referenced ``channel.type`` (no such column) and
+            # omitted the required ``channel`` column itself (nullable=False).
+            # IntegrityError on any product with support channels.
             if source_product.support_channels:
-                for channel in source_product.support_channels:
+                for support in source_product.support_channels:
                     new_channel = SupportDb(
                         product_id=new_id,
-                        type=channel.type,
-                        url=channel.url,
-                        description=channel.description
+                        channel=support.channel,
+                        url=support.url,
+                        description=support.description,
+                        tool=support.tool,
+                        scope=support.scope,
+                        invitation_url=support.invitation_url,
                     )
                     db.add(new_channel)
-            
+
             # Clone Team
             if source_product.team:
                 src_team = source_product.team
@@ -1661,15 +1709,22 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 )
                 db.add(new_team)
                 db.flush()
-                
-                # Clone team members
-                if hasattr(src_team, 'members') and src_team.members:
+
+                # Clone team members. Earlier code referenced ``member.email``
+                # and omitted the required ``username`` column; ``email`` is
+                # not a column on ``DataProductTeamMemberDb`` — the required
+                # identity field is ``username`` (line 356 of db_models).
+                if src_team.members:
                     for member in src_team.members:
                         new_member = DataProductTeamMemberDb(
                             team_id=new_team.id,
+                            username=member.username,
                             name=member.name,
-                            email=member.email,
-                            role=member.role
+                            description=member.description,
+                            role=member.role,
+                            date_in=member.date_in,
+                            date_out=member.date_out,
+                            replaced_by_username=member.replaced_by_username,
                         )
                         db.add(new_member)
             

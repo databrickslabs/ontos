@@ -8,6 +8,7 @@ Manages time-limited access grants to assets including:
 - Triggering expiry workflows
 """
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -178,6 +179,75 @@ class AccessGrantsManager:
         for k, v in extra_fields.items():
             if k != "wizard_data" and k not in entity_data:
                 entity_data[k] = v
+
+        # Enrich entity_data with fields from the *underlying* object so
+        # webhook templates can reference them via ``${entity.<field>}``.
+        #
+        # An access-grant request is a proxy: the trigger fires with
+        # ``entity_type=access_grant`` and ``entity_id=<request_id>``,
+        # but the workflow author usually wants properties of the
+        # underlying entity (e.g. the data product's
+        # ``consumer_principals`` — the AD/UC access group that
+        # downstream provisioners add the requester into).
+        #
+        # Without this enrichment, ``${entity.consumer_principals}`` in a
+        # webhook body_template renders to nothing, and the workflow
+        # has no portable way to surface the access group to the
+        # provisioner. Adding a "fetch underlying entity" step type to
+        # the workflow engine would be more general but is a bigger
+        # change; this enrichment hits the 80% case (data_product) and
+        # is opt-out by the caller (caller-supplied keys win).
+        #
+        # Only ``data_product`` is enriched today. Failures are logged
+        # but never propagate — a missing or unreadable DP must not
+        # break the access-grant submission flow.
+        if data.entity_type == "data_product":
+            try:
+                from src.repositories.data_products_repository import (
+                    data_product_repo,
+                )
+
+                dp = data_product_repo.get(db, id=data.entity_id)
+                if dp is not None:
+                    # ``consumer_principals`` is persisted as a JSON
+                    # string on ``DataProductDb`` (see
+                    # db_models/data_products.py). Deserialize so
+                    # webhook templates render an array, not a quoted
+                    # JSON string.
+                    raw_cp = getattr(dp, "consumer_principals", None)
+                    cp_list: List[Dict[str, object]] = []
+                    if raw_cp:
+                        try:
+                            parsed = (
+                                json.loads(raw_cp)
+                                if isinstance(raw_cp, str)
+                                else raw_cp
+                            )
+                            if isinstance(parsed, list):
+                                cp_list = parsed
+                        except (ValueError, TypeError):
+                            logger.warning(
+                                "Failed to parse consumer_principals JSON on "
+                                "DP %s when enriching access-grant "
+                                "entity_data",
+                                dp.id,
+                            )
+                    # Don't overwrite caller-supplied keys (wizard_data
+                    # or extra= overrides). Workflow authors who want a
+                    # different shape can still supply their own value
+                    # via the wizard.
+                    if "consumer_principals" not in entity_data:
+                        entity_data["consumer_principals"] = cp_list
+                    if "data_product_name" not in entity_data and dp.name:
+                        entity_data["data_product_name"] = dp.name
+            except Exception:
+                logger.exception(
+                    "Failed to enrich access-grant entity_data with "
+                    "data-product fields for entity_id=%s; webhook "
+                    "templates referencing ${entity.consumer_principals} "
+                    "will resolve to nothing.",
+                    data.entity_id,
+                )
 
         trigger_registry = get_trigger_registry(db)
         executions = trigger_registry.on_request_access(

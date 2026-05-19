@@ -52,6 +52,90 @@ def is_user_admin(user_groups: Optional[List[str]], settings: Settings) -> bool:
         return "admins" in [g.lower() for g in user_groups]
 
 
+async def is_user_feature_admin(
+    user_email: Optional[str],
+    user_groups: Optional[List[str]],
+    feature_id: str,
+    request: Request,
+) -> bool:
+    """Return True if the user has admin-level rights for the given feature.
+
+    Distinct from :func:`is_user_admin`, which only checks workspace-group
+    membership (``APP_ADMIN_DEFAULT_GROUPS``). This helper also consults the
+    Ontos role system: a user whose effective permissions include
+    ``FeatureAccessLevel.ADMIN`` on ``feature_id`` is considered admin for
+    cascade-bypass purposes — even when their workspace groups don't include
+    the literal ``admins`` group.
+
+    Use this when deciding whether a user should bypass ownership scoping
+    on a specific feature (e.g., "should this user see all data products?").
+    It mirrors the resolution used by :func:`enforce_feature_permission`
+    (team-role override → applied-role override → group-based merge) so the
+    bypass stays consistent with whatever role the user is currently acting
+    under.
+
+    Resolution failures fall back to the workspace-admin check only — i.e.,
+    a transient DB error never flips a non-admin into admin.
+
+    Args:
+        user_email: Caller's email (matched against role ``assigned_groups``
+            via the auth manager's email-as-group support).
+        user_groups: Caller's workspace groups.
+        feature_id: Feature identifier (e.g., ``"data-products"``).
+        request: FastAPI request — used to reach ``auth_manager`` and
+            ``settings_manager`` from ``request.app.state``.
+
+    Returns:
+        True if the user is admin via workspace group OR Ontos role.
+    """
+    workspace_admin = is_user_admin(user_groups or [], get_settings())
+    if workspace_admin:
+        return True
+    if not user_email:
+        return False
+    try:
+        auth_manager: Optional[AuthorizationManager] = getattr(
+            request.app.state, "authorization_manager", None
+        )
+        settings_manager: Optional[SettingsManager] = getattr(
+            request.app.state, "settings_manager", None
+        )
+        if auth_manager is None:
+            return False
+
+        team_role_override = await get_user_team_role_overrides(
+            user_email, user_groups or [], request
+        )
+
+        applied_role_id: Optional[str] = None
+        if settings_manager is not None:
+            try:
+                applied_role_id = settings_manager.get_applied_role_override_for_user(
+                    user_email
+                )
+            except Exception:
+                applied_role_id = None
+
+        if applied_role_id and settings_manager is not None:
+            effective = settings_manager.get_feature_permissions_for_role_id(
+                applied_role_id
+            )
+        else:
+            effective = auth_manager.get_user_effective_permissions(
+                user_groups or [], team_role_override
+            )
+
+        return effective.get(feature_id) == FeatureAccessLevel.ADMIN
+    except Exception:
+        logger.exception(
+            "is_user_feature_admin: failed to resolve Ontos-role admin for user '%s' on feature '%s'; "
+            "falling back to workspace-admin check (False)",
+            user_email,
+            feature_id,
+        )
+        return False
+
+
 # Local Dev Mock User (keep here for the dependency function)
 LOCAL_DEV_USER = UserInfo(
     email="localdev@example.com",  # Use example.com which is reserved for documentation

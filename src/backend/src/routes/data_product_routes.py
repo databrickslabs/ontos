@@ -1610,6 +1610,7 @@ async def upload_data_products(
 
 @router.get('/data-products', response_model=Any)
 async def get_data_products(
+    request: Request,
     project_id: Optional[str] = None,
     current_user: CurrentUserDep = None,
     db: DBSessionDep = None,
@@ -1619,19 +1620,36 @@ async def get_data_products(
     try:
         logger.info(f"Retrieving data products via get_data_products route (project_id: {project_id})...")
 
-        # Check if user is admin
-        from src.common.authorization import is_user_admin
-        from src.common.config import get_settings
-        settings = get_settings()
+        # Cascade-bypass admin check.
+        #
+        # PR D originally used ``is_user_admin(user_groups, settings)`` here,
+        # which only matches workspace-``APP_ADMIN_DEFAULT_GROUPS`` membership.
+        # That mis-classifies users whose admin status comes from the Ontos
+        # role system (e.g., a customer's "Admin" role assigned to a non-
+        # ``admins`` workspace group): they have FeatureAccessLevel.ADMIN on
+        # data-products via their role, but get cascade-restricted and see
+        # an empty Products page.
+        #
+        # ``is_user_feature_admin`` consults the same auth manager that
+        # ``/api/user/permissions`` uses, so the bypass aligns with the
+        # user's effective permissions. The behavior for workspace-``admins``
+        # users is unchanged (the helper short-circuits on workspace-admin
+        # membership before doing role resolution).
+        from src.common.authorization import is_user_feature_admin
         user_groups = current_user.groups if current_user else []
-        is_admin = is_user_admin(user_groups, settings)
+        caller_email = current_user.email if current_user else None
+        is_admin = await is_user_feature_admin(
+            user_email=caller_email,
+            user_groups=user_groups,
+            feature_id=DATA_PRODUCTS_FEATURE_ID,
+            request=request,
+        )
 
         logger.info(f"User {current_user.email if current_user else 'unknown'} is_admin: {is_admin}")
 
         # Resolve ownership scope for non-admin callers. Admins skip scoping
         # entirely; we still pass the inputs harmlessly so the call site is
         # uniform.
-        caller_email = current_user.email if current_user else None
         caller_team_ids: List[str] = []
         caller_project_ids: List[str] = []
         if not is_admin and current_user:

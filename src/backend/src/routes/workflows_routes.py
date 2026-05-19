@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
 from src.common.database import get_db
-from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
+from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, get_notifications_manager
 from src.common.authorization import (
     PermissionChecker,
     enforce_feature_permission,
@@ -19,11 +19,14 @@ from src.common.authorization import (
 )
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
+from src.models.notifications import Notification
 from src.common.logging import get_logger
 from src.controller.workflows_manager import WorkflowsManager
+from src.controller.notifications_manager import NotificationsManager
 from src.common.workflow_executor import WorkflowExecutor
 from src.repositories.process_workflows_repository import process_workflow_repo, workflow_execution_repo
 from src.db_models.compliance import CompliancePolicyDb
+from src.db_models.notifications import NotificationDb
 from src.db_models.process_workflows import WorkflowStepDb
 from src.models.process_workflows import (
     ProcessWorkflow,
@@ -569,9 +572,17 @@ WIZARD_PERMISSION_DISPATCH: Dict[str, Optional[tuple]] = {
     TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
     TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
     TriggerType.ON_FIRST_ACCESS.value:           None,  # authenticated only — first-login welcome screen
-    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("settings",       FeatureAccessLevel.READ_ONLY),
-    # `for_approval_response` has an additional per-request approvers-list
-    # check INSIDE the session handler (already present, leave intact).
+    # `for_approval_response` — relaxed from `settings:READ_ONLY` to
+    # `notifications:READ_WRITE` (PR K). Non-admin Business Owners can be
+    # configured approvers but typically don't have settings access; the
+    # outer gate now reflects "must be able to receive + mark a
+    # notification" (universal minimum for approvers), and the real
+    # authorization is the per-execution check inside
+    # `POST /api/workflows/handle-approval`
+    # (`_assert_caller_authorized_for_execution`) which verifies the
+    # caller is a recipient/role-member of the actual approval
+    # notification — preventing horizontal privilege escalation.
+    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_WRITE),
 }
 
 
@@ -1144,6 +1155,81 @@ async def get_paused_executions_for_entity(
     }
 
 
+def _find_approval_notifications_for_execution(
+    db: Session, execution_id: str
+) -> List[Notification]:
+    """Return all `workflow_approval` notifications whose payload targets
+    ``execution_id``.
+
+    Returned objects are pydantic ``Notification`` models (validated from
+    the DB rows) so they can be fed directly to
+    ``NotificationsManager.can_user_access_notification``.
+
+    We intentionally do NOT filter on ``read == False`` here — a previously
+    auto-marked-read notification still encodes "this user/role was an
+    authorized approver for this execution", which is exactly what we
+    want when authorizing a fresh approval POST.
+    """
+    rows = db.query(NotificationDb).filter(
+        NotificationDb.action_type == 'workflow_approval'
+    ).all()
+    matches: List[Notification] = []
+    for row in rows:
+        try:
+            payload = row.action_payload
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if payload and payload.get('execution_id') == execution_id:
+                matches.append(Notification.model_validate(row))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+    return matches
+
+
+def _assert_caller_authorized_for_execution(
+    db: Session,
+    notifications_manager: NotificationsManager,
+    execution_id: str,
+    user_info: UserInfo,
+) -> List[Notification]:
+    """Authorize ``user_info`` to act on the paused workflow execution.
+
+    A caller is authorized iff there exists at least one
+    ``workflow_approval`` notification for ``execution_id`` that the caller
+    can access under
+    ``NotificationsManager.can_user_access_notification`` (direct
+    recipient, role membership via ``recipient_role_id``, or admin
+    fallback for role-with-no-groups).
+
+    This is the per-execution check that backs the relaxed outer gate on
+    ``POST /handle-approval`` (notifications:READ_WRITE instead of
+    settings:READ_WRITE). It prevents horizontal privilege escalation —
+    a Business Owner with notifications RW cannot approve an execution
+    they were never notified about.
+
+    Raises 403 with a descriptive detail on failure. Returns the matching
+    notifications on success so callers can avoid re-fetching them.
+
+    NOTE: name kept generic (``_assert_caller_authorized_for_execution``)
+    so PR L can lift this for ``resume_workflow`` / similar.
+    """
+    candidates = _find_approval_notifications_for_execution(db, execution_id)
+    if not candidates:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not an authorized approver for this execution",
+        )
+    for notification in candidates:
+        if notifications_manager.can_user_access_notification(
+            db=db, notification=notification, user_info=user_info
+        ):
+            return candidates
+    raise HTTPException(
+        status_code=403,
+        detail="You are not an authorized approver for this execution",
+    )
+
+
 @router.post("/handle-approval")
 async def handle_workflow_approval(
     request: Request,
@@ -1151,14 +1237,23 @@ async def handle_workflow_approval(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     executor: WorkflowExecutor = Depends(get_workflow_executor),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_WRITE)),
+    notifications_manager: NotificationsManager = Depends(get_notifications_manager),
+    # Outer gate intentionally `notifications:READ_WRITE` (not
+    # `settings:READ_WRITE`): the real authorization is the per-execution
+    # check below (`_assert_caller_authorized_for_execution`), which
+    # confirms the caller was an actual recipient/role-member of the
+    # approval notification. Anyone authorized to approve must already
+    # have `notifications:READ_WRITE` (it's the minimum to receive the
+    # approval notification + mark it read). PR K — was previously
+    # `settings:READ_WRITE` which blocked non-admin Business Owners.
+    _: bool = Depends(PermissionChecker('notifications', FeatureAccessLevel.READ_WRITE)),
 ) -> Dict[str, Any]:
     """Handle a workflow approval from a notification action.
-    
+
     This is the endpoint called when a user responds to an approval notification
     with action_type='workflow_approval'. It finds the execution from the
     action_payload and resumes it.
-    
+
     Request body:
         - execution_id: str - ID of the paused execution
         - approved: bool - Whether the request was approved
@@ -1170,12 +1265,22 @@ async def handle_workflow_approval(
         execution_id = body.get('execution_id')
         approved = body.get('approved', False)
         message = body.get('message') or body.get('reason')
-        
+
         if not execution_id:
             raise HTTPException(status_code=400, detail="execution_id is required")
-        
+
+        # Per-execution authorization (PR K). Raises 403 if the caller
+        # isn't a recipient/role-member of any approval notification for
+        # this execution. Must run BEFORE resume_workflow side effects.
+        _assert_caller_authorized_for_execution(
+            db=db,
+            notifications_manager=notifications_manager,
+            execution_id=execution_id,
+            user_info=current_user,
+        )
+
         user_email = current_user.email if current_user else None
-        
+
         # Resume the workflow
         result = executor.resume_workflow(
             execution_id=execution_id,

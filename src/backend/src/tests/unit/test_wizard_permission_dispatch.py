@@ -68,7 +68,11 @@ def test_dispatch_expected_features() -> None:
         TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
         TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
         TriggerType.ON_FIRST_ACCESS.value:           None,
-        TriggerType.FOR_APPROVAL_RESPONSE.value:     ("settings",       FeatureAccessLevel.READ_ONLY),
+        # PR K — relaxed from settings:READ_ONLY so non-admin Business
+        # Owners can respond to approval wizards. The per-execution
+        # authorization check inside POST /handle-approval is the real
+        # gate; this outer gate is just "minimum to receive notifications".
+        TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_WRITE),
     }
     assert WIZARD_PERMISSION_DISPATCH == expected
 
@@ -177,7 +181,9 @@ def test_on_first_access_any_authenticated_user_allowed() -> None:
 
 
 def test_for_approval_response_consumer_denied() -> None:
-    request = _request_with_perms(effective={"settings": FeatureAccessLevel.NONE})
+    # PR K — outer gate is now notifications:READ_WRITE. A user with no
+    # notifications perms still fails the outer gate.
+    request = _request_with_perms(effective={"notifications": FeatureAccessLevel.NONE})
     with pytest.raises(HTTPException) as exc:
         _run(enforce_wizard_permission(
             TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["consumers"]), request
@@ -185,8 +191,19 @@ def test_for_approval_response_consumer_denied() -> None:
     assert exc.value.status_code == 403
 
 
+def test_for_approval_response_business_owner_allowed() -> None:
+    # PR K — non-admin Business Owner with notifications:READ_WRITE clears
+    # the outer gate. Per-execution authorization happens INSIDE
+    # POST /handle-approval (see test_handle_approval_per_execution_check).
+    request = _request_with_perms(effective={"notifications": FeatureAccessLevel.READ_WRITE})
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["business-owners"]), request
+    ))
+
+
 def test_for_approval_response_admin_allowed() -> None:
-    request = _request_with_perms(effective={"settings": FeatureAccessLevel.ADMIN})
+    # Admin still has notifications:ADMIN > READ_WRITE → clears outer gate.
+    request = _request_with_perms(effective={"notifications": FeatureAccessLevel.ADMIN})
     _run(enforce_wizard_permission(
         TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["admins"]), request
     ))

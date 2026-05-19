@@ -77,7 +77,13 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 domain=obj_in.domain,
                 tenant=obj_in.tenant,
                 owner_team_id=obj_in.owner_team_id,
-                project_id=None,  # Set via manager if needed
+                # Preserve project_id from the input schema. Historic
+                # comment claimed "Set via manager if needed", but the
+                # manager never populated it from this path, so any DP
+                # POSTed with a project_id silently lost it on create.
+                # (DataProductCreate / DataProduct both declare the
+                # field, so reading via attribute is safe.)
+                project_id=getattr(obj_in, 'project_id', None),
                 max_level_inheritance=obj_in.max_level_inheritance,
                 parent_product_id=getattr(obj_in, 'parent_product_id', None),
                 base_name=getattr(obj_in, 'base_name', None),

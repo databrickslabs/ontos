@@ -110,6 +110,32 @@ class TestDataProductRepository:
         assert result.id == minimal_model.id
         assert result.name == minimal_model.name
 
+    def test_create_product_preserves_project_id(self, db_session: Session):
+        """A POST that includes ``project_id`` must persist it.
+
+        Before this fix, the repository's ``create()`` hard-coded
+        ``project_id=None`` regardless of what the input schema carried, so
+        any product POSTed with a project association silently lost it.
+        """
+        # Arrange
+        project_uuid = str(uuid.uuid4())
+        model = DataProductCreate(
+            id=str(uuid.uuid4()),
+            name="Project-Bound Product",
+            version="1.0.0",
+            project_id=project_uuid,
+        )
+
+        # Act
+        result = data_product_repo.create(db=db_session, obj_in=model)
+        db_session.commit()
+        fetched = db_session.query(DataProductDb).filter_by(id=result.id).first()
+
+        # Assert — both the in-memory return and the DB row carry the value.
+        assert result.project_id == project_uuid
+        assert fetched is not None
+        assert fetched.project_id == project_uuid
+
     # =====================================================================
     # Get Tests
     # =====================================================================

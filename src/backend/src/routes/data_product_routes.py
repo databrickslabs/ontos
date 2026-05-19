@@ -1891,7 +1891,13 @@ async def update_data_product(
 
         # Delegate to manager (includes auth check)
         user_groups = current_user.groups or []
-        product_dict = product_update.model_dump()
+        # PR I: exclude_unset preserves partial-update semantics. Without it,
+        # Pydantic's defaults flood the dict with None for every Optional field,
+        # the manager re-instantiates DataProductUpdate(**full_dump) marking all
+        # fields as "set", and the repository's
+        # `if 'field' in update_data: db_obj.field = ...` pattern clears every
+        # unmodified Optional column (delivery_method_id, contract_id, etc).
+        product_dict = product_update.model_dump(exclude_unset=True)
 
         updated_product_response = manager.update_product_with_auth(
             product_id=product_id,

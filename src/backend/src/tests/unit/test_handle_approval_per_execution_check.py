@@ -54,14 +54,19 @@ from src.routes.workflows_routes import (
 # ---------------------------------------------------------------------------
 
 
-def test_dispatch_for_approval_response_is_notifications_read_write() -> None:
-    """PR K — was ``("settings", READ_ONLY)``, now
-    ``("notifications", READ_WRITE)``. Outer gate represents
-    "minimum to receive an approval notification"; real authorization is
-    the per-execution check below."""
+def test_dispatch_for_approval_response_is_notifications_read_only() -> None:
+    """PR L — relaxed further from PR K's ``("notifications", READ_WRITE)``
+    to ``("notifications", READ_ONLY)``. The outer gate's only job is to
+    confirm the caller is part of the notification system at all
+    (defense-in-depth alongside the per-execution check). Requiring
+    READ_WRITE was too tight: typical Business Owners hold a business
+    role on the entity but only have notifications:Read-only at the
+    app-role level. The real authorization remains the per-execution
+    check (``_assert_caller_authorized_for_execution``) — see tests
+    below."""
     assert WIZARD_PERMISSION_DISPATCH[TriggerType.FOR_APPROVAL_RESPONSE.value] == (
         "notifications",
-        FeatureAccessLevel.READ_WRITE,
+        FeatureAccessLevel.READ_ONLY,
     )
 
 

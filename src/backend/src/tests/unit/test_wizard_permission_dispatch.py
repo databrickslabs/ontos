@@ -68,11 +68,15 @@ def test_dispatch_expected_features() -> None:
         TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
         TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
         TriggerType.ON_FIRST_ACCESS.value:           None,
-        # PR K — relaxed from settings:READ_ONLY so non-admin Business
-        # Owners can respond to approval wizards. The per-execution
-        # authorization check inside POST /handle-approval is the real
-        # gate; this outer gate is just "minimum to receive notifications".
-        TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_WRITE),
+        # PR L — relaxed further from PR K's notifications:READ_WRITE
+        # down to notifications:READ_ONLY. The outer gate's only job is
+        # to confirm the caller is part of the notification system at
+        # all (rejects users with notifications:None). Approving a
+        # notification routed to you is read + respond, not a separate
+        # "write" action on the notifications feature itself. Real
+        # authorization remains the per-execution check inside
+        # POST /handle-approval.
+        TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_ONLY),
     }
     assert WIZARD_PERMISSION_DISPATCH == expected
 
@@ -180,9 +184,12 @@ def test_on_first_access_any_authenticated_user_allowed() -> None:
     ))
 
 
-def test_for_approval_response_consumer_denied() -> None:
-    # PR K — outer gate is now notifications:READ_WRITE. A user with no
-    # notifications perms still fails the outer gate.
+def test_for_approval_response_user_without_notifications_denied() -> None:
+    """PR L — outer gate is `notifications:READ_ONLY`. A user with
+    `notifications:None` is rejected at the outer gate before reaching
+    the per-execution check inside POST /handle-approval. Defense-in-
+    depth: a recipient-matching bug in the per-execution check still
+    can't be probed by users with zero notification access."""
     request = _request_with_perms(effective={"notifications": FeatureAccessLevel.NONE})
     with pytest.raises(HTTPException) as exc:
         _run(enforce_wizard_permission(
@@ -191,10 +198,22 @@ def test_for_approval_response_consumer_denied() -> None:
     assert exc.value.status_code == 403
 
 
-def test_for_approval_response_business_owner_allowed() -> None:
-    # PR K — non-admin Business Owner with notifications:READ_WRITE clears
-    # the outer gate. Per-execution authorization happens INSIDE
-    # POST /handle-approval (see test_handle_approval_per_execution_check).
+def test_for_approval_response_business_owner_with_read_only_allowed() -> None:
+    """PR L — non-admin Business Owner with only `notifications:READ_ONLY`
+    (the typical Data Consumer / Daimler-shaped role) clears the outer
+    gate. Real authorization (caller is the assigned recipient of this
+    execution's approval notification) happens INSIDE POST
+    /handle-approval (see test_handle_approval_per_execution_check)."""
+    request = _request_with_perms(effective={"notifications": FeatureAccessLevel.READ_ONLY})
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["business-owners"]), request
+    ))
+
+
+def test_for_approval_response_read_write_allowed() -> None:
+    """READ_WRITE still passes — strictly more permissive than the
+    relaxed READ_ONLY gate. Preserves PR K's behavior for users who
+    happen to have stronger notifications access."""
     request = _request_with_perms(effective={"notifications": FeatureAccessLevel.READ_WRITE})
     _run(enforce_wizard_permission(
         TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["business-owners"]), request
@@ -202,7 +221,9 @@ def test_for_approval_response_business_owner_allowed() -> None:
 
 
 def test_for_approval_response_admin_allowed() -> None:
-    # Admin still has notifications:ADMIN > READ_WRITE → clears outer gate.
+    """Admin still has `notifications:ADMIN` > READ_ONLY → clears outer
+    gate. Per-execution check has an admin bypass for rescue/manual
+    intervention (intentional per PR K design)."""
     request = _request_with_perms(effective={"notifications": FeatureAccessLevel.ADMIN})
     _run(enforce_wizard_permission(
         TriggerType.FOR_APPROVAL_RESPONSE.value, _user(["admins"]), request

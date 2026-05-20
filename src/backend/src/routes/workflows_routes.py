@@ -572,17 +572,19 @@ WIZARD_PERMISSION_DISPATCH: Dict[str, Optional[tuple]] = {
     TriggerType.FOR_REQUEST_CERTIFY.value:       ("data-contracts", FeatureAccessLevel.READ_WRITE),
     TriggerType.FOR_REQUEST_STATUS_CHANGE.value: ("data-products",  FeatureAccessLevel.READ_WRITE),
     TriggerType.ON_FIRST_ACCESS.value:           None,  # authenticated only — first-login welcome screen
-    # `for_approval_response` — relaxed from `settings:READ_ONLY` to
-    # `notifications:READ_WRITE` (PR K). Non-admin Business Owners can be
-    # configured approvers but typically don't have settings access; the
-    # outer gate now reflects "must be able to receive + mark a
-    # notification" (universal minimum for approvers), and the real
-    # authorization is the per-execution check inside
+    # `for_approval_response` — relaxed from `notifications:READ_WRITE`
+    # (PR K) down to `notifications:READ_ONLY` (PR L). The outer gate
+    # only needs to confirm the user is part of the notification system
+    # at all; the real authorization is the per-execution check inside
     # `POST /api/workflows/handle-approval`
-    # (`_assert_caller_authorized_for_execution`) which verifies the
-    # caller is a recipient/role-member of the actual approval
+    # (`_assert_caller_authorized_for_execution`), which verifies the
+    # caller is the recipient (or role-member) of the actual approval
     # notification — preventing horizontal privilege escalation.
-    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_WRITE),
+    # READ_WRITE is too tight: typical Business Owners hold a business
+    # role on the entity but only have notifications:Read-only at the
+    # app-role level (they read + respond to notifications routed to
+    # them; they don't author or modify notifications).
+    TriggerType.FOR_APPROVAL_RESPONSE.value:     ("notifications",  FeatureAccessLevel.READ_ONLY),
 }
 
 
@@ -1238,15 +1240,29 @@ async def handle_workflow_approval(
     current_user: AuditCurrentUserDep,
     executor: WorkflowExecutor = Depends(get_workflow_executor),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager),
-    # Outer gate intentionally `notifications:READ_WRITE` (not
-    # `settings:READ_WRITE`): the real authorization is the per-execution
-    # check below (`_assert_caller_authorized_for_execution`), which
-    # confirms the caller was an actual recipient/role-member of the
-    # approval notification. Anyone authorized to approve must already
-    # have `notifications:READ_WRITE` (it's the minimum to receive the
-    # approval notification + mark it read). PR K — was previously
-    # `settings:READ_WRITE` which blocked non-admin Business Owners.
-    _: bool = Depends(PermissionChecker('notifications', FeatureAccessLevel.READ_WRITE)),
+    # Outer gate is `notifications:READ_ONLY` (PR L). The real
+    # authorization is the per-execution check below
+    # (`_assert_caller_authorized_for_execution`), which confirms the
+    # caller was an actual recipient/role-member of the approval
+    # notification. The outer gate exists for defense-in-depth — it
+    # ensures the caller is part of the notification system at all
+    # (rejects users with `notifications:None`), but doesn't require
+    # write-level notification permissions which most non-admin
+    # Business Owners legitimately don't have. Approving a notification
+    # routed to you is *reading* + responding; not a separate "write"
+    # action on the notification feature itself.
+    #
+    # Two-layer defense satisfied (per OWASP API1+API5):
+    #   * Function-level (outer): you can see notifications → can be a
+    #     workflow recipient. Excludes users with no notification access.
+    #   * Object-level (inner): you must be the specific recipient of
+    #     this execution's approval notification (or have admin bypass).
+    #
+    # History: was `settings:READ_WRITE` (pre-PR-K, semantically wrong),
+    # then `notifications:READ_WRITE` (PR K, too tight for non-admin
+    # BOs), now `notifications:READ_ONLY` (PR L, the minimum that
+    # preserves defense-in-depth without blocking legitimate approvers).
+    _: bool = Depends(PermissionChecker('notifications', FeatureAccessLevel.READ_ONLY)),
 ) -> Dict[str, Any]:
     """Handle a workflow approval from a notification action.
 

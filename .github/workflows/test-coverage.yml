@@ -352,6 +352,45 @@ jobs:
           echo "Run ./scripts/lock-requirements.sh locally and commit the updated .txt files."
           exit 1
 
+  check-alembic-heads:
+    name: Alembic Single-Head Check
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+    # Skip on PRs that intentionally carry a divergent migration branch.
+    # The label is the documented escape hatch for the rare case where two
+    # heads are deliberate and a merge revision is planned in the PR itself.
+    if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'alembic-branch')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Fetch enough history to diff against the PR base.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.10'
+
+      - name: Install backend deps (for alembic)
+        working-directory: ./src
+        run: |
+          python -m pip install --upgrade pip
+          pip install "virtualenv<21" hatch==1.16.3
+          hatch -e dev run pip install --require-hashes -r backend/requirements.txt
+
+      - name: Fetch PR base ref
+        run: git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"
+
+      - name: Enforce single alembic head + base-ancestry
+        working-directory: ./src
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+        run: |
+          hatch -e dev run python ../scripts/check-alembic-heads.py
+
   frontend-build:
     name: Frontend Build Check
     runs-on:

@@ -525,6 +525,37 @@ To regenerate locked files after updating `.in` files:
 
 This requires [uv](https://github.com/astral-sh/uv) and PyPI access. The script runs `uv pip compile --generate-hashes` for all three requirement sets (`src/`, `src/backend/`, `src/e2e/`).
 
+### Alembic Migration Heads
+
+The database migration history under `src/backend/alembic/versions/` must always
+have **exactly one head**. Two PRs that branch off the same Alembic tip and each
+add a sibling revision will leave `main` with multiple heads, and app startup
+will crash in `init_db` with `script directory has multiple heads`.
+
+CI enforces this via the **Alembic Single-Head Check** job in
+`.github/workflows/test-coverage.yml`. On every PR it runs
+`scripts/check-alembic-heads.py`, which:
+
+1. Loads the PR's `versions/` tree and fails if `alembic heads` returns more
+   than one head.
+2. Fails if any newly added revision's `down_revision` is not reachable from
+   the PR base branch's tip — i.e. you forgot to rebase before authoring the
+   migration.
+
+**Remediation when the check fails:**
+
+- Rebase your branch onto the current base, drop your revision file, and
+  re-run `alembic revision -m '<message>'` so the new revision descends from
+  the live head.
+- Or, if a merge revision is the right call (your branch and another both
+  shipped migrations independently), run
+  `alembic merge -m 'merge heads' <head_a> <head_b>` and commit the resulting
+  file.
+
+**Escape hatch:** Apply the `alembic-branch` label to the PR to bypass the
+check. Use this only when the multi-head state is intentional and a merge
+revision is planned in the same PR.
+
 ### Workflow Permissions
 
 All workflows must declare a minimal `permissions` block at the workflow level:

@@ -233,6 +233,20 @@ The project implements a web application designed to run as a **Databricks App**
 - Always use `hatch -e dev run ...` to run Python snippets
 - IMPORTANT: The backend server (Python) logs are in `/tmp/backend.log` and the frontend (Vite) in `/tmp/frontend.log. Read them as needed.
 
+## Database Migrations
+
+- Alembic migrations live in `src/backend/alembic/versions/`. The history must
+  always have **exactly one head**; CI enforces this via the
+  `check-alembic-heads` job in `.github/workflows/test-coverage.yml`, which
+  runs `scripts/check-alembic-heads.py`.
+- When authoring a new migration: rebase onto the current base branch first,
+  then run `alembic revision -m '<message>'` so the new revision descends
+  from the live head.
+- If two PRs landed sibling revisions and a merge revision is genuinely
+  needed in this PR, run
+  `alembic merge -m 'merge heads' <head_a> <head_b>` and apply the
+  `alembic-branch` PR label to bypass the CI gate.
+
 ## Package Management
 
 - This project uses **Yarn** for frontend package management. Use `yarn add`, `yarn install`, `yarn remove`, etc., instead of `npm`.

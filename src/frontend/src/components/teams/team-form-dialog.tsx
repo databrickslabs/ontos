@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import TagSelector from '@/components/ui/tag-selector';
+import { PrincipalPicker } from '@/components/common/principal-picker';
+import { principalAcceptsForMemberType } from '@/lib/team-members';
 import {
   Dialog,
   DialogContent,
@@ -416,18 +418,32 @@ export function TeamFormDialog({
                           <FormField
                             control={form.control}
                             name={`members.${index}.member_identifier`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>{t('teams:form.labels.identifier')}</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder={form.watch(`members.${index}.member_type`) === 'user' ? t('teams:form.placeholders.userEmail') : t('teams:form.placeholders.groupName')}
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
+                            render={({ field }) => {
+                              // Picker accepts narrows to the chosen
+                              // member_type so users only see users in
+                              // the dropdown, groups only see groups.
+                              const memberType = form.watch(`members.${index}.member_type`);
+                              const accepts = principalAcceptsForMemberType(memberType);
+                              return (
+                                <FormItem>
+                                  <FormLabel>{t('teams:form.labels.identifier')}</FormLabel>
+                                  <FormControl>
+                                    <PrincipalPicker
+                                      accepts={accepts}
+                                      value={field.value || null}
+                                      onChange={(next) => field.onChange(next ?? '')}
+                                      placeholder={
+                                        memberType === 'group'
+                                          ? t('teams:form.placeholders.groupName')
+                                          : t('teams:form.placeholders.userEmail')
+                                      }
+                                      aria-label={t('teams:form.labels.identifier')}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              );
+                            }}
                           />
 
                           <FormField

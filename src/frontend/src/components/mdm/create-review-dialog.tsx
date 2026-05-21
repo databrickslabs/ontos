@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, FileCheck } from 'lucide-react';
@@ -20,6 +19,8 @@ import { Loader2, FileCheck } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { MdmCreateReviewRequest, MdmCreateReviewResponse } from '@/types/mdm';
+import { PrincipalPicker } from '@/components/common/principal-picker';
+import { Controller } from 'react-hook-form';
 
 const formSchema = z.object({
   reviewer_email: z.string().email('Valid email is required'),
@@ -129,12 +130,20 @@ export default function CreateReviewDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="reviewer_email">Reviewer Email</Label>
-            <Input
-              id="reviewer_email"
-              type="email"
-              placeholder="data-steward@company.com"
-              {...form.register('reviewer_email')}
+            <Label htmlFor="reviewer_email">Reviewer</Label>
+            <Controller
+              name="reviewer_email"
+              control={form.control}
+              render={({ field }) => (
+                <PrincipalPicker
+                  id="reviewer_email"
+                  accepts={['user']}
+                  value={field.value || null}
+                  onChange={(next) => field.onChange(next ?? '')}
+                  placeholder="data-steward@company.com"
+                  aria-label="Reviewer"
+                />
+              )}
             />
             {form.formState.errors.reviewer_email && (
               <p className="text-sm text-destructive">

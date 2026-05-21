@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { PrincipalPicker } from '@/components/common/principal-picker';
 import type { OwnerObjectType } from '@/types/business-owner';
 import type { BusinessRoleRead } from '@/types/business-role';
 
@@ -94,18 +95,19 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="owner-email">{t('assignDialog.emailLabel', { defaultValue: 'Email' })} *</Label>
-            <Input
+            <Label htmlFor="owner-email">{t('assignDialog.emailLabel', { defaultValue: 'User' })} *</Label>
+            <PrincipalPicker
               id="owner-email"
-              type="email"
+              accepts={['user']}
+              value={userEmail || null}
+              onChange={(next) => setUserEmail(next ?? '')}
               placeholder={t('assignDialog.emailPlaceholder', { defaultValue: 'user@example.com' })}
-              value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
+              aria-label="Owner user"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="owner-name">{t('assignDialog.nameLabel', { defaultValue: 'Display Name' })}</Label>
+            <Label htmlFor="owner-name">{t('assignDialog.nameLabel', { defaultValue: 'Display Name (optional)' })}</Label>
             <Input
               id="owner-name"
               placeholder={t('assignDialog.namePlaceholder', { defaultValue: 'Jane Doe' })}

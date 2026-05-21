@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import InferFromAssetDialog from './infer-from-asset-dialog'
 import type { InferredSchemaObject } from './infer-from-asset-dialog'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
+import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
 import { useToast } from '@/hooks/use-toast'
 
@@ -107,6 +108,25 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const [descriptionUsage, setDescriptionUsage] = useState(initial?.descriptionUsage || '')
   const [descriptionPurpose, setDescriptionPurpose] = useState(initial?.descriptionPurpose || '')
   const [descriptionLimitations, setDescriptionLimitations] = useState(initial?.descriptionLimitations || '')
+
+  // Stakeholders / access groups / support contacts wired up in Phase 4
+  // (PRD #335). Previously these step-4 fields rendered but their values
+  // were dropped at submit time; they now flow into the wizard payload.
+  const [consumers, setConsumers] = useState<string[]>(
+    (initial as { consumers?: string[] } | undefined)?.consumers ?? [],
+  )
+  const [subjectMatterExperts, setSubjectMatterExperts] = useState<string[]>(
+    (initial as { subjectMatterExperts?: string[] } | undefined)?.subjectMatterExperts ?? [],
+  )
+  const [readGroups, setReadGroups] = useState<string[]>(
+    (initial as { readGroups?: string[] } | undefined)?.readGroups ?? [],
+  )
+  const [writeGroups, setWriteGroups] = useState<string[]>(
+    (initial as { writeGroups?: string[] } | undefined)?.writeGroups ?? [],
+  )
+  const [primarySupportEmail, setPrimarySupportEmail] = useState<string>(
+    (initial as { primarySupportEmail?: string } | undefined)?.primarySupportEmail ?? '',
+  )
 
   type Column = {
     name: string;
@@ -372,6 +392,12 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
+        // Phase 4 stakeholder / access / support fields — previously
+        // rendered but unwired in the wizard.
+        consumers,
+        subjectMatterExperts,
+        accessControl: { readGroups, writeGroups },
+        support: { primaryEmail: primarySupportEmail },
         // Include contract-level semantic assignments as authoritativeDefinitions
         authoritativeDefinitions: convertSemanticConcepts(contractSemanticConcepts),
         schema: schemaObjects.map((o) => ({
@@ -453,6 +479,12 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
+        // Phase 4 stakeholder / access / support fields — previously
+        // rendered but unwired in the wizard.
+        consumers,
+        subjectMatterExperts,
+        accessControl: { readGroups, writeGroups },
+        support: { primaryEmail: primarySupportEmail },
         // Include contract-level semantic assignments as authoritativeDefinitions
         authoritativeDefinitions: convertSemanticConcepts(contractSemanticConcepts),
         schema: schemaObjects.map((o) => ({
@@ -599,13 +631,16 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                 </div>
                 <div>
                   <Label htmlFor="dc-owner" className="text-sm font-medium">Contract Owner</Label>
-                  <Input 
-                    id="dc-owner" 
-                    value={owner} 
-                    onChange={(e) => setOwner(e.target.value)} 
-                    placeholder="e.g., data-team@company.com"
-                    className="mt-1"
-                  />
+                  <div className="mt-1">
+                    <PrincipalPicker
+                      id="dc-owner"
+                      accepts={['user']}
+                      value={owner || null}
+                      onChange={(next) => setOwner(next ?? '')}
+                      placeholder="e.g., data-team@company.com"
+                      aria-label="Contract Owner"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1535,28 +1570,32 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="font-medium text-sm">Data Consumers</div>
-                      <Button variant="outline" size="sm">+ Add</Button>
-                    </div>
-                    <div className="space-y-2">
-                      <Input placeholder="consumer-team@company.com" className="text-sm" />
-                      <div className="text-xs text-muted-foreground">
-                        Add stakeholders who will consume this data
-                      </div>
+                    <div className="font-medium text-sm mb-3">Data Consumers</div>
+                    <PrincipalPicker
+                      multiple
+                      accepts={['user', 'group']}
+                      value={consumers}
+                      onChange={setConsumers}
+                      placeholder="consumer-team@company.com"
+                      aria-label="Data Consumers"
+                    />
+                    <div className="text-xs text-muted-foreground mt-2">
+                      Stakeholders who will consume this data.
                     </div>
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="font-medium text-sm">Subject Matter Experts</div>
-                      <Button variant="outline" size="sm">+ Add</Button>
-                    </div>
-                    <div className="space-y-2">
-                      <Input placeholder="expert@company.com" className="text-sm" />
-                      <div className="text-xs text-muted-foreground">
-                        Domain experts for business context and validation
-                      </div>
+                    <div className="font-medium text-sm mb-3">Subject Matter Experts</div>
+                    <PrincipalPicker
+                      multiple
+                      accepts={['user']}
+                      value={subjectMatterExperts}
+                      onChange={setSubjectMatterExperts}
+                      placeholder="expert@company.com"
+                      aria-label="Subject Matter Experts"
+                    />
+                    <div className="text-xs text-muted-foreground mt-2">
+                      Domain experts for business context and validation.
                     </div>
                   </div>
                 </div>
@@ -1569,19 +1608,26 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                 <div className="space-y-3">
                   <div className="p-4 border rounded-lg">
                     <div className="font-medium text-sm mb-3">Read Access</div>
-                    <div className="space-y-2">
-                      <Input placeholder="data-consumers-group" className="text-sm" />
-                      <Input placeholder="analytics-team" className="text-sm" />
-                      <Button variant="ghost" size="sm" className="text-primary">+ Add Group</Button>
-                    </div>
+                    <PrincipalPicker
+                      multiple
+                      accepts={['group']}
+                      value={readGroups}
+                      onChange={setReadGroups}
+                      placeholder="data-consumers-group"
+                      aria-label="Read access groups"
+                    />
                   </div>
 
                   <div className="p-4 border rounded-lg">
                     <div className="font-medium text-sm mb-3">Write Access</div>
-                    <div className="space-y-2">
-                      <Input placeholder="data-engineers-group" className="text-sm" />
-                      <Button variant="ghost" size="sm" className="text-primary">+ Add Group</Button>
-                    </div>
+                    <PrincipalPicker
+                      multiple
+                      accepts={['group']}
+                      value={writeGroups}
+                      onChange={setWriteGroups}
+                      placeholder="data-engineers-group"
+                      aria-label="Write access groups"
+                    />
                   </div>
 
                   <div className="p-4 border rounded-lg">
@@ -1635,7 +1681,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div>
                   <Label className="text-sm font-medium">Primary Support Email</Label>
-                  <Input placeholder="data-support@company.com" className="mt-1" />
+                  <div className="mt-1">
+                    <PrincipalPicker
+                      accepts={['user']}
+                      value={primarySupportEmail || null}
+                      onChange={(next) => setPrimarySupportEmail(next ?? '')}
+                      placeholder="data-support@company.com"
+                      aria-label="Primary Support Email"
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Slack Channel</Label>

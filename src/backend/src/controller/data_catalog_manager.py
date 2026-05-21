@@ -303,12 +303,25 @@ class DataCatalogManager:
             })
         return columns
 
-    def _resolve_asset_parents(self, asset: AssetDb) -> Dict[str, Optional[str]]:
-        """Walk up the hierarchy to find parent System/Catalog/Schema names."""
+    def _resolve_asset_parents(
+        self,
+        asset: AssetDb,
+        _visited: Optional[set] = None,
+    ) -> Dict[str, Optional[str]]:
+        """Walk up the hierarchy to find parent System/Catalog/Schema names.
+
+        Guards against cyclic asset graphs via a visited-set keyed on asset id.
+        """
         result: Dict[str, Optional[str]] = {"system": None, "catalog": None, "schema": None}
 
         if not asset.target_relationships:
             return result
+
+        if _visited is None:
+            _visited = set()
+        if asset.id in _visited:
+            return result
+        _visited.add(asset.id)
 
         # target_relationships: this asset is the target (child); source is the parent
         for rel in asset.target_relationships:
@@ -323,13 +336,13 @@ class DataCatalogManager:
             elif parent_type == "Catalog":
                 result["catalog"] = parent.name
                 # Also try to get system from catalog's parent
-                catalog_parents = self._resolve_asset_parents(parent)
+                catalog_parents = self._resolve_asset_parents(parent, _visited)
                 if catalog_parents.get("system"):
                     result["system"] = catalog_parents["system"]
             elif parent_type == "Schema":
                 result["schema"] = parent.name
                 # Walk up from schema
-                schema_parents = self._resolve_asset_parents(parent)
+                schema_parents = self._resolve_asset_parents(parent, _visited)
                 if schema_parents.get("catalog"):
                     result["catalog"] = schema_parents["catalog"]
                 if schema_parents.get("system"):
@@ -644,8 +657,11 @@ class DataCatalogManager:
         """Get list of tables/schema objects for the filter dropdown."""
         logger.info(f"Getting table list (catalog={catalog_filter}, schema={schema_filter})")
 
-        tables: List[TableListItem] = []
+        # Build (table_columns count, first-row metadata) in a single pass; the
+        # final list is materialised after counting completes so column_count
+        # reflects the full filtered total.
         table_columns: Dict[str, int] = {}
+        table_meta: Dict[str, ColumnDictionaryEntry] = {}
 
         try:
             contract_columns = self._get_columns_from_contracts()
@@ -659,34 +675,28 @@ class DataCatalogManager:
                     continue
                 full_name = col.table_full_name
                 table_columns[full_name] = table_columns.get(full_name, 0) + 1
+                table_meta.setdefault(full_name, col)
 
-            seen_tables: set = set()
-            for col in all_columns:
-                full_name = col.table_full_name
-                if full_name in seen_tables:
-                    continue
-                if catalog_filter and col.catalog_name.lower() != catalog_filter.lower():
-                    continue
-                if schema_filter and col.schema_name.lower() != schema_filter.lower():
-                    continue
-
-                seen_tables.add(full_name)
-                tables.append(TableListItem(
+            tables: List[TableListItem] = [
+                TableListItem(
                     full_name=full_name,
-                    name=col.table_name,
-                    schema_name=col.schema_name,
-                    catalog_name=col.catalog_name,
-                    table_type=col.table_type,
-                    column_count=table_columns.get(full_name, 0),
+                    name=meta.table_name,
+                    schema_name=meta.schema_name,
+                    catalog_name=meta.catalog_name,
+                    table_type=meta.table_type,
+                    column_count=table_columns[full_name],
                     comment=None,
-                    contract_id=col.contract_id,
-                    contract_name=col.contract_name,
-                    contract_version=col.contract_version,
-                    contract_status=col.contract_status,
-                ))
+                    contract_id=meta.contract_id,
+                    contract_name=meta.contract_name,
+                    contract_version=meta.contract_version,
+                    contract_status=meta.contract_status,
+                )
+                for full_name, meta in table_meta.items()
+            ]
 
         except Exception as e:
             logger.error(f"Error getting table list: {e}", exc_info=True)
+            tables = []
 
         total_columns = sum(table_columns.values())
 

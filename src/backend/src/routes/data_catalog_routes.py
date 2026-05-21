@@ -109,7 +109,7 @@ async def get_all_columns(
 async def search_columns(
     request: Request,
     db: DBSessionDep,
-    q: str = Query(..., min_length=1, description="Search query"),
+    q: str = Query(..., min_length=2, description="Search query (min 2 chars)"),
     catalog: Optional[str] = Query(None, description="Filter to specific catalog"),
     schema: Optional[str] = Query(None, description="Filter to specific schema"),
     table: Optional[str] = Query(None, description="Filter to specific table (FQN or name)"),

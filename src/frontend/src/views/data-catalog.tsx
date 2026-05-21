@@ -21,7 +21,6 @@ import {
   Table as TableIcon,
   Eye,
   ArrowUpDown,
-  Database,
   RefreshCw,
   Tag,
   ChevronLeft,

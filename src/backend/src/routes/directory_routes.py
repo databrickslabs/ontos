@@ -1,13 +1,16 @@
 """Directory layer API: status, search, test, and provider-agnostic settings.
 
 Settings keys live in the existing ``app_settings`` key/value table so
-no Alembic migration is required. All Graph traffic flows through a UC
-HTTP Connection; the app never holds a client secret or token.
+no Alembic migration is required. v1 ships three providers:
+
+- ``entra``    — Microsoft Entra ID via Microsoft Graph (UC HTTP Connection)
+- ``lakebase`` — A Postgres table on the app's primary Lakebase database
+- ``file``     — A local CSV file (tests / demos)
 
 See plans/directory-lookup-and-principal-picker.md.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
@@ -18,13 +21,18 @@ from src.common.dependencies import DirectoryManagerDep
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.common.uc_connections import list_http_connections
-from src.controller.directory_providers import DirectoryError
+from src.controller.directory_providers import (
+    DirectoryError,
+    DirectoryProviderContext,
+)
 from src.models.directory import (
     DirectorySearchResponse,
     DirectorySettingsUpdate,
     DirectoryStatus,
     DirectoryTestResult,
     SETTING_KEY_CONNECTION_NAME,
+    SETTING_KEY_FILE_PATH,
+    SETTING_KEY_LAKEBASE_TABLE,
     SETTING_KEY_PROVIDER_TYPE,
 )
 from src.repositories.app_settings_repository import app_settings_repo
@@ -32,6 +40,26 @@ from src.repositories.app_settings_repository import app_settings_repo
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/directory", tags=["Directory"])
+
+
+def _build_context(request: Request, db: Session) -> DirectoryProviderContext:
+    """Assemble the per-request provider context.
+
+    Each provider reads only the transport handles it cares about:
+    Entra needs ``ws_client``, Lakebase needs ``db_engine``, File
+    needs neither.
+    """
+
+    ws_client: Any = None
+    try:
+        from src.common.workspace_client import get_obo_workspace_client
+
+        ws_client = get_obo_workspace_client(request)
+    except Exception:
+        ws_client = None
+
+    db_engine = db.get_bind() if db is not None else None
+    return DirectoryProviderContext(ws_client=ws_client, db_engine=db_engine)
 
 
 @router.get("/status", response_model=DirectoryStatus)
@@ -68,20 +96,12 @@ async def search(
     picker's unconfigured mode handles the UX from there.
     """
 
-    from src.common.workspace_client import get_obo_workspace_client
-
     parsed_types: List[str] = []
     if types:
         parsed_types = [t.strip() for t in types.split(",") if t.strip()]
+    ctx = _build_context(request, db)
     try:
-        ws = get_obo_workspace_client(request)
-    except Exception:
-        # The picker is expected to degrade gracefully; treat workspace
-        # client failure the same as an empty result.
-        return DirectorySearchResponse(results=[])
-
-    try:
-        results = manager.search(db, ws, query=q, types=parsed_types, limit=limit)
+        results = manager.search(db, ctx, query=q, types=parsed_types, limit=limit)
     except DirectoryError as exc:
         logger.warning(f"Directory search failed: {exc}")
         return DirectorySearchResponse(results=[])
@@ -97,15 +117,9 @@ async def test(
 ) -> DirectoryTestResult:
     """Probe the configured provider; surfaces a typed success/error to the UI."""
 
-    from src.common.workspace_client import get_obo_workspace_client
-
+    ctx = _build_context(request, db)
     try:
-        ws = get_obo_workspace_client(request)
-    except Exception as exc:
-        return DirectoryTestResult(healthy=False, error=f"Workspace client error: {exc}")
-
-    try:
-        manager.test(db, ws)
+        manager.test(db, ctx)
     except DirectoryError as exc:
         return DirectoryTestResult(healthy=False, error=str(exc))
     except Exception as exc:
@@ -121,17 +135,20 @@ async def update_settings(
     db: Session = Depends(get_db),
     _: bool = Depends(PermissionChecker("settings", FeatureAccessLevel.READ_WRITE)),
 ) -> DirectoryStatus:
-    """Persist provider type and/or connection name, then invalidate cache.
+    """Persist any directory settings supplied, then invalidate cache.
 
-    Either field may be ``None`` (or empty string) to clear that
-    setting. Caller passes both for full updates; passing just one is
-    an "edit one field" shortcut.
+    The caller passes the full set on save; missing fields are left
+    untouched. Pass an explicit empty string to clear a setting.
     """
 
     if body.provider_type is not None:
         app_settings_repo.set(db, SETTING_KEY_PROVIDER_TYPE, body.provider_type or None)
     if body.connection_name is not None:
         app_settings_repo.set(db, SETTING_KEY_CONNECTION_NAME, body.connection_name or None)
+    if body.lakebase_table is not None:
+        app_settings_repo.set(db, SETTING_KEY_LAKEBASE_TABLE, body.lakebase_table or None)
+    if body.file_path is not None:
+        app_settings_repo.set(db, SETTING_KEY_FILE_PATH, body.file_path or None)
     manager.invalidate_cache()
     return manager.get_status(db)
 

@@ -200,7 +200,9 @@ class DataCatalogManager:
                 .filter(AssetTypeDb.name.in_(_TABLE_LIKE_TYPES))
                 .options(
                     selectinload(AssetDb.asset_type),
-                    selectinload(AssetDb.source_relationships),
+                    # Eager-load child column assets (avoids N+1 in _get_asset_child_columns)
+                    selectinload(AssetDb.source_relationships)
+                    .selectinload(AssetRelationshipDb.target_asset),
                     selectinload(AssetDb.target_relationships)
                     .selectinload(AssetRelationshipDb.source_asset)
                     .selectinload(AssetDb.asset_type),
@@ -273,7 +275,12 @@ class DataCatalogManager:
         return columns
 
     def _get_asset_child_columns(self, asset: AssetDb) -> List[Dict[str, Any]]:
-        """Get Column children of a table-like asset via hasColumn relationships."""
+        """Get Column children of a table-like asset via hasColumn relationships.
+
+        Relies on `source_relationships.target_asset` being eager-loaded by the
+        caller (see `_get_columns_from_assets`) — accessing `rel.target_asset`
+        here would otherwise trigger an N+1 lazy-load per child column.
+        """
         columns: List[Dict[str, Any]] = []
         if not asset.source_relationships:
             return columns
@@ -281,12 +288,7 @@ class DataCatalogManager:
         for rel in asset.source_relationships:
             if rel.relationship_type != "hasColumn":
                 continue
-            # Load the child column asset
-            child = (
-                self.db.query(AssetDb)
-                .filter(AssetDb.id == rel.target_asset_id)
-                .first()
-            )
+            child = rel.target_asset
             if not child:
                 continue
             props = child.properties or {}

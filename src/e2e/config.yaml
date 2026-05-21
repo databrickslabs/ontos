@@ -11,3 +11,34 @@ base_url: "http://localhost:8000"
 databricks:
   host: "https://e2-demo-field-eng.cloud.databricks.com"
   profile: "DEFAULT"
+
+# Persona-specific auth for CUJ tests (ONT-CUJ-*, ONT-RBAC-*, etc.).
+# Each persona maps to a Databricks workspace user assigned to the corresponding
+# Ontos role group (data-admins, data-producers, data-stewards, data-consumers).
+#
+# Priority order: token > profile > fall back to default 'databricks' settings above.
+# In config.local.yaml set token or profile for each persona you have provisioned.
+# If a persona is not configured, CUJ tests that require it run under the default
+# (admin) identity; RBAC tests that require a DISTINCT user are skipped.
+personas:
+  admin:
+    profile: ""   # e.g. "fevm-ontos-v1-test"
+    token: ""     # PAT takes precedence over profile
+  producer:
+    profile: ""
+    token: ""
+  steward:
+    profile: ""
+    token: ""
+  consumer:
+    profile: ""
+    token: ""
+
+# Google Sheets reporter — writes Pass/Fail/Blocked back to the CUJ tracking sheet
+# after each pytest session.  Set enabled: true and supply your local gcloud token
+# via `gcloud auth application-default login` (the reporter calls
+# `gcloud auth application-default print-access-token`).
+sheet_reporter:
+  enabled: false
+  spreadsheet_id: "1kkj8d_drDxFa3DPr0dBjTOmqlNuIRqmuDBNdzc8fY-I"
+  quota_project: "gcp-dev-field-eng-aiapiquota"

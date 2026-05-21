@@ -22,6 +22,8 @@ from src.common.logging import get_logger
 from src.controller.directory_providers.base import (
     DirectoryError,
     DirectoryProvider,
+    DirectoryProviderConfig,
+    DirectoryProviderContext,
 )
 from src.models.directory import Principal, PrincipalType
 
@@ -57,11 +59,17 @@ class EntraIdProvider(DirectoryProvider):
     lives in ``DirectoryManager``.
     """
 
-    def __init__(self, ws_client: Any, connection_name: str) -> None:
-        if not connection_name:
+    def __init__(
+        self,
+        ctx: DirectoryProviderContext,
+        config: DirectoryProviderConfig,
+    ) -> None:
+        if not config.connection_name:
             raise DirectoryError("UC HTTP connection name is required")
-        self._ws = ws_client
-        self._connection_name = connection_name
+        if ctx.ws_client is None:
+            raise DirectoryError("Workspace client is required for Entra provider")
+        self._ws = ctx.ws_client
+        self._connection_name = config.connection_name
 
     # ----- DirectoryProvider --------------------------------------------------
 

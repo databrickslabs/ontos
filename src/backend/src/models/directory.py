@@ -1,8 +1,13 @@
 """Pydantic API models for the Directory layer (external IdP lookups).
 
 The Directory layer is the generic abstraction over identity providers.
-v1 ships one concrete provider (Microsoft Entra ID via Microsoft Graph),
-but the manager / routes / models are provider-agnostic so future
+v1 ships three concrete providers:
+
+- ``entra``    — Microsoft Entra ID via Microsoft Graph (UC HTTP Connection)
+- ``lakebase`` — a Postgres table sitting in the app's Lakebase instance
+- ``file``     — a local CSV file (primarily for tests and demos)
+
+The manager / routes / models stay provider-agnostic so future
 providers (Okta, Ping, ...) can be added without breaking changes.
 
 See plans/directory-lookup-and-principal-picker.md.
@@ -61,18 +66,27 @@ class DirectoryProviderType(str, Enum):
     """
 
     ENTRA = "entra"
+    LAKEBASE = "lakebase"
+    FILE = "file"
 
 
 class DirectoryStatus(BaseModel):
     """Reports whether the directory is wired up.
 
-    ``configured`` is True iff both a recognised provider type and a UC
-    HTTP connection name are persisted in settings.
+    ``configured`` is True iff the persisted provider type is one we
+    recognise *and* the provider-specific settings it requires are all
+    non-empty. This model carries the raw settings (not secrets) so
+    the Settings tab can hydrate its inputs without an extra round
+    trip.
     """
 
     configured: bool
     provider_type: Optional[str] = None
-    connection_name: Optional[str] = None
+    # Provider-specific settings (most will be ``None`` depending on
+    # the configured provider_type).
+    connection_name: Optional[str] = None   # entra
+    lakebase_table: Optional[str] = None    # lakebase
+    file_path: Optional[str] = None         # file
 
 
 class DirectoryTestResult(BaseModel):
@@ -91,13 +105,19 @@ class DirectorySearchResponse(BaseModel):
 class DirectorySettingsUpdate(BaseModel):
     """Payload accepted by ``PUT /api/directory/settings``.
 
-    Either field may be ``None`` to clear that setting.
+    Any field may be ``None`` to clear that setting. Each provider
+    type cares about a different subset; the UI sends the full set
+    every time and the backend persists only the keys present.
     """
 
     provider_type: Optional[str] = None
     connection_name: Optional[str] = None
+    lakebase_table: Optional[str] = None
+    file_path: Optional[str] = None
 
 
 # Setting keys (single source of truth)
 SETTING_KEY_PROVIDER_TYPE = "DIRECTORY_PROVIDER_TYPE"
 SETTING_KEY_CONNECTION_NAME = "DIRECTORY_UC_HTTP_CONNECTION_NAME"
+SETTING_KEY_LAKEBASE_TABLE = "DIRECTORY_LAKEBASE_TABLE"
+SETTING_KEY_FILE_PATH = "DIRECTORY_FILE_PATH"

@@ -44,6 +44,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { PrincipalPicker } from '@/components/common/principal-picker';
 import { RelativeDate } from '@/components/common/relative-date';
 import { useAppSettingsStore } from '@/stores/app-settings-store';
 
@@ -796,12 +797,14 @@ export default function TagsSettings() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="permission-group">Group ID</Label>
-              <Input
+              <Label htmlFor="permission-group">Group</Label>
+              <PrincipalPicker
                 id="permission-group"
-                value={permissionForm.group_id}
-                onChange={(e) => setPermissionForm({ ...permissionForm, group_id: e.target.value })}
+                accepts={['group']}
+                value={permissionForm.group_id || null}
+                onChange={(next) => setPermissionForm({ ...permissionForm, group_id: next ?? '' })}
                 placeholder="e.g., data-engineers, analysts"
+                aria-label="Group"
               />
             </div>
             <div>

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { PrincipalPicker } from '@/components/common/principal-picker';
 import type { TeamMember } from '@/types/data-product';
 
 type TeamMemberFormProps = {
@@ -92,15 +93,16 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
             <Label htmlFor="username">
               Username <span className="text-destructive">*</span>
             </Label>
-            <Input
+            <PrincipalPicker
               id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              accepts={['user']}
+              value={username || null}
+              onChange={(next) => setUsername(next ?? '')}
               placeholder="e.g., user@example.com or username"
-              autoFocus
+              aria-label="Username"
             />
             <p className="text-xs text-muted-foreground">
-              User's username or email address (REQUIRED in ODPS)
+              User&apos;s username or email address (REQUIRED in ODPS)
             </p>
           </div>
 

@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TreeView } from '@/components/ui/tree-view';
 import { CatalogItem, DataAssetReviewRequest, DataAssetReviewRequestCreate, AssetType } from '@/types/data-asset-review';
 import { Loader2, AlertCircle, Folder, FolderOpen, Table, Layout, FunctionSquare } from 'lucide-react';
+import { PrincipalPicker } from '@/components/common/principal-picker';
 
 // Define user info type based on backend response
 interface UserInfo {
@@ -339,16 +340,17 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                             />
                         </div>
                         <div>
-                            <Label htmlFor="reviewer-email">Reviewer Email *</Label>
-                            <Input
+                            <Label htmlFor="reviewer-email">Reviewer *</Label>
+                            <PrincipalPicker
                                 id="reviewer-email"
-                                type="email"
-                                value={reviewerEmail}
-                                onChange={(e) => {
-                                    setReviewerEmail(e.target.value);
+                                accepts={['user']}
+                                value={reviewerEmail || null}
+                                onChange={(next) => {
+                                    setReviewerEmail(next ?? '');
                                     setFormError(null);
                                 }}
-                                required
+                                placeholder="user@example.com"
+                                aria-label="Reviewer"
                             />
                         </div>
                     </div>

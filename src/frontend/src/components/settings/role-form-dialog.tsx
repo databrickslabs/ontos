@@ -18,6 +18,8 @@ import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
 import { features as orderedFeatures } from '@/config/features'; // Import the ordered features
 import { usePermissions } from '@/stores/permissions-store';
 import { Checkbox } from '@/components/ui/checkbox';
+import { PrincipalPicker } from '@/components/common/principal-picker';
+import { normaliseAssignedGroups } from '@/lib/assigned-groups';
 
 interface RoleFormDialogProps {
     isOpen: boolean;
@@ -324,21 +326,16 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                             name="assigned_groups"
                                             control={control}
                                             render={({ field }) => {
-                                                // Convert array to string for display, keep as string for editing
-                                                const displayValue = Array.isArray(field.value) 
-                                                    ? field.value.join(', ') 
-                                                    : (field.value || '');
-                                                
+                                                const value = normaliseAssignedGroups(field.value);
                                                 return (
-                                                    <Input
+                                                    <PrincipalPicker
                                                         id="assigned_groups"
+                                                        multiple
+                                                        accepts={['group']}
+                                                        value={value}
+                                                        onChange={(next) => field.onChange(next)}
                                                         placeholder={t('roles.general.assignedGroupsPlaceholder')}
-                                                        value={displayValue}
-                                                        onChange={(e) => {
-                                                            // Store as string, will be split on submit
-                                                            field.onChange(e.target.value);
-                                                        }}
-                                                        className="focus:ring-2 focus:ring-offset-2"
+                                                        aria-label={t('roles.general.assignedGroups')}
                                                     />
                                                 );
                                             }}

@@ -227,10 +227,33 @@ def _resolve_role_to_users(
     - '<uuid>' → app role UUID
     - 'user@email.com' → direct email
     - Legacy aliases like 'domain_owners', 'admins', etc.
+    - **Comma-separated list of any of the above** → recurse on each
+      segment, flatten results. This is what the Workflow Designer's
+      "Custom principals" toggle emits: a role/literal token from the
+      Select plus any users / groups picked from the PrincipalPicker.
     """
     from src.db_models.settings import AppRoleDb
     from src.db_models.business_roles import BusinessRoleDb
     from src.db_models.business_owners import BusinessOwnerDb
+
+    # Recursion gate for the mixed-shape list. We check for ``,`` first
+    # so each segment hits the rest of this function in isolation and
+    # role tokens / aliases / business: prefixes still resolve.
+    if ',' in role_spec:
+        out: List[tuple] = []
+        seen: set = set()
+        for segment in role_spec.split(','):
+            seg = segment.strip()
+            if not seg:
+                continue
+            for identifier, role_uuid in _resolve_role_to_users(db, seg, context):
+                if not identifier:
+                    continue
+                key = (identifier, role_uuid)
+                if key not in seen:
+                    seen.add(key)
+                    out.append((identifier, role_uuid))
+        return out
 
     # Map shorthand names to role names (legacy support)
     role_aliases = {
@@ -259,7 +282,8 @@ def _resolve_role_to_users(
         return [(role_name, role.id if role else None)]
 
     if '@' in role_spec:
-        return [(e.strip(), None) for e in role_spec.split(',')]
+        # Pre-comma-split single email -- treat as a direct recipient.
+        return [(role_spec, None)]
 
     # Business role: prefixed with "business:"
     if role_spec.startswith('business:'):

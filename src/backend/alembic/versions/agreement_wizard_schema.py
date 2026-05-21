@@ -1,7 +1,7 @@
 """Agreement wizard schema: workflow_type, sessions, agreements, completion_action
 
 Revision ID: v4_wizard_completion_act
-Revises: u1688q602tt5
+Revises: u2_create_workflow_tables
 Create Date: 2026-02-12
 
 Single migration for approval/agreement wizard feature (squashed from v1–v4):
@@ -11,6 +11,13 @@ Single migration for approval/agreement wizard feature (squashed from v1–v4):
 
 Uses revision v4_wizard_completion_act so DBs that already applied the old v1–v4
 chain remain at head without re-running.
+
+Chained behind `u2_create_workflow_tables` (instead of `u1688q602tt5` directly)
+so older DBs that were stamped before the ProcessWorkflowDb model existed get
+`process_workflows` (and its sibling workflow tables) created before this
+migration tries to ALTER it. DBs that already applied this migration against
+`u1688q602tt5` won't re-run it; the new parent only inserts itself for DBs
+that hadn't yet reached `v4_wizard_completion_act`.
 """
 from typing import Sequence, Union
 
@@ -19,7 +26,7 @@ import sqlalchemy as sa
 
 
 revision: str = 'v4_wizard_completion_act'
-down_revision: Union[str, None] = 'u1688q602tt5'
+down_revision: Union[str, None] = 'u2_create_workflow_tables'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

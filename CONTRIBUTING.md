@@ -65,6 +65,59 @@ yarn install
 # Backend dependencies are managed by Hatch and installed automatically
 ```
 
+#### Working Behind a Private npm Mirror (optional)
+
+Some corporate environments block the public npm/yarn registry and require all
+package traffic to flow through an internal mirror (e.g., Nexus, Artifactory,
+Verdaccio, or an HTTPS pass-through proxy). If that applies to you, running
+`yarn install` will rewrite every `resolved` URL in `src/frontend/yarn.lock`
+from `https://registry.yarnpkg.com/...` to your mirror's URL, producing a huge
+diff on every install. **Do not commit those rewrites** — the lockfile in the
+repo must stay on the public registry URLs so external contributors can
+install without your mirror.
+
+To keep the on-disk lockfile pointing at your mirror (so yarn works) while git
+only ever sees the canonical public URLs, install a local git clean/smudge
+filter. This setup is per-clone and is not committed.
+
+1. Register the filter in your local git config (replace `<your-mirror-host>`
+   with the host of your internal mirror, e.g. `npm.corp.example.com`):
+
+   ```bash
+   MIRROR=<your-mirror-host>
+   git config filter.npmmirror.clean  "sed 's|https://${MIRROR//./\\.}/|https://registry.yarnpkg.com/|g'"
+   git config filter.npmmirror.smudge "sed 's|https://registry\\.yarnpkg\\.com/|https://${MIRROR}/|g'"
+   git config filter.npmmirror.required true
+   ```
+
+2. Attach the filter to the lockfile via local-only git attributes (lives in
+   `.git/info/attributes`, never committed):
+
+   ```bash
+   mkdir -p .git/info
+   printf 'src/frontend/yarn.lock filter=npmmirror\n' >> .git/info/attributes
+   ```
+
+3. Re-normalize the working tree so existing files match the new filter:
+
+   ```bash
+   git add --renormalize src/frontend/yarn.lock
+   git checkout -- src/frontend/yarn.lock
+   ```
+
+After this, `git diff src/frontend/yarn.lock` should be empty even though the
+on-disk file contains mirror URLs. `yarn install --frozen-lockfile`,
+`yarn add`, and `yarn upgrade` all work normally, and any commits you make
+will contain only real dependency changes against the public registry URLs.
+
+Notes:
+
+- Integrity hashes (`integrity sha512-...`) are independent of the URL, so
+  package verification is unaffected.
+- You must repeat the three steps above on every fresh clone.
+- If your mirror host changes later, re-run step 1 with the new host and then
+  step 3.
+
 ### 2. Configure Environment
 
 Create a `.env` file in the project root:

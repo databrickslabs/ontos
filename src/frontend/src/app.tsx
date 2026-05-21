@@ -85,6 +85,7 @@ import SettingsSearchView from './views/settings-search';
 import SettingsMcpView from './views/settings-mcp';
 import SettingsUiView from './views/settings-ui';
 import SettingsConnectorsView from './views/settings-connectors';
+import SettingsDirectoryView from './views/settings-directory';
 import SettingsSemanticModelsView from './views/settings-semantic-models';
 import SettingsCertificationLevelsView from './views/settings-certification-levels';
 
@@ -229,6 +230,7 @@ export default function App() {
                 <Route path="mcp" element={<SettingsMcpView />} />
                 <Route path="ui" element={<SettingsUiView />} />
                 <Route path="connectors" element={<SettingsConnectorsView />} />
+                <Route path="directory" element={<SettingsDirectoryView />} />
                 <Route path="semantic-models" element={<SettingsSemanticModelsView />} />
                 <Route path="certification-levels" element={<SettingsCertificationLevelsView />} />
                 <Route path="workflows" element={<Workflows />} />

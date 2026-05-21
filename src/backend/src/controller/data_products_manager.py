@@ -2541,15 +2541,25 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         logger.debug(f"Fetching ODPS products linked to contract {contract_id}")
 
         try:
-            all_products = self.list_products(limit=10000)
-            linked_products = []
+            from src.db_models.data_products import OutputPortDb
 
-            for product in all_products:
-                if product.outputPorts:
-                    for port in product.outputPorts:
-                        if port.contractId == contract_id:
-                            linked_products.append(product)
-                            break
+            # Query output_ports directly to find all product_ids referencing this contract.
+            # This avoids loading all products and is immune to session identity-map staleness.
+            self._db.expire_all()
+            port_rows = (
+                self._db.query(OutputPortDb.product_id)
+                .filter(OutputPortDb.contract_id == contract_id)
+                .distinct()
+                .all()
+            )
+            product_ids = [row[0] for row in port_rows]
+            logger.debug(f"Found {len(product_ids)} product IDs with output ports linked to contract {contract_id}")
+
+            linked_products = []
+            for pid in product_ids:
+                product_db = self._repo.get(db=self._db, id=pid)
+                if product_db:
+                    linked_products.append(self._load_product_with_tags(product_db))
 
             logger.info(f"Found {len(linked_products)} ODPS products linked to contract {contract_id}")
             return linked_products

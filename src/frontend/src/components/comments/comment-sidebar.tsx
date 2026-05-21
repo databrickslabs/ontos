@@ -28,6 +28,8 @@ import { Avatar } from '@/components/ui/avatar';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PrincipalPicker } from '@/components/common/principal-picker';
+import { buildAudienceTokens, parseAudienceTokens } from '@/lib/audience';
 // Select components removed - unused
 
 interface CommentFormData {
@@ -35,6 +37,13 @@ interface CommentFormData {
   comment: string;
   selectedTeams: string[];
   selectedRoles: string[];
+  /**
+   * Additional audience tokens collected from the PrincipalPicker.
+   * These are plain emails (users) and plain group names (groups) --
+   * NOT prefixed with ``team:`` / ``role:``. They merge with the
+   * checkbox selections at submit time.
+   */
+  selectedPrincipals: string[];
 }
 
 interface TimelineEntry {
@@ -83,6 +92,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     comment: '',
     selectedTeams: [],
     selectedRoles: [],
+    selectedPrincipals: [],
   });
 
   // Ref for the ScrollArea viewport to control scrolling
@@ -195,11 +205,14 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       return;
     }
 
-    // Build audience array with team: and role: prefixes
-    const audienceTokens: string[] = [
-      ...formData.selectedTeams.map(teamId => `team:${teamId}`),
-      ...formData.selectedRoles.map(roleName => `role:${roleName}`),
-    ];
+    // Build audience array. ``team:`` / ``role:`` prefixes come from
+    // the checkbox lists; plain emails / group names come from the
+    // PrincipalPicker (Directory pick) and flow through unchanged.
+    const audienceTokens: string[] = buildAudienceTokens({
+      teams: formData.selectedTeams,
+      roles: formData.selectedRoles,
+      principals: formData.selectedPrincipals,
+    });
 
     const commentData: CommentCreate | CommentUpdate = {
       title: formData.title || null,
@@ -259,7 +272,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     }
     
     // Reset form and refresh timeline
-    setFormData({ title: '', comment: '', selectedTeams: [], selectedRoles: [] });
+    setFormData({ title: '', comment: '', selectedTeams: [], selectedRoles: [], selectedPrincipals: [] });
     setEditingComment(null);
     setIsFormOpen(false);
     await fetchTimeline();
@@ -302,31 +315,23 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   const handleEdit = (comment: Comment) => {
     setEditingComment(comment);
     
-    // Parse audience tokens to extract teams and roles
-    const teams: string[] = [];
-    const roles: string[] = [];
-    
-    if (comment.audience) {
-      comment.audience.forEach(token => {
-        if (token.startsWith('team:')) {
-          teams.push(token.substring(5));
-        } else if (token.startsWith('role:')) {
-          roles.push(token.substring(5));
-        }
-      });
-    }
-    
+    // Parse audience tokens. ``team:`` / ``role:`` go into the
+    // respective checkbox state; anything else is a Directory
+    // principal (plain email or group name) and rehydrates the
+    // PrincipalPicker.
+    const parsed = parseAudienceTokens(comment.audience);
     setFormData({
       title: comment.title || '',
       comment: comment.comment,
-      selectedTeams: teams,
-      selectedRoles: roles,
+      selectedTeams: parsed.teams,
+      selectedRoles: parsed.roles,
+      selectedPrincipals: parsed.principals,
     });
     setIsFormOpen(true);
   };
 
   const resetForm = () => {
-    setFormData({ title: '', comment: '', selectedTeams: [], selectedRoles: [] });
+    setFormData({ title: '', comment: '', selectedTeams: [], selectedRoles: [], selectedPrincipals: [] });
     setEditingComment(null);
     setIsFormOpen(false);
   };
@@ -458,7 +463,27 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
             ))}
           </div>
         </div>
-        
+
+        {/* Directory principals (users / groups). Sits alongside the
+            team / role checkbox lists -- picked values flow into the
+            same ``audience`` field as plain emails / group names. */}
+        <div>
+          <Label htmlFor="audience-principals">Users &amp; groups</Label>
+          <div className="mt-1">
+            <PrincipalPicker
+              id="audience-principals"
+              multiple
+              accepts={['user', 'group']}
+              value={formData.selectedPrincipals}
+              onChange={(next) =>
+                setFormData({ ...formData, selectedPrincipals: next })
+              }
+              placeholder="Add users or groups…"
+              aria-label="Audience users and groups"
+            />
+          </div>
+        </div>
+
         {/* Display selected teams and roles */}
         {(formData.selectedTeams.length > 0 || formData.selectedRoles.length > 0) && (
           <div className="flex flex-wrap gap-1 mt-2">

@@ -5,6 +5,8 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 10_000 },
   testDir: './src/tests',
+  globalSetup: './src/tests/global-setup.ts',
+  globalTeardown: './src/tests/global-teardown.ts',
   // Skip tests that depend on features not yet wired for CI (mock workspace client)
   testIgnore: process.env.CI ? [
     '**/contract-outputport-mapping*',

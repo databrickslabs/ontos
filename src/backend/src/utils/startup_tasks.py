@@ -450,6 +450,23 @@ async def startup_event_handler(app: FastAPI):
         initialize_database() # Step 1: Setup Database
         logger.info("Database initialization sequence complete.")
 
+        # Step 1b: Seed reference data that the alembic data-migrations would
+        # have inserted but that `create_all()` cannot. On a fresh database
+        # init_db() takes the create_all() + stamp path (no `alembic upgrade`),
+        # so any rows seeded inside migrations (e.g. Bronze/Silver/Gold in
+        # a8_add_certification_levels_table.py) never get written. The
+        # seed_defaults() calls below are idempotent — they no-op if rows exist.
+        try:
+            from src.repositories.certification_levels_repository import certification_levels_repo
+
+            session_factory = get_session_factory()
+            with session_factory() as db_session:
+                certification_levels_repo.seed_defaults(db_session)
+                db_session.commit()
+            logger.info("Reference data seed step complete.")
+        except Exception as e:
+            logger.warning(f"Failed seeding reference data: {e}", exc_info=True)
+
         # Step 2: Initialize managers (requires ws_client to be set up if managers need it)
         # Create a temporary session for manager initializations that require DB access (like default namespace)
         # Note: Managers themselves should request sessions via DBSessionDep for their operational methods.

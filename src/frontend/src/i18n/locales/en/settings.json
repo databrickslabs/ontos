@@ -293,7 +293,7 @@
       "roleName": "Role Name",
       "roleNameRequired": "Role name is required",
       "description": "Description",
-      "assignedGroups": "Assigned Directory Groups (comma-separated)",
+      "assignedGroups": "Assigned Directory Groups",
       "assignedGroupsPlaceholder": "e.g., data-stewards, finance-team",
       "assignedGroupsHelp": "Users belonging to these groups will inherit this role's permissions."
     },

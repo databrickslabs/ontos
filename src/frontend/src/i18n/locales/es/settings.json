@@ -200,7 +200,7 @@
       "roleName": "Nombre del rol",
       "roleNameRequired": "El nombre del rol es obligatorio",
       "description": "Descripción",
-      "assignedGroups": "Grupos de directorio asignados (separados por comas)",
+      "assignedGroups": "Grupos de directorio asignados",
       "assignedGroupsPlaceholder": "ej. data-stewards, finance-team",
       "assignedGroupsHelp": "Los usuarios pertenecientes a estos grupos heredarán los permisos de este rol."
     },

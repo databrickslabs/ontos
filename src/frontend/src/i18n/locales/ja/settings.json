@@ -200,7 +200,7 @@
       "roleName": "ロール名",
       "roleNameRequired": "ロール名は必須です",
       "description": "説明",
-      "assignedGroups": "割り当てられたディレクトリグループ（カンマ区切り）",
+      "assignedGroups": "割り当てられたディレクトリグループ",
       "assignedGroupsPlaceholder": "例：data-stewards, finance-team",
       "assignedGroupsHelp": "これらのグループに所属するユーザーは、このロールの権限を継承します。"
     },

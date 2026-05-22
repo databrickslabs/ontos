@@ -29,12 +29,6 @@
   "general": {
     "title": "Impostazioni generali",
     "description": "Configura le impostazioni di base dell'applicazione",
-    "enableBackgroundJobs": "Abilita job in background",
-    "workspaceDeploymentPath": {
-      "label": "Percorso di distribuzione del workspace",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
-      "help": "Percorso nel workspace Databricks dove vengono distribuiti i file di workflow per i job in background."
-    },
     "unityCatalog": {
       "title": "Unity Catalog",
       "help": "Posizione Unity Catalog per l'archiviazione dei dati dell'applicazione.",
@@ -130,6 +124,12 @@
     "jobClusterId": {
       "label": "ID cluster job (opzionale)",
       "placeholder": "Lascia vuoto per il calcolo serverless"
+    },
+    "workspaceDeploymentPath": {
+      "label": "Percorso di distribuzione del workspace",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "Percorso nel workspace Databricks dove vengono distribuiti i file di workflow per i job in background.",
+      "requiredHint": "Imposta il percorso di distribuzione sopra per abilitare i workflow."
     },
     "availableWorkflows": {
       "label": "Workflow disponibili",

@@ -29,12 +29,6 @@
   "general": {
     "title": "Paramètres généraux",
     "description": "Configurer les paramètres de base de l'application",
-    "enableBackgroundJobs": "Activer les jobs en arrière-plan",
-    "workspaceDeploymentPath": {
-      "label": "Chemin de déploiement du workspace",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
-      "help": "Chemin dans le workspace Databricks où les fichiers de workflow sont déployés pour les jobs en arrière-plan."
-    },
     "unityCatalog": {
       "title": "Unity Catalog",
       "help": "Emplacement Unity Catalog pour stocker les données de l'application.",
@@ -130,6 +124,12 @@
     "jobClusterId": {
       "label": "ID du cluster de jobs (optionnel)",
       "placeholder": "Laisser vide pour le calcul serverless"
+    },
+    "workspaceDeploymentPath": {
+      "label": "Chemin de déploiement du workspace",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "Chemin dans le workspace Databricks où les fichiers de workflow sont déployés pour les jobs en arrière-plan.",
+      "requiredHint": "Définissez le chemin de déploiement ci-dessus pour activer les workflows."
     },
     "availableWorkflows": {
       "label": "Workflows disponibles",

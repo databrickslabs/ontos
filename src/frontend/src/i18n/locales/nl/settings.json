@@ -29,12 +29,6 @@
   "general": {
     "title": "Algemene Instellingen",
     "description": "Configureer basis applicatie-instellingen",
-    "enableBackgroundJobs": "Achtergrond Jobs Inschakelen",
-    "workspaceDeploymentPath": {
-      "label": "Workspace Deployment Pad",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
-      "help": "Pad in Databricks workspace waar workflow bestanden worden gedeployed voor achtergrond jobs."
-    },
     "unityCatalog": {
       "title": "Unity Catalog",
       "help": "Unity Catalog locatie voor het opslaan van applicatiedata.",
@@ -130,6 +124,12 @@
     "jobClusterId": {
       "label": "Job Cluster ID (optioneel)",
       "placeholder": "Laat leeg voor serverless compute"
+    },
+    "workspaceDeploymentPath": {
+      "label": "Workspace Deployment Pad",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "Pad in Databricks workspace waar workflow bestanden worden gedeployed voor achtergrond jobs.",
+      "requiredHint": "Stel het deployment pad hierboven in om workflows in te schakelen."
     },
     "availableWorkflows": {
       "label": "Beschikbare Workflows",

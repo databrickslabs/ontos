@@ -29,12 +29,6 @@
   "general": {
     "title": "一般設定",
     "description": "基本的なアプリケーション設定を構成",
-    "enableBackgroundJobs": "バックグラウンドジョブを有効化",
-    "workspaceDeploymentPath": {
-      "label": "ワークスペースデプロイパス",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
-      "help": "バックグラウンドジョブ用のワークフローファイルがデプロイされるDatabricksワークスペース内のパス。"
-    },
     "unityCatalog": {
       "title": "Unity Catalog",
       "help": "アプリケーションデータを保存するUnity Catalogの場所。",
@@ -130,6 +124,12 @@
     "jobClusterId": {
       "label": "ジョブクラスタID",
       "placeholder": "ジョブクラスタIDを入力"
+    },
+    "workspaceDeploymentPath": {
+      "label": "ワークスペースデプロイパス",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "バックグラウンドジョブ用のワークフローファイルがデプロイされるDatabricksワークスペース内のパス。",
+      "requiredHint": "ワークフローを有効化するには、上記のデプロイパスを設定してください。"
     },
     "availableWorkflows": {
       "label": "利用可能なワークフロー",

@@ -29,12 +29,6 @@
   "general": {
     "title": "Configuración general",
     "description": "Configurar ajustes básicos de la aplicación",
-    "enableBackgroundJobs": "Habilitar jobs en segundo plano",
-    "workspaceDeploymentPath": {
-      "label": "Ruta de despliegue del workspace",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
-      "help": "Ruta en el workspace de Databricks donde se despliegan los archivos de workflow para jobs en segundo plano."
-    },
     "unityCatalog": {
       "title": "Unity Catalog",
       "help": "Ubicación de Unity Catalog para almacenar datos de la aplicación.",
@@ -130,6 +124,12 @@
     "jobClusterId": {
       "label": "ID del clúster de jobs (opcional)",
       "placeholder": "Dejar vacío para computación serverless"
+    },
+    "workspaceDeploymentPath": {
+      "label": "Ruta de despliegue del workspace",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "Ruta en el workspace de Databricks donde se despliegan los archivos de workflow para jobs en segundo plano.",
+      "requiredHint": "Establece la ruta de despliegue arriba para habilitar los workflows."
     },
     "availableWorkflows": {
       "label": "Workflows disponibles",

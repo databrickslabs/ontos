@@ -254,3 +254,128 @@ describe('PrincipalPicker — configured mode', () => {
     expect(onChange).toHaveBeenLastCalledWith(['alice@x.com']);
   });
 });
+
+describe('PrincipalPicker — manual-entry hint', () => {
+  it('renders the manual-mode hint only when directory is unconfigured', () => {
+    setDirectoryStatus(false);
+    const { rerender } = renderWithProviders(
+      <PrincipalPicker multiple value={[]} onChange={() => {}} />,
+    );
+    expect(screen.getByTestId('principal-picker-manual-hint')).toBeInTheDocument();
+
+    setDirectoryStatus(true);
+    rerender(<PrincipalPicker multiple value={[]} onChange={() => {}} />);
+    expect(screen.queryByTestId('principal-picker-manual-hint')).toBeNull();
+  });
+});
+
+describe('PrincipalPicker — pill placement', () => {
+  it('renders badges below the input row in the DOM', () => {
+    setDirectoryStatus(false);
+    renderWithProviders(
+      <PrincipalPicker multiple value={['alice@x.com']} onChange={() => {}} />,
+    );
+    const input = screen.getByTestId('principal-picker-input');
+    const badge = screen.getByTestId('principal-badge');
+    // ``compareDocumentPosition`` returns bitmask DOCUMENT_POSITION_FOLLOWING (4)
+    // when the second node follows the first. The badge should follow the input.
+    expect(input.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('PrincipalPicker — Browse dialog', () => {
+  beforeEach(() => {
+    setDirectoryStatus(true);
+    fetchMock.mockImplementation((url: RequestInfo | URL) => {
+      const u = url.toString();
+      if (u.includes('/api/directory/search')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              results: [
+                { type: 'group', id: 'Producers', display_name: 'Data Producers', sub_label: 'producers-guid' },
+              ],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+  });
+
+  it('clears the search query and filter when the dialog is reopened', async () => {
+    renderWithProviders(
+      <PrincipalPicker multiple accepts={['group']} value={[]} onChange={() => {}} />,
+    );
+    // Open once.
+    await userEvent.click(screen.getByRole('button', { name: /browse directory/i }));
+    const dialogInput1 = await screen.findByTestId('principal-picker-dialog-input');
+    await userEvent.type(dialogInput1, 'pro');
+    expect((dialogInput1 as HTMLInputElement).value).toBe('pro');
+
+    // Close via the in-dialog Close button (the path that previously
+    // bypassed reset because it called onOpenChange directly). Radix
+    // also renders an icon-only close button with sr-only "Close" text;
+    // pick the visible footer button (the one without the sr-only span).
+    const closeButtons = screen.getAllByRole('button', { name: /^close$/i });
+    const visibleClose = closeButtons.find((b) => !b.querySelector('.sr-only'))!;
+    await userEvent.click(visibleClose);
+    await waitFor(() => {
+      expect(screen.queryByTestId('principal-picker-dialog-input')).toBeNull();
+    });
+
+    // Reopen.
+    await userEvent.click(screen.getByRole('button', { name: /browse directory/i }));
+    const dialogInput2 = await screen.findByTestId('principal-picker-dialog-input');
+    expect((dialogInput2 as HTMLInputElement).value).toBe('');
+  });
+
+  it('picks a row on click and emits the principal id', async () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <PrincipalPicker multiple accepts={['group']} value={[]} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /browse directory/i }));
+    const dialogInput = await screen.findByTestId('principal-picker-dialog-input');
+    await userEvent.type(dialogInput, 'pro');
+
+    const row = await screen.findByTestId('principal-row');
+    await userEvent.click(row);
+
+    expect(onChange).toHaveBeenLastCalledWith(['Producers']);
+  });
+
+  it('closes the dialog after a pick in multi-select mode', async () => {
+    // Browse is the discovery path -- it should always close after a
+    // pick so the user is returned to the form. Adding several entries
+    // is done via the inline type-ahead.
+    renderWithProviders(
+      <PrincipalPicker multiple accepts={['group']} value={[]} onChange={() => {}} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /browse directory/i }));
+    const dialogInput = await screen.findByTestId('principal-picker-dialog-input');
+    await userEvent.type(dialogInput, 'pro');
+
+    const row = await screen.findByTestId('principal-row');
+    await userEvent.click(row);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('principal-picker-dialog-input')).toBeNull();
+    });
+  });
+
+  it('row mousedown is default-prevented to keep focus on the input (regression for fix #1)', async () => {
+    renderWithProviders(
+      <PrincipalPicker multiple accepts={['group']} value={[]} onChange={() => {}} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /browse directory/i }));
+    const dialogInput = await screen.findByTestId('principal-picker-dialog-input');
+    await userEvent.type(dialogInput, 'pro');
+
+    const row = await screen.findByTestId('principal-row');
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    row.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+});

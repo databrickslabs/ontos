@@ -200,7 +200,7 @@
       "roleName": "Nom du rôle",
       "roleNameRequired": "Le nom du rôle est requis",
       "description": "Description",
-      "assignedGroups": "Groupes d'annuaire assignés (séparés par des virgules)",
+      "assignedGroups": "Groupes d'annuaire assignés",
       "assignedGroupsPlaceholder": "ex. data-stewards, finance-team",
       "assignedGroupsHelp": "Les utilisateurs appartenant à ces groupes hériteront des autorisations de ce rôle."
     },

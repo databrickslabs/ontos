@@ -200,7 +200,7 @@
       "roleName": "Rollenname",
       "roleNameRequired": "Rollenname ist erforderlich",
       "description": "Beschreibung",
-      "assignedGroups": "Zugewiesene Verzeichnisgruppen (durch Komma getrennt)",
+      "assignedGroups": "Zugewiesene Verzeichnisgruppen",
       "assignedGroupsPlaceholder": "z.B. data-stewards, finance-team",
       "assignedGroupsHelp": "Benutzer dieser Gruppen erben die Berechtigungen dieser Rolle."
     },

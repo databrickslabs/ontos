@@ -200,7 +200,7 @@
       "roleName": "Rolnaam",
       "roleNameRequired": "Rolnaam is verplicht",
       "description": "Beschrijving",
-      "assignedGroups": "Toegewezen Directory Groepen (komma-gescheiden)",
+      "assignedGroups": "Toegewezen Directory Groepen",
       "assignedGroupsPlaceholder": "bijv. data-stewards, finance-team",
       "assignedGroupsHelp": "Gebruikers die tot deze groepen behoren zullen de machtigingen van deze rol erven."
     },

@@ -203,12 +203,6 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <SelectionBadges
-        ids={selectedIds}
-        resolved={resolved}
-        disabled={disabled}
-        onRemove={removeId}
-      />
       <div className="flex gap-1">
         {configured ? (
           <ConfiguredInput
@@ -244,6 +238,19 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
           </Button>
         )}
       </div>
+      {!configured && (
+        // Self-rendered hint so individual callers don't have to track
+        // configured vs. unconfigured state for their own labels.
+        <p className="text-xs text-muted-foreground" data-testid="principal-picker-manual-hint">
+          Press Enter, Tab, or comma to add an entry.
+        </p>
+      )}
+      <SelectionBadges
+        ids={selectedIds}
+        resolved={resolved}
+        disabled={disabled}
+        onRemove={removeId}
+      />
       {configured && (
         <PrincipalPickerDialog
           open={dialogOpen}
@@ -252,7 +259,10 @@ export function PrincipalPicker(props: PrincipalPickerProps) {
           selectedIds={selectedIds}
           onPick={(p) => {
             addPrincipal(p);
-            if (!multiple) setDialogOpen(false);
+            // Always close after a pick -- even in multi-select mode.
+            // Browse is the discovery path; the inline type-ahead is the
+            // fast path for adding several entries in succession.
+            setDialogOpen(false);
           }}
           onSearchFail={markDegraded}
         />
@@ -395,6 +405,12 @@ function ConfiguredInput({
         className="w-[var(--radix-popover-trigger-width)] p-1"
         align="start"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        // Radix Dialog locks ``pointer-events: none`` on <body> while open.
+        // The Popover is portaled to <body>, so it inherits that lock and
+        // every row inside becomes unclickable when this picker is used
+        // inside a dialog (e.g. Role form, Team form, Owner dialog).
+        // Restoring auto here re-enables clicks for the popover subtree.
+        style={{ pointerEvents: 'auto' }}
       >
         {loading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground">
@@ -481,6 +497,10 @@ function PrincipalRow({ principal, onPick }: PrincipalRowProps) {
       <button
         type="button"
         onClick={onPick}
+        // Keep focus on the anchoring input so the surrounding popover /
+        // dialog focus management does not unmount the row before React
+        // dispatches the click handler.
+        onMouseDown={(e) => e.preventDefault()}
         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-left hover:bg-accent focus:bg-accent focus:outline-none"
         data-testid="principal-row"
       >
@@ -525,14 +545,23 @@ function PrincipalPickerDialog({
     onError: onSearchFail,
   });
 
-  // Reset query and type filter whenever the dialog transitions to
-  // closed. Done in the onOpenChange handler (not an effect) to keep
-  // state writes out of effect bodies.
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
+  // Reset on the open transition rather than close, because the dialog
+  // may be closed via paths that bypass ``handleOpenChange`` -- the
+  // Close button below calls ``onOpenChange`` directly, and the
+  // single-select parent closes the dialog from outside. Resetting on
+  // open is the only way to guarantee a clean slate every time.
+  useEffect(() => {
+    if (open) {
       setQuery('');
       setFilter(accepts);
     }
+    // ``accepts`` intentionally omitted -- callers pass a fresh array
+    // every render, which would re-run this effect and wipe state on
+    // every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const handleOpenChange = (next: boolean) => {
     onOpenChange(next);
   };
 

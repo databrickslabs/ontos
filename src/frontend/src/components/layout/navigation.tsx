@@ -93,57 +93,53 @@ export function Navigation({ isCollapsed }: NavigationProps) {
     return t(`features:${featureId}.name`, { defaultValue: defaultName });
   };
 
-  // Hide home link when already on home page
-  const isOnHomePage = location.pathname === '/';
-
   return (
     <ScrollArea className="h-full py-2">
       <TooltipProvider delayDuration={0}>
         <nav className={cn("flex flex-col px-1 gap-1")}>
-          {/* Home Link - hidden when on home page */}
-          {!isOnHomePage && (
-            isCollapsed ? (
-                  <Tooltip key={homeLink.path}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          'flex items-center justify-center rounded-lg p-2 transition-colors',
-                          location.pathname === homeLink.path
-                            ? 'bg-muted text-primary'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                        aria-label={homeLink.name}
-                        asChild
-                      >
-                        <NavLink to={homeLink.path}>
-                          <homeLink.icon className="h-5 w-5" />
-                          <span className="sr-only">{homeLink.name}</span>
-                        </NavLink>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="flex items-center gap-4">
-                      {homeLink.name}
-                    </TooltipContent>
-                  </Tooltip>
-            ) : (
-                  <NavLink
-                    key={homeLink.path}
-                    to={homeLink.path}
-                    className={({ isActive: navIsActive }) =>
-                      cn(
-                        'flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
-                        navIsActive
-                          ? 'bg-muted text-primary'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      )
-                    }
-                  >
-                    <homeLink.icon className="h-5 w-5 shrink-0" />
-                    <span className="flex-1 min-w-0 truncate">{homeLink.name}</span>
+          {/* Home Link */}
+          {isCollapsed ? (
+            <Tooltip key={homeLink.path}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'flex items-center justify-center rounded-lg p-2 transition-colors',
+                    location.pathname === homeLink.path
+                      ? 'bg-muted text-primary'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                  aria-label={homeLink.name}
+                  asChild
+                >
+                  <NavLink to={homeLink.path}>
+                    <homeLink.icon className="h-5 w-5" />
+                    <span className="sr-only">{homeLink.name}</span>
                   </NavLink>
-            )
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="flex items-center gap-4">
+                {homeLink.name}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <NavLink
+              key={homeLink.path}
+              to={homeLink.path}
+              end
+              className={({ isActive: navIsActive }) =>
+                cn(
+                  'flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
+                  navIsActive
+                    ? 'bg-muted text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                )
+              }
+            >
+              <homeLink.icon className="h-5 w-5 shrink-0" />
+              <span className="flex-1 min-w-0 truncate">{homeLink.name}</span>
+            </NavLink>
           )}
           {/* Ungrouped Items (Domains, Teams, Projects) */}
           {ungroupedItems.map((item: FeatureConfig) => {

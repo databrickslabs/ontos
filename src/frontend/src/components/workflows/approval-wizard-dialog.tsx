@@ -85,6 +85,50 @@ const NON_VISUAL_STEP_TYPES = new Set(['persist_agreement', 'generate_pdf', 'del
  */
 const PREVIEW_SESSION_ID = 'preview-local';
 
+/** Shape of a step as the wizard sees it on a workflow definition. */
+type PreviewStep = {
+  step_id: string;
+  name: string;
+  step_type: string;
+  config: Record<string, unknown>;
+  on_pass?: string | null;
+  on_fail?: string | null;
+  order?: number;
+};
+
+/**
+ * Pure helper: given the workflow's steps and the id of the step currently
+ * displayed, decide what the preview walker should do next. Mirrors the
+ * server-side rule in ``agreement_wizard_manager.submit_step()`` (line ~519
+ * in the backend): follow ``on_pass``; treat a terminal step (no ``on_pass``)
+ * or a PASS step with no outgoing edges as completion.
+ *
+ * Exported so vitest can exercise the graph-walking logic without dragging
+ * in the full Radix-based dialog. The component calls this from inside the
+ * preview branch of ``submitStep``.
+ */
+export function computePreviewNextStep(
+  steps: PreviewStep[] | undefined,
+  currentStepId: string,
+): { kind: 'terminal' } | { kind: 'advance'; next: PreviewStep; nextVisualIndex: number } {
+  if (!steps || steps.length === 0) return { kind: 'terminal' };
+  const currentDef = steps.find((s) => s.step_id === currentStepId);
+  const nextId = currentDef?.on_pass ?? null;
+  const nextDef = nextId ? steps.find((s) => s.step_id === nextId) : null;
+  const terminal =
+    !nextDef ||
+    (nextDef.step_type === 'pass' && !nextDef.on_pass && !nextDef.on_fail);
+  if (terminal) return { kind: 'terminal' };
+  const visualSteps = steps.filter(
+    (s) =>
+      !NON_VISUAL_STEP_TYPES.has(s.step_type) &&
+      s.step_type !== 'pass' &&
+      s.step_type !== 'fail',
+  );
+  const nextVisualIndex = visualSteps.findIndex((s) => s.step_id === nextDef.step_id);
+  return { kind: 'advance', next: nextDef, nextVisualIndex };
+}
+
 /**
  * Field shape carried in ``required_fields`` on a ``user_action`` step. Mirrors
  * the BE config shape; ``options_endpoint`` is the new addition for portable
@@ -564,34 +608,24 @@ export default function ApprovalWizardDialog({
         if (currentStep.step_type === 'user_action' && submissionPayload && typeof submissionPayload === 'object') {
           collectedFieldsRef.current = { ...collectedFieldsRef.current, ...submissionPayload };
         }
-        // Walk on_pass forward, skipping non-visual + pass/fail terminal steps
-        // until we land on a visual step or run out. We don't auto-collapse
+        // Walk on_pass forward — the helper handles terminal detection and
+        // computes the next visual-step index. We don't auto-collapse
         // non-visual steps in one tick because the auto-advance effect below
         // already handles them — it will fire once we set the next step.
-        const currentDef = wf.steps.find((s) => s.step_id === currentStep.step_id);
-        const nextId = currentDef?.on_pass ?? null;
-        const nextDef = nextId ? wf.steps.find((s) => s.step_id === nextId) : null;
-        const terminal =
-          !nextDef ||
-          (nextDef.step_type === 'pass' && !nextDef.on_pass && !nextDef.on_fail);
-        if (terminal) {
+        const decision = computePreviewNextStep(wf.steps, currentStep.step_id);
+        if (decision.kind === 'terminal') {
           setCompleteResult({ agreement_id: null, pdf_storage_path: null, pdf_url: null });
           setCurrentStep(null);
           toast({ title: 'Preview complete', description: 'No agreement was created and no notifications were sent.' });
           return;
         }
-        // Advance progress only for visual next steps (matches the non-preview
-        // branch's behavior at line ~529 in the original submitStep).
-        const visualSteps = wf.steps
-          .filter((s) => !NON_VISUAL_STEP_TYPES.has(s.step_type) && s.step_type !== 'pass' && s.step_type !== 'fail');
-        const nextVisualIdx = visualSteps.findIndex((s) => s.step_id === nextDef.step_id);
-        if (nextVisualIdx >= 0) setCurrentStepIndex(nextVisualIdx);
+        if (decision.nextVisualIndex >= 0) setCurrentStepIndex(decision.nextVisualIndex);
         setCurrentStep({
-          step_id: nextDef.step_id,
-          name: nextDef.name,
-          step_type: nextDef.step_type,
-          config: nextDef.config ?? {},
-          order: nextDef.order,
+          step_id: decision.next.step_id,
+          name: decision.next.name,
+          step_type: decision.next.step_type,
+          config: decision.next.config ?? {},
+          order: decision.next.order,
         });
         setPayload({});
         setScrolledToEnd(false);

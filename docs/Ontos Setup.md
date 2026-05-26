@@ -3,23 +3,23 @@
 - [Table of Content](#Table-of-Content)
 - [Requirements](#Requirements)
 - [Preparation Steps](#Preparation-Steps)
-	- [Step #0.1 - Create a Volume](#Preparation-Steps#Step-#0.1---Create-a-Volume)
-	- [Step #0.2 - (Optionally) Enable OBO Authentication](#Preparation-Steps#Step-#0.2---(Optionally)-Enable-OBO-Authentication)
+	- [Step #0.1 - Create a Volume](#Step-#0.1---Create-a-Volume)
+	- [Step #0.2 - (Optionally) Enable OBO Authentication](#Step-#0.2---(Optionally)-Enable-OBO-Authentication)
 - [Installation Steps](#Installation-Steps)
-	- [Step #1 - Create Lakebase Instance](#Installation-Steps#Step-#1---Create-Lakebase-Instance)
-	- [Step #2 - Create Ontos Database](#Installation-Steps#Step-#2---Create-Ontos-Database)
-	- [Step #4 - Option A - Deploy the App via Marketplace](#Installation-Steps#Step-#4---Option-A---Deploy-the-App-via-Marketplace)
-	- [Step #4 - Option B - Deploy the App via Git Repo](#Installation-Steps#Step-#4---Option-B---Deploy-the-App-via-Git-Repo)
-	- [Step #5: (Optionally) Load Demo Data](#Installation-Steps#Step-#5:-(Optionally)-Load-Demo-Data)
-	- [Troubleshooting](#Installation-Steps#Troubleshooting)
-		- [Debugging Issues](#Troubleshooting#Debugging-Issues)
-		- [Database Ownership](#Troubleshooting#Database-Ownership)
-		- [Change of App Service Principle](#Troubleshooting#Change-of-App-Service-Principle)
-		- [Role `admins` is Missing](#Troubleshooting#Role-`admins`-is-Missing)
-		- [Unblock Remote Repositories](#Troubleshooting#Unblock-Remote-Repositories)
-		- [Fix Access for Databricks Reader/Writer](#Troubleshooting#Fix-Access-for-Databricks-Reader/Writer)
-	- [DANGER ZONE](#Installation-Steps#DANGER-ZONE)
-	- [OBSOLETE: Step #6 - Lock Down the Database](#Installation-Steps#OBSOLETE:-Step-#6---Lock-Down-the-Database)
+	- [Step #1 - Create Lakebase Instance](#Step-#1---Create-Lakebase-Instance)
+	- [Step #2 - Create Ontos Database](#Step-#2---Create-Ontos-Database)
+	- [Step #4 - Option A - Deploy the App via Marketplace](#Step-#4---Option-A---Deploy-the-App-via-Marketplace)
+	- [Step #4 - Option B - Deploy the App via Git Repo](#Step-#4---Option-B---Deploy-the-App-via-Git-Repo)
+	- [Step #5: (Optionally) Load Demo Data](#Step-#5:-(Optionally)-Load-Demo-Data)
+	- [Troubleshooting](#Troubleshooting)
+		- [Debugging Issues](#Debugging-Issues)
+		- [Database Ownership](#Database-Ownership)
+		- [Change of App Service Principle](#Change-of-App-Service-Principle)
+		- [Role `admins` is Missing](#Role-`admins`-is-Missing)
+		- [Unblock Remote Repositories](#Unblock-Remote-Repositories)
+		- [Fix Access for Databricks Reader/Writer](#Fix-Access-for-Databricks-Reader/Writer)
+	- [DANGER ZONE](#DANGER-ZONE)
+	- [OBSOLETE: Step #6 - Lock Down the Database](#OBSOLETE:-Step-#6---Lock-Down-the-Database)
 
 # Requirements
 
@@ -27,7 +27,7 @@
 	- You have Databricks Apps available and are allowed to deploy apps
 	- You have Lakebase available and are allowed to create instances
 	- You have a catalog you can use to set up a volume for the app
-- Also see [Step #0.2 - (Optionally) Enable OBO Authentication](#Step%200.2%20-%20(Optionally)%20Enable%20OBO%20Authentication) 
+- Also see [Step #0.2 - (Optionally) Enable OBO Authentication](#Step-#0.2---(Optionally)-Enable-OBO-Authentication) 
 
 Notes:
 - If you want to map the Lakebase database of the app into a Unity Catalog catalog, you need `CREATE CATALOG` on the metastore. Mapping the database is not needed, strictly speaking, but allows to demo dashboards accessing the Ontos data directly.
@@ -71,7 +71,7 @@ Note: The Databricks Apps service is automatically adding the Service Principle 
 
 ## Step #0.2 - (Optionally) Enable OBO Authentication
 
-Currently, the required [on-behalf-of users](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/auth#user-authorization) authentication is a Public Preview feature. If you try to set up the app _without_ enabling OBO for apps first, you may see this in [Step #4 - Option A - Deploy the App via Marketplace](#Step%204%20-%20Option%20A%20-%20Deploy%20the%20App%20via%20Marketplace):
+Currently, the required [on-behalf-of users](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/auth#user-authorization) authentication is a Public Preview feature. If you try to set up the app _without_ enabling OBO for apps first, you may see this in [Step #4 - Option A - Deploy the App via Marketplace](#Step-#4---Option-A---Deploy-the-App-via-Marketplace):
 
 ![](images/setup/2285fc6c0141802e5cfc05db2e8d02ef.png)
 
@@ -481,7 +481,7 @@ This can be caused by a later change of scopes with the cookie missing the updat
 
 ### Fix Access for Databricks Reader/Writer
 
-The Databricks control plane uses a dedicated set of roles to read and write data, as well as access the information schema. If you run into [DANGER ZONE](#DANGER%20ZONE), you can fix access like so:
+The Databricks control plane uses a dedicated set of roles to read and write data, as well as access the information schema. If you run into [DANGER ZONE](#DANGER-ZONE), you can fix access like so:
 
 ```sql
 ➜ psql "host=instance-025df497-74e6-461a-bfed-f2313585b527.database.azuredatabricks.net user=lars.george@databricks.com dbname=databricks_postgres port=5432 sslmode=require"
@@ -541,7 +541,7 @@ The following step was meant to proactively limit the access to the app's databa
 
 ![](images/setup/a7d1b9dbed6fe33108e665f19e4b7125.png)
 
-See [Fix Access for Databricks Reader/Writer](#Fix%20Access%20for%20Databricks%20Reader/Writer) how to fix this.
+See [Fix Access for Databricks Reader/Writer](#Fix-Access-for-Databricks-Reader/Writer) how to fix this.
 ## OBSOLETE: Step #6 - Lock Down the Database
 
 Click on the app's "Overview" tab, then copy the Service Principal using the "Copy" button:

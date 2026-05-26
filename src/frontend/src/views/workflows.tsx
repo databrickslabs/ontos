@@ -141,7 +141,7 @@ export default function Workflows() {
   const [isActionInProgress, setIsActionInProgress] = useState(false);
   // Preview wizard (issue #405): launched from the row-action menu on any
   // approval workflow. Pure FE dry-run — no API session, no audit.
-  const [previewWorkflow, setPreviewWorkflow] = useState<ProcessWorkflow | null>(null);
+  const [previewingWorkflow, setPreviewingWorkflow] = useState<ProcessWorkflow | null>(null);
 
   const loadWorkflows = useCallback(async () => {
     setIsLoadingWorkflows(true);
@@ -855,7 +855,7 @@ export default function Workflows() {
               {canEdit ? t('common:actions.edit') : t('common:actions.view')}
             </DropdownMenuItem>
             {row.original.workflow_type === 'approval' && (
-              <DropdownMenuItem onClick={() => setPreviewWorkflow(row.original)}>
+              <DropdownMenuItem onClick={() => setPreviewingWorkflow(row.original)}>
                 <Eye className="h-4 w-4 mr-2" />
                 Preview wizard
               </DropdownMenuItem>
@@ -1524,14 +1524,14 @@ export default function Workflows() {
 
       {/* Approval Wizard Preview (issue #405) — synthetic dry-run, no API
           session, no agreement, no notifications. */}
-      {previewWorkflow && (
+      {previewingWorkflow && (
         <ApprovalWizardDialog
-          isOpen={!!previewWorkflow}
-          onOpenChange={(open) => { if (!open) setPreviewWorkflow(null); }}
+          isOpen={!!previewingWorkflow}
+          onOpenChange={(open) => { if (!open) setPreviewingWorkflow(null); }}
           entityType="preview"
           entityId="preview"
-          entityName={previewWorkflow.name}
-          preselectedWorkflowId={previewWorkflow.id}
+          entityName={previewingWorkflow.name}
+          preselectedWorkflowId={previewingWorkflow.id}
           autoStartWithPreselected
           previewMode
         />

@@ -70,7 +70,9 @@ import {
   Database,
   Send,
   KeyRound,
+  Eye,
 } from 'lucide-react';
+import ApprovalWizardDialog from './approval-wizard-dialog';
 
 import RequiredFieldsEditor, {
   type RequiredField,
@@ -524,6 +526,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
+  // Preview wizard (issue #405) — design-time dry-run. Only meaningful once
+  // the workflow has been persisted (we need its id to fetch the snapshot),
+  // and only for approval-type workflows.
+  const [previewOpen, setPreviewOpen] = useState(false);
   
   // Form state
   const [name, setName] = useState('');
@@ -1128,6 +1134,21 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           )}
         </div>
         <div className="flex items-center gap-2">
+          {workflowType === 'approval' && !isNew && workflow?.id && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPreviewOpen(true)}
+              // Disabled while dirty so the preview reflects the persisted
+              // workflow — otherwise designers would chase phantom diffs
+              // between the saved snapshot and unsaved edits.
+              disabled={isDirty || isSaving}
+              title={isDirty ? 'Save changes to preview the latest version' : 'Run the wizard in dry-run mode'}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview wizard
+            </Button>
+          )}
           <div className="flex items-center gap-2 mr-2">
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <span className="text-sm">{isActive ? 'Active' : 'Inactive'}</span>
@@ -1215,6 +1236,22 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             </Panel>
           </ReactFlow>
         </div>
+        )}
+
+        {/* Approval Wizard Preview (issue #405) — design-time dry-run launched
+            from the header. Pure FE walk through the persisted workflow; no
+            session, no agreement, no notifications. */}
+        {workflow?.id && workflowType === 'approval' && previewOpen && (
+          <ApprovalWizardDialog
+            isOpen={previewOpen}
+            onOpenChange={setPreviewOpen}
+            entityType="preview"
+            entityId="preview"
+            entityName={name || workflow.name}
+            preselectedWorkflowId={workflow.id}
+            autoStartWithPreselected
+            previewMode
+          />
         )}
 
         {/* Discard changes confirmation dialog */}

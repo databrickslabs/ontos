@@ -25,7 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Check, XCircle, ChevronRight, FileText } from 'lucide-react';
+import { Loader2, Check, XCircle, ChevronRight, FileText, Eye } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { useUserStore } from '@/stores/user-store';
@@ -51,7 +52,18 @@ interface ApprovalWorkflowRef {
   id: string;
   name: string;
   description?: string;
-  steps: Array<{ step_id: string; name: string; step_type: string; config: Record<string, unknown> }>;
+  steps: Array<{
+    step_id: string;
+    name: string;
+    step_type: string;
+    config: Record<string, unknown>;
+    // ``on_pass``/``on_fail``/``order`` are returned by GET /api/workflows/{id}
+    // but the wizard only needs them for preview mode (step-graph walking
+    // happens server-side during real sessions).
+    on_pass?: string | null;
+    on_fail?: string | null;
+    order?: number;
+  }>;
 }
 
 interface WizardStep {
@@ -65,6 +77,13 @@ interface WizardStep {
 
 /** Step types that require no user interaction and should auto-advance. */
 const NON_VISUAL_STEP_TYPES = new Set(['persist_agreement', 'generate_pdf', 'deliver']);
+
+/**
+ * Sentinel sessionId used when ``previewMode`` is set — keeps the UI gates that
+ * key off ``sessionId`` (progress indicator, step rendering, abortSession)
+ * working without ever calling /api/approvals/sessions.
+ */
+const PREVIEW_SESSION_ID = 'preview-local';
 
 /**
  * Field shape carried in ``required_fields`` on a ``user_action`` step. Mirrors
@@ -201,6 +220,15 @@ export interface ApprovalWizardDialogProps {
   ) => void;
   /** Called when no workflow is available so the caller can proceed directly. */
   onNoWorkflow?: () => void;
+  /**
+   * Preview / dry-run mode. When true the wizard walks the workflow steps
+   * client-side without ever calling /api/approvals/sessions* — no session is
+   * persisted, no agreement is created, no PDF, no delivery notifications, no
+   * audit logs. Required by issue #405 so workflow authors can iterate on a
+   * design without firing side effects. Pair with ``preselectedWorkflowId``
+   * and ``autoStartWithPreselected`` to skip the chooser.
+   */
+  previewMode?: boolean;
 }
 
 export default function ApprovalWizardDialog({
@@ -215,6 +243,7 @@ export default function ApprovalWizardDialog({
   autoStartWithPreselected,
   onComplete,
   onNoWorkflow,
+  previewMode = false,
 }: ApprovalWizardDialogProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
@@ -358,6 +387,29 @@ export default function ApprovalWizardDialog({
           setStepNames(visualSteps.map((s) => s.name));
           setCurrentStepIndex(0);
         }
+        // Preview mode: walk the workflow client-side, never touch the API.
+        // Mirrors the server-side first-step calculation so designers see
+        // exactly what a real session would render at step 0.
+        if (previewMode) {
+          if (!wf?.steps || wf.steps.length === 0) {
+            toast({ title: 'Nothing to preview', description: 'Workflow has no steps.', variant: 'destructive' });
+            return;
+          }
+          const orderedSteps = [...wf.steps].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          const first = orderedSteps[0];
+          setSessionId(PREVIEW_SESSION_ID);
+          setCurrentStep({
+            step_id: first.step_id,
+            name: first.name,
+            step_type: first.step_type,
+            config: first.config ?? {},
+            order: first.order,
+            index: 0,
+          });
+          setStepResults([]);
+          setPayload({});
+          return;
+        }
         // thread on_behalf_of through to the session
         // create call so _complete_session's auto-subscribe persists OBO on
         // the resulting subscription record.
@@ -388,7 +440,7 @@ export default function ApprovalWizardDialog({
         setLoading(false);
       }
     },
-    [entityType, entityId, completionAction, onBehalfOf, post, toast, workflows],
+    [entityType, entityId, completionAction, onBehalfOf, post, toast, workflows, previewMode],
   );
 
   useEffect(() => {
@@ -499,6 +551,64 @@ export default function ApprovalWizardDialog({
 
   const submitStep = useCallback(async () => {
     if (!sessionId || !currentStep) return;
+    // Preview mode: walk the workflow's on_pass graph locally. Mirrors the
+    // server-side logic in agreement_wizard_manager.submit_step() (line 519+
+    // in the backend) — terminal step (no on_pass) or a PASS step with no
+    // outgoing edges → "complete". No API call.
+    if (previewMode) {
+      setLoading(true);
+      try {
+        const wf = workflows.find((w) => w.steps?.some((s) => s.step_id === currentStep.step_id));
+        if (!wf?.steps) return;
+        const submissionPayload = currentStep.step_type === 'user_action' ? payload : stepValidation.payload;
+        if (currentStep.step_type === 'user_action' && submissionPayload && typeof submissionPayload === 'object') {
+          collectedFieldsRef.current = { ...collectedFieldsRef.current, ...submissionPayload };
+        }
+        // Walk on_pass forward, skipping non-visual + pass/fail terminal steps
+        // until we land on a visual step or run out. We don't auto-collapse
+        // non-visual steps in one tick because the auto-advance effect below
+        // already handles them — it will fire once we set the next step.
+        const currentDef = wf.steps.find((s) => s.step_id === currentStep.step_id);
+        const nextId = currentDef?.on_pass ?? null;
+        const nextDef = nextId ? wf.steps.find((s) => s.step_id === nextId) : null;
+        const terminal =
+          !nextDef ||
+          (nextDef.step_type === 'pass' && !nextDef.on_pass && !nextDef.on_fail);
+        if (terminal) {
+          setCompleteResult({ agreement_id: null, pdf_storage_path: null, pdf_url: null });
+          setCurrentStep(null);
+          toast({ title: 'Preview complete', description: 'No agreement was created and no notifications were sent.' });
+          return;
+        }
+        // Advance progress only for visual next steps (matches the non-preview
+        // branch's behavior at line ~529 in the original submitStep).
+        const visualSteps = wf.steps
+          .filter((s) => !NON_VISUAL_STEP_TYPES.has(s.step_type) && s.step_type !== 'pass' && s.step_type !== 'fail');
+        const nextVisualIdx = visualSteps.findIndex((s) => s.step_id === nextDef.step_id);
+        if (nextVisualIdx >= 0) setCurrentStepIndex(nextVisualIdx);
+        setCurrentStep({
+          step_id: nextDef.step_id,
+          name: nextDef.name,
+          step_type: nextDef.step_type,
+          config: nextDef.config ?? {},
+          order: nextDef.order,
+        });
+        setPayload({});
+        setScrolledToEnd(false);
+        setAcknowledged(false);
+        setChecklistState({});
+        setCoSigners([]);
+        setCoSignerInput('');
+        setOboMode('self');
+        setOboGroup('');
+        setOboOther('');
+        setOboOtherType('group');
+        setOboJustification('');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     setLoading(true);
     try {
       const submissionPayload = currentStep.step_type === 'user_action' ? payload : stepValidation.payload;
@@ -547,7 +657,7 @@ export default function ApprovalWizardDialog({
     } finally {
       setLoading(false);
     }
-  }, [sessionId, currentStep, payload, stepValidation, post, toast, onComplete, onOpenChange]);
+  }, [sessionId, currentStep, payload, stepValidation, post, toast, onComplete, onOpenChange, previewMode, workflows]);
 
   /** Auto-advance non-visual steps (persist_agreement, generate_pdf, deliver). */
   useEffect(() => {
@@ -569,6 +679,13 @@ export default function ApprovalWizardDialog({
       onOpenChange(false);
       return;
     }
+    // Preview mode never persists a session, so there's nothing to abort
+    // server-side — just close the dialog quietly.
+    if (previewMode) {
+      toast({ title: 'Preview cancelled', variant: 'default' });
+      onOpenChange(false);
+      return;
+    }
     setLoading(true);
     try {
       await post(`/api/approvals/sessions/${sessionId}/abort`, {});
@@ -581,12 +698,14 @@ export default function ApprovalWizardDialog({
   };
 
   const handleDialogOpenChange = (open: boolean) => {
-    if (!open && completeResult) {
-      // Closing after completion — fire onComplete
+    if (!open && completeResult && !previewMode) {
+      // Closing after completion — fire onComplete. Preview never fires
+      // onComplete because nothing was persisted; the caller would otherwise
+      // believe an agreement was created.
       onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path, { ...collectedFieldsRef.current });
     } else if (!open && !completeResult) {
       // User closed via X or escape mid-flow — treat as cancel
-      toast({ title: 'Cancelled', variant: 'default' });
+      toast({ title: previewMode ? 'Preview cancelled' : 'Cancelled', variant: 'default' });
     }
     onOpenChange(open);
   };
@@ -616,9 +735,19 @@ export default function ApprovalWizardDialog({
     <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Approval wizard</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Approval wizard
+            {previewMode && (
+              <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+                <Eye className="h-3 w-3" />
+                Preview
+              </Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
-            {!sessionId ? 'Choose an approval workflow to run for this entity.' : currentStep ? `Step: ${currentStep.name}` : completeResult ? 'Completed.' : 'Loading\u2026'}
+            {previewMode ? (
+              'Dry run \u2014 nothing is persisted and no notifications are sent.'
+            ) : !sessionId ? 'Choose an approval workflow to run for this entity.' : currentStep ? `Step: ${currentStep.name}` : completeResult ? 'Completed.' : 'Loading\u2026'}
           </DialogDescription>
         </DialogHeader>
 
@@ -646,7 +775,7 @@ export default function ApprovalWizardDialog({
         )}
 
         {/* Contextual header — shown when session is active */}
-        {sessionId && !completeResult && entityName && (
+        {sessionId && !completeResult && entityName && !previewMode && (
           <p className="text-sm text-muted-foreground px-1">
             Complete the following before {actionLabel.toLowerCase()} to <strong>{entityName}</strong>
           </p>
@@ -654,11 +783,15 @@ export default function ApprovalWizardDialog({
 
         {completeResult && (
           <div className="space-y-2 py-4">
-            <p className="text-sm text-muted-foreground">Agreement recorded.</p>
-            {completeResult.agreement_id && (
+            <p className="text-sm text-muted-foreground">
+              {previewMode
+                ? 'Preview complete. No agreement was created and no notifications were sent.'
+                : 'Agreement recorded.'}
+            </p>
+            {!previewMode && completeResult.agreement_id && (
               <p className="text-xs text-muted-foreground">Agreement ID: {completeResult.agreement_id}</p>
             )}
-            {completeResult.pdf_url && (
+            {!previewMode && completeResult.pdf_url && (
               <Button
                 variant="outline"
                 size="sm"
@@ -670,7 +803,9 @@ export default function ApprovalWizardDialog({
             )}
             <DialogFooter>
               <Button onClick={() => {
-                onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path, { ...collectedFieldsRef.current });
+                if (!previewMode) {
+                  onComplete?.(completeResult.agreement_id, completeResult.pdf_storage_path, { ...collectedFieldsRef.current });
+                }
                 onOpenChange(false);
               }}>Close</Button>
             </DialogFooter>
@@ -705,10 +840,21 @@ export default function ApprovalWizardDialog({
           <div className="flex flex-col items-center justify-center gap-3 py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              {currentStep.step_type === 'persist_agreement' ? 'Saving agreement...' :
-               currentStep.step_type === 'generate_pdf' ? 'Generating document...' :
-               currentStep.step_type === 'deliver' ? 'Sending notifications...' :
-               'Finalizing...'}
+              {previewMode ? (
+                <>
+                  {currentStep.step_type === 'persist_agreement' ? 'Would save agreement' :
+                   currentStep.step_type === 'generate_pdf' ? 'Would generate document' :
+                   currentStep.step_type === 'deliver' ? 'Would send notifications' :
+                   'Would finalize'} — skipped in preview
+                </>
+              ) : (
+                <>
+                  {currentStep.step_type === 'persist_agreement' ? 'Saving agreement...' :
+                   currentStep.step_type === 'generate_pdf' ? 'Generating document...' :
+                   currentStep.step_type === 'deliver' ? 'Sending notifications...' :
+                   'Finalizing...'}
+                </>
+              )}
             </p>
           </div>
         )}

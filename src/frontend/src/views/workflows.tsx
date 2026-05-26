@@ -31,6 +31,7 @@ import {
   Power,
   PowerOff,
   HelpCircle,
+  Eye,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -43,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ColumnDef, Column } from "@tanstack/react-table";
 import { useApi } from '@/hooks/use-api';
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
@@ -57,6 +59,7 @@ import type {
 } from '@/types/process-workflow';
 import { getTriggerDisplay } from '@/lib/workflow-labels';
 import { WorkflowExecutionDialog } from '@/components/workflows/workflow-execution-dialog';
+import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 import { RelativeDate } from '@/components/common/relative-date';
 
 interface WorkflowExecutionsResponse {
@@ -136,6 +139,9 @@ export default function Workflows() {
   const [deleteExecutionDialogOpen, setDeleteExecutionDialogOpen] = useState(false);
   const [executionToDelete, setExecutionToDelete] = useState<WorkflowExecution | null>(null);
   const [isActionInProgress, setIsActionInProgress] = useState(false);
+  // Preview wizard (issue #405): launched from the row-action menu on any
+  // approval workflow. Pure FE dry-run — no API session, no audit.
+  const [previewWorkflow, setPreviewWorkflow] = useState<ProcessWorkflow | null>(null);
 
   const loadWorkflows = useCallback(async () => {
     setIsLoadingWorkflows(true);
@@ -848,6 +854,12 @@ export default function Workflows() {
               <Pencil className="h-4 w-4 mr-2" />
               {canEdit ? t('common:actions.edit') : t('common:actions.view')}
             </DropdownMenuItem>
+            {row.original.workflow_type === 'approval' && (
+              <DropdownMenuItem onClick={() => setPreviewWorkflow(row.original)}>
+                <Eye className="h-4 w-4 mr-2" />
+                Preview wizard
+              </DropdownMenuItem>
+            )}
             {canEdit && (
               <>
                 <DropdownMenuItem onClick={() => {
@@ -976,13 +988,53 @@ export default function Workflows() {
       accessorKey: 'error_message',
       header: 'Error',
       enableSorting: false,
-      cell: ({ row }) => (
-        row.original.error_message ? (
-          <span className="text-sm text-destructive truncate max-w-[200px]" title={row.original.error_message}>
-            {row.original.error_message}
-          </span>
-        ) : null
-      ),
+      cell: ({ row }) => {
+        const errorMessage = row.original.error_message;
+        if (!errorMessage) return null;
+        // `truncate` is a no-op on inline spans, so a multi-line stack trace
+        // used to expand the row vertically; clamp to 2 lines on a block button
+        // and hoist the full text into a Popover for inspection / copy.
+        return (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="text-left text-sm text-destructive line-clamp-2 max-w-[280px] hover:underline focus:outline-none focus:ring-1 focus:ring-destructive/40 rounded-sm"
+                onClick={(e) => e.stopPropagation()}
+                title="Click to see full error"
+              >
+                {errorMessage}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="bottom"
+              className="w-[480px] max-w-[90vw] p-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b px-3 py-2">
+                <span className="text-xs font-medium text-muted-foreground">Error details</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(errorMessage).then(() => {
+                      toast({ title: 'Copied', description: 'Error copied to clipboard.' });
+                    });
+                  }}
+                >
+                  <Copy className="h-3 w-3 mr-1" />
+                  Copy
+                </Button>
+              </div>
+              <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap break-words p-3 text-xs text-destructive">
+                {errorMessage}
+              </pre>
+            </PopoverContent>
+          </Popover>
+        );
+      },
     },
     {
       id: 'actions',
@@ -1469,6 +1521,21 @@ export default function Workflows() {
         open={executionDialogOpen}
         onOpenChange={setExecutionDialogOpen}
       />
+
+      {/* Approval Wizard Preview (issue #405) — synthetic dry-run, no API
+          session, no agreement, no notifications. */}
+      {previewWorkflow && (
+        <ApprovalWizardDialog
+          isOpen={!!previewWorkflow}
+          onOpenChange={(open) => { if (!open) setPreviewWorkflow(null); }}
+          entityType="preview"
+          entityId="preview"
+          entityName={previewWorkflow.name}
+          preselectedWorkflowId={previewWorkflow.id}
+          autoStartWithPreselected
+          previewMode
+        />
+      )}
 
       {/* Delete Execution Confirmation Dialog */}
       <Dialog open={deleteExecutionDialogOpen} onOpenChange={setDeleteExecutionDialogOpen}>

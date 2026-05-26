@@ -42,7 +42,7 @@
     "@types/react-dropzone": "^5.1.0",
     "@types/react-sparklines": "^1.7.5",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "ajv": "^8.17.1",
+    "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

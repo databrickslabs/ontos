@@ -44,6 +44,7 @@ import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import EntityQualityPanel from '@/components/quality/entity-quality-panel';
 import LinkContractToPortDialog from '@/components/data-products/link-contract-to-port-dialog';
 import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog';
+import VersionNavigator from '@/components/common/version-navigator';
 import { Link2, Unlink, GitBranch } from 'lucide-react';
 import { AssetSelector } from '@/components/common/asset-selector';
 import { EntityTreePanel } from '@/components/common/entity-tree-panel';
@@ -1424,6 +1425,14 @@ export default function DataProductDetails() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to List
           </Button>
+
+          {/* Version Navigation — unified across contracts and products (PRD #442). */}
+          <VersionNavigator
+            entityKind="product"
+            currentEntityId={productId!}
+            currentVersion={product?.version}
+            onVersionChange={(id) => navigate(`${listPath}/${id}`)}
+          />
 
           {/* View Mode Toggle */}
           <div className="inline-flex items-stretch h-8 gap-px border rounded-md bg-background overflow-hidden">

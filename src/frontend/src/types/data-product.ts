@@ -283,8 +283,9 @@ export interface DataProduct {
 
   // Versioning fields
   draftOwnerId?: string; // Personal draft owner - if set, visible only to owner
-  parentProductId?: string; // Parent version ID for version lineage
-  baseName?: string; // Base name without version for grouping versions
+  parentProductId?: string; // Parent version ID for version lineage (edge)
+  versionFamilyId?: string; // PRD #442 — canonical family grouping key carried unchanged on every clone
+  baseName?: string; // Legacy base name; superseded by versionFamilyId
   changeSummary?: string; // Summary of changes in this version
 
   publication_scope?: string | null;

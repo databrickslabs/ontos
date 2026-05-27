@@ -18,7 +18,7 @@ class ContractCloner:
     - Maintains parent-child relationship
     - Regenerates IDs for all nested entities
     - Preserves structure and content
-    - Sets version metadata (base_name, parent_contract_id, change_summary)
+    - Sets version metadata (version_family_id, parent_contract_id, change_summary)
     """
 
     def __init__(self):
@@ -46,19 +46,29 @@ class ContractCloner:
         # Generate new ID for cloned contract
         new_contract_id = str(uuid4())
 
-        # Determine base name (strip version suffix if present)
+        # Keep the legacy base_name populated for back-compat (it's not the
+        # primary grouping key anymore — version_family_id is — but other
+        # readers may still inspect it).
         base_name = self._extract_base_name(source_contract_db.name, source_contract_db.version)
 
-        # Build cloned contract data
+        # The clone inherits the source's family id. Roots (which lacked
+        # the column historically) were backfilled in migration j1 to
+        # self.id, so source_contract_db.version_family_id is always set.
+        family_id = getattr(source_contract_db, 'version_family_id', None) or source_contract_db.id
+
+        # Build cloned contract data. Note: we no longer rewrite `name` to
+        # "<base>_v<version>" — the version is its own column, and the
+        # human-readable name should stay stable across the family.
         cloned_data = {
             'id': new_contract_id,
-            'name': f"{base_name}_v{new_version}",  # Append new version to base name
+            'name': source_contract_db.name,
             'version': new_version,
             'status': 'draft',  # New versions start as draft
             'publication_scope': 'none',
 
             # Semantic versioning fields
             'parent_contract_id': source_contract_db.id,
+            'version_family_id': family_id,
             'base_name': base_name,
             'change_summary': change_summary,
 

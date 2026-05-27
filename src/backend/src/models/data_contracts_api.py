@@ -444,6 +444,10 @@ class DataContractUpdate(BaseModel):
 
     # Semantic versioning fields
     parent_contract_id: Optional[str] = Field(None, alias='parentContractId')
+    # Canonical family grouping key. Defaults to self.id on initial create;
+    # carried forward unchanged on every clone. Optional here so the
+    # initial-create path can omit it (repo will default it).
+    version_family_id: Optional[str] = Field(None, alias='versionFamilyId')
     base_name: Optional[str] = Field(None, alias='baseName')
     change_summary: Optional[str] = Field(None, alias='changeSummary')
 
@@ -510,6 +514,7 @@ class DataContractRead(BaseModel):
 
     # Semantic versioning fields
     parentContractId: Optional[str] = Field(None, alias='parent_contract_id')
+    versionFamilyId: Optional[str] = Field(None, alias='version_family_id')
     baseName: Optional[str] = Field(None, alias='base_name')
     changeSummary: Optional[str] = Field(None, alias='change_summary')
 
@@ -526,6 +531,11 @@ class DataContractRead(BaseModel):
 
     class Config:
         populate_by_name = True
+        # Allow validating directly from ORM rows. Pre-existing endpoints
+        # (e.g. POST /data-contracts/{id}/clone) call
+        # ``DataContractRead.model_validate(db_row)`` and were returning 400
+        # under Pydantic v2 because this flag was missing.
+        from_attributes = True
 
 
 class DataContractSummary(BaseModel):
@@ -549,6 +559,7 @@ class DataContractSummary(BaseModel):
     created: Optional[str] = None
     updated: Optional[str] = None
     parentContractId: Optional[str] = Field(None, alias='parent_contract_id')
+    versionFamilyId: Optional[str] = Field(None, alias='version_family_id')
     baseName: Optional[str] = Field(None, alias='base_name')
     changeSummary: Optional[str] = Field(None, alias='change_summary')
     draftOwnerId: Optional[str] = Field(None, alias='draft_owner_id')

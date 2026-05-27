@@ -4708,71 +4708,42 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     def get_contract_versions(
         self,
         db,
-        contract_id: str
+        contract_id: str,
+        *,
+        user_email: Optional[str] = None,
+        is_admin: bool = False,
     ) -> list:
-        """Get all versions of a contract family.
-        
-        Returns contracts with the same base_name, sorted by creation date (newest first).
-        Falls back to parent-child relationships if no base_name matches.
-        
+        """Get every visible version of a contract's family, newest first.
+
+        Uses the canonical ``version_family_id`` grouping key (PRD #442):
+        one indexed equality lookup returns every member of the family.
+        Replaces the old ``base_name``/``name`` heuristic which left
+        cross-clone families fragmented depending on which clone path
+        produced them.
+
         Args:
             db: Database session
-            contract_id: Contract ID to get versions for
-            
+            contract_id: Any contract ID in the family.
+            user_email: Caller email (for personal-draft visibility).
+            is_admin: If True, bypasses the personal-draft filter.
+
         Returns:
-            List of DataContractDb objects representing all versions
-            
+            List of DataContractDb objects ordered by created_at DESC.
+
         Raises:
-            ValueError: If contract not found
+            ValueError: If contract not found.
         """
-        from src.utils.contract_cloner import ContractCloner
-        from sqlalchemy import or_
-        
-        # Get the source contract
         source_contract = data_contract_repo.get(db, id=contract_id)
         if not source_contract:
             raise ValueError("Contract not found")
-        
-        # Get base_name (either from field or extract from name)
-        base_name = source_contract.base_name
-        extracted_base_name = None
-        if not base_name:
-            # Extract from name if not set
-            cloner = ContractCloner()
-            extracted_base_name = cloner._extract_base_name(source_contract.name, source_contract.version or "1.0.0")
-            base_name = extracted_base_name
-        
-        # Find all contracts with same base_name (from DB column)
-        # OR same name (for legacy contracts without base_name set)
-        contracts = db.query(DataContractDb).filter(
-            or_(
-                DataContractDb.base_name == base_name,
-                # Also match by name for contracts without base_name set
-                DataContractDb.name == (extracted_base_name or source_contract.name)
-            )
-        ).order_by(DataContractDb.created_at.desc()).all()
-        
-        # If no matches, fall back to parent_contract_id relationships
-        if not contracts:
-            # Build version tree by following parent relationships
-            contracts = [source_contract]
-            # Find children
-            children = db.query(DataContractDb).filter(
-                DataContractDb.parent_contract_id == contract_id
-            ).order_by(DataContractDb.created_at.desc()).all()
-            contracts.extend(children)
-            # Find parent and its children
-            if source_contract.parent_contract_id:
-                parent = data_contract_repo.get(db, id=source_contract.parent_contract_id)
-                if parent and parent not in contracts:
-                    contracts.insert(0, parent)
-                    siblings = db.query(DataContractDb).filter(
-                        DataContractDb.parent_contract_id == parent.id,
-                        DataContractDb.id != contract_id
-                    ).order_by(DataContractDb.created_at.desc()).all()
-                    contracts.extend(siblings)
-        
-        return contracts
+
+        family_id = getattr(source_contract, 'version_family_id', None) or source_contract.id
+        return data_contract_repo.get_family_versions(
+            db,
+            family_id=family_id,
+            user_email=user_email,
+            is_admin=is_admin,
+        )
     
     def get_version_history(
         self,
@@ -4862,7 +4833,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not original:
             raise ValueError("Contract not found")
         
-        # Create clone with new version
+        # Create clone with new version.
+        # parent_contract_id encodes lineage; version_family_id is inherited
+        # so the whole family is reachable via one indexed equality lookup.
+        # Previously neither was set on this lightweight path, which caused
+        # the detail-view version selector to hide itself (see PRD #442).
         clone = DataContractDb(
             name=original.name,
             version=new_version,
@@ -4876,6 +4851,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             description_purpose=original.description_purpose,
             description_limitations=original.description_limitations,
             domain_id=original.domain_id,
+            parent_contract_id=original.id,
+            version_family_id=original.version_family_id,
             created_by=current_user,
             updated_by=current_user,
         )

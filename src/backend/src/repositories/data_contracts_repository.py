@@ -79,11 +79,24 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
     def create(self, db: Session, *, obj_in: Union[Dict[str, Any], DataContractDb]) -> DataContractDb:
         try:
             if isinstance(obj_in, DataContractDb):
+                # Defaulting: every contract belongs to exactly one family.
+                # If the caller didn't supply one (this is an initial create,
+                # not a clone), make the row its own family root.
+                if obj_in.id is None:
+                    from uuid import uuid4
+                    obj_in.id = str(uuid4())
+                if obj_in.version_family_id is None:
+                    obj_in.version_family_id = obj_in.id
                 db.add(obj_in)
                 db.flush()
                 db.refresh(obj_in)
                 return obj_in
             payload: Dict[str, Any] = dict(obj_in)
+            if not payload.get('id'):
+                from uuid import uuid4
+                payload['id'] = str(uuid4())
+            if not payload.get('version_family_id'):
+                payload['version_family_id'] = payload['id']
             db_obj = self.model(**payload)
             db.add(db_obj)
             db.flush()
@@ -91,6 +104,142 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
             return db_obj
         except Exception as e:
             logger.error(f"Error creating DataContractDb: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    # ---- Version-family lookups (PRD #442) ----
+
+    def get_family_versions(
+        self,
+        db: Session,
+        *,
+        family_id: str,
+        user_email: Optional[str] = None,
+        is_admin: bool = False,
+    ) -> List[DataContractDb]:
+        """Return every version in a family that's visible to the caller, newest first.
+
+        Visibility rules:
+          - Personal drafts (draft_owner_id IS NOT NULL) are visible only to
+            their owner, regardless of role.
+          - Admins see everything; other users see all non-personal-draft rows.
+
+        Args:
+            db: Database session
+            family_id: version_family_id to look up (every row in a family
+                       carries this same UUID — see PRD #442).
+            user_email: Caller's email/username (used for personal-draft
+                        ownership check).
+            is_admin: If True, bypasses the personal-draft filter entirely.
+
+        Returns:
+            List of DataContractDb rows ordered by created_at DESC.
+        """
+        try:
+            query = db.query(self.model).filter(self.model.version_family_id == family_id)
+            if not is_admin:
+                # Hide other users' personal drafts.
+                query = query.filter(
+                    or_(
+                        self.model.draft_owner_id.is_(None),
+                        self.model.draft_owner_id == user_email,
+                    )
+                )
+            return query.order_by(self.model.created_at.desc()).all()
+        except Exception as e:
+            logger.error(f"Error fetching family versions for {family_id}: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def list_family_representatives(
+        self,
+        db: Session,
+        *,
+        user_email: Optional[str] = None,
+        is_admin: bool = False,
+        project_id: Optional[str] = None,
+        include_history: bool = False,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[DataContractDb]:
+        """List one row per family (latest visible representative), or all
+        rows if include_history is True.
+
+        Representative-pick rules:
+          - For each family, choose the most recently created row that
+            passes the visibility filter (personal drafts hidden from
+            non-owners; project filter applied for non-admins).
+
+        Args:
+            db: Database session
+            user_email: Caller's email for personal-draft visibility
+            is_admin: If True, bypasses visibility filters
+            project_id: Optional project scope (non-admins see only project +
+                        unassigned rows)
+            include_history: If True, returns all visible rows flat (no
+                             family collapse). Use for "Show all versions".
+            skip / limit: Pagination
+        """
+        from sqlalchemy import func
+
+        try:
+            base_filters = []
+            if not is_admin:
+                base_filters.append(
+                    or_(
+                        self.model.draft_owner_id.is_(None),
+                        self.model.draft_owner_id == user_email,
+                    )
+                )
+                if project_id:
+                    base_filters.append(
+                        or_(
+                            self.model.project_id == project_id,
+                            self.model.project_id.is_(None),
+                        )
+                    )
+
+            if include_history:
+                query = db.query(self.model)
+                if base_filters:
+                    query = query.filter(*base_filters)
+                return (
+                    query.order_by(
+                        self.model.version_family_id,
+                        self.model.created_at.desc(),
+                    )
+                    .offset(skip)
+                    .limit(limit)
+                    .all()
+                )
+
+            # Window function: rank rows within each family newest-first;
+            # pick rank 1. Postgres supports ROW_NUMBER() OVER (...).
+            rn = (
+                func.row_number()
+                .over(
+                    partition_by=self.model.version_family_id,
+                    order_by=self.model.created_at.desc(),
+                )
+                .label("_family_rn")
+            )
+            ranked = db.query(self.model.id.label("_id"), rn)
+            if base_filters:
+                ranked = ranked.filter(*base_filters)
+            ranked_sq = ranked.subquery()
+            query = (
+                db.query(self.model)
+                .join(ranked_sq, self.model.id == ranked_sq.c._id)
+                .filter(ranked_sq.c._family_rn == 1)
+            )
+            return (
+                query.order_by(self.model.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+                .all()
+            )
+        except Exception as e:
+            logger.error(f"Error listing family representatives: {e}", exc_info=True)
             db.rollback()
             raise
 

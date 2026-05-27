@@ -1780,6 +1780,59 @@ async def create_data_product(
             details=details_for_audit.copy()
         )
 
+@router.get("/data-products/{product_id}/versions", response_model=List[dict])
+async def get_data_product_versions(
+    product_id: str,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """Get every visible version of a product's family, newest first.
+
+    Grouped by ``version_family_id`` (PRD #442): one indexed equality
+    lookup returns every member, regardless of which clone path produced
+    them. Personal drafts owned by other users are hidden.
+    """
+    try:
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        user_email = current_user.username if current_user else None
+        is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
+        products = manager.get_product_versions(
+            db=db,
+            product_id=product_id,
+            user_email=user_email,
+            is_admin=is_admin,
+        )
+        # Hand back a tight shape matching the unified VersionSelector's
+        # type — avoids loading every product relationship just to render
+        # a dropdown.
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "version": p.version,
+                "status": p.status,
+                "versionFamilyId": p.version_family_id,
+                "parentProductId": p.parent_product_id,
+                "baseName": p.base_name,
+                "changeSummary": p.change_summary,
+                "draftOwnerId": p.draft_owner_id,
+                "publicationScope": getattr(p, "publication_scope", None) or "none",
+                "createdAt": p.created_at.isoformat() if p.created_at else None,
+                "updatedAt": p.updated_at.isoformat() if p.updated_at else None,
+            }
+            for p in products
+        ]
+    except ValueError as ve:
+        logger.error("Validation error fetching product versions for %s: %s", product_id, ve)
+        raise HTTPException(status_code=404, detail="Product not found")
+    except Exception:
+        logger.error("Error fetching product versions for %s", product_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch product versions")
+
+
 @router.post("/data-products/{product_id}/versions", response_model=DataProduct, status_code=201)
 async def create_data_product_version(
     product_id: str, # This is the original product ID

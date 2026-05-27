@@ -376,7 +376,11 @@ class DataProduct(BaseModel):
     # Versioning fields
     draft_owner_id: Optional[str] = Field(None, alias="draftOwnerId", description="Personal draft owner - if set, visible only to owner")
     parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")
-    base_name: Optional[str] = Field(None, alias="baseName", description="Base name without version for grouping versions")
+    # Canonical family grouping key (PRD #442). One indexed equality lookup
+    # returns every version of the family. Defaults to self.id on initial
+    # create; carried forward unchanged on every clone.
+    version_family_id: Optional[str] = Field(None, alias="versionFamilyId", description="Canonical family grouping key shared across every version of the family")
+    base_name: Optional[str] = Field(None, alias="baseName", description="Legacy base name; superseded by versionFamilyId. Kept for back-compat.")
     change_summary: Optional[str] = Field(None, alias="changeSummary", description="Summary of changes in this version")
 
     # Publication fields
@@ -497,6 +501,9 @@ class DataProductCreate(BaseModel):
 
     # Versioning
     parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")
+    # Optional on create — repo defaults to self.id if omitted. Managers
+    # explicitly pass source.version_family_id when cloning new versions.
+    version_family_id: Optional[str] = Field(None, alias="versionFamilyId", description="Canonical family grouping key; defaults to self.id on initial create")
     # The following three columns exist on DataProductDb but were missing
     # from the create schema, so Pydantic v2 silently stripped them from
     # incoming POSTs (model_config does not set extra="allow"). The

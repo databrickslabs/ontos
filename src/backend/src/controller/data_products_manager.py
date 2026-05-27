@@ -1430,8 +1430,13 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         new_product_data['id'] = str(uuid.uuid4())
         new_product_data['version'] = request.new_version
 
-        # Link new version back to the original product
+        # Link new version back to the original product (lineage edge) and
+        # propagate the family id (set-membership). PRD #442.
         new_product_data['parent_product_id'] = original_product_id
+        new_product_data['version_family_id'] = (
+            getattr(original_product, 'version_family_id', None)
+            or original_product_id
+        )
 
         # Reset status to DRAFT
         new_product_data['status'] = DataProductStatus.DRAFT.value
@@ -1453,6 +1458,42 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except SQLAlchemyError as e:
             logger.error(f"Database error creating new version: {e}")
             raise
+
+    def get_product_versions(
+        self,
+        db: Session,
+        product_id: str,
+        *,
+        user_email: Optional[str] = None,
+        is_admin: bool = False,
+    ) -> List["DataProductDb"]:
+        """Get every visible version of a product's family, newest first.
+
+        Uses the canonical ``version_family_id`` grouping key (PRD #442).
+        Personal drafts owned by other users are hidden unless ``is_admin``.
+
+        Args:
+            db: Database session
+            product_id: Any product ID in the family.
+            user_email: Caller email (personal-draft owner check).
+            is_admin: If True, bypasses the personal-draft filter.
+
+        Returns:
+            List of DataProductDb rows ordered by created_at DESC.
+
+        Raises:
+            ValueError: If product not found.
+        """
+        source = data_product_repo.get(db, id=product_id)
+        if not source:
+            raise ValueError("Product not found")
+        family_id = getattr(source, 'version_family_id', None) or source.id
+        return data_product_repo.get_family_versions(
+            db,
+            family_id=family_id,
+            user_email=user_email,
+            is_admin=is_admin,
+        )
 
     # ==================== Versioned Editing Methods ====================
 
@@ -1514,6 +1555,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Extract base_name from source (strip version suffix if present)
             base_name = source_product.base_name or source_product.name
             
+            # Carry the family id forward unchanged on clone (PRD #442).
+            family_id = getattr(source_product, 'version_family_id', None) or source_product.id
+
             # Create new product with core fields
             new_product = DataProductDb(
                 id=new_id,
@@ -1530,6 +1574,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # Versioning fields
                 draft_owner_id=current_user if as_personal_draft else None,
                 parent_product_id=product_id,
+                version_family_id=family_id,
                 base_name=base_name,
                 change_summary=change_summary,
             )

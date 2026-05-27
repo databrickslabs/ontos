@@ -49,7 +49,7 @@ import LinkProductToContractDialog from '@/components/data-contracts/link-produc
 import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog'
 import CustomPropertyFormDialog from '@/components/data-contracts/custom-property-form-dialog'
 import CommitDraftDialog from '@/components/data-contracts/commit-draft-dialog'
-import VersionSelector from '@/components/data-contracts/version-selector'
+import VersionNavigator from '@/components/common/version-navigator'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
 import { useCopilotContext } from '@/hooks/use-copilot-context'
@@ -1685,36 +1685,14 @@ export default function DataContractDetails() {
             Back to List
           </Button>
 
-          {/* Version Navigation */}
-          {versions.length > 1 && (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={!prevVersion}
-                onClick={() => prevVersion && navigate(`${listPath}/${prevVersion.id}`)}
-                title={prevVersion ? `Previous version: ${prevVersion.version}` : 'No previous version'}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <VersionSelector
-                currentContractId={contractId!}
-                currentVersion={contract?.version}
-                onVersionChange={(id) => navigate(`${listPath}/${id}`)}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={!nextVersion}
-                onClick={() => nextVersion && navigate(`${listPath}/${nextVersion.id}`)}
-                title={nextVersion ? `Next version: ${nextVersion.version}` : 'No next version'}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+          {/* Version Navigation — unified across contracts and products (PRD #442). */}
+          <VersionNavigator
+            entityKind="contract"
+            currentEntityId={contractId!}
+            currentVersion={contract?.version}
+            onVersionChange={(id) => navigate(`${listPath}/${id}`)}
+          />
+
 
           {/* View Mode Toggle */}
           <div className="inline-flex items-stretch h-8 gap-px border rounded-md bg-background overflow-hidden">

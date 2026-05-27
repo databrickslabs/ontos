@@ -90,11 +90,19 @@ async def get_contracts(
     db: DBSessionDep,
     domain_id: Optional[str] = None,
     project_id: Optional[str] = None,
+    include_history: bool = False,
     current_user: CurrentUserDep = None,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all data contracts with basic ODCS structure and optional project filtering"""
+    """Get all data contracts with basic ODCS structure and optional project filtering.
+
+    ``include_history`` (PRD #442): reserved for the family-collapse rollout.
+    Until the frontend opts into the collapse, the param is accepted but the
+    response shape is unchanged (every version row returned). When the
+    frontend is ready, the manager will switch on this flag to return one
+    row per ``version_family_id`` by default and the full set when ``True``.
+    """
     try:
         # Check if user is admin
         from src.common.authorization import is_user_admin
@@ -103,7 +111,11 @@ async def get_contracts(
         user_groups = current_user.groups if current_user else []
         is_admin = is_user_admin(user_groups, settings)
 
-        logger.info(f"User {current_user.email if current_user else 'unknown'} fetching contracts (project_id: {project_id}, domain_id: {domain_id}, is_admin: {is_admin})")
+        logger.info(
+            f"User {current_user.email if current_user else 'unknown'} fetching contracts "
+            f"(project_id: {project_id}, domain_id: {domain_id}, is_admin: {is_admin}, "
+            f"include_history: {include_history})"
+        )
 
         result = manager.list_contracts_from_db(
             db,
@@ -3554,17 +3566,48 @@ async def delete_contract_tag(
 async def get_contract_versions(
     contract_id: str,
     db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all versions of a contract family (same base_name), sorted newest first."""
-    try:
-        # Business logic now in manager
-        contracts = manager.get_contract_versions(db=db, contract_id=contract_id)
+    """Get every visible version of a contract's family, newest first.
 
-        # Convert to API model
-        from src.models.data_contracts_api import DataContractRead
-        return [DataContractRead.model_validate(c).model_dump() for c in contracts]
+    Grouped by ``version_family_id`` (PRD #442): one indexed equality
+    lookup returns every member, regardless of which clone path produced
+    them. Personal drafts owned by other users are hidden.
+    """
+    try:
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        user_email = current_user.username if current_user else None
+        is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
+        contracts = manager.get_contract_versions(
+            db=db,
+            contract_id=contract_id,
+            user_email=user_email,
+            is_admin=is_admin,
+        )
+
+        # Map directly to a shape matching the frontend VersionSelector's
+        # ContractVersion type — keeps the response tight and skips the
+        # heavy eager-loads that DataContractRead would need.
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "version": c.version,
+                "status": c.status,
+                "versionFamilyId": c.version_family_id,
+                "parentContractId": c.parent_contract_id,
+                "baseName": c.base_name,
+                "changeSummary": c.change_summary,
+                "draftOwnerId": c.draft_owner_id,
+                "publicationScope": getattr(c, "publication_scope", None) or "none",
+                "createdAt": c.created_at.isoformat() if c.created_at else None,
+                "updatedAt": c.updated_at.isoformat() if c.updated_at else None,
+            }
+            for c in contracts
+        ]
     except ValueError as e:
         logger.error("Validation error fetching contract versions for %s: %s", contract_id, e)
         raise HTTPException(status_code=404, detail="Contract not found")

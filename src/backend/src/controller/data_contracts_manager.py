@@ -5929,7 +5929,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     # --- Contract Listing and API Model Building ---
 
     def _query_contracts(self, db, domain_id=None, project_id=None, is_admin=False, latest_only=True):
-        """Shared query logic for listing contracts. Returns list of DataContractDb."""
+        """Shared query logic for listing contracts. Returns (contracts, family_counts).
+
+        ``latest_only`` (default True) collapses every ``version_family_id``
+        down to the row with the newest ``created_at``. ``family_counts``
+        maps each surviving family_id → total rows in the family from the
+        visibility-filtered result set, so callers can render a "N versions"
+        badge without a second query. See PRD #442.
+        """
         if domain_id:
             query = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id)
             if not is_admin and project_id:
@@ -5946,17 +5953,29 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 is_admin=is_admin
             )
 
+        # Always compute family sizes from the visibility-filtered set so the
+        # collapsed and the expanded list views report consistent counts.
+        family_counts: dict = {}
+        for c in contracts:
+            fid = c.version_family_id or c.id
+            family_counts[fid] = family_counts.get(fid, 0) + 1
+
         if latest_only:
             original_count = len(contracts)
-            seen_base_names: dict = {}
+            # Family-id is the canonical group key (PRD #442). Falls back to
+            # row id for any legacy row that somehow escaped the backfill,
+            # which degrades to "treat as its own family" — never collapses
+            # unrelated rows together.
+            picked: dict = {}
             for c in contracts:
-                key = c.base_name or c.name
-                if key not in seen_base_names or c.created_at > seen_base_names[key].created_at:
-                    seen_base_names[key] = c
-            contracts = list(seen_base_names.values())
-            logger.debug(f"Filtered from {original_count} to {len(contracts)} latest versions (grouped by base_name)")
+                key = c.version_family_id or c.id
+                current = picked.get(key)
+                if current is None or (c.created_at and (current.created_at is None or c.created_at > current.created_at)):
+                    picked[key] = c
+            contracts = list(picked.values())
+            logger.debug(f"Collapsed {original_count} → {len(contracts)} rows (one per version_family_id)")
 
-        return contracts
+        return contracts, family_counts
 
     def list_contracts_from_db(
         self,
@@ -5964,14 +5983,33 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         domain_id: Optional[str] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False,
-        latest_only: bool = True
+        latest_only: bool = True,
+        include_history: bool = False,
     ):
-        """List data contracts as lightweight summaries (no schema/quality/comments)."""
-        contracts = self._query_contracts(db, domain_id, project_id, is_admin, latest_only)
-        return self._build_contract_summaries(db, contracts)
+        """List data contracts as lightweight summaries (no schema/quality/comments).
 
-    def _build_contract_summaries(self, db, contracts):
-        """Build lightweight summary models for a list of contracts with batched lookups."""
+        When ``include_history`` is True the version-family collapse is
+        skipped and every visible row is returned. ``latest_only`` is the
+        legacy switch retained for callers that bypass the route layer; the
+        route always passes ``latest_only = not include_history``.
+        """
+        if include_history:
+            latest_only = False
+        contracts, family_counts = self._query_contracts(
+            db, domain_id, project_id, is_admin, latest_only
+        )
+        return self._build_contract_summaries(
+            db, contracts, family_counts=family_counts if latest_only else None
+        )
+
+    def _build_contract_summaries(self, db, contracts, family_counts=None):
+        """Build lightweight summary models for a list of contracts with batched lookups.
+
+        ``family_counts`` (PRD #442): optional ``{version_family_id → int}``
+        map. When provided, each summary gets a ``versionCount`` field so the
+        list UI can render a "N versions" badge without an extra round-trip.
+        Pass ``None`` for the expanded list view to omit the field entirely.
+        """
         from src.models.data_contracts_api import ContractDescription, DataContractSummary
         from src.repositories.data_domain_repository import data_domain_repo
         from src.repositories.tags_repository import entity_tag_repo
@@ -6057,6 +6095,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     limitations=c.description_limitations
                 )
 
+            family_id = getattr(c, "version_family_id", None) or c.id
+            version_count = (
+                family_counts.get(family_id) if family_counts is not None else None
+            )
+
             results.append(DataContractSummary(
                 id=c.id,
                 name=c.name,
@@ -6076,6 +6119,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 tags=tags_map.get(c.id, []),
                 created=c.created_at.isoformat() if c.created_at else None,
                 updated=c.updated_at.isoformat() if c.updated_at else None,
+                parent_contract_id=getattr(c, "parent_contract_id", None),
+                version_family_id=family_id,
+                base_name=getattr(c, "base_name", None),
+                change_summary=getattr(c, "change_summary", None),
+                draft_owner_id=getattr(c, "draft_owner_id", None),
+                version_count=version_count,
                 schemaObjectCount=schema_counts.get(c.id, 0),
                 publication_scope=getattr(c, "publication_scope", None) or "none",
                 published_at=c.published_at.isoformat() if getattr(c, "published_at", None) else None,

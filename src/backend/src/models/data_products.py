@@ -382,6 +382,10 @@ class DataProduct(BaseModel):
     version_family_id: Optional[str] = Field(None, alias="versionFamilyId", description="Canonical family grouping key shared across every version of the family")
     base_name: Optional[str] = Field(None, alias="baseName", description="Legacy base name; superseded by versionFamilyId. Kept for back-compat.")
     change_summary: Optional[str] = Field(None, alias="changeSummary", description="Summary of changes in this version")
+    # Count of versions in this row's family that are visible to the caller.
+    # Only populated by the collapsed list view; None on detail responses
+    # and on the expanded list view. See PRD #442.
+    version_count: Optional[int] = Field(None, alias="versionCount", description="Number of visible versions in this family (collapsed list view only)")
 
     # Publication fields
     publication_scope: Optional[str] = Field("none", description="Publication scope: none, domain, organization, external")

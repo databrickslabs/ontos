@@ -30,6 +30,9 @@ import { useDomains } from '@/hooks/use-domains';
 import { useProjectContext } from '@/stores/project-store';
 import CertificationBadge from '@/components/common/certification-badge';
 import PublicationBadge from '@/components/common/publication-badge';
+import VersionCountBadge from '@/components/common/version-count-badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import type { CertificationLevel } from '@/types/lifecycle';
 
 // --- Helper Function Type Definition --- 
@@ -60,6 +63,10 @@ const checkApiResponse: CheckApiResponseFn = (response, name) => {
 export default function DataProducts() {
   const { t } = useTranslation(['data-products', 'common']);
   const [products, setProducts] = useState<DataProduct[]>([]);
+  // "Show all versions" toggle — flips include_history on the products list
+  // endpoint. Off (default) collapses each family to its newest visible
+  // version and surfaces a "N versions" badge per row. See PRD #442.
+  const [includeHistory, setIncludeHistory] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<DataProduct | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -117,11 +124,16 @@ export default function DataProducts() {
       setLoading(true);
       setError(null);
       try {
-        // Build URL with project context if available
-        let productsEndpoint = '/api/data-products';
+        // Build URL with project context and include_history flag (PRD #442).
+        const params = new URLSearchParams();
         if (hasProjectContext && currentProject) {
-          productsEndpoint += `?project_id=${currentProject.id}`;
+          params.set('project_id', currentProject.id);
         }
+        if (includeHistory) {
+          params.set('include_history', 'true');
+        }
+        const qs = params.toString();
+        const productsEndpoint = qs ? `/api/data-products?${qs}` : '/api/data-products';
 
         // Fetch products and dropdown values concurrently
         const [productsResp, statusesResp, ownersResp/*, typesResp*/] = await Promise.all([
@@ -171,7 +183,9 @@ export default function DataProducts() {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [get, canRead, permissionsLoading, setStaticSegments, setDynamicTitle, hasProjectContext, currentProject]);
+    // includeHistory in deps so toggling re-runs the initial fetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [get, canRead, permissionsLoading, setStaticSegments, setDynamicTitle, hasProjectContext, currentProject, includeHistory]);
 
   // Fetch user's subscriptions
   useEffect(() => {
@@ -229,11 +243,17 @@ export default function DataProducts() {
   const fetchProducts = async () => {
     if (!canRead) return;
     try {
-      // Build URL with project context if available
-      let endpoint = '/api/data-products';
+      // Mirror loadInitialData so a refetch after a create/delete keeps the
+      // same view mode (collapsed vs expanded) the user already had selected.
+      const params = new URLSearchParams();
       if (hasProjectContext && currentProject) {
-        endpoint += `?project_id=${currentProject.id}`;
+        params.set('project_id', currentProject.id);
       }
+      if (includeHistory) {
+        params.set('include_history', 'true');
+      }
+      const qs = params.toString();
+      const endpoint = qs ? `/api/data-products?${qs}` : '/api/data-products';
 
       const response = await get<DataProduct[]>(endpoint);
       const productsData = checkApiResponse(response, 'Products Refetch');
@@ -557,7 +577,21 @@ export default function DataProducts() {
           {t('table.version')} <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <Badge variant="secondary">{row.original.version}</Badge>,
+      cell: ({ row }) => {
+        const id = row.original.id
+        return (
+          <div className="flex items-center gap-1.5">
+            <Badge variant="secondary">{row.original.version}</Badge>
+            {/* Family badge — same UX as on contracts. Click routes into
+                the detail view where VersionNavigator handles version
+                navigation. See PRD #442. */}
+            <VersionCountBadge
+              count={row.original.versionCount}
+              onClick={() => id && navigate(`${pathname}/${id}`)}
+            />
+          </div>
+        )
+      },
     },
     {
       accessorKey: "outputPorts",
@@ -742,6 +776,19 @@ export default function DataProducts() {
               storageKey="data-products-sort"
               toolbarActions={
                 <>
+                  {/* Family-collapse toggle. Mirrors the contracts list view.
+                      See PRD #442. */}
+                  <div className="flex items-center gap-2 h-9 pr-2 border-r border-border">
+                    <Switch
+                      id="products-include-history"
+                      checked={includeHistory}
+                      onCheckedChange={setIncludeHistory}
+                      aria-label={t('versionFamily.showAllVersions', { defaultValue: 'Show all versions' })}
+                    />
+                    <Label htmlFor="products-include-history" className="text-xs text-muted-foreground cursor-pointer">
+                      {t('versionFamily.showAllVersions', { defaultValue: 'Show all versions' })}
+                    </Label>
+                  </div>
                   {/* My Subscriptions Filter Toggle */}
                   <Button
                     onClick={handleToggleMySubscriptions}

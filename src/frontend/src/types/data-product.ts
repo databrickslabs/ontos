@@ -287,6 +287,9 @@ export interface DataProduct {
   versionFamilyId?: string; // PRD #442 — canonical family grouping key carried unchanged on every clone
   baseName?: string; // Legacy base name; superseded by versionFamilyId
   changeSummary?: string; // Summary of changes in this version
+  // Number of visible versions in this row's family — only populated on the
+  // collapsed list view (include_history=false). See PRD #442.
+  versionCount?: number;
 
   publication_scope?: string | null;
   published_at?: string | null;

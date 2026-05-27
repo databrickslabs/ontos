@@ -246,6 +246,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         caller_email: Optional[str] = None,
         caller_team_ids: Optional[List[str]] = None,
         caller_project_ids: Optional[List[str]] = None,
+        include_history: bool = False,
     ) -> List[DataProductApi]:
         """List ODPS v1.0.0 data products.
 
@@ -281,9 +282,36 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 caller_team_ids=caller_team_ids,
                 caller_project_ids=caller_project_ids,
             )
+
+            # Family-aware collapse (PRD #442). Counts are computed from the
+            # visibility-filtered set so the badge reflects what the caller
+            # can actually navigate to. When include_history=True we keep
+            # every row but still attach the count so the UI can group rows.
+            family_counts: dict = {}
+            for p in products_db:
+                fid = getattr(p, "version_family_id", None) or p.id
+                family_counts[fid] = family_counts.get(fid, 0) + 1
+
+            if not include_history:
+                picked: dict = {}
+                for p in products_db:
+                    key = getattr(p, "version_family_id", None) or p.id
+                    current = picked.get(key)
+                    if current is None or (
+                        p.created_at and (current.created_at is None or p.created_at > current.created_at)
+                    ):
+                        picked[key] = p
+                products_db = list(picked.values())
+
             products_with_tags = []
             for product_db in products_db:
                 product_with_tags = self._load_product_with_tags(product_db)
+                fid = getattr(product_db, "version_family_id", None) or product_db.id
+                # Only emit a count on the collapsed view; on the expanded
+                # view the rows speak for themselves and a per-row count
+                # would be misleading.
+                if not include_history:
+                    product_with_tags.version_count = family_counts.get(fid)
                 products_with_tags.append(product_with_tags)
             return products_with_tags
         except SQLAlchemyError as e:

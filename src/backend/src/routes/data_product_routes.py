@@ -1612,6 +1612,7 @@ async def upload_data_products(
 async def get_data_products(
     request: Request,
     project_id: Optional[str] = None,
+    include_history: bool = False,
     current_user: CurrentUserDep = None,
     db: DBSessionDep = None,
     manager: DataProductsManager = Depends(get_data_products_manager),
@@ -1682,8 +1683,12 @@ async def get_data_products(
             caller_email=caller_email,
             caller_team_ids=caller_team_ids,
             caller_project_ids=caller_project_ids,
+            include_history=include_history,
         )
-        logger.info(f"Retrieved {len(products)} data products")
+        logger.info(
+            f"Retrieved {len(products)} data products "
+            f"(include_history={include_history})"
+        )
         return [p.model_dump() for p in products]
     except Exception as e:
         error_msg = f"Error retrieving data products: {e!s}"

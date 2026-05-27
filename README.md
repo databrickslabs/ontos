@@ -62,7 +62,7 @@ Ontos is designed to run as a **Databricks App**:
 
 ```bash
 # Clone the repository
-git clone https://github.com/larsgeorge/ontos.git
+git clone https://github.com/databrickslabs/ontos.git
 cd ontos
 
 # Install frontend dependencies

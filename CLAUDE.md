@@ -13,7 +13,7 @@ You are an expert in **Python, FastAPI, scalable API development, TypeScript, Re
 - Follow proper **naming conventions**:
   - For Python: use lowercase with underscores (e.g., `routers/user_routes.py`, `db_models/data_products.py`, `repositories/settings_repository.py`).
   - For TypeScript: use lowercase with dashes for directories and files (e.g., `components/auth-wizard`, `views/data-products.tsx`).
-- The project is ASF 2.0 licensed and open-source, hosted at https://github.com/larsgeorge/ontos
+- The project is ASF 2.0 licensed and open-source, hosted at https://github.com/databrickslabs/ontos
 
 ## Personal Style
 

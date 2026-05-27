@@ -48,7 +48,7 @@ Please be respectful and professional in all interactions. We're building a coll
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/larsgeorge/ontos.git
+   git remote add upstream https://github.com/databrickslabs/ontos.git
    ```
 
 ---

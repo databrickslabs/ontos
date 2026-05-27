@@ -10,9 +10,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from src.common.authorization import PermissionChecker
+from src.common.authorization import require_ontos_admin
 from src.common.dependencies import CurrentUserDep, DBSessionDep, AuditManagerDep, AuditCurrentUserDep
-from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.controller.mcp_tokens_manager import MCPTokensManager
 from src.models.mcp_tokens import (
@@ -32,8 +31,9 @@ def register_routes(app):
     app.include_router(router)
 
 
-# Require admin access for token management
-require_admin = PermissionChecker(feature_id="settings", required_level=FeatureAccessLevel.READ_WRITE)
+# MCP token management is admin-only. Gated on Ontos admin role membership
+# (AppRole.is_admin=True), not on settings:ADMIN — see #404 for context.
+require_admin = require_ontos_admin
 
 
 @router.post(

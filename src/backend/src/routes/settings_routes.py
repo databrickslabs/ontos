@@ -20,6 +20,10 @@ from ..common.dependencies import (
     AuditCurrentUserDep,
     DBSessionDep,
 )
+from ..common.authorization import get_user_details_from_sdk
+from ..common.manager_dependencies import get_auth_manager
+from ..controller.authorization_manager import AuthorizationManager
+from ..models.users import UserInfo
 from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
 from ..controller.notifications_manager import NotificationsManager
@@ -165,11 +169,34 @@ async def get_features_config(manager: SettingsManager = Depends(get_settings_ma
         raise HTTPException(status_code=500, detail="Failed to get features configuration")
 
 @router.get("/settings/roles", response_model=List[AppRole])
-async def list_roles(manager: SettingsManager = Depends(get_settings_manager)):
-    """List all application roles."""
+async def list_roles(
+    manager: SettingsManager = Depends(get_settings_manager),
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+):
+    """List application roles.
+
+    Ontos admins (members of an AppRole with ``is_admin=True``) receive the
+    full role catalog — required for the admin role-switcher impersonation
+    path and for Settings admin UI. Non-admins receive only roles whose
+    ``assigned_groups`` intersect their own groups (case-insensitive); this
+    is the set they may legitimately switch to via the membership-scoped
+    role switcher, and avoids leaking the full role catalog (see #404).
+    """
     try:
         roles = manager.list_app_roles()
-        return roles
+        if auth_manager.is_user_ontos_admin(user_details.groups):
+            return roles
+
+        user_group_set = {(g or '').lower() for g in (user_details.groups or [])}
+        if not user_group_set:
+            return []
+        scoped: List[AppRole] = []
+        for role in roles:
+            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
+            if role_groups and role_groups.intersection(user_group_set):
+                scoped.append(role)
+        return scoped
     except Exception as e:
         logger.error("Error listing roles", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list roles")

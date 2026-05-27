@@ -126,4 +126,45 @@ class AuthorizationManager:
         user_level = effective_permissions.get(feature_id, FeatureAccessLevel.NONE)
         has_perm = ACCESS_LEVEL_ORDER[user_level] >= ACCESS_LEVEL_ORDER[required_level]
         logger.debug(f"Permission check for feature '{feature_id}': Required='{required_level.value}', User has='{user_level.value}'. Granted: {has_perm}")
-        return has_perm 
+        return has_perm
+
+    def is_user_ontos_admin(self, user_groups: Optional[List[str]]) -> bool:
+        """Return True iff the user belongs to any AppRole flagged ``is_admin=True``.
+
+        Membership is determined by case-insensitive intersection between the
+        user's workspace groups and the role's ``assigned_groups``. This is the
+        canonical "Ontos admin" check used to gate admin-only capabilities such
+        as the role switcher (impersonation), the alpha-features toggle, MCP
+        token management, and the unrestricted view of ``/api/settings/roles``.
+
+        It is intentionally decoupled from ``settings:ADMIN``: a user may
+        administer Settings without being an Ontos admin, and vice versa.
+
+        Args:
+            user_groups: Caller's workspace groups (from SDK or identity headers).
+
+        Returns:
+            True if any role with ``is_admin=True`` has an assigned group that
+            matches one of the user's groups; False otherwise (including the
+            empty-groups case).
+        """
+        if not user_groups:
+            return False
+
+        user_group_set = {(g or '').lower() for g in user_groups}
+        if not user_group_set:
+            return False
+
+        try:
+            all_roles = self._settings_manager.list_app_roles()
+        except Exception:
+            logger.exception("is_user_ontos_admin: failed to load app roles; denying admin")
+            return False
+
+        for role in all_roles:
+            if not getattr(role, 'is_admin', False):
+                continue
+            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
+            if role_groups and role_groups.intersection(user_group_set):
+                return True
+        return False

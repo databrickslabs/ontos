@@ -70,7 +70,6 @@ export default function UserInfo() {
   const { showBeta, showAlpha, actions: visibilityActions } = useFeatureVisibilityStore();
   const {
       permissions,
-      actualPermissions,
       isLoading: permissionsLoading,
       availableRoles,
       appliedRoleId,
@@ -149,10 +148,11 @@ export default function UserInfo() {
     })();
   }, []);
 
-  // Determine if user can switch roles (use ACTUAL permissions, not overridden)
+  // Determine if user can switch roles. The admin gate (full impersonation across
+  // all roles) is now membership in an AppRole flagged is_admin — NOT settings:ADMIN.
+  // See #404: settings:ADMIN should only govern Settings administration, while admin-
+  // level capabilities like impersonation belong to the Ontos admin role.
   const isLocalDev = userInfo?.username === 'localdev';
-  const actualSettingsLevel = actualPermissions['settings'] ?? FeatureAccessLevel.NONE;
-  const isAdminActual = ACCESS_LEVEL_ORDER[actualSettingsLevel] >= ACCESS_LEVEL_ORDER[FeatureAccessLevel.ADMIN];
 
   // Membership-scoped role set: roles whose assigned_groups intersect the user's groups.
   // Fix for regression where end users belonging to 2+ roles could not switch between them —
@@ -164,6 +164,18 @@ export default function UserInfo() {
       if (!groups || groups.length === 0) return [];
       const groupSet = new Set(groups.map(g => (g || '').toLowerCase()));
       return availableRoles.filter(role =>
+          (role.assigned_groups || []).some(g => groupSet.has((g || '').toLowerCase()))
+      );
+  }, [userInfo?.groups, availableRoles]);
+
+  // Ontos admin = user belongs to any AppRole flagged is_admin (canonical check,
+  // mirrors AuthorizationManager.is_user_ontos_admin on the backend).
+  const isAdminActual = useMemo<boolean>(() => {
+      const groups = userInfo?.groups;
+      if (!groups || groups.length === 0) return false;
+      const groupSet = new Set(groups.map(g => (g || '').toLowerCase()));
+      return availableRoles.some(role =>
+          role.is_admin === true &&
           (role.assigned_groups || []).some(g => groupSet.has((g || '').toLowerCase()))
       );
   }, [userInfo?.groups, availableRoles]);

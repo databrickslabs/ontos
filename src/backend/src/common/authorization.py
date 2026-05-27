@@ -261,6 +261,33 @@ async def get_user_details_from_sdk(
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
+async def require_ontos_admin(
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+) -> UserInfo:
+    """FastAPI dependency that gates an endpoint on Ontos admin membership.
+
+    "Ontos admin" means the caller's workspace groups intersect the
+    ``assigned_groups`` of at least one ``AppRole`` flagged ``is_admin=True``.
+    This is distinct from ``settings:ADMIN`` (which only governs administration
+    of the Settings feature) and from workspace admin via
+    ``APP_ADMIN_DEFAULT_GROUPS`` (which gates moderation-style operations).
+
+    Use this for routes that grant capabilities beyond a single feature —
+    impersonation, MCP token management, full role catalog access, etc.
+    """
+    if not auth_manager.is_user_ontos_admin(user_details.groups):
+        logger.warning(
+            "Ontos admin required but caller '%s' is not in any is_admin role",
+            user_details.user or user_details.email,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ontos admin role required.",
+        )
+    return user_details
+
+
 async def get_user_groups(user_email: str) -> List[str]:
     """Get user groups for the given user email."""
     # Get settings directly instead of using dependency injection

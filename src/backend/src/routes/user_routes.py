@@ -197,11 +197,10 @@ async def set_role_override(
     always allowed.
     """
     role_id = payload.role_id
-    # Determine if caller has admin-level settings permissions (matches the UI's gate
-    # for "is admin actual"). Computed from groups so the override cannot bootstrap admin.
-    actual_perms = auth_manager.get_user_effective_permissions(user_details.groups or [])
-    settings_level = actual_perms.get('settings', FeatureAccessLevel.NONE)
-    caller_is_admin = settings_level == FeatureAccessLevel.ADMIN
+    # Determine if caller is an Ontos admin (member of an AppRole flagged is_admin).
+    # Computed from groups so the override cannot bootstrap admin, and intentionally
+    # decoupled from settings:ADMIN (see issue #404).
+    caller_is_admin = auth_manager.is_user_ontos_admin(user_details.groups)
 
     try:
         settings_manager.set_applied_role_override_for_user(

@@ -56,29 +56,44 @@ import UserInfo from './user-info';
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Admin-style impersonation is now gated on `is_admin` role membership (see #404),
+// not on `settings:ADMIN`. The fixture mirrors that: the canonical Admin role carries
+// is_admin=true, while a separate "Settings Admin" role grants settings:ADMIN without
+// admin powers — used by the regression case below.
 const adminRole = {
   id: 'role-admin',
   name: 'Admin',
   assigned_groups: ['admins'],
   feature_permissions: { settings: FeatureAccessLevel.ADMIN },
+  is_admin: true,
+};
+const settingsAdminRole = {
+  id: 'role-settings-admin',
+  name: 'Settings Admin',
+  assigned_groups: ['settings-admins'],
+  feature_permissions: { settings: FeatureAccessLevel.ADMIN },
+  is_admin: false,
 };
 const producerRole = {
   id: 'role-producer',
   name: 'Data Producer',
   assigned_groups: ['data-producers'],
   feature_permissions: { 'data-products': FeatureAccessLevel.READ_WRITE },
+  is_admin: false,
 };
 const stewardRole = {
   id: 'role-steward',
   name: 'Data Steward',
   assigned_groups: ['data-stewards'],
   feature_permissions: { 'data-products': FeatureAccessLevel.READ_WRITE },
+  is_admin: false,
 };
 const consumerRole = {
   id: 'role-consumer',
   name: 'Data Consumer',
   assigned_groups: ['data-consumers'],
   feature_permissions: { 'data-products': FeatureAccessLevel.READ_ONLY },
+  is_admin: false,
 };
 
 const mockUserDetailsFetch = (groups: string[], username: string = 'test.user') => {
@@ -122,27 +137,52 @@ describe('UserInfo role switcher gating', () => {
       permissions: {},
       actualPermissions: {},
       isLoading: false,
-      availableRoles: [adminRole, producerRole, stewardRole, consumerRole],
+      availableRoles: [adminRole, settingsAdminRole, producerRole, stewardRole, consumerRole],
       appliedRoleId: null,
       setRoleOverride: setRoleOverrideMock,
       initializeStore: initializeStoreMock,
     };
   });
 
-  it('shows all non-canonical roles in the switcher for admin users', async () => {
+  it('shows all non-canonical roles in the switcher for users in the is_admin role', async () => {
+    // Membership in a role with is_admin=true is what unlocks the full switcher,
+    // not the settings:ADMIN feature permission (see #404).
     mockUserDetailsFetch(['admins'], 'admin.user');
-    permissionsState.actualPermissions = { settings: FeatureAccessLevel.ADMIN };
 
     renderWithProviders(<UserInfo />);
     await openMenu();
 
     // Switcher label present
     expect(await screen.findByText('userMenu.applyRoleOverride')).toBeInTheDocument();
-    // Admin sees all roles in the radio list
+    // Admin sees all roles in the radio list (Settings Admin included)
     expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('Settings Admin')).toBeInTheDocument();
     expect(screen.getByText('Data Producer')).toBeInTheDocument();
     expect(screen.getByText('Data Steward')).toBeInTheDocument();
     expect(screen.getByText('Data Consumer')).toBeInTheDocument();
+  });
+
+  it('does NOT grant admin impersonation to users with settings:ADMIN but no is_admin role (regression for #404)', async () => {
+    // The user belongs only to the "Settings Admin" role (settings:ADMIN, is_admin=false).
+    // Before the fix this implicitly elevated them and showed the full role catalog;
+    // after the fix they fall into the non-admin path and only see their membership-matched role.
+    mockUserDetailsFetch(['settings-admins'], 'settings.admin');
+    permissionsState.actualPermissions = { settings: FeatureAccessLevel.ADMIN };
+
+    renderWithProviders(<UserInfo />);
+    await openMenu();
+
+    await waitFor(() => {
+      expect(screen.getByText('userMenu.profile')).toBeInTheDocument();
+    });
+
+    // With only one membership-matched role, the switcher is not shown at all
+    // (matches existing "single membership" gating).
+    expect(screen.queryByText('userMenu.applyRoleOverride')).not.toBeInTheDocument();
+    // And critically, no other roles leak into the UI.
+    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('Data Producer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Data Consumer')).not.toBeInTheDocument();
   });
 
   it('shows only membership-matched roles for non-admin user in 2+ roles', async () => {

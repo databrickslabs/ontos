@@ -9,7 +9,6 @@ import ManagementPortFormDialog from '@/components/data-products/management-port
 import TeamMemberFormDialog from '@/components/data-products/team-member-form-dialog';
 import SupportChannelFormDialog from '@/components/data-products/support-channel-form-dialog';
 import ImportExportDialog from '@/components/data-products/import-export-dialog';
-import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog';
 import { useApi } from '@/hooks/use-api';
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Button } from '@/components/ui/button';
@@ -463,6 +462,7 @@ export default function DataProductDetails() {
   const [product, setProduct] = useState<DataProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarOwners, setSidebarOwners] = useState<Array<{ user_name?: string | null; user_email: string; role_name?: string | null }>>([]);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
@@ -481,7 +481,6 @@ export default function DataProductDetails() {
   const [isTeamMemberDialogOpen, setIsTeamMemberDialogOpen] = useState(false);
   const [isSupportChannelDialogOpen, setIsSupportChannelDialogOpen] = useState(false);
   const [isImportExportDialogOpen, setIsImportExportDialogOpen] = useState(false);
-  const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false);
 
   // Editing state for nested entities
   const [editingInputPortIndex, setEditingInputPortIndex] = useState<number | null>(null);
@@ -702,6 +701,20 @@ export default function DataProductDetails() {
       setDynamicTitle(null);
     };
   }, [productId, canRead, permissionsLoading]);
+
+  useEffect(() => {
+    if (!productId) return;
+    (async () => {
+      try {
+        const res = await get<Array<{ user_name?: string | null; user_email: string; role_name?: string | null; is_active: boolean }>>(
+          `/api/business-owners/by-object/data_product/${productId}?active_only=true`
+        );
+        if (!res.error && Array.isArray(res.data)) {
+          setSidebarOwners(res.data.filter((o) => o.is_active));
+        }
+      } catch { /* sidebar contacts are best-effort */ }
+    })();
+  }, [productId, get]);
 
   const handleEdit = () => {
     if (!canWrite) {
@@ -1158,71 +1171,6 @@ export default function DataProductDetails() {
     }
   };
 
-  const handleImportTeamMembers = async (members: TeamMember[]) => {
-    if (!productId || !product) return;
-    
-    try {
-      // Append imported members to existing team members
-      const existingMembers = product.team?.members || [];
-      const updatedMembers = [...existingMembers, ...members];
-      const updatedTeam = { ...product.team, members: updatedMembers };
-      
-      // Convert tags from objects to strings (tag FQNs) if needed
-      const tags = Array.isArray(product.tags) 
-        ? product.tags.map((tag: any) => typeof tag === 'string' ? tag : (tag.tag_fqn || tag.tagFQN))
-        : [];
-      
-      // Store team assignment metadata in customProperties
-      const teamMetadata = {
-        property: 'assigned_team',
-        value: JSON.stringify({
-          team_id: product.owner_team_id,
-          team_name: product.owner_team_name,
-          assigned_at: new Date().toISOString(),
-          member_count: members.length
-        }),
-        description: 'App team assignment metadata'
-      };
-      
-      const existingCustomProps = product.customProperties || [];
-      const updatedCustomProps = [
-        ...existingCustomProps.filter((p: any) => p.property !== 'assigned_team'),
-        teamMetadata
-      ];
-      
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...product, 
-          team: updatedTeam, 
-          customProperties: updatedCustomProps,
-          tags // Use converted tags
-        }),
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => '');
-        throw new Error(`Failed to import team members (${res.status}): ${errorText}`);
-      }
-      
-      await fetchProductDetails();
-      setIsImportTeamMembersOpen(false);
-      
-      toast({
-        title: 'Team Members Imported',
-        description: `Successfully imported ${members.length} team member(s) from ${product.owner_team_name}`,
-      });
-    } catch (error) {
-      console.error('Failed to import team members:', error);
-      toast({
-        title: 'Import Failed',
-        description: error instanceof Error ? error.message : 'Failed to import team members',
-        variant: 'destructive',
-      });
-      throw error;
-    }
-  };
 
   const handleAddSupportChannel = async (channel: Support) => {
     if (!productId || !product) return;
@@ -1659,15 +1607,9 @@ export default function DataProductDetails() {
                   )}
                 </div>
               )}
-              {(viewMode !== 'minimal' || product.tenant) && (
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
-                  <span className="text-xs text-muted-foreground truncate">{product.tenant || t('common:states.notAssigned')}</span>
-                </div>
-              )}
               {(viewMode !== 'minimal' || (product.owner_team_id && product.owner_team_name)) && (
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground min-w-[4rem]">Owner:</Label>
+                  <Label className="text-xs text-muted-foreground min-w-[4rem]">Team:</Label>
                   {product.owner_team_id && product.owner_team_name ? (
                     <span
                       className="text-xs cursor-pointer text-primary hover:underline truncate"
@@ -1679,6 +1621,12 @@ export default function DataProductDetails() {
                   ) : (
                     <span className="text-xs text-muted-foreground">{t('common:states.notAssigned')}</span>
                   )}
+                </div>
+              )}
+              {(viewMode !== 'minimal' || product.tenant) && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
+                  <span className="text-xs text-muted-foreground truncate">{product.tenant || t('common:states.notAssigned')}</span>
                 </div>
               )}
               {viewMode !== 'minimal' && (
@@ -1735,17 +1683,50 @@ export default function DataProductDetails() {
         {/* Sidebar: Contacts + Quality */}
         <div className="space-y-4">
           {/* Contacts */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Contacts</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {(() => {
-                const contacts = product.team?.members?.filter(
-                  (m) => m.role && ['owner', 'data owner', 'data steward', 'steward'].includes(m.role.toLowerCase())
-                );
-                if (contacts && contacts.length > 0) {
-                  return contacts.map((member, idx) => (
+          {(() => {
+            // Determine contact source for fallback indicator
+            const ownerContacts = product.team?.members?.filter(
+              (m) => m.role && ['owner', 'data owner', 'data steward', 'steward'].includes(m.role.toLowerCase())
+            );
+            const contactSource = sidebarOwners.length > 0
+              ? 'owners'
+              : (ownerContacts && ownerContacts.length > 0)
+                ? 'imported'
+                : product.owner_team_name
+                  ? 'team_only'
+                  : 'none';
+
+            return (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">Contacts</CardTitle>
+                  {contactSource === 'imported' && (
+                    <p className="text-[11px] text-muted-foreground italic">From imported data</p>
+                  )}
+                  {contactSource === 'team_only' && (
+                    <p className="text-[11px] text-muted-foreground italic">Team assignment only</p>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {contactSource === 'owners' && sidebarOwners.map((owner, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                          {(owner.user_name || owner.user_email || '?')
+                            .split(/[\s.@]+/)
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((p) => p[0].toUpperCase())
+                            .join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{owner.user_name || owner.user_email}</div>
+                        <div className="text-xs text-muted-foreground">{owner.role_name || 'Owner'}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {contactSource === 'imported' && ownerContacts!.map((member, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="text-xs bg-primary/10 text-primary">
@@ -1762,27 +1743,27 @@ export default function DataProductDetails() {
                         <div className="text-xs text-muted-foreground">{member.role}</div>
                       </div>
                     </div>
-                  ));
-                }
-                if (product.owner_team_name) {
-                  return (
+                  ))}
+                  {contactSource === 'team_only' && (
                     <div className="flex items-center gap-2">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                          {product.owner_team_name.split(/\s+/).slice(0, 2).map((p) => p[0].toUpperCase()).join('')}
+                          {product.owner_team_name!.split(/\s+/).slice(0, 2).map((p) => p[0].toUpperCase()).join('')}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate">{product.owner_team_name}</div>
-                        <div className="text-xs text-muted-foreground">Owner Team</div>
+                        <div className="text-xs text-muted-foreground">Team</div>
                       </div>
                     </div>
-                  );
-                }
-                return <span className="text-xs text-muted-foreground">No contacts assigned</span>;
-              })()}
-            </CardContent>
-          </Card>
+                  )}
+                  {contactSource === 'none' && (
+                    <span className="text-xs text-muted-foreground">No contacts assigned</span>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <LifecycleSummaryPanel
             status={(product.status || 'draft').toLowerCase()}
@@ -2101,69 +2082,24 @@ export default function DataProductDetails() {
       </Card>
       )}
 
-      {/* Team Section */}
-      {shouldShowSection('team') && (
+      {/* ODPS Team Metadata (read-only provenance) */}
+      {shouldShowSection('team') && product.team?.members && product.team.members.length > 0 && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Team ({product.team?.members?.length || 0} members)</span>
-            <div className="flex gap-2">
-              {canWrite && product.owner_team_id && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => setIsImportTeamMembersOpen(true)}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Import from Team
-                </Button>
-              )}
-              {canModify && (
-                <Button size="sm" onClick={() => setIsTeamMemberDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Member
-                </Button>
-              )}
-            </div>
+            <span>ODPS Team Metadata ({product.team.members.length} members)</span>
           </CardTitle>
+          <p className="text-sm text-muted-foreground">Read-only provenance from imported product YAML. Manage ownership via the Owners panel above.</p>
         </CardHeader>
         <CardContent>
-          {product.team?.members && product.team.members.length > 0 ? (
-            <div className="space-y-2">
-              {product.team.members.map((member, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline">{member.role || 'Member'}</Badge>
-                    <span className="text-sm">{member.name || member.username}</span>
-                  </div>
-                  {canModify && (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingTeamMemberIndex(idx);
-                          setIsTeamMemberDialogOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteTeamMember(idx)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No team members defined</p>
-          )}
+          <div className="space-y-2">
+            {product.team.members.map((member, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-3 border rounded-lg">
+                <Badge variant="outline">{member.role || 'Member'}</Badge>
+                <span className="text-sm">{member.name || member.username}</span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
       )}
@@ -2268,9 +2204,23 @@ export default function DataProductDetails() {
         />
       )}
 
-      {/* Ownership Panel */}
+      {/* Ownership Panel (with imported ODPS contacts) */}
       {shouldShowSection('ownership') && (
-        <OwnershipPanel objectType="data_product" objectId={productId!} canAssign={canModify} className="mb-6" />
+        <OwnershipPanel
+          objectType="data_product"
+          objectId={productId!}
+          canAssign={canModify}
+          className="mb-6"
+          importedContacts={product.team?.members?.map((m) => ({
+            username: m.username,
+            name: m.name,
+            role: m.role,
+            description: m.description,
+          }))}
+          importedContactsLabel="Imported Contacts"
+          ownerTeamId={product.owner_team_id}
+          ownerTeamName={product.owner_team_name}
+        />
       )}
 
       {/* Entity Relationships Panel (tree-based with drill-down) */}
@@ -2439,18 +2389,6 @@ export default function DataProductDetails() {
         currentProduct={product}
       />
 
-      {/* Import Team Members Dialog */}
-      {product.owner_team_id && (
-        <ImportTeamMembersDialog
-          isOpen={isImportTeamMembersOpen}
-          onOpenChange={setIsImportTeamMembersOpen}
-          entityId={productId!}
-          entityType="product"
-          teamId={product.owner_team_id}
-          teamName={product.owner_team_name || product.owner_team_id}
-          onImport={handleImportTeamMembers}
-        />
-      )}
 
       {/* Link Contract to Port Dialog */}
       <LinkContractToPortDialog

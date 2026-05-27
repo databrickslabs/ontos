@@ -63,3 +63,26 @@ class BusinessOwnerHistory(BaseModel):
     object_id: str
     current_owners: List[BusinessOwnerRead] = Field(default_factory=list)
     previous_owners: List[BusinessOwnerRead] = Field(default_factory=list)
+
+
+# --- Bulk Import Models ---
+
+class ImportTeamMemberMapping(BaseModel):
+    """Single team member to import as a business owner."""
+    username: str = Field(..., description="Username/email from the ODCS/ODPS team or Ontos Team member")
+    name: Optional[str] = Field(None, description="Display name (optional)")
+    role_id: UUID = Field(..., description="Business role ID to assign")
+
+
+class ImportFromTeamRequest(BaseModel):
+    """Bulk import request: create Business Owner records from team members."""
+    object_type: OwnerObjectType = Field(..., description="Type of the target object")
+    object_id: str = Field(..., description="ID of the target object")
+    members: List[ImportTeamMemberMapping] = Field(..., min_length=1, description="Team members to import as owners")
+
+
+class ImportFromTeamResponse(BaseModel):
+    """Result of bulk import."""
+    created: int = Field(0, description="Number of new owner records created")
+    skipped: int = Field(0, description="Number skipped (already assigned)")
+    errors: List[str] = Field(default_factory=list, description="Any error messages")

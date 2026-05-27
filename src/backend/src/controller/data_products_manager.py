@@ -2874,6 +2874,50 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             "datasets": datasets_out,
         }
 
+    # Role mapping from Business Role names to ODPS team role strings
+    BUSINESS_ROLE_TO_TEAM_ROLE = {
+        "data owner": "owner",
+        "technical owner": "technical steward",
+        "business sponsor": "business steward",
+    }
+
+    def _merge_business_owners_into_team(
+        self, members_list: list, db_session, object_type: str, object_id: str
+    ) -> list:
+        """Merge active Business Owners into the team members list for YAML export.
+        Deduplicates by (username/email, role). Owners take precedence over existing members."""
+        from src.repositories.business_owners_repository import business_owner_repo
+
+        try:
+            active_owners = business_owner_repo.get_for_object(
+                db_session, object_type=object_type, object_id=object_id, active_only=True
+            )
+        except Exception:
+            return members_list
+
+        if not active_owners:
+            return members_list
+
+        existing_keys = {
+            (m.get('username', '').lower(), m.get('role', '').lower())
+            for m in members_list
+        }
+
+        for owner in active_owners:
+            role_name = owner.role.name if owner.role else 'owner'
+            team_role = self.BUSINESS_ROLE_TO_TEAM_ROLE.get(role_name.lower(), role_name.lower())
+            username = owner.user_email
+            key = (username.lower(), team_role.lower())
+
+            if key not in existing_keys:
+                member_dict = {'role': team_role, 'username': username}
+                if owner.user_name:
+                    member_dict['name'] = owner.user_name
+                members_list.append(member_dict)
+                existing_keys.add(key)
+
+        return members_list
+
     def build_odps_export(
         self,
         product_id: str,
@@ -2944,16 +2988,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 for s in product.support_channels
             ]
 
+        # Build team members from ODPS data, then merge active Business Owners
+        team_members = []
         if product.team and product.team.members:
-            odps["team"] = {
-                "name": product.team.name,
-                "members": [
-                    {k: v for k, v in {
-                        "username": m.username, "role": m.role,
-                    }.items() if v}
-                    for m in product.team.members
-                ],
-            }
+            team_members = [
+                {k: v for k, v in {
+                    "username": m.username, "role": m.role,
+                    "name": getattr(m, 'name', None),
+                }.items() if v}
+                for m in product.team.members
+            ]
+        team_members = self._merge_business_owners_into_team(
+            team_members, session, 'data_product', product_id
+        )
+        if team_members:
+            team_name = product.team.name if product.team else None
+            odps["team"] = {"members": team_members}
+            if team_name:
+                odps["team"]["name"] = team_name
 
         if product.custom_properties:
             odps["customProperties"] = [

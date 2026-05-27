@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from src.models.business_owners import (
     BusinessOwnerCreate, BusinessOwnerUpdate, BusinessOwnerRead,
     BusinessOwnerRemove, BusinessOwnerHistory,
+    ImportFromTeamRequest, ImportFromTeamResponse,
 )
 from src.controller.business_owners_manager import business_owners_manager
 from src.common.authorization import PermissionChecker
@@ -259,6 +260,65 @@ def remove_owner(
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="REMOVE_OWNER", success=success, details=details,
         )
+
+
+# --- Bulk Import from Team ---
+
+@router.post(
+    "/import-from-team",
+    response_model=ImportFromTeamResponse,
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def import_from_team(
+    request: Request,
+    body: ImportFromTeamRequest,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager=Depends(get_business_owners_manager),
+):
+    """Bulk-import team members as business owners.
+
+    Accepts a list of username/role mappings and creates Business Owner records.
+    Skips members who are already active owners on the target object.
+    Works for both ODCS/ODPS imported team members and Ontos Team members.
+    """
+    created = 0
+    skipped = 0
+    errors: List[str] = []
+
+    for member in body.members:
+        try:
+            owner_in = BusinessOwnerCreate(
+                object_type=body.object_type,
+                object_id=body.object_id,
+                user_email=member.username,
+                user_name=member.name,
+                role_id=member.role_id,
+            )
+            manager.assign_owner(db=db, owner_in=owner_in, current_user_id=current_user.email)
+            created += 1
+        except ConflictError:
+            skipped += 1
+        except NotFoundError as e:
+            errors.append(f"{member.username}: {str(e)}")
+        except Exception as e:
+            logger.warning("Failed to import team member %s: %s", member.username, str(e))
+            errors.append(f"{member.username}: {str(e)}")
+
+    audit_manager.log_action(
+        db=db, username=current_user.username,
+        ip_address=request.client.host if request.client else None,
+        feature=FEATURE_ID, action="IMPORT_FROM_TEAM", success=True,
+        details={
+            "object": f"{body.object_type}:{body.object_id}",
+            "created": created,
+            "skipped": skipped,
+            "errors": errors,
+        },
+    )
+
+    return ImportFromTeamResponse(created=created, skipped=skipped, errors=errors)
 
 
 # --- Current user's ownerships (on separate prefix) ---

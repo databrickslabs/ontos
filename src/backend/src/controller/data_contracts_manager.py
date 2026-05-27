@@ -840,6 +840,50 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             "skipped": skipped,
         }
 
+    # Role mapping from Business Role names to ODCS/ODPS team role strings
+    BUSINESS_ROLE_TO_TEAM_ROLE = {
+        "data owner": "owner",
+        "technical owner": "technical steward",
+        "business sponsor": "business steward",
+    }
+
+    def _merge_business_owners_into_team(
+        self, members_list: list, db_session, object_type: str, object_id: str
+    ) -> list:
+        """Merge active Business Owners into the team members list for YAML export.
+        Deduplicates by (username/email, role). Owners take precedence over existing members."""
+        from src.repositories.business_owners_repository import business_owner_repo
+
+        try:
+            active_owners = business_owner_repo.get_for_object(
+                db_session, object_type=object_type, object_id=object_id, active_only=True
+            )
+        except Exception:
+            return members_list
+
+        if not active_owners:
+            return members_list
+
+        existing_keys = {
+            (m.get('username', '').lower(), m.get('role', '').lower())
+            for m in members_list
+        }
+
+        for owner in active_owners:
+            role_name = owner.role.name if owner.role else 'owner'
+            team_role = self.BUSINESS_ROLE_TO_TEAM_ROLE.get(role_name.lower(), role_name.lower())
+            username = owner.user_email
+            key = (username.lower(), team_role.lower())
+
+            if key not in existing_keys:
+                member_dict = {'role': team_role, 'username': username}
+                if owner.user_name:
+                    member_dict['name'] = owner.user_name
+                members_list.append(member_dict)
+                existing_keys.add(key)
+
+        return members_list
+
     def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None) -> Dict[str, Any]:
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
@@ -1325,8 +1369,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             odcs['schema'] = schema
             
         # Build team (version-aware: Team object for v3.1.0+, plain array for v3.0.x)
+        # Merge active Business Owners into the exported team array for YAML fidelity
+        members_list = []
         if hasattr(db_obj, 'team') and db_obj.team:
-            members_list = []
             for member in db_obj.team:
                 member_dict = {
                     'role': member.role,
@@ -1346,6 +1391,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     member_dict['description'] = member.description
                 members_list.append(member_dict)
 
+        if db_session:
+            members_list = self._merge_business_owners_into_team(
+                members_list, db_session, 'data_contract', str(db_obj.id)
+            )
+
+        if members_list:
             api_version = db_obj.api_version or 'v3.1.0'
             tm = getattr(db_obj, 'team_metadata', None)
             if api_version >= 'v3.1.0' and tm:

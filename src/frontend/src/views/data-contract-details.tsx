@@ -44,7 +44,6 @@ import CreateFromContractDialog from '@/components/data-products/create-from-con
 import DqxSchemaSelectDialog from '@/components/data-contracts/dqx-schema-select-dialog'
 import DqxSuggestionsDialog from '@/components/data-contracts/dqx-suggestions-dialog'
 import AuthoritativeDefinitionFormDialog from '@/components/data-contracts/authoritative-definition-form-dialog'
-import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog'
 import LinkProductToContractDialog from '@/components/data-contracts/link-product-to-contract-dialog'
 import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog'
 import CustomPropertyFormDialog from '@/components/data-contracts/custom-property-form-dialog'
@@ -270,7 +269,6 @@ export default function DataContractDetails() {
   const [isCreateProductDialogOpen, setIsCreateProductDialogOpen] = useState(false)
 
   // Team import state
-  const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false)
 
   // Team metadata (ODCS v3.1.0)
   const [, setTeamMetadata] = useState<{ name?: string; description?: string }>({})
@@ -1538,36 +1536,6 @@ export default function DataContractDetails() {
     fetchProfileRuns()
   }
 
-  const handleImportTeamMembers = async (members: TeamMember[]) => {
-    if (!contract) return
-    
-    try {
-      // Append to existing team array
-      const updatedTeam = [...(contract.team || []), ...members]
-      
-      // Store team assignment metadata in customProperties
-      const customProps = contract.customProperties || {}
-      const now = new Date().toISOString()
-      
-      await updateContract({
-        team: updatedTeam,
-        customProperties: {
-          ...customProps,
-          assignedTeamId: contract.owner_team_id,
-          assignedTeamName: contract.owner_team_name,
-          assignedTeamDate: now
-        }
-      }, false)  // Suppress generic toast, show custom one below
-      
-      toast({
-        title: 'Team Members Imported',
-        description: `Successfully imported ${members.length} team ${members.length === 1 ? 'member' : 'members'} to the contract.`
-      })
-    } catch (e) {
-      // Error already handled by updateContract
-      throw e
-    }
-  }
 
   const handleSaveTeamMetadata = async () => {
     if (!contractId) return
@@ -1871,17 +1839,10 @@ export default function DataContractDetails() {
                 )}
               </div>
             )}
-            {/* Hide Tenant if empty in minimal mode */}
-            {(viewMode !== 'minimal' || contract.tenant) && (
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
-                <span className="text-xs text-muted-foreground truncate">{contract.tenant || t('common:states.notAssigned')}</span>
-              </div>
-            )}
-            {/* Hide Owner if empty in minimal mode */}
+            {/* Hide Team if empty in minimal mode */}
             {(viewMode !== 'minimal' || (contract.owner_team_id && contract.owner_team_name)) && (
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Owner:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Team:</Label>
                 {contract.owner_team_id && contract.owner_team_name ? (
                   <span
                     className="text-xs cursor-pointer text-primary hover:underline truncate"
@@ -1893,6 +1854,13 @@ export default function DataContractDetails() {
                 ) : (
                   <span className="text-xs text-muted-foreground">{t('common:states.notAssigned')}</span>
                 )}
+              </div>
+            )}
+            {/* Hide Tenant if empty in minimal mode */}
+            {(viewMode !== 'minimal' || contract.tenant) && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
+                <span className="text-xs text-muted-foreground truncate">{contract.tenant || t('common:states.notAssigned')}</span>
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -2665,84 +2633,33 @@ export default function DataContractDetails() {
       </Card>
       )}
 
-      {/* Team & Roles Section */}
-      {shouldShowSection('team-members') && (
+      {/* ODCS Team Metadata (read-only provenance) */}
+      {shouldShowSection('team-members') && (contract.team?.length || teamMetaName || teamMetaDesc) && (
         <Card>
           <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-xl">Team Members ({contract.team?.length || 0})</CardTitle>
-              <CardDescription>Team responsible for this contract</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              {(() => {
-                console.log('[DEBUG] Rendering Team Members buttons:', {
-                  owner_team_id: contract.owner_team_id,
-                  owner_team_name: contract.owner_team_name,
-                  hasOwnerTeamId: !!contract.owner_team_id,
-                  shouldShowButton: !!contract.owner_team_id
-                })
-                return null
-              })()}
-              {canEditInPlace && contract.owner_team_id && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => setIsImportTeamMembersOpen(true)}
-                  disabled={!contract.owner_team_name}
-                  title={contract.owner_team_name ? `Import members from ${contract.owner_team_name}` : 'No team assigned'}
-                >
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Import from Team
-                </Button>
-              )}
-              {canEditInPlace && (
-                <Button size="sm" onClick={() => { setEditingTeamMemberIndex(null); setIsTeamMemberFormOpen(true); }}>
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Add Member
-                </Button>
-              )}
+              <CardTitle className="text-xl">ODCS Team Metadata</CardTitle>
+              <CardDescription>Read-only provenance from imported contract YAML. Manage ownership via the Owners panel above.</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Team metadata (ODCS v3.1.0) */}
-          <div className="grid grid-cols-2 gap-4 border rounded-lg p-4 bg-muted/30">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Team Name</Label>
-              {canEditInPlace ? (
-                <Input
-                  value={teamMetaName}
-                  onChange={(e) => { setTeamMetaName(e.target.value); setTeamMetaDirty(true) }}
-                  placeholder="e.g. Data Engineering"
-                  className="h-8"
-                />
-              ) : (
+          {(teamMetaName || teamMetaDesc) && (
+            <div className="grid grid-cols-2 gap-4 border rounded-lg p-4 bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Team Name</Label>
                 <p className="text-sm">{teamMetaName || '—'}</p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Team Description</Label>
-              {canEditInPlace ? (
-                <Textarea
-                  value={teamMetaDesc}
-                  onChange={(e) => { setTeamMetaDesc(e.target.value); setTeamMetaDirty(true) }}
-                  placeholder="Brief description of the team"
-                  className="min-h-[32px] resize-none"
-                  rows={1}
-                />
-              ) : (
-                <p className="text-sm">{teamMetaDesc || '—'}</p>
-              )}
-            </div>
-            {canEditInPlace && teamMetaDirty && (
-              <div className="col-span-2 flex justify-end">
-                <Button size="sm" onClick={handleSaveTeamMetadata}>Save Team Info</Button>
               </div>
-            )}
-          </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Team Description</Label>
+                <p className="text-sm">{teamMetaDesc || '—'}</p>
+              </div>
+            </div>
+          )}
 
-          {/* Team members list */}
+          {/* Team members list (read-only) */}
           {contract.team && contract.team.length > 0 ? (
             <div className="space-y-2">
               {contract.team.map((member, idx) => (
@@ -2751,21 +2668,11 @@ export default function DataContractDetails() {
                     <Badge variant="outline">{member.role}</Badge>
                     <span className="text-sm">{member.name || member.username || member.email}</span>
                   </div>
-                  {canEditInPlace && (
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => { setEditingTeamMemberIndex(idx); setIsTeamMemberFormOpen(true); }}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDeleteTeamMember(idx)} className="text-destructive hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No team members defined. Click "Add Member" to add one.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No imported team members.</p>
           )}
         </CardContent>
       </Card>
@@ -3075,9 +2982,26 @@ export default function DataContractDetails() {
       </Card>
       )}
 
-      {/* Ownership Panel */}
+      {/* Ownership Panel (with imported ODCS contacts) */}
       {shouldShowSection('metadata-panel') && contract.id && (
-        <OwnershipPanel objectType="data_contract" objectId={contract.id} canAssign={canEditInPlace} className="mb-6" />
+        <OwnershipPanel
+          objectType="data_contract"
+          objectId={contract.id}
+          canAssign={canEditInPlace}
+          className="mb-6"
+          importedContacts={contract.team?.map((m) => ({
+            username: m.username,
+            name: m.name,
+            email: m.email,
+            role: m.role,
+            description: m.description,
+            dateIn: m.dateIn,
+            dateOut: m.dateOut,
+          }))}
+          importedContactsLabel="Imported Contacts"
+          ownerTeamId={contract.owner_team_id}
+          ownerTeamName={contract.owner_team_name}
+        />
       )}
 
       {/* Entity Relationships Panel */}
@@ -3256,18 +3180,6 @@ export default function DataContractDetails() {
         level="property"
       />
 
-      {/* Import Team Members Dialog */}
-      {contract?.owner_team_id && (
-        <ImportTeamMembersDialog
-          isOpen={isImportTeamMembersOpen}
-          onOpenChange={setIsImportTeamMembersOpen}
-          entityId={contractId!}
-          entityType="contract"
-          teamId={contract.owner_team_id}
-          teamName={contract.owner_team_name || contract.owner_team_id}
-          onImport={handleImportTeamMembers}
-        />
-      )}
 
       {/* Link Product to Contract Dialog */}
       <LinkProductToContractDialog

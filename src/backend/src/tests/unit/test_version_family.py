@@ -442,6 +442,88 @@ class TestProductsListCollapse:
         # Family of two surfaces as versionCount=2.
         assert {p.version_count for p in products if p.id == p2} == {2}
 
+    def test_consumer_sees_active_rep_even_when_newer_draft_exists(
+        self, db_session: Session
+    ):
+        """PRD #442 visibility rule: a plain consumer's representative
+        for a family must be the newest *published* version, never an
+        in-flight draft that they don't own."""
+        from pathlib import Path
+        from datetime import datetime, timedelta, timezone
+        from src.controller.data_contracts_manager import DataContractsManager
+
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        fam = str(uuid.uuid4())
+        active_id = str(uuid.uuid4())
+        draft_id = str(uuid.uuid4())
+        db_session.add(DataContractDb(
+            id=active_id, name="A", version="1.0.0", status="active",
+            version_family_id=fam,
+            created_at=base, updated_at=base,
+        ))
+        db_session.add(DataContractDb(
+            id=draft_id, name="A", version="2.0.0", status="draft",
+            version_family_id=fam, parent_contract_id=active_id,
+            created_at=base + timedelta(days=1), updated_at=base + timedelta(days=1),
+        ))
+        db_session.commit()
+
+        manager = DataContractsManager(data_dir=Path("/tmp"))
+
+        # Consumer: not admin, not owner of the draft, no team membership.
+        summaries = manager.list_contracts_from_db(
+            db_session,
+            is_admin=False,
+            caller_email="alice@example.com",
+            caller_team_ids=set(),
+        )
+        ids = {s.id for s in summaries}
+        # Active wins; draft is filtered out by consumer visibility.
+        assert active_id in ids
+        assert draft_id not in ids
+
+    def test_team_member_sees_draft_rep(
+        self, db_session: Session
+    ):
+        """A team member of the owner team has elevated visibility for
+        the family and should see the newest in-flight version (draft)
+        as the family rep."""
+        from pathlib import Path
+        from datetime import datetime, timedelta, timezone
+        from src.controller.data_contracts_manager import DataContractsManager
+
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        fam = str(uuid.uuid4())
+        team_id = str(uuid.uuid4())
+        active_id = str(uuid.uuid4())
+        draft_id = str(uuid.uuid4())
+        db_session.add(DataContractDb(
+            id=active_id, name="A", version="1.0.0", status="active",
+            version_family_id=fam, owner_team_id=team_id,
+            created_at=base, updated_at=base,
+        ))
+        db_session.add(DataContractDb(
+            id=draft_id, name="A", version="2.0.0", status="draft",
+            version_family_id=fam, parent_contract_id=active_id,
+            owner_team_id=team_id,
+            created_at=base + timedelta(days=1), updated_at=base + timedelta(days=1),
+        ))
+        db_session.commit()
+
+        manager = DataContractsManager(data_dir=Path("/tmp"))
+
+        # Team member: not admin, but member of the owner team.
+        summaries = manager.list_contracts_from_db(
+            db_session,
+            is_admin=False,
+            caller_email="alice@example.com",
+            caller_team_ids={team_id},
+        )
+        ids = {s.id for s in summaries}
+        # Draft wins now that the caller is elevated for this family.
+        assert draft_id in ids
+        assert active_id not in ids
+
     def test_include_history_returns_all_versions(self, db_session: Session):
         from datetime import datetime, timedelta, timezone
         from src.controller.data_products_manager import DataProductsManager

@@ -3754,9 +3754,12 @@ async def clone_contract_for_new_version(
             }
         )
 
-        # Return new contract
+        # Return new contract. `from_attributes=True` propagates through nested
+        # validation (e.g. servers, schema, team) so Pydantic v2 accepts ORM rows
+        # for any populated relationship. Without it the clone succeeds in the DB
+        # but the response serialization fails (see issue #455).
         from src.models.data_contracts_api import DataContractRead
-        return DataContractRead.model_validate(new_contract).model_dump()
+        return DataContractRead.model_validate(new_contract, from_attributes=True).model_dump()
 
     except ValueError as e:
         logger.error("Validation error cloning contract %s: %s", contract_id, e)
@@ -3809,12 +3812,15 @@ async def get_contract_version_history(
         # Business logic now in manager
         history = manager.get_version_history(db=db, contract_id=contract_id)
 
-        # Convert database objects to API models
+        # Convert database objects to API models. `from_attributes=True` is required
+        # so Pydantic v2 propagates ORM-attribute validation into nested config models
+        # (servers, schema, team, etc.); without it the response serialization fails
+        # for any populated nested relationship (see issue #455).
         return {
-            "current": DataContractRead.model_validate(history["current"]).model_dump(),
-            "parent": DataContractRead.model_validate(history["parent"]).model_dump() if history["parent"] else None,
-            "children": [DataContractRead.model_validate(c).model_dump() for c in history["children"]],
-            "siblings": [DataContractRead.model_validate(s).model_dump() for s in history["siblings"]]
+            "current": DataContractRead.model_validate(history["current"], from_attributes=True).model_dump(),
+            "parent": DataContractRead.model_validate(history["parent"], from_attributes=True).model_dump() if history["parent"] else None,
+            "children": [DataContractRead.model_validate(c, from_attributes=True).model_dump() for c in history["children"]],
+            "siblings": [DataContractRead.model_validate(s, from_attributes=True).model_dump() for s in history["siblings"]]
         }
     except ValueError as e:
         logger.error("Validation error fetching version history for %s: %s", contract_id, e)
@@ -4097,7 +4103,7 @@ async def get_my_personal_drafts(
             limit=limit
         )
         
-        return [DataContractRead.model_validate(d).model_dump() for d in drafts]
+        return [DataContractRead.model_validate(d, from_attributes=True).model_dump() for d in drafts]
         
     except Exception as e:
         logger.error("Error fetching personal drafts", exc_info=True)

@@ -132,13 +132,46 @@ export function EntityVersionPicker({
     const fetchRows = async () => {
       setLoading(true)
       try {
-        const res = await fetch(apiBase)
+        // When a statusFilter is set we need to consider ALL versions,
+        // not just the family rep. Otherwise a family whose rep was
+        // promoted to draft (under the elevated-rank rule) would
+        // disappear from a status-restricted picker, even though it
+        // has a perfectly valid published version available — see the
+        // POS Transaction Stream regression hit during the smoke test.
+        const wantsHistory = !!statusFilter?.length
+        const url = wantsHistory ? `${apiBase}?include_history=true` : apiBase
+        const res = await fetch(url)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data: FamilyRow[] = await res.json()
         if (cancelled) return
-        const filtered = statusFilter
+        let filtered = statusFilter
           ? data.filter((r) => statusFilter.includes((r.status || '').toLowerCase()))
           : data
+        // Collapse client-side: one row per family, preferring the
+        // newest matching version. Family counts are computed BEFORE
+        // collapse so the badge still tells the user "this family has
+        // 3 versions" even when only the published one is selectable.
+        if (wantsHistory) {
+          const counts = new Map<string, number>()
+          for (const r of filtered) {
+            const fid = r.versionFamilyId || r.id
+            counts.set(fid, (counts.get(fid) || 0) + 1)
+          }
+          const picked = new Map<string, FamilyRow>()
+          for (const r of filtered) {
+            const fid = r.versionFamilyId || r.id
+            const cur = picked.get(fid)
+            // Lexicographic version compare is good enough here — every
+            // version in the same family is semver-y by convention.
+            if (!cur || (r.version || '') > (cur.version || '')) {
+              picked.set(fid, r)
+            }
+          }
+          filtered = Array.from(picked.values()).map((r) => ({
+            ...r,
+            versionCount: counts.get(r.versionFamilyId || r.id),
+          }))
+        }
         setRows(filtered)
       } catch (e) {
         console.warn(`[EntityVersionPicker] fetch failed for ${apiBase}`, e)

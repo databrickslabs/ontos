@@ -42,13 +42,19 @@ type VersionSelectorProps = {
   entityKind: EntityKind
   currentEntityId: string
   currentVersion?: string
-  onVersionChange: (entityId: string) => void
+  // The 2nd arg gives callers access to the full row (status, change
+  // summary, etc.) without re-fetching. Optional for back-compat — old
+  // callers that take only the id still type-check.
+  onVersionChange: (entityId: string, row?: EntityVersionRow) => void
   /**
    * Optional: an alternative endpoint, useful for tests or for a future
    * "family-by-id" route. When omitted, the component derives the URL
    * from `entityKind` + `currentEntityId`.
    */
   endpointOverride?: string
+  // Lets parents override the trigger button look — used by the
+  // EntityVersionPicker to make its inline sub-picker stretch full-width.
+  triggerClassName?: string
 }
 
 function endpointFor(kind: EntityKind, id: string): string {
@@ -77,6 +83,7 @@ export default function VersionSelector({
   currentVersion,
   onVersionChange,
   endpointOverride,
+  triggerClassName,
 }: VersionSelectorProps) {
   const { toast } = useToast()
   const [versions, setVersions] = useState<EntityVersionRow[]>([])
@@ -124,13 +131,16 @@ export default function VersionSelector({
   }
 
   const handleSelect = (id: string) => {
-    if (id !== currentEntityId) onVersionChange(id)
+    if (id !== currentEntityId) {
+      const row = versions.find((v) => v.id === id)
+      onVersionChange(id, row)
+    }
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={isLoading}>
+        <Button variant="outline" size="sm" disabled={isLoading} className={triggerClassName}>
           <History className="h-4 w-4 mr-2" />
           {currentVersion || 'Version'}
           <ChevronDown className="h-4 w-4 ml-2" />

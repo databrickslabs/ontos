@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Set
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
@@ -116,12 +116,33 @@ async def get_contracts(
             f"include_history: {include_history})"
         )
 
+        # Resolve the caller's owning teams once so the manager can compute
+        # elevated visibility for their contracts (PRD #442 role-aware rank).
+        caller_email = current_user.email if current_user else None
+        caller_team_ids: Set[str] = set()
+        if not is_admin and current_user:
+            try:
+                from src.controller.teams_manager import teams_manager
+                user_teams = teams_manager.get_teams_for_user(
+                    db, caller_email, user_groups
+                )
+                caller_team_ids = {t.id for t in user_teams if getattr(t, "id", None)}
+            except Exception:
+                # Best-effort: a failed team lookup downgrades the caller to
+                # consumer visibility, which is the safe fail-closed default.
+                logger.exception(
+                    f"Failed to resolve teams for {caller_email}; "
+                    "falling back to consumer visibility"
+                )
+
         result = manager.list_contracts_from_db(
             db,
             domain_id=domain_id,
             project_id=project_id,
             is_admin=is_admin,
             include_history=include_history,
+            caller_email=caller_email,
+            caller_team_ids=caller_team_ids,
         )
         return result
     except Exception as e:
@@ -3614,6 +3635,79 @@ async def get_contract_versions(
     except Exception as e:
         logger.error("Error fetching contract versions for %s", contract_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch contract versions")
+
+
+@router.get('/data-contracts/families/{family_id}/latest', response_model=dict)
+async def get_contract_family_latest(
+    family_id: str,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+):
+    """Resolve a family-follow-latest reference to a concrete contract row.
+
+    Returns the visible "latest" version of the family per the role-aware
+    rank in :mod:`src.common.version_visibility`. Used by the
+    EntityVersionPicker and any backend read path that stores a
+    ``contract_family_id`` reference. See PRD #442.
+    """
+    from src.common.authorization import is_user_admin
+    from src.common.config import get_settings
+    from src.common.version_visibility import (
+        collapse_by_family,
+        is_admin_only_status,
+        is_visible_consumer,
+    )
+
+    user_email = current_user.username if current_user else None
+    is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
+
+    # Pull every visible row in the family first; the elevation decision
+    # is per-family, so we can compute it from this slice alone.
+    rows = data_contract_repo.get_family_versions(
+        db, family_id=family_id, user_email=user_email, is_admin=is_admin
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Family not found or empty")
+
+    # Caller is elevated for this family if any row's owner or draft is
+    # theirs. We don't have a contract subscription table to consult.
+    elevated = is_admin or any(
+        r.draft_owner_id == user_email for r in rows if user_email
+    )
+
+    # Apply consumer status filter when caller isn't elevated, drop
+    # retired rows for non-admins, then pick a single rep.
+    if not is_admin:
+        rows = [
+            r
+            for r in rows
+            if elevated
+            or (not is_admin_only_status(r) and is_visible_consumer(r))
+        ]
+    reps = collapse_by_family(
+        rows,
+        elevated_family_ids={family_id} if elevated else set(),
+        is_admin=is_admin,
+    )
+    if not reps:
+        # Family exists but nothing is visible to this caller.
+        raise HTTPException(status_code=404, detail="No visible version in family")
+
+    c = reps[0]
+    return {
+        "id": c.id,
+        "name": c.name,
+        "version": c.version,
+        "status": c.status,
+        "versionFamilyId": c.version_family_id,
+        "parentContractId": c.parent_contract_id,
+        "changeSummary": c.change_summary,
+        "draftOwnerId": c.draft_owner_id,
+        "publicationScope": getattr(c, "publication_scope", None) or "none",
+        "createdAt": c.created_at.isoformat() if c.created_at else None,
+        "updatedAt": c.updated_at.isoformat() if c.updated_at else None,
+    }
 
 
 @router.post('/data-contracts/{contract_id}/clone', response_model=dict, status_code=201)

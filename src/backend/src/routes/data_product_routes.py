@@ -1838,6 +1838,94 @@ async def get_data_product_versions(
         raise HTTPException(status_code=500, detail="Failed to fetch product versions")
 
 
+@router.get("/data-products/families/{family_id}/latest", response_model=dict)
+async def get_product_family_latest(
+    family_id: str,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Resolve a family-follow-latest reference to a concrete product row.
+
+    Returns the visible "latest" version of the family per the role-aware
+    rank in :mod:`src.common.version_visibility`. Subscribers and owners
+    of any version in the family see in-flight rows (draft/proposed/...);
+    plain consumers see only active/deprecated. See PRD #442.
+    """
+    from src.common.authorization import is_user_admin
+    from src.common.config import get_settings
+    from src.common.version_visibility import (
+        collapse_by_family,
+        is_admin_only_status,
+        is_visible_consumer,
+    )
+    from src.repositories.data_products_repository import data_product_repo
+    from src.db_models.data_products import DataProductSubscriptionDb
+
+    user_email = current_user.username if current_user else None
+    is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
+
+    rows = data_product_repo.get_family_versions(
+        db, family_id=family_id, user_email=user_email, is_admin=is_admin
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Family not found or empty")
+
+    # Elevation sources: admin > owner/draft > subscription. The first
+    # match short-circuits the more expensive subscription query.
+    elevated = is_admin or (
+        user_email is not None
+        and any(r.draft_owner_id == user_email for r in rows)
+    )
+    if not elevated and user_email:
+        try:
+            product_ids = [r.id for r in rows]
+            sub = (
+                db.query(DataProductSubscriptionDb.id)
+                .filter(
+                    DataProductSubscriptionDb.subscriber_email == user_email,
+                    DataProductSubscriptionDb.product_id.in_(product_ids),
+                )
+                .first()
+            )
+            elevated = sub is not None
+        except Exception:
+            logger.exception(
+                f"Subscription lookup failed for {user_email} on family {family_id}; "
+                "treating as consumer"
+            )
+
+    if not is_admin:
+        rows = [
+            r
+            for r in rows
+            if elevated
+            or (not is_admin_only_status(r) and is_visible_consumer(r))
+        ]
+    reps = collapse_by_family(
+        rows,
+        elevated_family_ids={family_id} if elevated else set(),
+        is_admin=is_admin,
+    )
+    if not reps:
+        raise HTTPException(status_code=404, detail="No visible version in family")
+
+    p = reps[0]
+    return {
+        "id": p.id,
+        "name": p.name,
+        "version": p.version,
+        "status": p.status,
+        "versionFamilyId": p.version_family_id,
+        "parentProductId": p.parent_product_id,
+        "changeSummary": p.change_summary,
+        "draftOwnerId": p.draft_owner_id,
+        "publicationScope": getattr(p, "publication_scope", None) or "none",
+        "createdAt": p.created_at.isoformat() if p.created_at else None,
+        "updatedAt": p.updated_at.isoformat() if p.updated_at else None,
+    }
+
+
 @router.post("/data-products/{product_id}/versions", response_model=DataProduct, status_code=201)
 async def create_data_product_version(
     product_id: str, # This is the original product ID

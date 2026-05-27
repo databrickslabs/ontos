@@ -2,7 +2,7 @@ import json
 import uuid
 from uuid import uuid4
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 import os
 from pathlib import Path
 
@@ -5928,15 +5928,67 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     # --- Contract Listing and API Model Building ---
 
-    def _query_contracts(self, db, domain_id=None, project_id=None, is_admin=False, latest_only=True):
+    def _elevated_contract_families(
+        self,
+        db,
+        contracts,
+        *,
+        caller_email: Optional[str],
+        caller_team_ids: Optional[Set[str]],
+    ) -> Set[str]:
+        """Family IDs the caller has elevated visibility for.
+
+        Contracts have no subscription table today (per PRD #442 follow-up
+        scope), so elevation comes from ownership and authorship:
+
+          * caller is the ``draft_owner_id`` of any row in the family
+          * caller is a member of the ``owner_team_id`` of any row
+
+        Admins skip this check at the call site; we never need to compute
+        the set for them.
+        """
+        elevated: Set[str] = set()
+        if not caller_email and not caller_team_ids:
+            return elevated
+        team_ids = caller_team_ids or set()
+        for c in contracts:
+            fid = c.version_family_id or c.id
+            if fid in elevated:
+                continue
+            if caller_email and c.draft_owner_id == caller_email:
+                elevated.add(fid)
+                continue
+            if c.owner_team_id and c.owner_team_id in team_ids:
+                elevated.add(fid)
+        return elevated
+
+    def _query_contracts(
+        self,
+        db,
+        domain_id=None,
+        project_id=None,
+        is_admin=False,
+        latest_only=True,
+        *,
+        caller_email: Optional[str] = None,
+        caller_team_ids: Optional[Set[str]] = None,
+    ):
         """Shared query logic for listing contracts. Returns (contracts, family_counts).
 
-        ``latest_only`` (default True) collapses every ``version_family_id``
-        down to the row with the newest ``created_at``. ``family_counts``
-        maps each surviving family_id → total rows in the family from the
-        visibility-filtered result set, so callers can render a "N versions"
-        badge without a second query. See PRD #442.
+        ``latest_only`` (default True) collapses each ``version_family_id``
+        family using the role-aware rank in :mod:`src.common.version_visibility`:
+        consumers see only published rows (active/deprecated), owners and
+        admins see in-flight versions (draft/proposed/...) first. The
+        ``family_counts`` map is keyed by surviving family_id so the route
+        can render a "N versions" badge from a single query.
         """
+        from src.common.version_visibility import (
+            collapse_by_family,
+            family_counts as compute_family_counts,
+            is_admin_only_status,
+            is_visible_consumer,
+        )
+
         if domain_id:
             query = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id)
             if not is_admin and project_id:
@@ -5953,29 +6005,46 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 is_admin=is_admin
             )
 
-        # Always compute family sizes from the visibility-filtered set so the
-        # collapsed and the expanded list views report consistent counts.
-        family_counts: dict = {}
-        for c in contracts:
-            fid = c.version_family_id or c.id
-            family_counts[fid] = family_counts.get(fid, 0) + 1
+        elevated_families = (
+            set()
+            if is_admin
+            else self._elevated_contract_families(
+                db,
+                contracts,
+                caller_email=caller_email,
+                caller_team_ids=caller_team_ids,
+            )
+        )
+
+        # Pre-filter for the expanded view too. Without this, a consumer
+        # who toggles "Show all versions" would see draft rows from
+        # families they don't own — which contradicts the PRD's
+        # consumer-visibility rule. Admins bypass.
+        if not is_admin:
+            contracts = [
+                c
+                for c in contracts
+                if (c.version_family_id or c.id) in elevated_families
+                or (not is_admin_only_status(c) and is_visible_consumer(c))
+            ]
+
+        # Family counts are taken from the post-visibility-filter set so
+        # the badge reflects what the caller can actually navigate to.
+        counts = compute_family_counts(contracts)
 
         if latest_only:
             original_count = len(contracts)
-            # Family-id is the canonical group key (PRD #442). Falls back to
-            # row id for any legacy row that somehow escaped the backfill,
-            # which degrades to "treat as its own family" — never collapses
-            # unrelated rows together.
-            picked: dict = {}
-            for c in contracts:
-                key = c.version_family_id or c.id
-                current = picked.get(key)
-                if current is None or (c.created_at and (current.created_at is None or c.created_at > current.created_at)):
-                    picked[key] = c
-            contracts = list(picked.values())
-            logger.debug(f"Collapsed {original_count} → {len(contracts)} rows (one per version_family_id)")
+            contracts = collapse_by_family(
+                contracts,
+                elevated_family_ids=elevated_families,
+                is_admin=is_admin,
+            )
+            logger.debug(
+                f"Collapsed {original_count} → {len(contracts)} rows "
+                f"(role-aware rank; elevated={len(elevated_families)} families)"
+            )
 
-        return contracts, family_counts
+        return contracts, counts
 
     def list_contracts_from_db(
         self,
@@ -5985,6 +6054,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         is_admin: bool = False,
         latest_only: bool = True,
         include_history: bool = False,
+        *,
+        caller_email: Optional[str] = None,
+        caller_team_ids: Optional[Set[str]] = None,
     ):
         """List data contracts as lightweight summaries (no schema/quality/comments).
 
@@ -5996,7 +6068,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if include_history:
             latest_only = False
         contracts, family_counts = self._query_contracts(
-            db, domain_id, project_id, is_admin, latest_only
+            db,
+            domain_id,
+            project_id,
+            is_admin,
+            latest_only,
+            caller_email=caller_email,
+            caller_team_ids=caller_team_ids,
         )
         return self._build_contract_summaries(
             db, contracts, family_counts=family_counts if latest_only else None

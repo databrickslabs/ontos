@@ -1,0 +1,7 @@
+type,id,display_name,sub_label
+user,alice@example.com,Alice Liddell,alice@example.com
+user,bob@example.com,Bob Builder,bob@example.com
+user,carol@example.com,Carol Carlsson,carol@example.com
+group,Producers,Data Producers,producers-guid
+group,Consumers,Data Consumers,consumers-guid
+group,Admins,Platform Admins,admins-guid

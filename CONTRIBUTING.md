@@ -484,6 +484,68 @@ yarn test:e2e
 - Use fixtures for common setup
 - Aim for >80% coverage on new code
 
+### Local Directory Provider (PrincipalPicker testing)
+
+Many surfaces in the app use the `PrincipalPicker` to resolve users and
+groups against the configured Directory provider (Roles, Entitlements,
+Reviews, Comments audience, Workflow Designer custom principals, Data
+Contract wizard owner/stakeholders, etc.). To exercise the configured
+code path locally without standing up an Entra ID tenant or a Lakebase
+table, use the bundled `file` provider against the sample CSV at
+`src/backend/src/data/principals.csv`.
+
+The CSV ships with three users (Alice / Bob / Carol) and three groups
+(Producers / Consumers / Admins) and matches the format the
+`FileProvider` expects:
+
+```csv
+type,id,display_name,sub_label
+user,alice@example.com,Alice Liddell,alice@example.com
+user,bob@example.com,Bob Builder,bob@example.com
+user,carol@example.com,Carol Carlsson,carol@example.com
+group,Producers,Data Producers,producers-guid
+group,Consumers,Data Consumers,consumers-guid
+group,Admins,Platform Admins,admins-guid
+```
+
+**Configure via the UI (recommended):**
+
+1. Start the dev servers (see [Development Setup](#development-setup)).
+2. Sign in as a user with `settings:READ_WRITE` permission.
+3. Navigate to **Settings → Integrations → Directory**.
+4. Pick **CSV file (test / demo)** as the Provider.
+5. Set **CSV file path** to the absolute path of the bundled file, e.g.
+   `/Users/you/code/ontos/src/backend/src/data/principals.csv`.
+6. Click **Save**, then **Test connection** — you should see a success
+   toast.
+
+**Configure via the backend directly** (e.g. in a test fixture or
+seed script):
+
+```python
+from src.repositories.app_settings_repository import app_settings_repo
+
+app_settings_repo.set_by_key(db, "DIRECTORY_PROVIDER_TYPE", "file")
+app_settings_repo.set_by_key(
+    db,
+    "DIRECTORY_FILE_PATH",
+    "/absolute/path/to/src/backend/src/data/principals.csv",
+)
+```
+
+**Verify it works:**
+
+- `GET /api/directory/status` → `{ "configured": true, "provider_type": "file", "file_path": "/…/principals.csv" }`
+- `GET /api/directory/search?q=ali&types=users` → returns Alice
+- In any picker (e.g. Assign Owner on a Data Product), type `al` —
+  the dropdown should show a two-line row with `Alice Liddell` and
+  `alice@example.com` underneath.
+
+The file is re-read whenever its `mtime` advances, so editing the CSV
+takes effect on the next picker query without a server restart. The
+sample file is checked in as a fixture — feel free to extend it
+locally, but please don't commit org-specific edits.
+
 ---
 
 ## License

@@ -558,16 +558,35 @@ class DataContractSummary(BaseModel):
     tags: Optional[List[AssignedTag]] = Field(default_factory=list)
     created: Optional[str] = None
     updated: Optional[str] = None
-    parentContractId: Optional[str] = Field(None, alias='parent_contract_id')
-    versionFamilyId: Optional[str] = Field(None, alias='version_family_id')
-    baseName: Optional[str] = Field(None, alias='base_name')
-    changeSummary: Optional[str] = Field(None, alias='change_summary')
-    draftOwnerId: Optional[str] = Field(None, alias='draft_owner_id')
+    # The ``serialization_alias`` here forces camelCase on the wire while
+    # ``alias`` (used as the validation alias by Pydantic v2 when no
+    # explicit ``validation_alias`` is given) keeps the snake_case ORM
+    # attribute mapping working via ``from_attributes=True``. Without
+    # this, FastAPI's default ``response_model_by_alias=True`` would
+    # emit snake_case and the camelCase FE types would silently see
+    # ``undefined`` — see PRD #442 follow-up.
+    parentContractId: Optional[str] = Field(
+        None, alias='parent_contract_id', serialization_alias='parentContractId'
+    )
+    versionFamilyId: Optional[str] = Field(
+        None, alias='version_family_id', serialization_alias='versionFamilyId'
+    )
+    baseName: Optional[str] = Field(
+        None, alias='base_name', serialization_alias='baseName'
+    )
+    changeSummary: Optional[str] = Field(
+        None, alias='change_summary', serialization_alias='changeSummary'
+    )
+    draftOwnerId: Optional[str] = Field(
+        None, alias='draft_owner_id', serialization_alias='draftOwnerId'
+    )
     # Count of versions in this row's family that are visible to the caller.
     # Only emitted on the collapsed list view (include_history=False); on the
     # expanded list view it is omitted because every row is its own family
     # member. See PRD #442.
-    versionCount: Optional[int] = Field(None, alias='version_count')
+    versionCount: Optional[int] = Field(
+        None, alias='version_count', serialization_alias='versionCount'
+    )
     schema_object_count: int = Field(0, alias='schemaObjectCount')
     publication_scope: str = "none"
     published_at: Optional[str] = None

@@ -375,17 +375,46 @@ class DataProduct(BaseModel):
 
     # Versioning fields
     draft_owner_id: Optional[str] = Field(None, alias="draftOwnerId", description="Personal draft owner - if set, visible only to owner")
-    parent_product_id: Optional[str] = Field(None, alias="parentProductId", description="Parent version ID for version lineage")
+    # All fields below use ``serialization_alias`` to force camelCase on
+    # the wire (matching the FE TS types) while the snake_case Python
+    # attribute keeps ORM ``from_attributes=True`` reading working
+    # without a separate ``validation_alias``. See PRD #442 follow-up.
+    parent_product_id: Optional[str] = Field(
+        None,
+        alias="parentProductId",
+        serialization_alias="parentProductId",
+        description="Parent version ID for version lineage",
+    )
     # Canonical family grouping key (PRD #442). One indexed equality lookup
     # returns every version of the family. Defaults to self.id on initial
     # create; carried forward unchanged on every clone.
-    version_family_id: Optional[str] = Field(None, alias="versionFamilyId", description="Canonical family grouping key shared across every version of the family")
-    base_name: Optional[str] = Field(None, alias="baseName", description="Legacy base name; superseded by versionFamilyId. Kept for back-compat.")
-    change_summary: Optional[str] = Field(None, alias="changeSummary", description="Summary of changes in this version")
+    version_family_id: Optional[str] = Field(
+        None,
+        alias="versionFamilyId",
+        serialization_alias="versionFamilyId",
+        description="Canonical family grouping key shared across every version of the family",
+    )
+    base_name: Optional[str] = Field(
+        None,
+        alias="baseName",
+        serialization_alias="baseName",
+        description="Legacy base name; superseded by versionFamilyId. Kept for back-compat.",
+    )
+    change_summary: Optional[str] = Field(
+        None,
+        alias="changeSummary",
+        serialization_alias="changeSummary",
+        description="Summary of changes in this version",
+    )
     # Count of versions in this row's family that are visible to the caller.
     # Only populated by the collapsed list view; None on detail responses
     # and on the expanded list view. See PRD #442.
-    version_count: Optional[int] = Field(None, alias="versionCount", description="Number of visible versions in this family (collapsed list view only)")
+    version_count: Optional[int] = Field(
+        None,
+        alias="versionCount",
+        serialization_alias="versionCount",
+        description="Number of visible versions in this family (collapsed list view only)",
+    )
 
     # Publication fields
     publication_scope: Optional[str] = Field("none", description="Publication scope: none, domain, organization, external")

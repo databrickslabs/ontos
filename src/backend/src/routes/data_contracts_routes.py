@@ -97,11 +97,10 @@ async def get_contracts(
 ):
     """Get all data contracts with basic ODCS structure and optional project filtering.
 
-    ``include_history`` (PRD #442): reserved for the family-collapse rollout.
-    Until the frontend opts into the collapse, the param is accepted but the
-    response shape is unchanged (every version row returned). When the
-    frontend is ready, the manager will switch on this flag to return one
-    row per ``version_family_id`` by default and the full set when ``True``.
+    ``include_history`` (PRD #442): when False (default) the response contains
+    one row per ``version_family_id`` — the newest visible version of each
+    family, plus a ``versionCount`` field. When True, every visible version
+    is returned (used by the "Show all versions" toggle in the UI).
     """
     try:
         # Check if user is admin
@@ -121,7 +120,8 @@ async def get_contracts(
             db,
             domain_id=domain_id,
             project_id=project_id,
-            is_admin=is_admin
+            is_admin=is_admin,
+            include_history=include_history,
         )
         return result
     except Exception as e:

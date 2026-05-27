@@ -309,3 +309,166 @@ class TestListFamilyRepresentatives:
         # that within family A v2 precedes v1.
         a_rows = [r for r in rows if r.version_family_id == two_families["fam_a"]]
         assert [r.id for r in a_rows] == [two_families["a_v2"], two_families["a_root"]]
+
+
+# ---------------------------------------------------------------------------
+# Manager-level list collapse (Phase 2)
+# ---------------------------------------------------------------------------
+
+class TestContractsListCollapse:
+    """``list_contracts_from_db`` collapses families and emits versionCount."""
+
+    @pytest.fixture
+    def family_with_loose_row(self, db_session: Session):
+        from datetime import datetime, timedelta, timezone
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        fam = str(uuid.uuid4())
+        v1 = str(uuid.uuid4())
+        v2 = str(uuid.uuid4())
+        v3 = str(uuid.uuid4())
+        loose = str(uuid.uuid4())
+        # 3-version family A
+        db_session.add(DataContractDb(
+            id=v1, name="A", version="1.0.0", status="active",
+            version_family_id=fam,
+            created_at=base, updated_at=base,
+        ))
+        db_session.add(DataContractDb(
+            id=v2, name="A", version="2.0.0", status="active",
+            version_family_id=fam, parent_contract_id=v1,
+            created_at=base + timedelta(days=1), updated_at=base + timedelta(days=1),
+        ))
+        db_session.add(DataContractDb(
+            id=v3, name="A", version="3.0.0", status="draft",
+            version_family_id=fam, parent_contract_id=v2,
+            created_at=base + timedelta(days=2), updated_at=base + timedelta(days=2),
+        ))
+        # Single-version family B (loose row)
+        db_session.add(DataContractDb(
+            id=loose, name="B", version="1.0.0", status="active",
+            version_family_id=str(uuid.uuid4()),
+            created_at=base, updated_at=base,
+        ))
+        db_session.commit()
+        return {"fam": fam, "v1": v1, "v2": v2, "v3": v3, "loose": loose}
+
+    def _manager(self, db_session):
+        from pathlib import Path
+        from src.controller.data_contracts_manager import DataContractsManager
+        # The contracts manager keeps its DB session out of __init__ and takes
+        # it as a method arg; data_dir is only used for legacy YAML loading
+        # paths we don't exercise here.
+        return DataContractsManager(data_dir=Path("/tmp"))
+
+    def test_collapses_to_one_row_per_family_by_default(
+        self, db_session: Session, family_with_loose_row
+    ):
+        manager = self._manager(db_session)
+        summaries = manager.list_contracts_from_db(db_session, is_admin=True)
+        ids = {s.id for s in summaries}
+        # Family A is represented by its newest version (v3); loose row B
+        # passes through as its own family.
+        assert family_with_loose_row["v3"] in ids
+        assert family_with_loose_row["v1"] not in ids
+        assert family_with_loose_row["v2"] not in ids
+        assert family_with_loose_row["loose"] in ids
+        assert len(summaries) == 2
+
+    def test_emits_version_count_on_collapse(
+        self, db_session: Session, family_with_loose_row
+    ):
+        manager = self._manager(db_session)
+        summaries = manager.list_contracts_from_db(db_session, is_admin=True)
+        by_id = {s.id: s for s in summaries}
+        # Family A had 3 versions, loose row B is a family of one.
+        assert by_id[family_with_loose_row["v3"]].versionCount == 3
+        assert by_id[family_with_loose_row["loose"]].versionCount == 1
+
+    def test_include_history_returns_every_row_without_count(
+        self, db_session: Session, family_with_loose_row
+    ):
+        manager = self._manager(db_session)
+        summaries = manager.list_contracts_from_db(
+            db_session, is_admin=True, include_history=True
+        )
+        ids = {s.id for s in summaries}
+        # All 4 rows are present.
+        assert ids == {
+            family_with_loose_row["v1"],
+            family_with_loose_row["v2"],
+            family_with_loose_row["v3"],
+            family_with_loose_row["loose"],
+        }
+        # versionCount is intentionally omitted on the expanded view.
+        assert all(s.versionCount is None for s in summaries)
+
+
+class TestProductsListCollapse:
+    """``list_products`` collapses by version_family_id and attaches counts."""
+
+    def test_default_collapses_to_latest_version_per_family(
+        self, db_session: Session
+    ):
+        from datetime import datetime, timedelta, timezone
+        from src.controller.data_products_manager import DataProductsManager
+        from databricks.sdk import WorkspaceClient
+        from unittest.mock import MagicMock
+
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        fam = str(uuid.uuid4())
+        p1 = str(uuid.uuid4())
+        p2 = str(uuid.uuid4())
+        # Family with two versions.
+        db_session.add(DataProductDb(
+            id=p1, name="orders", version="1.0.0", status="active",
+            version_family_id=fam,
+            created_at=base, updated_at=base,
+        ))
+        db_session.add(DataProductDb(
+            id=p2, name="orders", version="2.0.0", status="active",
+            version_family_id=fam, parent_product_id=p1,
+            created_at=base + timedelta(days=1), updated_at=base + timedelta(days=1),
+        ))
+        db_session.commit()
+
+        ws = MagicMock(spec=WorkspaceClient)
+        manager = DataProductsManager(db=db_session, ws_client=ws)
+
+        products = manager.list_products(is_admin=True)
+        ids = {p.id for p in products}
+        # Newest version wins.
+        assert p2 in ids
+        assert p1 not in ids
+        # Family of two surfaces as versionCount=2.
+        assert {p.version_count for p in products if p.id == p2} == {2}
+
+    def test_include_history_returns_all_versions(self, db_session: Session):
+        from datetime import datetime, timedelta, timezone
+        from src.controller.data_products_manager import DataProductsManager
+        from databricks.sdk import WorkspaceClient
+        from unittest.mock import MagicMock
+
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        fam = str(uuid.uuid4())
+        p1 = str(uuid.uuid4())
+        p2 = str(uuid.uuid4())
+        db_session.add(DataProductDb(
+            id=p1, name="orders", version="1.0.0", status="active",
+            version_family_id=fam,
+            created_at=base, updated_at=base,
+        ))
+        db_session.add(DataProductDb(
+            id=p2, name="orders", version="2.0.0", status="active",
+            version_family_id=fam, parent_product_id=p1,
+            created_at=base + timedelta(days=1), updated_at=base + timedelta(days=1),
+        ))
+        db_session.commit()
+
+        ws = MagicMock(spec=WorkspaceClient)
+        manager = DataProductsManager(db=db_session, ws_client=ws)
+
+        products = manager.list_products(is_admin=True, include_history=True)
+        ids = {p.id for p in products}
+        assert ids == {p1, p2}
+        # version_count is suppressed on the expanded view.
+        assert all(p.version_count is None for p in products)

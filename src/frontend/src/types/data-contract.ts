@@ -24,6 +24,9 @@ export type DataContractListItem = {
   baseName?: string
   // Personal draft visibility
   draftOwnerId?: string // If set, this is a personal draft
+  // Number of visible versions in this row's family — only populated on the
+  // collapsed list view (include_history=false). See PRD #442.
+  versionCount?: number
   // Summary field from list endpoint
   schemaObjectCount?: number
   // Fields returned by summary endpoint for compatibility

@@ -563,6 +563,11 @@ class DataContractSummary(BaseModel):
     baseName: Optional[str] = Field(None, alias='base_name')
     changeSummary: Optional[str] = Field(None, alias='change_summary')
     draftOwnerId: Optional[str] = Field(None, alias='draft_owner_id')
+    # Count of versions in this row's family that are visible to the caller.
+    # Only emitted on the collapsed list view (include_history=False); on the
+    # expanded list view it is omitted because every row is its own family
+    # member. See PRD #442.
+    versionCount: Optional[int] = Field(None, alias='version_count')
     schema_object_count: int = Field(0, alias='schemaObjectCount')
     publication_scope: str = "none"
     published_at: Optional[str] = None

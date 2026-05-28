@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ChevronLeft, ChevronRight, ShieldCheck, Globe, Link2 } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ShieldCheck, Globe, Link2 } from 'lucide-react'
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
@@ -284,10 +284,6 @@ export default function DataContractDetails() {
   // Commit draft dialog state
   const [isCommitDraftDialogOpen, setIsCommitDraftDialogOpen] = useState(false)
 
-  // Version navigation state
-  type ContractVersionInfo = { id: string; version: string; status: string; createdAt: string }
-  const [versions, setVersions] = useState<ContractVersionInfo[]>([])
-
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([])
   const [certifyDialogOpen, setCertifyDialogOpen] = useState(false)
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)
@@ -314,11 +310,6 @@ export default function DataContractDetails() {
   const isPersonalDraft = contract?.draftOwnerId != null
   // Contract is read-only if it's not editable and not a personal draft
   const isReadOnly = !canEditInPlace
-
-  // Version navigation helpers
-  const currentVersionIndex = versions.findIndex(v => v.id === contractId)
-  const prevVersion = currentVersionIndex > 0 ? versions[currentVersionIndex - 1] : null
-  const nextVersion = currentVersionIndex >= 0 && currentVersionIndex < versions.length - 1 ? versions[currentVersionIndex + 1] : null
 
   // View mode state for filtering sections - initialize from localStorage
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -401,21 +392,6 @@ export default function DataContractDetails() {
     }
   }
 
-  const fetchVersions = async () => {
-    if (!contractId) return
-    try {
-      const response = await fetch(`/api/data-contracts/${contractId}/versions`)
-      if (response.ok) {
-        const data = await response.json()
-        setVersions(Array.isArray(data) ? data : [])
-      } else {
-        setVersions([])
-      }
-    } catch (e) {
-      console.warn('Failed to fetch contract versions:', e)
-      setVersions([])
-    }
-  }
 
   const fetchContractAuthDefs = async () => {
     if (!contractId) return
@@ -711,7 +687,6 @@ export default function DataContractDetails() {
     fetchLinkedProducts()
     fetchContractAuthDefs()
     fetchProfileRuns()
-    fetchVersions()
 
     return () => {
       setStaticSegments([])

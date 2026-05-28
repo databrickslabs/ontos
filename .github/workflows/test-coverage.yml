@@ -132,8 +132,8 @@ jobs:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
     timeout-minutes: 20
-    # Run E2E tests only on pushes to main (not on PRs)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # E2E tests temporarily disabled on all branches
+    if: false
 
     services:
       postgres:

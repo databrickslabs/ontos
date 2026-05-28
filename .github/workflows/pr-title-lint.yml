@@ -1,0 +1,52 @@
+name: pr-title-lint
+
+# Enforce Conventional Commits format on pull-request titles. Squash-merge
+# uses the PR title as the commit message, so a well-formed PR title becomes
+# a well-formed commit, which is what downstream changelog / release-please
+# tooling parses. The accepted vocabulary mirrors the type table in
+# CONTRIBUTING.md ("Commit Guidelines" -> "Types").
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    name: validate title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Keep in sync with CONTRIBUTING.md > Commit Guidelines > Types.
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          # Scopes are optional; CONTRIBUTING.md lists a recommended set but
+          # does not enforce it. Leaving requireScope unset preserves that.
+          requireScope: false
+          # Description (the part after the colon) must start with a
+          # lowercase letter -- matches the existing 95% of merged PRs and
+          # rejects things like "feat: Add foo" or "Feature/ontos approval".
+          subjectPattern: ^[a-z].+$
+          subjectPatternError: |
+            The subject of the PR title (the part after the colon) must
+            start with a lowercase letter and be non-empty.
+
+            Got: "{subject}"
+            Title: "{title}"
+
+            Example: feat(contracts): add ODCS v3.1.0 schema export

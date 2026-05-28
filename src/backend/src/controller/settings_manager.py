@@ -37,14 +37,39 @@ ROLES_YAML_PATH = Path(__file__).parent.parent / 'data' / 'settings.yaml'
 
 # --- Default Role Definitions --- 
 
-# Define default roles structure
+# Define default roles structure.
+# Non-Admin roles ship with `assigned_groups` that match the personas in
+# src/backend/src/data/test_personas.yaml, so the runtime impersonation flow
+# (TEST_USER_TOKEN) lands users in the matching role out of the box. Admin's
+# groups still come from APP_ADMIN_DEFAULT_GROUPS so production deployments
+# keep full control of who gets admin without depending on this default list.
 DEFAULT_ROLES = [
     {"name": "Admin", "description": "Default role: Admin"},
-    {"name": "Data Governance Officer", "description": "Default role: Data Governance Officer"},
-    {"name": "Data Steward", "description": "Default role: Data Steward"},
-    {"name": "Data Consumer", "description": "Default role: Data Consumer"},
-    {"name": "Data Producer", "description": "Default role: Data Producer"},
-    {"name": "Security Officer", "description": "Default role: Security Officer"},
+    {
+        "name": "Data Governance Officer",
+        "description": "Default role: Data Governance Officer",
+        "assigned_groups": ["data-governance-officers"],
+    },
+    {
+        "name": "Data Steward",
+        "description": "Default role: Data Steward",
+        "assigned_groups": ["data-stewards"],
+    },
+    {
+        "name": "Data Consumer",
+        "description": "Default role: Data Consumer",
+        "assigned_groups": ["data-consumers"],
+    },
+    {
+        "name": "Data Producer",
+        "description": "Default role: Data Producer",
+        "assigned_groups": ["data-producers"],
+    },
+    {
+        "name": "Security Officer",
+        "description": "Default role: Security Officer",
+        "assigned_groups": ["security-officers"],
+    },
 ]
 
 # Define desired default permissions for non-Admin roles
@@ -490,6 +515,12 @@ class SettingsManager:
                                 'name': name,
                                 'description': role_def.get('description'),
                             }
+                            # Propagate group bindings declared on the in-code defaults
+                            # (e.g. data-producers -> Data Producer) so the generated
+                            # YAML matches the canned test personas out of the box.
+                            default_groups = role_def.get('assigned_groups')
+                            if default_groups:
+                                base['assigned_groups'] = list(default_groups)
                             # Only include non-admin explicit permissions; admin will be expanded at runtime
                             if name != 'Admin':
                                 base['feature_permissions'] = {

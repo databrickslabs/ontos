@@ -24,6 +24,12 @@ roles:
 
   - name: Data Governance Officer
     description: "Default role: Data Governance Officer"
+    # Default group binding. Matches the persona of the same id in
+    # src/backend/src/data/test_personas.yaml so runtime impersonation
+    # (TEST_USER_TOKEN flow) lands users in this role out of the box.
+    # Override in production via the Settings UI or a custom settings.yaml.
+    assigned_groups:
+      - data-governance-officers
     feature_permissions:
       data-domains: Admin
       data-products: Admin
@@ -62,6 +68,8 @@ roles:
 
   - name: Data Steward
     description: "Default role: Data Steward"
+    assigned_groups:
+      - data-stewards
     feature_permissions:
       data-domains: Read/Write
       data-products: Read/Write
@@ -95,6 +103,8 @@ roles:
 
   - name: Data Consumer
     description: "Default role: Data Consumer"
+    assigned_groups:
+      - data-consumers
     feature_permissions:
       data-domains: Read-only
       data-products: Read-only
@@ -111,6 +121,8 @@ roles:
 
   - name: Data Producer
     description: "Default role: Data Producer"
+    assigned_groups:
+      - data-producers
     feature_permissions:
       data-domains: Read-only
       data-products: Read/Write
@@ -138,6 +150,8 @@ roles:
 
   - name: Security Officer
     description: "Default role: Security Officer"
+    assigned_groups:
+      - security-officers
     feature_permissions:
       security-features: Admin
       entitlements: Admin

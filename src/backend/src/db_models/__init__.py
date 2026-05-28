@@ -43,4 +43,5 @@ from . import certification_levels
 from . import workflow_configurations
 from . import workflow_installations
 from . import workflow_job_runs
+from . import ontology_generation_runs
 

@@ -1,5 +1,7 @@
 """Pydantic models for the ontology generator API."""
 
+from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -115,3 +117,59 @@ class SaveToCollectionResponse(BaseModel):
     collection_iri: str = ""
     triples_imported: int = 0
     error: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Async generation run models
+# ---------------------------------------------------------------------------
+
+class GenerationRunStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class RunParams(BaseModel):
+    """Summarised parameters stored with each run."""
+    connection_id: Optional[str] = None
+    connection_name: Optional[str] = None
+    path_count: int = 0
+    guidelines: str = ""
+    base_uri: str = ""
+    options: Dict[str, Any] = Field(default_factory=dict)
+
+
+class StartRunResponse(BaseModel):
+    run_id: str
+    status: GenerationRunStatus
+
+
+class GenerationRunSummary(BaseModel):
+    run_id: str
+    status: GenerationRunStatus
+    progress_message: Optional[str] = None
+    error: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    params: RunParams = Field(default_factory=RunParams)
+    step_count: int = 0
+
+
+class GenerationRunDetail(BaseModel):
+    run_id: str
+    status: GenerationRunStatus
+    progress_message: Optional[str] = None
+    error: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    params: RunParams = Field(default_factory=RunParams)
+    steps: List[AgentStepResponse] = Field(default_factory=list)
+    result: Optional[GenerateOntologyResponse] = None
+
+
+class RunListResponse(BaseModel):
+    runs: List[GenerationRunSummary] = Field(default_factory=list)

@@ -1,8 +1,8 @@
 """API routes for LLM-based ontology generation.
 
-Accepts table metadata and guidelines, runs an agentic LLM loop to
-produce an OWL ontology in Turtle format, and returns the parsed
-classes, properties, constraints, and axioms.
+Both POST /generate and POST /generate-from-connection are async: they
+return HTTP 202 with a run_id immediately, and the actual LLM work runs
+in a background thread.  Clients poll GET /runs/{run_id} for progress.
 """
 
 from typing import List, Optional
@@ -10,19 +10,25 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from src.controller.ontology_generator_manager import AgentResult, OntologyGeneratorManager
+from src.controller.ontology_generator_manager import OntologyGeneratorManager
 from src.models.ontology_generator import (
     AgentStepResponse,
     GenerateFromConnectionRequest,
     GenerateOntologyRequest,
     GenerateOntologyResponse,
+    GenerationRunDetail,
+    GenerationRunStatus,
+    GenerationRunSummary,
     OntologyClassResponse,
     OntologyInfoResponse,
     OntologyPropertyResponse,
+    RunListResponse,
+    RunParams,
     SaveToCollectionRequest,
     SaveToCollectionResponse,
+    StartRunResponse,
 )
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, is_user_feature_admin
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
@@ -48,39 +54,76 @@ def _get_user_token(request: Request) -> Optional[str]:
     return request.headers.get("x-forwarded-access-token")
 
 
-def _build_response(result: AgentResult) -> GenerateOntologyResponse:
-    """Convert an ``AgentResult`` to the API response model."""
-    return GenerateOntologyResponse(
-        success=result.success,
-        owl_content=result.owl_content,
-        classes=[OntologyClassResponse(**c) for c in result.classes],
-        properties=[OntologyPropertyResponse(**p) for p in result.properties],
-        ontology_info=(
-            OntologyInfoResponse(**result.ontology_info)
-            if result.ontology_info
-            else OntologyInfoResponse()
-        ),
-        constraints=result.constraints,
-        axioms=result.axioms,
-        steps=[
-            AgentStepResponse(
-                step_type=s.step_type,
-                content=s.content,
-                tool_name=s.tool_name,
-                duration_ms=s.duration_ms,
-            )
-            for s in result.steps
-        ],
-        iterations=result.iterations,
-        error=result.error,
-        usage=result.usage,
+# ------------------------------------------------------------------
+# Helpers to convert DB rows to response models
+# ------------------------------------------------------------------
+
+def _run_to_params(run) -> RunParams:
+    return RunParams(
+        connection_id=run.connection_id,
+        connection_name=run.connection_name,
+        path_count=len(run.selected_paths) if run.selected_paths else 0,
+        guidelines=(run.guidelines or "")[:200],
+        base_uri=run.base_uri or "",
+        options=run.options or {},
     )
 
 
+def _run_to_summary(run) -> GenerationRunSummary:
+    return GenerationRunSummary(
+        run_id=run.id,
+        status=GenerationRunStatus(run.status),
+        progress_message=run.progress_message,
+        error=run.error,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+        completed_at=run.completed_at,
+        params=_run_to_params(run),
+        step_count=len(run.steps) if run.steps else 0,
+    )
+
+
+def _run_to_detail(run) -> GenerationRunDetail:
+    steps = []
+    if run.steps:
+        for s in run.steps:
+            steps.append(AgentStepResponse(
+                step_type=s.get("step_type", ""),
+                content=s.get("content", ""),
+                tool_name=s.get("tool_name", ""),
+                duration_ms=s.get("duration_ms", 0),
+            ))
+
+    result_model = None
+    if run.result:
+        try:
+            result_model = GenerateOntologyResponse(**run.result)
+        except Exception:
+            logger.warning("Failed to parse stored result for run %s", run.id)
+
+    return GenerationRunDetail(
+        run_id=run.id,
+        status=GenerationRunStatus(run.status),
+        progress_message=run.progress_message,
+        error=run.error,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+        completed_at=run.completed_at,
+        params=_run_to_params(run),
+        steps=steps,
+        result=result_model,
+    )
+
+
+# ------------------------------------------------------------------
+# Async generation endpoints
+# ------------------------------------------------------------------
+
 @router.post(
     "/generate",
-    response_model=GenerateOntologyResponse,
-    summary="Generate an OWL ontology from table metadata using an LLM agent",
+    response_model=StartRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start async OWL ontology generation from table metadata",
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 def generate_ontology(
@@ -91,7 +134,7 @@ def generate_ontology(
     current_user: AuditCurrentUserDep = None,
     manager: OntologyGeneratorManagerDep = None,
 ):
-    """Run the ontology-generation agent and return structured results."""
+    """Kick off an async ontology generation run and return the run_id."""
     success = False
     details = {
         "table_count": len(body.metadata.tables),
@@ -101,38 +144,34 @@ def generate_ontology(
 
     try:
         metadata_dict = {"tables": [t.model_dump() for t in body.metadata.tables]}
-
         options = {
             "includeDataProperties": body.include_data_properties,
             "includeRelationships": body.include_relationships,
             "includeInheritance": body.include_inheritance,
         }
 
-        result = manager.generate_ontology(
+        run_id = manager.start_run(
+            db=db,
+            user_id=current_user.email or current_user.username or "unknown",
             metadata=metadata_dict,
             guidelines=body.guidelines,
             options=options,
             base_uri=body.base_uri,
-            selected_tables=body.selected_tables,
             user_token=_get_user_token(request),
         )
 
-        success = result.success
-        details["iterations"] = result.iterations
-        details["classes_count"] = len(result.classes)
-        details["properties_count"] = len(result.properties)
-        details["owl_content_length"] = len(result.owl_content)
-        if result.error:
-            details["error"] = result.error
+        success = True
+        details["run_id"] = run_id
+        return StartRunResponse(run_id=run_id, status=GenerationRunStatus.PENDING)
 
-        return _build_response(result)
-
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e))
     except Exception as e:
-        logger.exception("Failed to generate ontology")
+        logger.exception("Failed to start ontology generation run")
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ontology generation failed: {e}",
+            detail=f"Failed to start generation: {e}",
         )
     finally:
         audit_manager.log_action(
@@ -140,7 +179,7 @@ def generate_ontology(
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID,
-            action="GENERATE_ONTOLOGY",
+            action="START_ONTOLOGY_GENERATION",
             success=success,
             details=details,
         )
@@ -148,8 +187,9 @@ def generate_ontology(
 
 @router.post(
     "/generate-from-connection",
-    response_model=GenerateOntologyResponse,
-    summary="Generate an OWL ontology from a connection's selected tables",
+    response_model=StartRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start async OWL ontology generation from a connection",
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
 )
 def generate_from_connection(
@@ -160,7 +200,7 @@ def generate_from_connection(
     current_user: AuditCurrentUserDep = None,
     manager: OntologyGeneratorManagerDep = None,
 ):
-    """Fetch table metadata via a connection, then generate an OWL ontology."""
+    """Resolve table metadata from a connection, then start an async generation run."""
     success = False
     details = {
         "connection_id": body.connection_id,
@@ -196,29 +236,36 @@ def generate_from_connection(
             "includeInheritance": body.include_inheritance,
         }
 
-        result = manager.generate_ontology(
+        connection = conn_mgr.get_connection(UUID(body.connection_id))
+        conn_name = connection.name if connection else body.connection_id
+
+        run_id = manager.start_run(
+            db=db,
+            user_id=current_user.email or current_user.username or "unknown",
             metadata={"tables": tables_metadata},
             guidelines=body.guidelines,
             options=options,
             base_uri=body.base_uri,
             user_token=_get_user_token(request),
+            connection_id=body.connection_id,
+            connection_name=conn_name,
+            selected_paths=body.selected_paths,
         )
 
-        success = result.success
-        details["iterations"] = result.iterations
-        details["classes_count"] = len(result.classes)
-        details["properties_count"] = len(result.properties)
+        success = True
+        details["run_id"] = run_id
+        return StartRunResponse(run_id=run_id, status=GenerationRunStatus.PENDING)
 
-        return _build_response(result)
-
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to generate ontology from connection")
+        logger.exception("Failed to start ontology generation from connection")
         details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ontology generation failed: {e}",
+            detail=f"Failed to start generation: {e}",
         )
     finally:
         audit_manager.log_action(
@@ -226,11 +273,119 @@ def generate_from_connection(
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID,
-            action="GENERATE_ONTOLOGY_FROM_CONNECTION",
+            action="START_ONTOLOGY_GENERATION_FROM_CONNECTION",
             success=success,
             details=details,
         )
 
+
+# ------------------------------------------------------------------
+# Run management endpoints
+# ------------------------------------------------------------------
+
+@router.get(
+    "/runs",
+    response_model=RunListResponse,
+    summary="List recent ontology generation runs",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+async def list_runs(
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+    manager: OntologyGeneratorManagerDep = None,
+    limit: int = 50,
+):
+    user_id = current_user.email or current_user.username or "unknown"
+    is_admin = await is_user_feature_admin(
+        current_user.email, current_user.groups, FEATURE_ID, request,
+    )
+
+    if is_admin:
+        rows = manager.list_all_runs(db, limit=limit)
+    else:
+        rows = manager.list_runs(db, user_id, limit=limit)
+
+    return RunListResponse(runs=[_run_to_summary(r) for r in rows])
+
+
+@router.get(
+    "/runs/{run_id}",
+    response_model=GenerationRunDetail,
+    summary="Get full details of a generation run",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+async def get_run(
+    run_id: str,
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+    manager: OntologyGeneratorManagerDep = None,
+):
+    user_id = current_user.email or current_user.username or "unknown"
+    is_admin = await is_user_feature_admin(
+        current_user.email, current_user.groups, FEATURE_ID, request,
+    )
+
+    if is_admin:
+        run = manager.get_run(db, run_id)
+    else:
+        run = manager.get_run_for_user(db, run_id, user_id)
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # Refresh to pick up latest background-thread updates
+    db.refresh(run)
+    return _run_to_detail(run)
+
+
+@router.delete(
+    "/runs/{run_id}",
+    summary="Cancel a running generation or delete a finished run",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+async def delete_run(
+    run_id: str,
+    request: Request,
+    db: DBSessionDep = None,
+    current_user: AuditCurrentUserDep = None,
+    manager: OntologyGeneratorManagerDep = None,
+):
+    user_id = current_user.email or current_user.username or "unknown"
+    is_admin = await is_user_feature_admin(
+        current_user.email, current_user.groups, FEATURE_ID, request,
+    )
+
+    if is_admin:
+        run = manager.get_run(db, run_id)
+    else:
+        run = manager.get_run_for_user(db, run_id, user_id)
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if run.status in ('pending', 'running'):
+        manager.cancel_run(run_id)
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+        from datetime import datetime, timezone as tz
+        ontology_generation_runs_repo.update_status(
+            db, run_id, 'cancelled',
+            progress_message='Cancelled',
+            error='Cancelled by user',
+            completed_at=datetime.now(tz.utc),
+        )
+        db.commit()
+        return {"detail": "Run cancelled", "run_id": run_id}
+
+    manager.delete_run(db, run_id)
+    db.commit()
+    return {"detail": "Run deleted", "run_id": run_id}
+
+
+# ------------------------------------------------------------------
+# Save to collection (unchanged — synchronous)
+# ------------------------------------------------------------------
 
 @router.post(
     "/save-to-collection",

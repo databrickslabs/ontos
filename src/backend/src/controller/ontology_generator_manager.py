@@ -14,9 +14,14 @@ The agent loop:
 
 import json
 import re
+import threading
 import time
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
+
+from sqlalchemy.orm import Session
 
 from src.common.config import Settings
 from src.common.logging import get_logger
@@ -190,11 +195,16 @@ TOOL_HANDLERS = {
 # Manager
 # =====================================================================
 
+MAX_CONCURRENT_RUNS_PER_USER = 3
+
+
 class OntologyGeneratorManager:
     """Generates OWL ontologies from metadata using an LLM agent loop."""
 
     def __init__(self, settings: Settings):
         self._settings = settings
+        self._cancel_events: Dict[str, threading.Event] = {}
+        self._lock = threading.Lock()
 
     def _get_openai_client(self, user_token: Optional[str] = None):
         """Create an OpenAI client via the shared factory.
@@ -376,6 +386,7 @@ class OntologyGeneratorManager:
         selected_tables: Optional[List[str]] = None,
         on_step: Optional[Callable[[str], None]] = None,
         user_token: Optional[str] = None,
+        cancel_event: Optional[threading.Event] = None,
     ) -> AgentResult:
         """Run the ontology-generation agent.
 
@@ -444,6 +455,11 @@ class OntologyGeneratorManager:
         tools_supported = True
 
         for iteration in range(MAX_ITERATIONS):
+            if cancel_event and cancel_event.is_set():
+                result.error = "Generation cancelled by user"
+                logger.info("Agent cancelled before iteration %d", iteration + 1)
+                return result
+
             logger.info("Iteration %d/%d — %d messages", iteration + 1, MAX_ITERATIONS, len(messages))
             notify(f"Agent thinking… (step {iteration + 1})")
 
@@ -581,3 +597,229 @@ class OntologyGeneratorManager:
         result.error = f"Agent reached maximum iterations ({MAX_ITERATIONS}) without producing output"
         logger.error("Agent failed: %s", result.error)
         return result
+
+    # ------------------------------------------------------------------
+    # Async run management
+    # ------------------------------------------------------------------
+
+    def start_run(
+        self,
+        db: Session,
+        user_id: str,
+        metadata: dict,
+        *,
+        guidelines: str = "",
+        options: Optional[dict] = None,
+        base_uri: str = "http://ontos.example.org/ontology#",
+        user_token: Optional[str] = None,
+        connection_id: Optional[str] = None,
+        connection_name: Optional[str] = None,
+        selected_paths: Optional[List[str]] = None,
+    ) -> str:
+        """Create a DB-persisted run and execute generation in a background thread.
+
+        Returns the run_id immediately.  Raises ValueError if the user has
+        hit the concurrent-run cap.
+        """
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+
+        running = ontology_generation_runs_repo.count_running_for_user(db, user_id)
+        if running >= MAX_CONCURRENT_RUNS_PER_USER:
+            raise ValueError(
+                f"Concurrent run limit reached ({MAX_CONCURRENT_RUNS_PER_USER}). "
+                "Wait for a running generation to finish or cancel one."
+            )
+
+        run_id = str(uuid.uuid4())
+        options = options or {}
+
+        ontology_generation_runs_repo.create(
+            db,
+            run_id=run_id,
+            user_id=user_id,
+            connection_id=connection_id,
+            connection_name=connection_name,
+            selected_paths=selected_paths,
+            guidelines=guidelines,
+            base_uri=base_uri,
+            options=options,
+            steps=[],
+        )
+        db.commit()
+
+        cancel_event = threading.Event()
+        with self._lock:
+            self._cancel_events[run_id] = cancel_event
+
+        thread = threading.Thread(
+            target=self._run_generation,
+            args=(run_id, metadata, guidelines, options, base_uri, user_token, cancel_event),
+            daemon=True,
+        )
+        thread.start()
+        logger.info("Started background generation run %s for user %s", run_id, user_id)
+        return run_id
+
+    def _run_generation(
+        self,
+        run_id: str,
+        metadata: dict,
+        guidelines: str,
+        options: dict,
+        base_uri: str,
+        user_token: Optional[str],
+        cancel_event: threading.Event,
+    ) -> None:
+        """Background thread body — runs generate_ontology and persists results."""
+        from src.common.database import get_session_factory
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+
+        SessionLocal = get_session_factory()
+        db = SessionLocal()
+
+        accumulated_steps: List[dict] = []
+
+        def on_step(msg: str):
+            accumulated_steps.append({
+                "step_type": "progress",
+                "content": msg,
+                "tool_name": "",
+                "duration_ms": 0,
+            })
+            try:
+                ontology_generation_runs_repo.update_steps(db, run_id, accumulated_steps, progress_message=msg)
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        try:
+            ontology_generation_runs_repo.update_status(db, run_id, 'running', progress_message='Starting…')
+            db.commit()
+
+            result = self.generate_ontology(
+                metadata=metadata,
+                guidelines=guidelines,
+                options=options,
+                base_uri=base_uri,
+                user_token=user_token,
+                on_step=on_step,
+                cancel_event=cancel_event,
+            )
+
+            if cancel_event.is_set():
+                ontology_generation_runs_repo.update_status(
+                    db, run_id, 'cancelled',
+                    progress_message='Cancelled',
+                    error=result.error or 'Cancelled by user',
+                    completed_at=datetime.now(timezone.utc),
+                )
+                db.commit()
+                return
+
+            final_steps = [
+                {"step_type": s.step_type, "content": s.content, "tool_name": s.tool_name, "duration_ms": s.duration_ms}
+                for s in result.steps
+            ]
+
+            if result.success:
+                result_dict = self._agent_result_to_response_dict(result)
+                run = ontology_generation_runs_repo.get(db, run_id)
+                if run:
+                    run.steps = final_steps
+                    run.result = result_dict
+                    run.status = 'completed'
+                    run.progress_message = 'Completed'
+                    run.completed_at = datetime.now(timezone.utc)
+                    db.commit()
+            else:
+                ontology_generation_runs_repo.update_steps(db, run_id, final_steps, progress_message='Failed')
+                ontology_generation_runs_repo.update_status(
+                    db, run_id, 'failed',
+                    error=result.error,
+                    completed_at=datetime.now(timezone.utc),
+                )
+                db.commit()
+
+        except Exception as exc:
+            logger.exception("Background generation run %s failed with exception", run_id)
+            try:
+                ontology_generation_runs_repo.update_status(
+                    db, run_id, 'failed',
+                    error=str(exc),
+                    completed_at=datetime.now(timezone.utc),
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+        finally:
+            db.close()
+            with self._lock:
+                self._cancel_events.pop(run_id, None)
+
+    def cancel_run(self, run_id: str) -> bool:
+        """Signal a running generation to stop.  Returns True if the cancel
+        event was set (i.e. the run was active in this process)."""
+        with self._lock:
+            event = self._cancel_events.get(run_id)
+        if event:
+            event.set()
+            return True
+        return False
+
+    @staticmethod
+    def get_run(db: Session, run_id: str):
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+        return ontology_generation_runs_repo.get(db, run_id)
+
+    @staticmethod
+    def get_run_for_user(db: Session, run_id: str, user_id: str):
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+        return ontology_generation_runs_repo.get_for_user(db, run_id, user_id)
+
+    @staticmethod
+    def list_runs(db: Session, user_id: str, *, limit: int = 50):
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+        return ontology_generation_runs_repo.list_for_user(db, user_id, limit=limit)
+
+    @staticmethod
+    def list_all_runs(db: Session, *, limit: int = 50):
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+        return ontology_generation_runs_repo.list_all(db, limit=limit)
+
+    @staticmethod
+    def delete_run(db: Session, run_id: str) -> bool:
+        from src.repositories.ontology_generation_runs_repository import ontology_generation_runs_repo
+        return ontology_generation_runs_repo.delete(db, run_id)
+
+    @staticmethod
+    def _agent_result_to_response_dict(result: AgentResult) -> dict:
+        """Convert AgentResult to the GenerateOntologyResponse-compatible dict
+        that is stored in the DB ``result`` JSON column."""
+        from src.models.ontology_generator import (
+            OntologyClassResponse,
+            OntologyPropertyResponse,
+            OntologyInfoResponse,
+            AgentStepResponse,
+        )
+        return {
+            "success": result.success,
+            "owl_content": result.owl_content,
+            "classes": [OntologyClassResponse(**c).model_dump() for c in result.classes],
+            "properties": [OntologyPropertyResponse(**p).model_dump() for p in result.properties],
+            "ontology_info": (
+                OntologyInfoResponse(**result.ontology_info).model_dump()
+                if result.ontology_info else {}
+            ),
+            "constraints": result.constraints,
+            "axioms": result.axioms,
+            "steps": [
+                AgentStepResponse(
+                    step_type=s.step_type, content=s.content,
+                    tool_name=s.tool_name, duration_ms=s.duration_ms,
+                ).model_dump()
+                for s in result.steps
+            ],
+            "iterations": result.iterations,
+            "error": result.error,
+            "usage": result.usage,
+        }

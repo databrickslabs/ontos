@@ -1811,7 +1811,8 @@ class SemanticModelsManager:
                 f"urn:taxonomy:{taxonomy_name}",
                 f"urn:semantic-model:{taxonomy_name}",
                 f"urn:schema:{taxonomy_name}",
-                f"urn:glossary:{taxonomy_name}"
+                f"urn:glossary:{taxonomy_name}",
+                f"urn:ontology:{taxonomy_name}",
             ]
             for context in self._graph.contexts():
                 if hasattr(context, 'identifier') and str(context.identifier) in target_contexts:

@@ -60,30 +60,29 @@ export function RatingBadge({
     return null;
   }
 
-  const sizeClasses = size === 'sm' 
-    ? 'h-3 w-3 text-[10px]' 
-    : 'h-3.5 w-3.5 text-xs';
+  const iconSize = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const textSize = size === 'sm' ? 'text-xs' : 'text-sm';
 
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/30',
-        onClick && 'cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors',
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full leading-none bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40',
+        onClick && 'cursor-pointer transition-colors',
         className
       )}
       onClick={onClick}
       title={`${rating.average_rating.toFixed(1)} out of 5 stars (${rating.total_ratings} ratings)`}
     >
-      <Star className={cn(sizeClasses, 'fill-amber-400 text-amber-400')} />
+      <Star className={cn(iconSize, 'shrink-0 fill-amber-400 text-amber-400')} />
       <span className={cn(
-        sizeClasses,
-        'font-medium text-amber-700 dark:text-amber-300 tabular-nums'
+        textSize,
+        'font-semibold tabular-nums leading-none text-amber-700 dark:text-amber-300'
       )}>
         {rating.average_rating.toFixed(1)}
       </span>
       <span className={cn(
-        sizeClasses,
-        'text-amber-600/70 dark:text-amber-400/70 ml-1.5'
+        textSize,
+        'tabular-nums leading-none text-amber-600/70 dark:text-amber-400/70'
       )}>
         ({rating.total_ratings})
       </span>

@@ -22,6 +22,7 @@ import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog'
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { RatingBadge } from '@/components/ratings';
+import { QualityBadge } from '@/components/quality/quality-badge';
 import CertificationBadge from '@/components/common/certification-badge';
 import PublicationBadge from '@/components/common/publication-badge';
 import { PUBLICATION_SCOPE_LABELS, type CertificationLevel } from '@/types/lifecycle';
@@ -448,6 +449,14 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
               <RatingBadge
                 entityType="data_product"
                 entityId={product.id}
+                size="sm"
+              />
+            )}
+            {product.id && (
+              <QualityBadge
+                entityType="data_product"
+                entityId={product.id}
+                productAggregation
                 size="sm"
               />
             )}

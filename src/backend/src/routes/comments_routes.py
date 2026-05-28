@@ -57,7 +57,7 @@ async def create_comment(
             )
 
         # Get user's groups and check admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
         
         # Get user's teams (for validation if needed)
@@ -111,7 +111,7 @@ async def list_comments(
     """List comments for an entity, filtered by project context and user's visibility permissions."""
     try:
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         
         # Get user's teams for team-based audience filtering
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
@@ -162,7 +162,7 @@ async def get_entity_timeline_count(
         total_count = 0
 
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
         
         # Get user's teams and app role
@@ -229,7 +229,7 @@ async def get_entity_timeline(
         timeline_entries = []
         
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
         
         # Get user's teams and app role
@@ -361,7 +361,7 @@ async def update_comment(
 
     try:
         # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
 
         updated = manager.update_comment(
@@ -422,7 +422,7 @@ async def delete_comment(
 
     try:
         # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
 
         # Only admins can hard delete
@@ -477,7 +477,7 @@ async def check_comment_permissions(
     """Check if current user can modify a specific comment."""
     try:
         # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
         
         can_modify = manager.can_user_modify_comment(

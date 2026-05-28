@@ -120,6 +120,15 @@ class Settings(BaseSettings):
     MOCK_USER_GROUPS: Optional[str] = Field(None, env='MOCK_USER_GROUPS')
     MOCK_USER_IP: Optional[str] = Field(None, env='MOCK_USER_IP')
 
+    # Testing flag (replaces ad-hoc os.environ.get('TESTING') reads)
+    TESTING: bool = Field(False, env='TESTING')
+
+    # Per-request user-identity override via headers.
+    # When this token is set, requests carrying a matching X-Test-Token header
+    # may impersonate any user via X-Test-User-Email (+ optional X-Test-User-Groups).
+    # SECURITY: Leave UNSET in production. The feature is fully disabled when None.
+    TEST_USER_TOKEN: Optional[str] = Field(None, env='TEST_USER_TOKEN')
+
     # LLM Configuration
     LLM_ENABLED: bool = Field(False, env='LLM_ENABLED')
     LLM_ENDPOINT: Optional[str] = Field(None, env='LLM_ENDPOINT')  # Databricks serving endpoint name (e.g., 'databricks-claude-sonnet-4-5')
@@ -171,6 +180,22 @@ class Settings(BaseSettings):
         """Compute the DATABRICKS_HTTP_PATH after validation."""
         if self.DATABRICKS_WAREHOUSE_ID:
             self.DATABRICKS_HTTP_PATH = f"/sql/1.0/warehouses/{self.DATABRICKS_WAREHOUSE_ID}"
+        return self
+
+    @model_validator(mode='after')
+    def warn_test_token_in_prod(self) -> 'Settings':
+        """Warn loudly if TEST_USER_TOKEN is set in a production environment.
+
+        The shared-secret design intentionally permits enabling header overrides
+        anywhere (so testers can hit cloud test deployments), but doing so in
+        PROD is almost always a misconfiguration.
+        """
+        if self.TEST_USER_TOKEN and self.ENV.upper() == "PROD":
+            logger.warning(
+                "TEST_USER_TOKEN is set while ENV=PROD. Per-request user impersonation "
+                "via X-Test-Token headers is ENABLED. Unset TEST_USER_TOKEN unless this "
+                "is intentional."
+            )
         return self
 
     @model_validator(mode='after')

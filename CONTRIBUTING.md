@@ -546,6 +546,60 @@ takes effect on the next picker query without a server restart. The
 sample file is checked in as a fixture — feel free to extend it
 locally, but please don't commit org-specific edits.
 
+### Testing with Different User Personas (Runtime Impersonation)
+
+The app supports per-request user impersonation via HTTP headers, so you can
+test how features behave for different personas (Admin, Data Producer,
+Consumer, etc.) against the **same running backend** — no restarts, works with
+or without the Vite dev server in front.
+
+**Setup:**
+
+1. Pick a shared-secret token, e.g. `openssl rand -hex 32`.
+2. Set it on the backend: `TEST_USER_TOKEN=<your-token>` in
+   `src/backend/.env`.
+3. (Optional, for the UI picker) set the same value as
+   `VITE_TEST_USER_TOKEN=<your-token>` in `src/frontend/.env`.
+
+**Usage from the UI:**
+
+When `TEST_USER_TOKEN` is configured, the user-info dropdown gains a
+"Test persona" section listing personas defined in
+`src/backend/src/data/test_personas.yaml`. Pick one and the page reloads
+with every API request impersonating that user. A yellow ring around the
+avatar indicates an active persona.
+
+**Usage from curl / Playwright / any HTTP client:**
+
+```bash
+curl -H "X-Test-Token: <your-token>" \
+     -H "X-Test-User-Email: producer@test.local" \
+     -H "X-Test-User-Groups: [\"data-producers\"]" \
+     http://localhost:8000/api/user/details
+```
+
+- `X-Test-User-Email` is required when `X-Test-Token` matches.
+- `X-Test-User-Groups` is optional (JSON array or comma-separated). When
+  omitted, the backend falls back to a real SCIM lookup so the persona
+  reflects actual workspace state.
+- Optional refinement headers: `X-Test-User-Username`,
+  `X-Test-User-Name`, `X-Test-User-Ip`.
+
+**Security notes:**
+
+- The override is gated on `TEST_USER_TOKEN` being set server-side. Leave it
+  UNSET in production.
+- The token itself is never returned by the server. The persona discovery
+  endpoint (`GET /api/test/personas`) returns 404 when the feature is
+  disabled.
+- This mechanism is complementary to the env-based `MOCK_USER_*` variables
+  (which require restarts) and to the in-process FastAPI
+  `app.dependency_overrides[get_user_details_from_sdk]` pattern used by
+  most integration tests.
+
+See `src/backend/src/tests/integration/test_user_header_override.py` for
+worked examples.
+
 ---
 
 ## License

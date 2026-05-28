@@ -13,10 +13,12 @@ import {
   DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, User as UserIcon, FlaskConical, Beaker, Users as UsersIcon, Settings, Info } from 'lucide-react';
+import { LogOut, User as UserIcon, FlaskConical, Beaker, Users as UsersIcon, Settings, Info, TestTube2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { usePermissions } from '@/stores/permissions-store';
+import useTestPersonaStore from '@/stores/test-persona-store';
 import { FeatureAccessLevel, AppRole } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -78,6 +80,27 @@ export default function UserInfo() {
       initializeStore,
       hasPermission,
   } = usePermissions();
+  const {
+      enabled: testPersonasEnabled,
+      personas: testPersonas,
+      selectedPersonaId: selectedTestPersonaId,
+      token: testToken,
+      setPersona: setTestPersona,
+  } = useTestPersonaStore();
+  const activeTestPersona = useMemo(
+      () => testPersonas.find((p) => p.id === selectedTestPersonaId) || null,
+      [testPersonas, selectedTestPersonaId],
+  );
+
+  const handleTestPersonaChange = (value: string) => {
+      const next = value === 'none' ? null : value;
+      if (next === selectedTestPersonaId) return;
+      setTestPersona(next);
+      // Hard reload so every store (user, permissions, notifications, etc.) is
+      // re-hydrated with the new identity. Cheaper and more correct than
+      // teaching every store to handle mid-session identity swaps.
+      window.location.reload();
+  };
 
   // Hide the Settings menu item when the user lacks the layout gate;
   // the route would otherwise redirect them home anyway.
@@ -221,10 +244,19 @@ export default function UserInfo() {
     <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-8 w-8">
+        <Button
+            variant="ghost"
+            className="relative h-8 w-8 rounded-full"
+            // Subtle persistent visual cue so testers don't forget they're
+            // acting as someone else.
+            title={activeTestPersona ? `Acting as ${activeTestPersona.label} (test mode)` : undefined}
+        >
+          <Avatar className={`h-8 w-8 ${activeTestPersona ? 'ring-2 ring-yellow-500' : ''}`}>
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
+          {activeTestPersona && (
+            <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-yellow-500 border-2 border-background" />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
@@ -262,6 +294,54 @@ export default function UserInfo() {
             </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        {testPersonasEnabled && (
+            <>
+            <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 flex items-center justify-between">
+                    <span className="flex items-center">
+                        <TestTube2 className="mr-1.5 h-3.5 w-3.5" />
+                        Test persona
+                    </span>
+                    {activeTestPersona ? (
+                        <Badge variant="outline" className="text-[10px] border-yellow-500 text-yellow-700 dark:text-yellow-400">
+                            Active
+                        </Badge>
+                    ) : !testToken ? (
+                        <Badge variant="outline" className="text-[10px]" title="Set VITE_TEST_USER_TOKEN or localStorage['ucapp.testToken'] to enable">
+                            No token
+                        </Badge>
+                    ) : null}
+                </DropdownMenuLabel>
+                <ScrollArea className="max-h-[180px] overflow-y-auto">
+                    <DropdownMenuRadioGroup
+                        value={selectedTestPersonaId || 'none'}
+                        onValueChange={handleTestPersonaChange}
+                    >
+                        <DropdownMenuRadioItem value="none" disabled={!testToken}>
+                            <UserIcon className="mr-1.5 h-3.5 w-3.5" />
+                            None (real identity)
+                        </DropdownMenuRadioItem>
+                        {testPersonas.map((p) => (
+                            <DropdownMenuRadioItem
+                                key={p.id}
+                                value={p.id}
+                                disabled={!testToken}
+                                className="flex items-center"
+                                title={p.description}
+                            >
+                                <TestTube2 className="mr-1.5 h-3.5 w-3.5" />
+                                <span className="flex flex-col">
+                                    <span>{p.label}</span>
+                                    <span className="text-[10px] text-muted-foreground">{p.email}</span>
+                                </span>
+                            </DropdownMenuRadioItem>
+                        ))}
+                    </DropdownMenuRadioGroup>
+                </ScrollArea>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            </>
+        )}
         {canSwitchRoles && (
             <>
             <DropdownMenuGroup>

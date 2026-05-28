@@ -8,6 +8,12 @@ import { RouteErrorBoundary } from './components/layout/route-error-boundary';
 import { useUserStore } from './stores/user-store';
 import { usePermissions } from './stores/permissions-store';
 import { useNotificationsStore } from './stores/notifications-store';
+import useTestPersonaStore, { installTestPersonaFetchInterceptor } from './stores/test-persona-store';
+
+// Install the fetch interceptor immediately at module load so even very early
+// requests (e.g. probes during component mount) carry the override headers
+// once a persona is restored from localStorage.
+installTestPersonaFetchInterceptor();
 import ApprovalWizardDialog from './components/workflows/approval-wizard-dialog';
 import './i18n/config'; // Initialize i18n
 
@@ -93,6 +99,7 @@ export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
   const { fetchPermissions, fetchAvailableRoles } = usePermissions();
   const { startPolling: startNotificationPolling, stopPolling: stopNotificationPolling } = useNotificationsStore();
+  const initializeTestPersonas = useTestPersonaStore((s) => s.initialize);
 
   // First-access disclaimer: any active `on_first_access` Approval Workflow the
   // current user hasn't yet accepted at the workflow's current version is
@@ -110,9 +117,13 @@ export default function App() {
 
   useEffect(() => {
     console.log("App component mounted, fetching initial user info and permissions...");
-    fetchUserInfo();
-    fetchPermissions();
-    fetchAvailableRoles();
+    // Probe for the test-persona feature first so any restored persona
+    // selection is in effect before user/permissions calls go out.
+    initializeTestPersonas().finally(() => {
+      fetchUserInfo();
+      fetchPermissions();
+      fetchAvailableRoles();
+    });
 
     console.log("Starting notification polling...");
     startNotificationPolling();
@@ -141,7 +152,7 @@ export default function App() {
         console.log("App component unmounting, stopping notification polling...");
         stopNotificationPolling();
     };
-  }, [fetchUserInfo, fetchPermissions, fetchAvailableRoles, startNotificationPolling, stopNotificationPolling]);
+  }, [fetchUserInfo, fetchPermissions, fetchAvailableRoles, startNotificationPolling, stopNotificationPolling, initializeTestPersonas]);
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="ucapp-theme">

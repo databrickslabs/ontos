@@ -216,6 +216,17 @@ The project implements a web application designed to run as a **Databricks App**
 
 ## Testing and Deployment
 
+- **Runtime user impersonation (no restart needed):** set `TEST_USER_TOKEN`
+  in the backend env to enable per-request persona switching via HTTP
+  headers (`X-Test-Token`, `X-Test-User-Email`, optional
+  `X-Test-User-Groups`). When configured, the frontend user menu shows a
+  persona picker (driven by `src/backend/src/data/test_personas.yaml`,
+  exposed via `GET /api/test/personas`) and injects the headers on every
+  `/api` request. The token is provisioned to the frontend out-of-band via
+  `VITE_TEST_USER_TOKEN`. Leave `TEST_USER_TOKEN` UNSET in production.
+  See `CONTRIBUTING.md` ("Testing with Different User Personas") for full
+  details and `src/backend/src/tests/integration/test_user_header_override.py`
+  for examples.
 - Implement **unit tests** (e.g., using `pytest` for backend, Jest/React Testing Library for frontend).
 - Use **Playwright MCP** for automated UI testing and verification:
   - Navigate to pages using `mcp__playwright__browser_navigate`

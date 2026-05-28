@@ -18,7 +18,7 @@ from src.controller.settings_manager import SettingsManager
 from pydantic import BaseModel
 from src.controller.notifications_manager import NotificationsManager
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import get_user_details_from_sdk
+from src.common.authorization import get_user_details_from_sdk, _try_resolve_test_override
 from sqlalchemy.orm import Session # Import Session
 
 from src.common.logging import get_logger
@@ -35,6 +35,14 @@ router = APIRouter(prefix="/api", tags=["User"])
 async def get_user_info_from_headers(request: Request, settings: Settings = Depends(get_settings)):
     """Get basic user information directly from request headers, or mock data if local dev."""
     logger.info("Request received for /api/user/info")
+
+    # Per-request test-user override takes precedence over both mock-mode and headers.
+    override = _try_resolve_test_override(
+        request, settings, manager=None, real_ip=request.headers.get("X-Real-Ip")
+    )
+    if override is not None:
+        logger.info(f"/user/info: returning test override identity for {override.email}")
+        return override
 
     # Check for local development environment
     if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):

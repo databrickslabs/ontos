@@ -145,6 +145,117 @@ LOCAL_DEV_USER = UserInfo(
     groups=["admins", "local-admins", "developers"] # Added 'admins' for testing
 )
 
+
+# Per-request test-user override headers (see config.TEST_USER_TOKEN).
+TEST_TOKEN_HEADER = "X-Test-Token"
+TEST_USER_EMAIL_HEADER = "X-Test-User-Email"
+TEST_USER_GROUPS_HEADER = "X-Test-User-Groups"
+TEST_USER_USERNAME_HEADER = "X-Test-User-Username"
+TEST_USER_NAME_HEADER = "X-Test-User-Name"
+TEST_USER_IP_HEADER = "X-Test-User-Ip"
+
+
+def _parse_test_groups(raw: str) -> List[str]:
+    """Parse the X-Test-User-Groups header.
+
+    Accepts a JSON array (e.g. ``["admins","data-producers"]``) or a
+    comma-separated string (e.g. ``admins,data-producers``). Whitespace is
+    trimmed and empty entries dropped.
+    """
+    import json as _json
+    try:
+        parsed = _json.loads(raw)
+        if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
+            return [g.strip() for g in parsed if g and g.strip()]
+    except Exception:
+        pass
+    return [g.strip() for g in raw.split(',') if g.strip()]
+
+
+def _try_resolve_test_override(
+    request: Request,
+    settings: Settings,
+    manager: Optional[UsersManager],
+    real_ip: Optional[str] = None,
+) -> Optional[UserInfo]:
+    """Return a synthetic ``UserInfo`` when the request carries valid test headers.
+
+    Gating: a non-empty ``TEST_USER_TOKEN`` must be configured AND the request must
+    present an ``X-Test-Token`` header whose value matches it exactly. When the
+    feature is not configured (token unset), this function is a no-op and returns
+    ``None`` regardless of the headers present.
+
+    Behavior when active:
+      - ``X-Test-User-Email`` is required; missing/empty yields a 400.
+      - ``X-Test-User-Groups`` is optional. If provided, parsed locally.
+        If absent, groups are resolved via the SP-scoped SCIM lookup
+        (``UsersManager.get_user_details_by_email``) so the override
+        mirrors real Databricks Apps behavior.
+      - Optional ``X-Test-User-{Username,Name,Ip}`` headers refine the identity.
+
+    Returns ``None`` (without raising) when the token is unset or doesn't match,
+    so the caller can fall through to the regular identity-resolution path.
+    """
+    if not settings.TEST_USER_TOKEN:
+        return None
+    presented = request.headers.get(TEST_TOKEN_HEADER)
+    if not presented or presented != settings.TEST_USER_TOKEN:
+        return None
+
+    email = request.headers.get(TEST_USER_EMAIL_HEADER)
+    if not email or not email.strip():
+        # Token matched, so the caller clearly meant to use the override;
+        # surface a precise error instead of silently falling through.
+        raise HTTPException(
+            status_code=400,
+            detail=f"{TEST_TOKEN_HEADER} matched but {TEST_USER_EMAIL_HEADER} is missing or empty",
+        )
+    email = email.strip()
+
+    groups_raw = request.headers.get(TEST_USER_GROUPS_HEADER)
+    if groups_raw is not None:
+        groups: List[str] = _parse_test_groups(groups_raw)
+        groups_source = "header"
+    elif manager is not None:
+        # Fall back to SCIM lookup so the persona reflects real workspace state.
+        try:
+            sdk_info = manager.get_user_details_by_email(user_email=email, real_ip=real_ip)
+            groups = list(sdk_info.groups or [])
+            groups_source = "scim"
+        except NotFound:
+            logger.warning(
+                "Test override: SCIM lookup for %s returned NotFound; defaulting to email-as-group fallback",
+                email,
+            )
+            groups = [email]
+            groups_source = "fallback"
+        except Exception:
+            logger.exception(
+                "Test override: SCIM lookup for %s failed; defaulting to empty groups",
+                email,
+            )
+            groups = []
+            groups_source = "error"
+    else:
+        groups = []
+        groups_source = "no-manager"
+
+    username = (request.headers.get(TEST_USER_USERNAME_HEADER) or email).strip()
+    name = (request.headers.get(TEST_USER_NAME_HEADER) or email).strip()
+    ip = (request.headers.get(TEST_USER_IP_HEADER) or real_ip or "").strip() or None
+
+    logger.warning(
+        "TEST OVERRIDE active: identity=%s username=%s groups_source=%s groups=%s",
+        email, username, groups_source, groups,
+    )
+    return UserInfo(
+        email=email,
+        username=username,
+        user=name,
+        ip=ip,
+        groups=groups,
+    )
+
 async def get_user_details_from_sdk(
     request: Request,
     settings: Settings = Depends(get_settings),
@@ -158,6 +269,14 @@ async def get_user_details_from_sdk(
     
     Falls back to get_user_details_by_email if OBO token is not available.
     """
+    # Per-request test-user override (highest precedence; gated by TEST_USER_TOKEN).
+    # Safe no-op when token is unset, regardless of headers present.
+    override = _try_resolve_test_override(
+        request, settings, manager, real_ip=request.headers.get("X-Real-Ip")
+    )
+    if override is not None:
+        return override
+
     # Check for local development environment or explicit mock flag
     if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
         # Build mock user from env-var overrides if provided
@@ -261,10 +380,28 @@ async def get_user_details_from_sdk(
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
-async def get_user_groups(user_email: str) -> List[str]:
-    """Get user groups for the given user email."""
+async def get_user_groups(user_email: str, request: Optional[Request] = None) -> List[str]:
+    """Get user groups for the given user email.
+
+    When ``request`` is provided and a valid test-user override header is
+    present, the override's groups are returned (mirrors
+    :func:`get_user_details_from_sdk`).
+    """
     # Get settings directly instead of using dependency injection
     settings = get_settings()
+
+    # Per-request test override (only when caller threaded the request through).
+    if request is not None:
+        try:
+            override = _try_resolve_test_override(
+                request, settings, manager=None, real_ip=request.headers.get("X-Real-Ip")
+            )
+            if override is not None and override.email == user_email:
+                return list(override.groups or [])
+        except HTTPException:
+            # A 400 here means the caller meant to override but did it wrong.
+            # Surface it rather than masking with an empty group list.
+            raise
 
     if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
         # Return mock groups for local/mock development honoring overrides

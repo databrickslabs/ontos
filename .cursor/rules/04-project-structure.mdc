@@ -7,62 +7,53 @@ scope:
 
 ### Project Structure
 
-- **Frontend**: (`./src/frontend/`)
-  - **Language**: TypeScript
-  - **Framework**: React
-  - **UI Library**: Shadcn UI & Tailwind CSS
-  - **Build Tool**: Vite
-  - **Directory Structure**:
-    - `src/frontend/src`: Main source code
-    - `src/frontend/index.html`: Main HTML file
-    - `src/frontend/app.tsx`: Application entry point
-    - `src/frontend/src/components/`: Reusable UI components (Tailwind CSS + Shadcn UI)
-      - `src/frontend/src/components/ui/`: Base Shadcn UI components
-      - `src/frontend/src/components/common/`: App-specific common components (e.g., `RelativeDate`)
-      - `src/frontend/src/components/<feature>/`: Feature-specific components (e.g., `data-products/data-product-form-dialog.tsx`)
-    - `src/frontend/src/views/`: Page-level components corresponding to features (e.g., `data-products.tsx`, `settings.tsx`)
-    - `src/frontend/src/hooks/`: Custom React hooks (e.g., `useApi`, `useToast`)
-    - `src/frontend/src/stores/`: State management (e.g., Zustand for `permissions-store`, `breadcrumb-store`)
-    - `src/frontend/src/types/`: TypeScript type definitions (e.g., `data-product.ts`, `settings.ts`)
-    - `src/frontend/src/config/`: Application configuration (e.g., `features.ts`)
-    - `src/frontend/src/lib/`: Utility functions (e.g., `utils.ts`)
-  - **Configuration Files**:
-    - `tsconfig.json`, `tsconfig.node.json`
-    - `vite.config.ts`
-    - `tailwind.config.js`
-    - `postcss.config.js`
-    - `index.html` (entry point)
-    - `package.json`
+Top-level layout (`src/`):
 
-- **Backend**: (`./src/backend/`)
-  - **Language**: Python
-  - **Framework**: FastAPI
-  - **Build Tool**: hatch (`pyproject.toml`)
-  - **Database ORM**: SQLAlchemy
-  - **Directory Structure**:
-    - `src/backend/src/`: Main source code
-    - `src/backend/src/controller/`: Manager classes implementing business logic (e.g., `data_products_manager.py`).
-    - `src/backend/src/models/`: Pydantic models for API data structures (e.g., `data_products.py`, `settings.py`).
-    - `src/backend/src/db_models/`: SQLAlchemy ORM models defining database tables (e.g., `data_products.py`).
-    - `src/backend/src/repositories/`: Database access layer using the Repository pattern (e.g., `data_products_repository.py`).
-    - `src/backend/src/routes/`: FastAPI routers defining API endpoints (e.g., `data_product_routes.py`).
-    - `src/backend/src/utils/`: Helper classes and functions (e.g., `startup_tasks.py`, `demo_data_loader.py`).
-    - `src/backend/src/common/`: Shared utilities and base classes.
-      - `src/backend/src/common/database.py`: Database setup and session management.
-      - `src/backend/src/common/config.py`: Settings loading (`Settings` model) and management.
-      - `src/backend/src/common/logging.py`: Logging setup.
-      - `src/backend/src/common/workspace_client.py`: Databricks SDK client setup.
-      - `src/backend/src/common/dependencies.py`: FastAPI dependency injectors (e.g., `get_settings_manager`, `get_auth_manager`).
-      - `src/backend/src/common/authorization.py`: Permissions checking logic (`PermissionChecker`, user detail fetching).
-      - `src/backend/src/common/features.py`: Feature definitions and access levels (`FeatureAccessLevel` enum).
-      - `src/backend/src/common/search_interfaces.py`: `SearchableAsset` interface definition.
-      - `src/backend/src/common/search_registry.py`: `@searchable_asset` decorator and registry (`SEARCHABLE_ASSET_MANAGERS`).
-      - `src/backend/src/common/middleware.py`: Custom FastAPI middleware (Logging, Error Handling).
-      - `src/backend/src/common/repository.py`: Base repository class (`CRUDBase`).
-    - **Configuration & Data**:
-      - `.env` / `.env.example`: Environment variables (loaded by `src/backend/src/common/config.py`).
-      - `src/backend/src/data/`: Example/Demo data for services (YAML files, e.g., `data_products.yaml`). Loaded by managers or `demo_data_loader.py`.
-      - `src/backend/src/schemas/`: JSON schema files (e.g., for Data Contract validation).
-      - `src/backend/src/workflows/`: YAML definitions for Databricks jobs/workflows.
-      - `src/backend/src/app.yaml`: Databricks App configuration (Asset Bundle format).
-    - `src/backend/src/app.py`: FastAPI application entry point.
+- `src/app.yaml` — Databricks App configuration (Asset Bundle format).
+- `src/databricks.yaml` — Asset Bundle root.
+- `src/backend/` — Python/FastAPI backend.
+- `src/frontend/` — TypeScript/React frontend.
+
+#### Backend (`src/backend/src/`)
+
+- **Language**: Python · **Framework**: FastAPI · **ORM**: SQLAlchemy · **Build**: hatch (`pyproject.toml`).
+- `app.py` — FastAPI application entry point.
+- `routes/` — FastAPI routers (e.g., `data_product_routes.py`).
+- `controller/` — Manager classes implementing business logic (e.g., `data_products_manager.py`).
+- `repositories/` — Database access layer using the Repository pattern (e.g., `data_products_repository.py`).
+- `models/` — Pydantic models for API request/response shapes (e.g., `data_products.py`).
+- `db_models/` — SQLAlchemy ORM models defining DB tables (e.g., `data_products.py`).
+- `utils/` — Helpers like `startup_tasks.py`, `demo_data_loader.py`.
+- `common/` — Shared infrastructure:
+  - `database.py` — DB setup and sessions
+  - `config.py` — `Settings` (Pydantic `BaseSettings`)
+  - `logging.py` — logging setup
+  - `workspace_client.py` — Databricks SDK client
+  - `dependencies.py` — FastAPI DI providers (e.g., `get_settings_manager`)
+  - `authorization.py` — `PermissionChecker`, user/group lookup
+  - `features.py` — `FeatureAccessLevel` enum and feature definitions
+  - `search_interfaces.py` — `SearchableAsset` interface
+  - `search_registry.py` — `@searchable_asset` decorator + `SEARCHABLE_ASSET_MANAGERS`
+  - `middleware.py` — logging + error-handling middleware
+  - `repository.py` — `CRUDBase` repository base class
+- `data/` — example/demo YAML and the ontology (`data/taxonomies/ontos-ontology.ttl`).
+- `schemas/` — JSON schema files (e.g., for Data Contract validation).
+- `workflows/` — YAML definitions for Databricks jobs/workflows.
+
+`.env` / `.env.example` at the repo root (or `src/`) supplies environment variables consumed by `common/config.py`.
+
+#### Frontend (`src/frontend/`)
+
+- **Language**: TypeScript · **Framework**: React · **UI**: Shadcn UI + Tailwind CSS · **Build**: Vite.
+- `src/` — main source code:
+  - `views/` — page-level components per feature (e.g., `data-products.tsx`, `settings.tsx`).
+  - `components/` — reusable components.
+    - `components/ui/` — base Shadcn UI components.
+    - `components/common/` — app-wide common components (e.g., `RelativeDate`).
+    - `components/<feature>/` — feature-specific components.
+  - `hooks/` — custom React hooks (e.g., `use-api`, `use-toast`).
+  - `stores/` — Zustand stores (`permissions-store`, `breadcrumb-store`, etc.).
+  - `types/` — TypeScript type definitions per feature.
+  - `config/` — app config (`features.ts`).
+  - `lib/` — utilities (`utils.ts`).
+- `app.tsx`, `index.html` at the frontend root.

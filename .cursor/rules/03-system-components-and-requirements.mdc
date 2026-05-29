@@ -7,19 +7,19 @@ scope:
 
 ### System Components & Requirements
 
-- **Frontend:** Each feature has a dedicated React View (`src/views`).
-- **Backend:** Each feature has a dedicated FastAPI endpoint (`api/routes`), prefixed with `/api/` (e.g., `/api/data-products`).
-- **Controller Pattern:** FastAPI routes delegate business logic to service controller classes (`api/controller/*_manager.py`, e.g., `DataProductsManager`).
-- **Repository Pattern:** Controllers delegate database operations to repository classes (`api/repositories/*_repository.py`, e.g., `DataProductRepository`).
-- **Database Models:** SQLAlchemy models define the database schema (`api/db_models/*.py`).
-- **API Models:** Pydantic models define the API request/response structure and perform validation (`api/models/*.py`). Data is often mapped between DB and API models.
-- **Data Storage:** Metadata (settings, roles, reviews, etc.) is stored in a database (e.g., Postgres or potentially Databricks SQL using JDBC/ODBC). Configuration can optionally be synced to a Git repository as YAML files.
+- **Frontend:** Each feature has a dedicated React View (`src/frontend/src/views`).
+- **Backend:** Each feature has a dedicated FastAPI router (`src/backend/src/routes`), URL-prefixed with `/api/` (e.g., `/api/data-products`).
+- **Controller Pattern:** FastAPI routes delegate business logic to manager classes (`src/backend/src/controller/*_manager.py`, e.g., `DataProductsManager`).
+- **Repository Pattern:** Managers delegate database operations to repository classes (`src/backend/src/repositories/*_repository.py`, e.g., `DataProductRepository`). The base class is `CRUDBase` in `src/backend/src/common/repository.py`.
+- **Database Models:** SQLAlchemy ORM models (`src/backend/src/db_models/*.py`) define the schema.
+- **API Models:** Pydantic models (`src/backend/src/models/*.py`) define request/response shapes and validation. Data is mapped between DB and API models.
+- **Data Storage:** Metadata (settings, roles, reviews, etc.) is stored in a database (Postgres / Lakebase or Databricks SQL). Configuration can optionally be synced to a Git repository as YAML files.
 - **Background Jobs:** Heavy workloads (syncing, validation) are delegated to Databricks Workflows, installed and managed via the Settings UI and `SettingsManager`. A job runner class handles job operations.
 - **Notifications:** A shared system (`NotificationsManager`) notifies users about asynchronous operations (job progress, review requests).
-- **Search:** A shared search service (`SearchManager`) indexes data from various managers (those implementing `SearchableAsset` via the `@searchable_asset` decorator and `SEARCHABLE_ASSET_MANAGERS` registry). Users can search across features (Data Products, Contracts, Glossary Terms, Reviews, etc.).
+- **Search:** A shared search service (`SearchManager`) indexes data from managers implementing `SearchableAsset` via the `@searchable_asset` decorator and the `SEARCHABLE_ASSET_MANAGERS` registry. Users can search across features (Data Products, Contracts, Glossary Terms, Reviews, etc.).
 - **Tagging System:** The app uses a **unified tagging system** via `EntityTagAssociationDb` for ALL app objects (Data Products, Datasets, Contracts, Teams, Projects, etc.). Tags are managed through `TagsManager` with namespaces and permissions.
   - **`EntityTagAssociationDb`**: The primary unified tag assignment table linking tags to any entity type.
   - **`DataContractTagDb`**: Legacy storage for tags imported from ODCS contracts (the ODCS schema has its own `tags` array of strings). On contract export, both the original ODCS tags AND any unified system tags are written out.
   - **IMPORTANT**: All entities should use `EntityTagAssociationDb` via `TagsManager` for tag assignments. Do NOT use per-entity tag tables like `DatasetTagDb` (deprecated).
-- **Git Sync:** Changes to configurations (potentially other data) can be saved as YAML files to a configured Git repository. A background process detects changes and prompts the user (via notifications) to commit/push with a pre-filled message.
-- **Startup:** The `api/app.py` defines the FastAPI app. `api/utils/startup_tasks.py` handles initialization: database setup (`initialize_database`), manager instantiation (`initialize_managers`), and demo data loading (`load_initial_data`). Managers are stored as singletons in `app.state` and accessed via FastAPI dependencies (e.g., `get_data_products_manager`).
+- **Git Sync:** Changes to configurations (and potentially other data) can be saved as YAML files to a configured Git repository. A background process detects changes and prompts the user (via notifications) to commit/push with a pre-filled message.
+- **Startup:** `src/backend/src/app.py` defines the FastAPI app. `src/backend/src/utils/startup_tasks.py` handles initialization: database setup (`initialize_database`), manager instantiation (`initialize_managers`), and demo data loading (`load_initial_data`). Managers are stored as singletons in `app.state` and accessed via FastAPI dependencies (e.g., `get_data_products_manager`).

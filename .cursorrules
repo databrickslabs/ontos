@@ -5,7 +5,7 @@ This repository uses modular Cursor rules with scoped `.mdc` files (YAML frontma
 3. 03-system-components-and-requirements.mdc
 4. 04-project-structure.mdc
 5. 05-code-style-and-structure.mdc
-6. 06-performance-optimization.mdc
-7. 07-project-conventions.mdc
-8. 08-testing-and-deployment.mdc
-9. 09-package-management.mdc
+6. 07-project-conventions.mdc
+7. 08-testing-and-deployment.mdc
+8. 09-package-management.mdc
+9. 10-entity-panel-matrix.mdc

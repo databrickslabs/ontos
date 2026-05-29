@@ -9,18 +9,15 @@ scope:
 
 **Backend**
 
-1. Follow **RESTful API design**. Endpoints grouped by resource in `api/routes`.
-2. Use **FastAPI's dependency injection** (via `Depends`) extensively. Access singletons via `request.app.state` within dependency functions.
-3. Use **SQLAlchemy** for ORM. Employ the **Repository pattern** for database abstraction.
-4. Ensure **CORS** is configured in `api/app.py` for local development.
-5. **Authorization**: Implemented via `api/common/authorization.py` (`PermissionChecker` dependency) based on user groups and role definitions stored in the database (managed by `SettingsManager` and `AuthorizationManager`). User details (including groups) are fetched via Databricks SDK (`api/controller/users_manager.py`, `api/common/authorization.py`). Permissions defined in `api/common/features.py`.
-6. **Configuration**: Managed by `api/common/config.py` using Pydantic's `BaseSettings` loading from `.env` and environment variables.
-7. **Search**: Managers implement `SearchableAsset` interface and use `@searchable_asset` decorator. `SearchManager` collects items and provides search endpoint.
+1. Endpoints are grouped by resource in `src/backend/src/routes/`. Routes are thin — delegate to managers.
+2. Use **FastAPI dependency injection** (via `Depends`) for sessions, managers, settings, and the workspace client. Singletons live in `request.app.state`.
+3. **Authorization**: Implemented via `src/backend/src/common/authorization.py` (`PermissionChecker` dependency) based on user groups and role definitions stored in the database (managed by `SettingsManager` and `AuthorizationManager`). User details (including groups) are fetched via the Databricks SDK (`src/backend/src/controller/users_manager.py` + `common/authorization.py`). Permissions are defined in `src/backend/src/common/features.py`.
+4. **Configuration**: Managed by `src/backend/src/common/config.py` using Pydantic's `BaseSettings`, loading from `.env` and environment variables.
+5. **Search**: Managers implement `SearchableAsset` and use `@searchable_asset`. `SearchManager` collects items and exposes the search endpoint.
 
 **Frontend**
 
-1. Optimize **Web Vitals**.
-2. Use `useToast` hook (based on Shadcn UI Toaster) for user feedback.
-3. Use Zustand stores (`stores/`) for cross-component state.
-4. Fetch user permissions via `/api/user/permissions` endpoint and store using `permissions-store`. Use `usePermissions` hook to check access levels (e.g., `hasPermission(featureId, FeatureAccessLevel.READ_WRITE)`). Conditionally render UI elements or disable actions based on permissions.
-5. Use `breadcrumb-store` to dynamically update breadcrumbs, especially for detail pages.
+1. Use the `useToast` hook (Shadcn UI Toaster) for user feedback.
+2. Use Zustand stores (`src/frontend/src/stores/`) for cross-component state.
+3. Fetch user permissions via `/api/user/permissions` and store in `permissions-store`. Use the `usePermissions` hook to gate UI (e.g., `hasPermission(featureId, FeatureAccessLevel.READ_WRITE)`). Conditionally render or disable actions based on permissions.
+4. Use `breadcrumb-store` to dynamically update breadcrumbs, especially on detail pages.

@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus } from 'lucide-react';
 import type { OutputPort, DataProduct } from '@/types/data-product';
-import type { DataContractListItem } from '@/types/data-contract';
 import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
+import EntityVersionPicker, { type ScopeValue } from '@/components/common/entity-version-picker';
 
 type LinkContractToPortDialogProps = {
   isOpen: boolean;
@@ -29,19 +28,23 @@ export default function LinkContractToPortDialog({
 }: LinkContractToPortDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingContracts, setIsLoadingContracts] = useState(false);
-  const [contracts, setContracts] = useState<DataContractListItem[]>([]);
-  const [selectedContractId, setSelectedContractId] = useState('');
+  // PRD #442 picker value. Entity-pinned only for now — switching the
+  // output-port write path to support family-follow-latest requires the
+  // schema work in the reference-storage slice (still pending).
+  const [pickerValue, setPickerValue] = useState<ScopeValue | null>(null);
   const [isCreateContractOpen, setIsCreateContractOpen] = useState(false);
   const [product, setProduct] = useState<DataProduct | null>(null);
 
+  // Only contracts that are safe to attach to a live deliverable should
+  // appear. The backend's role-aware visibility already enforces the
+  // personal-draft and consumer rules; this filter narrows further to
+  // the producer-publishable subset.
   const activeStatuses = ['active', 'approved', 'certified'];
 
   useEffect(() => {
     if (isOpen) {
-      fetchContracts();
       fetchProduct();
-      setSelectedContractId('');
+      setPickerValue(null);
     }
   }, [isOpen]);
 
@@ -57,32 +60,8 @@ export default function LinkContractToPortDialog({
     }
   };
 
-  const fetchContracts = async () => {
-    setIsLoadingContracts(true);
-    try {
-      const response = await fetch('/api/data-contracts');
-      if (!response.ok) throw new Error('Failed to fetch contracts');
-      
-      const data: DataContractListItem[] = await response.json();
-      
-      // Filter to only show contracts with appropriate status
-      const filteredContracts = data.filter(c => 
-        activeStatuses.includes(c.status?.toLowerCase() || '')
-      );
-      
-      setContracts(filteredContracts);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error?.message || 'Failed to load contracts',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsLoadingContracts(false);
-    }
-  };
-
   const handleSubmit = async () => {
+    const selectedContractId = pickerValue?.scope === 'entity' ? pickerValue.entityId : '';
     if (!selectedContractId) {
       toast({
         title: 'Validation Error',
@@ -144,9 +123,14 @@ export default function LinkContractToPortDialog({
   };
 
   const handleContractCreated = (contractId: string) => {
-    setSelectedContractId(contractId);
+    // The picker fetches its own list, so we just hand it the new
+    // entity-pinned value; it'll resolve display metadata on next mount.
+    setPickerValue({
+      scope: 'entity',
+      entityKind: 'contract',
+      entityId: contractId,
+    });
     setIsCreateContractOpen(false);
-    fetchContracts(); // Refresh contract list
   };
 
   return (
@@ -178,36 +162,21 @@ export default function LinkContractToPortDialog({
               <Label htmlFor="contract">
                 Select Contract <span className="text-destructive">*</span>
               </Label>
-              {isLoadingContracts ? (
-                <div className="flex items-center justify-center p-4">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : (
-                <Select value={selectedContractId} onValueChange={setSelectedContractId}>
-                  <SelectTrigger id="contract">
-                    <SelectValue placeholder="Choose a contract..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {contracts.length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground text-center">
-                        No active/approved contracts available
-                      </div>
-                    ) : (
-                      contracts.map((contract) => (
-                        <SelectItem key={contract.id} value={contract.id}>
-                          <div className="flex items-center gap-2">
-                            <span>{contract.name}</span>
-                            <Badge variant="secondary" className="text-xs">v{contract.version}</Badge>
-                            <Badge variant="outline" className="text-xs">{contract.status}</Badge>
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              )}
+              {/* EntityVersionPicker disambiguates same-named contracts by
+                  showing the version inline (closes #69). Entity-pinned
+                  only for now; family-follow-latest mode lands once the
+                  output-port reference column is added. PRD #442. */}
+              <EntityVersionPicker
+                entityKind="contract"
+                value={pickerValue}
+                onChange={setPickerValue}
+                allowedScopes={['entity']}
+                statusFilter={activeStatuses}
+                placeholder="Choose a contract…"
+              />
               <p className="text-xs text-muted-foreground">
-                Only showing contracts with 'active', 'approved', or 'certified' status
+                Only showing contracts with 'active', 'approved', or 'certified' status.
+                Pick a specific version — same-named contracts now show their version inline.
               </p>
             </div>
 
@@ -238,7 +207,7 @@ export default function LinkContractToPortDialog({
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={isSubmitting || !selectedContractId}
+              disabled={isSubmitting || pickerValue?.scope !== 'entity'}
             >
               {isSubmitting ? (
                 <>

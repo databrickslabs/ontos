@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Set
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
@@ -90,11 +90,18 @@ async def get_contracts(
     db: DBSessionDep,
     domain_id: Optional[str] = None,
     project_id: Optional[str] = None,
+    include_history: bool = False,
     current_user: CurrentUserDep = None,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all data contracts with basic ODCS structure and optional project filtering"""
+    """Get all data contracts with basic ODCS structure and optional project filtering.
+
+    ``include_history`` (PRD #442): when False (default) the response contains
+    one row per ``version_family_id`` — the newest visible version of each
+    family, plus a ``versionCount`` field. When True, every visible version
+    is returned (used by the "Show all versions" toggle in the UI).
+    """
     try:
         # Check if user is admin
         from src.common.authorization import is_user_admin
@@ -103,13 +110,39 @@ async def get_contracts(
         user_groups = current_user.groups if current_user else []
         is_admin = is_user_admin(user_groups, settings)
 
-        logger.info(f"User {current_user.email if current_user else 'unknown'} fetching contracts (project_id: {project_id}, domain_id: {domain_id}, is_admin: {is_admin})")
+        logger.info(
+            f"User {current_user.email if current_user else 'unknown'} fetching contracts "
+            f"(project_id: {project_id}, domain_id: {domain_id}, is_admin: {is_admin}, "
+            f"include_history: {include_history})"
+        )
+
+        # Resolve the caller's owning teams once so the manager can compute
+        # elevated visibility for their contracts (PRD #442 role-aware rank).
+        caller_email = current_user.email if current_user else None
+        caller_team_ids: Set[str] = set()
+        if not is_admin and current_user:
+            try:
+                from src.controller.teams_manager import teams_manager
+                user_teams = teams_manager.get_teams_for_user(
+                    db, caller_email, user_groups
+                )
+                caller_team_ids = {t.id for t in user_teams if getattr(t, "id", None)}
+            except Exception:
+                # Best-effort: a failed team lookup downgrades the caller to
+                # consumer visibility, which is the safe fail-closed default.
+                logger.exception(
+                    f"Failed to resolve teams for {caller_email}; "
+                    "falling back to consumer visibility"
+                )
 
         result = manager.list_contracts_from_db(
             db,
             domain_id=domain_id,
             project_id=project_id,
-            is_admin=is_admin
+            is_admin=is_admin,
+            include_history=include_history,
+            caller_email=caller_email,
+            caller_team_ids=caller_team_ids,
         )
         return result
     except Exception as e:
@@ -3554,23 +3587,127 @@ async def delete_contract_tag(
 async def get_contract_versions(
     contract_id: str,
     db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all versions of a contract family (same base_name), sorted newest first."""
-    try:
-        # Business logic now in manager
-        contracts = manager.get_contract_versions(db=db, contract_id=contract_id)
+    """Get every visible version of a contract's family, newest first.
 
-        # Convert to API model
-        from src.models.data_contracts_api import DataContractRead
-        return [DataContractRead.model_validate(c).model_dump() for c in contracts]
+    Grouped by ``version_family_id`` (PRD #442): one indexed equality
+    lookup returns every member, regardless of which clone path produced
+    them. Personal drafts owned by other users are hidden.
+    """
+    try:
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        user_email = current_user.username if current_user else None
+        is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
+        contracts = manager.get_contract_versions(
+            db=db,
+            contract_id=contract_id,
+            user_email=user_email,
+            is_admin=is_admin,
+        )
+
+        # Map directly to a shape matching the frontend VersionSelector's
+        # ContractVersion type — keeps the response tight and skips the
+        # heavy eager-loads that DataContractRead would need.
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "version": c.version,
+                "status": c.status,
+                "versionFamilyId": c.version_family_id,
+                "parentContractId": c.parent_contract_id,
+                "baseName": c.base_name,
+                "changeSummary": c.change_summary,
+                "draftOwnerId": c.draft_owner_id,
+                "publicationScope": getattr(c, "publication_scope", None) or "none",
+                "createdAt": c.created_at.isoformat() if c.created_at else None,
+                "updatedAt": c.updated_at.isoformat() if c.updated_at else None,
+            }
+            for c in contracts
+        ]
     except ValueError as e:
         logger.error("Validation error fetching contract versions for %s: %s", contract_id, e)
         raise HTTPException(status_code=404, detail="Contract not found")
     except Exception as e:
         logger.error("Error fetching contract versions for %s", contract_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch contract versions")
+
+
+@router.get('/data-contracts/families/{family_id}/latest', response_model=dict)
+async def get_contract_family_latest(
+    family_id: str,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+):
+    """Resolve a family-follow-latest reference to a concrete contract row.
+
+    Returns the visible "latest" version of the family per the role-aware
+    rank in :mod:`src.common.version_visibility`. Used by the
+    EntityVersionPicker and any backend read path that stores a
+    ``contract_family_id`` reference. See PRD #442.
+    """
+    from src.common.authorization import is_user_admin
+    from src.common.config import get_settings
+    from src.common.version_visibility import (
+        collapse_by_family,
+        is_admin_only_status,
+        is_visible_consumer,
+    )
+
+    user_email = current_user.username if current_user else None
+    is_admin = is_user_admin(current_user.groups if current_user else [], get_settings())
+
+    # Pull every visible row in the family first; the elevation decision
+    # is per-family, so we can compute it from this slice alone.
+    rows = data_contract_repo.get_family_versions(
+        db, family_id=family_id, user_email=user_email, is_admin=is_admin
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Family not found or empty")
+
+    # Caller is elevated for this family if any row's owner or draft is
+    # theirs. We don't have a contract subscription table to consult.
+    elevated = is_admin or any(
+        r.draft_owner_id == user_email for r in rows if user_email
+    )
+
+    # Apply consumer status filter when caller isn't elevated, drop
+    # retired rows for non-admins, then pick a single rep.
+    if not is_admin:
+        rows = [
+            r
+            for r in rows
+            if elevated
+            or (not is_admin_only_status(r) and is_visible_consumer(r))
+        ]
+    reps = collapse_by_family(
+        rows,
+        elevated_family_ids={family_id} if elevated else set(),
+        is_admin=is_admin,
+    )
+    if not reps:
+        # Family exists but nothing is visible to this caller.
+        raise HTTPException(status_code=404, detail="No visible version in family")
+
+    c = reps[0]
+    return {
+        "id": c.id,
+        "name": c.name,
+        "version": c.version,
+        "status": c.status,
+        "versionFamilyId": c.version_family_id,
+        "parentContractId": c.parent_contract_id,
+        "changeSummary": c.change_summary,
+        "draftOwnerId": c.draft_owner_id,
+        "publicationScope": getattr(c, "publication_scope", None) or "none",
+        "createdAt": c.created_at.isoformat() if c.created_at else None,
+        "updatedAt": c.updated_at.isoformat() if c.updated_at else None,
+    }
 
 
 @router.post('/data-contracts/{contract_id}/clone', response_model=dict, status_code=201)
@@ -3617,9 +3754,12 @@ async def clone_contract_for_new_version(
             }
         )
 
-        # Return new contract
+        # Return new contract. `from_attributes=True` propagates through nested
+        # validation (e.g. servers, schema, team) so Pydantic v2 accepts ORM rows
+        # for any populated relationship. Without it the clone succeeds in the DB
+        # but the response serialization fails (see issue #455).
         from src.models.data_contracts_api import DataContractRead
-        return DataContractRead.model_validate(new_contract).model_dump()
+        return DataContractRead.model_validate(new_contract, from_attributes=True).model_dump()
 
     except ValueError as e:
         logger.error("Validation error cloning contract %s: %s", contract_id, e)
@@ -3672,12 +3812,15 @@ async def get_contract_version_history(
         # Business logic now in manager
         history = manager.get_version_history(db=db, contract_id=contract_id)
 
-        # Convert database objects to API models
+        # Convert database objects to API models. `from_attributes=True` is required
+        # so Pydantic v2 propagates ORM-attribute validation into nested config models
+        # (servers, schema, team, etc.); without it the response serialization fails
+        # for any populated nested relationship (see issue #455).
         return {
-            "current": DataContractRead.model_validate(history["current"]).model_dump(),
-            "parent": DataContractRead.model_validate(history["parent"]).model_dump() if history["parent"] else None,
-            "children": [DataContractRead.model_validate(c).model_dump() for c in history["children"]],
-            "siblings": [DataContractRead.model_validate(s).model_dump() for s in history["siblings"]]
+            "current": DataContractRead.model_validate(history["current"], from_attributes=True).model_dump(),
+            "parent": DataContractRead.model_validate(history["parent"], from_attributes=True).model_dump() if history["parent"] else None,
+            "children": [DataContractRead.model_validate(c, from_attributes=True).model_dump() for c in history["children"]],
+            "siblings": [DataContractRead.model_validate(s, from_attributes=True).model_dump() for s in history["siblings"]]
         }
     except ValueError as e:
         logger.error("Validation error fetching version history for %s: %s", contract_id, e)
@@ -3960,7 +4103,7 @@ async def get_my_personal_drafts(
             limit=limit
         )
         
-        return [DataContractRead.model_validate(d).model_dump() for d in drafts]
+        return [DataContractRead.model_validate(d, from_attributes=True).model_dump() for d in drafts]
         
     except Exception as e:
         logger.error("Error fetching personal drafts", exc_info=True)

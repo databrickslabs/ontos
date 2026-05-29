@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
@@ -288,8 +288,50 @@ class ServerConfig(BaseModel):
     # Additional properties for specific server types
     properties: Dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator('properties', mode='before')
+    @classmethod
+    def _coerce_properties_from_orm(cls, value):
+        """Allow ORM-row collections to be validated alongside plain dicts.
+
+        ``DataContractServerDb.properties`` is a SQLAlchemy relationship
+        returning a list of ``DataContractServerPropertyDb`` rows (each with
+        ``key``/``value``), whereas ``ServerConfig.properties`` is a
+        ``Dict[str, Any]``. Without this coercion, calls like
+        ``DataContractRead.model_validate(orm_row, from_attributes=True)``
+        (used by the clone endpoint, history endpoint, personal-drafts list,
+        etc.) fail with ``Input should be a valid dictionary``. See #455.
+
+        Accepts:
+          * dict / mapping -> passed through
+          * iterable of objects with ``.key``/``.value`` attributes
+          * iterable of ``{"key": ..., "value": ...}`` mappings
+          * ``None`` -> empty dict
+        """
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        # Treat anything else as an iterable of property rows / dicts.
+        try:
+            iterator = iter(value)
+        except TypeError:
+            return value  # let Pydantic raise the usual error
+        result: Dict[str, Any] = {}
+        for item in iterator:
+            if isinstance(item, dict):
+                key = item.get('key')
+                val = item.get('value')
+            else:
+                key = getattr(item, 'key', None)
+                val = getattr(item, 'value', None)
+            if key is None:
+                continue
+            result[key] = val
+        return result
+
     class Config:
         populate_by_name = True
+        from_attributes = True
 
 
 # Full ODCS Contract Structure
@@ -444,6 +486,10 @@ class DataContractUpdate(BaseModel):
 
     # Semantic versioning fields
     parent_contract_id: Optional[str] = Field(None, alias='parentContractId')
+    # Canonical family grouping key. Defaults to self.id on initial create;
+    # carried forward unchanged on every clone. Optional here so the
+    # initial-create path can omit it (repo will default it).
+    version_family_id: Optional[str] = Field(None, alias='versionFamilyId')
     base_name: Optional[str] = Field(None, alias='baseName')
     change_summary: Optional[str] = Field(None, alias='changeSummary')
 
@@ -510,6 +556,7 @@ class DataContractRead(BaseModel):
 
     # Semantic versioning fields
     parentContractId: Optional[str] = Field(None, alias='parent_contract_id')
+    versionFamilyId: Optional[str] = Field(None, alias='version_family_id')
     baseName: Optional[str] = Field(None, alias='base_name')
     changeSummary: Optional[str] = Field(None, alias='change_summary')
 
@@ -526,6 +573,11 @@ class DataContractRead(BaseModel):
 
     class Config:
         populate_by_name = True
+        # Allow validating directly from ORM rows. Pre-existing endpoints
+        # (e.g. POST /data-contracts/{id}/clone) call
+        # ``DataContractRead.model_validate(db_row)`` and were returning 400
+        # under Pydantic v2 because this flag was missing.
+        from_attributes = True
 
 
 class DataContractSummary(BaseModel):
@@ -548,10 +600,35 @@ class DataContractSummary(BaseModel):
     tags: Optional[List[AssignedTag]] = Field(default_factory=list)
     created: Optional[str] = None
     updated: Optional[str] = None
-    parentContractId: Optional[str] = Field(None, alias='parent_contract_id')
-    baseName: Optional[str] = Field(None, alias='base_name')
-    changeSummary: Optional[str] = Field(None, alias='change_summary')
-    draftOwnerId: Optional[str] = Field(None, alias='draft_owner_id')
+    # The ``serialization_alias`` here forces camelCase on the wire while
+    # ``alias`` (used as the validation alias by Pydantic v2 when no
+    # explicit ``validation_alias`` is given) keeps the snake_case ORM
+    # attribute mapping working via ``from_attributes=True``. Without
+    # this, FastAPI's default ``response_model_by_alias=True`` would
+    # emit snake_case and the camelCase FE types would silently see
+    # ``undefined`` — see PRD #442 follow-up.
+    parentContractId: Optional[str] = Field(
+        None, alias='parent_contract_id', serialization_alias='parentContractId'
+    )
+    versionFamilyId: Optional[str] = Field(
+        None, alias='version_family_id', serialization_alias='versionFamilyId'
+    )
+    baseName: Optional[str] = Field(
+        None, alias='base_name', serialization_alias='baseName'
+    )
+    changeSummary: Optional[str] = Field(
+        None, alias='change_summary', serialization_alias='changeSummary'
+    )
+    draftOwnerId: Optional[str] = Field(
+        None, alias='draft_owner_id', serialization_alias='draftOwnerId'
+    )
+    # Count of versions in this row's family that are visible to the caller.
+    # Only emitted on the collapsed list view (include_history=False); on the
+    # expanded list view it is omitted because every row is its own family
+    # member. See PRD #442.
+    versionCount: Optional[int] = Field(
+        None, alias='version_count', serialization_alias='versionCount'
+    )
     schema_object_count: int = Field(0, alias='schemaObjectCount')
     publication_scope: str = "none"
     published_at: Optional[str] = None

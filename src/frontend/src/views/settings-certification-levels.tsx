@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 export default function SettingsCertificationLevelsView() {
   const { t } = useTranslation(['settings']);
   return (
-    <SettingsPageWrapper title={t('settings:tabs.certificationLevels', 'Certification Levels')}>
+    <SettingsPageWrapper title={t('settings:tabs.certificationLevels', 'Certification Levels')} permissionId="settings-certification-levels">
       <CertificationLevelsSettings />
     </SettingsPageWrapper>
   );

@@ -20,9 +20,13 @@ export type DataContractListItem = {
   updated?: string
   // Semantic versioning fields
   parentContractId?: string
+  versionFamilyId?: string // PRD #442 — every member of a version family carries this same UUID
   baseName?: string
   // Personal draft visibility
   draftOwnerId?: string // If set, this is a personal draft
+  // Number of visible versions in this row's family — only populated on the
+  // collapsed list view (include_history=false). See PRD #442.
+  versionCount?: number
   // Summary field from list endpoint
   schemaObjectCount?: number
   // Fields returned by summary endpoint for compatibility
@@ -273,8 +277,9 @@ export interface DataContract {
   created?: string
   updated?: string
   // Semantic versioning fields
-  parentContractId?: string // Parent version reference
-  baseName?: string // Base name without version suffix
+  parentContractId?: string // Parent version reference (lineage edge)
+  versionFamilyId?: string // PRD #442 — canonical family grouping key
+  baseName?: string // Legacy base name; superseded by versionFamilyId
   changeSummary?: string // Summary of changes in this version
   // Publication & Certification
   publication_scope?: string | null

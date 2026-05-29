@@ -308,6 +308,31 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
 ];
 
 /**
+ * Maps workflow trigger EntityType values to the backend ApprovalEntity key
+ * used in `approval_privileges`. Only entity types that have a corresponding
+ * approval privilege are listed here; types that are absent (e.g. 'table',
+ * 'catalog') do not carry approval semantics and are not filtered.
+ */
+export const ENTITY_TYPE_TO_APPROVAL_ENTITY: Partial<Record<EntityType, string>> = {
+  data_contract: 'CONTRACTS',
+  data_product: 'PRODUCTS',
+  domain: 'DOMAINS',
+  data_asset_review: 'ASSET_REVIEWS',
+};
+
+/**
+ * Given the workflow's entity types, returns an approval-entity key set
+ * representing the intersection of required privileges. Returns null when
+ * no entity type maps to an approval privilege (all-roles case).
+ */
+export function getApprovalEntityKeys(entityTypes: EntityType[]): string[] | null {
+  const keys = entityTypes
+    .map(et => ENTITY_TYPE_TO_APPROVAL_ENTITY[et])
+    .filter((k): k is string => k !== undefined);
+  return keys.length > 0 ? keys : null;
+}
+
+/**
  * All step types for use in selectors/dropdowns.
  */
 export const ALL_STEP_TYPES: StepType[] = [

@@ -139,8 +139,6 @@
     "setStatus": "Establecer estado",
     "pasteODCSJSON": "Pegar JSON de ODCS",
     "searchDataProductsTermsContracts": "Buscar productos de datos, términos, contratos...",
-    "noResults": "No se encontraron resultados",
-    "noTags": "No se encontraron etiquetas",
     "exampleCatalogSchemaTable": "Ejemplo: catalog.schema.table"
   },
   "states": {
@@ -331,7 +329,7 @@
     },
     "stepTypes": {
       "validation": "Validación",
-      "approval": "Aprobación",
+      "approval": "Solicitar aprobación",
       "notification": "Notificación",
       "assign_tag": "Asignar etiqueta",
       "remove_tag": "Eliminar etiqueta",

@@ -329,7 +329,7 @@
     },
     "stepTypes": {
       "validation": "Validatie",
-      "approval": "Goedkeuring",
+      "approval": "Goedkeuring aanvragen",
       "notification": "Notificatie",
       "assign_tag": "Tag Toewijzen",
       "remove_tag": "Tag Verwijderen",
@@ -344,4 +344,3 @@
     }
   }
 }
-

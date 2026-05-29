@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ChevronLeft, ChevronRight, ShieldCheck, Globe, Link2 } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ShieldCheck, Globe, Link2 } from 'lucide-react'
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
@@ -49,7 +49,7 @@ import LinkProductToContractDialog from '@/components/data-contracts/link-produc
 import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog'
 import CustomPropertyFormDialog from '@/components/data-contracts/custom-property-form-dialog'
 import CommitDraftDialog from '@/components/data-contracts/commit-draft-dialog'
-import VersionSelector from '@/components/data-contracts/version-selector'
+import VersionNavigator from '@/components/common/version-navigator'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
 import { useCopilotContext } from '@/hooks/use-copilot-context'
@@ -284,10 +284,6 @@ export default function DataContractDetails() {
   // Commit draft dialog state
   const [isCommitDraftDialogOpen, setIsCommitDraftDialogOpen] = useState(false)
 
-  // Version navigation state
-  type ContractVersionInfo = { id: string; version: string; status: string; createdAt: string }
-  const [versions, setVersions] = useState<ContractVersionInfo[]>([])
-
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([])
   const [certifyDialogOpen, setCertifyDialogOpen] = useState(false)
   const [publishDialogOpen, setPublishDialogOpen] = useState(false)
@@ -314,11 +310,6 @@ export default function DataContractDetails() {
   const isPersonalDraft = contract?.draftOwnerId != null
   // Contract is read-only if it's not editable and not a personal draft
   const isReadOnly = !canEditInPlace
-
-  // Version navigation helpers
-  const currentVersionIndex = versions.findIndex(v => v.id === contractId)
-  const prevVersion = currentVersionIndex > 0 ? versions[currentVersionIndex - 1] : null
-  const nextVersion = currentVersionIndex >= 0 && currentVersionIndex < versions.length - 1 ? versions[currentVersionIndex + 1] : null
 
   // View mode state for filtering sections - initialize from localStorage
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -401,21 +392,6 @@ export default function DataContractDetails() {
     }
   }
 
-  const fetchVersions = async () => {
-    if (!contractId) return
-    try {
-      const response = await fetch(`/api/data-contracts/${contractId}/versions`)
-      if (response.ok) {
-        const data = await response.json()
-        setVersions(Array.isArray(data) ? data : [])
-      } else {
-        setVersions([])
-      }
-    } catch (e) {
-      console.warn('Failed to fetch contract versions:', e)
-      setVersions([])
-    }
-  }
 
   const fetchContractAuthDefs = async () => {
     if (!contractId) return
@@ -711,7 +687,6 @@ export default function DataContractDetails() {
     fetchLinkedProducts()
     fetchContractAuthDefs()
     fetchProfileRuns()
-    fetchVersions()
 
     return () => {
       setStaticSegments([])
@@ -1685,36 +1660,14 @@ export default function DataContractDetails() {
             Back to List
           </Button>
 
-          {/* Version Navigation */}
-          {versions.length > 1 && (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={!prevVersion}
-                onClick={() => prevVersion && navigate(`${listPath}/${prevVersion.id}`)}
-                title={prevVersion ? `Previous version: ${prevVersion.version}` : 'No previous version'}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <VersionSelector
-                currentContractId={contractId!}
-                currentVersion={contract?.version}
-                onVersionChange={(id) => navigate(`${listPath}/${id}`)}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={!nextVersion}
-                onClick={() => nextVersion && navigate(`${listPath}/${nextVersion.id}`)}
-                title={nextVersion ? `Next version: ${nextVersion.version}` : 'No next version'}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+          {/* Version Navigation — unified across contracts and products (PRD #442). */}
+          <VersionNavigator
+            entityKind="contract"
+            currentEntityId={contractId!}
+            currentVersion={contract?.version}
+            onVersionChange={(id) => navigate(`${listPath}/${id}`)}
+          />
+
 
           {/* View Mode Toggle */}
           <div className="inline-flex items-stretch h-8 gap-px border rounded-md bg-background overflow-hidden">

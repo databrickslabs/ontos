@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Set
 import json
 
 from sqlalchemy.orm import Session
@@ -12,8 +12,15 @@ logger = get_logger(__name__)
 
 
 class CommentsManager:
-    def __init__(self, comments_repository: CommentsRepository = comments_repo):
+    def __init__(
+        self,
+        comments_repository: CommentsRepository = comments_repo,
+        settings_manager=None,
+        authorization_manager=None,
+    ):
         self._comments_repo = comments_repository
+        self._settings_manager = settings_manager
+        self._authorization_manager = authorization_manager
 
 
     def _convert_audience_from_json(self, comment_db) -> Optional[List[str]]:
@@ -51,6 +58,44 @@ class CommentsManager:
             "updated_at": comment_db.updated_at,
         }
         return Comment(**comment_data)
+
+    # ------------------------------------------------------------------
+    # Role-audience helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_viewer_role_ids(
+        self,
+        user_groups: Optional[List[str]],
+        applied_role_override_id: Optional[str] = None,
+    ) -> Set[str]:
+        """Return the set of AppRole UUIDs the viewer holds.
+
+        Delegates to ``AuthorizationManager.get_user_effective_role_ids`` when
+        the authorization manager is available; falls back to an empty set so
+        callers that don't inject the manager degrade gracefully (unfiltered
+        audience is already handled upstream).
+        """
+        if self._authorization_manager is None:
+            logger.debug("_resolve_viewer_role_ids: no authorization_manager; returning empty set")
+            return set()
+        try:
+            return self._authorization_manager.get_user_effective_role_ids(
+                user_groups, applied_role_override_id
+            )
+        except Exception:
+            logger.exception("_resolve_viewer_role_ids: unexpected error; returning empty set")
+            return set()
+
+    def _resolve_legacy_role_name_to_id(self, role_name: str) -> Optional[str]:
+        """Look up a role UUID by name for legacy ``role:<name>`` tokens."""
+        if self._settings_manager is None:
+            return None
+        try:
+            role = self._settings_manager.get_app_role_by_name(role_name)
+            return str(role.id) if role else None
+        except Exception:
+            logger.exception("_resolve_legacy_role_name_to_id: error resolving name '%s'", role_name)
+            return None
 
     def create_comment(
         self, 
@@ -94,20 +139,21 @@ class CommentsManager:
         return self._db_to_api_model(db_obj)
 
     def list_comments(
-        self, 
-        db: Session, 
-        *, 
-        entity_type: str, 
+        self,
+        db: Session,
+        *,
+        entity_type: str,
         entity_id: str,
         project_id: Optional[str] = None,
         user_groups: Optional[List[str]] = None,
         user_teams: Optional[List[str]] = None,
         user_app_role: Optional[str] = None,
         user_email: Optional[str] = None,
+        applied_role_override_id: Optional[str] = None,
         include_deleted: bool = False
     ) -> CommentListResponse:
         """List comments for an entity, filtered by project and user's audience visibility.
-        
+
         Args:
             db: Database session
             entity_type: Type of entity
@@ -115,26 +161,40 @@ class CommentsManager:
             project_id: Filter by project context
             user_groups: User's group memberships
             user_teams: User's team memberships (IDs)
-            user_app_role: User's app role name
+            user_app_role: User's app role name (legacy team-override path; kept for
+                backward-compat but superseded by group-derived role resolution)
             user_email: User's email (for direct targeting)
+            applied_role_override_id: UUID of the role the viewer has pinned via the
+                role-switcher (from SettingsManager.get_applied_role_override_for_user).
+                When set, this takes full precedence over group-derived roles.
             include_deleted: Include soft-deleted comments
         """
         logger.debug(f"Listing comments for {entity_type}:{entity_id}, project_id={project_id}")
-        
+
+        # Resolve the set of AppRole UUIDs this viewer holds, using the same
+        # group-membership + override logic that AuthorizationManager uses for
+        # feature-permission checks.
+        viewer_role_ids: Set[str] = self._resolve_viewer_role_ids(
+            user_groups, applied_role_override_id
+        )
+
         # Get all comments (for total count) - without project filter for admin view
         all_comments = self._comments_repo.list_for_entity(
-            db, 
-            entity_type=entity_type, 
+            db,
+            entity_type=entity_type,
             entity_id=entity_id,
             project_id=None,  # Get all for count
             user_groups=None,
             user_teams=None,
             user_app_role=None,
+            user_role_ids=None,
             include_deleted=include_deleted
         )
         total_count = len(all_comments)
-        
-        # Get visible comments filtered by project and audience
+
+        # Get visible comments filtered by project and audience.
+        # Pass both the legacy user_app_role (team-override name) and the new
+        # viewer_role_ids so the repository can match both token formats.
         visible_comments = self._comments_repo.list_for_entity(
             db,
             entity_type=entity_type,
@@ -143,26 +203,53 @@ class CommentsManager:
             user_groups=user_groups,
             user_teams=user_teams,
             user_app_role=user_app_role,
+            user_role_ids=viewer_role_ids if viewer_role_ids else None,
             include_deleted=include_deleted
         )
 
-        # Additionally include comments targeted directly to the user's email via audience token
-        if user_email:
+        # Additionally include comments targeted directly to the user's email via audience token,
+        # and role-tagged comments matched via legacy role:<name> tokens resolved to IDs.
+        if user_email or viewer_role_ids:
             try:
-                email_token = f"user:{user_email}"
+                already_visible_ids = {getattr(c, 'id', None) for c in visible_comments}
                 for c in all_comments:
-                    aud = getattr(c, 'audience', None)
-                    if aud and email_token in aud and c not in visible_comments:
-                        # Also check project_id matches
+                    if getattr(c, 'id', None) in already_visible_ids:
+                        continue
+                    aud_raw = getattr(c, 'audience', None)
+                    if not aud_raw:
+                        continue
+                    try:
+                        aud_tokens: List[str] = json.loads(aud_raw)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    matched = False
+
+                    # Direct email targeting
+                    if user_email and f"user:{user_email}" in aud_tokens:
+                        matched = True
+
+                    # Legacy role:<name> tokens — resolve name → UUID and compare
+                    if not matched and viewer_role_ids:
+                        for token in aud_tokens:
+                            if token.startswith("role:"):
+                                role_name = token[len("role:"):]
+                                resolved_id = self._resolve_legacy_role_name_to_id(role_name)
+                                if resolved_id and resolved_id in viewer_role_ids:
+                                    matched = True
+                                    break
+
+                    if matched:
+                        # Respect project_id scope
                         if project_id is None or c.project_id is None or c.project_id == project_id:
                             visible_comments.append(c)
             except Exception:
-                pass
+                logger.exception("list_comments: error during supplemental audience matching")
+
         visible_count = len(visible_comments)
-        
+
         # Convert to API models
         api_comments = [self._db_to_api_model(comment) for comment in visible_comments]
-        
+
         return CommentListResponse(
             comments=api_comments,
             total_count=total_count,

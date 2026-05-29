@@ -169,7 +169,7 @@ export default function About() {
       <h2 className="text-3xl font-semibold mb-6">{t('about:learnMore')}</h2>
       <div className="flex flex-col md:flex-row gap-4">
         <Button asChild size="lg">
-          <a href="https://github.com/larsgeorge/ontos" target="_blank" rel="noopener noreferrer">
+          <a href="https://github.com/databrickslabs/ontos" target="_blank" rel="noopener noreferrer">
             <ExternalLink className="mr-2 h-5 w-5" /> {t('about:cta.github')}
           </a>
         </Button>

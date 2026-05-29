@@ -168,7 +168,7 @@ export default function BusinessRolesView() {
   ], [canWrite, canAdmin, t]);
 
   return (
-    <SettingsPageWrapper title={t('title')}>
+    <SettingsPageWrapper title={t('title')} permissionId="settings-business-roles">
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Briefcase className="w-8 h-8" />

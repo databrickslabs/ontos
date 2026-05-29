@@ -37,7 +37,7 @@ export default function UICustomizationSettings() {
   const { t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-  const hasWriteAccess = hasPermission('settings', FeatureAccessLevel.READ_WRITE);
+  const hasWriteAccess = hasPermission('settings-ui', FeatureAccessLevel.READ_WRITE);
 
   const [settings, setSettings] = useState<UICustomizationState>({
     i18nEnabled: true,

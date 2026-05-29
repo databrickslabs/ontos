@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Connections"])
 
-FEATURE_ID = "settings"
+FEATURE_ID = "settings-connectors"
 
 
 def _get_manager(db: Session = Depends(get_db)) -> ConnectionsManager:

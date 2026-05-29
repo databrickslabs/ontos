@@ -49,6 +49,7 @@ from src.routes import (
     settings_routes,
     semantic_models_routes,
     semantic_links_routes,
+    test_personas_routes,
     user_routes,
     audit_routes,
     change_log_routes,
@@ -319,7 +320,7 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(MaintenanceMiddleware)
 
 # Mount static files for the React application (skip in test mode)
-if not os.environ.get('TESTING'):
+if not settings.TESTING:
     app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name="static")
 
 # Data Products - Core data lifecycle
@@ -377,6 +378,7 @@ search_routes.register_routes(app)
 llm_search_routes.register_routes(app)
 jobs_routes.register_routes(app)
 user_routes.register_routes(app)
+test_personas_routes.register_routes(app)
 audit_routes.register_routes(app)
 change_log_routes.register_routes(app)
 mcp_routes.register_routes(app)
@@ -437,7 +439,7 @@ async def retry_startup():
     return {"status": "ok", "health": app.state.health}
 
 # Define the SPA catch-all route LAST (skip in test mode)
-if not os.environ.get('TESTING'):
+if not settings.TESTING:
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
         # Only catch routes that aren't API routes, static files, or API docs

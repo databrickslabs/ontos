@@ -9,7 +9,7 @@ from src.common.authorization import PermissionChecker, get_user_groups, is_user
 from src.common.config import get_settings, Settings
 from src.controller.comments_manager import CommentsManager
 from src.controller.change_log_manager import change_log_manager
-from src.common.manager_dependencies import get_comments_manager
+from src.common.manager_dependencies import get_comments_manager, get_settings_manager
 from src.models.comments import Comment, CommentCreate, CommentUpdate, CommentListResponse, RatingCreate, RatingAggregation
 from src.repositories.teams_repository import team_repo
 
@@ -57,7 +57,7 @@ async def create_comment(
             )
 
         # Get user's groups and check admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
         
         # Get user's teams (for validation if needed)
@@ -111,21 +111,32 @@ async def list_comments(
     """List comments for an entity, filtered by project context and user's visibility permissions."""
     try:
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email)
-        
+        user_groups = await get_user_groups(current_user.email, request)
+
         # Get user's teams for team-based audience filtering
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
         user_team_ids = [team.id for team in user_teams]
-        
-        # Get user's app role for role-based audience filtering
+
+        # Legacy team-override role name (kept for backward-compat with role:<name> tokens)
         user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=request)
-        
+
+        # Applied role-ID override (role-switcher / impersonation) — used for the
+        # group-derived role resolution path introduced in issue #326.
+        applied_role_override_id: Optional[str] = None
+        try:
+            settings_mgr = get_settings_manager(request)
+            applied_role_override_id = settings_mgr.get_applied_role_override_for_user(
+                current_user.email
+            )
+        except Exception:
+            logger.debug("list_comments: could not fetch applied role override; proceeding without it")
+
         # Only admins can see deleted comments
         if include_deleted:
             is_admin = is_user_admin(user_groups, get_settings())
             if not is_admin:
                 include_deleted = False
-        
+
         return manager.list_comments(
             db,
             entity_type=entity_type,
@@ -135,6 +146,7 @@ async def list_comments(
             user_teams=user_team_ids,
             user_app_role=user_app_role,
             user_email=current_user.email,
+            applied_role_override_id=applied_role_override_id,
             include_deleted=include_deleted
         )
     except HTTPException:
@@ -162,13 +174,22 @@ async def get_entity_timeline_count(
         total_count = 0
 
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
-        
+
         # Get user's teams and app role
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
         user_team_ids = [team.id for team in user_teams]
         user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=request)
+
+        applied_role_override_id: Optional[str] = None
+        try:
+            settings_mgr = get_settings_manager(request)
+            applied_role_override_id = settings_mgr.get_applied_role_override_for_user(
+                current_user.email
+            )
+        except Exception:
+            logger.debug("get_entity_timeline_count: could not fetch applied role override")
 
         if filter_type in ("all", "comments"):
             # Get comments count
@@ -184,6 +205,7 @@ async def get_entity_timeline_count(
                 user_teams=user_team_ids,
                 user_app_role=user_app_role,
                 user_email=current_user.email,
+                applied_role_override_id=applied_role_override_id,
                 include_deleted=include_deleted
             )
             total_count += len(comments_response.comments)
@@ -227,21 +249,30 @@ async def get_entity_timeline(
     """Get a unified timeline of comments and change log entries for an entity."""
     try:
         timeline_entries = []
-        
+
         # Get user's groups for audience filtering
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
-        
+
         # Get user's teams and app role
         user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
         user_team_ids = [team.id for team in user_teams]
         user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=request)
-        
+
+        applied_role_override_id: Optional[str] = None
+        try:
+            settings_mgr = get_settings_manager(request)
+            applied_role_override_id = settings_mgr.get_applied_role_override_for_user(
+                current_user.email
+            )
+        except Exception:
+            logger.debug("get_entity_timeline: could not fetch applied role override")
+
         if filter_type in ("all", "comments"):
             # Get comments
             if include_deleted and not is_admin:
                 include_deleted = False
-                
+
             comments_response = manager.list_comments(
                 db,
                 entity_type=entity_type,
@@ -251,6 +282,7 @@ async def get_entity_timeline(
                 user_teams=user_team_ids,
                 user_app_role=user_app_role,
                 user_email=current_user.email,
+                applied_role_override_id=applied_role_override_id,
                 include_deleted=include_deleted
             )
             
@@ -361,7 +393,7 @@ async def update_comment(
 
     try:
         # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
 
         updated = manager.update_comment(
@@ -422,7 +454,7 @@ async def delete_comment(
 
     try:
         # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
 
         # Only admins can hard delete
@@ -477,7 +509,7 @@ async def check_comment_permissions(
     """Check if current user can modify a specific comment."""
     try:
         # Get user's groups to check for admin status
-        user_groups = await get_user_groups(current_user.email)
+        user_groups = await get_user_groups(current_user.email, request)
         is_admin = is_user_admin(user_groups, get_settings())
         
         can_modify = manager.can_user_modify_comment(

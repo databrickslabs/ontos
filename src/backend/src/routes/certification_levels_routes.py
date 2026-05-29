@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Certification Levels"])
 
-SETTINGS_FEATURE_ID = "settings"
+SETTINGS_FEATURE_ID = "settings-certification-levels"
 
 
 @router.get(

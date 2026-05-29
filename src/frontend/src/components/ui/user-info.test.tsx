@@ -29,6 +29,7 @@ interface MockPermissionsState {
   appliedRoleId: string | null;
   setRoleOverride: typeof setRoleOverrideMock;
   initializeStore: typeof initializeStoreMock;
+  hasPermission: (featureId: string, requiredLevel: FeatureAccessLevel) => boolean;
 }
 
 let permissionsState: MockPermissionsState;
@@ -141,6 +142,7 @@ describe('UserInfo role switcher gating', () => {
       appliedRoleId: null,
       setRoleOverride: setRoleOverrideMock,
       initializeStore: initializeStoreMock,
+      hasPermission: () => true,
     };
   });
 

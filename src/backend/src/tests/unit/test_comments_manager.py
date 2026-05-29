@@ -4,7 +4,8 @@ Unit tests for CommentsManager
 import pytest
 import json
 from datetime import datetime
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
+from uuid import UUID
 from src.controller.comments_manager import CommentsManager
 from src.models.comments import CommentCreate, CommentUpdate, Comment
 from src.db_models.comments import CommentDb, CommentStatus
@@ -386,4 +387,249 @@ class TestCommentsManager:
         )
 
         assert result is False
+
+
+# =============================================================================
+# Issue #326 — role audience parity with workflows
+# =============================================================================
+
+ROLE_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+ROLE_UUID_2 = "11111111-2222-3333-4444-555555555555"
+COMMENT_UUID = "cccccccc-dddd-eeee-ffff-000000000001"
+
+
+def _make_comment_db(
+    comment_id: str = COMMENT_UUID,
+    audience_json: str | None = None,
+    project_id: str | None = None,
+) -> Mock:
+    """Build a minimal CommentDb mock."""
+    c = Mock(spec=CommentDb)
+    c.id = comment_id
+    c.entity_id = "e-1"
+    c.entity_type = "data_product"
+    c.title = "Test"
+    c.comment = "body"
+    c.audience = audience_json
+    c.project_id = project_id
+    c.status = CommentStatus.ACTIVE
+    c.comment_type = None
+    c.rating = None
+    c.created_by = "author@example.com"
+    c.updated_by = "author@example.com"
+    c.created_at = datetime(2024, 1, 1)
+    c.updated_at = datetime(2024, 1, 1)
+    return c
+
+
+class TestRoleAudienceParity:
+    """Tests for issue #326 – role_id:<uuid> and legacy role:<name> audience matching."""
+
+    @pytest.fixture
+    def mock_auth_manager(self):
+        m = Mock()
+        m.get_user_effective_role_ids.return_value = {ROLE_UUID}
+        return m
+
+    @pytest.fixture
+    def mock_settings_manager(self):
+        m = Mock()
+        # get_app_role_by_name returns a role whose id matches ROLE_UUID
+        role = Mock()
+        role.id = UUID(ROLE_UUID)
+        m.get_app_role_by_name.return_value = role
+        return m
+
+    @pytest.fixture
+    def mock_repo(self):
+        return Mock()
+
+    @pytest.fixture
+    def manager(self, mock_repo, mock_settings_manager, mock_auth_manager):
+        return CommentsManager(
+            comments_repository=mock_repo,
+            settings_manager=mock_settings_manager,
+            authorization_manager=mock_auth_manager,
+        )
+
+    # ------------------------------------------------------------------
+    # _resolve_viewer_role_ids
+    # ------------------------------------------------------------------
+
+    def test_resolve_viewer_role_ids_group_derived(self, manager, mock_auth_manager):
+        """Group membership resolves to a set of role UUIDs."""
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID}
+        result = manager._resolve_viewer_role_ids(["data-producers"], None)
+        assert result == {ROLE_UUID}
+        mock_auth_manager.get_user_effective_role_ids.assert_called_once_with(
+            ["data-producers"], None
+        )
+
+    def test_resolve_viewer_role_ids_override(self, manager, mock_auth_manager):
+        """Applied role override ID is passed through to auth_manager."""
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID_2}
+        result = manager._resolve_viewer_role_ids(["some-group"], ROLE_UUID_2)
+        assert result == {ROLE_UUID_2}
+        mock_auth_manager.get_user_effective_role_ids.assert_called_once_with(
+            ["some-group"], ROLE_UUID_2
+        )
+
+    def test_resolve_viewer_role_ids_no_auth_manager(self, mock_repo):
+        """Falls back to empty set when no auth manager is available."""
+        mgr = CommentsManager(comments_repository=mock_repo)
+        result = mgr._resolve_viewer_role_ids(["some-group"])
+        assert result == set()
+
+    # ------------------------------------------------------------------
+    # list_comments – role_id:<uuid> token matching (new format)
+    # ------------------------------------------------------------------
+
+    def test_list_comments_role_id_token_match(self, manager, mock_repo, mock_auth_manager):
+        """Comments tagged role_id:<uuid> are visible to a viewer who holds that role."""
+        comment = _make_comment_db(
+            audience_json=json.dumps([f"role_id:{ROLE_UUID}"])
+        )
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID}
+        # First call (all_comments), second call (visible)
+        mock_repo.list_for_entity.side_effect = [
+            [comment],
+            [comment],
+        ]
+
+        db = Mock()
+        result = manager.list_comments(
+            db, entity_type="data_product", entity_id="e-1",
+            user_groups=["data-producers"]
+        )
+
+        assert result.visible_count == 1
+        assert str(result.comments[0].id) == COMMENT_UUID
+
+    def test_list_comments_role_id_token_no_match(self, manager, mock_repo, mock_auth_manager):
+        """Comments tagged role_id:<uuid> are hidden when viewer doesn't hold that role."""
+        comment = _make_comment_db(
+            audience_json=json.dumps([f"role_id:{ROLE_UUID}"])
+        )
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID_2}  # different role
+        mock_repo.list_for_entity.side_effect = [
+            [comment],  # all comments
+            [],          # none visible (repo filters out mismatched role_id)
+        ]
+
+        db = Mock()
+        result = manager.list_comments(
+            db, entity_type="data_product", entity_id="e-1",
+            user_groups=["other-group"]
+        )
+
+        assert result.visible_count == 0
+
+    # ------------------------------------------------------------------
+    # list_comments – legacy role:<name> token matching
+    # ------------------------------------------------------------------
+
+    def test_list_comments_legacy_role_name_token_match(
+        self, manager, mock_repo, mock_auth_manager, mock_settings_manager
+    ):
+        """Legacy role:<name> tokens are resolved to UUIDs and matched."""
+        comment = _make_comment_db(
+            audience_json=json.dumps(["role:Data Producer"])
+        )
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID}
+        # Repo returns the comment in all_comments but NOT in visible (repo doesn't know
+        # about the name→id resolution; manager does the supplemental check).
+        mock_repo.list_for_entity.side_effect = [
+            [comment],  # all
+            [],          # visible (role:<name> not matched by repo directly)
+        ]
+        # settings_manager resolves "Data Producer" → role with id=ROLE_UUID
+        role = Mock()
+        role.id = UUID(ROLE_UUID)
+        mock_settings_manager.get_app_role_by_name.return_value = role
+
+        db = Mock()
+        result = manager.list_comments(
+            db, entity_type="data_product", entity_id="e-1",
+            user_groups=["data-producers"]
+        )
+
+        # Supplemental loop should add the comment
+        assert result.visible_count == 1
+        mock_settings_manager.get_app_role_by_name.assert_called_once_with("Data Producer")
+
+    def test_list_comments_legacy_role_name_token_no_match(
+        self, manager, mock_repo, mock_auth_manager, mock_settings_manager
+    ):
+        """Legacy role:<name> token is NOT matched when viewer holds a different role."""
+        comment = _make_comment_db(
+            audience_json=json.dumps(["role:Data Producer"])
+        )
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID_2}
+        mock_repo.list_for_entity.side_effect = [
+            [comment],
+            [],
+        ]
+        # Name resolves to ROLE_UUID, but viewer only holds ROLE_UUID_2
+        role = Mock()
+        role.id = UUID(ROLE_UUID)
+        mock_settings_manager.get_app_role_by_name.return_value = role
+
+        db = Mock()
+        result = manager.list_comments(
+            db, entity_type="data_product", entity_id="e-1",
+            user_groups=["consumers"]
+        )
+
+        assert result.visible_count == 0
+
+    # ------------------------------------------------------------------
+    # list_comments – override path
+    # ------------------------------------------------------------------
+
+    def test_list_comments_override_role_id_match(
+        self, manager, mock_repo, mock_auth_manager
+    ):
+        """Applied role_id override pins the viewer to exactly that role."""
+        comment = _make_comment_db(
+            audience_json=json.dumps([f"role_id:{ROLE_UUID}"])
+        )
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID}
+        mock_repo.list_for_entity.side_effect = [
+            [comment],
+            [comment],
+        ]
+
+        db = Mock()
+        result = manager.list_comments(
+            db, entity_type="data_product", entity_id="e-1",
+            applied_role_override_id=ROLE_UUID
+        )
+
+        assert result.visible_count == 1
+        mock_auth_manager.get_user_effective_role_ids.assert_called_once_with(
+            None, ROLE_UUID
+        )
+
+    # ------------------------------------------------------------------
+    # Ensure repo is called with user_role_ids kwarg
+    # ------------------------------------------------------------------
+
+    def test_list_comments_passes_role_ids_to_repo(
+        self, manager, mock_repo, mock_auth_manager
+    ):
+        """Manager passes resolved role_ids to the repository for SQL-level filtering."""
+        mock_auth_manager.get_user_effective_role_ids.return_value = {ROLE_UUID}
+        mock_repo.list_for_entity.return_value = []
+
+        db = Mock()
+        manager.list_comments(
+            db, entity_type="data_product", entity_id="e-1",
+            user_groups=["producers"]
+        )
+
+        # Second call is the visible-comments query; check user_role_ids was passed
+        calls = mock_repo.list_for_entity.call_args_list
+        assert len(calls) == 2
+        visible_call_kwargs = calls[1].kwargs
+        assert visible_call_kwargs.get("user_role_ids") == {ROLE_UUID}
 

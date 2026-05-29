@@ -3,12 +3,19 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Loader2, ShieldX } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { usePermissions } from '@/stores/permissions-store';
+import usePermissionsStore, { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 interface SettingsPageWrapperProps {
   title: string;
+  /**
+   * Per-sub-page permission ID (e.g. `settings-general`, `settings-git`).
+   * Access is granted only if the user holds at least `Read-only` on BOTH
+   * the parent `settings` feature (the layout gate) AND this specific
+   * sub-page permission.
+   */
+  permissionId: string;
   children: React.ReactNode;
 }
 
@@ -16,13 +23,20 @@ interface SettingsPageWrapperProps {
  * Shared wrapper for standalone settings pages.
  * Handles permission check, loading state, and breadcrumb setup.
  */
-export default function SettingsPageWrapper({ title, children }: SettingsPageWrapperProps) {
+export default function SettingsPageWrapper({ title, permissionId, children }: SettingsPageWrapperProps) {
   const { t } = useTranslation(['settings', 'common']);
   const { isLoading: permissionsLoading, hasPermission } = usePermissions();
+  // Distinguish "store not yet initialized" from "user lacks access" — without
+  // this guard we'd flash the Access Denied panel on first mount before the
+  // permissions fetch has even started.
+  const initAttempted = usePermissionsStore((s) => s._initAttempted);
+  const isInitializing = usePermissionsStore((s) => s._isInitializing);
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
-  const hasSettingsAccess = hasPermission('settings', FeatureAccessLevel.READ_ONLY);
+  const hasLayoutAccess = hasPermission('settings', FeatureAccessLevel.READ_ONLY);
+  const hasPageAccess = hasPermission(permissionId, FeatureAccessLevel.READ_ONLY);
+  const hasSettingsAccess = hasLayoutAccess && hasPageAccess;
 
   useEffect(() => {
     setStaticSegments([]);
@@ -33,7 +47,7 @@ export default function SettingsPageWrapper({ title, children }: SettingsPageWra
     };
   }, [title, setStaticSegments, setDynamicTitle]);
 
-  if (permissionsLoading) {
+  if (permissionsLoading || isInitializing || !initAttempted) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

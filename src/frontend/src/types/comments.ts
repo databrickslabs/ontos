@@ -71,8 +71,16 @@ export interface AudienceTeam {
   name: string;
 }
 
+/**
+ * App role as returned by /api/workflows/roles.
+ * ``id`` is the UUID string used for ``role_id:<uuid>`` audience tokens.
+ * ``source`` distinguishes "app" (RBAC) from "business" roles.
+ */
 export interface AudienceRole {
+  id: string;
   name: string;
+  description?: string | null;
+  source?: 'app' | 'business' | string;
 }
 
 // Rating-related types

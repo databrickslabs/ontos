@@ -444,7 +444,7 @@ The fundamental insight is that data governance is ultimately about meaning. And
 
 ### Q: If listeners want to try Ontos, where do they start?
 
-**A:** "It's open source under Apache 2.0 at github.com/larsgeorge/ontos. Clone it, follow the Quick Start, enable demo mode to see sample data, and start exploring. The User Guide is comprehensive."
+**A:** "It's open source under Apache 2.0 at github.com/databrickslabs/ontos. Clone it, follow the Quick Start, enable demo mode to see sample data, and start exploring. The User Guide is comprehensive."
 
 ### Q: What existing technology inspired Ontos the most?
 

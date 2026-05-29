@@ -39,33 +39,88 @@ ADMIN_ONLY_LEVELS = [
 ]
 
 
+# Permission group buckets — mirror the sidebar groups plus a Settings bucket
+# and a catch-all `Other` bucket for cross-cutting permissions.
+GROUP_DISCOVER = "Discover"
+GROUP_BUILD = "Build"
+GROUP_GOVERN = "Govern"
+GROUP_DEPLOY = "Deploy"
+GROUP_SETTINGS = "Settings"
+GROUP_OTHER = "Other"
+
+
 # Mirroring src/config/features.ts (simplified for now)
-# Key: Feature ID, Value: Dict with 'name' and 'allowed_levels'
+# Key: Feature ID, Value: Dict with 'name', 'allowed_levels', and 'group'
 APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
-    # Data Management
-    'data-domains': {
-        'name': 'Data Domains',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS # Standard CRUD + Admin delete
+    # --- Discover ---
+    'data-catalog': {
+        'name': 'Data Catalog',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Browse catalog, view lineage
+        'group': GROUP_DISCOVER,
     },
+    'llm-search': {
+        'name': 'LLM Search',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_DISCOVER,
+    },
+
+    # --- Build ---
     'data-products': {
         'name': 'Data Products',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS + [FeatureAccessLevel.FILTERED] # Allow filtering
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS + [FeatureAccessLevel.FILTERED],  # Allow filtering
+        'group': GROUP_BUILD,
     },
     'data-contracts': {
         'name': 'Data Contracts',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_BUILD,
     },
-    'teams': {
-        'name': 'Teams',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+    'assets': {
+        'name': 'Assets',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_BUILD,
     },
-    'projects': {
-        'name': 'Projects',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+    'semantic-models': {
+        'name': 'Concept Browser',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_BUILD,
     },
+    'schema-importer': {
+        'name': 'Schema Importer',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_BUILD,
+    },
+
+    # --- Govern ---
     'compliance': {
         'name': 'Compliance',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_GOVERN,
+    },
+    'master-data': {
+        'name': 'Master Data Management',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_GOVERN,
+    },
+    'data-asset-reviews': {
+        'name': 'Asset Reviews',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Stewards review, admins manage
+        'group': GROUP_GOVERN,
+    },
+    'security-features': {
+        'name': 'Security Features',
+        'allowed_levels': ADMIN_ONLY_LEVELS,  # Likely admin only
+        'group': GROUP_GOVERN,
+    },
+    'entitlements': {
+        'name': 'Entitlements',
+        'allowed_levels': ADMIN_ONLY_LEVELS,  # Admin manages personas/groups
+        'group': GROUP_GOVERN,
+    },
+    'entitlements-sync': {
+        'name': 'Entitlements Sync',
+        'allowed_levels': ADMIN_ONLY_LEVELS,  # Admin manages sync jobs
+        'group': GROUP_GOVERN,
     },
     'process-workflows': {
         'name': 'Process Workflows',
@@ -73,42 +128,195 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
             FeatureAccessLevel.NONE,
             FeatureAccessLevel.READ_ONLY,
             FeatureAccessLevel.ADMIN,  # Only Admin gets full write access
-        ]
-    },
-    'estate-manager': {
-        'name': 'Estate Manager',
-        'allowed_levels': READ_ONLY_FULL_LEVELS # Now includes ADMIN
-    },
-    'master-data': {
-        'name': 'Master Data Management',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS # Requires admin for setup?
-    },
-    # Security
-    'security-features': {
-        'name': 'Security Features',
-        'allowed_levels': ADMIN_ONLY_LEVELS # Likely admin only
-    },
-    'entitlements': {
-        'name': 'Entitlements',
-        'allowed_levels': ADMIN_ONLY_LEVELS # Admin manages personas/groups
-    },
-    'entitlements-sync': {
-        'name': 'Entitlements Sync',
-        'allowed_levels': ADMIN_ONLY_LEVELS # Admin manages sync jobs
+        ],
+        'group': GROUP_GOVERN,
     },
     'access-grants': {
         'name': 'Access Grants',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS # Users request, admins grant
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Users request, admins grant
+        'group': GROUP_GOVERN,
     },
-    'data-asset-reviews': {
-        'name': 'Asset Reviews',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS # Stewards review, admins manage
+
+    # --- Deploy ---
+    'estate-manager': {
+        'name': 'Estate Manager',
+        'allowed_levels': READ_ONLY_FULL_LEVELS,  # Now includes ADMIN
+        'group': GROUP_DEPLOY,
     },
-    'data-catalog': {
-        'name': 'Data Catalog',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS  # Browse catalog, view lineage
+    'catalog-commander': {
+        'name': 'Catalog Commander',
+        'allowed_levels': [FeatureAccessLevel.NONE, FeatureAccessLevel.READ_ONLY, FeatureAccessLevel.FULL, FeatureAccessLevel.ADMIN],
+        'group': GROUP_DEPLOY,
     },
-    # Observability / Logs
+
+    # --- Settings (layout gate) ---
+    'settings': {
+        'name': 'Settings',
+        # Bumped from ADMIN_ONLY to full scale — acts as the layout gate.
+        # Each sub-page below has its own settings-<name> permission.
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+
+    # --- Settings: Reference Data sub-pages ---
+    'settings-data-domains': {
+        'name': 'Settings — Data Domains',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-business-roles': {
+        'name': 'Settings — Business Roles',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-delivery-methods': {
+        'name': 'Settings — Delivery Methods',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-asset-types': {
+        'name': 'Settings — Asset Types',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-teams': {
+        'name': 'Settings — Teams',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-projects': {
+        'name': 'Settings — Projects',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-certification-levels': {
+        'name': 'Settings — Certification Levels',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+
+    # --- Settings: Configuration sub-pages ---
+    'settings-general': {
+        'name': 'Settings — General',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-ui': {
+        'name': 'Settings — UI Customization',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-tags': {
+        'name': 'Settings — Tags',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-connectors': {
+        'name': 'Settings — Connectors',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+
+    # --- Settings: Integrations sub-pages ---
+    'settings-git': {
+        'name': 'Settings — Git',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-mcp': {
+        'name': 'Settings — MCP',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-directory': {
+        'name': 'Settings — Directory',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-semantic-models': {
+        'name': 'Settings — RDF Sources',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-search': {
+        'name': 'Settings — Search',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+
+    # --- Settings: Operations sub-pages ---
+    'settings-jobs': {
+        'name': 'Settings — Jobs',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-delivery': {
+        'name': 'Settings — Delivery',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-workflows': {
+        'name': 'Settings — Workflows',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+
+    # --- Settings: Access Control sub-pages ---
+    'settings-roles': {
+        'name': 'Settings — App Roles',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+    'settings-audit': {
+        'name': 'Settings — Audit Trail',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
+
+    # --- Other (cross-cutting / consumption-side permissions) ---
+    # These existing top-level IDs remain in place to govern consumption of
+    # the underlying feature elsewhere in the app (pickers, lineage, search
+    # results, etc.). Their settings-page counterparts live above.
+    'data-domains': {
+        'name': 'Data Domains',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
+    },
+    'teams': {
+        'name': 'Teams',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
+    },
+    'projects': {
+        'name': 'Projects',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
+    },
+    'business-roles': {
+        'name': 'Business Roles',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
+    },
+    'business-owners': {
+        'name': 'Business Owners',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
+    },
+    'delivery-methods': {
+        'name': 'Delivery Methods',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
+    },
+    'tags': {
+        'name': 'Tags',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # READ_WRITE can create tags, ADMIN can manage taxonomy
+        'group': GROUP_OTHER,
+    },
+    'jobs': {
+        'name': 'Jobs',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # View/manage background jobs
+        'group': GROUP_OTHER,
+    },
     'audit': {
         'name': 'Audit & Change Logs',
         # Allow read-only, full (if used), and admin; write requires at least READ_WRITE but routes use explicit checks
@@ -118,86 +326,51 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
             FeatureAccessLevel.READ_WRITE,
             FeatureAccessLevel.FULL,
             FeatureAccessLevel.ADMIN,
-        ]
-    },
-    # Tools
-    'catalog-commander': {
-        'name': 'Catalog Commander',
-        'allowed_levels': [FeatureAccessLevel.NONE, FeatureAccessLevel.READ_ONLY, FeatureAccessLevel.FULL, FeatureAccessLevel.ADMIN]
-    },
-    # System (Settings is special, About is always visible)
-    'settings': {
-        'name': 'Settings',
-        'allowed_levels': ADMIN_ONLY_LEVELS # Only Admins change settings
-    },
-    'semantic-models': {
-        'name': 'Concept Browser',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
-    },
-    'tags': {
-        'name': 'Tags',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS # READ_WRITE can create tags, ADMIN can manage taxonomy
-    },
-    # Search & Discovery
-    'llm-search': {
-        'name': 'LLM Search',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS  # Anyone with read access can use LLM search
+        ],
+        'group': GROUP_OTHER,
     },
     'notifications': {
         'name': 'Notifications',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS  # Users can view/manage own notifications
-    },
-    'jobs': {
-        'name': 'Jobs',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS  # View/manage background jobs
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Users can view/manage own notifications
+        'group': GROUP_OTHER,
     },
     'self-service': {
         'name': 'Self Service',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS  # Self-service data requests
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Self-service data requests
+        'group': GROUP_OTHER,
     },
-    # Comments & Ratings - cross-cutting feature for social interaction
     'comments': {
         'name': 'Comments & Ratings',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS  # READ_WRITE to add, ADMIN to manage all
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # READ_WRITE to add, ADMIN to manage all
+        'group': GROUP_OTHER,
     },
-    # Reference Data
-    'assets': {
-        'name': 'Assets',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
-    },
-    'business-roles': {
-        'name': 'Business Roles',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
-    },
-    'business-owners': {
-        'name': 'Business Owners',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
-    },
-    'delivery-methods': {
-        'name': 'Delivery Methods',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
-    },
-    # Ontology-driven model
     'ontology': {
         'name': 'Ontology Schema',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
     },
     'entity_relationships': {
         'name': 'Entity Relationships',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
     },
     'entity_subscriptions': {
         'name': 'Entity Subscriptions',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
-    },
-    # Schema Import
-    'schema-importer': {
-        'name': 'Schema Importer',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_OTHER,
     },
     # 'about': { ... } # About page doesn't need explicit permissions here
-
 }
+
+
+# IDs that are part of the Settings group — used by the role seeder to
+# auto-grant ADMIN on the built-in Admin role.
+SETTINGS_SUBPAGE_FEATURE_IDS: List[str] = [
+    feature_id
+    for feature_id, config in APP_FEATURES.items()
+    if feature_id.startswith('settings-')
+]
+
 
 def get_feature_config() -> Dict[str, Dict[str, str | List[FeatureAccessLevel]]]:
     """Returns the application feature configuration."""
@@ -205,4 +378,4 @@ def get_feature_config() -> Dict[str, Dict[str, str | List[FeatureAccessLevel]]]
 
 def get_all_access_levels() -> List[FeatureAccessLevel]:
     """Returns all possible access levels."""
-    return ALL_ACCESS_LEVELS 
+    return ALL_ACCESS_LEVELS

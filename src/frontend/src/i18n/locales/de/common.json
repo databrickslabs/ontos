@@ -329,7 +329,7 @@
     },
     "stepTypes": {
       "validation": "Validierung",
-      "approval": "Genehmigung",
+      "approval": "Genehmigung anfordern",
       "notification": "Benachrichtigung",
       "assign_tag": "Tag zuweisen",
       "remove_tag": "Tag entfernen",

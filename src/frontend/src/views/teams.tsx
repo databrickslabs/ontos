@@ -283,7 +283,7 @@ export default function TeamsView() {
   ], [canWrite, canAdmin, getDomainName, navigate, t, handleOpenEditDialog]);
 
   return (
-    <SettingsPageWrapper title={t('title')}>
+    <SettingsPageWrapper title={t('title')} permissionId="settings-teams">
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
            <UserCheck className="w-8 h-8" />

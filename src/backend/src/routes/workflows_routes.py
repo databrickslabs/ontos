@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
 from src.common.database import get_db
-from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, get_notifications_manager
+from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, get_notifications_manager, SettingsManagerDep
 from src.common.authorization import (
     PermissionChecker,
     enforce_feature_permission,
@@ -64,7 +64,7 @@ async def list_workflows(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     workflow_type: Optional[str] = Query(None, description="Filter by workflow_type: process | approval"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowListResponse:
     """List all process workflows (or approval workflows when workflow_type=approval).
 
@@ -89,7 +89,7 @@ async def list_workflows(
 async def get_step_types(
     request: Request,
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> List[StepTypeSchema]:
     """Get schemas for all available step types."""
     return manager.get_step_type_schemas()
@@ -243,7 +243,7 @@ def _trigger_group(value: str) -> str:
 @router.get("/trigger-types", response_model=List[Dict[str, Any]])
 async def get_trigger_types(
     request: Request,
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> List[Dict[str, Any]]:
     """Get the UI catalog of all trigger types.
 
@@ -273,7 +273,7 @@ async def list_executions(
     status: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowExecutionListResponse:
     """List workflow executions."""
     if workflow_id:
@@ -367,21 +367,36 @@ async def list_compliance_policies_for_workflows(
 @router.get("/roles")
 async def list_roles_for_workflows(
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    settings_manager: SettingsManagerDep,
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
+    approval_entity: Optional[str] = Query(
+        default=None,
+        description=(
+            "Filter to roles whose approval_privileges flag is True for this entity type. "
+            "Valid values: CONTRACTS, PRODUCTS, DOMAINS, ASSET_REVIEWS. "
+            "Omit to return all roles (backward-compatible)."
+        ),
+    ),
 ) -> List[Dict[str, Any]]:
     """List roles available for workflow approver/recipient selection.
 
     Returns both app roles (RBAC) and business roles (governance) that are
     marked as approvers. Each role includes a 'source' field to distinguish
     between app and business roles.
+
+    When *approval_entity* is provided the app-role list is narrowed to only
+    roles where ``approval_privileges[approval_entity]`` is ``True``. Business
+    roles (is_approver=True) are always included regardless of the filter
+    because they carry entity-level approval semantics through their own flag.
     """
-    from src.db_models.settings import AppRoleDb
     from src.db_models.business_roles import BusinessRoleDb
 
-    # App roles (RBAC)
-    app_roles = db.query(AppRoleDb).order_by(AppRoleDb.name).all()
+    # App roles — optionally filtered by approval_entity
+    filtered_app_roles = settings_manager.list_app_roles_for_approval(
+        approval_entity=approval_entity
+    )
 
-    # Business roles marked as approvers
+    # Business roles marked as approvers (always returned for backward compat)
     business_roles = (
         db.query(BusinessRoleDb)
         .filter(BusinessRoleDb.is_approver.is_(True), BusinessRoleDb.status == "active")
@@ -391,7 +406,7 @@ async def list_roles_for_workflows(
 
     result = []
 
-    for r in app_roles:
+    for r in filtered_app_roles:
         result.append({
             "id": str(r.id),
             "name": r.name,
@@ -416,7 +431,7 @@ async def list_roles_for_workflows(
 async def get_role_by_id(
     role_id: str,
     db: DBSessionDep,
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> Dict[str, Any]:
     """Get a single role by UUID for display purposes."""
     from src.db_models.settings import AppRoleDb
@@ -450,7 +465,7 @@ async def get_role_by_id(
 @router.get("/http-connections")
 async def list_http_connections_for_workflows(
     request: Request,
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> List[Dict[str, Any]]:
     """List Unity Catalog HTTP connections for webhook step configuration.
 
@@ -684,7 +699,7 @@ async def create_workflow(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Create a new workflow."""
     user_email = current_user.email if current_user else None
@@ -718,7 +733,7 @@ async def update_workflow(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Update an existing workflow."""
     user_email = current_user.email if current_user else None
@@ -767,7 +782,7 @@ async def delete_workflow(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.ADMIN)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.ADMIN)),
 ) -> dict:
     """Delete a workflow (non-default only)."""
     # Check if it's a default workflow
@@ -808,7 +823,7 @@ async def toggle_workflow_active(
     current_user: AuditCurrentUserDep,
     is_active: bool = Query(..., description="New active status"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Toggle workflow active status."""
     user_email = current_user.email if current_user else None
@@ -839,7 +854,7 @@ async def duplicate_workflow(
     current_user: AuditCurrentUserDep,
     new_name: str = Query(..., description="Name for the duplicated workflow"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> ProcessWorkflow:
     """Duplicate an existing workflow."""
     user_email = current_user.email if current_user else None
@@ -873,7 +888,7 @@ async def execute_workflow(
     entity_name: Optional[str] = Query(None, description="Entity name"),
     manager: WorkflowsManager = Depends(get_workflows_manager),
     executor: WorkflowExecutor = Depends(get_workflow_executor),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> WorkflowExecution:
     """Manually execute a workflow."""
     workflow = manager.get_workflow(workflow_id)
@@ -919,7 +934,7 @@ async def validate_workflow(
     request: Request,
     workflow: ProcessWorkflowCreate,
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> WorkflowValidationResult:
     """Validate a workflow definition."""
     return manager.validate_workflow(workflow)
@@ -933,7 +948,7 @@ async def load_default_workflows(
     current_user: AuditCurrentUserDep,
     update_existing: bool = False,
     manager: WorkflowsManager = Depends(get_workflows_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.ADMIN)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.ADMIN)),
 ) -> dict:
     """Load default workflows from YAML (admin only).
     
@@ -1025,7 +1040,7 @@ async def resume_workflow_execution(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     executor: WorkflowExecutor = Depends(get_workflow_executor),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_WRITE)),
 ) -> Dict[str, Any]:
     """Resume a paused workflow execution after approval decision.
     
@@ -1099,7 +1114,7 @@ async def get_paused_executions_for_entity(
     db: DBSessionDep,
     entity_type: str = Query(..., description="Entity type (e.g., 'data_contract', 'dataset')"),
     entity_id: str = Query(..., description="Entity ID"),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ) -> Dict[str, Any]:
     """Find paused workflow executions for a specific entity.
     

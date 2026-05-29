@@ -21,7 +21,7 @@ export default function DeliverySettings() {
   const { hasPermission } = usePermissions();
   const { toast } = useToast();
 
-  const hasWriteAccess = hasPermission('settings', FeatureAccessLevel.READ_WRITE);
+  const hasWriteAccess = hasPermission('settings-delivery', FeatureAccessLevel.READ_WRITE);
 
   const [settings, setSettings] = useState<DeliveryModeSettings>({
     deliveryModeDirect: false,

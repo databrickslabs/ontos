@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 export default function SettingsSearchView() {
   const { t } = useTranslation(['settings']);
   return (
-    <SettingsPageWrapper title={t('settings:tabs.search', 'Search')}>
+    <SettingsPageWrapper title={t('settings:tabs.search', 'Search')} permissionId="settings-search">
       <SearchConfigEditor />
     </SettingsPageWrapper>
   );

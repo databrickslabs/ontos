@@ -66,7 +66,7 @@ def _build_context(request: Request, db: Session) -> DirectoryProviderContext:
 async def get_status(
     manager: DirectoryManagerDep,
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker("settings", FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker("settings-directory", FeatureAccessLevel.READ_ONLY)),
 ) -> DirectoryStatus:
     """Lightweight status check.
 
@@ -88,7 +88,7 @@ async def search(
     ),
     limit: int = Query(default=20, ge=1, le=50),
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker("settings", FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker("settings-directory", FeatureAccessLevel.READ_ONLY)),
 ) -> DirectorySearchResponse:
     """Search the configured directory and return normalised principals.
 
@@ -113,7 +113,7 @@ async def test(
     request: Request,
     manager: DirectoryManagerDep,
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker("settings", FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker("settings-directory", FeatureAccessLevel.READ_WRITE)),
 ) -> DirectoryTestResult:
     """Probe the configured provider; surfaces a typed success/error to the UI."""
 
@@ -133,7 +133,7 @@ async def update_settings(
     body: DirectorySettingsUpdate,
     manager: DirectoryManagerDep,
     db: Session = Depends(get_db),
-    _: bool = Depends(PermissionChecker("settings", FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker("settings-directory", FeatureAccessLevel.READ_WRITE)),
 ) -> DirectoryStatus:
     """Persist any directory settings supplied, then invalidate cache.
 
@@ -156,7 +156,7 @@ async def update_settings(
 @router.get("/uc-http-connections")
 async def list_uc_http_connections(
     request: Request,
-    _: bool = Depends(PermissionChecker("settings", FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker("settings-directory", FeatureAccessLevel.READ_WRITE)),
 ) -> List[dict]:
     """List HTTP-type UC connections so the Settings tab can populate its dropdown.
 

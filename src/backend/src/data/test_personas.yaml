@@ -1,0 +1,57 @@
+# Canned test personas exposed via GET /api/test/personas when TEST_USER_TOKEN is set.
+#
+# Each persona pairs a synthetic identity with the workspace groups that should
+# resolve to a given AppRole during permission evaluation. The default groups
+# below mirror the seeded role definitions (see DEFAULT_ROLES /
+# DEFAULT_ROLE_PERMISSIONS in settings_manager.py); if you've customized role
+# assigned_groups in your deployment, adjust this file accordingly.
+#
+# Fields:
+#   id          - stable identifier used by the frontend persona picker
+#   label       - human-readable name shown in the UI
+#   email       - X-Test-User-Email value sent on every request
+#   groups      - X-Test-User-Groups value (omit/null to let the backend
+#                 fall back to a real SCIM lookup for the email)
+#   description - optional explanation shown alongside the persona
+personas:
+  - id: admin
+    label: "Admin"
+    email: admin@test.local
+    groups: ["admins"]
+    description: "Full access to all features (matches APP_ADMIN_DEFAULT_GROUPS)"
+
+  - id: governance
+    label: "Data Governance Officer"
+    email: governance@test.local
+    groups: ["data-governance-officers"]
+    description: "Cross-cutting governance: domains, products, contracts, glossary, compliance"
+
+  - id: steward
+    label: "Data Steward"
+    email: steward@test.local
+    groups: ["data-stewards"]
+    description: "Curates domains, contracts, glossary terms"
+
+  - id: producer
+    label: "Data Producer"
+    email: producer@test.local
+    groups: ["data-producers"]
+    description: "Creates data products and contracts"
+
+  - id: consumer
+    label: "Data Consumer"
+    email: consumer@test.local
+    groups: ["data-consumers"]
+    description: "Read-only access to published products and contracts"
+
+  - id: security
+    label: "Security Officer"
+    email: security@test.local
+    groups: ["security-officers"]
+    description: "Security features, entitlements, compliance review"
+
+  - id: anon
+    label: "No groups"
+    email: anon@test.local
+    groups: []
+    description: "Caller has no group memberships (exercises empty-permission paths)"

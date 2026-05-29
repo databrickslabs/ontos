@@ -2,7 +2,7 @@ import json
 import uuid
 from uuid import uuid4
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 import os
 from pathlib import Path
 
@@ -4708,71 +4708,42 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     def get_contract_versions(
         self,
         db,
-        contract_id: str
+        contract_id: str,
+        *,
+        user_email: Optional[str] = None,
+        is_admin: bool = False,
     ) -> list:
-        """Get all versions of a contract family.
-        
-        Returns contracts with the same base_name, sorted by creation date (newest first).
-        Falls back to parent-child relationships if no base_name matches.
-        
+        """Get every visible version of a contract's family, newest first.
+
+        Uses the canonical ``version_family_id`` grouping key (PRD #442):
+        one indexed equality lookup returns every member of the family.
+        Replaces the old ``base_name``/``name`` heuristic which left
+        cross-clone families fragmented depending on which clone path
+        produced them.
+
         Args:
             db: Database session
-            contract_id: Contract ID to get versions for
-            
+            contract_id: Any contract ID in the family.
+            user_email: Caller email (for personal-draft visibility).
+            is_admin: If True, bypasses the personal-draft filter.
+
         Returns:
-            List of DataContractDb objects representing all versions
-            
+            List of DataContractDb objects ordered by created_at DESC.
+
         Raises:
-            ValueError: If contract not found
+            ValueError: If contract not found.
         """
-        from src.utils.contract_cloner import ContractCloner
-        from sqlalchemy import or_
-        
-        # Get the source contract
         source_contract = data_contract_repo.get(db, id=contract_id)
         if not source_contract:
             raise ValueError("Contract not found")
-        
-        # Get base_name (either from field or extract from name)
-        base_name = source_contract.base_name
-        extracted_base_name = None
-        if not base_name:
-            # Extract from name if not set
-            cloner = ContractCloner()
-            extracted_base_name = cloner._extract_base_name(source_contract.name, source_contract.version or "1.0.0")
-            base_name = extracted_base_name
-        
-        # Find all contracts with same base_name (from DB column)
-        # OR same name (for legacy contracts without base_name set)
-        contracts = db.query(DataContractDb).filter(
-            or_(
-                DataContractDb.base_name == base_name,
-                # Also match by name for contracts without base_name set
-                DataContractDb.name == (extracted_base_name or source_contract.name)
-            )
-        ).order_by(DataContractDb.created_at.desc()).all()
-        
-        # If no matches, fall back to parent_contract_id relationships
-        if not contracts:
-            # Build version tree by following parent relationships
-            contracts = [source_contract]
-            # Find children
-            children = db.query(DataContractDb).filter(
-                DataContractDb.parent_contract_id == contract_id
-            ).order_by(DataContractDb.created_at.desc()).all()
-            contracts.extend(children)
-            # Find parent and its children
-            if source_contract.parent_contract_id:
-                parent = data_contract_repo.get(db, id=source_contract.parent_contract_id)
-                if parent and parent not in contracts:
-                    contracts.insert(0, parent)
-                    siblings = db.query(DataContractDb).filter(
-                        DataContractDb.parent_contract_id == parent.id,
-                        DataContractDb.id != contract_id
-                    ).order_by(DataContractDb.created_at.desc()).all()
-                    contracts.extend(siblings)
-        
-        return contracts
+
+        family_id = getattr(source_contract, 'version_family_id', None) or source_contract.id
+        return data_contract_repo.get_family_versions(
+            db,
+            family_id=family_id,
+            user_email=user_email,
+            is_admin=is_admin,
+        )
     
     def get_version_history(
         self,
@@ -4862,7 +4833,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not original:
             raise ValueError("Contract not found")
         
-        # Create clone with new version
+        # Create clone with new version.
+        # parent_contract_id encodes lineage; version_family_id is inherited
+        # so the whole family is reachable via one indexed equality lookup.
+        # Previously neither was set on this lightweight path, which caused
+        # the detail-view version selector to hide itself (see PRD #442).
         clone = DataContractDb(
             name=original.name,
             version=new_version,
@@ -4876,6 +4851,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             description_purpose=original.description_purpose,
             description_limitations=original.description_limitations,
             domain_id=original.domain_id,
+            parent_contract_id=original.id,
+            version_family_id=original.version_family_id,
             created_by=current_user,
             updated_by=current_user,
         )
@@ -5951,8 +5928,67 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     # --- Contract Listing and API Model Building ---
 
-    def _query_contracts(self, db, domain_id=None, project_id=None, is_admin=False, latest_only=True):
-        """Shared query logic for listing contracts. Returns list of DataContractDb."""
+    def _elevated_contract_families(
+        self,
+        db,
+        contracts,
+        *,
+        caller_email: Optional[str],
+        caller_team_ids: Optional[Set[str]],
+    ) -> Set[str]:
+        """Family IDs the caller has elevated visibility for.
+
+        Contracts have no subscription table today (per PRD #442 follow-up
+        scope), so elevation comes from ownership and authorship:
+
+          * caller is the ``draft_owner_id`` of any row in the family
+          * caller is a member of the ``owner_team_id`` of any row
+
+        Admins skip this check at the call site; we never need to compute
+        the set for them.
+        """
+        elevated: Set[str] = set()
+        if not caller_email and not caller_team_ids:
+            return elevated
+        team_ids = caller_team_ids or set()
+        for c in contracts:
+            fid = c.version_family_id or c.id
+            if fid in elevated:
+                continue
+            if caller_email and c.draft_owner_id == caller_email:
+                elevated.add(fid)
+                continue
+            if c.owner_team_id and c.owner_team_id in team_ids:
+                elevated.add(fid)
+        return elevated
+
+    def _query_contracts(
+        self,
+        db,
+        domain_id=None,
+        project_id=None,
+        is_admin=False,
+        latest_only=True,
+        *,
+        caller_email: Optional[str] = None,
+        caller_team_ids: Optional[Set[str]] = None,
+    ):
+        """Shared query logic for listing contracts. Returns (contracts, family_counts).
+
+        ``latest_only`` (default True) collapses each ``version_family_id``
+        family using the role-aware rank in :mod:`src.common.version_visibility`:
+        consumers see only published rows (active/deprecated), owners and
+        admins see in-flight versions (draft/proposed/...) first. The
+        ``family_counts`` map is keyed by surviving family_id so the route
+        can render a "N versions" badge from a single query.
+        """
+        from src.common.version_visibility import (
+            collapse_by_family,
+            family_counts as compute_family_counts,
+            is_admin_only_status,
+            is_visible_consumer,
+        )
+
         if domain_id:
             query = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id)
             if not is_admin and project_id:
@@ -5969,17 +6005,46 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 is_admin=is_admin
             )
 
+        elevated_families = (
+            set()
+            if is_admin
+            else self._elevated_contract_families(
+                db,
+                contracts,
+                caller_email=caller_email,
+                caller_team_ids=caller_team_ids,
+            )
+        )
+
+        # Pre-filter for the expanded view too. Without this, a consumer
+        # who toggles "Show all versions" would see draft rows from
+        # families they don't own — which contradicts the PRD's
+        # consumer-visibility rule. Admins bypass.
+        if not is_admin:
+            contracts = [
+                c
+                for c in contracts
+                if (c.version_family_id or c.id) in elevated_families
+                or (not is_admin_only_status(c) and is_visible_consumer(c))
+            ]
+
+        # Family counts are taken from the post-visibility-filter set so
+        # the badge reflects what the caller can actually navigate to.
+        counts = compute_family_counts(contracts)
+
         if latest_only:
             original_count = len(contracts)
-            seen_base_names: dict = {}
-            for c in contracts:
-                key = c.base_name or c.name
-                if key not in seen_base_names or c.created_at > seen_base_names[key].created_at:
-                    seen_base_names[key] = c
-            contracts = list(seen_base_names.values())
-            logger.debug(f"Filtered from {original_count} to {len(contracts)} latest versions (grouped by base_name)")
+            contracts = collapse_by_family(
+                contracts,
+                elevated_family_ids=elevated_families,
+                is_admin=is_admin,
+            )
+            logger.debug(
+                f"Collapsed {original_count} → {len(contracts)} rows "
+                f"(role-aware rank; elevated={len(elevated_families)} families)"
+            )
 
-        return contracts
+        return contracts, counts
 
     def list_contracts_from_db(
         self,
@@ -5987,14 +6052,42 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         domain_id: Optional[str] = None,
         project_id: Optional[str] = None,
         is_admin: bool = False,
-        latest_only: bool = True
+        latest_only: bool = True,
+        include_history: bool = False,
+        *,
+        caller_email: Optional[str] = None,
+        caller_team_ids: Optional[Set[str]] = None,
     ):
-        """List data contracts as lightweight summaries (no schema/quality/comments)."""
-        contracts = self._query_contracts(db, domain_id, project_id, is_admin, latest_only)
-        return self._build_contract_summaries(db, contracts)
+        """List data contracts as lightweight summaries (no schema/quality/comments).
 
-    def _build_contract_summaries(self, db, contracts):
-        """Build lightweight summary models for a list of contracts with batched lookups."""
+        When ``include_history`` is True the version-family collapse is
+        skipped and every visible row is returned. ``latest_only`` is the
+        legacy switch retained for callers that bypass the route layer; the
+        route always passes ``latest_only = not include_history``.
+        """
+        if include_history:
+            latest_only = False
+        contracts, family_counts = self._query_contracts(
+            db,
+            domain_id,
+            project_id,
+            is_admin,
+            latest_only,
+            caller_email=caller_email,
+            caller_team_ids=caller_team_ids,
+        )
+        return self._build_contract_summaries(
+            db, contracts, family_counts=family_counts if latest_only else None
+        )
+
+    def _build_contract_summaries(self, db, contracts, family_counts=None):
+        """Build lightweight summary models for a list of contracts with batched lookups.
+
+        ``family_counts`` (PRD #442): optional ``{version_family_id → int}``
+        map. When provided, each summary gets a ``versionCount`` field so the
+        list UI can render a "N versions" badge without an extra round-trip.
+        Pass ``None`` for the expanded list view to omit the field entirely.
+        """
         from src.models.data_contracts_api import ContractDescription, DataContractSummary
         from src.repositories.data_domain_repository import data_domain_repo
         from src.repositories.tags_repository import entity_tag_repo
@@ -6080,6 +6173,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     limitations=c.description_limitations
                 )
 
+            family_id = getattr(c, "version_family_id", None) or c.id
+            version_count = (
+                family_counts.get(family_id) if family_counts is not None else None
+            )
+
             results.append(DataContractSummary(
                 id=c.id,
                 name=c.name,
@@ -6099,6 +6197,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 tags=tags_map.get(c.id, []),
                 created=c.created_at.isoformat() if c.created_at else None,
                 updated=c.updated_at.isoformat() if c.updated_at else None,
+                parent_contract_id=getattr(c, "parent_contract_id", None),
+                version_family_id=family_id,
+                base_name=getattr(c, "base_name", None),
+                change_summary=getattr(c, "change_summary", None),
+                draft_owner_id=getattr(c, "draft_owner_id", None),
+                version_count=version_count,
                 schemaObjectCount=schema_counts.get(c.id, 0),
                 publication_scope=getattr(c, "publication_scope", None) or "none",
                 published_at=c.published_at.isoformat() if getattr(c, "published_at", None) else None,

@@ -29,7 +29,7 @@ export default function ConnectorsSettings() {
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
 
-  const hasWriteAccess = hasPermission('settings', FeatureAccessLevel.READ_WRITE);
+  const hasWriteAccess = hasPermission('settings-connectors', FeatureAccessLevel.READ_WRITE);
 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [isLoading, setIsLoading] = useState(false);

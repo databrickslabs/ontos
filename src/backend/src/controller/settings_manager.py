@@ -688,6 +688,74 @@ class SettingsManager:
             logger.error(f"Unexpected error during default role check/creation: {e}", exc_info=True)
             raise # Re-raise other unexpected errors
 
+    def upgrade_admin_role_for_new_features(self):
+        """Idempotent migration: ensure the built-in Admin role has ADMIN on every feature.
+
+        Runs on startup. When new feature IDs are added to ``APP_FEATURES`` (e.g.,
+        the ``settings-*`` sub-page permissions introduced by the Settings
+        permissions refactor), the existing Admin role in the database will be
+        missing entries for them. This method backfills those entries with
+        ``FeatureAccessLevel.ADMIN`` so administrators don't need to manually
+        re-grant access after every release.
+
+        Only the built-in Admin role (``is_admin=True``) is touched. Non-admin
+        roles are left untouched so their explicit grants are preserved — admins
+        must explicitly delegate the new sub-permissions.
+        """
+        try:
+            all_features_config = get_feature_config()
+            roles_db = self.app_role_repo.get_all_roles(db=self._db)
+            updated_count = 0
+
+            for role_db in roles_db:
+                if not getattr(role_db, 'is_admin', False):
+                    continue
+                try:
+                    existing_perms_raw = json.loads(getattr(role_db, 'feature_permissions', '{}') or '{}')
+                except Exception:
+                    logger.warning(
+                        "Admin role '%s' has unparseable feature_permissions; resetting to ADMIN on all features.",
+                        role_db.name,
+                    )
+                    existing_perms_raw = {}
+
+                existing_perms: Dict[str, str] = {
+                    k: v for k, v in existing_perms_raw.items() if isinstance(k, str) and isinstance(v, str)
+                }
+                missing_ids = [
+                    feat_id for feat_id in all_features_config.keys()
+                    if feat_id not in existing_perms
+                ]
+                if not missing_ids:
+                    continue
+
+                for feat_id in missing_ids:
+                    allowed_levels = all_features_config[feat_id].get('allowed_levels', [])
+                    target = FeatureAccessLevel.ADMIN if FeatureAccessLevel.ADMIN in allowed_levels else (
+                        allowed_levels[-1] if allowed_levels else FeatureAccessLevel.NONE
+                    )
+                    existing_perms[feat_id] = target.value
+
+                role_db.feature_permissions = json.dumps(existing_perms)
+                self._db.add(role_db)
+                updated_count += 1
+                logger.info(
+                    "Backfilled Admin role '%s' with ADMIN on %d new feature ids: %s",
+                    role_db.name, len(missing_ids), missing_ids,
+                )
+
+            if updated_count > 0:
+                self._db.flush()
+                logger.info("Upgraded %d Admin role(s) with new feature permissions.", updated_count)
+            else:
+                logger.info("No Admin roles needed upgrade for new feature permissions.")
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error during Admin role upgrade: {e}", exc_info=True)
+            self._db.rollback()
+        except Exception as e:
+            logger.error(f"Unexpected error during Admin role upgrade: {e}", exc_info=True)
+
     def _setup_default_role_hierarchy(self):
         """Sets up the default role request/approval hierarchy.
         
@@ -1620,14 +1688,21 @@ class SettingsManager:
         )
 
     def get_features_with_access_levels(self) -> Dict[str, Dict[str, str | List[str]]]:
-        """Returns a dictionary of features and their allowed access levels."""
+        """Returns a dictionary of features and their allowed access levels.
+
+        Each entry contains:
+        - name: human-readable label
+        - allowed_levels: list of allowed FeatureAccessLevel values (as strings)
+        - group: one of Discover/Build/Govern/Deploy/Settings/Other for UI grouping
+        """
         features_config = get_feature_config()
         all_levels = get_all_access_levels()
         # Convert enum members to their string values for API response
         return {
             feature_id: {
                 'name': config['name'],
-                'allowed_levels': [level.value for level in config['allowed_levels']]
+                'allowed_levels': [level.value for level in config['allowed_levels']],
+                'group': config.get('group', 'Other'),
             }
             for feature_id, config in features_config.items()
         }
@@ -1692,6 +1767,22 @@ class SettingsManager:
             logger.error(f"Database error listing roles: {e}", exc_info=True)
             self._db.rollback()
             return [] # Return empty list on error
+
+    def list_app_roles_for_approval(self, approval_entity: Optional[str] = None) -> List[AppRole]:
+        """Lists app roles filtered by approval privilege for a given entity type.
+
+        When *approval_entity* is provided (e.g. ``"CONTRACTS"``), only roles
+        where ``approval_privileges[approval_entity]`` is ``True`` are returned.
+        When omitted, all roles are returned (backward-compatible behaviour).
+        """
+        all_roles = self.list_app_roles()
+        if approval_entity is None:
+            return all_roles
+        entity_key = approval_entity.upper()
+        return [
+            role for role in all_roles
+            if role.approval_privileges.get(ApprovalEntity(entity_key)) is True  # type: ignore[arg-type]
+        ]
 
     def get_app_role(self, role_id: str) -> Optional[AppRole]:
         """Retrieves a specific application role by ID."""

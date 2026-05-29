@@ -122,12 +122,6 @@
   "general": {
     "title": "General Settings",
     "description": "Configure basic application settings",
-    "enableBackgroundJobs": "Enable Background Jobs",
-    "workspaceDeploymentPath": {
-      "label": "Workspace Deployment Path",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
-      "help": "Path in Databricks workspace where workflow files are deployed for background jobs."
-    },
     "unityCatalog": {
       "title": "Unity Catalog",
       "help": "Unity Catalog location for storing application data.",
@@ -224,6 +218,12 @@
       "label": "Job Cluster ID (optional)",
       "placeholder": "Leave empty for serverless compute"
     },
+    "workspaceDeploymentPath": {
+      "label": "Workspace Deployment Path",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "Path in Databricks workspace where workflow files are deployed for background jobs.",
+      "requiredHint": "Set the deployment path above to enable workflows."
+    },
     "availableWorkflows": {
       "label": "Available Workflows",
       "description": "Enable or disable background workflows"
@@ -315,6 +315,14 @@
       "featurePermissions": {
         "title": "Feature Permissions",
         "description": "Configure access levels for each feature in the application."
+      },
+      "groups": {
+        "discover": "Discover",
+        "build": "Build",
+        "govern": "Govern",
+        "deploy": "Deploy",
+        "settings": "Settings",
+        "other": "Other"
       }
     },
     "deployment": {

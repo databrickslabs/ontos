@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection, ApprovalEntity, NO_ROLE_SENTINEL } from '@/types/settings';
+import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection, ApprovalEntity, NO_ROLE_SENTINEL, PermissionGroup, PERMISSION_GROUP_ORDER } from '@/types/settings';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
@@ -20,6 +20,38 @@ import { usePermissions } from '@/stores/permissions-store';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { normaliseAssignedGroups } from '@/lib/assigned-groups';
+
+// Order within the Settings group should mirror the Settings sidebar
+// (Reference Data → Configuration → Integrations → Operations → Access Control)
+// rather than alphabetical. Anything not listed here falls to the bottom.
+const SETTINGS_GROUP_ORDER: string[] = [
+    // Reference Data
+    'settings-data-domains',
+    'settings-business-roles',
+    'settings-delivery-methods',
+    'settings-asset-types',
+    'settings-teams',
+    'settings-projects',
+    'settings-certification-levels',
+    // Configuration
+    'settings-general',
+    'settings-ui',
+    'settings-tags',
+    'settings-connectors',
+    // Integrations
+    'settings-git',
+    'settings-mcp',
+    'settings-semantic-models',
+    'settings-search',
+    // Operations
+    'settings-jobs',
+    'settings-delivery',
+    'settings-workflows',
+    // Access Control
+    'settings-roles',
+    'settings-audit',
+    // Parent settings gate sits at the very top of the group
+];
 
 interface RoleFormDialogProps {
     isOpen: boolean;
@@ -412,107 +444,116 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                         <TabsContent value="permissions" className="flex-1 mt-4">
                             <ScrollArea className="h-[calc(90vh-280px)]">
                                 <div className="space-y-4 pr-4 px-1 py-1">
-                                    {/* Feature Permissions */}
+                                    {/* Feature Permissions, grouped by sidebar area */}
                                     <div className="space-y-3">
                                         <h4 className="font-medium">{t('roles.permissions.featurePermissions.title')}</h4>
                                         <p className="text-xs text-muted-foreground">{t('roles.permissions.featurePermissions.description')}</p>
-                                        <div className="space-y-1">
-                                    {orderedFeatures.map((feature) => {
-                                        const featureConf = featuresConfig[feature.id];
-                                        if (!featureConf) {
-                                            console.warn(`No backend config found for feature ID: ${feature.id}. Skipping permission setting.`);
-                                            return null;
-                                        }
-                                        const allowedLevels = Array.isArray(featureConf.allowed_levels) ? featureConf.allowed_levels : [];
 
-                                        return (
-                                            <div key={feature.id} className="flex items-center justify-between space-x-4 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                                                <Label htmlFor={`permissions-${feature.id}`} className="text-sm font-normal flex-1">
-                                                     {feature.name}
-                                                     <p className="text-xs text-muted-foreground">{feature.description}</p>
-                                                 </Label>
-                                                <div className="w-auto">
-                                                    <Controller
-                                                        name={`feature_permissions.${feature.id}`}
-                                                        control={control}
-                                                        render={({ field }) => (
-                                                            <Select
-                                                                value={field.value || FeatureAccessLevel.NONE}
-                                                                onValueChange={field.onChange}
-                                                                disabled={allowedLevels.length === 0}
-                                                            >
-                                                                <SelectTrigger id={`permissions-${feature.id}`} className="w-[180px]">
-                                                                    <SelectValue placeholder="Select access" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    {allowedLevels.length > 0 ? (
-                                                                        [...allowedLevels]
-                                                                            .sort((a, b) => (ACCESS_LEVEL_ORDER[a] ?? -1) - (ACCESS_LEVEL_ORDER[b] ?? -1))
-                                                                            .map(level => (
-                                                                                <SelectItem key={level} value={level}>
-                                                                                    {level}
-                                                                                </SelectItem>
-                                                                            ))
-                                                                    ) : (
-                                                                        <SelectItem value="none" disabled>No levels</SelectItem>
-                                                                    )}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        )}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {/* Backend-only features (not in frontend navigation) */}
-                                    {Object.entries(featuresConfig)
-                                        .filter(([featureId]) => !orderedFeatures.some(f => f.id === featureId))
-                                        .map(([featureId, featureConf]) => {
-                                            const allowedLevels = Array.isArray(featureConf.allowed_levels) ? featureConf.allowed_levels : [];
-                                            return (
-                                                <div key={featureId} className="flex items-center justify-between space-x-4 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                                                    <Label htmlFor={`permissions-${featureId}`} className="text-sm font-normal flex-1">
-                                                        {featureConf.name || featureId}
-                                                        <p className="text-xs text-muted-foreground">Cross-cutting feature</p>
-                                                    </Label>
-                                                    <div className="w-auto">
-                                                        <Controller
-                                                            name={`feature_permissions.${featureId}`}
-                                                            control={control}
-                                                            render={({ field }) => (
-                                                                <Select
-                                                                    value={field.value || FeatureAccessLevel.NONE}
-                                                                    onValueChange={field.onChange}
-                                                                    disabled={allowedLevels.length === 0}
-                                                                >
-                                                                    <SelectTrigger id={`permissions-${featureId}`} className="w-[180px]">
-                                                                        <SelectValue placeholder="Select access" />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {allowedLevels.length > 0 ? (
-                                                                            [...allowedLevels]
-                                                                                .sort((a, b) => (ACCESS_LEVEL_ORDER[a] ?? -1) - (ACCESS_LEVEL_ORDER[b] ?? -1))
-                                                                                .map(level => (
-                                                                                    <SelectItem key={level} value={level}>
-                                                                                        {level}
-                                                                                    </SelectItem>
-                                                                                ))
-                                                                        ) : (
-                                                                            <SelectItem value="none" disabled>No levels</SelectItem>
-                                                                        )}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            )}
-                                                        />
+                                        {(() => {
+                                            const orderedFeatureById = new Map(orderedFeatures.map(f => [f.id, f]));
+                                            // Bucket features into groups defined by the backend config.
+                                            const grouped = new Map<PermissionGroup, [string, FeatureConfig][]>();
+                                            for (const [id, conf] of Object.entries(featuresConfig)) {
+                                                const g = (conf.group ?? 'Other') as PermissionGroup;
+                                                if (!grouped.has(g)) grouped.set(g, []);
+                                                grouped.get(g)!.push([id, conf]);
+                                            }
+
+                                            const sortByName = (a: [string, FeatureConfig], b: [string, FeatureConfig]) =>
+                                                (a[1].name || a[0]).localeCompare(b[1].name || b[0]);
+
+                                            // Settings group preserves sidebar order; other groups sort alphabetically.
+                                            const settingsRank = (id: string): number => {
+                                                if (id === 'settings') return -1; // parent gate at top
+                                                const idx = SETTINGS_GROUP_ORDER.indexOf(id);
+                                                return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+                                            };
+                                            const sortSettings = (a: [string, FeatureConfig], b: [string, FeatureConfig]) => {
+                                                const ra = settingsRank(a[0]);
+                                                const rb = settingsRank(b[0]);
+                                                if (ra !== rb) return ra - rb;
+                                                return sortByName(a, b);
+                                            };
+
+                                            for (const [g, items] of grouped) {
+                                                items.sort(g === 'Settings' ? sortSettings : sortByName);
+                                            }
+
+                                            const groupLabelKey = (g: PermissionGroup) => {
+                                                switch (g) {
+                                                    case 'Discover': return 'roles.permissions.groups.discover';
+                                                    case 'Build': return 'roles.permissions.groups.build';
+                                                    case 'Govern': return 'roles.permissions.groups.govern';
+                                                    case 'Deploy': return 'roles.permissions.groups.deploy';
+                                                    case 'Settings': return 'roles.permissions.groups.settings';
+                                                    case 'Other': return 'roles.permissions.groups.other';
+                                                }
+                                            };
+
+                                            const renderRow = (featureId: string, featureConf: FeatureConfig) => {
+                                                const navFeature = orderedFeatureById.get(featureId);
+                                                const label = featureConf.name || navFeature?.name || featureId;
+                                                const description = navFeature?.description ?? '';
+                                                const allowedLevels = Array.isArray(featureConf.allowed_levels) ? featureConf.allowed_levels : [];
+                                                return (
+                                                    <div key={featureId} className="flex items-center justify-between space-x-4 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                                                        <Label htmlFor={`permissions-${featureId}`} className="text-sm font-normal flex-1">
+                                                            {label}
+                                                            {description && <p className="text-xs text-muted-foreground">{description}</p>}
+                                                        </Label>
+                                                        <div className="w-auto">
+                                                            <Controller
+                                                                name={`feature_permissions.${featureId}`}
+                                                                control={control}
+                                                                render={({ field }) => (
+                                                                    <Select
+                                                                        value={field.value || FeatureAccessLevel.NONE}
+                                                                        onValueChange={field.onChange}
+                                                                        disabled={allowedLevels.length === 0}
+                                                                    >
+                                                                        <SelectTrigger id={`permissions-${featureId}`} className="w-[180px]">
+                                                                            <SelectValue placeholder="Select access" />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {allowedLevels.length > 0 ? (
+                                                                                [...allowedLevels]
+                                                                                    .sort((a, b) => (ACCESS_LEVEL_ORDER[a] ?? -1) - (ACCESS_LEVEL_ORDER[b] ?? -1))
+                                                                                    .map(level => (
+                                                                                        <SelectItem key={level} value={level}>
+                                                                                            {level}
+                                                                                        </SelectItem>
+                                                                                    ))
+                                                                            ) : (
+                                                                                <SelectItem value="none" disabled>No levels</SelectItem>
+                                                                            )}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                )}
+                                                            />
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })
-                                    }
-                                    {Object.keys(featuresConfig).length === 0 && (
-                                        <p className="text-sm text-muted-foreground">No features configuration loaded.</p>
-                                    )}
-                                        </div>
+                                                );
+                                            };
+
+                                            const sections: React.ReactElement[] = [];
+                                            for (const g of PERMISSION_GROUP_ORDER) {
+                                                const items = grouped.get(g);
+                                                if (!items || items.length === 0) continue;
+                                                sections.push(
+                                                    <div key={g} className="space-y-1 pt-3 first:pt-0">
+                                                        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                                                            {t(groupLabelKey(g), g)}
+                                                        </h5>
+                                                        {items.map(([id, conf]) => renderRow(id, conf))}
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (Object.keys(featuresConfig).length === 0) {
+                                                return <p className="text-sm text-muted-foreground">No features configuration loaded.</p>;
+                                            }
+                                            return sections;
+                                        })()}
                                     </div>
                                 </div>
                             </ScrollArea>

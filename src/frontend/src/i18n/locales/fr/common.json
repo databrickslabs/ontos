@@ -134,13 +134,11 @@
     "enterSecurableId": "Exemple : catalog.schema.table",
     "typeToSearch": "Tapez pour rechercher...",
     "noResults": "Aucun résultat trouvé",
-    "noTags": "Aucun tag trouvé",
+    "noTags": "Aucune étiquette trouvée",
     "searchConceptsAndTerms": "Rechercher des concepts et des termes...",
     "setStatus": "Définir le statut",
     "pasteODCSJSON": "Coller le JSON ODCS",
     "searchDataProductsTermsContracts": "Rechercher des produits de données, termes, contrats...",
-    "noResults": "Aucun résultat trouvé",
-    "noTags": "Aucune étiquette trouvée",
     "exampleCatalogSchemaTable": "Exemple : catalog.schema.table"
   },
   "states": {
@@ -331,7 +329,7 @@
     },
     "stepTypes": {
       "validation": "Validation",
-      "approval": "Approbation",
+      "approval": "Demander une approbation",
       "notification": "Notification",
       "assign_tag": "Attribuer un tag",
       "remove_tag": "Supprimer un tag",

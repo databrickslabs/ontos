@@ -461,7 +461,33 @@ class WebhookStepConfig(BaseModel):
     timeout_seconds: int = Field(default=30, description="Request timeout in seconds")
     success_codes: Optional[List[int]] = Field(default=None, description="HTTP codes considered success (default: 200-299)")
     retry_count: int = Field(default=0, description="Number of retries on failure")
-    
+
+    # Caller-supplied extra parameters forwarded into the UC HTTPConnection call.
+    # All three support ${entity.*} / ${trigger.*} / ${context.*} substitution,
+    # the same syntax as `body_template`. Absent/empty fields are no-ops, so
+    # existing webhook configs continue to work unchanged.
+    additional_headers: Optional[Dict[str, str]] = Field(
+        default_factory=dict,
+        description=(
+            "Additional headers merged into the request (template substitution supported). "
+            "Take precedence over `headers` if a key collides."
+        ),
+    )
+    additional_query_params: Optional[Dict[str, str]] = Field(
+        default_factory=dict,
+        description=(
+            "Additional query string parameters appended to the request "
+            "(template substitution supported). Values are URL-encoded."
+        ),
+    )
+    path_suffix: Optional[str] = Field(
+        None,
+        description=(
+            "Optional suffix appended to `path` before the query string "
+            "(template substitution supported). Useful for context-derived path segments."
+        ),
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -469,7 +495,10 @@ class WebhookStepConfig(BaseModel):
                 "method": "POST",
                 "path": "/api/now/table/incident",
                 "body_template": '{"short_description": "Alert: ${entity_name}"}',
-                "timeout_seconds": 30
+                "additional_headers": {"X-Trace-Id": "${execution_id}"},
+                "additional_query_params": {"caller": "ontos"},
+                "path_suffix": "/${entity_id}",
+                "timeout_seconds": 30,
             }
         }
 

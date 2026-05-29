@@ -44,11 +44,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { 
-  Save, 
-  ArrowLeft, 
-  // Plus - unused
-  Trash2, 
+import {
+  Save,
+  ArrowLeft,
+  Plus,
+  Trash2,
   Loader2,
   Shield,
   Bell,
@@ -71,6 +71,9 @@ import {
   Send,
   KeyRound,
   Eye,
+  Edit2,
+  Check,
+  X,
 } from 'lucide-react';
 import ApprovalWizardDialog from './approval-wizard-dialog';
 
@@ -120,6 +123,7 @@ import type {
 import {
   ALL_ENTITY_TYPES,
   isTriggerEntitySupported,
+  ENTITY_TYPE_TO_APPROVAL_ENTITY,
 } from '@/lib/workflow-labels';
 import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
 import { EntityTypeMultiselect } from './entity-type-multiselect';
@@ -128,6 +132,286 @@ import {
   joinRoleAndPrincipals,
   splitRoleAndPrincipals,
 } from '@/lib/workflow-principals';
+
+// -------------------------------------------------------------------------
+// KeyValueEditor — explicit add/edit editor for Record<string, string>
+// config fields. Used by the webhook step config panel for
+// `additional_headers` and `additional_query_params` (issue #401 follow-up).
+// Kept inline because it is only used here; if a second caller needs it,
+// lift to a shared file.
+//
+// UX contract:
+//   • "Add entry" row at the top — explicit Add button, validated on click.
+//   • Saved entries render read-only below with Edit (pencil) + Remove (trash).
+//   • Clicking Edit enters per-row edit mode: Save (check) + Cancel (X).
+//   • Validation: empty key blocked; duplicate key blocked (both Add + Edit).
+//   • Template warning: if a value contains an unclosed ${ show amber badge.
+//   • Empty state: muted italic "No entries." text.
+// -------------------------------------------------------------------------
+
+/** Returns true when a value string has an unclosed ${ template expression. */
+function hasUnclosedTemplate(val: string): boolean {
+  const opens = (val.match(/\$\{/g) || []).length;
+  const closes = (val.match(/\}/g) || []).length;
+  return opens > closes;
+}
+
+interface KeyValueEditorProps {
+  label: string;
+  helpText?: string;
+  keyPlaceholder?: string;
+  valuePlaceholder?: string;
+  value: Record<string, string>;
+  onChange: (next: Record<string, string>) => void;
+}
+
+function KeyValueEditor({
+  label,
+  helpText,
+  keyPlaceholder,
+  valuePlaceholder,
+  value,
+  onChange,
+}: KeyValueEditorProps) {
+  // Entries derived from the controlled prop — insertion-order preserved.
+  const entries = useMemo(() => Object.entries(value || {}), [value]);
+
+  // ---- Add-row state ----
+  const [addKey, setAddKey] = useState('');
+  const [addValue, setAddValue] = useState('');
+  const [addKeyError, setAddKeyError] = useState<string | null>(null);
+
+  // ---- Per-row edit state ----
+  // editIdx: which saved row is currently being edited (null = none)
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editKey, setEditKey] = useState('');
+  const [editValue, setEditValue] = useState('');
+  const [editKeyError, setEditKeyError] = useState<string | null>(null);
+
+  const commitEntries = (next: Array<[string, string]>) => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of next) {
+      if (k.length > 0) out[k] = v;
+    }
+    onChange(out);
+  };
+
+  // ---- Add handlers ----
+  const handleAdd = () => {
+    const trimmedKey = addKey.trim();
+    if (!trimmedKey) {
+      setAddKeyError('Key required');
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(value || {}, trimmedKey)) {
+      setAddKeyError('Key already exists — edit the existing entry');
+      return;
+    }
+    commitEntries([...entries, [trimmedKey, addValue]]);
+    setAddKey('');
+    setAddValue('');
+    setAddKeyError(null);
+  };
+
+  // ---- Edit handlers ----
+  const startEdit = (idx: number) => {
+    setEditIdx(idx);
+    setEditKey(entries[idx][0]);
+    setEditValue(entries[idx][1]);
+    setEditKeyError(null);
+  };
+
+  const cancelEdit = () => {
+    setEditIdx(null);
+    setEditKeyError(null);
+  };
+
+  const commitEdit = () => {
+    const trimmedKey = editKey.trim();
+    if (!trimmedKey) {
+      setEditKeyError('Key required');
+      return;
+    }
+    // Duplicate check: allow the same key if it's the row being edited.
+    const isDuplicate = entries.some(
+      ([k], i) => k === trimmedKey && i !== editIdx,
+    );
+    if (isDuplicate) {
+      setEditKeyError('Key already exists — choose a different name');
+      return;
+    }
+    const next = entries.map((e, i) =>
+      i === editIdx ? ([trimmedKey, editValue] as [string, string]) : (e as [string, string]),
+    );
+    commitEntries(next);
+    setEditIdx(null);
+    setEditKeyError(null);
+  };
+
+  const removeRow = (idx: number) => {
+    if (editIdx === idx) cancelEdit();
+    commitEntries(entries.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div>
+      <Label>{label}</Label>
+
+      {/* Add-entry row */}
+      <div className="mt-2 p-2 rounded-md border border-dashed bg-muted/30 space-y-1">
+        <p className="text-xs text-muted-foreground font-medium">Add entry</p>
+        <div className="flex gap-2 items-start">
+          <div className="flex-1 space-y-1">
+            <Input
+              value={addKey}
+              onChange={(e) => {
+                setAddKey(e.target.value);
+                if (addKeyError) setAddKeyError(null);
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+              placeholder={keyPlaceholder || 'key'}
+              className="font-mono text-sm"
+              aria-label="New entry key"
+            />
+            {addKeyError && (
+              <p className="text-xs text-destructive">{addKeyError}</p>
+            )}
+          </div>
+          <div className="flex-1">
+            <Input
+              value={addValue}
+              onChange={(e) => setAddValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+              placeholder={valuePlaceholder || 'value'}
+              className="font-mono text-sm"
+              aria-label="New entry value"
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleAdd}
+            aria-label="Add entry"
+          >
+            <Plus className="w-3 h-3 mr-1" />
+            Add
+          </Button>
+        </div>
+      </div>
+
+      {/* Saved entries list */}
+      <div className="space-y-1 mt-2">
+        {entries.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">No entries.</p>
+        )}
+        {entries.map(([k, v], idx) => {
+          const isEditing = editIdx === idx;
+          return (
+            <div
+              key={k}
+              className={`flex gap-2 items-start rounded-md px-2 py-1 ${
+                isEditing ? 'ring-1 ring-primary/40 bg-primary/5' : 'bg-background'
+              }`}
+            >
+              {isEditing ? (
+                <>
+                  <div className="flex-1 space-y-1">
+                    <Input
+                      value={editKey}
+                      onChange={(e) => {
+                        setEditKey(e.target.value);
+                        if (editKeyError) setEditKeyError(null);
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                      placeholder={keyPlaceholder || 'key'}
+                      className="font-mono text-sm"
+                      aria-label="Edit entry key"
+                      autoFocus
+                    />
+                    {editKeyError && (
+                      <p className="text-xs text-destructive">{editKeyError}</p>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }}
+                      placeholder={valuePlaceholder || 'value'}
+                      className="font-mono text-sm"
+                      aria-label="Edit entry value"
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={commitEdit}
+                      aria-label="Save edit"
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={cancelEdit}
+                      aria-label="Cancel edit"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 font-mono text-sm py-1 truncate">{k}</span>
+                  <div className="flex-1 flex items-center gap-1 min-w-0">
+                    <span className="font-mono text-sm py-1 truncate">{v}</span>
+                    {hasUnclosedTemplate(v) && (
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 text-amber-700 border-amber-400 bg-amber-100 text-xs px-1 py-0"
+                      >
+                        Check template
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => startEdit(idx)}
+                      aria-label="Edit row"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => removeRow(idx)}
+                      aria-label="Remove row"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {helpText && (
+        <p className="text-xs text-muted-foreground mt-1">{helpText}</p>
+      )}
+    </div>
+  );
+}
 
 // Node types registry (default = fallback for unknown step_type)
 const nodeTypes = {
@@ -528,6 +812,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const [_stepTypes, setStepTypes] = useState<StepTypeSchema[]>([]);
   const [compliancePolicies, setCompliancePolicies] = useState<CompliancePolicyRef[]>([]);
   const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string; source: 'app' | 'business'; has_groups?: boolean; category?: string; description?: string }[]>([]);
+  // approverRoles is the approval-entity-filtered subset of availableRoles used
+  // specifically in the Approvers (Role) picker. It is re-computed whenever
+  // entityTypes changes so the dropdown tracks the trigger configuration.
+  const [approverRoles, setApproverRoles] = useState<typeof availableRoles>([]);
   const [httpConnections, setHttpConnections] = useState<HttpConnectionRef[]>([]);
   const [triggerTypeOptions, setTriggerTypeOptions] = useState<TriggerTypeOption[]>([]);
   const [showDiscardDialog, setShowDiscardDialog] = useState(false);
@@ -856,6 +1144,61 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     return map;
   }, [availableRoles]);
 
+  // Re-compute approverRoles whenever entityTypes or the base role list changes.
+  // For each entity type that has an ApprovalEntity mapping we fetch the
+  // backend-filtered list, then intersect across all mapped types so only roles
+  // eligible to approve EVERY entity type are shown. Entity types without a
+  // mapping (e.g. 'table', 'catalog') are ignored for filtering purposes —
+  // if ALL entity types are unmapped the full role list is used.
+  useEffect(() => {
+    const requiredKeys = entityTypes
+      .map(et => ENTITY_TYPE_TO_APPROVAL_ENTITY[et])
+      .filter((k): k is string => k !== undefined);
+
+    if (requiredKeys.length === 0) {
+      // No approval-mapped entity types: show all roles (backward compat)
+      setApproverRoles(availableRoles);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchIntersection = async () => {
+      try {
+        const perKeyRoles = await Promise.all(
+          requiredKeys.map(key =>
+            get<typeof availableRoles>(`/api/workflows/roles?approval_entity=${encodeURIComponent(key)}`)
+              .then(r => r.data ?? [])
+          )
+        );
+
+        if (cancelled) return;
+
+        if (perKeyRoles.length === 0) {
+          setApproverRoles([]);
+          return;
+        }
+
+        // Intersect: keep roles present in all per-key result sets
+        const firstSet = perKeyRoles[0];
+        const idSets = perKeyRoles.slice(1).map(arr => new Set(arr.map(r => r.id)));
+        const intersected = firstSet.filter(role =>
+          idSets.every(s => s.has(role.id))
+        );
+
+        setApproverRoles(intersected);
+      } catch {
+        if (!cancelled) {
+          // Fall back to unfiltered list on error
+          setApproverRoles(availableRoles);
+        }
+      }
+    };
+
+    fetchIntersection();
+    return () => { cancelled = true; };
+  }, [entityTypes, availableRoles, get]);
+
   // Update node data when rolesMap changes
   useEffect(() => {
     if (Object.keys(rolesMap).length > 0) {
@@ -868,6 +1211,19 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       }));
     }
   }, [rolesMap, setNodes]);
+
+  // Keep the canvas trigger node in sync with the trigger picker state.
+  // Without this the node renders only the initial default (on_create / table)
+  // and never reflects changes the user makes in the Trigger Configuration panel.
+  useEffect(() => {
+    setNodes(prevNodes => prevNodes.map(node => {
+      if (node.type !== 'trigger') return node;
+      return {
+        ...node,
+        data: { ...node.data, trigger: { type: triggerType, entity_types: entityTypes } },
+      };
+    }));
+  }, [triggerType, entityTypes, setNodes]);
 
   // Handle node selection
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -1877,7 +2233,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                   <SelectValue placeholder="Select role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {renderGroupedRoles(availableRoles, { requester: true })}
+                                  {renderGroupedRoles(approverRoles, { requester: true })}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -2097,7 +2453,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         <Label>Body Template</Label>
                         <Textarea
                           value={(selectedStep.config as { body_template?: string })?.body_template || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
+                          onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, body_template: e.target.value }
                           })}
                           placeholder={'{\n  "description": "Alert for ${entity_name}",\n  "entity_type": "${entity_type}"\n}'}
@@ -2108,7 +2464,47 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           Use {'${variable}'} for substitution: entity_type, entity_id, entity_name, user_email, workflow_name
                         </p>
                       </div>
-                      
+
+                      {/* Extra parameters forwarded into the UC HTTPConnection call (issue #401).
+                          These augment what the connection's static config provides — useful when
+                          the downstream service needs context-derived headers, query string params,
+                          or path segments computed from ${entity.*} / ${trigger.*}. */}
+                      <KeyValueEditor
+                        label="Additional Headers"
+                        helpText="Merged into the request headers. Override `headers` on key collision. Values support ${variable} substitution."
+                        keyPlaceholder="X-Trace-Id"
+                        valuePlaceholder="${execution_id}"
+                        value={(selectedStep.config as { additional_headers?: Record<string, string> })?.additional_headers || {}}
+                        onChange={(next) => updateStep(selectedStep.step_id, {
+                          config: { ...selectedStep.config, additional_headers: next },
+                        })}
+                      />
+
+                      <KeyValueEditor
+                        label="Additional Query Parameters"
+                        helpText="Appended to the request URL/path as query string. Values support ${variable} substitution and are URL-encoded."
+                        keyPlaceholder="caller"
+                        valuePlaceholder="ontos"
+                        value={(selectedStep.config as { additional_query_params?: Record<string, string> })?.additional_query_params || {}}
+                        onChange={(next) => updateStep(selectedStep.step_id, {
+                          config: { ...selectedStep.config, additional_query_params: next },
+                        })}
+                      />
+
+                      <div>
+                        <Label>Path Suffix</Label>
+                        <Input
+                          value={(selectedStep.config as { path_suffix?: string })?.path_suffix || ''}
+                          onChange={(e) => updateStep(selectedStep.step_id, {
+                            config: { ...selectedStep.config, path_suffix: e.target.value },
+                          })}
+                          placeholder="/${entity_id}"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Appended to Path before the query string. Supports {'${variable}'} substitution.
+                        </p>
+                      </div>
+
                       <div>
                         <Label>Timeout (seconds)</Label>
                         <Input

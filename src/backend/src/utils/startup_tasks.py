@@ -388,7 +388,12 @@ def initialize_managers(app: FastAPI):
         
         # --- Ensure default roles exist using the manager method --- 
         app.state.settings_manager.ensure_default_roles_exist()
-        
+
+        # --- Backfill Admin role with ADMIN on any newly-added feature IDs ---
+        # Idempotent migration; covers the settings-* sub-page permissions
+        # added by the Settings permissions refactor and any future additions.
+        app.state.settings_manager.upgrade_admin_role_for_new_features()
+
         # --- Ensure default team and project exist for admins ---
         app.state.settings_manager.ensure_default_team_and_project()
 

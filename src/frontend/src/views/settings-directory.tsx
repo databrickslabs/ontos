@@ -214,7 +214,7 @@ export default function SettingsDirectoryView() {
 
   if (loading) {
     return (
-      <SettingsPageWrapper title="Directory">
+      <SettingsPageWrapper title="Directory" permissionId="settings-directory">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
@@ -256,7 +256,7 @@ export default function SettingsDirectoryView() {
   })();
 
   return (
-    <SettingsPageWrapper title="Directory">
+    <SettingsPageWrapper title="Directory" permissionId="settings-directory">
       <div className="flex flex-col gap-6 max-w-2xl">
         <p className="text-sm text-muted-foreground">
           Connect a principal directory so users and groups can be picked

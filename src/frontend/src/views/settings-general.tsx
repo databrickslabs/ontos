@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 export default function SettingsGeneralView() {
   const { t } = useTranslation(['settings']);
   return (
-    <SettingsPageWrapper title={t('settings:tabs.general', 'General')}>
+    <SettingsPageWrapper title={t('settings:tabs.general', 'General')} permissionId="settings-general">
       <GeneralSettings />
     </SettingsPageWrapper>
   );

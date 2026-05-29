@@ -275,7 +275,7 @@ export default function ProjectsView() {
   ], [canWrite, canAdmin, t, handleOpenEditDialog]);
 
   return (
-    <SettingsPageWrapper title={t('title')}>
+    <SettingsPageWrapper title={t('title')} permissionId="settings-projects">
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
            <FolderOpen className="w-8 h-8" />

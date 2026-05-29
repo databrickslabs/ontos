@@ -37,7 +37,7 @@ export default function RolesSettings() {
     const { userInfo } = useUserStore(); // Get user info from user store
     const userGroups = userInfo?.groups ?? []; // Extract groups, default to empty array
     
-    const featureId = 'settings'; // Feature ID for permissions
+    const featureId = 'settings-roles'; // Feature ID for permissions
     const canWrite = hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
     const canAdmin = hasPermission(featureId, FeatureAccessLevel.ADMIN);
 

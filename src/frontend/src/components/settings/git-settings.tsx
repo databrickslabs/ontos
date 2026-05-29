@@ -52,7 +52,7 @@ export default function GitSettings() {
   const { t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
-  const hasWriteAccess = hasPermission('settings', FeatureAccessLevel.READ_WRITE);
+  const hasWriteAccess = hasPermission('settings-git', FeatureAccessLevel.READ_WRITE);
 
   const [settings, setSettings] = useState<GitSettings>({
     gitRepoUrl: '',

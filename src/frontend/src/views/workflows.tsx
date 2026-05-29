@@ -1194,7 +1194,7 @@ export default function Workflows() {
   useEffect(() => { setStatsFilter('all'); }, [workflowTypeFilter]);
 
   return (
-    <SettingsPageWrapper title={t('common:labels.workflows', 'Workflows')}>
+    <SettingsPageWrapper title={t('common:labels.workflows', 'Workflows')} permissionId="settings-workflows">
       <div className="mb-6">
         <div className="flex justify-between items-start">
           <div>

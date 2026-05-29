@@ -247,7 +247,7 @@ async def list_agreements(
     entity_id: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ):
     """List agreements, optionally filtered by entity type/id."""
     return wizard_manager.list_agreements(
@@ -259,7 +259,7 @@ async def list_agreements(
 async def get_agreement(
     agreement_id: str,
     wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ):
     """Get a single agreement by ID."""
     result = wizard_manager.get_agreement(agreement_id)
@@ -272,7 +272,7 @@ async def get_agreement(
 async def download_agreement_pdf(
     agreement_id: str,
     wizard_manager: AgreementWizardManager = Depends(get_agreement_wizard_manager),
-    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
 ):
     """Download the agreement as a PDF document.
 

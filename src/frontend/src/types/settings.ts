@@ -11,9 +11,30 @@ export enum FeatureAccessLevel {
     ADMIN = "Admin",
 }
 
+// Permission group buckets — mirror the sidebar nav groups plus a Settings
+// bucket and a catch-all `Other` bucket for cross-cutting permissions.
+// Used by the role configuration UI to group features by area.
+export type PermissionGroup =
+    | 'Discover'
+    | 'Build'
+    | 'Govern'
+    | 'Deploy'
+    | 'Settings'
+    | 'Other';
+
+export const PERMISSION_GROUP_ORDER: PermissionGroup[] = [
+    'Discover',
+    'Build',
+    'Govern',
+    'Deploy',
+    'Settings',
+    'Other',
+];
+
 export interface FeatureConfig {
     name: string;
     allowed_levels: FeatureAccessLevel[];
+    group?: PermissionGroup;
 }
 
 export enum HomeSection {

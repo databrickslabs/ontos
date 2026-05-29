@@ -169,7 +169,7 @@ export default function AuditTrail() {
   };
 
   return (
-    <SettingsPageWrapper title={t('title')}>
+    <SettingsPageWrapper title={t('title')} permissionId="settings-audit">
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <ScrollText className="w-8 h-8" />

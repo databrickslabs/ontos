@@ -139,8 +139,6 @@
     "setStatus": "ステータスを設定",
     "pasteODCSJSON": "ODCS JSONを貼り付け",
     "searchDataProductsTermsContracts": "データ製品、用語、契約を検索...",
-    "noResults": "結果が見つかりません",
-    "noTags": "タグが見つかりません",
     "exampleCatalogSchemaTable": "例: catalog.schema.table"
   },
   "states": {
@@ -331,7 +329,7 @@
     },
     "stepTypes": {
       "validation": "検証",
-      "approval": "承認",
+      "approval": "承認をリクエスト",
       "notification": "通知",
       "assign_tag": "タグ割り当て",
       "remove_tag": "タグ削除",

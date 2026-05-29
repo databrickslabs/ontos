@@ -1347,31 +1347,58 @@ class WebhookStepHandler(StepHandler):
         timeout_seconds = self._config.get('timeout_seconds', 30)
         success_codes = self._config.get('success_codes')
         retry_count = self._config.get('retry_count', 0)
-        
+
+        # Caller-supplied extras forwarded into the UC HTTPConnection call
+        # (issue #401). All support the same template substitution as
+        # body_template / headers; absent or empty fields are no-ops, so
+        # legacy configs are unaffected.
+        additional_headers = self._config.get('additional_headers', {}) or {}
+        additional_query_params = self._config.get('additional_query_params', {}) or {}
+        path_suffix = self._config.get('path_suffix')
+
         # Validate configuration
         if not connection_name and not url:
             return StepResult(
                 passed=False,
                 error="Webhook requires either 'connection_name' (UC Connection) or 'url' (inline mode)"
             )
-        
+
         # Substitute template variables in body
         body = None
         if body_template:
             body = self._substitute_template(body_template, context)
-        
+
         # Substitute template variables in headers
         resolved_headers = {}
         for key, value in headers.items():
             resolved_headers[key] = self._substitute_template(value, context)
-        
+
+        # Merge additional_headers (caller-supplied extras win on key collision).
+        for key, value in additional_headers.items():
+            resolved_headers[key] = self._substitute_template(value, context)
+
+        # Resolve additional_query_params (values, not keys, are templated).
+        resolved_query_params: Dict[str, str] = {}
+        for key, value in additional_query_params.items():
+            resolved_query_params[key] = self._substitute_template(value, context)
+
+        # Resolve path_suffix and merge with the configured path.
+        resolved_path_suffix = (
+            self._substitute_template(path_suffix, context) if path_suffix else ''
+        )
+        effective_path = self._compose_path(
+            base_path=path or '',
+            suffix=resolved_path_suffix,
+            query_params=resolved_query_params,
+        )
+
         try:
             if connection_name:
                 # UC Connection mode
                 result = self._execute_via_uc_connection(
                     connection_name=connection_name,
                     method=method,
-                    path=path,
+                    path=effective_path,
                     headers=resolved_headers,
                     body=body,
                     timeout_seconds=timeout_seconds,
@@ -1379,9 +1406,14 @@ class WebhookStepHandler(StepHandler):
                     retry_count=retry_count,
                 )
             else:
-                # Inline mode
+                # Inline mode — append path_suffix and query params to the URL.
+                effective_url = self._compose_url(
+                    base_url=url,
+                    suffix=resolved_path_suffix,
+                    query_params=resolved_query_params,
+                )
                 result = self._execute_direct(
-                    url=url,
+                    url=effective_url,
                     method=method,
                     headers=resolved_headers,
                     body=body,
@@ -1389,12 +1421,77 @@ class WebhookStepHandler(StepHandler):
                     success_codes=success_codes,
                     retry_count=retry_count,
                 )
-            
+
             return result
-            
+
         except Exception as e:
             logger.exception(f"Webhook step failed: {e}")
             return StepResult(passed=False, error=str(e))
+
+    @staticmethod
+    def _compose_path(base_path: str, suffix: str, query_params: Dict[str, str]) -> str:
+        """Combine `base_path`, optional `suffix`, and optional `query_params` into
+        a single path string for the UC HTTPConnection call.
+
+        - If both `base_path` and `suffix` are empty, returns '/' (existing behavior).
+        - Avoids duplicated slashes at the join.
+        - Query string is appended last, URL-encoded.
+        """
+        from urllib.parse import urlencode
+
+        # Strip surrounding whitespace to forgive UI input.
+        base = (base_path or '').strip()
+        suf = (suffix or '').strip()
+
+        if base and suf:
+            # Ensure exactly one slash between base and suffix.
+            if base.endswith('/') and suf.startswith('/'):
+                combined = base + suf[1:]
+            elif not base.endswith('/') and not suf.startswith('/'):
+                combined = base + '/' + suf
+            else:
+                combined = base + suf
+        else:
+            combined = base or suf
+
+        if not combined:
+            combined = '/'
+
+        if query_params:
+            sep = '&' if '?' in combined else '?'
+            combined = f"{combined}{sep}{urlencode(query_params, doseq=True)}"
+
+        return combined
+
+    @staticmethod
+    def _compose_url(base_url: str, suffix: str, query_params: Dict[str, str]) -> str:
+        """Combine `base_url` with optional path `suffix` and `query_params`.
+
+        Inline-mode counterpart to ``_compose_path``. The suffix is inserted into
+        the URL's path component (before any existing query string) with single
+        normalizing slashes, then ``query_params`` are appended last.
+        """
+        from urllib.parse import urlencode, urlsplit, urlunsplit
+
+        url = base_url
+        suf = (suffix or '').strip()
+        if suf:
+            parts = urlsplit(url)
+            base_path = parts.path or ''
+            if base_path and suf:
+                if base_path.endswith('/') and suf.startswith('/'):
+                    combined = base_path + suf[1:]
+                elif not base_path.endswith('/') and not suf.startswith('/'):
+                    combined = base_path + '/' + suf
+                else:
+                    combined = base_path + suf
+            else:
+                combined = base_path or suf
+            url = urlunsplit((parts.scheme, parts.netloc, combined, parts.query, parts.fragment))
+        if query_params:
+            sep = '&' if '?' in url else '?'
+            url = f"{url}{sep}{urlencode(query_params, doseq=True)}"
+        return url
 
     def _substitute_template(self, template: str, context: StepContext) -> str:
         """Delegate to module-level substitute_template."""

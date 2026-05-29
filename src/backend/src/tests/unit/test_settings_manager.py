@@ -312,14 +312,47 @@ class TestSettingsManager:
         assert isinstance(result, dict)
 
     def test_get_features_with_access_levels(self, manager, db_session):
-        """Test getting features with their access levels."""
+        """Test getting features with their access levels and group bucket."""
         # Act
         result = manager.get_features_with_access_levels()
 
         # Assert
         assert isinstance(result, dict)
-        # Should contain feature configurations
         assert len(result) > 0
+
+        # Every entry has the expected shape
+        for feature_id, conf in result.items():
+            assert 'name' in conf, f"{feature_id} is missing 'name'"
+            assert 'allowed_levels' in conf, f"{feature_id} is missing 'allowed_levels'"
+            assert 'group' in conf, f"{feature_id} is missing 'group'"
+            assert conf['group'] in {'Discover', 'Build', 'Govern', 'Deploy', 'Settings', 'Other'}
+
+        # `settings` now offers the four-level scale (not Admin-only)
+        assert 'settings' in result
+        assert result['settings']['group'] == 'Settings'
+        assert 'Read-only' in result['settings']['allowed_levels']
+        assert 'Read/Write' in result['settings']['allowed_levels']
+        assert 'Admin' in result['settings']['allowed_levels']
+
+        # Each Settings sub-page has its own dedicated permission ID
+        expected_subpage_ids = {
+            'settings-data-domains', 'settings-business-roles',
+            'settings-delivery-methods', 'settings-asset-types',
+            'settings-teams', 'settings-projects',
+            'settings-certification-levels', 'settings-general',
+            'settings-ui', 'settings-tags', 'settings-connectors',
+            'settings-git', 'settings-mcp', 'settings-semantic-models',
+            'settings-search', 'settings-jobs', 'settings-delivery',
+            'settings-workflows', 'settings-roles', 'settings-audit',
+        }
+        missing = expected_subpage_ids - set(result.keys())
+        assert not missing, f"Missing settings sub-page IDs: {missing}"
+
+        for sub_id in expected_subpage_ids:
+            assert result[sub_id]['group'] == 'Settings'
+            assert 'Read-only' in result[sub_id]['allowed_levels']
+            assert 'Read/Write' in result[sub_id]['allowed_levels']
+            assert 'Admin' in result[sub_id]['allowed_levels']
 
     # =====================================================================
     # Role Count Tests
@@ -437,4 +470,98 @@ class TestSettingsManager:
         perms = {}
         manager._validate_permissions(perms)
         assert perms == {}
+
+    # =====================================================================
+    # list_app_roles_for_approval Tests (#161)
+    # =====================================================================
+
+    def test_list_app_roles_for_approval_no_filter_returns_all(self, manager, db_session):
+        """Without a filter param all roles are returned (backward compat)."""
+        import json
+        for i, privs in enumerate(['{"CONTRACTS": true}', '{}', '{"PRODUCTS": true}']):
+            db_session.add(AppRoleDb(
+                id=str(uuid.uuid4()),
+                name=f"Role {i}",
+                description="",
+                feature_permissions='{}',
+                assigned_groups='[]',
+                home_sections='[]',
+                approval_privileges=privs,
+            ))
+        db_session.commit()
+
+        result = manager.list_app_roles_for_approval(approval_entity=None)
+        assert len(result) == 3
+
+    def test_list_app_roles_for_approval_filters_by_entity(self, manager, db_session):
+        """Only roles with the matching approval privilege are returned."""
+        import json
+        db_session.add(AppRoleDb(
+            id=str(uuid.uuid4()),
+            name="Governor",
+            description="",
+            feature_permissions='{}',
+            assigned_groups='[]',
+            home_sections='[]',
+            approval_privileges='{"CONTRACTS": true, "PRODUCTS": true}',
+        ))
+        db_session.add(AppRoleDb(
+            id=str(uuid.uuid4()),
+            name="Consumer",
+            description="",
+            feature_permissions='{}',
+            assigned_groups='[]',
+            home_sections='[]',
+            approval_privileges='{}',
+        ))
+        db_session.commit()
+
+        result = manager.list_app_roles_for_approval(approval_entity="CONTRACTS")
+        assert len(result) == 1
+        assert result[0].name == "Governor"
+
+    def test_list_app_roles_for_approval_missing_privilege_excluded(self, manager, db_session):
+        """Roles where the flag is False (not just missing) are excluded."""
+        db_session.add(AppRoleDb(
+            id=str(uuid.uuid4()),
+            name="No Privilege",
+            description="",
+            feature_permissions='{}',
+            assigned_groups='[]',
+            home_sections='[]',
+            approval_privileges='{"DOMAINS": false}',
+        ))
+        db_session.commit()
+
+        result = manager.list_app_roles_for_approval(approval_entity="DOMAINS")
+        assert result == []
+
+    def test_list_app_roles_for_approval_multi_entity_intersection(self, manager, db_session):
+        """Roles must have ALL requested privileges to pass the filter."""
+        db_session.add(AppRoleDb(
+            id=str(uuid.uuid4()),
+            name="Both",
+            description="",
+            feature_permissions='{}',
+            assigned_groups='[]',
+            home_sections='[]',
+            approval_privileges='{"CONTRACTS": true, "PRODUCTS": true}',
+        ))
+        db_session.add(AppRoleDb(
+            id=str(uuid.uuid4()),
+            name="Contracts only",
+            description="",
+            feature_permissions='{}',
+            assigned_groups='[]',
+            home_sections='[]',
+            approval_privileges='{"CONTRACTS": true}',
+        ))
+        db_session.commit()
+
+        contracts = {r.name for r in manager.list_app_roles_for_approval(approval_entity="CONTRACTS")}
+        products = {r.name for r in manager.list_app_roles_for_approval(approval_entity="PRODUCTS")}
+        # Intersection of both sets simulates what the frontend does for multi-entity workflows
+        intersection = contracts & products
+        assert intersection == {"Both"}
+        assert "Contracts only" not in intersection
 

@@ -84,15 +84,21 @@ class TestFeatures:
         assert FeatureAccessLevel.READ_WRITE in feature['allowed_levels']
         assert FeatureAccessLevel.ADMIN in feature['allowed_levels']
 
-    def test_settings_feature_admin_only(self):
-        """Test settings feature is admin-only."""
+    def test_settings_feature_layout_gate(self):
+        """Settings is the parent layout gate; allows None/RO/RW/Admin.
+
+        Per the Settings permissions refactor (PR #430 / issue #427), the
+        top-level `settings` permission acts as a layout gate for the
+        Settings area while individual sub-pages get their own
+        `settings-<name>` permissions.
+        """
         feature = APP_FEATURES['settings']
         assert feature['name'] == 'Settings'
         allowed = feature['allowed_levels']
         assert FeatureAccessLevel.NONE in allowed
+        assert FeatureAccessLevel.READ_ONLY in allowed
+        assert FeatureAccessLevel.READ_WRITE in allowed
         assert FeatureAccessLevel.ADMIN in allowed
-        # Settings should not allow READ_WRITE
-        assert FeatureAccessLevel.READ_WRITE not in allowed
 
     def test_data_products_filtered_access(self):
         """Test data-products supports filtered access."""

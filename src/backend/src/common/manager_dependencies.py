@@ -145,8 +145,17 @@ def get_metadata_manager(request: Request) -> MetadataManager:
 def get_comments_manager(request: Request) -> CommentsManager:
     manager = getattr(request.app.state, 'comments_manager', None)
     if not manager:
-        # Instantiate lazily and cache on app.state
-        manager = CommentsManager()
+        # Instantiate lazily and cache on app.state.
+        # Inject SettingsManager and AuthorizationManager so that list_comments
+        # can resolve viewer role IDs via the same group-membership + override
+        # logic that AuthorizationManager.get_user_effective_permissions uses
+        # (issue #326 — role audience parity with workflows).
+        settings_manager = getattr(request.app.state, 'settings_manager', None)
+        authorization_manager = getattr(request.app.state, 'authorization_manager', None)
+        manager = CommentsManager(
+            settings_manager=settings_manager,
+            authorization_manager=authorization_manager,
+        )
         setattr(request.app.state, 'comments_manager', manager)
         logger.info("Initialized CommentsManager and stored on app.state.comments_manager")
     return manager

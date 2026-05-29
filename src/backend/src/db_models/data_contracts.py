@@ -8,6 +8,7 @@ from sqlalchemy import (
     Integer,
     ForeignKey,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -45,8 +46,12 @@ class DataContractDb(Base):
     contract_created_ts = Column(DateTime(timezone=True), nullable=True)  # ODCS contractCreatedTs field
 
     # Semantic versioning fields
-    parent_contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="SET NULL"), nullable=True, index=True)  # Parent version reference
-    base_name = Column(String, nullable=True, index=True)  # Base name without version (e.g., "customer_data" for "customer_data_v1.0.0")
+    parent_contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="SET NULL"), nullable=True, index=True)  # Parent version reference (lineage)
+    # Canonical, immutable family grouping key. Copied from parent on every
+    # clone, or set to self.id on first creation. Single indexed equality
+    # lookup returns every version of the family. See PRD #442 in GH.
+    version_family_id = Column(String, nullable=False, index=True)
+    base_name = Column(String, nullable=True, index=True)  # Legacy base name; superseded by version_family_id. Kept for back-compat, no longer queried.
     change_summary = Column(Text, nullable=True)  # Summary of changes in this version
 
     # Personal draft visibility field
@@ -89,6 +94,21 @@ class DataContractDb(Base):
     comments = relationship("DataContractCommentDb", back_populates="contract", cascade="all, delete-orphan", lazy="select")
     profiling_runs = relationship("DataProfilingRunDb", back_populates="contract", cascade="all, delete-orphan", lazy="select")
     suggested_quality_checks = relationship("SuggestedQualityCheckDb", back_populates="contract", cascade="all, delete-orphan", lazy="select")
+
+
+@event.listens_for(DataContractDb, "before_insert")
+def _seed_contract_version_family_id(_mapper, _connection, target):
+    """Guarantee the version_family_id NOT NULL invariant regardless of
+    insert path (repository, direct ORM construction, demo loader, etc.).
+
+    Roots get themselves as family root; clones must explicitly carry the
+    source's family id (see ContractCloner / DataContractsManager) — this
+    listener only fires when the caller forgot.
+    """
+    if not getattr(target, "id", None):
+        target.id = str(uuid4())
+    if not getattr(target, "version_family_id", None):
+        target.version_family_id = target.id
 
 
 class DataContractTagDb(Base):

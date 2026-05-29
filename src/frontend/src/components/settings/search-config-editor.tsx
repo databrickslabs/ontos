@@ -149,7 +149,7 @@ export default function SearchConfigEditor() {
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
   
-  const hasWriteAccess = hasPermission('settings', FeatureAccessLevel.ADMIN);
+  const hasWriteAccess = hasPermission('settings-search', FeatureAccessLevel.ADMIN);
 
   const [config, setConfig] = useState<SearchConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);

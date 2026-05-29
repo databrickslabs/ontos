@@ -29,12 +29,6 @@
   "general": {
     "title": "Allgemeine Einstellungen",
     "description": "Grundlegende Anwendungseinstellungen konfigurieren",
-    "enableBackgroundJobs": "Hintergrund-Jobs aktivieren",
-    "workspaceDeploymentPath": {
-      "label": "Workspace-Bereitstellungspfad",
-      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
-      "help": "Pfad im Databricks-Workspace, in dem Workflow-Dateien für Hintergrund-Jobs bereitgestellt werden."
-    },
     "unityCatalog": {
       "title": "Unity Catalog",
       "help": "Unity Catalog-Speicherort für Anwendungsdaten.",
@@ -131,6 +125,12 @@
       "label": "Job-Cluster-ID",
       "placeholder": "Job-Cluster-ID eingeben"
     },
+    "workspaceDeploymentPath": {
+      "label": "Workspace-Bereitstellungspfad",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "Pfad im Databricks-Workspace, in dem Workflow-Dateien für Hintergrund-Jobs bereitgestellt werden.",
+      "requiredHint": "Legen Sie oben den Bereitstellungspfad fest, um Workflows zu aktivieren."
+    },
     "availableWorkflows": {
       "label": "Verfügbare Workflows",
       "description": "Hintergrund-Workflows aktivieren oder deaktivieren"
@@ -218,6 +218,14 @@
       "featurePermissions": {
         "title": "Funktionsberechtigungen",
         "description": "Zugriffsebenen für jede Funktion in der Anwendung konfigurieren."
+      },
+      "groups": {
+        "discover": "Entdecken",
+        "build": "Erstellen",
+        "govern": "Verwalten",
+        "deploy": "Bereitstellen",
+        "settings": "Einstellungen",
+        "other": "Sonstige"
       }
     },
     "deployment": {

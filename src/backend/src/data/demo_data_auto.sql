@@ -165,7 +165,69 @@ INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, 
 ('00600012-0004-4000-8000-000000000018', '00500008-0004-4000-8000-000000000008', 'vin', 'string', true, false, false, false, -1, -1, true, 'Vehicle Identification Number'),
 ('00600013-0004-4000-8000-000000000019', '00500008-0004-4000-8000-000000000008', 'failure_code', 'string', true, false, false, false, -1, -1, true, 'Standardized failure mode code'),
 ('00600014-0004-4000-8000-000000000020', '00500008-0004-4000-8000-000000000008', 'mileage_km', 'integer', true, false, false, false, -1, -1, false, 'Vehicle odometer at time of claim'),
-('00600015-0004-4000-8000-000000000021', '00500008-0004-4000-8000-000000000008', 'claim_cost_usd', 'decimal', true, false, false, false, -1, -1, true, 'Total claim cost (parts + labor)')
+('00600015-0004-4000-8000-000000000021', '00500008-0004-4000-8000-000000000008', 'claim_cost_usd', 'decimal', true, false, false, false, -1, -1, true, 'Total claim cost (parts + labor)'),
+
+-- diagnostic_codes table (00500002 — Vehicle Telematics)
+('00600016-0004-4000-8000-000000000022', '00500002-0004-4000-8000-000000000002', 'event_id', 'string', true, true, true, false, 1, -1, true, 'Unique DTC event identifier'),
+('00600017-0004-4000-8000-000000000023', '00500002-0004-4000-8000-000000000002', 'vin', 'string', true, false, false, false, -1, -1, true, 'Vehicle Identification Number'),
+('00600018-0004-4000-8000-000000000024', '00500002-0004-4000-8000-000000000002', 'dtc_code', 'string', true, false, false, false, -1, -1, true, 'SAE J2012 diagnostic trouble code (e.g. P0420)'),
+('00600019-0004-4000-8000-000000000025', '00500002-0004-4000-8000-000000000002', 'severity', 'string', true, false, false, false, -1, -1, true, 'pending | confirmed | permanent'),
+('0060001a-0004-4000-8000-000000000026', '00500002-0004-4000-8000-000000000002', 'first_seen_ts', 'timestamp', true, false, false, true, -1, 1, false, 'First occurrence timestamp (UTC)'),
+('0060001b-0004-4000-8000-000000000027', '00500002-0004-4000-8000-000000000002', 'mileage_km', 'integer', true, false, false, false, -1, -1, false, 'Odometer at first occurrence'),
+
+-- driving_events table (00500003)
+('0060001c-0004-4000-8000-000000000028', '00500003-0004-4000-8000-000000000003', 'event_id', 'string', true, true, true, false, 1, -1, true, 'Unique driving event identifier'),
+('0060001d-0004-4000-8000-000000000029', '00500003-0004-4000-8000-000000000003', 'vin', 'string', true, false, false, false, -1, -1, true, 'Vehicle Identification Number'),
+('0060001e-0004-4000-8000-000000000030', '00500003-0004-4000-8000-000000000003', 'event_type', 'string', true, false, false, false, -1, -1, false, 'hard_brake | rapid_accel | hard_corner'),
+('0060001f-0004-4000-8000-000000000031', '00500003-0004-4000-8000-000000000003', 'event_ts', 'timestamp', true, false, false, true, -1, 1, false, 'Event timestamp (UTC)'),
+('00600020-0004-4000-8000-000000000032', '00500003-0004-4000-8000-000000000003', 'lat', 'decimal', true, false, false, false, -1, -1, false, 'Latitude (WGS84)'),
+('00600021-0004-4000-8000-000000000033', '00500003-0004-4000-8000-000000000003', 'lon', 'decimal', true, false, false, false, -1, -1, false, 'Longitude (WGS84)'),
+('00600022-0004-4000-8000-000000000034', '00500003-0004-4000-8000-000000000003', 'speed_kph', 'decimal', true, false, false, false, -1, -1, false, 'Vehicle speed at event time'),
+
+-- annotations table (00500005 — ADAS Sensor Data)
+('00600023-0004-4000-8000-000000000035', '00500005-0004-4000-8000-000000000005', 'annotation_id', 'string', true, true, true, false, 1, -1, true, 'Unique annotation identifier'),
+('00600024-0004-4000-8000-000000000036', '00500005-0004-4000-8000-000000000005', 'recording_id', 'string', true, false, false, false, -1, -1, true, 'FK to sensor_recordings.recording_id'),
+('00600025-0004-4000-8000-000000000037', '00500005-0004-4000-8000-000000000005', 'frame_index', 'integer', true, false, false, false, -1, -1, false, 'Frame index within the recording'),
+('00600026-0004-4000-8000-000000000038', '00500005-0004-4000-8000-000000000005', 'object_class', 'string', true, false, false, false, -1, -1, false, 'vehicle | pedestrian | cyclist | traffic_sign | lane_marking'),
+('00600027-0004-4000-8000-000000000039', '00500005-0004-4000-8000-000000000005', 'bbox_3d', 'string', false, false, false, false, -1, -1, false, '3D bounding box (JSON encoded)'),
+('00600028-0004-4000-8000-000000000040', '00500005-0004-4000-8000-000000000005', 'labeller_id', 'string', true, false, false, false, -1, -1, false, 'Labeller / annotation tool identifier'),
+
+-- incoming_inspections table (00500007 — Supplier Quality)
+('00600029-0004-4000-8000-000000000041', '00500007-0004-4000-8000-000000000007', 'inspection_id', 'string', true, true, true, false, 1, -1, true, 'Unique inspection record identifier'),
+('0060002a-0004-4000-8000-000000000042', '00500007-0004-4000-8000-000000000007', 'supplier_code', 'string', true, false, false, false, -1, -1, true, 'DUNS or internal supplier code'),
+('0060002b-0004-4000-8000-000000000043', '00500007-0004-4000-8000-000000000007', 'part_number', 'string', true, false, false, false, -1, -1, true, 'OEM part number'),
+('0060002c-0004-4000-8000-000000000044', '00500007-0004-4000-8000-000000000007', 'lot_size', 'integer', true, false, false, false, -1, -1, false, 'Lot size received'),
+('0060002d-0004-4000-8000-000000000045', '00500007-0004-4000-8000-000000000007', 'defects_found', 'integer', true, false, false, false, -1, -1, true, 'Number of defective units'),
+('0060002e-0004-4000-8000-000000000046', '00500007-0004-4000-8000-000000000007', 'inspection_date', 'date', true, false, false, true, -1, 1, false, 'Inspection date (partition key)'),
+
+-- recall_campaigns table (00500009 — Warranty Claims)
+('0060002f-0004-4000-8000-000000000047', '00500009-0004-4000-8000-000000000009', 'campaign_id', 'string', true, true, true, false, 1, -1, true, 'Unique recall campaign identifier'),
+('00600030-0004-4000-8000-000000000048', '00500009-0004-4000-8000-000000000009', 'campaign_type', 'string', true, false, false, false, -1, -1, true, 'safety | non_safety | service_action'),
+('00600031-0004-4000-8000-000000000049', '00500009-0004-4000-8000-000000000009', 'announced_date', 'date', true, false, false, false, -1, -1, false, 'Public announcement date'),
+('00600032-0004-4000-8000-000000000050', '00500009-0004-4000-8000-000000000009', 'affected_vins', 'integer', true, false, false, false, -1, -1, true, 'Estimated affected VIN count'),
+('00600033-0004-4000-8000-000000000051', '00500009-0004-4000-8000-000000000009', 'nhtsa_id', 'string', false, false, false, false, -1, -1, false, 'NHTSA recall reference (if applicable)')
+
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 4d. DATA CONTRACT QUALITY CHECKS (Auto-specific)
+-- ============================================================================
+
+INSERT INTO data_contract_quality_checks (id, object_id, property_id, level, name, description, dimension, business_impact, severity, type, rule, must_be, must_not_be, must_be_gt, must_be_ge, must_be_lt, must_be_le, must_be_between_min, must_be_between_max, query, engine, implementation, schedule, scheduler) VALUES
+-- Vehicle signals
+('03000001-0004-4000-8000-000000000001', '00500001-0004-4000-8000-000000000001', '00600001-0004-4000-8000-000000000001', 'property', 'vin_format',           'VIN must be 17 alphanumeric characters (excluding I/O/Q)',  'conformity',   'regulatory',  'error',   'library', 'regex',      '^[A-HJ-NPR-Z0-9]{17}$', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',  'airflow'),
+('03000002-0004-4000-8000-000000000002', '00500001-0004-4000-8000-000000000001', NULL,                                  'object',   'freshness_1h',         'CAN signals stream must have data within last hour',         'timeliness',   'operational', 'error',   'sql',     NULL,         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SELECT MAX(timestamp_utc) > NOW() - INTERVAL ''1 hour'' FROM telematics.can_bus_signals', 'spark', NULL, '*/10 * * * *', 'airflow'),
+-- Diagnostic codes
+('03000003-0004-4000-8000-000000000003', '00500002-0004-4000-8000-000000000002', '00600019-0004-4000-8000-000000000025', 'property', 'severity_values',      'severity must be one of pending/confirmed/permanent',         'conformity',   'operational', 'error',   'library', 'enumValues', 'pending,confirmed,permanent', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',  'airflow'),
+-- PPAP
+('03000004-0004-4000-8000-000000000004', '00500006-0004-4000-8000-000000000006', '0060000f-0004-4000-8000-000000000015', 'property', 'ppap_level_range',     'PPAP level must be in range [1,5] per AIAG',                  'accuracy',     'regulatory',  'error',   'library', 'rangeCheck', NULL, NULL, NULL, NULL, NULL, NULL, '1', '5', NULL, NULL, NULL, '@daily',  'airflow'),
+('03000005-0004-4000-8000-000000000005', '00500006-0004-4000-8000-000000000006', '00600010-0004-4000-8000-000000000016', 'property', 'disposition_values',   'disposition must be one of approved/interim_approved/rejected','conformity',  'regulatory',  'error',   'library', 'enumValues', 'approved,interim_approved,rejected', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',  'airflow'),
+-- Warranty claims
+('03000006-0004-4000-8000-000000000006', '00500008-0004-4000-8000-000000000008', '00600011-0004-4000-8000-000000000017', 'property', 'claim_id_unique',      'claim_id must be unique',                                     'uniqueness',   'operational', 'error',   'library', 'unique',     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',  'airflow'),
+('03000007-0004-4000-8000-000000000007', '00500008-0004-4000-8000-000000000008', '00600015-0004-4000-8000-000000000021', 'property', 'claim_cost_non_neg',   'claim_cost_usd must be >= 0',                                  'accuracy',     'operational', 'error',   'library', 'rangeCheck', NULL, NULL, NULL, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',   'airflow'),
+-- Recalls
+('03000008-0004-4000-8000-000000000008', '00500009-0004-4000-8000-000000000009', '00600030-0004-4000-8000-000000000048', 'property', 'campaign_type_values', 'campaign_type must be safety/non_safety/service_action',      'conformity',   'regulatory',  'error',   'library', 'enumValues', 'safety,non_safety,service_action', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',  'airflow')
 
 ON CONFLICT (id) DO NOTHING;
 
@@ -529,7 +591,53 @@ INSERT INTO assets (id, name, description, asset_type_id, platform, location, do
  '00000004-0004-4000-8000-000000000004',
  '{"catalog": "lakehouse", "schema": "auto_supply", "table_name": "tier_n_inventory", "row_count": 280000, "format": "delta"}',
  '[]',
- 'active', 'system@demo', NOW(), NOW())
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- ── Column assets for the Auto Tables / Streams above ──
+-- 0f300103 lakehouse.auto.telemetry.can_signals
+('0f520103-0004-4000-8000-000000000003', 'vin',           'Vehicle Identification Number',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.vin',           '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["telematics", "pii"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520104-0004-4000-8000-000000000004', 'trip_id',       'Unique trip session identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.trip_id',       '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}',  '["telematics", "key"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520105-0004-4000-8000-000000000005', 'signal_name',   'CAN signal name per DBC definition',              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.signal_name',   '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520106-0004-4000-8000-000000000006', 'signal_value',  'Decoded physical signal value',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.signal_value',  '00000002-0004-4000-8000-000000000002', '{"data_type": "DECIMAL(18,6)", "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520107-0004-4000-8000-000000000007', 'timestamp_utc', 'Signal timestamp (UTC, millisecond precision)',   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.timestamp_utc', '00000002-0004-4000-8000-000000000002', '{"data_type": "TIMESTAMP",     "nullable": false, "partition_key": true}',   '["telematics", "partition"]','active', 'system@demo', NOW(), NOW()),
+('0f520108-0004-4000-8000-000000000008', 'ecu_id',        'Source ECU identifier',                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.ecu_id',        '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300104 kafka.fleet.events.diagnostic_trouble_codes (Stream)
+('0f520111-0004-4000-8000-000000000011', 'event_id',      'Unique DTC event identifier',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.event_id',  '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false, "is_primary_key": true}', '["telematics", "key"]',      'active', 'system@demo', NOW(), NOW()),
+('0f520112-0004-4000-8000-000000000012', 'vin',           'Vehicle Identification Number',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.vin',       '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false}',                          '["telematics", "pii"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520113-0004-4000-8000-000000000013', 'dtc_code',      'SAE J2012 diagnostic trouble code',               (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.dtc_code',  '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520114-0004-4000-8000-000000000014', 'severity',      'pending | confirmed | permanent',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.severity',  '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520115-0004-4000-8000-000000000015', 'first_seen_ts', 'First occurrence timestamp (UTC)',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.first_seen_ts','00000002-0004-4000-8000-000000000002','{"data_type": "TIMESTAMP","nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300108 lakehouse.auto.supply.tier_n_inventory
+('0f520121-0004-4000-8000-000000000021', 'part_number',     'OEM part number (PK)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.part_number',     '00000004-0004-4000-8000-000000000004', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}',     '["supply-chain", "key"]',  'active', 'system@demo', NOW(), NOW()),
+('0f520122-0004-4000-8000-000000000022', 'supplier_code',   'Supplier code (PK with part_number)',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.supplier_code',   '00000004-0004-4000-8000-000000000004', '{"data_type": "STRING",  "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520123-0004-4000-8000-000000000023', 'tier',            'Supplier tier (1=direct, 2/3=upstream)',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.tier',            '00000004-0004-4000-8000-000000000004', '{"data_type": "INT",     "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520124-0004-4000-8000-000000000024', 'on_hand_qty',     'Current on-hand quantity',                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.on_hand_qty',     '00000004-0004-4000-8000-000000000004', '{"data_type": "INT",     "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520125-0004-4000-8000-000000000025', 'last_shipment_ts','Last shipment timestamp (UTC)',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.last_shipment_ts','00000004-0004-4000-8000-000000000004', '{"data_type": "TIMESTAMP","nullable": true }',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 15b. hasColumn RELATIONSHIPS (Auto)
+-- ============================================================================
+INSERT INTO entity_relationships (id, source_type, source_id, target_type, target_id, relationship_type, properties, created_by, created_at) VALUES
+('0f620103-0004-4000-8000-000000000003', 'Table',  '0f300103-0004-4000-8000-000000000003', 'Column', '0f520103-0004-4000-8000-000000000003', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620104-0004-4000-8000-000000000004', 'Table',  '0f300103-0004-4000-8000-000000000003', 'Column', '0f520104-0004-4000-8000-000000000004', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620105-0004-4000-8000-000000000005', 'Table',  '0f300103-0004-4000-8000-000000000003', 'Column', '0f520105-0004-4000-8000-000000000005', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620106-0004-4000-8000-000000000006', 'Table',  '0f300103-0004-4000-8000-000000000003', 'Column', '0f520106-0004-4000-8000-000000000006', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620107-0004-4000-8000-000000000007', 'Table',  '0f300103-0004-4000-8000-000000000003', 'Column', '0f520107-0004-4000-8000-000000000007', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620108-0004-4000-8000-000000000008', 'Table',  '0f300103-0004-4000-8000-000000000003', 'Column', '0f520108-0004-4000-8000-000000000008', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620111-0004-4000-8000-000000000011', 'Stream', '0f300104-0004-4000-8000-000000000004', 'Column', '0f520111-0004-4000-8000-000000000011', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620112-0004-4000-8000-000000000012', 'Stream', '0f300104-0004-4000-8000-000000000004', 'Column', '0f520112-0004-4000-8000-000000000012', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620113-0004-4000-8000-000000000013', 'Stream', '0f300104-0004-4000-8000-000000000004', 'Column', '0f520113-0004-4000-8000-000000000013', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620114-0004-4000-8000-000000000014', 'Stream', '0f300104-0004-4000-8000-000000000004', 'Column', '0f520114-0004-4000-8000-000000000014', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620115-0004-4000-8000-000000000015', 'Stream', '0f300104-0004-4000-8000-000000000004', 'Column', '0f520115-0004-4000-8000-000000000015', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620121-0004-4000-8000-000000000021', 'Table',  '0f300108-0004-4000-8000-000000000008', 'Column', '0f520121-0004-4000-8000-000000000021', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620122-0004-4000-8000-000000000022', 'Table',  '0f300108-0004-4000-8000-000000000008', 'Column', '0f520122-0004-4000-8000-000000000022', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620123-0004-4000-8000-000000000023', 'Table',  '0f300108-0004-4000-8000-000000000008', 'Column', '0f520123-0004-4000-8000-000000000023', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620124-0004-4000-8000-000000000024', 'Table',  '0f300108-0004-4000-8000-000000000008', 'Column', '0f520124-0004-4000-8000-000000000024', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620125-0004-4000-8000-000000000025', 'Table',  '0f300108-0004-4000-8000-000000000008', 'Column', '0f520125-0004-4000-8000-000000000025', 'hasColumn', NULL, 'system@demo', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

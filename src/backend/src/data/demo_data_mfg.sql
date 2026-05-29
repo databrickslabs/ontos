@@ -162,7 +162,77 @@ INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, 
 ('0060000f-0003-4000-8000-000000000015', '00500007-0003-4000-8000-000000000007', 'sensor_type', 'string', true, false, false, false, -1, -1, false, 'vibration, temperature, pressure, current'),
 ('00600010-0003-4000-8000-000000000016', '00500007-0003-4000-8000-000000000007', 'reading_value', 'decimal', true, false, false, false, -1, -1, true, 'Sensor reading value in SI units'),
 ('00600011-0003-4000-8000-000000000017', '00500007-0003-4000-8000-000000000007', 'reading_ts', 'timestamp', true, false, false, true, -1, 1, false, 'Reading timestamp (UTC)'),
-('00600012-0003-4000-8000-000000000018', '00500007-0003-4000-8000-000000000007', 'health_score', 'decimal', false, false, false, false, -1, -1, true, 'ML-derived equipment health score (0-100)')
+('00600012-0003-4000-8000-000000000018', '00500007-0003-4000-8000-000000000007', 'health_score', 'decimal', false, false, false, false, -1, -1, true, 'ML-derived equipment health score (0-100)'),
+
+-- machine_states table (00500002 — Production Line)
+('00600013-0003-4000-8000-000000000019', '00500002-0003-4000-8000-000000000002', 'asset_id', 'string', true, false, true, false, 1, -1, true, 'Machine asset tag (composite PK with state_ts)'),
+('00600014-0003-4000-8000-000000000020', '00500002-0003-4000-8000-000000000002', 'state_ts', 'timestamp', true, false, true, true, 2, 1, true, 'State change timestamp (UTC, partition)'),
+('00600015-0003-4000-8000-000000000021', '00500002-0003-4000-8000-000000000002', 'state', 'string', true, false, false, false, -1, -1, true, 'running | idle | down | changeover'),
+('00600016-0003-4000-8000-000000000022', '00500002-0003-4000-8000-000000000002', 'reason_code', 'string', false, false, false, false, -1, -1, false, 'Operator-confirmed downtime reason code'),
+
+-- cycle_times table (00500003)
+('00600017-0003-4000-8000-000000000023', '00500003-0003-4000-8000-000000000003', 'cycle_id', 'string', true, true, true, false, 1, -1, true, 'Unique cycle identifier'),
+('00600018-0003-4000-8000-000000000024', '00500003-0003-4000-8000-000000000003', 'work_order_id', 'string', true, false, false, false, -1, -1, true, 'FK to work_orders.work_order_id'),
+('00600019-0003-4000-8000-000000000025', '00500003-0003-4000-8000-000000000003', 'standard_seconds', 'decimal', true, false, false, false, -1, -1, false, 'Standard cycle time (seconds)'),
+('0060001a-0003-4000-8000-000000000026', '00500003-0003-4000-8000-000000000003', 'actual_seconds', 'decimal', true, false, false, false, -1, -1, true, 'Actual cycle time (seconds)'),
+('0060001b-0003-4000-8000-000000000027', '00500003-0003-4000-8000-000000000003', 'measured_at', 'timestamp', true, false, false, true, -1, 1, false, 'Cycle measurement time'),
+
+-- defects table (00500005 — Quality Inspection)
+('0060001c-0003-4000-8000-000000000028', '00500005-0003-4000-8000-000000000005', 'defect_id', 'string', true, true, true, false, 1, -1, true, 'Unique defect identifier'),
+('0060001d-0003-4000-8000-000000000029', '00500005-0003-4000-8000-000000000005', 'inspection_id', 'string', true, false, false, false, -1, -1, true, 'FK to inspections.inspection_id'),
+('0060001e-0003-4000-8000-000000000030', '00500005-0003-4000-8000-000000000005', 'defect_code', 'string', true, false, false, false, -1, -1, true, 'Standardized defect classification code'),
+('0060001f-0003-4000-8000-000000000031', '00500005-0003-4000-8000-000000000005', 'severity', 'string', true, false, false, false, -1, -1, false, 'minor | major | critical'),
+('00600020-0003-4000-8000-000000000032', '00500005-0003-4000-8000-000000000005', 'disposition', 'string', true, false, false, false, -1, -1, true, 'rework | scrap | use_as_is | return_to_supplier'),
+
+-- spc_data table (00500006)
+('00600021-0003-4000-8000-000000000033', '00500006-0003-4000-8000-000000000006', 'spc_id', 'string', true, true, true, false, 1, -1, true, 'Unique SPC point identifier'),
+('00600022-0003-4000-8000-000000000034', '00500006-0003-4000-8000-000000000006', 'characteristic', 'string', true, false, false, false, -1, -1, true, 'Characteristic under control'),
+('00600023-0003-4000-8000-000000000035', '00500006-0003-4000-8000-000000000006', 'measurement', 'decimal', true, false, false, false, -1, -1, true, 'Measured value'),
+('00600024-0003-4000-8000-000000000036', '00500006-0003-4000-8000-000000000006', 'subgroup_id', 'string', false, false, false, false, -1, -1, false, 'Subgroup grouping for X-bar charts'),
+('00600025-0003-4000-8000-000000000037', '00500006-0003-4000-8000-000000000006', 'measured_ts', 'timestamp', true, false, false, true, -1, 1, false, 'Measurement timestamp'),
+
+-- maintenance_records table (00500008 — Equipment Health)
+('00600026-0003-4000-8000-000000000038', '00500008-0003-4000-8000-000000000008', 'wo_id', 'string', true, true, true, false, 1, -1, true, 'Maintenance work order identifier'),
+('00600027-0003-4000-8000-000000000039', '00500008-0003-4000-8000-000000000008', 'asset_id', 'string', true, false, false, false, -1, -1, true, 'FK to equipment asset'),
+('00600028-0003-4000-8000-000000000040', '00500008-0003-4000-8000-000000000008', 'maintenance_type', 'string', true, false, false, false, -1, -1, false, 'preventive | predictive | corrective'),
+('00600029-0003-4000-8000-000000000041', '00500008-0003-4000-8000-000000000008', 'completed_ts', 'timestamp', false, false, false, false, -1, -1, false, 'Completion timestamp (NULL until done)'),
+('0060002a-0003-4000-8000-000000000042', '00500008-0003-4000-8000-000000000008', 'labor_hours', 'decimal', true, false, false, false, -1, -1, false, 'Labor hours expended'),
+
+-- incidents table (00500009 — EHS)
+('0060002b-0003-4000-8000-000000000043', '00500009-0003-4000-8000-000000000009', 'incident_id', 'string', true, true, true, false, 1, -1, true, 'Unique incident identifier'),
+('0060002c-0003-4000-8000-000000000044', '00500009-0003-4000-8000-000000000009', 'incident_type', 'string', true, false, false, false, -1, -1, true, 'injury | near_miss | environmental | property_damage'),
+('0060002d-0003-4000-8000-000000000045', '00500009-0003-4000-8000-000000000009', 'severity', 'string', true, false, false, false, -1, -1, true, 'Severity per ANSI Z16.1'),
+('0060002e-0003-4000-8000-000000000046', '00500009-0003-4000-8000-000000000009', 'reported_at', 'timestamp', true, false, false, true, -1, 1, false, 'Incident reported timestamp'),
+('0060002f-0003-4000-8000-000000000047', '00500009-0003-4000-8000-000000000009', 'osha_recordable', 'boolean', true, false, false, false, -1, -1, true, 'Whether incident is OSHA-recordable'),
+
+-- environmental_readings table (0050000a)
+('00600030-0003-4000-8000-000000000048', '0050000a-0003-4000-8000-000000000010', 'reading_id', 'string', true, true, true, false, 1, -1, true, 'Unique environmental reading identifier'),
+('00600031-0003-4000-8000-000000000049', '0050000a-0003-4000-8000-000000000010', 'metric_type', 'string', true, false, false, false, -1, -1, true, 'emissions | noise | waste'),
+('00600032-0003-4000-8000-000000000050', '0050000a-0003-4000-8000-000000000010', 'metric_value', 'decimal', true, false, false, false, -1, -1, true, 'Measured value (units depend on metric_type)'),
+('00600033-0003-4000-8000-000000000051', '0050000a-0003-4000-8000-000000000010', 'unit', 'string', true, false, false, false, -1, -1, false, 'Unit of measurement (ppm, dB, kg, ...)'),
+('00600034-0003-4000-8000-000000000052', '0050000a-0003-4000-8000-000000000010', 'measured_at', 'timestamp', true, false, false, true, -1, 1, false, 'Measurement timestamp')
+
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 4d. DATA CONTRACT QUALITY CHECKS (Manufacturing-specific)
+-- ============================================================================
+
+INSERT INTO data_contract_quality_checks (id, object_id, property_id, level, name, description, dimension, business_impact, severity, type, rule, must_be, must_not_be, must_be_gt, must_be_ge, must_be_lt, must_be_le, must_be_between_min, must_be_between_max, query, engine, implementation, schedule, scheduler) VALUES
+-- Work orders
+('03000001-0003-4000-8000-000000000001', '00500001-0003-4000-8000-000000000001', '00600005-0003-4000-8000-000000000005', 'property', 'scrap_non_negative',  'scrap_count must be >= 0',                                       'accuracy',     'operational', 'error',   'library', 'rangeCheck', NULL, NULL, NULL, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',  'airflow'),
+('03000002-0003-4000-8000-000000000002', '00500001-0003-4000-8000-000000000001', '00600004-0003-4000-8000-000000000004', 'property', 'qty_non_negative',    'quantity_produced must be >= 0',                                 'accuracy',     'operational', 'error',   'library', 'rangeCheck', NULL, NULL, NULL, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',  'airflow'),
+-- Machine states
+('03000003-0003-4000-8000-000000000003', '00500002-0003-4000-8000-000000000002', '00600015-0003-4000-8000-000000000021', 'property', 'state_values',        'state must be one of running/idle/down/changeover',              'conformity',   'operational', 'error',   'library', 'enumValues', 'running,idle,down,changeover', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',  'airflow'),
+-- Inspections
+('03000004-0003-4000-8000-000000000004', '00500004-0003-4000-8000-000000000004', '0060000d-0003-4000-8000-000000000013', 'property', 'disposition_values',  'disposition must be one of accept/reject/rework/use_as_is',      'conformity',   'regulatory',  'error',   'library', 'enumValues', 'accept,reject,rework,use_as_is', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',  'airflow'),
+('03000005-0003-4000-8000-000000000005', '00500004-0003-4000-8000-000000000004', NULL,                                  'object',   'spec_consistency',    'upper_spec must be > lower_spec for all rows',                   'consistency',  'operational', 'warning', 'sql',     NULL,         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SELECT MIN(upper_spec - lower_spec) > 0 FROM quality.inspection_results', 'spark', NULL, '@daily', 'airflow'),
+-- Sensor readings
+('03000006-0003-4000-8000-000000000006', '00500007-0003-4000-8000-000000000007', '00600012-0003-4000-8000-000000000018', 'property', 'health_score_range',  'health_score must be in [0, 100]',                               'accuracy',     'operational', 'warning', 'library', 'rangeCheck', NULL, NULL, NULL, NULL, NULL, NULL, '0', '100', NULL, NULL, NULL, '@hourly',  'airflow'),
+('03000007-0003-4000-8000-000000000007', '00500007-0003-4000-8000-000000000007', NULL,                                  'object',   'freshness_15min',     'sensor_readings must have rows within last 15 minutes',          'timeliness',   'operational', 'error',   'sql',     NULL,         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SELECT MAX(reading_ts) > NOW() - INTERVAL ''15 minutes'' FROM maintenance.sensor_timeseries', 'spark', NULL, '*/5 * * * *', 'airflow'),
+-- EHS incidents
+('03000008-0003-4000-8000-000000000008', '00500009-0003-4000-8000-000000000009', '0060002c-0003-4000-8000-000000000044', 'property', 'incident_type_values', 'incident_type must be one of injury/near_miss/environmental/property_damage', 'conformity', 'regulatory', 'error', 'library', 'enumValues', 'injury,near_miss,environmental,property_damage', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly', 'airflow')
 
 ON CONFLICT (id) DO NOTHING;
 
@@ -523,7 +593,69 @@ INSERT INTO assets (id, name, description, asset_type_id, platform, location, do
  '00000004-0003-4000-8000-000000000004',
  '{"catalog": "lakehouse", "schema": "mfg_ehs", "table_name": "incidents", "row_count": 1280, "format": "delta"}',
  '["osha-recordable", "iso-14001"]',
- 'active', 'system@demo', NOW(), NOW())
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- ── Column assets for the MFG Tables / Streams above ──
+-- 0f300104 kafka.factory.telemetry.equipment (Stream)
+('0f520104-0003-4000-8000-000000000004', 'asset_id',     'Equipment asset tag',                              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.factory.telemetry.equipment.asset_id',     '00000003-0003-4000-8000-000000000003', '{"data_type": "STRING",   "nullable": false}',                          '["telemetry"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520105-0003-4000-8000-000000000005', 'sensor_type',  'vibration | temperature | pressure | current',     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.factory.telemetry.equipment.sensor_type',  '00000003-0003-4000-8000-000000000003', '{"data_type": "STRING",   "nullable": false}',                          '["telemetry"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520106-0003-4000-8000-000000000006', 'reading_value','Sensor value (SI units)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.factory.telemetry.equipment.reading_value','00000003-0003-4000-8000-000000000003', '{"data_type": "DECIMAL(18,6)", "nullable": false}',                     '["telemetry"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520107-0003-4000-8000-000000000007', 'reading_ts',   'Reading timestamp (UTC)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.factory.telemetry.equipment.reading_ts',   '00000003-0003-4000-8000-000000000003', '{"data_type": "TIMESTAMP","nullable": false}',                          '["telemetry"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520108-0003-4000-8000-000000000008', 'health_score', 'ML-derived equipment health score (0-100)',        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.factory.telemetry.equipment.health_score', '00000003-0003-4000-8000-000000000003', '{"data_type": "DECIMAL(6,2)","nullable": true }',                       '["telemetry", "ml"]',     'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300105 lakehouse.mfg.wip.work_orders
+('0f520111-0003-4000-8000-000000000011', 'work_order_id',     'MES work order number',                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.wip.work_orders.work_order_id',     '00000001-0003-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": false, "is_primary_key": true}', '["mes", "key"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520112-0003-4000-8000-000000000012', 'part_number',       'Manufactured part number',                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.wip.work_orders.part_number',       '00000001-0003-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": false}',                          '["mes"]',                 'active', 'system@demo', NOW(), NOW()),
+('0f520113-0003-4000-8000-000000000013', 'quantity_planned',  'Planned quantity',                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.wip.work_orders.quantity_planned',  '00000001-0003-4000-8000-000000000001', '{"data_type": "INT",      "nullable": false}',                          '["mes"]',                 'active', 'system@demo', NOW(), NOW()),
+('0f520114-0003-4000-8000-000000000014', 'quantity_produced', 'Good quantity produced',                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.wip.work_orders.quantity_produced', '00000001-0003-4000-8000-000000000001', '{"data_type": "INT",      "nullable": false}',                          '["mes", "kpi"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520115-0003-4000-8000-000000000015', 'scrap_count',       'Scrap count',                                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.wip.work_orders.scrap_count',       '00000001-0003-4000-8000-000000000001', '{"data_type": "INT",      "nullable": false}',                          '["mes", "kpi"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520116-0003-4000-8000-000000000016', 'start_time',        'Work order start timestamp (partition)',        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.wip.work_orders.start_time',        '00000001-0003-4000-8000-000000000001', '{"data_type": "TIMESTAMP","nullable": false, "partition_key": true}',  '["mes", "partition"]',    'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300106 lakehouse.mfg.quality.defect_log
+('0f520121-0003-4000-8000-000000000021', 'defect_id',     'Unique defect identifier',                        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.quality.defect_log.defect_id',     '00000002-0003-4000-8000-000000000002', '{"data_type": "STRING",   "nullable": false, "is_primary_key": true}', '["quality", "key"]',       'active', 'system@demo', NOW(), NOW()),
+('0f520122-0003-4000-8000-000000000022', 'inspection_id', 'FK to inspections.inspection_id',                 (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.quality.defect_log.inspection_id', '00000002-0003-4000-8000-000000000002', '{"data_type": "STRING",   "nullable": false}',                          '["quality", "fk"]',        'active', 'system@demo', NOW(), NOW()),
+('0f520123-0003-4000-8000-000000000023', 'defect_code',   'Standardized defect classification',              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.quality.defect_log.defect_code',   '00000002-0003-4000-8000-000000000002', '{"data_type": "STRING",   "nullable": false}',                          '["quality"]',              'active', 'system@demo', NOW(), NOW()),
+('0f520124-0003-4000-8000-000000000024', 'severity',      'minor | major | critical',                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.quality.defect_log.severity',      '00000002-0003-4000-8000-000000000002', '{"data_type": "STRING",   "nullable": false}',                          '["quality"]',              'active', 'system@demo', NOW(), NOW()),
+('0f520125-0003-4000-8000-000000000025', 'capa_ref',      'CAPA reference number (NULL if none)',            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.quality.defect_log.capa_ref',      '00000002-0003-4000-8000-000000000002', '{"data_type": "STRING",   "nullable": true }',                          '["quality"]',              'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300108 lakehouse.mfg.ehs.incidents
+('0f520131-0003-4000-8000-000000000031', 'incident_id',     'Unique incident identifier',                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.ehs.incidents.incident_id',     '00000004-0003-4000-8000-000000000004', '{"data_type": "STRING",   "nullable": false, "is_primary_key": true}', '["ehs", "key"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520132-0003-4000-8000-000000000032', 'incident_type',   'injury | near_miss | environmental | property_damage', (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.ehs.incidents.incident_type',   '00000004-0003-4000-8000-000000000004', '{"data_type": "STRING",   "nullable": false}',                          '["ehs", "osha-recordable"]','active', 'system@demo', NOW(), NOW()),
+('0f520133-0003-4000-8000-000000000033', 'severity',        'Severity per ANSI Z16.1',                        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.ehs.incidents.severity',        '00000004-0003-4000-8000-000000000004', '{"data_type": "STRING",   "nullable": false}',                          '["ehs"]',                  'active', 'system@demo', NOW(), NOW()),
+('0f520134-0003-4000-8000-000000000034', 'reported_at',     'Incident reported timestamp (partition)',        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.ehs.incidents.reported_at',     '00000004-0003-4000-8000-000000000004', '{"data_type": "TIMESTAMP","nullable": false, "partition_key": true}',  '["ehs", "partition"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520135-0003-4000-8000-000000000035', 'osha_recordable', 'Whether incident is OSHA-recordable',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.mfg.ehs.incidents.osha_recordable', '00000004-0003-4000-8000-000000000004', '{"data_type": "BOOLEAN",  "nullable": false}',                          '["ehs", "osha-recordable"]','active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 15b. hasColumn RELATIONSHIPS (MFG)
+-- ============================================================================
+INSERT INTO entity_relationships (id, source_type, source_id, target_type, target_id, relationship_type, properties, created_by, created_at) VALUES
+-- 0f300104 stream → 5 columns
+('0f620104-0003-4000-8000-000000000004', 'Stream', '0f300104-0003-4000-8000-000000000004', 'Column', '0f520104-0003-4000-8000-000000000004', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620105-0003-4000-8000-000000000005', 'Stream', '0f300104-0003-4000-8000-000000000004', 'Column', '0f520105-0003-4000-8000-000000000005', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620106-0003-4000-8000-000000000006', 'Stream', '0f300104-0003-4000-8000-000000000004', 'Column', '0f520106-0003-4000-8000-000000000006', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620107-0003-4000-8000-000000000007', 'Stream', '0f300104-0003-4000-8000-000000000004', 'Column', '0f520107-0003-4000-8000-000000000007', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620108-0003-4000-8000-000000000008', 'Stream', '0f300104-0003-4000-8000-000000000004', 'Column', '0f520108-0003-4000-8000-000000000008', 'hasColumn', NULL, 'system@demo', NOW()),
+-- 0f300105 work_orders → 6 columns
+('0f620111-0003-4000-8000-000000000011', 'Table',  '0f300105-0003-4000-8000-000000000005', 'Column', '0f520111-0003-4000-8000-000000000011', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620112-0003-4000-8000-000000000012', 'Table',  '0f300105-0003-4000-8000-000000000005', 'Column', '0f520112-0003-4000-8000-000000000012', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620113-0003-4000-8000-000000000013', 'Table',  '0f300105-0003-4000-8000-000000000005', 'Column', '0f520113-0003-4000-8000-000000000013', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620114-0003-4000-8000-000000000014', 'Table',  '0f300105-0003-4000-8000-000000000005', 'Column', '0f520114-0003-4000-8000-000000000014', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620115-0003-4000-8000-000000000015', 'Table',  '0f300105-0003-4000-8000-000000000005', 'Column', '0f520115-0003-4000-8000-000000000015', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620116-0003-4000-8000-000000000016', 'Table',  '0f300105-0003-4000-8000-000000000005', 'Column', '0f520116-0003-4000-8000-000000000016', 'hasColumn', NULL, 'system@demo', NOW()),
+-- 0f300106 defect_log → 5 columns
+('0f620121-0003-4000-8000-000000000021', 'Table',  '0f300106-0003-4000-8000-000000000006', 'Column', '0f520121-0003-4000-8000-000000000021', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620122-0003-4000-8000-000000000022', 'Table',  '0f300106-0003-4000-8000-000000000006', 'Column', '0f520122-0003-4000-8000-000000000022', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620123-0003-4000-8000-000000000023', 'Table',  '0f300106-0003-4000-8000-000000000006', 'Column', '0f520123-0003-4000-8000-000000000023', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620124-0003-4000-8000-000000000024', 'Table',  '0f300106-0003-4000-8000-000000000006', 'Column', '0f520124-0003-4000-8000-000000000024', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620125-0003-4000-8000-000000000025', 'Table',  '0f300106-0003-4000-8000-000000000006', 'Column', '0f520125-0003-4000-8000-000000000025', 'hasColumn', NULL, 'system@demo', NOW()),
+-- 0f300108 ehs.incidents → 5 columns
+('0f620131-0003-4000-8000-000000000031', 'Table',  '0f300108-0003-4000-8000-000000000008', 'Column', '0f520131-0003-4000-8000-000000000031', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620132-0003-4000-8000-000000000032', 'Table',  '0f300108-0003-4000-8000-000000000008', 'Column', '0f520132-0003-4000-8000-000000000032', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620133-0003-4000-8000-000000000033', 'Table',  '0f300108-0003-4000-8000-000000000008', 'Column', '0f520133-0003-4000-8000-000000000033', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620134-0003-4000-8000-000000000034', 'Table',  '0f300108-0003-4000-8000-000000000008', 'Column', '0f520134-0003-4000-8000-000000000034', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620135-0003-4000-8000-000000000035', 'Table',  '0f300108-0003-4000-8000-000000000008', 'Column', '0f520135-0003-4000-8000-000000000035', 'hasColumn', NULL, 'system@demo', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

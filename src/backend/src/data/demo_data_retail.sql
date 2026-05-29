@@ -234,15 +234,29 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================================
 
 INSERT INTO data_contract_schema_objects (id, contract_id, name, logical_type, physical_name, description) VALUES
--- Customer Data Contract schemas
+-- Customer Data Contract schemas (00400001 — active)
 ('00500001-0000-4000-8000-000000000001', '00400001-0000-4000-8000-000000000001', 'customers', 'object', 'crm.customers_v2', 'Core customer master table'),
 ('00500002-0000-4000-8000-000000000002', '00400001-0000-4000-8000-000000000001', 'customer_preferences', 'object', 'crm.customer_preferences', 'Customer preference settings'),
 ('00500003-0000-4000-8000-000000000003', '00400001-0000-4000-8000-000000000001', 'customer_addresses', 'object', 'crm.customer_addresses', 'Customer address information'),
 
--- IoT Device Data Contract schemas
+-- IoT Device Data Contract schemas (00400004 — active)
 ('00500004-0000-4000-8000-000000000004', '00400004-0000-4000-8000-000000000004', 'devices', 'object', 'iot.devices_master', 'IoT device registry'),
 ('00500005-0000-4000-8000-000000000005', '00400004-0000-4000-8000-000000000004', 'device_telemetry', 'object', 'iot.device_telemetry_live', 'Device telemetry readings'),
-('00500006-0000-4000-8000-000000000006', '00400004-0000-4000-8000-000000000004', 'device_events', 'object', 'iot.device_events_log', 'Device events and alerts')
+('00500006-0000-4000-8000-000000000006', '00400004-0000-4000-8000-000000000004', 'device_events', 'object', 'iot.device_events_log', 'Device events and alerts'),
+
+-- Product Catalog Contract schemas (00400002 — deprecated)
+('00500007-0000-4000-8000-000000000007', '00400002-0000-4000-8000-000000000002', 'products', 'object', 'catalog.products', 'Product master table'),
+('00500008-0000-4000-8000-000000000008', '00400002-0000-4000-8000-000000000002', 'product_categories', 'object', 'catalog.product_categories', 'Product category hierarchy'),
+
+-- IoT Sensor Data Contract schemas (00400005 — retired)
+('00500009-0000-4000-8000-000000000009', '00400005-0000-4000-8000-000000000005', 'sensor_readings', 'object', 'manufacturing.sensor_readings', 'Real-time sensor readings (legacy schema)'),
+
+-- Financial Transactions Contract schemas (00400006 — draft)
+('0050000a-0000-4000-8000-000000000010', '00400006-0000-4000-8000-000000000006', 'transactions', 'object', 'finance.daily_transactions', 'Daily financial transactions'),
+('0050000b-0000-4000-8000-000000000011', '00400006-0000-4000-8000-000000000006', 'currencies', 'object', 'finance.currency_rates', 'FX rates lookup table'),
+
+-- Inventory Management Contract schemas (00400007 — deprecated)
+('0050000c-0000-4000-8000-000000000012', '00400007-0000-4000-8000-000000000007', 'inventory_levels', 'object', 'supply_chain.inventory_current', 'Current stock levels per warehouse')
 
 ON CONFLICT (id) DO NOTHING;
 
@@ -269,7 +283,111 @@ INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, 
 ('0060000c-0000-4000-8000-000000000012', '00500004-0000-4000-8000-000000000004', 'device_serial', 'string', true, true, false, false, -1, -1, false, 'Manufacturer serial number'),
 ('0060000d-0000-4000-8000-000000000013', '00500004-0000-4000-8000-000000000004', 'device_type', 'string', true, false, false, false, -1, -1, false, 'Device type (sensor, actuator, gateway, controller)'),
 ('0060000e-0000-4000-8000-000000000014', '00500004-0000-4000-8000-000000000004', 'status', 'string', true, false, false, false, -1, -1, false, 'Device status (active, inactive, maintenance, faulty, decommissioned)'),
-('0060000f-0000-4000-8000-000000000015', '00500004-0000-4000-8000-000000000004', 'is_online', 'boolean', true, false, false, false, -1, -1, false, 'Current connectivity status')
+('0060000f-0000-4000-8000-000000000015', '00500004-0000-4000-8000-000000000004', 'is_online', 'boolean', true, false, false, false, -1, -1, false, 'Current connectivity status'),
+
+-- customer_preferences table properties (00500002)
+('00600010-0000-4000-8000-000000000016', '00500002-0000-4000-8000-000000000002', 'customer_id', 'string', true, false, true, false, 1, -1, true, 'FK to customers.customer_id'),
+('00600011-0000-4000-8000-000000000017', '00500002-0000-4000-8000-000000000002', 'preference_key', 'string', true, false, true, false, 2, -1, false, 'Preference name (channel, language, marketing_optin)'),
+('00600012-0000-4000-8000-000000000018', '00500002-0000-4000-8000-000000000002', 'preference_value', 'string', true, false, false, false, -1, -1, false, 'Preference value as string'),
+('00600013-0000-4000-8000-000000000019', '00500002-0000-4000-8000-000000000002', 'updated_at', 'timestamp', true, false, false, false, -1, -1, false, 'Last update timestamp (UTC)'),
+
+-- customer_addresses table properties (00500003)
+('00600014-0000-4000-8000-000000000020', '00500003-0000-4000-8000-000000000003', 'address_id', 'string', true, true, true, false, 1, -1, true, 'Unique address identifier (UUID)'),
+('00600015-0000-4000-8000-000000000021', '00500003-0000-4000-8000-000000000003', 'customer_id', 'string', true, false, false, false, -1, -1, true, 'FK to customers.customer_id'),
+('00600016-0000-4000-8000-000000000022', '00500003-0000-4000-8000-000000000003', 'address_type', 'string', true, false, false, false, -1, -1, false, 'billing | shipping | residential'),
+('00600017-0000-4000-8000-000000000023', '00500003-0000-4000-8000-000000000003', 'street', 'string', true, false, false, false, -1, -1, false, 'Street address line 1'),
+('00600018-0000-4000-8000-000000000024', '00500003-0000-4000-8000-000000000003', 'city', 'string', true, false, false, false, -1, -1, false, 'City'),
+('00600019-0000-4000-8000-000000000025', '00500003-0000-4000-8000-000000000003', 'postal_code', 'string', true, false, false, false, -1, -1, false, 'Postal/ZIP code'),
+('0060001a-0000-4000-8000-000000000026', '00500003-0000-4000-8000-000000000003', 'country_code', 'string', true, false, false, false, -1, -1, false, 'ISO 3166-1 alpha-2'),
+
+-- device_telemetry table properties (00500005)
+('0060001b-0000-4000-8000-000000000027', '00500005-0000-4000-8000-000000000005', 'reading_id', 'string', true, true, true, false, 1, -1, true, 'Unique reading identifier'),
+('0060001c-0000-4000-8000-000000000028', '00500005-0000-4000-8000-000000000005', 'device_id', 'string', true, false, false, false, -1, -1, true, 'FK to devices.device_id'),
+('0060001d-0000-4000-8000-000000000029', '00500005-0000-4000-8000-000000000005', 'metric_name', 'string', true, false, false, false, -1, -1, false, 'temperature | humidity | pressure | vibration'),
+('0060001e-0000-4000-8000-000000000030', '00500005-0000-4000-8000-000000000005', 'metric_value', 'decimal', true, false, false, false, -1, -1, true, 'Numeric measurement value'),
+('0060001f-0000-4000-8000-000000000031', '00500005-0000-4000-8000-000000000005', 'unit', 'string', true, false, false, false, -1, -1, false, 'Unit of measurement (C, %, kPa, mm/s)'),
+('00600020-0000-4000-8000-000000000032', '00500005-0000-4000-8000-000000000005', 'reading_timestamp', 'timestamp', true, false, false, true, -1, 1, true, 'Reading timestamp (UTC, partition key)'),
+
+-- device_events table properties (00500006)
+('00600021-0000-4000-8000-000000000033', '00500006-0000-4000-8000-000000000006', 'event_id', 'string', true, true, true, false, 1, -1, true, 'Unique event identifier'),
+('00600022-0000-4000-8000-000000000034', '00500006-0000-4000-8000-000000000006', 'device_id', 'string', true, false, false, false, -1, -1, true, 'FK to devices.device_id'),
+('00600023-0000-4000-8000-000000000035', '00500006-0000-4000-8000-000000000006', 'event_type', 'string', true, false, false, false, -1, -1, false, 'alert | error | info | maintenance'),
+('00600024-0000-4000-8000-000000000036', '00500006-0000-4000-8000-000000000006', 'severity', 'string', true, false, false, false, -1, -1, false, 'critical | high | medium | low'),
+('00600025-0000-4000-8000-000000000037', '00500006-0000-4000-8000-000000000006', 'message', 'string', false, false, false, false, -1, -1, false, 'Event payload message'),
+('00600026-0000-4000-8000-000000000038', '00500006-0000-4000-8000-000000000006', 'event_timestamp', 'timestamp', true, false, false, true, -1, 1, false, 'Event timestamp (UTC)'),
+
+-- products table properties (00500007 — Product Catalog Contract, deprecated)
+('00600027-0000-4000-8000-000000000039', '00500007-0000-4000-8000-000000000007', 'sku', 'string', true, true, true, false, 1, -1, true, 'Stock keeping unit (unique)'),
+('00600028-0000-4000-8000-000000000040', '00500007-0000-4000-8000-000000000007', 'product_name', 'string', true, false, false, false, -1, -1, false, 'Display name'),
+('00600029-0000-4000-8000-000000000041', '00500007-0000-4000-8000-000000000007', 'category_id', 'string', true, false, false, false, -1, -1, false, 'FK to product_categories'),
+('0060002a-0000-4000-8000-000000000042', '00500007-0000-4000-8000-000000000007', 'list_price', 'decimal', true, false, false, false, -1, -1, true, 'List price in store currency'),
+('0060002b-0000-4000-8000-000000000043', '00500007-0000-4000-8000-000000000007', 'is_active', 'boolean', true, false, false, false, -1, -1, false, 'Active in catalog'),
+
+-- product_categories table properties (00500008)
+('0060002c-0000-4000-8000-000000000044', '00500008-0000-4000-8000-000000000008', 'category_id', 'string', true, true, true, false, 1, -1, true, 'Unique category identifier'),
+('0060002d-0000-4000-8000-000000000045', '00500008-0000-4000-8000-000000000008', 'name', 'string', true, false, false, false, -1, -1, false, 'Category display name'),
+('0060002e-0000-4000-8000-000000000046', '00500008-0000-4000-8000-000000000008', 'parent_category_id', 'string', false, false, false, false, -1, -1, false, 'Parent (for hierarchy)'),
+
+-- sensor_readings table properties (00500009 — IoT Sensor Contract, retired)
+('0060002f-0000-4000-8000-000000000047', '00500009-0000-4000-8000-000000000009', 'sensor_id', 'string', true, false, true, false, 1, -1, true, 'Sensor identifier (composite PK with timestamp)'),
+('00600030-0000-4000-8000-000000000048', '00500009-0000-4000-8000-000000000009', 'reading_timestamp', 'timestamp', true, false, true, true, 2, 1, true, 'Reading time (composite PK, partition)'),
+('00600031-0000-4000-8000-000000000049', '00500009-0000-4000-8000-000000000009', 'value', 'decimal', true, false, false, false, -1, -1, false, 'Measured value'),
+('00600032-0000-4000-8000-000000000050', '00500009-0000-4000-8000-000000000009', 'unit', 'string', true, false, false, false, -1, -1, false, 'Unit of measurement'),
+
+-- transactions table properties (0050000a — Financial Transactions, draft)
+('00600033-0000-4000-8000-000000000051', '0050000a-0000-4000-8000-000000000010', 'transaction_id', 'string', true, true, true, false, 1, -1, true, 'Unique transaction identifier'),
+('00600034-0000-4000-8000-000000000052', '0050000a-0000-4000-8000-000000000010', 'account_id', 'string', true, false, false, false, -1, -1, true, 'Internal account identifier'),
+('00600035-0000-4000-8000-000000000053', '0050000a-0000-4000-8000-000000000010', 'amount', 'decimal', true, false, false, false, -1, -1, true, 'Transaction amount (>= 0)'),
+('00600036-0000-4000-8000-000000000054', '0050000a-0000-4000-8000-000000000010', 'currency', 'string', true, false, false, false, -1, -1, true, 'ISO-4217 currency code'),
+('00600037-0000-4000-8000-000000000055', '0050000a-0000-4000-8000-000000000010', 'transaction_date', 'date', true, false, false, true, -1, 1, false, 'Transaction date (partition key)'),
+('00600038-0000-4000-8000-000000000056', '0050000a-0000-4000-8000-000000000010', 'transaction_type', 'string', true, false, false, false, -1, -1, false, 'debit | credit | transfer'),
+
+-- currencies table properties (0050000b)
+('00600039-0000-4000-8000-000000000057', '0050000b-0000-4000-8000-000000000011', 'currency_code', 'string', true, false, true, false, 1, -1, true, 'ISO-4217 code (composite PK with date)'),
+('0060003a-0000-4000-8000-000000000058', '0050000b-0000-4000-8000-000000000011', 'rate_date', 'date', true, false, true, false, 2, -1, true, 'Rate effective date (composite PK)'),
+('0060003b-0000-4000-8000-000000000059', '0050000b-0000-4000-8000-000000000011', 'rate_to_usd', 'decimal', true, false, false, false, -1, -1, false, 'FX rate to USD on the given date'),
+
+-- inventory_levels table properties (0050000c — Inventory Management Contract, deprecated)
+('0060003c-0000-4000-8000-000000000060', '0050000c-0000-4000-8000-000000000012', 'product_id', 'string', true, false, true, false, 1, -1, true, 'FK to products.sku (composite PK with warehouse_id)'),
+('0060003d-0000-4000-8000-000000000061', '0050000c-0000-4000-8000-000000000012', 'warehouse_id', 'string', true, false, true, false, 2, -1, true, 'Warehouse identifier (composite PK)'),
+('0060003e-0000-4000-8000-000000000062', '0050000c-0000-4000-8000-000000000012', 'quantity_on_hand', 'integer', true, false, false, false, -1, -1, true, 'Current quantity on hand (>= 0)'),
+('0060003f-0000-4000-8000-000000000063', '0050000c-0000-4000-8000-000000000012', 'reorder_point', 'integer', false, false, false, false, -1, -1, false, 'Quantity at which reorder is triggered'),
+('00600040-0000-4000-8000-000000000064', '0050000c-0000-4000-8000-000000000012', 'last_updated', 'timestamp', true, false, false, false, -1, -1, false, 'Last stock update timestamp (UTC)')
+
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 4d. DATA CONTRACT QUALITY CHECKS (type=030)
+-- ============================================================================
+-- ODCS quality checks — object-level (table) and property-level (column).
+-- Demonstrates not-null, uniqueness, range, regex, and freshness rules.
+
+INSERT INTO data_contract_quality_checks (id, object_id, property_id, level, name, description, dimension, business_impact, severity, type, rule, must_be, must_not_be, must_be_gt, must_be_ge, must_be_lt, must_be_le, must_be_between_min, must_be_between_max, query, engine, implementation, schedule, scheduler) VALUES
+-- Customers table — 00500001
+('03000001-0000-4000-8000-000000000001', '00500001-0000-4000-8000-000000000001', NULL,                                       'object',   'row_count_min',         'Customers table should have at least 1,000 rows in production', 'completeness', 'operational', 'error',   'library', 'rowCountCheck',     NULL, NULL, NULL, '1000', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '0 6 * * *',    'airflow'),
+('03000002-0000-4000-8000-000000000002', '00500001-0000-4000-8000-000000000001', '00600001-0000-4000-8000-000000000001',     'property', 'customer_id_not_null',  'customer_id must never be NULL',                                'completeness', 'regulatory',  'error',   'library', 'notNull',           NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',      'airflow'),
+('03000003-0000-4000-8000-000000000003', '00500001-0000-4000-8000-000000000001', '00600001-0000-4000-8000-000000000001',     'property', 'customer_id_unique',    'customer_id must be unique across the customers table',         'uniqueness',   'regulatory',  'error',   'library', 'unique',            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',       'airflow'),
+('03000004-0000-4000-8000-000000000004', '00500001-0000-4000-8000-000000000001', '00600002-0000-4000-8000-000000000002',     'property', 'email_format',          'email must match RFC-5322 simple regex',                        'conformity',   'operational', 'warning', 'library', 'regex',             '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily', 'airflow'),
+('03000005-0000-4000-8000-000000000005', '00500001-0000-4000-8000-000000000001', '00600007-0000-4000-8000-000000000007',     'property', 'country_code_iso',      'country_code must be ISO 3166-1 alpha-2 (length=2 uppercase)',  'conformity',   'operational', 'warning', 'library', 'regex',             '^[A-Z]{2}$', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',       'airflow'),
+('03000006-0000-4000-8000-000000000006', '00500001-0000-4000-8000-000000000001', '00600009-0000-4000-8000-000000000009',     'property', 'account_status_values', 'account_status must be one of the allowed values',              'conformity',   'operational', 'error',   'library', 'enumValues',        'active,suspended,closed,pending_verification', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly', 'airflow'),
+
+-- Devices table — 00500004
+('03000007-0000-4000-8000-000000000007', '00500004-0000-4000-8000-000000000004', '0060000b-0000-4000-8000-000000000011',     'property', 'device_id_not_null',    'device_id must never be NULL',                                  'completeness', 'operational', 'error',   'library', 'notNull',           NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',      'airflow'),
+('03000008-0000-4000-8000-000000000008', '00500004-0000-4000-8000-000000000004', '0060000b-0000-4000-8000-000000000011',     'property', 'device_id_unique',      'device_id must be globally unique',                             'uniqueness',   'operational', 'error',   'library', 'unique',            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',       'airflow'),
+('03000009-0000-4000-8000-000000000009', '00500004-0000-4000-8000-000000000004', '0060000e-0000-4000-8000-000000000014',     'property', 'status_values',         'status must be one of the allowed device states',               'conformity',   'operational', 'warning', 'library', 'enumValues',        'active,inactive,maintenance,faulty,decommissioned', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly', 'airflow'),
+
+-- Device telemetry table — 00500005
+('0300000a-0000-4000-8000-000000000010', '00500005-0000-4000-8000-000000000005', '0060001e-0000-4000-8000-000000000030',     'property', 'metric_value_range',    'metric_value must be in plausible sensor range [-100, 10000]',  'accuracy',     'operational', 'warning', 'library', 'rangeCheck',        NULL, NULL, NULL, NULL, NULL, NULL, '-100', '10000', NULL, NULL, NULL, '@hourly', 'airflow'),
+('0300000b-0000-4000-8000-000000000011', '00500005-0000-4000-8000-000000000005', NULL,                                       'object',   'freshness_30min',       'Telemetry table must have rows within last 30 minutes',         'timeliness',   'operational', 'error',   'sql',     NULL,                NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SELECT MAX(reading_timestamp) > NOW() - INTERVAL ''30 minutes'' FROM iot.device_telemetry_live', 'spark', NULL, '*/15 * * * *', 'airflow'),
+
+-- Financial Transactions (draft contract — 0050000a)
+('0300000c-0000-4000-8000-000000000012', '0050000a-0000-4000-8000-000000000010', '00600035-0000-4000-8000-000000000053',     'property', 'amount_non_negative',   'amount must be >= 0',                                           'accuracy',     'regulatory',  'error',   'library', 'rangeCheck',        NULL, NULL, NULL, '0',  NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',      'airflow'),
+('0300000d-0000-4000-8000-000000000013', '0050000a-0000-4000-8000-000000000010', '00600036-0000-4000-8000-000000000054',     'property', 'currency_iso4217',      'currency must be ISO-4217 (length=3 uppercase)',                'conformity',   'regulatory',  'error',   'library', 'regex',             '^[A-Z]{3}$', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',       'airflow'),
+('0300000e-0000-4000-8000-000000000014', '0050000a-0000-4000-8000-000000000010', '00600033-0000-4000-8000-000000000051',     'property', 'transaction_id_unique', 'transaction_id must be unique',                                 'uniqueness',   'regulatory',  'error',   'library', 'unique',            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',       'airflow'),
+
+-- Inventory levels (deprecated contract — 0050000c)
+('0300000f-0000-4000-8000-000000000015', '0050000c-0000-4000-8000-000000000012', '0060003e-0000-4000-8000-000000000062',     'property', 'qty_non_negative',      'quantity_on_hand must be an integer >= 0',                      'accuracy',     'operational', 'error',   'library', 'rangeCheck',        NULL, NULL, NULL, '0',  NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',       'airflow')
 
 ON CONFLICT (id) DO NOTHING;
 
@@ -1417,6 +1535,234 @@ ON CONFLICT DO NOTHING;
 
 
 -- ============================================================================
+-- 15e. COLUMN ASSETS + hasColumn RELATIONSHIPS (Tables/Views in 15b)
+-- ============================================================================
+-- Every Table and View in section 15b gets a representative set of Column
+-- assets and hasColumn relationships so the asset detail UI can render its
+-- "columns" tree. Locations include the parent path + ".<column>" to satisfy
+-- the assets uq_asset_identity (name, asset_type_id, platform, location)
+-- unique constraint.
+
+INSERT INTO assets (id, name, description, asset_type_id, platform, location, domain_id, properties, tags, status, created_by, created_at, updated_at) VALUES
+-- 02500001 Customers Master Table — prod_catalog.crm.customers_master
+('0f520001-0000-4000-8000-000000000001', 'customer_id',       'Unique customer identifier (UUID)',                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customers_master.customer_id',       NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["pii", "key"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520002-0000-4000-8000-000000000002', 'email',             'Customer email address',                                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customers_master.email',             NULL, '{"data_type": "STRING",    "nullable": false}',                          '["pii"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520003-0000-4000-8000-000000000003', 'first_name',        'Customer first name',                                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customers_master.first_name',        NULL, '{"data_type": "STRING",    "nullable": false}',                          '["pii"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520004-0000-4000-8000-000000000004', 'last_name',         'Customer last name',                                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customers_master.last_name',         NULL, '{"data_type": "STRING",    "nullable": false}',                          '["pii"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520005-0000-4000-8000-000000000005', 'registration_date', 'Account registration timestamp (UTC)',                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customers_master.registration_date', NULL, '{"data_type": "TIMESTAMP", "nullable": false}',                          '[]',                     'active', 'system@demo', NOW(), NOW()),
+
+-- 02500002 Snowflake Customers Replica — ANALYTICS_DB.CRM.CUSTOMERS_MASTER
+('0f520011-0000-4000-8000-000000000011', 'CUSTOMER_ID',       'Unique customer identifier (UUID, Snowflake replica)',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Snowflake',  'ANALYTICS_DB.CRM.CUSTOMERS_MASTER.CUSTOMER_ID',       NULL, '{"data_type": "VARCHAR",   "nullable": false, "is_primary_key": true}',  '["pii", "key", "snowflake"]', 'active', 'system@demo', NOW(), NOW()),
+('0f520012-0000-4000-8000-000000000012', 'EMAIL',             'Customer email (Snowflake replica)',                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Snowflake',  'ANALYTICS_DB.CRM.CUSTOMERS_MASTER.EMAIL',             NULL, '{"data_type": "VARCHAR",   "nullable": false}',                          '["pii", "snowflake"]',   'active', 'system@demo', NOW(), NOW()),
+('0f520013-0000-4000-8000-000000000013', 'FIRST_NAME',        'Customer first name (Snowflake replica)',                      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Snowflake',  'ANALYTICS_DB.CRM.CUSTOMERS_MASTER.FIRST_NAME',        NULL, '{"data_type": "VARCHAR",   "nullable": false}',                          '["pii", "snowflake"]',   'active', 'system@demo', NOW(), NOW()),
+('0f520014-0000-4000-8000-000000000014', 'REGISTRATION_DATE', 'Registration date (Snowflake replica)',                        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Snowflake',  'ANALYTICS_DB.CRM.CUSTOMERS_MASTER.REGISTRATION_DATE', NULL, '{"data_type": "TIMESTAMP_NTZ", "nullable": false}',                      '["snowflake"]',          'active', 'system@demo', NOW(), NOW()),
+
+-- 02500003 Dev Customers Table — dev_catalog.crm.customers_master
+('0f520021-0000-4000-8000-000000000021', 'customer_id',       'Unique customer identifier (dev)',                             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'dev_catalog.crm.customers_master.customer_id',        NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["dev", "key"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520022-0000-4000-8000-000000000022', 'email',             'Customer email (dev)',                                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'dev_catalog.crm.customers_master.email',              NULL, '{"data_type": "STRING",    "nullable": true }',                          '["dev"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520023-0000-4000-8000-000000000023', 'first_name',        'Customer first name (dev)',                                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'dev_catalog.crm.customers_master.first_name',         NULL, '{"data_type": "STRING",    "nullable": true }',                          '["dev"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520024-0000-4000-8000-000000000024', 'last_name',         'Customer last name (dev)',                                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'dev_catalog.crm.customers_master.last_name',          NULL, '{"data_type": "STRING",    "nullable": true }',                          '["dev"]',                'active', 'system@demo', NOW(), NOW()),
+
+-- 02500004 Customer Preferences View — prod_catalog.crm.v_customer_preferences
+('0f520031-0000-4000-8000-000000000031', 'customer_id',       'FK to customers.customer_id',                                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.v_customer_preferences.customer_id', NULL, '{"data_type": "STRING",    "nullable": false}',                          '["fk"]',                 'active', 'system@demo', NOW(), NOW()),
+('0f520032-0000-4000-8000-000000000032', 'preference_key',    'Preference name (channel, language, marketing_optin)',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.v_customer_preferences.preference_key',NULL,'{"data_type": "STRING",    "nullable": false}',                          '[]',                     'active', 'system@demo', NOW(), NOW()),
+('0f520033-0000-4000-8000-000000000033', 'preference_value',  'Preference value (string)',                                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.v_customer_preferences.preference_value',NULL,'{"data_type": "STRING", "nullable": false}',                            '[]',                     'active', 'system@demo', NOW(), NOW()),
+('0f520034-0000-4000-8000-000000000034', 'updated_at',        'Last update timestamp (UTC)',                                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.v_customer_preferences.updated_at',  NULL, '{"data_type": "TIMESTAMP", "nullable": false}',                          '[]',                     'active', 'system@demo', NOW(), NOW()),
+
+-- 02500005 Device Registry — iot_catalog.devices.device_registry
+('0f520041-0000-4000-8000-000000000041', 'device_id',         'Unique device identifier',                                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_registry.device_id',       NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["iot", "key"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520042-0000-4000-8000-000000000042', 'device_serial',     'Manufacturer serial number',                                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_registry.device_serial',   NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520043-0000-4000-8000-000000000043', 'device_type',       'sensor | actuator | gateway | controller',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_registry.device_type',     NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520044-0000-4000-8000-000000000044', 'status',            'Operational state',                                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_registry.status',          NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot"]',                'active', 'system@demo', NOW(), NOW()),
+
+-- 02500006 Dev Device Registry — iot_dev.devices.device_registry
+('0f520051-0000-4000-8000-000000000051', 'device_id',         'Unique device identifier (dev)',                               (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_dev.devices.device_registry.device_id',           NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["iot", "dev"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520052-0000-4000-8000-000000000052', 'device_serial',     'Manufacturer serial number (dev)',                             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_dev.devices.device_registry.device_serial',       NULL, '{"data_type": "STRING",    "nullable": true }',                          '["iot", "dev"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520053-0000-4000-8000-000000000053', 'device_type',       'Device type (dev)',                                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_dev.devices.device_registry.device_type',         NULL, '{"data_type": "STRING",    "nullable": true }',                          '["iot", "dev"]',         'active', 'system@demo', NOW(), NOW()),
+
+-- 02500007 Device Readings — iot_catalog.telemetry.device_readings
+('0f520061-0000-4000-8000-000000000061', 'reading_id',        'Unique reading identifier',                                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.telemetry.device_readings.reading_id',    NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["iot", "telemetry", "key"]','active','system@demo', NOW(), NOW()),
+('0f520062-0000-4000-8000-000000000062', 'device_id',         'FK to devices.device_id',                                      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.telemetry.device_readings.device_id',     NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot", "telemetry", "fk"]','active', 'system@demo', NOW(), NOW()),
+('0f520063-0000-4000-8000-000000000063', 'metric_value',      'Numeric measurement value',                                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.telemetry.device_readings.metric_value',  NULL, '{"data_type": "DECIMAL(10,4)", "nullable": false}',                      '["iot", "telemetry"]',   'active', 'system@demo', NOW(), NOW()),
+('0f520064-0000-4000-8000-000000000064', 'reading_timestamp', 'Reading timestamp (UTC)',                                      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.telemetry.device_readings.reading_timestamp', NULL, '{"data_type": "TIMESTAMP", "nullable": false, "partition_key": true}', '["iot", "telemetry", "partition"]', 'active', 'system@demo', NOW(), NOW()),
+
+-- 02500008 Daily Transactions — finance_dev.transactions.daily_transactions
+('0f520071-0000-4000-8000-000000000071', 'transaction_id',    'Unique transaction identifier',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'finance_dev.transactions.daily_transactions.transaction_id', NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["finance", "key"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520072-0000-4000-8000-000000000072', 'account_id',        'Internal account identifier',                                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'finance_dev.transactions.daily_transactions.account_id',     NULL, '{"data_type": "STRING",    "nullable": false}',                          '["finance", "fk"]',      'active', 'system@demo', NOW(), NOW()),
+('0f520073-0000-4000-8000-000000000073', 'amount',            'Transaction amount (>= 0)',                                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'finance_dev.transactions.daily_transactions.amount',         NULL, '{"data_type": "DECIMAL(18,2)", "nullable": false}',                      '["finance", "amount"]',  'active', 'system@demo', NOW(), NOW()),
+('0f520074-0000-4000-8000-000000000074', 'currency',          'ISO-4217 currency code',                                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'finance_dev.transactions.daily_transactions.currency',       NULL, '{"data_type": "STRING",    "nullable": false}',                          '["finance"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520075-0000-4000-8000-000000000075', 'transaction_date',  'Transaction date (partition key)',                             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'finance_dev.transactions.daily_transactions.transaction_date',NULL,'{"data_type": "DATE",      "nullable": false, "partition_key": true}',   '["finance", "partition"]','active','system@demo', NOW(), NOW()),
+
+-- 02500009 Current Inventory (deprecated) — analytics_catalog.supply_chain.inventory_current
+('0f520081-0000-4000-8000-000000000081', 'product_id',        'FK to products.sku',                                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'analytics_catalog.supply_chain.inventory_current.product_id',   NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["supply-chain", "deprecated", "key"]', 'deprecated', 'system@demo', NOW(), NOW()),
+('0f520082-0000-4000-8000-000000000082', 'warehouse_id',      'Warehouse identifier',                                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'analytics_catalog.supply_chain.inventory_current.warehouse_id', NULL, '{"data_type": "STRING",    "nullable": false}',                          '["supply-chain", "deprecated"]',         'deprecated', 'system@demo', NOW(), NOW()),
+('0f520083-0000-4000-8000-000000000083', 'quantity_on_hand',  'Current quantity on hand (>= 0)',                              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'analytics_catalog.supply_chain.inventory_current.quantity_on_hand', NULL,'{"data_type": "INT",     "nullable": false}',                          '["supply-chain", "deprecated"]',         'deprecated', 'system@demo', NOW(), NOW()),
+('0f520084-0000-4000-8000-000000000084', 'last_updated',      'Last stock update timestamp (UTC)',                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'analytics_catalog.supply_chain.inventory_current.last_updated', NULL, '{"data_type": "TIMESTAMP", "nullable": false}',                          '["supply-chain", "deprecated"]',         'deprecated', 'system@demo', NOW(), NOW()),
+
+-- 0250000a Customer Addresses — prod_catalog.crm.customer_addresses
+('0f520091-0000-4000-8000-000000000091', 'address_id',        'Unique address identifier (UUID)',                             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_addresses.address_id',      NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["pii", "key"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520092-0000-4000-8000-000000000092', 'customer_id',       'FK to customers.customer_id',                                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_addresses.customer_id',     NULL, '{"data_type": "STRING",    "nullable": false}',                          '["pii", "fk"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520093-0000-4000-8000-000000000093', 'street',            'Street address line 1',                                        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_addresses.street',          NULL, '{"data_type": "STRING",    "nullable": false}',                          '["pii"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520094-0000-4000-8000-000000000094', 'city',              'City',                                                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_addresses.city',            NULL, '{"data_type": "STRING",    "nullable": false}',                          '["pii"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520095-0000-4000-8000-000000000095', 'country_code',      'ISO 3166-1 alpha-2',                                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_addresses.country_code',    NULL, '{"data_type": "STRING",    "nullable": false}',                          '[]',                     'active', 'system@demo', NOW(), NOW()),
+
+-- 0250000b Countries Lookup — prod_catalog.reference.countries
+('0f5200a1-0000-4000-8000-0000000000a1', 'country_code',      'ISO 3166-1 alpha-2 (PK)',                                      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.reference.countries.country_code',       NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["reference", "key"]',   'active', 'system@demo', NOW(), NOW()),
+('0f5200a2-0000-4000-8000-0000000000a2', 'country_name',      'Official country name',                                        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.reference.countries.country_name',       NULL, '{"data_type": "STRING",    "nullable": false}',                          '["reference"]',          'active', 'system@demo', NOW(), NOW()),
+('0f5200a3-0000-4000-8000-0000000000a3', 'continent',         'Continent (Europe, Asia, ...)',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.reference.countries.continent',          NULL, '{"data_type": "STRING",    "nullable": false}',                          '["reference"]',          'active', 'system@demo', NOW(), NOW()),
+
+-- 0250000c Device Types — iot_catalog.devices.device_types
+('0f5200b1-0000-4000-8000-0000000000b1', 'type_id',           'Type identifier (PK)',                                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_types.type_id',            NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["iot", "reference", "key"]','active','system@demo', NOW(), NOW()),
+('0f5200b2-0000-4000-8000-0000000000b2', 'type_name',         'Display name',                                                 (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_types.type_name',          NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot", "reference"]',   'active', 'system@demo', NOW(), NOW()),
+('0f5200b3-0000-4000-8000-0000000000b3', 'manufacturer',      'Hardware manufacturer',                                        (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_types.manufacturer',       NULL, '{"data_type": "STRING",    "nullable": true }',                          '["iot", "reference"]',   'active', 'system@demo', NOW(), NOW()),
+('0f5200b4-0000-4000-8000-0000000000b4', 'capabilities',      'JSON-encoded device capabilities map',                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_catalog.devices.device_types.capabilities',       NULL, '{"data_type": "STRING",    "nullable": true,  "format": "json"}',        '["iot", "reference"]',   'active', 'system@demo', NOW(), NOW()),
+
+-- 0250000d Raw Device Data (staging) — iot_staging.devices.device_raw
+('0f5200c1-0000-4000-8000-0000000000c1', 'event_id',          'Raw event ID (UUID)',                                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_staging.devices.device_raw.event_id',             NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["iot", "staging", "key"]','active', 'system@demo', NOW(), NOW()),
+('0f5200c2-0000-4000-8000-0000000000c2', 'device_id',         'Originating device',                                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_staging.devices.device_raw.device_id',            NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot", "staging", "fk"]','active','system@demo', NOW(), NOW()),
+('0f5200c3-0000-4000-8000-0000000000c3', 'payload',           'Raw event payload (JSON)',                                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_staging.devices.device_raw.payload',              NULL, '{"data_type": "STRING",    "nullable": false, "format": "json"}',        '["iot", "staging"]',     'active', 'system@demo', NOW(), NOW()),
+('0f5200c4-0000-4000-8000-0000000000c4', 'ingest_timestamp',  'Bronze ingest timestamp (UTC)',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'iot_staging.devices.device_raw.ingest_timestamp',     NULL, '{"data_type": "TIMESTAMP", "nullable": false, "partition_key": true}',   '["iot", "staging"]',     'active', 'system@demo', NOW(), NOW()),
+
+-- 02500010 Customer 360 Dashboard view — prod_catalog.crm.customer_360_dashboard
+('0f5200d1-0000-4000-8000-0000000000d1', 'customer_id',       'FK to customers.customer_id',                                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_360_dashboard.customer_id',     NULL, '{"data_type": "STRING",    "nullable": false}',                          '["customer-360"]',       'active', 'system@demo', NOW(), NOW()),
+('0f5200d2-0000-4000-8000-0000000000d2', 'ltv',               'Lifetime value (USD)',                                         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_360_dashboard.ltv',             NULL, '{"data_type": "DECIMAL(18,2)", "nullable": true }',                      '["customer-360", "kpi"]','active', 'system@demo', NOW(), NOW()),
+('0f5200d3-0000-4000-8000-0000000000d3', 'total_orders',      'Cumulative order count',                                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_360_dashboard.total_orders',    NULL, '{"data_type": "INT",       "nullable": false}',                          '["customer-360", "kpi"]','active', 'system@demo', NOW(), NOW()),
+('0f5200d4-0000-4000-8000-0000000000d4', 'last_purchase_date','Most recent purchase date',                                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'prod_catalog.crm.customer_360_dashboard.last_purchase_date',NULL,'{"data_type": "DATE",     "nullable": true }',                          '["customer-360"]',       'active', 'system@demo', NOW(), NOW()),
+
+-- 02500011 PowerBI Customer Dataset — workspace://Workspaces/Analytics/Customer_Analysis
+('0f5200e1-0000-4000-8000-0000000000e1', 'CustomerKey',       'Surrogate key into the customer dimension',                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Power BI',   'workspace://Workspaces/Analytics/Customer_Analysis.CustomerKey',  NULL, '{"data_type": "Int64",    "nullable": false, "is_primary_key": true}',   '["powerbi", "key"]',     'active', 'system@demo', NOW(), NOW()),
+('0f5200e2-0000-4000-8000-0000000000e2', 'Email',             'Email (PowerBI semantic model)',                               (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Power BI',   'workspace://Workspaces/Analytics/Customer_Analysis.Email',        NULL, '{"data_type": "Text",     "nullable": false}',                           '["powerbi", "pii"]',     'active', 'system@demo', NOW(), NOW()),
+('0f5200e3-0000-4000-8000-0000000000e3', 'Segment',           'Marketing segment label',                                      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Power BI',   'workspace://Workspaces/Analytics/Customer_Analysis.Segment',      NULL, '{"data_type": "Text",     "nullable": false}',                           '["powerbi"]',            'active', 'system@demo', NOW(), NOW()),
+('0f5200e4-0000-4000-8000-0000000000e4', 'LifetimeValue',     'Computed CLV measure (USD)',                                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Power BI',   'workspace://Workspaces/Analytics/Customer_Analysis.LifetimeValue',NULL, '{"data_type": "Decimal",  "nullable": true,  "is_measure": true}',       '["powerbi", "kpi"]',     'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300006 Invoices — lakehouse.finance.curated.invoices
+('0f5200f1-0000-4000-8000-0000000000f1', 'invoice_id',        'Unique invoice identifier',                                    (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.finance.curated.invoices.invoice_id',       NULL, '{"data_type": "STRING",    "nullable": false, "is_primary_key": true}',  '["finance", "key"]',     'active', 'system@demo', NOW(), NOW()),
+('0f5200f2-0000-4000-8000-0000000000f2', 'customer_id',       'FK to customers.customer_id',                                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.finance.curated.invoices.customer_id',      NULL, '{"data_type": "STRING",    "nullable": false}',                          '["finance", "fk"]',      'active', 'system@demo', NOW(), NOW()),
+('0f5200f3-0000-4000-8000-0000000000f3', 'total_amount',      'Invoice total in invoice currency (>= 0)',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.finance.curated.invoices.total_amount',     NULL, '{"data_type": "DECIMAL(18,2)", "nullable": false}',                      '["finance", "amount"]',  'active', 'system@demo', NOW(), NOW()),
+('0f5200f4-0000-4000-8000-0000000000f4', 'currency',          'ISO-4217 currency code',                                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.finance.curated.invoices.currency',         NULL, '{"data_type": "STRING",    "nullable": false}',                          '["finance"]',            'active', 'system@demo', NOW(), NOW()),
+('0f5200f5-0000-4000-8000-0000000000f5', 'invoice_date',      'Invoice issue date (partition key)',                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.finance.curated.invoices.invoice_date',     NULL, '{"data_type": "DATE",      "nullable": false, "partition_key": true}',   '["finance", "partition"]','active','system@demo', NOW(), NOW()),
+
+-- 0f30000b iot-device-telemetry — Kafka topic schema (advertised contract)
+('0f520201-0000-4000-8000-000000000201', 'device_id',         'FK to devices.device_id',                                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Confluent Kafka', 'kafka://broker.internal:9092/iot-device-telemetry.device_id',         NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot", "streaming", "fk"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520202-0000-4000-8000-000000000202', 'metric_name',       'Metric name (temperature, humidity, ...)',                      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Confluent Kafka', 'kafka://broker.internal:9092/iot-device-telemetry.metric_name',       NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot", "streaming"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520203-0000-4000-8000-000000000203', 'metric_value',      'Numeric measurement value',                                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Confluent Kafka', 'kafka://broker.internal:9092/iot-device-telemetry.metric_value',      NULL, '{"data_type": "DECIMAL(10,4)", "nullable": false}',                      '["iot", "streaming"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520204-0000-4000-8000-000000000204', 'unit',              'Unit of measurement (C, %, kPa, ...)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Confluent Kafka', 'kafka://broker.internal:9092/iot-device-telemetry.unit',              NULL, '{"data_type": "STRING",    "nullable": false}',                          '["iot", "streaming"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520205-0000-4000-8000-000000000205', 'reading_timestamp', 'Reading timestamp (UTC)',                                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Confluent Kafka', 'kafka://broker.internal:9092/iot-device-telemetry.reading_timestamp', NULL, '{"data_type": "TIMESTAMP", "nullable": false}',                          '["iot", "streaming"]',           'active', 'system@demo', NOW(), NOW())
+
+ON CONFLICT (id) DO NOTHING;
+
+
+-- hasColumn relationships for all the Tables/Views above
+INSERT INTO entity_relationships (id, source_type, source_id, target_type, target_id, relationship_type, properties, created_by, created_at) VALUES
+-- 02500001 Customers Master Table → 5 columns
+('0f620001-0000-4000-8000-000000000001', 'Table', '02500001-0000-4000-8000-000000000001', 'Column', '0f520001-0000-4000-8000-000000000001', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620002-0000-4000-8000-000000000002', 'Table', '02500001-0000-4000-8000-000000000001', 'Column', '0f520002-0000-4000-8000-000000000002', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620003-0000-4000-8000-000000000003', 'Table', '02500001-0000-4000-8000-000000000001', 'Column', '0f520003-0000-4000-8000-000000000003', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620004-0000-4000-8000-000000000004', 'Table', '02500001-0000-4000-8000-000000000001', 'Column', '0f520004-0000-4000-8000-000000000004', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620005-0000-4000-8000-000000000005', 'Table', '02500001-0000-4000-8000-000000000001', 'Column', '0f520005-0000-4000-8000-000000000005', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500002 Snowflake Customers Replica → 4 columns
+('0f620011-0000-4000-8000-000000000011', 'Table', '02500002-0000-4000-8000-000000000002', 'Column', '0f520011-0000-4000-8000-000000000011', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620012-0000-4000-8000-000000000012', 'Table', '02500002-0000-4000-8000-000000000002', 'Column', '0f520012-0000-4000-8000-000000000012', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620013-0000-4000-8000-000000000013', 'Table', '02500002-0000-4000-8000-000000000002', 'Column', '0f520013-0000-4000-8000-000000000013', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620014-0000-4000-8000-000000000014', 'Table', '02500002-0000-4000-8000-000000000002', 'Column', '0f520014-0000-4000-8000-000000000014', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500003 Dev Customers Table → 4 columns
+('0f620021-0000-4000-8000-000000000021', 'Table', '02500003-0000-4000-8000-000000000003', 'Column', '0f520021-0000-4000-8000-000000000021', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620022-0000-4000-8000-000000000022', 'Table', '02500003-0000-4000-8000-000000000003', 'Column', '0f520022-0000-4000-8000-000000000022', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620023-0000-4000-8000-000000000023', 'Table', '02500003-0000-4000-8000-000000000003', 'Column', '0f520023-0000-4000-8000-000000000023', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620024-0000-4000-8000-000000000024', 'Table', '02500003-0000-4000-8000-000000000003', 'Column', '0f520024-0000-4000-8000-000000000024', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500004 Customer Preferences View → 4 columns
+('0f620031-0000-4000-8000-000000000031', 'View',  '02500004-0000-4000-8000-000000000004', 'Column', '0f520031-0000-4000-8000-000000000031', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620032-0000-4000-8000-000000000032', 'View',  '02500004-0000-4000-8000-000000000004', 'Column', '0f520032-0000-4000-8000-000000000032', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620033-0000-4000-8000-000000000033', 'View',  '02500004-0000-4000-8000-000000000004', 'Column', '0f520033-0000-4000-8000-000000000033', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620034-0000-4000-8000-000000000034', 'View',  '02500004-0000-4000-8000-000000000004', 'Column', '0f520034-0000-4000-8000-000000000034', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500005 Device Registry → 4 columns
+('0f620041-0000-4000-8000-000000000041', 'Table', '02500005-0000-4000-8000-000000000005', 'Column', '0f520041-0000-4000-8000-000000000041', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620042-0000-4000-8000-000000000042', 'Table', '02500005-0000-4000-8000-000000000005', 'Column', '0f520042-0000-4000-8000-000000000042', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620043-0000-4000-8000-000000000043', 'Table', '02500005-0000-4000-8000-000000000005', 'Column', '0f520043-0000-4000-8000-000000000043', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620044-0000-4000-8000-000000000044', 'Table', '02500005-0000-4000-8000-000000000005', 'Column', '0f520044-0000-4000-8000-000000000044', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500006 Dev Device Registry → 3 columns
+('0f620051-0000-4000-8000-000000000051', 'Table', '02500006-0000-4000-8000-000000000006', 'Column', '0f520051-0000-4000-8000-000000000051', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620052-0000-4000-8000-000000000052', 'Table', '02500006-0000-4000-8000-000000000006', 'Column', '0f520052-0000-4000-8000-000000000052', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620053-0000-4000-8000-000000000053', 'Table', '02500006-0000-4000-8000-000000000006', 'Column', '0f520053-0000-4000-8000-000000000053', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500007 Device Readings → 4 columns
+('0f620061-0000-4000-8000-000000000061', 'Table', '02500007-0000-4000-8000-000000000007', 'Column', '0f520061-0000-4000-8000-000000000061', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620062-0000-4000-8000-000000000062', 'Table', '02500007-0000-4000-8000-000000000007', 'Column', '0f520062-0000-4000-8000-000000000062', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620063-0000-4000-8000-000000000063', 'Table', '02500007-0000-4000-8000-000000000007', 'Column', '0f520063-0000-4000-8000-000000000063', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620064-0000-4000-8000-000000000064', 'Table', '02500007-0000-4000-8000-000000000007', 'Column', '0f520064-0000-4000-8000-000000000064', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500008 Daily Transactions → 5 columns
+('0f620071-0000-4000-8000-000000000071', 'Table', '02500008-0000-4000-8000-000000000008', 'Column', '0f520071-0000-4000-8000-000000000071', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620072-0000-4000-8000-000000000072', 'Table', '02500008-0000-4000-8000-000000000008', 'Column', '0f520072-0000-4000-8000-000000000072', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620073-0000-4000-8000-000000000073', 'Table', '02500008-0000-4000-8000-000000000008', 'Column', '0f520073-0000-4000-8000-000000000073', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620074-0000-4000-8000-000000000074', 'Table', '02500008-0000-4000-8000-000000000008', 'Column', '0f520074-0000-4000-8000-000000000074', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620075-0000-4000-8000-000000000075', 'Table', '02500008-0000-4000-8000-000000000008', 'Column', '0f520075-0000-4000-8000-000000000075', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500009 Current Inventory (deprecated) → 4 columns
+('0f620081-0000-4000-8000-000000000081', 'Table', '02500009-0000-4000-8000-000000000009', 'Column', '0f520081-0000-4000-8000-000000000081', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620082-0000-4000-8000-000000000082', 'Table', '02500009-0000-4000-8000-000000000009', 'Column', '0f520082-0000-4000-8000-000000000082', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620083-0000-4000-8000-000000000083', 'Table', '02500009-0000-4000-8000-000000000009', 'Column', '0f520083-0000-4000-8000-000000000083', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620084-0000-4000-8000-000000000084', 'Table', '02500009-0000-4000-8000-000000000009', 'Column', '0f520084-0000-4000-8000-000000000084', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 0250000a Customer Addresses → 5 columns
+('0f620091-0000-4000-8000-000000000091', 'Table', '0250000a-0000-4000-8000-000000000010', 'Column', '0f520091-0000-4000-8000-000000000091', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620092-0000-4000-8000-000000000092', 'Table', '0250000a-0000-4000-8000-000000000010', 'Column', '0f520092-0000-4000-8000-000000000092', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620093-0000-4000-8000-000000000093', 'Table', '0250000a-0000-4000-8000-000000000010', 'Column', '0f520093-0000-4000-8000-000000000093', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620094-0000-4000-8000-000000000094', 'Table', '0250000a-0000-4000-8000-000000000010', 'Column', '0f520094-0000-4000-8000-000000000094', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620095-0000-4000-8000-000000000095', 'Table', '0250000a-0000-4000-8000-000000000010', 'Column', '0f520095-0000-4000-8000-000000000095', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 0250000b Countries Lookup → 3 columns
+('0f6200a1-0000-4000-8000-0000000000a1', 'Table', '0250000b-0000-4000-8000-000000000011', 'Column', '0f5200a1-0000-4000-8000-0000000000a1', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200a2-0000-4000-8000-0000000000a2', 'Table', '0250000b-0000-4000-8000-000000000011', 'Column', '0f5200a2-0000-4000-8000-0000000000a2', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200a3-0000-4000-8000-0000000000a3', 'Table', '0250000b-0000-4000-8000-000000000011', 'Column', '0f5200a3-0000-4000-8000-0000000000a3', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 0250000c Device Types → 4 columns
+('0f6200b1-0000-4000-8000-0000000000b1', 'Table', '0250000c-0000-4000-8000-000000000012', 'Column', '0f5200b1-0000-4000-8000-0000000000b1', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200b2-0000-4000-8000-0000000000b2', 'Table', '0250000c-0000-4000-8000-000000000012', 'Column', '0f5200b2-0000-4000-8000-0000000000b2', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200b3-0000-4000-8000-0000000000b3', 'Table', '0250000c-0000-4000-8000-000000000012', 'Column', '0f5200b3-0000-4000-8000-0000000000b3', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200b4-0000-4000-8000-0000000000b4', 'Table', '0250000c-0000-4000-8000-000000000012', 'Column', '0f5200b4-0000-4000-8000-0000000000b4', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 0250000d Raw Device Data → 4 columns
+('0f6200c1-0000-4000-8000-0000000000c1', 'Table', '0250000d-0000-4000-8000-000000000013', 'Column', '0f5200c1-0000-4000-8000-0000000000c1', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200c2-0000-4000-8000-0000000000c2', 'Table', '0250000d-0000-4000-8000-000000000013', 'Column', '0f5200c2-0000-4000-8000-0000000000c2', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200c3-0000-4000-8000-0000000000c3', 'Table', '0250000d-0000-4000-8000-000000000013', 'Column', '0f5200c3-0000-4000-8000-0000000000c3', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200c4-0000-4000-8000-0000000000c4', 'Table', '0250000d-0000-4000-8000-000000000013', 'Column', '0f5200c4-0000-4000-8000-0000000000c4', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500010 Customer 360 Dashboard view → 4 columns
+('0f6200d1-0000-4000-8000-0000000000d1', 'View',  '02500010-0000-4000-8000-000000000016', 'Column', '0f5200d1-0000-4000-8000-0000000000d1', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200d2-0000-4000-8000-0000000000d2', 'View',  '02500010-0000-4000-8000-000000000016', 'Column', '0f5200d2-0000-4000-8000-0000000000d2', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200d3-0000-4000-8000-0000000000d3', 'View',  '02500010-0000-4000-8000-000000000016', 'Column', '0f5200d3-0000-4000-8000-0000000000d3', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200d4-0000-4000-8000-0000000000d4', 'View',  '02500010-0000-4000-8000-000000000016', 'Column', '0f5200d4-0000-4000-8000-0000000000d4', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 02500011 PowerBI Customer Dataset → 4 columns
+('0f6200e1-0000-4000-8000-0000000000e1', 'View',  '02500011-0000-4000-8000-000000000017', 'Column', '0f5200e1-0000-4000-8000-0000000000e1', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200e2-0000-4000-8000-0000000000e2', 'View',  '02500011-0000-4000-8000-000000000017', 'Column', '0f5200e2-0000-4000-8000-0000000000e2', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200e3-0000-4000-8000-0000000000e3', 'View',  '02500011-0000-4000-8000-000000000017', 'Column', '0f5200e3-0000-4000-8000-0000000000e3', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200e4-0000-4000-8000-0000000000e4', 'View',  '02500011-0000-4000-8000-000000000017', 'Column', '0f5200e4-0000-4000-8000-0000000000e4', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 0f300006 Invoices → 5 columns
+('0f6200f1-0000-4000-8000-0000000000f1', 'Table', '0f300006-0000-4000-8000-000000000006', 'Column', '0f5200f1-0000-4000-8000-0000000000f1', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200f2-0000-4000-8000-0000000000f2', 'Table', '0f300006-0000-4000-8000-000000000006', 'Column', '0f5200f2-0000-4000-8000-0000000000f2', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200f3-0000-4000-8000-0000000000f3', 'Table', '0f300006-0000-4000-8000-000000000006', 'Column', '0f5200f3-0000-4000-8000-0000000000f3', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200f4-0000-4000-8000-0000000000f4', 'Table', '0f300006-0000-4000-8000-000000000006', 'Column', '0f5200f4-0000-4000-8000-0000000000f4', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200f5-0000-4000-8000-0000000000f5', 'Table', '0f300006-0000-4000-8000-000000000006', 'Column', '0f5200f5-0000-4000-8000-0000000000f5', 'hasColumn', NULL, 'system@demo', NOW()),
+
+-- 0f30000b iot-device-telemetry (Stream — Kafka topic) → 5 columns
+('0f6200b1-0000-4000-8000-0000000000b9', 'Stream', '0f30000b-0000-4000-8000-000000000011', 'Column', '0f520201-0000-4000-8000-000000000201', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200b2-0000-4000-8000-0000000000ba', 'Stream', '0f30000b-0000-4000-8000-000000000011', 'Column', '0f520202-0000-4000-8000-000000000202', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200b3-0000-4000-8000-0000000000bb', 'Stream', '0f30000b-0000-4000-8000-000000000011', 'Column', '0f520203-0000-4000-8000-000000000203', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200b4-0000-4000-8000-0000000000bc', 'Stream', '0f30000b-0000-4000-8000-000000000011', 'Column', '0f520204-0000-4000-8000-000000000204', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f6200b5-0000-4000-8000-0000000000bd', 'Stream', '0f30000b-0000-4000-8000-000000000011', 'Column', '0f520205-0000-4000-8000-000000000205', 'hasColumn', NULL, 'system@demo', NOW())
+
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
 -- 15d. DATASET SUBSCRIPTIONS → ENTITY SUBSCRIPTIONS
 -- ============================================================================
 
@@ -2154,14 +2500,10 @@ INSERT INTO assets (id, name, description, asset_type_id, platform, location, do
  'active', 'system@demo', NOW(), NOW()),
 
 -- Tables (Customer)
-('0f300005-0000-4000-8000-000000000005',
- 'lakehouse.customer.curated.customer360',
- 'Unified customer profile combining CRM, web, and transaction data.',
- COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.customer.curated.customer360',
- '00000007-0000-4000-8000-000000000007',
- '{"catalog": "lakehouse", "schema": "customer_curated", "table_name": "customer360", "row_count": 850000, "format": "delta"}',
- '["curated", "pii", "customer"]',
- 'active', 'system@demo', NOW(), NOW()),
+-- NOTE: A customer360 / customer master Table previously lived here as 0f300005.
+-- It was deduplicated into 02500001 ("Customers Master Table") in section 15b
+-- since both represented the same business asset. All relationships and
+-- ownership rows that pointed at 0f300005 have been rewired to 02500001.
 
 -- Tables (Finance)
 ('0f300006-0000-4000-8000-000000000006',
@@ -2232,15 +2574,10 @@ INSERT INTO assets (id, name, description, asset_type_id, platform, location, do
  '["ml", "forecasting", "production"]',
  'active', 'system@demo', NOW(), NOW()),
 
--- Deprecated asset
-('0f30000d-0000-4000-8000-000000000013',
- 'legacy.sales.raw.transactions_v1',
- 'Deprecated raw sales table from legacy ETL pipeline. Replaced by POS Transaction Stream.',
- COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'legacy.sales.raw.transactions_v1',
- '00000003-0000-4000-8000-000000000003',
- '{"catalog": "legacy", "schema": "sales_raw", "table_name": "transactions_v1", "row_count": 0, "format": "delta"}',
- '["deprecated", "legacy"]',
- 'deprecated', 'system@demo', NOW() - INTERVAL '180 days', NOW() - INTERVAL '30 days'),
+-- NOTE: A legacy/deprecated stub Table (0f30000d "legacy.sales.raw.transactions_v1")
+-- previously lived here, only used to demo a "replacedBy" relationship. Removed
+-- during dedup — the deprecated/active state demo is already covered by 02500009
+-- ("Current Inventory", status='deprecated') in section 15b.
 
 -- Column assets for pos_transactions table (0f300003)
 ('0f500001-0000-4000-8000-000000000001',
@@ -2577,7 +2914,7 @@ INSERT INTO entity_relationships (id, source_type, source_id, target_type, targe
 -- Tables belong to Databricks Lakehouse system
 ('0f400001-0000-4000-8000-000000000001', 'Table', '0f300003-0000-4000-8000-000000000003', 'System', '0f300001-0000-4000-8000-000000000001', 'belongsToSystem', NULL, 'system@demo', NOW()),
 ('0f400002-0000-4000-8000-000000000002', 'Table', '0f300004-0000-4000-8000-000000000004', 'System', '0f300001-0000-4000-8000-000000000001', 'belongsToSystem', NULL, 'system@demo', NOW()),
-('0f400003-0000-4000-8000-000000000003', 'Table', '0f300005-0000-4000-8000-000000000005', 'System', '0f300001-0000-4000-8000-000000000001', 'belongsToSystem', NULL, 'system@demo', NOW()),
+('0f400003-0000-4000-8000-000000000003', 'Table', '02500001-0000-4000-8000-000000000001', 'System', '0f300001-0000-4000-8000-000000000001', 'belongsToSystem', NULL, 'system@demo', NOW()),
 ('0f400004-0000-4000-8000-000000000004', 'Table', '0f300006-0000-4000-8000-000000000006', 'System', '0f300001-0000-4000-8000-000000000001', 'belongsToSystem', NULL, 'system@demo', NOW()),
 
 -- Dashboards belong to Power BI system
@@ -2586,7 +2923,7 @@ INSERT INTO entity_relationships (id, source_type, source_id, target_type, targe
 
 -- Dashboard consumes table data (business lineage)
 ('0f400007-0000-4000-8000-000000000007', 'Dashboard', '0f300007-0000-4000-8000-000000000007', 'Table', '0f300003-0000-4000-8000-000000000003', 'consumesFrom', '{"lineage_type": "business"}', 'system@demo', NOW()),
-('0f400008-0000-4000-8000-000000000008', 'Dashboard', '0f300008-0000-4000-8000-000000000008', 'Table', '0f300005-0000-4000-8000-000000000005', 'consumesFrom', '{"lineage_type": "business"}', 'system@demo', NOW()),
+('0f400008-0000-4000-8000-000000000008', 'Dashboard', '0f300008-0000-4000-8000-000000000008', 'Table', '02500001-0000-4000-8000-000000000001', 'consumesFrom', '{"lineage_type": "business"}', 'system@demo', NOW()),
 
 -- ML model consumes table
 ('0f400009-0000-4000-8000-000000000009', 'MLModel', '0f30000c-0000-4000-8000-000000000012', 'Table', '0f300003-0000-4000-8000-000000000003', 'consumesFrom', '{"purpose": "training"}', 'system@demo', NOW()),
@@ -2595,8 +2932,10 @@ INSERT INTO entity_relationships (id, source_type, source_id, target_type, targe
 -- Stream feeds into table
 ('0f40000b-0000-4000-8000-000000000011', 'Stream', '0f30000b-0000-4000-8000-000000000011', 'Table', '0f300003-0000-4000-8000-000000000003', 'producesTo', '{"processing": "streaming_ingest"}', 'system@demo', NOW()),
 
--- Deprecated table replaced by new one
-('0f40000c-0000-4000-8000-000000000012', 'Table', '0f30000d-0000-4000-8000-000000000013', 'Table', '0f300003-0000-4000-8000-000000000003', 'replacedBy', '{"reason": "legacy migration"}', 'system@demo', NOW()),
+-- Deprecated table replaced by new one — demonstrates the "replacedBy" pattern.
+-- 02500009 ("Current Inventory", status=deprecated, analytics_catalog.supply_chain.inventory_current)
+-- has been superseded by the curated 0f300004 ("lakehouse.retail.curated.inventory_levels").
+('0f40000c-0000-4000-8000-000000000012', 'Table', '02500009-0000-4000-8000-000000000009', 'Table', '0f300004-0000-4000-8000-000000000004', 'replacedBy', '{"reason": "Migrated from analytics_catalog supply chain table to curated retail inventory_levels"}', 'system@demo', NOW()),
 
 -- DataProducts deployed on systems
 ('0f40000d-0000-4000-8000-000000000013', 'DataProduct', '00700001-0000-4000-8000-000000000001', 'System', '0f300001-0000-4000-8000-000000000001', 'deployedOnSystem', NULL, 'system@demo', NOW()),
@@ -2703,7 +3042,7 @@ INSERT INTO entity_relationships (id, source_type, source_id, target_type, targe
 -- Policy attachments (migrated from policy_attachments table to entity_relationships)
 -- Customer PII Policy → Customer domain, customer360 table, customer search API
 ('0f500001-0000-4000-8000-000000000051', 'Policy', '0f100001-0000-4000-8000-000000000001', 'DataDomain', '00000007-0000-4000-8000-000000000007', 'appliesTo', '{"notes": "Applies to all assets in the Customer domain"}', 'system@demo', NOW()),
-('0f500002-0000-4000-8000-000000000052', 'Table', '0f300005-0000-4000-8000-000000000005', 'Policy', '0f100001-0000-4000-8000-000000000001', 'attachedPolicy', '{"notes": "PII masking required for email, phone columns"}', 'system@demo', NOW()),
+('0f500002-0000-4000-8000-000000000052', 'Table', '02500001-0000-4000-8000-000000000001', 'Policy', '0f100001-0000-4000-8000-000000000001', 'attachedPolicy', '{"notes": "PII masking required for email, phone columns"}', 'system@demo', NOW()),
 ('0f500003-0000-4000-8000-000000000053', 'APIEndpoint', '0f300009-0000-4000-8000-000000000009', 'Policy', '0f100001-0000-4000-8000-000000000001', 'attachedPolicy', '{"notes": "API must enforce PII filtering"}', 'system@demo', NOW()),
 -- Employee Data Access Policy → HR domain
 ('0f500004-0000-4000-8000-000000000054', 'Policy', '0f100002-0000-4000-8000-000000000002', 'DataDomain', '00000009-0000-4000-8000-000000000009', 'appliesTo', NULL, 'system@demo', NOW()),
@@ -2756,8 +3095,8 @@ INSERT INTO business_owners (id, object_type, object_id, user_email, user_name, 
 ('0f60000d-0000-4000-8000-000000000013', 'asset', '0f100007-0000-4000-8000-000000000007', 'alice.chen@example.com',   'Alice Chen',   '0f00000a-0000-4000-8000-000000000010', true,  NOW() - INTERVAL '75 days',  NULL, NULL, 'system@demo', NOW(), NOW()),
 
 -- Asset owners
-('0f60000e-0000-4000-8000-000000000014', 'asset', '0f300005-0000-4000-8000-000000000005', 'alice.chen@example.com',    'Alice Chen',    '0f000001-0000-4000-8000-000000000001', true,  NOW() - INTERVAL '60 days',  NULL, NULL, 'system@demo', NOW(), NOW()),
-('0f60000f-0000-4000-8000-000000000015', 'asset', '0f300005-0000-4000-8000-000000000005', 'frank.lee@example.com',     'Frank Lee',     '0f000005-0000-4000-8000-000000000005', true,  NOW() - INTERVAL '60 days',  NULL, NULL, 'system@demo', NOW(), NOW()),
+('0f60000e-0000-4000-8000-000000000014', 'asset', '02500001-0000-4000-8000-000000000001', 'alice.chen@example.com',    'Alice Chen',    '0f000001-0000-4000-8000-000000000001', true,  NOW() - INTERVAL '60 days',  NULL, NULL, 'system@demo', NOW(), NOW()),
+('0f60000f-0000-4000-8000-000000000015', 'asset', '02500001-0000-4000-8000-000000000001', 'frank.lee@example.com',     'Frank Lee',     '0f000005-0000-4000-8000-000000000005', true,  NOW() - INTERVAL '60 days',  NULL, NULL, 'system@demo', NOW(), NOW()),
 ('0f600010-0000-4000-8000-000000000016', 'asset', '0f300006-0000-4000-8000-000000000006', 'bob.martinez@example.com',  'Bob Martinez',  '0f000001-0000-4000-8000-000000000001', true,  NOW() - INTERVAL '45 days',  NULL, NULL, 'system@demo', NOW(), NOW()),
 ('0f600011-0000-4000-8000-000000000017', 'asset', '0f300007-0000-4000-8000-000000000007', 'hank.analyst@example.com',  'Hank Analyst',  '0f000008-0000-4000-8000-000000000008', true,  NOW() - INTERVAL '30 days',  NULL, NULL, 'system@demo', NOW(), NOW()),
 

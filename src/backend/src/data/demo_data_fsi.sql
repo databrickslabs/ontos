@@ -156,7 +156,79 @@ INSERT INTO data_contract_schema_properties (id, object_id, name, logical_type, 
 ('0060000c-0002-4000-8000-000000000012', '00500006-0002-4000-8000-000000000006', 'risk_rating', 'string', true, false, false, false, -1, -1, true, 'low, medium, high, prohibited'),
 ('0060000d-0002-4000-8000-000000000013', '00500006-0002-4000-8000-000000000006', 'pep_status', 'boolean', true, false, false, false, -1, -1, true, 'Politically Exposed Person flag'),
 ('0060000e-0002-4000-8000-000000000014', '00500006-0002-4000-8000-000000000006', 'last_review_date', 'date', true, false, false, false, -1, -1, false, 'Date of most recent KYC review'),
-('0060000f-0002-4000-8000-000000000015', '00500006-0002-4000-8000-000000000006', 'beneficial_owners', 'string', false, false, false, false, -1, -1, true, 'JSON array of beneficial owners (>25% threshold)')
+('0060000f-0002-4000-8000-000000000015', '00500006-0002-4000-8000-000000000006', 'beneficial_owners', 'string', false, false, false, false, -1, -1, true, 'JSON array of beneficial owners (>25% threshold)'),
+
+-- positions table (00500002 — Trading & Market Data)
+('00600010-0002-4000-8000-000000000016', '00500002-0002-4000-8000-000000000002', 'position_id', 'string', true, true, true, false, 1, -1, true, 'Unique end-of-day position identifier'),
+('00600011-0002-4000-8000-000000000017', '00500002-0002-4000-8000-000000000002', 'desk', 'string', true, false, false, false, -1, -1, true, 'Trading desk that owns the position'),
+('00600012-0002-4000-8000-000000000018', '00500002-0002-4000-8000-000000000002', 'instrument_id', 'string', true, false, false, false, -1, -1, true, 'ISIN or internal security identifier'),
+('00600013-0002-4000-8000-000000000019', '00500002-0002-4000-8000-000000000002', 'net_quantity', 'decimal', true, false, false, false, -1, -1, true, 'Net long/short quantity (signed)'),
+('00600014-0002-4000-8000-000000000020', '00500002-0002-4000-8000-000000000002', 'mark_to_market_usd', 'decimal', true, false, false, false, -1, -1, true, 'Current MTM in USD'),
+('00600015-0002-4000-8000-000000000021', '00500002-0002-4000-8000-000000000002', 'snapshot_date', 'date', true, false, false, true, -1, 1, true, 'EOD snapshot date (partition key)'),
+
+-- market_data table (00500003)
+('00600016-0002-4000-8000-000000000022', '00500003-0002-4000-8000-000000000003', 'instrument_id', 'string', true, false, true, false, 1, -1, true, 'Composite PK with tick_ts'),
+('00600017-0002-4000-8000-000000000023', '00500003-0002-4000-8000-000000000003', 'tick_ts', 'timestamp', true, false, true, true, 2, 1, true, 'Tick timestamp (nanosecond precision, partition)'),
+('00600018-0002-4000-8000-000000000024', '00500003-0002-4000-8000-000000000003', 'bid', 'decimal', true, false, false, false, -1, -1, false, 'Best bid'),
+('00600019-0002-4000-8000-000000000025', '00500003-0002-4000-8000-000000000003', 'ask', 'decimal', true, false, false, false, -1, -1, false, 'Best ask'),
+('0060001a-0002-4000-8000-000000000026', '00500003-0002-4000-8000-000000000003', 'last_price', 'decimal', false, false, false, false, -1, -1, false, 'Last traded price'),
+('0060001b-0002-4000-8000-000000000027', '00500003-0002-4000-8000-000000000003', 'volume', 'integer', false, false, false, false, -1, -1, false, 'Volume on the tick'),
+
+-- stress_scenarios table (00500005 — Risk Exposure)
+('0060001c-0002-4000-8000-000000000028', '00500005-0002-4000-8000-000000000005', 'scenario_id', 'string', true, false, true, false, 1, -1, true, 'Stress scenario identifier (composite PK)'),
+('0060001d-0002-4000-8000-000000000029', '00500005-0002-4000-8000-000000000005', 'desk', 'string', true, false, true, false, 2, -1, true, 'Desk identifier (composite PK)'),
+('0060001e-0002-4000-8000-000000000030', '00500005-0002-4000-8000-000000000005', 'pnl_impact_usd', 'decimal', true, false, false, false, -1, -1, true, 'Modeled P&L impact in USD'),
+('0060001f-0002-4000-8000-000000000031', '00500005-0002-4000-8000-000000000005', 'severity', 'string', true, false, false, false, -1, -1, false, 'mild | severe | extreme'),
+('00600020-0002-4000-8000-000000000032', '00500005-0002-4000-8000-000000000005', 'reporting_date', 'date', true, false, false, true, -1, 1, false, 'Reporting date (partition key)'),
+
+-- aml_alerts table (00500007 — KYC/AML)
+('00600021-0002-4000-8000-000000000033', '00500007-0002-4000-8000-000000000007', 'alert_id', 'string', true, true, true, false, 1, -1, true, 'Unique AML alert identifier'),
+('00600022-0002-4000-8000-000000000034', '00500007-0002-4000-8000-000000000007', 'customer_id', 'string', true, false, false, false, -1, -1, true, 'FK to customer_kyc.customer_id'),
+('00600023-0002-4000-8000-000000000035', '00500007-0002-4000-8000-000000000007', 'scenario_code', 'string', true, false, false, false, -1, -1, true, 'AML rule / ML scenario that fired'),
+('00600024-0002-4000-8000-000000000036', '00500007-0002-4000-8000-000000000007', 'severity', 'string', true, false, false, false, -1, -1, true, 'low | medium | high | critical'),
+('00600025-0002-4000-8000-000000000037', '00500007-0002-4000-8000-000000000007', 'alert_ts', 'timestamp', true, false, false, true, -1, 1, true, 'Alert generation timestamp (UTC)'),
+('00600026-0002-4000-8000-000000000038', '00500007-0002-4000-8000-000000000007', 'analyst_disposition', 'string', false, false, false, false, -1, -1, false, 'pending | escalated | suppressed | sar_filed'),
+
+-- accounts table (00500008 — Account & Transaction Contract)
+('00600027-0002-4000-8000-000000000039', '00500008-0002-4000-8000-000000000008', 'account_id', 'string', true, true, true, false, 1, -1, true, 'Internal account identifier'),
+('00600028-0002-4000-8000-000000000040', '00500008-0002-4000-8000-000000000008', 'customer_id', 'string', true, false, false, false, -1, -1, true, 'FK to customer_kyc.customer_id'),
+('00600029-0002-4000-8000-000000000041', '00500008-0002-4000-8000-000000000008', 'product_type', 'string', true, false, false, false, -1, -1, false, 'checking | savings | credit_card | mortgage | brokerage'),
+('0060002a-0002-4000-8000-000000000042', '00500008-0002-4000-8000-000000000008', 'currency', 'string', true, false, false, false, -1, -1, true, 'ISO-4217 base currency'),
+('0060002b-0002-4000-8000-000000000043', '00500008-0002-4000-8000-000000000008', 'opened_date', 'date', true, false, false, false, -1, -1, false, 'Account opening date'),
+('0060002c-0002-4000-8000-000000000044', '00500008-0002-4000-8000-000000000008', 'status', 'string', true, false, false, false, -1, -1, false, 'active | dormant | closed | frozen'),
+
+-- transactions table (00500009)
+('0060002d-0002-4000-8000-000000000045', '00500009-0002-4000-8000-000000000009', 'transaction_id', 'string', true, true, true, false, 1, -1, true, 'Unique transaction identifier'),
+('0060002e-0002-4000-8000-000000000046', '00500009-0002-4000-8000-000000000009', 'account_id', 'string', true, false, false, false, -1, -1, true, 'FK to accounts.account_id'),
+('0060002f-0002-4000-8000-000000000047', '00500009-0002-4000-8000-000000000009', 'amount', 'decimal', true, false, false, false, -1, -1, true, 'Signed transaction amount'),
+('00600030-0002-4000-8000-000000000048', '00500009-0002-4000-8000-000000000009', 'currency', 'string', true, false, false, false, -1, -1, true, 'ISO-4217 currency code'),
+('00600031-0002-4000-8000-000000000049', '00500009-0002-4000-8000-000000000009', 'transaction_ts', 'timestamp', true, false, false, true, -1, 1, true, 'Transaction timestamp (UTC)'),
+('00600032-0002-4000-8000-000000000050', '00500009-0002-4000-8000-000000000009', 'channel', 'string', true, false, false, false, -1, -1, false, 'atm | branch | mobile | online | wire')
+
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 4d. DATA CONTRACT QUALITY CHECKS (FSI-specific)
+-- ============================================================================
+
+INSERT INTO data_contract_quality_checks (id, object_id, property_id, level, name, description, dimension, business_impact, severity, type, rule, must_be, must_not_be, must_be_gt, must_be_ge, must_be_lt, must_be_le, must_be_between_min, must_be_between_max, query, engine, implementation, schedule, scheduler) VALUES
+-- Trades — 00500001
+('03000001-0002-4000-8000-000000000001', '00500001-0002-4000-8000-000000000001', '00600001-0002-4000-8000-000000000001', 'property', 'trade_id_unique',     'trade_id must be globally unique',                                'uniqueness',   'regulatory', 'error',   'library', 'unique',     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly', 'airflow'),
+('03000002-0002-4000-8000-000000000002', '00500001-0002-4000-8000-000000000001', '00600004-0002-4000-8000-000000000004', 'property', 'quantity_positive',   'quantity must be > 0',                                            'accuracy',     'regulatory', 'error',   'library', 'rangeCheck', NULL, NULL, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly', 'airflow'),
+('03000003-0002-4000-8000-000000000003', '00500001-0002-4000-8000-000000000001', '00600003-0002-4000-8000-000000000003', 'property', 'side_values',         'side must be BUY or SELL',                                        'conformity',   'regulatory', 'error',   'library', 'enumValues', 'BUY,SELL', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly', 'airflow'),
+-- Risk exposures — 00500004
+('03000004-0002-4000-8000-000000000004', '00500004-0002-4000-8000-000000000004', '00600009-0002-4000-8000-000000000009', 'property', 'var99_non_negative',  'var_99 must be >= 0 (loss measure)',                              'accuracy',     'regulatory', 'error',   'library', 'rangeCheck', NULL, NULL, NULL, '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',   'airflow'),
+('03000005-0002-4000-8000-000000000005', '00500004-0002-4000-8000-000000000004', NULL,                                  'object',   'freshness_24h',       'Risk exposures must have at least one row in the last 24 hours',  'timeliness',   'regulatory', 'error',   'sql',     NULL,         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SELECT MAX(reporting_date) >= CURRENT_DATE - 1 FROM risk.aggregated_exposures', 'spark', NULL, '0 7 * * *', 'airflow'),
+-- KYC — 00500006
+('03000006-0002-4000-8000-000000000006', '00500006-0002-4000-8000-000000000006', '0060000c-0002-4000-8000-000000000012', 'property', 'risk_rating_values',  'risk_rating must be one of the regulated values',                  'conformity',   'regulatory', 'error',   'library', 'enumValues', 'low,medium,high,prohibited', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',   'airflow'),
+('03000007-0002-4000-8000-000000000007', '00500006-0002-4000-8000-000000000006', '0060000e-0002-4000-8000-000000000014', 'property', 'kyc_review_freshness','KYC last_review_date must be within the last 365 days',           'timeliness',   'regulatory', 'warning', 'sql',     NULL,         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'SELECT MIN(last_review_date) >= CURRENT_DATE - INTERVAL ''365 days'' FROM compliance.customer_kyc_profiles', 'spark', NULL, '0 8 * * 1', 'airflow'),
+-- AML alerts — 00500007
+('03000008-0002-4000-8000-000000000008', '00500007-0002-4000-8000-000000000007', '00600024-0002-4000-8000-000000000036', 'property', 'severity_values',     'severity must be one of low/medium/high/critical',                'conformity',   'regulatory', 'error',   'library', 'enumValues', 'low,medium,high,critical', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@hourly',  'airflow'),
+-- Accounts — 00500008
+('03000009-0002-4000-8000-000000000009', '00500008-0002-4000-8000-000000000008', '0060002a-0002-4000-8000-000000000042', 'property', 'currency_iso4217',    'currency must be ISO-4217 (length=3 uppercase)',                  'conformity',   'regulatory', 'error',   'library', 'regex',      '^[A-Z]{3}$', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',   'airflow'),
+-- Transactions — 00500009
+('0300000a-0002-4000-8000-000000000010', '00500009-0002-4000-8000-000000000009', '0060002d-0002-4000-8000-000000000045', 'property', 'tx_id_unique',        'transaction_id must be globally unique',                          'uniqueness',   'regulatory', 'error',   'library', 'unique',     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '@daily',    'airflow')
 
 ON CONFLICT (id) DO NOTHING;
 
@@ -519,7 +591,69 @@ INSERT INTO assets (id, name, description, asset_type_id, platform, location, do
  '00000003-0002-4000-8000-000000000003',
  '{"refresh_schedule": "hourly", "audience": "cro-team"}',
  '["bcbs-239", "risk-tier-1"]',
- 'active', 'system@demo', NOW(), NOW())
+ 'active', 'system@demo', NOW(), NOW()),
+
+-- ── Column assets for the FSI Tables / Streams above ──
+-- 0f300101 lakehouse.fsi.trading.executions
+('0f520101-0002-4000-8000-000000000001', 'trade_id',     'Unique trade execution identifier',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.trade_id',     '00000002-0002-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}',  '["mifid-ii", "key"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520102-0002-4000-8000-000000000002', 'instrument_id','ISIN or internal security identifier',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.instrument_id','00000002-0002-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520103-0002-4000-8000-000000000003', 'side',         'BUY or SELL',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.side',         '00000002-0002-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520104-0002-4000-8000-000000000004', 'quantity',     'Executed quantity',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.quantity',     '00000002-0002-4000-8000-000000000002', '{"data_type": "DECIMAL(18,4)", "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520105-0002-4000-8000-000000000005', 'price',        'Execution price (instrument currency)',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.price',        '00000002-0002-4000-8000-000000000002', '{"data_type": "DECIMAL(18,6)", "nullable": false}',                          '["mifid-ii"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520106-0002-4000-8000-000000000006', 'execution_ts', 'Execution timestamp (nanosecond precision)', (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.trading.executions.execution_ts', '00000002-0002-4000-8000-000000000002', '{"data_type": "TIMESTAMP_NS",  "nullable": false, "partition_key": true}',   '["mifid-ii", "partition"]',          'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300104 lakehouse.fsi.risk.aggregated_var
+('0f520111-0002-4000-8000-000000000011', 'exposure_id',    'Unique exposure record identifier',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.exposure_id',   '00000003-0002-4000-8000-000000000003', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}', '["bcbs-239", "key"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520112-0002-4000-8000-000000000012', 'risk_type',      'credit | market | counterparty | operational',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.risk_type',     '00000003-0002-4000-8000-000000000003', '{"data_type": "STRING",        "nullable": false}',                         '["bcbs-239"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520113-0002-4000-8000-000000000013', 'desk',           'Trading desk identifier',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.desk',          '00000003-0002-4000-8000-000000000003', '{"data_type": "STRING",        "nullable": false}',                         '["bcbs-239"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520114-0002-4000-8000-000000000014', 'var_99',         'Value-at-Risk at 99% confidence',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.var_99',        '00000003-0002-4000-8000-000000000003', '{"data_type": "DECIMAL(18,2)", "nullable": false}',                         '["bcbs-239", "kpi"]',                'active', 'system@demo', NOW(), NOW()),
+('0f520115-0002-4000-8000-000000000015', 'reporting_date', 'Risk reporting date (partition key)',       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.risk.aggregated_var.reporting_date','00000003-0002-4000-8000-000000000003', '{"data_type": "DATE",          "nullable": false, "partition_key": true}',  '["bcbs-239", "partition"]',          'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300105 kafka.fsi.aml.transaction_alerts (Stream — schema as advertised on the topic)
+('0f520121-0002-4000-8000-000000000021', 'alert_id',       'Unique AML alert identifier',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.alert_id',     '00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false, "is_primary_key": true}', '["aml", "key"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520122-0002-4000-8000-000000000022', 'customer_id',    'FK to customer_kyc.customer_id',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.customer_id',  '00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false}',                          '["aml", "fk"]',      'active', 'system@demo', NOW(), NOW()),
+('0f520123-0002-4000-8000-000000000023', 'scenario_code',  'Scenario / model that fired',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.scenario_code','00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false}',                          '["aml"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520124-0002-4000-8000-000000000024', 'severity',       'low | medium | high | critical',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.severity',     '00000004-0002-4000-8000-000000000004', '{"data_type": "STRING", "nullable": false}',                          '["aml"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520125-0002-4000-8000-000000000025', 'alert_ts',       'Alert generation timestamp (UTC)',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka', 'kafka://broker.bank:9093/aml.transaction_alerts.alert_ts',     '00000004-0002-4000-8000-000000000004', '{"data_type": "TIMESTAMP", "nullable": false}',                       '["aml"]',            'active', 'system@demo', NOW(), NOW()),
+
+-- 0f300107 lakehouse.fsi.banking.customer_master
+('0f520131-0002-4000-8000-000000000031', 'customer_id',  'Unique customer identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.customer_id', '00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}', '["pii", "key"]',          'active', 'system@demo', NOW(), NOW()),
+('0f520132-0002-4000-8000-000000000032', 'kyc_tier',     'Tier of customer due diligence applied',      (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.kyc_tier',    '00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false}',                          '["aml-monitored"]',       'active', 'system@demo', NOW(), NOW()),
+('0f520133-0002-4000-8000-000000000033', 'segment',      'Retail | Mass-Affluent | Private | SMB | Corp',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.segment',     '00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false}',                          '["banking"]',             'active', 'system@demo', NOW(), NOW()),
+('0f520134-0002-4000-8000-000000000034', 'opened_date',  'Earliest account opening date for customer',   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.opened_date', '00000001-0002-4000-8000-000000000001', '{"data_type": "DATE",    "nullable": false}',                          '["banking"]',             'active', 'system@demo', NOW(), NOW()),
+('0f520135-0002-4000-8000-000000000035', 'country_code', 'ISO 3166-1 alpha-2 of customer residence',     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.fsi.banking.customer_master.country_code','00000001-0002-4000-8000-000000000001', '{"data_type": "STRING",  "nullable": false}',                          '["banking", "pii"]',      'active', 'system@demo', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+
+-- ============================================================================
+-- 15b. hasColumn RELATIONSHIPS (FSI)
+-- ============================================================================
+INSERT INTO entity_relationships (id, source_type, source_id, target_type, target_id, relationship_type, properties, created_by, created_at) VALUES
+-- 0f300101 → 6 columns
+('0f620101-0002-4000-8000-000000000001', 'Table',  '0f300101-0002-4000-8000-000000000001', 'Column', '0f520101-0002-4000-8000-000000000001', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620102-0002-4000-8000-000000000002', 'Table',  '0f300101-0002-4000-8000-000000000001', 'Column', '0f520102-0002-4000-8000-000000000002', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620103-0002-4000-8000-000000000003', 'Table',  '0f300101-0002-4000-8000-000000000001', 'Column', '0f520103-0002-4000-8000-000000000003', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620104-0002-4000-8000-000000000004', 'Table',  '0f300101-0002-4000-8000-000000000001', 'Column', '0f520104-0002-4000-8000-000000000004', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620105-0002-4000-8000-000000000005', 'Table',  '0f300101-0002-4000-8000-000000000001', 'Column', '0f520105-0002-4000-8000-000000000005', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620106-0002-4000-8000-000000000006', 'Table',  '0f300101-0002-4000-8000-000000000001', 'Column', '0f520106-0002-4000-8000-000000000006', 'hasColumn', NULL, 'system@demo', NOW()),
+-- 0f300104 → 5 columns
+('0f620111-0002-4000-8000-000000000011', 'Table',  '0f300104-0002-4000-8000-000000000004', 'Column', '0f520111-0002-4000-8000-000000000011', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620112-0002-4000-8000-000000000012', 'Table',  '0f300104-0002-4000-8000-000000000004', 'Column', '0f520112-0002-4000-8000-000000000012', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620113-0002-4000-8000-000000000013', 'Table',  '0f300104-0002-4000-8000-000000000004', 'Column', '0f520113-0002-4000-8000-000000000013', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620114-0002-4000-8000-000000000014', 'Table',  '0f300104-0002-4000-8000-000000000004', 'Column', '0f520114-0002-4000-8000-000000000014', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620115-0002-4000-8000-000000000015', 'Table',  '0f300104-0002-4000-8000-000000000004', 'Column', '0f520115-0002-4000-8000-000000000015', 'hasColumn', NULL, 'system@demo', NOW()),
+-- 0f300105 (Stream) → 5 columns (advertised topic schema)
+('0f620121-0002-4000-8000-000000000021', 'Stream', '0f300105-0002-4000-8000-000000000005', 'Column', '0f520121-0002-4000-8000-000000000021', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620122-0002-4000-8000-000000000022', 'Stream', '0f300105-0002-4000-8000-000000000005', 'Column', '0f520122-0002-4000-8000-000000000022', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620123-0002-4000-8000-000000000023', 'Stream', '0f300105-0002-4000-8000-000000000005', 'Column', '0f520123-0002-4000-8000-000000000023', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620124-0002-4000-8000-000000000024', 'Stream', '0f300105-0002-4000-8000-000000000005', 'Column', '0f520124-0002-4000-8000-000000000024', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620125-0002-4000-8000-000000000025', 'Stream', '0f300105-0002-4000-8000-000000000005', 'Column', '0f520125-0002-4000-8000-000000000025', 'hasColumn', NULL, 'system@demo', NOW()),
+-- 0f300107 → 5 columns
+('0f620131-0002-4000-8000-000000000031', 'Table',  '0f300107-0002-4000-8000-000000000007', 'Column', '0f520131-0002-4000-8000-000000000031', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620132-0002-4000-8000-000000000032', 'Table',  '0f300107-0002-4000-8000-000000000007', 'Column', '0f520132-0002-4000-8000-000000000032', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620133-0002-4000-8000-000000000033', 'Table',  '0f300107-0002-4000-8000-000000000007', 'Column', '0f520133-0002-4000-8000-000000000033', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620134-0002-4000-8000-000000000034', 'Table',  '0f300107-0002-4000-8000-000000000007', 'Column', '0f520134-0002-4000-8000-000000000034', 'hasColumn', NULL, 'system@demo', NOW()),
+('0f620135-0002-4000-8000-000000000035', 'Table',  '0f300107-0002-4000-8000-000000000007', 'Column', '0f520135-0002-4000-8000-000000000035', 'hasColumn', NULL, 'system@demo', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 

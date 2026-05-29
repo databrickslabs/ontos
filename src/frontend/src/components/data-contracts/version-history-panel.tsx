@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { Skeleton } from '@/components/ui/skeleton'
+import { VersionLineageSkeleton } from '@/components/common/list-view-skeleton'
 
 type ContractSummary = {
   id: string
@@ -129,9 +129,8 @@ export default function VersionHistoryPanel({
           </CardTitle>
           <CardDescription>Loading version lineage...</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-32 w-full" />
+        <CardContent>
+          <VersionLineageSkeleton versions={2} />
         </CardContent>
       </Card>
     )

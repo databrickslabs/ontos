@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Skeleton } from '@/components/ui/skeleton'
+import { SkeletonBlock } from '@/components/common/list-view-skeleton'
 import { useToast } from '@/hooks/use-toast'
 
 type SchemaChange = {
@@ -125,7 +125,7 @@ export default function ContractDiffViewer({ oldContract, newContract }: Contrac
           <CardDescription>Comparing contract versions</CardDescription>
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-32 w-full" />
+          <SkeletonBlock height="h-32" />
         </CardContent>
       </Card>
     )

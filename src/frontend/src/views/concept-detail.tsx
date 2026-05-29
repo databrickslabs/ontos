@@ -17,7 +17,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import {
+  SkeletonLine,
+  SkeletonBlock,
+} from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Collapsible,
@@ -270,10 +273,10 @@ export default function ConceptDetailView() {
             {t('semantic-models:details.backToList', 'Back to Concepts')}
           </Button>
         </div>
-        <Skeleton className="h-9 w-2/3" />
-        <Skeleton className="h-3 w-1/2" />
-        <Skeleton className="h-24 w-full rounded-lg" />
-        <Skeleton className="h-24 w-full rounded-lg" />
+        <SkeletonLine height="h-9" width="w-2/3" />
+        <SkeletonLine height="h-3" width="w-1/2" />
+        <SkeletonBlock height="h-24" className="rounded-lg" />
+        <SkeletonBlock height="h-24" className="rounded-lg" />
       </div>
     );
   }

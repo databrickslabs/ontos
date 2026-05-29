@@ -10,7 +10,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import { DialogSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { User, Users, FolderKanban, Shield } from 'lucide-react';
@@ -67,13 +67,7 @@ export default function UserProfileDialog({ open, onOpenChange }: UserProfileDia
     }
   };
 
-  const renderLoadingSkeleton = () => (
-    <div className="space-y-4">
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-4 w-1/2" />
-      <Skeleton className="h-4 w-2/3" />
-    </div>
-  );
+  const renderLoadingSkeleton = () => <DialogSkeleton rows={3} />;
 
   const renderUserInfo = () => {
     if (!profileData) return null;

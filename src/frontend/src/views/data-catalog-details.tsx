@@ -44,7 +44,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
+import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
@@ -243,17 +243,11 @@ const DataCatalogDetails: React.FC = () => {
   };
 
   if (isLoading) {
+    // Mirrors rendered shape: header (back button), title with icon and badge,
+    // tabs row, plus the two-column overview cards (Basic Info + Storage).
     return (
-      <div className="flex flex-col h-full p-6 gap-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10 rounded" />
-          <div>
-            <Skeleton className="h-6 w-64 mb-2" />
-            <Skeleton className="h-4 w-96" />
-          </div>
-        </div>
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="flex-1" />
+      <div className="flex flex-col h-full p-6">
+        <DetailViewSkeleton cards={3} actionButtons={1} />
       </div>
     );
   }

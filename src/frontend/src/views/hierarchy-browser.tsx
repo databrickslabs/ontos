@@ -12,7 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
+import {
+  HierarchyTreeSkeleton,
+  SkeletonLine,
+} from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -71,34 +74,17 @@ function getEntityRoute(entityType: string, entityId: string): string {
   return `/assets/${entityId}`;
 }
 
-function TreeSkeleton() {
-  return (
-    <div className="space-y-2 p-4">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="space-y-1.5">
-          <Skeleton className="h-5 w-32" />
-          <div className="pl-6 space-y-1">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-4 w-36" />
-            <Skeleton className="h-4 w-44" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function DetailSkeleton() {
   return (
     <div className="space-y-4 p-6">
-      <Skeleton className="h-8 w-64" />
-      <Skeleton className="h-4 w-96" />
+      <SkeletonLine height="h-8" width="w-64" />
+      <SkeletonLine width="w-96" />
       <div className="space-y-2 mt-6">
-        <Skeleton className="h-6 w-48" />
+        <SkeletonLine height="h-6" width="w-48" />
         <div className="pl-4 space-y-1.5">
-          <Skeleton className="h-5 w-56" />
-          <Skeleton className="h-5 w-52" />
-          <Skeleton className="h-5 w-60" />
+          <SkeletonLine height="h-5" width="w-56" />
+          <SkeletonLine height="h-5" width="w-52" />
+          <SkeletonLine height="h-5" width="w-60" />
         </div>
       </div>
     </div>
@@ -542,7 +528,7 @@ export default function HierarchyBrowserView() {
               <ScrollArea className="h-full">
                 <div className="px-2 pb-2" role="tree">
                   {rootsLoading ? (
-                    <TreeSkeleton />
+                    <HierarchyTreeSkeleton groups={3} itemsPerGroup={3} />
                   ) : filteredGroups.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Network className="h-8 w-8 mx-auto mb-2 opacity-30" />

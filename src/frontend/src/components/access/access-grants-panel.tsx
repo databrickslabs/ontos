@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PanelSkeleton } from '@/components/common/list-view-skeleton';
 import {
   Table,
   TableBody,
@@ -217,23 +217,7 @@ export default function AccessGrantsPanel({
   };
 
   if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-5 w-5" />
-            <Skeleton className="h-5 w-32" />
-          </div>
-          <Skeleton className="h-4 w-48 mt-1" />
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <PanelSkeleton rows={2} rowHeight="h-10" />;
   }
 
   const hasContent = grants.length > 0 || pendingRequests.length > 0;

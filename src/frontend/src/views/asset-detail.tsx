@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
+import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -179,21 +179,10 @@ export default function AssetDetailView() {
   }, [asset, setStaticSegments, setDynamicTitle]);
 
   if (loading) {
-    return (
-      <div className="py-6 space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10 rounded-md" />
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-64" />
-            <Skeleton className="h-4 w-40" />
-          </div>
-        </div>
-        <div className="grid gap-6">
-          <Skeleton className="h-48 w-full rounded-lg" />
-          <Skeleton className="h-32 w-full rounded-lg" />
-        </div>
-      </div>
-    );
+    // Mirrors the rendered detail view: header with action buttons, core
+    // metadata card, and a few stacked panels (relationships, ownership,
+    // metadata, ratings, costs, quality).
+    return <DetailViewSkeleton cards={4} actionButtons={5} />;
   }
 
   if (error || !asset) {

@@ -48,7 +48,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
+import { CatalogColumnsTableSkeleton } from '@/components/common/list-view-skeleton';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
@@ -488,16 +488,7 @@ const DataCatalog: React.FC = () => {
       <Card className="flex-1 flex flex-col min-h-0">
         <CardContent className="flex-1 p-0 min-h-0">
           {isLoading ? (
-            <div className="p-6 space-y-4">
-              {[...Array(10)].map((_, i) => (
-                <div key={i} className="flex gap-4">
-                  <Skeleton className="h-6 w-32" />
-                  <Skeleton className="h-6 flex-1" />
-                  <Skeleton className="h-6 w-24" />
-                  <Skeleton className="h-6 w-40" />
-                </div>
-              ))}
-            </div>
+            <CatalogColumnsTableSkeleton rows={10} />
           ) : error ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
               <p className="text-lg mb-2">{t('common:error')}</p>

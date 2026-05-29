@@ -6,9 +6,21 @@ export interface CopilotQuestionDef {
   contexts: string[];
   featureId: string;
   minAccess: FeatureAccessLevel;
+  /**
+   * Optional adoption-mode filter. When set, the question is ONLY
+   * surfaced if the current workspace adoption_mode matches.
+   *
+   * - `'blank'`: workspace has no published data products yet —
+   *   onboarding-style "how do I get started" questions.
+   * - `'active'`: workspace has published products — operational
+   *   "show me failing checks", "low quality scores" style.
+   * - omitted: question is mode-agnostic and shown regardless.
+   */
+  adoptionMode?: 'blank' | 'active';
 }
 
 export const COPILOT_CATEGORIES = [
+  'getting_started',
   'explore',
   'build',
   'govern',
@@ -18,6 +30,16 @@ export const COPILOT_CATEGORIES = [
 export type CopilotCategory = (typeof COPILOT_CATEGORIES)[number];
 
 export const COPILOT_QUESTIONS: CopilotQuestionDef[] = [
+  // ── Getting Started (blank workspace) ─────────────────────────────
+  // Surface ONLY when the backend reports `adoption_mode='blank'`.
+  // Wording is neutral / generic — no customer specifics. Order in
+  // this list = display order within the group.
+  { key: 'gs_create_first_product',   category: 'getting_started', contexts: [], featureId: 'data-products',  minAccess: FeatureAccessLevel.READ_ONLY, adoptionMode: 'blank' },
+  { key: 'gs_setup_domains',          category: 'getting_started', contexts: [], featureId: 'data-domains',   minAccess: FeatureAccessLevel.READ_ONLY, adoptionMode: 'blank' },
+  { key: 'gs_assign_roles',           category: 'getting_started', contexts: [], featureId: 'settings',       minAccess: FeatureAccessLevel.READ_ONLY, adoptionMode: 'blank' },
+  { key: 'gs_what_is_ontos',          category: 'getting_started', contexts: [], featureId: 'search',         minAccess: FeatureAccessLevel.READ_ONLY, adoptionMode: 'blank' },
+  { key: 'gs_concepts_overview',      category: 'getting_started', contexts: [], featureId: 'search',         minAccess: FeatureAccessLevel.READ_ONLY, adoptionMode: 'blank' },
+
   // ── Explore & Discover ────────────────────────────────────────────
 
   // Global / Home – any authenticated user

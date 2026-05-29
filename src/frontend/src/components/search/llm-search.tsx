@@ -28,6 +28,7 @@ import remarkGfm from 'remark-gfm';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import type { LLMConfig } from '@/types/llm';
 import type {
+  AdoptionMode,
   ChatMessage,
   DebugInfo,
   LLMSearchStatus,
@@ -390,17 +391,30 @@ function SessionList({
 
 interface ExampleQuestionsProps {
   onSelectQuestion: (question: string) => void;
+  adoptionMode?: AdoptionMode | null;
 }
 
-function ExampleQuestions({ onSelectQuestion }: ExampleQuestionsProps) {
+function ExampleQuestions({ onSelectQuestion, adoptionMode }: ExampleQuestionsProps) {
   const { t } = useTranslation(['search']);
 
-  const examples = [
-    t('search:llm.examples.findCustomerData'),
-    t('search:llm.examples.dataProductsCost'),
-    t('search:llm.examples.businessTermsSales'),
-    t('search:llm.examples.showDataProducts'),
-  ];
+  // Mode-aware example set: a blank workspace wants onboarding
+  // questions, not "show me failing checks". When the snapshot is
+  // unavailable (`adoptionMode == null`) we keep the historical
+  // 'active' list as the safe default.
+  const examples =
+    adoptionMode === 'blank'
+      ? [
+          t('search:llm.examples.howToCreateProduct'),
+          t('search:llm.examples.howToSetupDomains'),
+          t('search:llm.examples.whatIsOntos'),
+          t('search:llm.examples.coreConcepts'),
+        ]
+      : [
+          t('search:llm.examples.findCustomerData'),
+          t('search:llm.examples.dataProductsCost'),
+          t('search:llm.examples.businessTermsSales'),
+          t('search:llm.examples.showDataProducts'),
+        ];
 
   return (
     <div className="space-y-2">
@@ -755,7 +769,10 @@ export default function LLMSearch() {
                   {t('search:llm.welcomeMessage')}
                 </p>
               </div>
-              <ExampleQuestions onSelectQuestion={handleSelectQuestion} />
+              <ExampleQuestions
+                onSelectQuestion={handleSelectQuestion}
+                adoptionMode={status?.adoption_mode ?? null}
+              />
             </div>
           ) : (
             <div className="space-y-4">

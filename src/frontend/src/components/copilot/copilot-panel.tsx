@@ -99,7 +99,6 @@ export default function CopilotPanel() {
   const pageContext = useCopilotStore((s) => s.pageContext);
   const panelWidth = useCopilotStore((s) => s.panelWidth);
   const { closePanel, setPanelWidth } = useCopilotStore((s) => s.actions);
-  const questionGroups = useCopilotQuestions();
 
   // Drag-to-resize: attach window-level listeners only while dragging so the
   // pointer can leave the thin handle without losing the drag. We throttle
@@ -148,6 +147,12 @@ export default function CopilotPanel() {
   }, []);
 
   const [status, setStatus] = useState<LLMSearchStatus | null>(null);
+  // ``status?.adoption_mode`` is forwarded into the question hook so a
+  // blank workspace gets the onboarding starter prompts and an active
+  // workspace gets the regular catalog. The hook handles `null`
+  // (snapshot unavailable) by hiding mode-tagged questions only.
+  const questionGroups = useCopilotQuestions(status?.adoption_mode ?? null);
+
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);

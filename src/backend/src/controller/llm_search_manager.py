@@ -283,7 +283,13 @@ class LLMSearchManager:
         self._search_manager = search_manager
         self._ws_client = workspace_client
         self._session_store = get_session_store()  # Use global singleton
-        
+
+        # Per-chat-call personalization context (Phase 3). Set by
+        # ``chat()`` before invoking ``_process_with_llm`` and reset to
+        # ``None`` afterwards so the manager is safe to reuse across
+        # requests within a process.
+        self._chat_context: Optional[Dict[str, Any]] = None
+
         # Initialize tool registry with all default tools
         self._tool_registry = create_default_registry()
         
@@ -314,8 +320,23 @@ class LLMSearchManager:
     # ========================================================================
     
     def get_status(self) -> LLMSearchStatus:
-        """Get the status of LLM search functionality."""
+        """Get the status of LLM search functionality.
+
+        Includes the current ``adoption_mode`` so the frontend can pick
+        the right starter-prompt set without an extra round-trip. The
+        snapshot is computed inline; a failure is logged and silently
+        downgraded to ``adoption_mode=None`` rather than failing the
+        whole status call.
+        """
         model = self._settings.LLM_ENDPOINT
+        adoption_mode: Optional[str] = None
+        try:
+            from src.tools.app_state import get_adoption_snapshot
+            snapshot = get_adoption_snapshot(self._db)
+            adoption_mode = snapshot.get("adoption_mode")
+        except Exception as e:
+            logger.warning(f"adoption snapshot in get_status failed: {e}")
+
         return LLMSearchStatus(
             enabled=self._settings.LLM_ENABLED,
             endpoint=model,
@@ -323,7 +344,8 @@ class LLMSearchManager:
             disclaimer=self._settings.LLM_DISCLAIMER_TEXT or (
                 "This feature uses AI to analyze data assets. AI-generated content may contain errors. "
                 "Review all suggestions carefully before taking action."
-            )
+            ),
+            adoption_mode=adoption_mode,
         )
     
     def list_sessions(self, user_id: str) -> List[SessionSummary]:
@@ -343,23 +365,71 @@ class LLMSearchManager:
         user_message: str,
         user_id: str,
         session_id: Optional[str] = None,
-        debug: bool = False
+        debug: bool = False,
+        # Phase 3 personalization — frontend sends page / entity from
+        # the copilot store on every chat request; the route derives
+        # the user's effective Ontos role(s) and passes them too. All
+        # optional for backward compatibility — chats from non-UI
+        # clients (e.g. MCP, tests) still work without context.
+        role: Optional[str] = None,
+        page_name: Optional[str] = None,
+        page_url: Optional[str] = None,
+        feature_id: Optional[str] = None,
+        selected_entity: Optional[Dict[str, Any]] = None,
     ) -> ChatResponse:
         """
         Process a chat message and return the assistant's response.
-        
+
         Note: The workspace client passed to this manager should already have
         user credentials (OBO) for proper access control and audit trail.
-        
+
         Args:
             user_message: The user's message
             user_id: ID of the user
             session_id: Optional session ID to continue conversation
             debug: When true, include debug info in the response
-            
+            role: Effective Ontos role label (Phase 3). Tailoring hint.
+            page_name: Page the user is on (Phase 3).
+            page_url: URL of the page (Phase 3).
+            feature_id: Feature ID the page maps to (Phase 3). Reserved
+                for future authz / context decisions; not used in the
+                prompt today.
+            selected_entity: Entity the user has selected in the UI
+                (Phase 3). Dict with optional ``type``, ``name``, ``id``.
+
         Returns:
             ChatResponse with the assistant's message
         """
+        # Stash context for the LLM-processing pass to read. Cleared
+        # in the ``finally`` below so a long-lived manager instance
+        # can't leak one request's context into the next.
+        self._chat_context = {
+            "role": role,
+            "page_name": page_name,
+            "page_url": page_url,
+            "feature_id": feature_id,
+            "selected_entity": selected_entity,
+        }
+        try:
+            return await self._chat_inner(
+                user_message=user_message,
+                user_id=user_id,
+                session_id=session_id,
+                debug=debug,
+            )
+        finally:
+            self._chat_context = None
+
+    async def _chat_inner(
+        self,
+        *,
+        user_message: str,
+        user_id: str,
+        session_id: Optional[str],
+        debug: bool,
+    ) -> ChatResponse:
+        """Body of ``chat()``, split out so ``chat()`` can wrap it in a
+        try/finally that always clears ``self._chat_context``."""
         # Check if LLM is enabled
         if not self._settings.LLM_ENABLED:
             logger.warning("LLM chat requested but LLM_ENABLED is False")
@@ -503,12 +573,44 @@ class LLMSearchManager:
         tool_names = [td["function"]["name"] for td in tool_definitions]
         logger.info(f"Using {len(tool_definitions)} tools for categories: {categories}")
 
+        # Pre-fetch the adoption snapshot ONCE per chat call. The same
+        # snapshot drives (a) the optional ``get_app_state`` tool result
+        # the LLM may decide to fetch, and (b) the Phase 2 system-prompt
+        # preamble we inject below so every conceptual answer is
+        # adoption-mode-aware even when the LLM never invokes the tool.
+        # Snapshot failures degrade gracefully: we log and proceed with
+        # ``adoption_mode=None`` so the prompt falls back to the
+        # Phase 1 default.
+        adoption_mode: Optional[str] = None
+        try:
+            from src.tools.app_state import get_adoption_snapshot
+            adoption_snapshot = get_adoption_snapshot(self._db)
+            adoption_mode = adoption_snapshot.get("adoption_mode")
+            logger.info(
+                f"Adoption snapshot: mode={adoption_mode} "
+                f"counts={adoption_snapshot.get('counts')}"
+            )
+        except Exception as snapshot_err:
+            logger.warning(
+                f"Adoption snapshot failed; skipping mode preamble: "
+                f"{snapshot_err}",
+                exc_info=True,
+            )
+
         # Resolve the system prompt once per chat invocation. The
         # `get_system_prompt` helper honors `Settings.LLM_SYSTEM_PROMPT`
         # as a verbatim override (previously dead code) and otherwise
-        # returns the default grounded prompt. Phase 2/3 will pass role
-        # / page / entity / adoption-mode context here.
-        system_prompt = get_system_prompt(settings=self._settings)
+        # returns the default grounded prompt with optional Phase 2/3
+        # preambles. Phase 3 (role / page / entity) is wired in
+        # ``process_chat`` -> ``chat`` -> ``_process_with_llm``.
+        system_prompt = get_system_prompt(
+            settings=self._settings,
+            role=self._chat_context.get("role") if self._chat_context else None,
+            page_name=self._chat_context.get("page_name") if self._chat_context else None,
+            page_url=self._chat_context.get("page_url") if self._chat_context else None,
+            selected_entity=self._chat_context.get("selected_entity") if self._chat_context else None,
+            adoption_mode=adoption_mode,
+        )
 
         if debug_info is not None:
             debug_info["query_classification"] = {

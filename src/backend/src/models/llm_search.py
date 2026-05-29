@@ -105,6 +105,9 @@ class ToolName(str, Enum):
     # Handbook search (grounds the copilot in docs/handbook/)
     SEARCH_ONTOS_HANDBOOK = "search_ontos_handbook"
 
+    # App-state introspection (powers adoption-mode preamble too)
+    GET_APP_STATE = "get_app_state"
+
 
 # ============================================================================
 # Tool Parameter Models
@@ -289,6 +292,15 @@ class LLMSearchStatus(BaseModel):
     endpoint: Optional[str] = Field(None, description="Configured LLM endpoint")
     model_name: Optional[str] = Field(None, description="Name of the configured foundation model")
     disclaimer: str = Field(..., description="Disclaimer text about AI limitations")
+    # Phase 2: adoption_mode is computed from the live DB snapshot
+    # whenever ``/api/llm-search/status`` is called. Frontend uses it
+    # to surface mode-aware starter prompts (blank vs active) without
+    # an extra round-trip. Stays ``None`` when the snapshot fails so
+    # the UI degrades to its default starter list.
+    adoption_mode: Optional[str] = Field(
+        None,
+        description="Current workspace adoption mode: 'blank' (no published data products), 'active', or null when undetermined.",
+    )
 
 
 # ============================================================================

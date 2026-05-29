@@ -65,16 +65,29 @@ CATEGORY_KEYWORDS = {
         "data steward", "data producer", "data consumer",
         "data owner", "business owner",
     ],
+    # App-state / adoption questions. Surfaces ``get_app_state`` for
+    # questions like "how many data products do we have?", "is this a
+    # fresh install?", "what's our adoption?". Also always-on (see
+    # ``ALWAYS_INCLUDED_CATEGORIES``) because the same snapshot drives
+    # the system-prompt adoption-mode preamble.
+    "app_state": [
+        "how many", "how much", "adoption", "empty", "new install",
+        "fresh install", "getting started", "onboarding",
+        "total number", "count of", "current state", "anyone using",
+    ],
 }
 
 # Categories that are always included for general discovery.
 # `handbook` is always-on so the LLM can ground any vague question in
 # the corpus — the cost of carrying one extra tool definition is low and
 # the safety upside (fewer hallucinated platform concepts) is large.
-ALWAYS_INCLUDED_CATEGORIES = ["discovery", "handbook"]
+# `app_state` is always-on for the same reason: it's a single
+# parameter-less tool whose result is cheap and is sometimes the right
+# answer to a vague "how are we doing?" question.
+ALWAYS_INCLUDED_CATEGORIES = ["discovery", "handbook", "app_state"]
 
 # Default categories when no specific match is found
-DEFAULT_CATEGORIES = ["discovery", "handbook", "data_products", "data_contracts", "semantic"]
+DEFAULT_CATEGORIES = ["discovery", "handbook", "app_state", "data_products", "data_contracts", "semantic"]
 
 
 def classify_query(query: str) -> List[str]:

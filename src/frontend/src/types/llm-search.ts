@@ -140,11 +140,19 @@ export interface ToolSource {
   error?: string;
 }
 
+export type AdoptionMode = 'blank' | 'active';
+
 export interface LLMSearchStatus {
   enabled: boolean;
   endpoint?: string;
   model_name?: string;
   disclaimer: string;
+  /**
+   * Workspace adoption mode used to pick mode-aware starter prompts.
+   * `null` (or absent) means the backend snapshot was unavailable;
+   * the UI should fall back to its default starter list in that case.
+   */
+  adoption_mode?: AdoptionMode | null;
 }
 
 

@@ -8,15 +8,30 @@ function so that:
 1. The `LLM_SYSTEM_PROMPT` env override — defined in `Settings` but
    never consumed — finally takes effect as a verbatim replacement of
    the default prompt.
-2. Phase 2 can inject per-page / per-role / per-entity / adoption-mode
-   personalization without touching the manager. The signature already
-   accepts those arguments; Phase 1 ignores them.
+2. Phase 2/3 can inject per-page / per-role / per-entity / adoption-mode
+   personalization without touching the manager.
 
 The new default prompt is grounded-first: it instructs the model to
 call the `search_ontos_handbook` tool for any "what is X" / "how does
 Y work" question BEFORE answering from training knowledge, and to
 attach hidden `<!-- ref: file.md#anchor -->` citations to claims that
 came from the handbook corpus.
+
+Phase 2 ("adoption mode") and Phase 3 ("role + page + entity") layer
+two short preambles ABOVE the default prompt:
+
+- ``## Current workspace state`` — derived from
+  ``tools.app_state.get_adoption_snapshot``. The LLM gets onboarding
+  vs operational framing on every call without having to invoke the
+  introspection tool itself.
+- ``## Current user context`` — derived from the chat request payload
+  (page name, page URL, selected entity) plus the user's effective
+  Ontos role.
+
+When neither preamble is applicable (e.g. the override is set, or the
+caller didn't pass context), the default prompt is returned verbatim
+so we don't drift from the Phase 1 behavior captured by existing
+integration tests.
 """
 
 from __future__ import annotations
@@ -172,6 +187,86 @@ If the user asks about something unrelated to Ontos, data governance, the data p
 
 
 # ---------------------------------------------------------------------------
+# Preamble assembly
+# ---------------------------------------------------------------------------
+
+
+# Adoption-mode preamble text. Kept short on purpose — the model
+# context is precious and these strings ship on every chat call. The
+# wording is calibrated to nudge the tone of the answer (suggestion
+# style, default examples, what NOT to spend tokens on) without
+# overriding the substantive grounded-first / refusal-template policy.
+_ADOPTION_PREAMBLE_BLANK = (
+    "This workspace is new to Ontos — no data products are published yet. "
+    "Lean toward onboarding-style suggestions and 'getting started' "
+    "framings. Avoid optimization advice that assumes existing assets."
+)
+
+_ADOPTION_PREAMBLE_ACTIVE = (
+    "This workspace has published data products. Operational and "
+    "optimization-oriented questions are appropriate; do not over-explain "
+    "basics unless asked."
+)
+
+
+def _adoption_preamble(adoption_mode: Optional[str]) -> Optional[str]:
+    """Map an ``adoption_mode`` string to its preamble body, or
+    ``None`` when the mode is missing / unrecognized so the caller can
+    omit the section entirely (rather than emit a placeholder)."""
+    if adoption_mode == "blank":
+        return _ADOPTION_PREAMBLE_BLANK
+    if adoption_mode == "active":
+        return _ADOPTION_PREAMBLE_ACTIVE
+    return None
+
+
+def _user_context_block(
+    role: Optional[str],
+    page_name: Optional[str],
+    page_url: Optional[str],
+    selected_entity: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    """Render the Phase 3 ``## Current user context`` section.
+
+    Returns ``None`` when every input is empty — the caller drops the
+    whole H2 in that case, so the default Phase 1 prompt still
+    round-trips byte-identical for the no-context path. Otherwise we
+    emit a small bullet list with a one-line tailoring instruction.
+    """
+    if not any([role, page_name, page_url, selected_entity]):
+        return None
+
+    lines = ["## Current user context", ""]
+    lines.append(f"- **Role**: {role or 'unknown'}")
+
+    if page_name or page_url:
+        location = page_name or "unknown"
+        if page_url:
+            location += f" ({page_url})"
+        lines.append(f"- **Currently on**: {location}")
+
+    if selected_entity:
+        # ``selected_entity`` is a small dict with `type`, `name`, `id`
+        # — render only the fields that are actually present so the
+        # block looks clean for partial payloads (e.g. an entity with
+        # no id yet).
+        entity_type = selected_entity.get("type") or "entity"
+        entity_name = selected_entity.get("name") or "(unnamed)"
+        entity_id = selected_entity.get("id")
+        viewing = f'- **Viewing**: {entity_type} "{entity_name}"'
+        if entity_id:
+            viewing += f" (id: {entity_id})"
+        lines.append(viewing)
+
+    lines.append("")
+    lines.append(
+        "Tailor answers to this role and page. A Data Consumer needs "
+        "task-completion help; an Admin needs configuration depth."
+    )
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -179,31 +274,47 @@ If the user asks about something unrelated to Ontos, data governance, the data p
 def get_system_prompt(
     *,
     settings: Settings,
-    # Phase 2/3 personalization inputs — accepted now so callers can be
-    # wired without churn; intentionally ignored in Phase 1.
     role: Optional[str] = None,
     page_name: Optional[str] = None,
+    page_url: Optional[str] = None,
     selected_entity: Optional[Dict[str, Any]] = None,
     adoption_mode: Optional[str] = None,
 ) -> str:
     """Return the system prompt for the Ask Ontos copilot.
 
     Precedence:
-    1. `settings.LLM_SYSTEM_PROMPT` (env override) — returned verbatim
-       when set. This unblocks the previously-dead override path.
-    2. Otherwise, the default grounded prompt baked into this module.
+    1. ``settings.LLM_SYSTEM_PROMPT`` (env override) — returned
+       verbatim when set. This unblocks the previously-dead override
+       path; the env override is treated as a full replacement, so
+       Phase 2/3 preambles do NOT get prepended on top.
+    2. Otherwise, the default grounded prompt with optional Phase 2
+       (adoption-mode) and Phase 3 (user-context) preambles prepended.
 
-    Phase 1 does not personalize. Phase 2/3 will use ``role``,
-    ``page_name``, ``selected_entity`` and ``adoption_mode`` to prepend
-    context blocks ("the user is on the Data Products page, viewing
-    product 'X' in status 'draft'...") and to adjust tone / scope for
-    the adoption mode (e.g., evaluation vs production).
+    Section order in the assembled prompt:
+
+    1. ``## Current workspace state`` (Phase 2 — adoption mode)
+    2. ``## Current user context`` (Phase 3 — role + page + entity)
+    3. The original Phase 1 default prompt (``You are Ontos, ...``)
+
+    When every Phase 2/3 input is ``None`` (or unrecognized), the
+    function returns the Phase 1 default prompt byte-identically so
+    existing tests don't regress.
     """
     override = getattr(settings, "LLM_SYSTEM_PROMPT", None)
     if override:
         return override
 
-    # Phase 2/3 hooks — explicitly unused here, kept for future use.
-    _ = (role, page_name, selected_entity, adoption_mode)
+    sections: list[str] = []
 
-    return _DEFAULT_SYSTEM_PROMPT
+    adoption_body = _adoption_preamble(adoption_mode)
+    if adoption_body:
+        sections.append("## Current workspace state\n\n" + adoption_body)
+
+    user_block = _user_context_block(role, page_name, page_url, selected_entity)
+    if user_block:
+        sections.append(user_block)
+
+    if not sections:
+        return _DEFAULT_SYSTEM_PROMPT
+
+    return "\n\n".join(sections) + "\n\n" + _DEFAULT_SYSTEM_PROMPT

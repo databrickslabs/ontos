@@ -215,6 +215,7 @@ def create_default_registry() -> ToolRegistry:
     )
     from src.tools.search import GlobalSearchTool
     from src.tools.handbook import SearchOntosHandbookTool
+    from src.tools.app_state import GetAppStateTool
     from src.tools.analytics import (
         GetTableSchemaTool,
         ExecuteAnalyticsQueryTool,
@@ -314,6 +315,13 @@ def create_default_registry() -> ToolRegistry:
     # see query_classifier.CATEGORY_KEYWORDS["handbook"] and
     # ALWAYS_INCLUDED_CATEGORIES.
     registry.register(SearchOntosHandbookTool())
+
+    # App-state introspection — surfaces total/published counts and a
+    # binary adoption mode (blank vs active). New `app_state` category
+    # added to ALWAYS_INCLUDED_CATEGORIES; the same snapshot is
+    # pre-fetched by LlmSearchManager to inject a mode preamble into
+    # the system prompt.
+    registry.register(GetAppStateTool())
     
     # Analytics tools
     registry.register(GetTableSchemaTool())

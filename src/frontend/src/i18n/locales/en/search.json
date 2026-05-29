@@ -165,7 +165,11 @@
       "findCustomerData": "Where can I find customer data?",
       "dataProductsCost": "How much do all data products cost?",
       "businessTermsSales": "What business terms are related to sales?",
-      "showDataProducts": "Show me data products in the Customer domain"
+      "showDataProducts": "Show me data products in the Customer domain",
+      "howToCreateProduct": "How do I create my first data product?",
+      "howToSetupDomains": "How do I set up data domains?",
+      "whatIsOntos": "What is Ontos and what can I do with it?",
+      "coreConcepts": "Explain the core concepts: data products, contracts, and domains."
     },
     "messages": {
       "sessionDeleted": "Session deleted",

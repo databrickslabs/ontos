@@ -9,6 +9,7 @@ import {
   COPILOT_CATEGORIES,
   type CopilotQuestionDef,
 } from '@/config/copilot-questions';
+import type { AdoptionMode } from '@/types/llm-search';
 
 export interface CopilotQuestionGroup {
   category: string;
@@ -29,7 +30,9 @@ function resolveFeatureId(pathname: string, contextFeatureId?: string): string |
   return null;
 }
 
-export function useCopilotQuestions(): CopilotQuestionGroup[] {
+export function useCopilotQuestions(
+  adoptionMode?: AdoptionMode | null,
+): CopilotQuestionGroup[] {
   const { t } = useTranslation(['copilot-questions']);
   const { pathname } = useLocation();
   const pageContext = useCopilotStore((s) => s.pageContext);
@@ -44,6 +47,13 @@ export function useCopilotQuestions(): CopilotQuestionGroup[] {
     if (permissionsLoading) return [];
 
     const matching: CopilotQuestionDef[] = COPILOT_QUESTIONS.filter((q) => {
+      // Adoption-mode filter: questions tagged with a specific
+      // adoption mode are only shown when it matches. When the
+      // backend snapshot is unavailable (`adoptionMode` is null/
+      // undefined) we hide blank-mode onboarding prompts and keep
+      // the regular catalog visible — same as the pre-PR behavior.
+      if (q.adoptionMode && q.adoptionMode !== adoptionMode) return false;
+
       const contextMatch =
         q.contexts.length === 0 ||
         (currentFeatureId !== null && q.contexts.includes(currentFeatureId));
@@ -72,5 +82,5 @@ export function useCopilotQuestions(): CopilotQuestionGroup[] {
     }
 
     return groups;
-  }, [currentFeatureId, permissionsLoading, hasPermission, t]);
+  }, [currentFeatureId, permissionsLoading, hasPermission, t, adoptionMode]);
 }

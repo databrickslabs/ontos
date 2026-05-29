@@ -15,6 +15,7 @@ no embeddings, no index — keeps the deployment surface zero.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,22 +31,46 @@ logger = get_logger(__name__)
 # Path resolution
 # ---------------------------------------------------------------------------
 
-# This file lives at: <ontos>/src/backend/src/tools/concepts.py
-# The corpus lives at: <ontos>/docs/concepts/
-# So we walk five parents up from __file__ to reach <ontos>.
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
-_DEFAULT_CONCEPTS_DIR = _REPO_ROOT / "docs" / "concepts"
+# The corpus lives at `docs/concepts/` relative to the repository root.
+# Depending on how the app is laid out at runtime, the repo root is at a
+# different number of parents above this file:
+#   - Local dev:    <ontos>/src/backend/src/tools/concepts.py  (5 parents up)
+#   - Deployed app: <approot>/backend/src/tools/concepts.py    (4 parents up)
+# We walk a small range and pick the first parent that has `docs/concepts/`.
+# An explicit env var `ONTOS_CONCEPTS_DIR` overrides the search for
+# deployments that ship the corpus to a non-standard location.
+
+_THIS_FILE = Path(__file__).resolve()
+_CONCEPTS_DIR_ENV_VAR = "ONTOS_CONCEPTS_DIR"
 
 
 def _resolve_concepts_dir() -> Optional[Path]:
     """Return the concept-docs directory if present on disk, else None.
 
-    Deployed Databricks Apps may not include `docs/concepts/` in the
-    packaged artifact. In that case, the tool degrades gracefully
-    (returns no matches) rather than crashing.
+    Resolution order:
+      1. ``ONTOS_CONCEPTS_DIR`` env var (explicit override).
+      2. Walk parents 2..6 above this file looking for ``docs/concepts/``.
+      3. Return ``None`` — the tool degrades gracefully (no matches).
     """
-    if _DEFAULT_CONCEPTS_DIR.is_dir():
-        return _DEFAULT_CONCEPTS_DIR
+    override = os.environ.get(_CONCEPTS_DIR_ENV_VAR)
+    if override:
+        candidate = Path(override).expanduser().resolve()
+        if candidate.is_dir():
+            return candidate
+        logger.warning(
+            "%s=%s but the directory does not exist; falling back to search.",
+            _CONCEPTS_DIR_ENV_VAR,
+            override,
+        )
+
+    for depth in range(2, 7):
+        try:
+            base = _THIS_FILE.parents[depth]
+        except IndexError:
+            break
+        candidate = base / "docs" / "concepts"
+        if candidate.is_dir():
+            return candidate
     return None
 
 

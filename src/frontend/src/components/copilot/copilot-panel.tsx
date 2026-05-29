@@ -18,7 +18,6 @@ import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent
 import { fetchLLMStatus, fetchSessions, sendMessage, deleteSession } from '@/components/search/llm-search-api';
 import {
   useCopilotStore,
-  type CopilotPageContext,
   COPILOT_MIN_WIDTH,
   COPILOT_MAX_WIDTH,
 } from '@/stores/copilot-store';
@@ -29,14 +28,10 @@ import type { ChatMessage, LLMSearchStatus, SessionSummary } from '@/types/llm-s
 
 const WELCOME_DISMISSED_KEY = 'copilot-welcome-dismissed';
 
-function buildContextPrefix(ctx: CopilotPageContext): string {
-  let prefix = `[Context: User is on the "${ctx.pageName}" page at ${ctx.pageUrl}`;
-  if (ctx.selectedEntity) {
-    prefix += `, viewing ${ctx.selectedEntity.type} "${ctx.selectedEntity.name}" (id: ${ctx.selectedEntity.id})`;
-  }
-  prefix += '. Consider this context when answering.]';
-  return prefix;
-}
+// Page / role / entity context is now sent in the chat-request payload
+// (see `llm-search-api.ts` + `ChatMessageCreate`) and rendered server-side
+// as a structured `## Current user context` preamble in the system prompt.
+// No need to prefix the user's message client-side anymore.
 
 function CopilotMessage({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
@@ -211,11 +206,6 @@ export default function CopilotPanel() {
       return;
     }
 
-    let contextualMessage = messageContent;
-    if (pageContext) {
-      contextualMessage = buildContextPrefix(pageContext) + '\n\n' + messageContent;
-    }
-
     const userMessage: ChatMessage = {
       id: `temp-${Date.now()}`,
       role: 'user',
@@ -228,7 +218,7 @@ export default function CopilotPanel() {
     setIsLoading(true);
 
     try {
-      const response = await sendMessage(contextualMessage, currentSessionId);
+      const response = await sendMessage(messageContent, currentSessionId);
       setCurrentSessionId(response.session_id);
       setMessages((prev) => [...prev, response.message]);
       const updatedSessions = await fetchSessions();

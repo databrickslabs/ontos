@@ -178,11 +178,51 @@ class ChatMessage(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SelectedEntity(BaseModel):
+    """Small descriptor of the entity currently selected in the UI.
+
+    All three fields are optional so partial payloads (an entity with
+    only a name, no id yet, etc.) round-trip cleanly. Phase 3 of the
+    Ask Ontos uplift uses these to render a ``## Current user
+    context`` block in the system prompt.
+    """
+    type: Optional[str] = Field(None, description="Entity type (e.g., 'data_product', 'data_contract', 'domain').")
+    name: Optional[str] = Field(None, description="Human-readable entity name as shown in the UI.")
+    id: Optional[str] = Field(None, description="Entity ID (UUID or natural key, depending on entity type).")
+
+
 class ChatMessageCreate(BaseModel):
-    """Request model for creating a new user message."""
+    """Request model for creating a new user message.
+
+    Phase 3 fields (``page_name`` … ``selected_entity``) are all
+    optional. Non-UI clients (MCP, tests) can keep posting the
+    original payload shape; the backend simply skips the
+    ``## Current user context`` preamble when nothing is provided.
+    """
     content: str = Field(..., min_length=1, max_length=4000, description="User's message content")
     session_id: Optional[str] = Field(None, description="Session ID for continuing a conversation")
     debug: bool = Field(False, description="When true, include debug info (tool calls, categories, timing) in response")
+    # Phase 3: page / entity context. The route also derives the
+    # user's effective Ontos role(s) server-side and injects them into
+    # the prompt — clients do NOT send role themselves (defense in
+    # depth: a client can't impersonate a role just by lying in the
+    # payload).
+    page_name: Optional[str] = Field(
+        None,
+        description="Page the user is on (e.g., 'data-products', 'data-contracts', 'home'). Frontend sources this from the copilot store.",
+    )
+    page_url: Optional[str] = Field(
+        None,
+        description="URL of the page (relative path, e.g., '/data-products/abc'). Surfaced as part of the user-context preamble.",
+    )
+    feature_id: Optional[str] = Field(
+        None,
+        description="Feature ID the page maps to (e.g., 'data-products'). Reserved for future authz / context decisions; not used in the prompt today.",
+    )
+    selected_entity: Optional[SelectedEntity] = Field(
+        None,
+        description="Entity the user is currently viewing in the UI, if any. Rendered as 'Viewing: <type> <name>' in the user-context preamble.",
+    )
 
 
 # ============================================================================

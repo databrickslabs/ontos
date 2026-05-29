@@ -29,26 +29,35 @@ from src.tools import ToolRegistry, ToolContext, create_default_registry
 logger = get_logger(__name__)
 
 
-# Internal citation markers — the system prompt instructs the model to emit
-# `<!-- ref: file.md#anchor -->` comments to anchor conceptual answers in the
-# docs/concepts/ corpus. Most markdown renderers drop HTML comments on render,
-# but the chat UI surfaces them as raw text. Strip server-side as a safety net.
-# Capture refs for audit (debug_info["internal_citations"]).
+# Internal grounding markers — the system prompt instructs the model to emit
+# two kinds of markers so reviewers can audit grounding, but neither belongs in
+# the user-facing response. Strip server-side as a safety net:
+#   1. `<!-- ref: file.md#anchor -->` — citation comments. Most markdown
+#      renderers drop HTML comments, but the chat UI surfaces them as text.
+#   2. `[Confirmed]` / `[Documented]` / `[Inferred]` — three-tier confidence
+#      labels. The model still emits them so the act of stratifying anchors
+#      the answer in the right source; we capture for audit but hide from
+#      end users.
+# Capture both into debug_info (`internal_citations`, `confidence_labels`).
 _CITATION_COMMENT_RE = re.compile(r"<!--\s*ref:\s*([^>]+?)\s*-->")
+_CONFIDENCE_LABEL_RE = re.compile(r"\s*\[(Confirmed|Documented|Inferred)\]")
 
 
-def _strip_internal_citations(text: str) -> Tuple[str, List[str]]:
-    """Remove <!-- ref: ... --> comments and return cleaned text + citation list.
+def _strip_internal_citations(text: str) -> Tuple[str, List[str], List[str]]:
+    """Remove internal grounding markers from the response.
 
-    Returns (cleaned_text, citations). The cleaned text has the markers removed
-    and any triple-newlines created by the strip collapsed back to doubles.
+    Returns (cleaned_text, citations, confidence_labels). The cleaned text has
+    both kinds of markers removed and any triple-newlines created by the strip
+    collapsed back to doubles.
     """
     if not text:
-        return text, []
+        return text, [], []
     citations = [m.strip() for m in _CITATION_COMMENT_RE.findall(text)]
+    confidence_labels = list(_CONFIDENCE_LABEL_RE.findall(text))
     cleaned = _CITATION_COMMENT_RE.sub("", text)
+    cleaned = _CONFIDENCE_LABEL_RE.sub("", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).rstrip()
-    return cleaned, citations
+    return cleaned, citations, confidence_labels
 
 
 # ============================================================================
@@ -631,7 +640,9 @@ class LLMSearchManager:
                         content=json.dumps(result_dict), tool_call_id=tc.id
                     )
             else:
-                cleaned_content, citations = _strip_internal_citations(assistant_message.content or "")
+                cleaned_content, citations, confidence_labels = _strip_internal_citations(
+                    assistant_message.content or ""
+                )
                 if debug_info is not None:
                     if iter_debug is not None:
                         debug_info["iterations"].append(iter_debug)
@@ -639,6 +650,7 @@ class LLMSearchManager:
                     debug_info["total_iterations"] = iteration + 1
                     debug_info["total_elapsed_ms"] = int((time.time() - process_start) * 1000)
                     debug_info["internal_citations"] = citations
+                    debug_info["confidence_labels"] = confidence_labels
                 return cleaned_content, total_tool_calls, sources, debug_info
             
             if debug_info is not None and iter_debug is not None:

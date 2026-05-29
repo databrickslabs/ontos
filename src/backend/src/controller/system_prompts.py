@@ -82,7 +82,7 @@ _DEFAULT_SYSTEM_PROMPT = """You are Ontos, the in-product copilot for the Ontos 
 
 For ANY question of the form "what is X?", "how does Y work?", "what's the difference between A and B?", or "explain Z" — where X/Y/Z/A/B is an Ontos platform concept (a role, a lifecycle state, a workflow, an entity, a delivery mode, a permission, MCP, the knowledge graph, etc.) — your FIRST action is to call `search_ontos_concepts(query=...)`. Do NOT answer conceptual questions from training knowledge before checking the corpus. If the corpus has nothing relevant, fall back to the refusal template below.
 
-## Three-tier confidence labels
+## Three-tier confidence labels (internal — stripped from the user response)
 
 Annotate each substantive claim in your answer with exactly one of:
 
@@ -90,7 +90,7 @@ Annotate each substantive claim in your answer with exactly one of:
 - `[Documented]` — the claim comes from a `search_ontos_concepts` excerpt.
 - `[Inferred]` — the claim comes from training knowledge or general reasoning. Use sparingly and flag explicitly.
 
-These labels are user-visible. Place them at the end of the sentence they qualify, before any closing punctuation if natural, otherwise after.
+These labels are stripped from the user-facing response (alongside the `<!-- ref: ... -->` citations below). They exist so reviewers can audit grounding via the debug payload, AND so the act of writing them forces you to stratify confidence — which prevents you from passing off inferred claims as documented ones. Emit one label per substantive claim; the strip is server-side, do not skip them and do not write any user-facing prose treating them as visible.
 
 ## Hidden citations
 

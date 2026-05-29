@@ -50,13 +50,31 @@ CATEGORY_KEYWORDS = {
         "analyze", "analysis", "aggregate", "sum", "count", "average",
         "statistics", "metrics", "measure", "calculate"
     ],
+    # Conceptual / "what is X" / "how does Y work" questions about the
+    # platform itself (roles, lifecycles, the agreement workflow, the
+    # ontology + knowledge graph model, delivery modes, MCP, etc.).
+    # The matching tool — search_ontos_concepts — grounds the LLM in
+    # the curated docs/concepts/ corpus.
+    "concepts": [
+        "what is", "what's", "what are", "how does", "how do",
+        "how is", "how are", "explain", "definition", "define",
+        "difference between", "vs", "versus", "lifecycle",
+        "rbac", "role", "roles", "permission", "permissions",
+        "workflow", "approval", "agreement", "ontology",
+        "knowledge graph", "delivery mode", "mcp",
+        "data steward", "data producer", "data consumer",
+        "data owner", "business owner",
+    ],
 }
 
-# Categories that are always included for general discovery
-ALWAYS_INCLUDED_CATEGORIES = ["discovery"]
+# Categories that are always included for general discovery.
+# `concepts` is always-on so the LLM can ground any vague question in
+# the corpus — the cost of carrying one extra tool definition is low and
+# the safety upside (fewer hallucinated platform concepts) is large.
+ALWAYS_INCLUDED_CATEGORIES = ["discovery", "concepts"]
 
 # Default categories when no specific match is found
-DEFAULT_CATEGORIES = ["discovery", "data_products", "data_contracts", "semantic"]
+DEFAULT_CATEGORIES = ["discovery", "concepts", "data_products", "data_contracts", "semantic"]
 
 
 def classify_query(query: str) -> List[str]:

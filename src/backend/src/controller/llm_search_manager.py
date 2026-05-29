@@ -7,6 +7,7 @@ business questions about data products, glossary terms, costs, and analytics.
 """
 
 import json
+import re
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
@@ -26,6 +27,28 @@ from src.models.llm_search import (
 from src.tools import ToolRegistry, ToolContext, create_default_registry
 
 logger = get_logger(__name__)
+
+
+# Internal citation markers — the system prompt instructs the model to emit
+# `<!-- ref: file.md#anchor -->` comments to anchor conceptual answers in the
+# docs/concepts/ corpus. Most markdown renderers drop HTML comments on render,
+# but the chat UI surfaces them as raw text. Strip server-side as a safety net.
+# Capture refs for audit (debug_info["internal_citations"]).
+_CITATION_COMMENT_RE = re.compile(r"<!--\s*ref:\s*([^>]+?)\s*-->")
+
+
+def _strip_internal_citations(text: str) -> Tuple[str, List[str]]:
+    """Remove <!-- ref: ... --> comments and return cleaned text + citation list.
+
+    Returns (cleaned_text, citations). The cleaned text has the markers removed
+    and any triple-newlines created by the strip collapsed back to doubles.
+    """
+    if not text:
+        return text, []
+    citations = [m.strip() for m in _CITATION_COMMENT_RE.findall(text)]
+    cleaned = _CITATION_COMMENT_RE.sub("", text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).rstrip()
+    return cleaned, citations
 
 
 # ============================================================================
@@ -608,13 +631,15 @@ class LLMSearchManager:
                         content=json.dumps(result_dict), tool_call_id=tc.id
                     )
             else:
+                cleaned_content, citations = _strip_internal_citations(assistant_message.content or "")
                 if debug_info is not None:
                     if iter_debug is not None:
                         debug_info["iterations"].append(iter_debug)
                     debug_info["total_tool_calls"] = total_tool_calls
                     debug_info["total_iterations"] = iteration + 1
                     debug_info["total_elapsed_ms"] = int((time.time() - process_start) * 1000)
-                return assistant_message.content or "", total_tool_calls, sources, debug_info
+                    debug_info["internal_citations"] = citations
+                return cleaned_content, total_tool_calls, sources, debug_info
             
             if debug_info is not None and iter_debug is not None:
                 debug_info["iterations"].append(iter_debug)

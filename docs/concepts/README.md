@@ -91,6 +91,7 @@ Authoring rules for citation-ready sections:
 | [data-quality.md](data-quality.md) | ODCS quality definitions, per-entity quality items, DQX end-to-end flow, source enums, surfacing, common questions |
 | [end-to-end-flows.md](end-to-end-flows.md) | Bottom-up flow (UC → product → contract → concept), top-down flow (ontology → assets → tags), where they meet, common questions |
 | [entities-glossary.md](entities-glossary.md) | One-paragraph definitions of every first-class entity |
+| [installation-and-troubleshooting.md](installation-and-troubleshooting.md) | Distribution channels (Marketplace vs Git), first-install prerequisites, update workflow, alembic discipline, common UI errors users hit (request-role prompt, 403s, scope-missing, grant_permissions, sync layout), common questions |
 | [personas-quick-reference.md](personas-quick-reference.md) | Plain-language persona framings, pages they touch, what they ask Ask Ontos |
 
-_Last verified against codebase: 2026-05-28_
+_Last verified against codebase: 2026-05-29_

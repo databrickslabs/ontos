@@ -1,7 +1,7 @@
 """add_ontology_generation_runs
 
 Revision ID: g2_ontology_gen_runs
-Revises: f1_merge_aa9_e2
+Revises: j1_add_version_family_id
 Create Date: 2026-05-28
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSON
 
 revision: str = 'g2_ontology_gen_runs'
-down_revision: Union[str, None] = 'i1_workflow_version'
+down_revision: Union[str, None] = 'j1_add_version_family_id'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

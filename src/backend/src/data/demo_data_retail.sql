@@ -211,28 +211,21 @@ ON CONFLICT (project_id, team_id) DO NOTHING;
 -- 4. DATA CONTRACTS (type=004)
 -- ============================================================================
 
-INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, domain_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at) VALUES
+INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, domain_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at, version_family_id) VALUES
 -- Customer Data Contract
-('00400001-0000-4000-8000-000000000001', 'Customer Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0000-4000-8000-000000000001', '00000007-0000-4000-8000-000000000007', 'Core customer data contract defining customer profile, preferences, and transaction history', 'Customer master data to power user-facing apps, analytics, and marketing campaigns', 'Emails must be validated; PII must be encrypted at rest; data retention 7 years max', 'org', 'system@demo', 'system@demo', NOW(), NOW()),
-
+('00400001-0000-4000-8000-000000000001', 'Customer Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0000-4000-8000-000000000001', '00000007-0000-4000-8000-000000000007', 'Core customer data contract defining customer profile, preferences, and transaction history', 'Customer master data to power user-facing apps, analytics, and marketing campaigns', 'Emails must be validated; PII must be encrypted at rest; data retention 7 years max', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400001-0000-4000-8000-000000000001'),
 -- Product Catalog Contract
-('00400002-0000-4000-8000-000000000002', 'Product Catalog Contract', 'DataContract', 'v3.1.0', '1.0.0', 'deprecated', false, '00100002-0000-4000-8000-000000000002', '00000008-0000-4000-8000-000000000008', 'Complete product catalog with categories, inventory, pricing, and vendor information', 'Power e-commerce platform, merchandising experiences, and inventory management', 'Price values must be non-negative; SKUs must be unique; inventory counts must be integers', 'none', 'system@demo', 'system@demo', NOW(), NOW()),
-
+('00400002-0000-4000-8000-000000000002', 'Product Catalog Contract', 'DataContract', 'v3.1.0', '1.0.0', 'deprecated', false, '00100002-0000-4000-8000-000000000002', '00000008-0000-4000-8000-000000000008', 'Complete product catalog with categories, inventory, pricing, and vendor information', 'Power e-commerce platform, merchandising experiences, and inventory management', 'Price values must be non-negative; SKUs must be unique; inventory counts must be integers', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400002-0000-4000-8000-000000000002'),
 -- Data Sharing Agreement
-('00400003-0000-4000-8000-000000000003', 'Data Sharing Agreement', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100004-0000-4000-8000-000000000004', '0000000b-0000-4000-8000-000000000011', 'Legal agreement for data sharing between Analytics and Marketing', 'Enables sharing of aggregated analytics for campaign optimization', 'No external sharing; PII must be masked; delete after 90 days', 'org', 'system@demo', 'system@demo', NOW(), NOW()),
-
+('00400003-0000-4000-8000-000000000003', 'Data Sharing Agreement', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100004-0000-4000-8000-000000000004', '0000000b-0000-4000-8000-000000000011', 'Legal agreement for data sharing between Analytics and Marketing', 'Enables sharing of aggregated analytics for campaign optimization', 'No external sharing; PII must be masked; delete after 90 days', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400003-0000-4000-8000-000000000003'),
 -- IoT Device Data Contract
-('00400004-0000-4000-8000-000000000004', 'IoT Device Data Contract', 'DataContract', 'v3.1.0', '1.1.0', 'active', true, '00100003-0000-4000-8000-000000000003', '0000000a-0000-4000-8000-000000000010', 'Comprehensive IoT device management and telemetry data for smart building systems', 'Monitor device health, performance, and environmental data in near real-time for predictive maintenance and energy optimization', 'Timestamps must be UTC; numeric telemetry must be within calibrated device ranges; data retention 2 years max', 'org', 'system@demo', 'system@demo', NOW(), NOW()),
-
+('00400004-0000-4000-8000-000000000004', 'IoT Device Data Contract', 'DataContract', 'v3.1.0', '1.1.0', 'active', true, '00100003-0000-4000-8000-000000000003', '0000000a-0000-4000-8000-000000000010', 'Comprehensive IoT device management and telemetry data for smart building systems', 'Monitor device health, performance, and environmental data in near real-time for predictive maintenance and energy optimization', 'Timestamps must be UTC; numeric telemetry must be within calibrated device ranges; data retention 2 years max', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400004-0000-4000-8000-000000000004'),
 -- IoT Sensor Data Contract (retired)
-('00400005-0000-4000-8000-000000000005', 'IoT Sensor Data Contract', 'DataContract', 'v3.1.0', '2.0.0', 'retired', false, '00100003-0000-4000-8000-000000000003', '0000000a-0000-4000-8000-000000000010', 'Real-time IoT sensor data from manufacturing floor', 'Stream analytics and anomaly detection', 'Primary key is (sensor_id, timestamp)', 'none', 'system@demo', 'system@demo', NOW(), NOW()),
-
+('00400005-0000-4000-8000-000000000005', 'IoT Sensor Data Contract', 'DataContract', 'v3.1.0', '2.0.0', 'retired', false, '00100003-0000-4000-8000-000000000003', '0000000a-0000-4000-8000-000000000010', 'Real-time IoT sensor data from manufacturing floor', 'Stream analytics and anomaly detection', 'Primary key is (sensor_id, timestamp)', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400005-0000-4000-8000-000000000005'),
 -- Financial Transactions Contract
-('00400006-0000-4000-8000-000000000006', 'Financial Transactions Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100004-0000-4000-8000-000000000004', '00000002-0000-4000-8000-000000000002', 'Daily financial transaction data', 'Reconciliation, accounting, and reporting', 'Amount must be >= 0; currency must be ISO-4217', 'none', 'system@demo', 'system@demo', NOW(), NOW()),
-
+('00400006-0000-4000-8000-000000000006', 'Financial Transactions Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100004-0000-4000-8000-000000000004', '00000002-0000-4000-8000-000000000002', 'Daily financial transaction data', 'Reconciliation, accounting, and reporting', 'Amount must be >= 0; currency must be ISO-4217', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400006-0000-4000-8000-000000000006'),
 -- Inventory Management Contract
-('00400007-0000-4000-8000-000000000007', 'Inventory Management Contract', 'DataContract', 'v3.1.0', '1.2.0', 'deprecated', false, '00100002-0000-4000-8000-000000000002', '00000006-0000-4000-8000-000000000006', 'Real-time inventory levels and movements', 'Track stock levels across warehouses', 'Quantity must be integer >= 0', 'none', 'system@demo', 'system@demo', NOW(), NOW())
-
+('00400007-0000-4000-8000-000000000007', 'Inventory Management Contract', 'DataContract', 'v3.1.0', '1.2.0', 'deprecated', false, '00100002-0000-4000-8000-000000000002', '00000006-0000-4000-8000-000000000006', 'Real-time inventory levels and movements', 'Track stock levels across warehouses', 'Quantity must be integer >= 0', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400007-0000-4000-8000-000000000007')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -285,15 +278,14 @@ ON CONFLICT (id) DO NOTHING;
 -- 5. DATA PRODUCTS (type=007)
 -- ============================================================================
 
-INSERT INTO data_products (id, api_version, kind, status, name, version, domain, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at) VALUES
-('00700001-0000-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'POS Transaction Stream v1', '1.0.0', 'Retail Operations', 'retail-demo', '00100001-0000-4000-8000-000000000001', 99, true, 'org', NOW(), NOW()),
-('00700002-0000-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'Prepared Sales Transactions v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100001-0000-4000-8000-000000000001', 99, true, 'org', NOW(), NOW()),
-('00700003-0000-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'Demand Forecast Model Output v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100002-0000-4000-8000-000000000002', 99, true, 'org', NOW(), NOW()),
-('00700004-0000-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Inventory Optimization Recommendations v1', '1.0.0', 'Supply Chain', 'retail-demo', '00100001-0000-4000-8000-000000000001', 99, true, 'org', NOW(), NOW()),
-('00700005-0000-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Price Optimization Model Output v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100002-0000-4000-8000-000000000002', 99, true, 'org', NOW(), NOW()),
-('00700006-0000-4000-8000-000000000006', 'v1.0.0', 'DataProduct', 'active', 'Customer Marketing Recommendations v1', '1.0.0', 'Marketing', 'retail-demo', '00100004-0000-4000-8000-000000000004', 99, true, 'org', NOW(), NOW()),
-('00700007-0000-4000-8000-000000000007', 'v1.0.0', 'DataProduct', 'active', 'Retail Performance Dashboard Data v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100002-0000-4000-8000-000000000002', 99, true, 'org', NOW(), NOW())
-
+INSERT INTO data_products (id, api_version, kind, status, name, version, domain, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at, version_family_id) VALUES
+('00700001-0000-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'POS Transaction Stream v1', '1.0.0', 'Retail Operations', 'retail-demo', '00100001-0000-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700001-0000-4000-8000-000000000001'),
+('00700002-0000-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'Prepared Sales Transactions v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100001-0000-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700002-0000-4000-8000-000000000002'),
+('00700003-0000-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'Demand Forecast Model Output v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100002-0000-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700003-0000-4000-8000-000000000003'),
+('00700004-0000-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Inventory Optimization Recommendations v1', '1.0.0', 'Supply Chain', 'retail-demo', '00100001-0000-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700004-0000-4000-8000-000000000004'),
+('00700005-0000-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Price Optimization Model Output v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100002-0000-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700005-0000-4000-8000-000000000005'),
+('00700006-0000-4000-8000-000000000006', 'v1.0.0', 'DataProduct', 'active', 'Customer Marketing Recommendations v1', '1.0.0', 'Marketing', 'retail-demo', '00100004-0000-4000-8000-000000000004', 99, true, 'org', NOW(), NOW(), '00700006-0000-4000-8000-000000000006'),
+('00700007-0000-4000-8000-000000000007', 'v1.0.0', 'DataProduct', 'active', 'Retail Performance Dashboard Data v1', '1.0.0', 'Retail Analytics', 'retail-demo', '00100002-0000-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700007-0000-4000-8000-000000000007')
 ON CONFLICT (id) DO NOTHING;
 
 

@@ -1,0 +1,84 @@
+# Deterministic seed for visibility matrix harnesses (Tier 2 live + docs).
+# Tier 1 in-process tests mirror these keys in test_visibility_matrix.py fixtures.
+#
+# Teams A/B; projects P1 (Team A only), P2 (Teams A+B).
+
+teams:
+  - key: team_a
+    name: matrix-team-a
+    members:
+      - email: matrix-producer-a@test.local
+        member_type: user
+  - key: team_b
+    name: matrix-team-b
+    members:
+      - email: matrix-consumer-b@test.local
+        member_type: user
+
+projects:
+  - key: project_p1
+    name: matrix-project-p1
+    owner_team_key: team_a
+    assigned_teams: [team_a]
+  - key: project_p2
+    name: matrix-project-p2
+    owner_team_key: team_b
+    assigned_teams: [team_a, team_b]
+
+data_products:
+  - key: dp_orphan
+    name: matrix-dp-orphan
+  - key: dp_project_p1
+    name: matrix-dp-p1
+    project_key: project_p1
+  - key: dp_team_a
+    name: matrix-dp-team-a
+    owner_team_key: team_a
+  - key: dp_draft_producer
+    name: matrix-dp-draft-producer
+    draft_owner_email: matrix-producer-a@test.local
+    status: draft
+
+data_contracts:
+  - key: dc_project_p2
+    name: matrix-dc-p2
+    project_key: project_p2
+    version_family_id: matrix-dc-family-p2
+  - key: dc_null_project
+    name: matrix-dc-null-project
+    project_key: null
+    version_family_id: matrix-dc-family-null
+  - key: dc_draft_producer
+    name: matrix-dc-draft-producer
+    draft_owner_email: matrix-producer-a@test.local
+    version_family_id: matrix-dc-family-draft
+  - key: dc_published
+    name: matrix-dc-published
+    publication_scope: domain
+    version_family_id: matrix-dc-family-pub
+
+asset_reviews:
+  - key: ar_project_p2
+    name: matrix-ar-p2
+    project_key: project_p2
+
+comments:
+  - key: comment_dp_p1
+    entity_type: data_product
+    entity_seed_key: dp_project_p1
+    body: matrix visibility comment
+
+mdm_configs:
+  - key: mdm_p2
+    name: matrix-mdm-p2
+    project_key: project_p2
+
+workflows:
+  - key: workflow_p1
+    name: matrix-workflow-p1
+    project_key: project_p1
+
+glossary_collections:
+  - key: glossary_collection
+    name: matrix-glossary-collection
+    scope_level: team

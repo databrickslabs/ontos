@@ -11,7 +11,7 @@ scope:
 
 1. Endpoints are grouped by resource in `src/backend/src/routes/`. Routes are thin — delegate to managers.
 2. Use **FastAPI dependency injection** (via `Depends`) for sessions, managers, settings, and the workspace client. Singletons live in `request.app.state`.
-3. **Authorization**: Implemented via `src/backend/src/common/authorization.py` (`PermissionChecker` dependency) based on user groups and role definitions stored in the database (managed by `SettingsManager` and `AuthorizationManager`). User details (including groups) are fetched via the Databricks SDK (`src/backend/src/controller/users_manager.py` + `common/authorization.py`). Permissions are defined in `src/backend/src/common/features.py`.
+3. **Authorization**: Implemented via `src/backend/src/common/authorization.py` (`PermissionChecker` dependency) based on user groups and role definitions stored in the database (managed by `SettingsManager` and `AuthorizationManager`). User details (including groups) are fetched via the Databricks SDK (`src/backend/src/controller/users_manager.py` + `common/authorization.py`). Permissions are defined in `src/backend/src/common/features.py`. For the canonical scenario matrix of who-sees-what across all entities (Owner / Project / Team / Role / publication state), see [`docs/visibility-rules.md`](../../docs/visibility-rules.md).
 4. **Configuration**: Managed by `src/backend/src/common/config.py` using Pydantic's `BaseSettings`, loading from `.env` and environment variables.
 5. **Search**: Managers implement `SearchableAsset` and use `@searchable_asset`. `SearchManager` collects items and exposes the search endpoint.
 

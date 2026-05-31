@@ -600,6 +600,13 @@ curl -H "X-Test-Token: <your-token>" \
 See `src/backend/src/tests/integration/test_user_header_override.py` for
 worked examples.
 
+For the authoritative scenario matrix exercised by these test headers
+(who sees what across every feature, by Owner / Project / Team / Role /
+publication state), see [`docs/visibility-rules.md`](docs/visibility-rules.md).
+The in-process and live persona-driven matrix harnesses live at
+`src/backend/tests/integration/test_visibility_matrix.py` and
+`src/backend/tests/e2e/test_visibility_matrix_live.py`.
+
 ---
 
 ## License

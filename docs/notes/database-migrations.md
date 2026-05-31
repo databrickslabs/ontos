@@ -350,12 +350,81 @@ When `init_db()` runs (application startup):
 
 ### Migration Naming Convention
 
+#### Alembic default
+
 Alembic generates file names like:
 ```
 <revision_id>_<message_slug>.py
 ```
 
 Example: `3135632d55e1_initial_schema_capture.py`
+
+The 12-char hex `<revision_id>` is the value stored in the `revision`
+variable inside the file and recorded in the `alembic_version` table.
+Older migrations in this repo (e.g. `3135632d55e1_*`, `h8355d269ff1_*`,
+`o5022k936mm8_*`) use this default form.
+
+#### Project shorthand: `<letter><number>_<slug>.py`
+
+Starting with the ontology-driven data-model rewrite (`a1_dataset_to_asset_migration.py`),
+this project switched to a human-friendly short-id convention:
+
+```
+<letter><number>_<slug>.py
+```
+
+Examples: `a1_dataset_to_asset_migration.py`, `b2_add_cert_pub_to_contracts.py`,
+`g1_add_workflow_snapshot.py`, `j1_add_version_family_id.py`.
+
+The two parts encode:
+
+- **Letter** (`a`, `b`, `c`, …) — a roughly chronological **cohort / wave**
+  of related migrations. A new letter is picked when a new feature wave
+  starts. Historical waves so far: `a*` = asset/ontology rewrite,
+  `b*` = certification + publication scope, `c*` = legacy-dataset cleanup,
+  `d*` = ODCS v3.1.0 persistence, `e*` = semantic-models display names,
+  `f*` = merge revision (`f1_merge_aa9_e2_heads`), `g*` = workflow
+  snapshot, `h*` = consumer-principals / wizard OBO, `i*` = workflow_version
+  backfill, `j*` = version_family_id.
+- **Number** — order within that wave (`a1`, `a2`, `a3`, …, `a9`).
+
+**Merge revisions** (created via `alembic merge -m '...' <head_a> <head_b>`)
+get the next letter and a `merge_<head_a>_<head_b>` slug. Example:
+`f1_merge_aa9_e2_heads.py` merges `aa9_is_approver` and `e2_semantic_display_name`.
+
+#### What to use for new migrations
+
+When adding a new migration, prefer the project shorthand:
+
+1. Generate the file: `hatch -e dev run alembic revision -m '<message>'`
+2. **Rename** the file from the default `<hex>_<slug>.py` to
+   `<letter><number>_<slug>.py`. Pick the letter:
+   - **Same wave** as the previous head → bump the number
+     (after `j1_add_version_family_id`, the next would be `j2_…`).
+   - **New themed wave** → next unused letter (after `j*`, start `k1_…`).
+3. **Update the `revision` variable** inside the file to match the short
+   id (e.g. `revision = 'j2_my_change'`). The filename prefix is cosmetic,
+   but the `revision` string is what Alembic stores and what `down_revision`
+   in subsequent migrations must reference.
+4. Update the docstring header (`Revision ID: …` and `Revises: …`) to
+   match.
+5. Set `down_revision` to the **current head** (run `hatch -e dev run alembic heads`).
+
+#### Caveats
+
+- **Alembic only cares about `revision` uniqueness.** The `<letter><number>`
+  prefix is purely a project convention; nothing in Alembic, CI, or the
+  app enforces it. The hard rules enforced by CI are:
+  - exactly **one head** at all times (`check-alembic-heads` job in
+    `.github/workflows/test-coverage.yml`), and
+  - every migration's `down_revision` resolves to a known revision.
+- **Filename prefix vs `revision` string must agree.** If you rename the
+  file but forget to update `revision = '...'`, descendants will still
+  work (they reference the string, not the filename), but humans will be
+  badly confused. Keep them in sync.
+- A few historical migrations slipped through with mixed forms
+  (`u1688q602tt5_*`, `r8355n269pp2_*`, etc.) — these are old and
+  intentionally not renamed to avoid breaking the chain.
 
 ## Getting Help
 

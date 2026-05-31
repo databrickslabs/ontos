@@ -1,0 +1,47 @@
+---
+name: Database Migrations
+priority: 65
+scope:
+  globs:
+    - "src/backend/alembic/**"
+    - "src/backend/src/db_models/**"
+---
+
+### Alembic migrations
+
+Full reference: [`docs/notes/database-migrations.md`](../../docs/notes/database-migrations.md).
+
+**Hard rules (CI-enforced)**
+
+- Exactly **one head** at all times. The `check-alembic-heads` job in `.github/workflows/test-coverage.yml` runs `scripts/check-alembic-heads.py` and will fail the PR otherwise.
+- Always **rebase onto the current base branch first**, then run `alembic revision -m '<message>'` so the new revision descends from the live head (`hatch -e dev run alembic heads`).
+- A genuine multi-head merge requires `alembic merge -m 'merge heads' <head_a> <head_b>` plus the `alembic-branch` PR label to bypass the gate.
+
+**Project convention: short revision ids**
+
+Migrations live in `src/backend/alembic/versions/` and use a `<letter><number>_<slug>.py` shorthand instead of Alembic's default 12-char hex slug.
+
+- **Letter** = chronological feature wave. Current waves: `a*` (ontology rewrite), `b*` (cert/publication), `c*` (legacy-dataset cleanup), `d*` (ODCS v3.1.0), `e*` (semantic display), `f*` (merge), `g*` (workflow snapshot), `h*` (consumer principals), `i*` (workflow_version), `j*` (version_family_id).
+- **Number** = order within the wave (`a1`, `a2`, …).
+- Merge revisions: `<next_letter>1_merge_<head_a>_<head_b>.py` (see `f1_merge_aa9_e2_heads.py`).
+
+**Workflow when adding a migration**
+
+1. Rebase the branch onto `main`.
+2. `cd src/backend && hatch -e dev run alembic heads` — note the current head (e.g. `j1_add_version_family_id`).
+3. `hatch -e dev run alembic revision -m '<message>'` (or `--autogenerate` and review).
+4. **Rename the file** from the default `<hex>_<slug>.py` to `<letter><number>_<slug>.py`:
+   - Same wave → bump the number (after `j1_…`, use `j2_…`).
+   - New themed wave → next unused letter (after `j*`, start `k1_…`).
+5. **Inside the file**, update *all three* in lockstep:
+   - `revision = '<letter><number>_<slug>'` (this is what Alembic actually stores)
+   - `down_revision = '<current_head_revision>'`
+   - Docstring header `Revision ID:` and `Revises:` lines
+6. Verify: `hatch -e dev run alembic heads` → must report a single head equal to your new revision; `alembic history` → must show your revision descending from the previous head.
+
+**Common pitfalls**
+
+- The **filename prefix is cosmetic**; only the `revision` string variable matters for chain integrity. Keep them in sync regardless.
+- `down_revision` must point at the **current live head**, not a historical one. A stale `down_revision` (e.g. on a long-running branch) creates a second head after merge and breaks CI.
+- Don't rename historical migrations — descendants reference their `revision` strings and renaming the variable will orphan them.
+- Postgres-specific column types (`from sqlalchemy.dialects.postgresql import JSON`) are fine; the project deploys on Postgres.

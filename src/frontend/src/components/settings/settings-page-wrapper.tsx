@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Loader2, ShieldX } from 'lucide-react';
+import { ShieldX } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import usePermissionsStore, { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { SettingsFormSkeleton } from '@/components/common/list-view-skeleton';
 
 interface SettingsPageWrapperProps {
   title: string;
@@ -48,11 +49,10 @@ export default function SettingsPageWrapper({ title, permissionId, children }: S
   }, [title, setStaticSegments, setDynamicTitle]);
 
   if (permissionsLoading || isInitializing || !initAttempted) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    // Render a generic settings form skeleton while permissions resolve.
+    // Individual settings pages render their own content-shaped skeletons
+    // afterwards if they have additional async loads.
+    return <SettingsFormSkeleton sections={2} fieldsPerSection={3} />;
   }
 
   if (!hasSettingsAccess) {

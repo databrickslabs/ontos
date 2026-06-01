@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Save, Settings } from 'lucide-react';
+import { SettingsFormSkeleton } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useToast } from '@/hooks/use-toast';
@@ -107,6 +108,21 @@ export default function GeneralSettings() {
     const { name, value } = e.target;
     setSettings(prev => ({ ...prev, [name]: value }));
   };
+
+  if (isLoading) {
+    return (
+      <>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Settings className="w-8 h-8" />
+            {t('settings:general.title')}
+          </h1>
+          <p className="text-muted-foreground mt-1">{t('settings:general.description')}</p>
+        </div>
+        <SettingsFormSkeleton sections={3} fieldsPerSection={3} showTitle={false} />
+      </>
+    );
+  }
 
   return (
     <>

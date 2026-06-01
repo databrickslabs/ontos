@@ -4,6 +4,7 @@ import { BookOpenCheck, ChevronRight } from 'lucide-react';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { DocViewerSkeleton } from '@/components/common/list-view-skeleton';
 
 // Helper function to slugify text for anchor IDs
 function slugify(text: string): string {
@@ -144,7 +145,7 @@ export default function UserGuide() {
           <BookOpenCheck className="w-8 h-8" />
           <h1 className="text-4xl font-bold">User Guide</h1>
         </div>
-        <div className="text-muted-foreground">{t('labels.loadingUserGuide')}</div>
+        <DocViewerSkeleton showTitle={false} proseRows={14} />
       </div>
     );
   }

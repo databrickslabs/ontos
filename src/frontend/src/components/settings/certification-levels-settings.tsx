@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Pencil, Trash2, Shield, ShieldCheck, Loader2 } from 'lucide-react';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -197,11 +198,7 @@ export default function CertificationLevelsSettings() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <ListItemSkeleton count={3} height="h-20" className="space-y-2" />;
   }
 
   return (

@@ -128,6 +128,7 @@ import {
 import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
 import { EntityTypeMultiselect } from './entity-type-multiselect';
 import { PrincipalPicker } from '@/components/common/principal-picker';
+import { WorkflowCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import {
   joinRoleAndPrincipals,
   splitRoleAndPrincipals,
@@ -1448,8 +1449,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="py-6 space-y-4 h-[calc(100vh-120px)] flex flex-col">
+        <WorkflowCanvasSkeleton showSidebar height="flex-1" />
       </div>
     );
   }

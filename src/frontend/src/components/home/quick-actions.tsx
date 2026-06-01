@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { features, type FeatureGroup } from '@/config/features';
+import { SkeletonLine } from '@/components/common/list-view-skeleton';
 
 interface QuickAction {
   name: string;
@@ -85,7 +86,17 @@ export default function QuickActions() {
   const visibleGroups = groupOrder.filter(group => groupedActions[group]?.length);
 
   if (permissionsLoading) {
-    return <div className="text-sm text-muted-foreground">{t('home:quickActions.loading')}</div>;
+    return (
+      <div className="space-y-4 p-6">
+        <SkeletonLine height="h-3" width="w-24" />
+        <div className="grid grid-cols-2 gap-2">
+          <SkeletonLine height="h-10" />
+          <SkeletonLine height="h-10" />
+          <SkeletonLine height="h-10" />
+          <SkeletonLine height="h-10" />
+        </div>
+      </div>
+    );
   }
 
   if (actions.length === 0) {

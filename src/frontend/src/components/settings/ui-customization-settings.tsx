@@ -27,6 +27,10 @@ import {
 } from 'lucide-react';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import {
+  CardSkeleton,
+  SkeletonLine,
+} from '@/components/common/list-view-skeleton';
 import { DEFAULT_APP_NAME } from '@/lib/branding';
 
 const APP_DISPLAY_NAME_MAX_LEN = 64;
@@ -190,9 +194,13 @@ export default function UICustomizationSettings() {
   const validateLogoUrl = validateImageUrl;
 
   if (isLoading) {
+    // Multi-section skeleton: tab strip + branding/theme/home customization cards
     return (
-      <div className="flex items-center justify-center py-10">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-6">
+        <SkeletonLine height="h-10" width="w-full" className="max-w-md" />
+        <CardSkeleton titleWidth="w-40" descriptionWidth="w-72" contentRows={4} />
+        <CardSkeleton titleWidth="w-32" descriptionWidth="w-64" contentRows={3} />
+        <CardSkeleton titleWidth="w-48" descriptionWidth="w-80" contentRows={5} />
       </div>
     );
   }

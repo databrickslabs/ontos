@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, ArrowRightCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, ArrowRightCircle } from 'lucide-react';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -76,7 +77,7 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
       <Card>
         <CardContent className="p-6">
           {loading ? (
-            <div className="flex items-center justify-center h-24"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            <ListItemSkeleton count={4} height="h-10" className="space-y-2" />
           ) : error ? (
             <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>
           ) : entries.length === 0 ? (

@@ -64,6 +64,7 @@ import {
   Cpu,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import { TableSkeleton } from '@/components/common/list-view-skeleton';
 import {
   MCPTokenInfo,
   MCPTokenList,
@@ -289,9 +290,7 @@ export default function MCPTokensSettings() {
 
         {/* Tokens Table */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
+          <TableSkeleton columns={6} rows={4} />
         ) : tokens.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Key className="h-12 w-12 mx-auto mb-4 opacity-50" />

@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import SearchBar from '@/components/ui/search-bar';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { TileGridSkeleton } from '@/components/common/list-view-skeleton';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel, HomeSection } from '@/types/settings';
@@ -87,9 +88,7 @@ export default function Home() {
           <div className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">{t('home:overview.title')}</h2>
             {permissionsLoading ? (
-              <div className="flex justify-center items-center h-24 col-span-full">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
+              <TileGridSkeleton count={8} columns={4} tileHeight="h-32" />
             ) : availableTiles.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {availableTiles.map((tile) => (

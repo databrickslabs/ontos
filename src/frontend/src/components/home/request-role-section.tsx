@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield, UserPlus, Info } from 'lucide-react';
+import { Shield, UserPlus, Info } from 'lucide-react';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { AppRole } from '@/types/settings';
 import RequestRoleAccessDialog from '@/components/settings/request-role-access-dialog';
@@ -30,8 +31,8 @@ export default function RequestRoleSection({ maxItems = 6 }: RequestRoleSectionP
       <section className="mb-16">
         <h2 className="text-2xl font-semibold mb-4">{t('requestRoleSection.title', 'Roles')}</h2>
         <Card>
-          <CardContent className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <CardContent className="py-6">
+            <ListItemSkeleton count={3} height="h-12" className="space-y-2" />
           </CardContent>
         </Card>
       </section>

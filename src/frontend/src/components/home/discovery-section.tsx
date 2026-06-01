@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Database, BoxSelect, Star, AlertCircle, Info, Bell } from 'lucide-react';
+import { CardSkeleton, SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { Link } from 'react-router-dom';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import SubscribeDialog from '@/components/data-products/subscribe-dialog';
@@ -257,9 +258,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
         </div>
 
         {domainsLoading || domainLoading ? (
-          <div style={{ height: 220, margin: 'auto' }} className="border rounded-lg overflow-hidden bg-muted/20 w-full flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
+          <SkeletonBlock height="h-[220px]" className="rounded-lg" />
         ) : domainError ? (
           <div style={{ height: 220, margin: 'auto' }} className="border rounded-lg overflow-hidden bg-muted/20 w-full flex items-center justify-center">
             <Alert variant="destructive" className="m-0 border-0 bg-transparent">
@@ -358,7 +357,11 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
       <div>
         <div className="flex items-center gap-2 mb-3"><Star className="h-5 w-5 text-primary" /><span className="font-medium">{t('discoverySection.popularProducts')}</span></div>
         {productsLoading ? (
-          <div className="flex items-center justify-center h-32"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <CardSkeleton key={i} titleWidth="w-3/4" descriptionWidth="w-1/2" contentRows={2} />
+            ))}
+          </div>
         ) : productsError ? (
           <Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4" /><AlertDescription>{productsError}</AlertDescription></Alert>
         ) : filteredProducts.length === 0 ? (

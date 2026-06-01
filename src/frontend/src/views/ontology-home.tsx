@@ -4,8 +4,8 @@ import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
   Network,
-  Loader2,
 } from 'lucide-react';
+import { GraphCanvasSkeleton } from '@/components/common/list-view-skeleton';
 import type {
   OntologyConcept,
   GroupedConcepts,
@@ -197,8 +197,8 @@ export default function OntologyHomeView() {
 
       {/* Loading state */}
       {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div className="flex-1">
+          <GraphCanvasSkeleton showFilterPanel showToolbar={false} height="h-[600px]" />
         </div>
       ) : (
         <div className="flex-1 flex flex-col">

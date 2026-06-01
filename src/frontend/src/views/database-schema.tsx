@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/popover';
 import { Search, Download, Info } from 'lucide-react';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { GraphCanvasSkeleton } from '@/components/common/list-view-skeleton';
 
 // Types for our schema data
 interface Column {
@@ -344,14 +345,7 @@ export default function DatabaseSchema() {
   }, [schemaData]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[600px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">{t('database-schema:loading')}</p>
-        </div>
-      </div>
-    );
+    return <GraphCanvasSkeleton showToolbar height="h-[600px]" />;
   }
 
   if (error) {

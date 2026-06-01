@@ -14,6 +14,10 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plug2 } from 'lucide-react';
 
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
+import {
+  SettingsFormSkeleton,
+  SkeletonLine,
+} from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -213,10 +217,12 @@ export default function SettingsDirectoryView() {
   };
 
   if (loading) {
+    // Provider tabs + dynamic form fields + status row
     return (
       <SettingsPageWrapper title="Directory" permissionId="settings-directory">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        <div className="space-y-4">
+          <SkeletonLine height="h-9" width="w-72" />
+          <SettingsFormSkeleton sections={1} fieldsPerSection={4} showSaveBar={false} showTitle={false} />
         </div>
       </SettingsPageWrapper>
     );

@@ -6,6 +6,7 @@ import { AppRole, FeatureConfig, FeatureAccessLevel } from '@/types/settings'; /
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Pencil, Trash2, AlertCircle, ChevronDown, UserPlus, Shield } from 'lucide-react';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import RoleFormDialog from './role-form-dialog'; // Uncomment and import
 import RequestRoleAccessDialog from './request-role-access-dialog'; // Import role access request dialog
@@ -244,7 +245,7 @@ export default function RolesSettings() {
 
     // --- Render Logic ---
     if (isLoading) {
-        return <div className="flex justify-center items-center h-32"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+        return <ListItemSkeleton count={4} height="h-16" className="space-y-2" />;
     }
 
     if (error) {

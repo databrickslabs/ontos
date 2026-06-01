@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Link } from 'react-router-dom';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
@@ -136,7 +137,9 @@ export default function RequiredActionsSection() {
   return (
     <>
       {loadingApprovals || isLoading ? (
-        <div className="flex justify-center items-center h-32 p-6">{t('requiredActionsSection.loading')}</div>
+        <div className="p-6">
+          <ListItemSkeleton count={4} height="h-12" className="space-y-2" />
+        </div>
       ) : approvalsError ? (
         <div className="text-sm text-destructive p-6">{approvalsError}</div>
       ) : unifiedApprovals.length === 0 && actionItems.length === 0 ? (

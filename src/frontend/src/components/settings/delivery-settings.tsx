@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Save, Truck } from 'lucide-react';
+import { SettingsFormSkeleton } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useToast } from '@/hooks/use-toast';
@@ -84,6 +85,23 @@ export default function DeliverySettings() {
       setIsSaving(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Truck className="w-8 h-8" />
+            {t('settings:delivery.title', 'Delivery Modes')}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {t('settings:delivery.description', 'Configure how governance changes are propagated to external systems. Multiple modes can be active simultaneously.')}
+          </p>
+        </div>
+        <SettingsFormSkeleton sections={3} fieldsPerSection={1} showTitle={false} />
+      </>
+    );
+  }
 
   return (
     <>

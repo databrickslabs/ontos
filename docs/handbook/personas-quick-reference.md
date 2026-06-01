@@ -10,7 +10,9 @@ The framings below are in the persona's own voice. The questions are
 representative, not exhaustive — they shape ranking and disambiguation, not
 gating.
 
-## Admin {#admin}
+## What you see in Ontos
+
+### Admin {#admin}
 
 **What you do.** You own the deployment. Roles, workflows, integrations,
 demo data, the MCP token store — when something is broken, you're the
@@ -34,7 +36,7 @@ broken.
 Admins want grounded references to settings, role assignments,
 workflow definitions, and the underlying permission matrix.
 
-## Data Governance Officer {#data-governance-officer}
+### Data Governance Officer {#data-governance-officer}
 
 **What you do.** You see the whole catalog. Your job is to make sure
 products have domains, contracts have quality checks, PII fields are
@@ -58,7 +60,7 @@ Asset Reviews queue, the Glossary across all collections.
 A DGO answer often spans multiple entity types and benefits from
 links into the compliance and entitlements features.
 
-## Data Steward {#data-steward}
+### Data Steward {#data-steward}
 
 **What you do.** You curate a slice — usually a domain. You're the
 gatekeeper at two moments: when a contract is proposed for approval,
@@ -84,7 +86,7 @@ suggestions land), Semantic Links panels on products and contracts.
 A Steward wants action-oriented answers: what needs my attention,
 who should I escalate to, what's the current state.
 
-## Data Producer {#data-producer}
+### Data Producer {#data-producer}
 
 **What you do.** You build products and contracts. You spend your
 time on the detail pages — composing Deliverables, drafting schemas,
@@ -116,7 +118,7 @@ Producers benefit from concrete answers about lifecycle transitions,
 ODPS / ODCS field semantics, and what a workflow will do when
 triggered.
 
-## Data Consumer {#data-consumer}
+### Data Consumer {#data-consumer}
 
 **What you do.** You find products in the marketplace and request
 access. You don't draft anything — you subscribe, sign agreements,
@@ -140,7 +142,7 @@ view, the Notification center.
 Consumers want short, action-oriented answers and direct links to
 the request-access wizard.
 
-## Security Officer {#security-officer}
+### Security Officer {#security-officer}
 
 **What you do.** You configure security features, entitlement sync,
 and access classifications. You're consulted on contract approvals
@@ -164,7 +166,7 @@ should respect the persona's `Admin`-level access to
 security-features, entitlements, and entitlements-sync, with
 `Read-only` on data-asset-reviews.
 
-## Knowledge Engineer / Data Architect {#knowledge-engineer}
+### Knowledge Engineer / Data Architect {#knowledge-engineer}
 
 **What you do.** You author the ontology in OWL/TTL/SHACL externally
 and load it into Ontos. You decide what the canonical concepts are,
@@ -197,7 +199,9 @@ Knowledge Engineers expect technical, RDF-aware answers — saying
 "concept" when you mean concept, "term" when you mean term,
 distinguishing the source artifact from the runtime graph.
 
-## The empty-groups persona ("anon") {#anon}
+## Under the hood
+
+### The empty-groups persona ("anon") {#anon}
 
 Used in testing to exercise fully-denied paths. A request from a
 user with zero groups should resolve to no Ontos role and hit `None`

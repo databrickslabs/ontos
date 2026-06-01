@@ -13,7 +13,9 @@ This document covers the approval flavour and the agreement artifact it
 produces. The `grant_permissions` step is shared with process workflows
 and is explained in context.
 
-## Three concepts that get conflated {#three-concepts}
+## What you see in Ontos
+
+### Three concepts that get conflated {#three-concepts}
 
 Customers (and reviewers, and sub-agents writing code against the API)
 often slur three different things together. They are distinct.
@@ -31,7 +33,7 @@ step. Wizard sessions are the user-facing surface for in-flight approval
 workflows; workflow executions are the lower-level state tracker that
 both process and approval workflows write to.
 
-## What an agreement is {#what-is-an-agreement}
+### What an agreement is {#what-is-an-agreement}
 
 An agreement is the durable record of a completed approval workflow. It
 captures who agreed to what, against which entity, under which workflow
@@ -60,7 +62,7 @@ The agreement complements (does not replace) the workflow execution
 record: the `WorkflowExecutionDb` row captures runtime state while the
 workflow is in flight; the agreement is the post-completion artifact.
 
-## Approval Gates {#approval-gates}
+### Approval Gates {#approval-gates}
 
 An **Approval Gate** is a first-class concept across Ontos's lifecycle:
 a moment where a configured approver must sign off before the entity
@@ -86,7 +88,7 @@ A gate may be configured to **auto-approve** under specific conditions
 data) — in which case the gate is logged but not paused for human sign
 off.
 
-## Roles in an approval flow {#approval-roles}
+### Roles in an approval flow {#approval-roles}
 
 Three logical roles participate, though a single person may play
 several:
@@ -115,7 +117,7 @@ workflow context and is persisted on derived artifacts (e.g., the data
 product subscription's `on_behalf_of_type` / `on_behalf_of_value`
 columns).
 
-## Triggering an approval workflow {#triggers}
+### Triggering an approval workflow {#triggers}
 
 Approval workflows are matched by **trigger type**, not by name. The
 wizard dialog dispatches on `for_*` triggers, which are 1:1 mirrors of
@@ -136,7 +138,38 @@ the corresponding `on_*` process triggers:
 mount when the current user has not yet accepted the workflow at its
 latest version.
 
-## Wizard step types {#step-types}
+### Webhook steps {#webhook-step}
+
+A `webhook` step calls an external HTTP endpoint either through a Unity
+Catalog Connection (preferred for secrets handling) or by direct URL.
+The step config includes `method`, `body_template`, headers, and
+optional extras for caller-supplied additional headers, query
+parameters, and path segments that can be templated from workflow
+context. Body templates can reference workflow context variables
+(`${entity.consumer_principals}`, `${entity.<custom_field>}`, etc.), so
+the workflow can drive ITSM tickets, e-mail providers, or Slack
+notifications without baking secrets into the workflow definition.
+
+### Delivery {#delivery-step}
+
+A `deliver` step (distinct from `delivery`) dispatches the completed
+agreement through one or more channels: `in_app` (Ontos notification),
+`email` (via EmailService), and `webhook` (HTTP POST). Email is the
+only channel that may be silently stripped if no email provider is
+configured; authors are expected to integrate their own email provider
+via a webhook step instead.
+
+### Agreement immutability and re-execution {#immutability}
+
+Once persisted, an agreement is not edited. If a workflow definition
+changes after an agreement is signed, the signed agreement still
+references the original definition via `workflow_snapshot`. To re-run
+an approval for the same entity (e.g., a new contract version), a new
+wizard session is launched, producing a new agreement row.
+
+## Under the hood
+
+### Wizard step types {#step-types}
 
 A workflow is an ordered list of steps. The `StepType` enum is the
 authoritative catalog; the most common types for approval workflows are
@@ -166,7 +199,7 @@ other `step_id` slugs.
 | `script` | Execute Python code (gated by deployment policy). |
 | `pass` / `fail` | Terminal nodes. |
 
-## Execution state machine {#execution-state-machine}
+### Execution state machine {#execution-state-machine}
 
 A `WorkflowExecutionDb` row tracks the runtime status of a single
 workflow invocation. The `ExecutionStatus` enum:
@@ -186,7 +219,7 @@ Per-step results live in `WorkflowStepExecutionDb` with
 `skipped`. The `passed` boolean captures the branching outcome (used by
 `validation`, `policy_check`, `conditional`).
 
-## The `grant_permissions` step {#grant-permissions-step}
+### The `grant_permissions` step {#grant-permissions-step}
 
 `grant_permissions` is the bridge from a signed agreement to real Unity
 Catalog access. The step:
@@ -204,35 +237,6 @@ The step requires the service principal to hold **`MANAGE`** on each
 securable it grants on. `ALL_PRIVILEGES` is **not** sufficient. UC
 accepts only account-level groups; workspace-only groups will be
 rejected even if they resolve in the Ontos identity layer.
-
-## Webhook steps {#webhook-step}
-
-A `webhook` step calls an external HTTP endpoint either through a Unity
-Catalog Connection (preferred for secrets handling) or by direct URL.
-The step config includes `method`, `body_template`, headers, and
-optional extras for caller-supplied additional headers, query
-parameters, and path segments that can be templated from workflow
-context. Body templates can reference workflow context variables
-(`${entity.consumer_principals}`, `${entity.<custom_field>}`, etc.), so
-the workflow can drive ITSM tickets, e-mail providers, or Slack
-notifications without baking secrets into the workflow definition.
-
-## Delivery {#delivery-step}
-
-A `deliver` step (distinct from `delivery`) dispatches the completed
-agreement through one or more channels: `in_app` (Ontos notification),
-`email` (via EmailService), and `webhook` (HTTP POST). Email is the
-only channel that may be silently stripped if no email provider is
-configured; authors are expected to integrate their own email provider
-via a webhook step instead.
-
-## Agreement immutability and re-execution {#immutability}
-
-Once persisted, an agreement is not edited. If a workflow definition
-changes after an agreement is signed, the signed agreement still
-references the original definition via `workflow_snapshot`. To re-run
-an approval for the same entity (e.g., a new contract version), a new
-wizard session is launched, producing a new agreement row.
 
 ## Common questions {#common-questions}
 

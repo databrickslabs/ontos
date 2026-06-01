@@ -4,22 +4,105 @@ Data quality in Ontos is split into **two parallel systems** that interact at
 specific seams. Customers consistently get confused here — they assume the
 quality checks on the contract are also the execution results, and they ask
 where DQX-style profiling output lives. The short version: the contract
-holds *definitions*; the per-entity quality table holds *measurements*; the
+holds *definitions*; a separate per-entity store holds *measurements*; the
 DQX workflow is the most-integrated execution path; everything else lands
 via the `external` source.
 
-## The two systems at a glance {#two-systems}
+## What you see in Ontos
 
-| System | What it stores | Where it lives | Lifecycle |
-|---|---|---|---|
-| Contract quality checks | Check **definitions** — the rule, dimension, severity, threshold | `DataQualityCheckDb`, attached to `SchemaObjectDb` (table-level) or `SchemaPropertyDb` (column-level) inside the contract | Steward authors, contract approval gates the definition |
-| Per-entity quality items | Check **measurements** — score, pass/fail, when, by which engine | `QualityItemDb` rows scoped to an entity (`data_product`, `data_contract`, `asset`, `data_domain`) | Written by profiling jobs, dbt runs, DQX runs, custom pipelines |
+### The two systems at a glance {#two-systems}
+
+| System | What it stores | Where you see it |
+|---|---|---|
+| Contract quality checks | Check **definitions** — the rule, dimension, severity, threshold | Contract detail page → Schema tab: per-object and per-column check rows authored by the Steward |
+| Per-entity quality measurements | Check **measurements** — score, pass/fail, when, by which engine | Data Product detail page → Quality panel: rolled-up scores by dimension and source |
 
 A contract that has 12 checks defined and zero measurements is normal —
 the contract is the design intent, the measurements are what actually
 happened last Tuesday at 03:00.
 
-## ODCS check definitions on the contract {#contract-check-definitions}
+### DQX integration — what you do, step by step {#dqx-flow}
+
+DQX is the most-tightly-wired integration. It is a complete loop, not a
+one-shot.
+
+**Step 1 — Steward kicks off profiling.** On the contract detail page,
+click the **Profile dataset** action in the top-right. This launches a
+background profiling workflow.
+
+**Step 2 — Workflow profiles a sample.** For each schema in the
+contract, the workflow profiles a sample of the underlying data
+(approximately 10% of rows, capped at 5,000) and proposes quality
+rules from what it observes.
+
+**Step 3 — Suggestions appear inline.** The proposed rules land as
+**pending suggestions** visible on the contract's Schema tab next to
+the corresponding columns. They are *not yet* real checks — they're a
+draft waiting for your review.
+
+**Step 4 — Review and accept.** From the contract's Schema tab, you see
+each pending suggestion inline with the column it targets. **Accept** to
+promote it to a real check; **Reject** to dismiss; or **Edit** to
+modify thresholds before accepting.
+
+**Step 5 — Periodic re-measurement.** Later runs of profiling (or any
+quality engine configured against the contract) re-measure the columns
+and post new measurements against the right contract source.
+
+**Step 6 — Rollup feeds the Quality panel.** The Data Product detail
+page Quality panel averages the latest measurement per dimension and
+shows the overall quality score, the per-dimension breakdown, and the
+per-source breakdown.
+
+**Step 7 — Subscribers get compliance alerts.** A subscription to a
+data product implicitly subscribes the consumer to compliance alerts
+for the bound contracts. When a measurement at `error` severity fails,
+subscribers are notified via the configured notification channels.
+
+Profiling-run state surfaces inside Ontos — if a profiling run fails,
+the contract page shows the failure status and the error so you don't
+have to drill into the Databricks Workflows UI to find out what went
+wrong.
+
+### Where quality surfaces in the UI {#where-it-surfaces}
+
+- **Data Product detail page → Quality panel.** Reads the rolled-up
+  quality summary for the contracts bound to the product. Shows
+  per-dimension scores and per-source breakdown. This is the "is my
+  product healthy?" view.
+- **Data Contract detail page → Schema tab.** Shows per-check
+  *definitions* attached to each schema object / property, plus
+  *suggested* checks pending review from the most recent profiling run.
+  This is the "what does the contract require?" view.
+- **Subscription compliance alerts.** A consumer who subscribes to a
+  data product receives notifications when the bound contract's quality
+  checks fail at `error` severity. The channels are configured per
+  notification type.
+
+### External quality sources {#external-sources}
+
+Customers running their own DQ pipelines outside Ontos can still get
+their results to show up in the Quality panel. The supported sources
+the platform recognizes:
+
+- **Manual** — entered by hand (a Steward filling in a one-time number).
+- **dbt** — dbt test results. Supported as a source value; the dedicated
+  import path is not yet shipping in the current Ontos version, so use
+  the external path below in the meantime.
+- **DQX** — the integrated path described above.
+- **Great Expectations** — same status as dbt.
+- **Soda** — same status.
+- **External** — a deliberate catch-all. Custom DQ pipelines can post
+  measurements through the public quality API and the rollup treats
+  them like any other source.
+
+If you have an organization-standard DQ tool that isn't on this list,
+the recipe is: post your results through the external source, populate
+the dimension and score, and the rollup will pick them up.
+
+## Under the hood
+
+### ODCS check definitions on the contract {#contract-check-definitions}
 
 A `DataQualityCheckDb` row carries:
 
@@ -46,7 +129,7 @@ Definitions ride along with the contract through its lifecycle. They are
 not executed by the contract itself. Something else has to actually
 measure the column and report back — see the next section.
 
-## Per-entity measurements and rollup {#measurements-and-rollup}
+### Per-entity measurements and rollup {#measurements-and-rollup}
 
 A `QualityItemDb` row is generic: scoped by `entity_type` (one of
 `data_product`, `data_contract`, `asset`, `data_domain`) and `entity_id`.
@@ -59,7 +142,7 @@ The row carries:
 - `measured_at` (timestamp)
 - `dimension` — same enum as the contract-check dimension
 - `source` — one of `manual`, `dbt`, `dqx`, `great_expectations`, `soda`,
-  `external`. (See [external sources](#external-sources) below.)
+  `external`. (See [external sources](#external-sources) above.)
 
 `QualityManager.aggregate_for_product` is the rollup that the Data Product
 detail page reads. The logic is:
@@ -79,56 +162,26 @@ Quality panel is a view over the contracts it binds. If you want quality
 to show up on a product, attach a contract to one of its output ports and
 let measurements flow into that contract.
 
-## DQX integration — concrete end-to-end flow {#dqx-flow}
+### DQX workflow internals {#dqx-internals}
 
-DQX is the most-tightly-wired integration. It is a complete loop, not a
-one-shot.
+The Profile dataset action launches the `dqx_profile_datasets` workflow.
+For each schema in the contract, the workflow uses
+`databricks.labs.dqx.profiler.profiler.DQProfiler` to profile a sample
+(10% sample, capped at 5000 rows). It hands the profile to `DQGenerator`
+and calls `generator.generate_dq_rules(profiles, level="error")` to
+propose rules.
 
-**Step 1 — Steward kicks off profiling.** From the contract detail page,
-the steward triggers a "Profile dataset" action. The action launches the
-`dqx_profile_datasets` workflow.
-
-**Step 2 — Workflow profiles a sample.** For each schema in the contract,
-the workflow:
-
-- Uses `databricks.labs.dqx.profiler.profiler.DQProfiler` to profile a
-  sample (10% sample, capped at 5000 rows).
-- Hands the profile to `DQGenerator` and calls
-  `generator.generate_dq_rules(profiles, level="error")` to propose rules.
-
-**Step 3 — Workflow writes suggested rules.** Each generated rule becomes
-a row in the `suggested_quality_checks` table with `status = 'pending'`.
-This is *not* a real check yet — it's a draft the steward can accept,
-reject, or modify.
-
-**Step 4 — Steward reviews and accepts.** From the contract's Schema tab,
-the steward sees the pending suggestions inline with the actual columns.
-Accept → the suggested row is promoted into a real `DataQualityCheckDb`
-attached to the relevant `SchemaObjectDb` or `SchemaPropertyDb`. Reject →
-the suggestion is dismissed. Edit → modify thresholds and accept.
-
-**Step 5 — Periodic re-measurement.** Later runs of profiling (or any
-quality engine configured for the contract) re-measure the columns and
-write `QualityItemDb` rows with `source = 'dqx'` (or the appropriate
-engine).
-
-**Step 6 — Rollup feeds the product Quality panel.**
-`QualityManager.aggregate_for_product` averages the latest measurements
-per dimension. The data product's detail page Quality panel renders
-`QualitySummary`.
-
-**Step 7 — Subscribers get compliance alerts.** A subscription to a data
-product implicitly subscribes the consumer to compliance alerts for the
-bound contracts. When a measurement's severity is `error` and the check
-fails, subscribers are notified via the configured notification channels.
+Each generated rule lands as a row in the `suggested_quality_checks`
+table with `status = 'pending'`. Accepting a suggestion promotes it
+into a real `DataQualityCheckDb` attached to the relevant
+`SchemaObjectDb` or `SchemaPropertyDb`. Later periodic profiling runs
+write `QualityItemDb` rows with `source = 'dqx'`.
 
 Profiling-run state is tracked in `data_profiling_runs`. Each run has a
 `status` (`running` / `completed` / `failed`) and a `summary_stats` blob.
-A failed run surfaces `status = 'failed'` plus an `error_message` — the
-intent is that the steward should see profiling-job failures inside Ontos
-without needing to drill into the Databricks Workflows UI.
+A failed run surfaces `status = 'failed'` plus an `error_message`.
 
-## DQX → ODCS dimension mapping {#dqx-odcs-mapping}
+### DQX → ODCS dimension mapping {#dqx-odcs-mapping}
 
 DQX has its own rule names. When suggestions are written, those names map
 to ODCS dimensions:
@@ -145,42 +198,15 @@ typical column. The fallback to `accuracy` is intentional — it ensures
 every DQX rule lands somewhere on the ODCS scale even if there's no
 obvious mapping.
 
-## Where quality surfaces in the UI {#where-it-surfaces}
+### External source enum and write path {#external-source-internals}
 
-- **Data Product detail page → Quality panel.** Reads the rolled-up
-  `QualitySummary` for the contracts bound to the product. Shows
-  per-dimension scores and per-source breakdown. This is the "is my
-  product healthy?" view.
-- **Data Contract detail page → Schema tab.** Shows per-check
-  *definitions* attached to each schema object / property, plus
-  *suggested* checks pending review from the most recent profiling run.
-  This is the "what does the contract require?" view.
-- **Subscription compliance alerts.** A consumer who subscribes to a data
-  product receives notifications when the bound contract's quality checks
-  fail at `error` severity. The channels are configured per notification
-  type.
-
-## External quality sources {#external-sources}
-
-Customers running their own DQ pipelines outside Ontos can still get their
-results to show up. The `source` enum supports:
-
-- `manual` — entered by hand (steward filling in a one-time number).
-- `dbt` — dbt test results. The enum exists; the dedicated import workflow
-  is not yet shipping in the current Ontos version (the schema reserves
-  the path but no first-class importer is wired).
-- `dqx` — the integrated path described above.
-- `great_expectations` — Great Expectations runs. Same status as dbt.
-- `soda` — Soda runs. Same status.
-- `external` — a deliberate catch-all. Custom DQ pipelines can write
-  `QualityItemDb` rows via the manager with `source='external'`. The
-  rollup treats them like any other source.
-
-If you have an organization-standard DQ tool that isn't on this list, the
-recipe is: write your results to `QualityItemDb` via the manager with
-`source='external'`, populate the dimension and score, and the rollup
-will pick them up. This is the same path the integrated engines use; the
-only difference is which workflow writes the rows.
+The `source` enum supports `manual`, `dbt`, `dqx`, `great_expectations`,
+`soda`, `external`. For the engines whose dedicated importer isn't
+shipping yet (`dbt`, `great_expectations`, `soda`), the practical path
+today is to write `QualityItemDb` rows via the manager with
+`source='external'`, populate the dimension and score, and let the
+rollup pick them up. This is the same path the integrated engines use;
+the only difference is which workflow writes the rows.
 
 ## Common questions {#common-questions}
 

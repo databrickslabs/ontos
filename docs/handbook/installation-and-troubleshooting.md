@@ -6,13 +6,15 @@ most often. Step-by-step setup screenshots live in `docs/Ontos Setup.md`;
 this file is the conceptual layer around it — what the choices mean,
 where they trade off, and what breaks when something is misconfigured.
 
-## Distribution channels {#distribution-channels}
+## What you see in Ontos
+
+### Distribution channels {#distribution-channels}
 
 Ontos ships through two channels. They install the same application,
 but they expect different operator skills and different update
 discipline.
 
-### Databricks Marketplace {#marketplace-channel}
+#### Databricks Marketplace {#marketplace-channel}
 
 The default path. From the workspace's Marketplace UI, an admin searches
 for "Ontos", clicks Install, and the workspace's Apps service handles
@@ -28,7 +30,7 @@ and can't be edited from the workspace side. If a customer needs a
 different scope set or a pre-release fix, the Marketplace channel is
 the wrong choice — go to the Git path.
 
-### GitHub repository {#git-channel}
+#### GitHub repository {#git-channel}
 
 `databrickslabs/ontos` is the canonical OSS repo. Advanced users clone
 or fork it, then deploy via `databricks bundle deploy` /
@@ -42,7 +44,7 @@ Scope changes can be applied directly to the deployed `manifest.yaml`,
 but each scope edit forces affected users to re-accept (see
 [OAuth scope changes](#oauth-scope-changes)).
 
-### When to choose which {#channel-choice}
+#### When to choose which {#channel-choice}
 
 For most customer deployments: Marketplace. It gives a clean semver
 upgrade story and removes scope-cookie maintenance from the operator's
@@ -50,12 +52,12 @@ plate. For partners, OEMs, or any deployment that needs to fork — Git.
 For temporary hot-patches against an unmerged upstream PR, Git is the
 only option; see [Customer fork hygiene](#customer-fork-hygiene).
 
-## First-time installation {#first-install}
+### First-time installation {#first-install}
 
 `docs/Ontos Setup.md` walks the step-by-step. What matters
 conceptually:
 
-### Prerequisites {#install-prerequisites}
+#### Prerequisites {#install-prerequisites}
 
 - A **Lakebase Postgres** instance the deployment can claim. The
   database (`app_ontos` by default) must be created with a permissive
@@ -74,7 +76,7 @@ conceptually:
 - Optionally, a **Marketplace listing** in the workspace's regional
   Marketplace feed.
 
-### First-admin bootstrap {#first-admin-bootstrap}
+#### First-admin bootstrap {#first-admin-bootstrap}
 
 The very first user reaching a freshly seeded Ontos database hits a
 chicken-and-egg problem: no role is yet bound to their groups. Two
@@ -97,7 +99,7 @@ mechanisms cover this:
 See [Roles and RBAC](roles-and-rbac.md#permission-model) for the full
 permission model.
 
-### Demo presets {#demo-presets}
+#### Demo presets {#demo-presets}
 
 Ontos ships with five self-contained demo packs — `retail` (default),
 `hls`, `fsi`, `mfg`, `auto`. Each is delivered as a standalone SQL
@@ -108,9 +110,9 @@ through `DELETE /api/settings/demo-data` and removes records across
 all loaded packs by demo UUID prefix. There is no implicit base
 overlay: each preset stands alone.
 
-## Updating to a new version {#updates}
+### Updating to a new version {#updates}
 
-### Marketplace upgrade {#marketplace-update}
+#### Marketplace upgrade {#marketplace-update}
 
 Re-install or upgrade the listing through the workspace UI. Databricks
 handles the swap; the running deployment is replaced by the new
@@ -118,7 +120,7 @@ version. Persistent state (Lakebase tables, Volume artifacts,
 configured roles) survives because it's external to the app
 container.
 
-### Git deploy update {#git-update}
+#### Git deploy update {#git-update}
 
 The expected sequence:
 
@@ -134,7 +136,7 @@ The expected sequence:
    `docs/` lives outside `src/` so the regular sync skips it.
 4. `databricks apps deploy <app_name>` to roll the new deployment.
 
-### Migration discipline {#migration-discipline}
+#### Migration discipline {#migration-discipline}
 
 Alembic migrations are **append-only**. Once a revision ID has been
 applied to any database, treat its body as frozen — add a new
@@ -155,7 +157,7 @@ head. CI enforces this via `scripts/check-alembic-heads.py`. If two
 PRs land sibling revisions, the merging PR must include an explicit
 `alembic merge`.
 
-### Restart vs database state {#restart-vs-db-state}
+#### Restart vs database state {#restart-vs-db-state}
 
 App restarts pick up code changes immediately. Database state
 **persists across deploys, branch switches, and git reverts**. This
@@ -164,7 +166,7 @@ roll back the database row it touched. Use the dedicated reset
 endpoint (`DELETE demo-data`) or direct SQL for state changes that
 need to mirror a code revert.
 
-### Customer fork hygiene {#customer-fork-hygiene}
+#### Customer fork hygiene {#customer-fork-hygiene}
 
 When a deployment runs hot-patches against unmerged upstream PRs, it
 is functionally a fork. Track the delta explicitly (which PRs are
@@ -174,9 +176,9 @@ for changes during review, and the merged version diverges from what
 the deployment already runs. Re-deploys after each upstream PR merge
 keep the deployment converging on stock OSS.
 
-## Maintenance {#maintenance}
+### Maintenance {#maintenance}
 
-### Database migrations {#db-migrations-at-startup}
+#### Database migrations {#db-migrations-at-startup}
 
 `alembic upgrade head` runs at startup, before the FastAPI app
 finishes initializing. A migration failure stops the app — health
@@ -184,7 +186,7 @@ endpoints return 200 (process is up) but `/api/health` JSON reports
 `db_ok: false`. The Apps UI may show "running" while the app is
 effectively broken; verify via the health JSON, not the badge.
 
-### Role re-seeding {#role-reseeding}
+#### Role re-seeding {#role-reseeding}
 
 `APP_ADMIN_DEFAULT_GROUPS` seeds only on the first start that
 encounters an empty role table. Later restarts do not re-merge. To
@@ -192,7 +194,7 @@ add admins post-deploy: edit `Admin.assigned_groups` in Settings →
 RBAC, or update the row directly in Postgres. Don't expect env-var
 edits to propagate to a running database.
 
-### Workspace sync direction {#workspace-sync-direction}
+#### Workspace sync direction {#workspace-sync-direction}
 
 The sync source directory matters. `app.yaml` lives at `src/app.yaml`
 in the repo, but the Apps service expects to find it at the
@@ -212,7 +214,7 @@ a prior bad sync — both sets coexist in the workspace until the
 operator deletes the stale paths explicitly. Verify the workspace
 layout before deploying.
 
-### OAuth scope changes {#oauth-scope-changes}
+#### OAuth scope changes {#oauth-scope-changes}
 
 When the deployment's required OAuth scopes change — for example,
 adding `unity-catalog` to the manifest — already-authorized users
@@ -230,7 +232,7 @@ There is no admin-side override that can force a re-prompt on every
 user — communicate the cookie-clear step when shipping a scope
 change.
 
-### Customer fork delta {#customer-fork-delta}
+#### Customer fork delta {#customer-fork-delta}
 
 For deployments carrying unmerged upstream patches, maintain a
 delta document listing each applied PR and its upstream status.
@@ -238,14 +240,14 @@ Rebase once any PR merges into upstream. Don't accumulate divergent
 patches without a reconciliation plan; the longer the delta lives,
 the more expensive each reconciliation deploy becomes.
 
-## Common UI errors {#common-ui-errors}
+### Common UI errors {#common-ui-errors}
 
 What follows is the recurring set of user-visible errors with their
 root causes. Each entry covers symptom, cause, and fix.
 
-### Identity and access errors {#identity-errors}
+#### Identity and access errors {#identity-errors}
 
-#### "Request role" prompt on every page load {#request-role-prompt}
+##### "Request role" prompt on every page load {#request-role-prompt}
 
 The user lands on Ontos and is asked to pick a role on every visit,
 because the role-resolution step found no matching `assigned_groups`
@@ -266,7 +268,7 @@ Two common causes:
   Settings → RBAC manually, or rewrite `Admin.assigned_groups` via
   SQL.
 
-#### 403 on data products or contracts the user should be able to see {#unexpected-403}
+##### 403 on data products or contracts the user should be able to see {#unexpected-403}
 
 The user has the documented feature-level access but a specific
 endpoint returns 403. Endpoints can apply stricter sub-gates than
@@ -278,7 +280,7 @@ needs to be lowered; the fix is a code change, not a permission
 change on the user's side. See
 [Roles and RBAC — permission model](roles-and-rbac.md#permission-model).
 
-#### "Unity Catalog scope missing" {#uc-scope-missing}
+##### "Unity Catalog scope missing" {#uc-scope-missing}
 
 The browser's cached scope-accept cookie predates a recent scope
 change. The new scope is in the manifest, but the user's session
@@ -286,9 +288,9 @@ token doesn't carry it. Fix: clear the cookie for the app's URL,
 reload, and re-accept the prompt. See
 [OAuth scope changes](#oauth-scope-changes).
 
-### Workflow and approval errors {#workflow-errors}
+#### Workflow and approval errors {#workflow-errors}
 
-#### "Cannot approve agreement" for a non-Admin reviewer {#cannot-approve}
+##### "Cannot approve agreement" for a non-Admin reviewer {#cannot-approve}
 
 A Business Owner or other non-Admin reviewer can't approve an
 agreement they're listed on. Two causes recur:
@@ -304,7 +306,7 @@ agreement they're listed on. Two causes recur:
   endpoint's gate, or relax the gate in the deployment's role
   config.
 
-#### "grant_permissions step failed" {#grant-permissions-failed}
+##### "grant_permissions step failed" {#grant-permissions-failed}
 
 The `grant_permissions` step in an agreement workflow tries to grant
 UC permissions and the platform rejects the call with
@@ -317,9 +319,9 @@ runbook; it bites every customer that uses `grant_permissions` in
 production. See
 [Agreement workflow — grant_permissions step](agreement-workflow.md#grant-permissions-step).
 
-### Database and data errors {#database-errors}
+#### Database and data errors {#database-errors}
 
-#### "Alembic version too long" or startup hang {#alembic-version-too-long}
+##### "Alembic version too long" or startup hang {#alembic-version-too-long}
 
 The app fails to start, logs show `StringDataRightTruncation` on
 `alembic_version`. A new migration's revision ID exceeded
@@ -328,14 +330,14 @@ short identifier (≤32 chars), redeploy. If the database has already
 recorded the old long ID, update `alembic_version.version_num`
 manually via SQL to the new value before deploying.
 
-#### Lakebase autoscale not picking up {#lakebase-autoscale-stuck}
+##### Lakebase autoscale not picking up {#lakebase-autoscale-stuck}
 
 The app reports it can't connect to Lakebase, but the Lakebase
 instance shows healthy. The autoscale signal sometimes sticks after
 a long idle. Fix: pause and resume the Lakebase instance from the
 UI. The app retries on next request.
 
-#### Stale data in product detail page after a code revert {#stale-data-after-revert}
+##### Stale data in product detail page after a code revert {#stale-data-after-revert}
 
 The operator reverted a code commit but the bug behavior persists.
 Database state is independent of git state — reverting code does
@@ -343,9 +345,9 @@ not roll back rows. Fix: either re-apply a corrective migration, or
 update the relevant rows manually via SQL. See
 [restart vs database state](#restart-vs-db-state).
 
-### Deploy and app process errors {#deploy-errors}
+#### Deploy and app process errors {#deploy-errors}
 
-#### "App process did not start within 10 minutes" {#process-did-not-start}
+##### "App process did not start within 10 minutes" {#process-did-not-start}
 
 The most common cause is a workspace sync layout bug: `app.yaml`
 landed at the wrong path because the sync was run from the repo
@@ -355,7 +357,7 @@ deeper, re-sync from `src/`. Also check for missing required env
 vars in `app.yaml` — a missing env binding can stall the container
 the same way.
 
-#### Ask Ontos returns "I don't have authoritative information" for everything conceptual {#corpus-not-found}
+##### Ask Ontos returns "I don't have authoritative information" for everything conceptual {#corpus-not-found}
 
 The `docs/handbook/` tree wasn't packaged into the deployment. The
 `search_ontos_handbook` tool can't find the corpus on disk, so
@@ -366,7 +368,7 @@ or set `ONTOS_HANDBOOK_DIR` to point at an alternate corpus
 location on the container. Restart the app to pick up the new
 files.
 
-## Where to get help {#getting-help}
+### Where to get help {#getting-help}
 
 - **Bugs and feature requests:** open issues at the
   `databrickslabs/ontos` GitHub repository.
@@ -375,6 +377,10 @@ files.
 - **Customer support:** Marketplace deployments are supported
   through the workspace's Ontos administrator; Git-channel
   deployments take support questions directly to GitHub.
+
+## Under the hood
+
+This whole doc speaks to deployment operators, so the line between user-facing and internal is fuzzier than in other concept docs. The deepest internals — the `alembic_version.version_num` `VARCHAR(32)` ceiling, the `alembic upgrade head` startup hook, the workspace sync layout invariant — are called out inline above where they matter. For source-level detail, see `src/backend/alembic/`, `scripts/check-alembic-heads.py`, `src/backend/src/utils/startup_tasks.py`, and the deployment runbooks under `docs/`.
 
 ## Cross-references {#cross-references}
 

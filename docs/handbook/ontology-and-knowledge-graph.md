@@ -12,7 +12,9 @@ Customers asking these questions tend to be highly skilled — they say "RDF",
 "OWL", "SHACL" the way a database engineer says "primary key". This document
 is written for that audience first, then translated for everyone else.
 
-## Four words that get confused {#four-words}
+## What you see in Ontos
+
+### Four words that get confused {#four-words}
 
 - **Ontology** — the source artifact. A `.ttl` / `.owl` / `.rdf` / `.nt` file
   authored externally (Protégé, TopBraid, any text editor). Declares classes,
@@ -44,7 +46,7 @@ are actually doing is **adding a concept** to a glossary collection and then
 matters because the same concept can be linked from many places, and a
 concept can exist without ever being published as a glossary term.
 
-## The "ontology is prescriptive" principle {#prescriptive-principle}
+### The "ontology is prescriptive" principle {#prescriptive-principle}
 
 Before the redesign, the ontology was decorative — Ontos loaded the TTL but
 nothing in the application changed when you edited it. That is no longer
@@ -68,7 +70,7 @@ that renders when you create an asset changes, the relationship types
 offered in the relationship panel change, the asset sidebar changes. That
 gives the knowledge engineer a real lever over the platform.
 
-## Bundled taxonomies {#bundled-taxonomies}
+### Bundled taxonomies {#bundled-taxonomies}
 
 Three ontologies ship out of the box under
 `src/backend/src/data/taxonomies/`:
@@ -92,7 +94,7 @@ These are synced into the DB at startup via `SemanticModelsManager`. You can
 disable any of them from Settings → Semantic Models; they will keep their
 DB rows but stop contributing triples to the runtime graph.
 
-## Authoring and uploading an ontology {#authoring}
+### Authoring and uploading an ontology {#authoring}
 
 The recommended path for a serious knowledge engineering effort:
 
@@ -111,7 +113,7 @@ The recommended path for a serious knowledge engineering effort:
 7. The model is now queryable via SPARQL, visible in the graph view, and
    available to Ask Ontos and MCP agents.
 
-## LLM-assisted inference (a starting point, not an ontology) {#inference}
+### LLM-assisted inference (a starting point, not an ontology) {#inference}
 
 `OntologyGeneratorManager` is the LLM-assisted alternative for teams that
 don't have an ontology yet. It points at UC metadata (table names, column
@@ -130,23 +132,7 @@ that requires human curation, not a finished ontology**. Quality depends on
 the richness of the source metadata. The output is OWL/Turtle the user
 reviews, edits, and accepts before it is persisted as a semantic model.
 
-## The runtime knowledge graph {#runtime-graph}
-
-`SemanticModelsManager` owns the runtime graph:
-
-- Conjunctive graph: a union of all enabled models, each loaded under its
-  own URN context (one per model). Contexts make it possible to enable /
-  disable individual models without rebuilding from scratch.
-- Caches concepts, taxonomies, and stats with a five-minute TTL. Refresh
-  is explicit: changing a semantic model's enable bit invalidates the cache.
-- Handles OWL `equivalentClass` parent/child extraction, blank-node
-  skolemization (so you can address blank nodes by stable URNs after
-  loading), and RDF list walking.
-- Exposes the graph to the rest of the app via `/api/semantic-models/*` —
-  including `/query` (SPARQL), `/neighbors` (one-hop traversal),
-  `/statistics` (counts), and `/refresh-graph` (force rebuild).
-
-## Semantic links — the three-tier story {#three-tier-linking}
+### Semantic links — the three-tier story {#three-tier-linking}
 
 This is what makes Ontos different from a flat glossary tool. A semantic
 link is a row in `entity_semantic_links` that pins one Ontos entity to one
@@ -180,7 +166,7 @@ Same table, same manager, three narratives. Discovery, governance, and
 agent grounding all benefit from linking at the lowest tier you can
 reasonably justify.
 
-## Business glossary as a published-ontology view {#glossary-as-view}
+### Business glossary as a published-ontology view {#glossary-as-view}
 
 When a steward "creates a glossary":
 
@@ -201,24 +187,7 @@ loaded by upload, (b) presented as a glossary term in a domain-scoped
 collection, and (c) linked to dozens of contracts and columns — all
 through the same triple plumbing.
 
-## SPARQL and graph navigation {#sparql-and-navigation}
-
-- `POST /api/semantic-models/query` runs SPARQL against the conjunctive
-  graph. `SPARQLQueryValidator` does basic input validation. On Unix, a
-  SIGALRM-based timeout cap protects against runaway queries.
-- `GET /api/semantic-models/neighbors` returns one-hop neighbours of a
-  given IRI — used by the Knowledge Graph view to expand a node on click.
-- `GET /api/semantic-models/statistics` returns counts (concepts,
-  relationships, by-type breakdowns) — used by the graph stats tab.
-- `POST /api/semantic-models/refresh-graph` rebuilds the conjunctive
-  graph from currently-enabled models. Cheap on small ontologies, can be
-  slow on large industry packs.
-
-For non-SPARQL users, the same data is reachable through
-`/api/semantic-models/concepts` (paged concept list with filters) and
-`/api/semantic-models/hierarchy` (subclass tree).
-
-## Industry packs {#industry-packs}
+### Industry packs {#industry-packs}
 
 `IndustryOntologyManager` ships pre-built ontologies that you can load as
 starting points: FIBO (financial industry), GS1 (supply chain), schema.org
@@ -226,7 +195,7 @@ starting points: FIBO (financial industry), GS1 (supply chain), schema.org
 are not opinionated about your specific data — they give the customer a
 populated graph to react to rather than a blank canvas.
 
-## Round-trip asymmetry — be honest about it {#round-trip-asymmetry}
+### Round-trip asymmetry — be honest about it {#round-trip-asymmetry}
 
 The top-down flow (ontology → physical assets → UC tags) ships in the
 forward direction; the reverse direction is still evolving. Here's the
@@ -259,6 +228,41 @@ honest current state.
   (the reverse direction) is not shipping. The customer voice tracking
   this work captures it as "Tags reading from UC is not there." Plan
   demos around the forward path and flag the reverse pull as evolving.
+
+## Under the hood
+
+### The runtime knowledge graph {#runtime-graph}
+
+`SemanticModelsManager` owns the runtime graph:
+
+- Conjunctive graph: a union of all enabled models, each loaded under its
+  own URN context (one per model). Contexts make it possible to enable /
+  disable individual models without rebuilding from scratch.
+- Caches concepts, taxonomies, and stats with a five-minute TTL. Refresh
+  is explicit: changing a semantic model's enable bit invalidates the cache.
+- Handles OWL `equivalentClass` parent/child extraction, blank-node
+  skolemization (so you can address blank nodes by stable URNs after
+  loading), and RDF list walking.
+- Exposes the graph to the rest of the app via `/api/semantic-models/*` —
+  including `/query` (SPARQL), `/neighbors` (one-hop traversal),
+  `/statistics` (counts), and `/refresh-graph` (force rebuild).
+
+### SPARQL and graph navigation {#sparql-and-navigation}
+
+- `POST /api/semantic-models/query` runs SPARQL against the conjunctive
+  graph. `SPARQLQueryValidator` does basic input validation. On Unix, a
+  SIGALRM-based timeout cap protects against runaway queries.
+- `GET /api/semantic-models/neighbors` returns one-hop neighbours of a
+  given IRI — used by the Knowledge Graph view to expand a node on click.
+- `GET /api/semantic-models/statistics` returns counts (concepts,
+  relationships, by-type breakdowns) — used by the graph stats tab.
+- `POST /api/semantic-models/refresh-graph` rebuilds the conjunctive
+  graph from currently-enabled models. Cheap on small ontologies, can be
+  slow on large industry packs.
+
+For non-SPARQL users, the same data is reachable through
+`/api/semantic-models/concepts` (paged concept list with filters) and
+`/api/semantic-models/hierarchy` (subclass tree).
 
 ## Common questions {#common-questions}
 

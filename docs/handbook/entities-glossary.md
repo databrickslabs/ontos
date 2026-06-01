@@ -4,7 +4,9 @@ One-paragraph definitions of every first-class entity in Ontos. Cross-links
 go to the appropriate lifecycle, concept, or role document for the longer
 story.
 
-## Organizational hierarchy {#organizational}
+## What you see in Ontos
+
+### Organizational hierarchy {#organizational}
 
 - **Domain** {#domain} — A business area that owns data assets (e.g.,
   "Sales", "Supply Chain"). Domains have an optional parent (`parent_id`)
@@ -20,7 +22,7 @@ story.
   Projects scope data products and contracts (`project_id`). Workflows
   can also be scoped to projects via `ScopeType.PROJECT`.
 
-## Data assets {#data-assets}
+### Data assets {#data-assets}
 
 - **Data Product** {#data-product} — A versioned, ODPS-conformant unit
   of related assets exposed through Deliverables, owned by a team,
@@ -81,7 +83,7 @@ story.
   icon, required/optional metadata schemas, allowed relationships. See
   [ontology-and-knowledge-graph.md](ontology-and-knowledge-graph.md#prescriptive-principle).
 
-## Agreements and workflows {#workflow-entities}
+### Agreements and workflows {#workflow-entities}
 
 - **Agreement** {#agreement} — The *immutable* record of a completed
   approval workflow, including the workflow snapshot and per-step
@@ -113,7 +115,7 @@ story.
   completion. See
   [agreement-workflow.md](agreement-workflow.md#three-concepts).
 
-## Semantics and tagging {#semantics-tagging}
+### Semantics and tagging {#semantics-tagging}
 
 - **Ontology** {#ontology} — The *source artifact*: a `.ttl` / `.owl`
   / `.rdf` / `.nt` file authored externally (Protégé, TopBraid, or a
@@ -159,7 +161,7 @@ story.
   name (e.g., `pii`, `domain`). Permissions can be configured per
   namespace via `tag_namespace_permissions`.
 
-## Identity and access {#identity-access}
+### Identity and access {#identity-access}
 
 - **User** {#user} — A caller identified by email and the groups
   Ontos resolves for them at request time. See
@@ -199,7 +201,7 @@ story.
   Drives ITSM notifications when the product or its bound contract
   changes.
 
-## People (not seeded roles) {#people-personas}
+### People (not seeded roles) {#people-personas}
 
 - **Knowledge Engineer / Data Architect** {#knowledge-engineer} —
   Not a seeded Ontos role; the persona behind ontology authoring.
@@ -209,7 +211,7 @@ story.
   drive asset types, ground Ask Ontos, and feed agents via MCP. See
   [personas-quick-reference.md](personas-quick-reference.md#knowledge-engineer).
 
-## Other {#other-entities}
+### Other {#other-entities}
 
 - **Compliance Policy** {#compliance-policy} — A declarative DSL
   rule that can be referenced by a workflow's `policy_check` step.
@@ -231,5 +233,9 @@ story.
   role (e.g., "Head of Sales Analytics") that can be assigned to a
   person and referenced by workflows. Distinct from Ontos's
   authorization roles.
+
+## Under the hood
+
+This file is a flat glossary cross-cutting the rest of the corpus. Persisted-model detail (`*Db` class names, table names, column names) is interleaved with the user-facing label for each entry because the same row backs both the UI label and the underlying data model. Treat the bolded term as the user-facing name (the one to use in answers) and the `inline-code` references as developer-facing pointers into the schema. For schema source-of-truth, see `src/backend/src/db_models/` and the per-entity concept doc linked from each glossary entry.
 
 _Last verified against codebase: 2026-05-28_

@@ -4,7 +4,9 @@ Two unrelated things in Ontos share the word *delivery*. Customers conflate
 them constantly, and so do engineers writing tools that touch them. Sort the
 two out first; the rest of this doc is about the second one.
 
-## Two "delivery" concepts {#two-deliveries}
+## What you see in Ontos
+
+### Two "delivery" concepts {#two-deliveries}
 
 | Term | What it governs | Where it shows up |
 |---|---|---|
@@ -26,7 +28,7 @@ The rest of this document is about Delivery Mode and the Delivery Service.
 For Delivery Method, see
 [Data Product Delivery Methods](data-product-lifecycle.md#delivery-methods).
 
-## Why the Delivery Service exists {#why-delivery-service}
+### Why the Delivery Service exists {#why-delivery-service}
 
 Ontos is a system of record for a lot of *decisions*: who can access what,
 which tags belong on which column, which roles carry which permissions,
@@ -52,14 +54,14 @@ need indirect delivery via a volume so our deployment pipeline can pick it
 up", "can Ontos write tags back to UC for us?". Those are all questions
 about Delivery Mode.
 
-## The three modes {#the-three-modes}
+### The three modes {#the-three-modes}
 
 Modes are not mutually exclusive. Every configured mode runs for every
 deliverable change, and the results are aggregated. If Direct succeeds but
 Indirect fails, the aggregate is `any_success=True, all_success=False`, and
 both outcomes are surfaced.
 
-### Direct mode {#direct-mode}
+#### Direct mode {#direct-mode}
 
 **What it does.** Applies the change immediately, in-process, by calling
 the underlying system's API. For grants and revokes, that means the
@@ -85,7 +87,7 @@ with a `Change type not applicable for direct mode` marker and are
 expected to land via Indirect or Manual — or, for the concept-to-UC-tag
 path, via the `uc_tag_sync` workflow described below.
 
-### Indirect mode {#indirect-mode}
+#### Indirect mode {#indirect-mode}
 
 **What it does.** Serializes the change to a YAML file in the configured
 Git repository (or volume — the `GitService` abstraction covers both).
@@ -114,7 +116,7 @@ data domains, roles, and tags — anything that has a `FileModel` in the
 registry. Change types that don't have a file model fall back to a
 generic timestamped YAML in `changes/` capturing the raw payload.
 
-### Manual mode {#manual-mode}
+#### Manual mode {#manual-mode}
 
 **What it does.** Creates a notification (and/or logs an entry) asking a
 named human or group to perform the change in another system. Used when
@@ -136,29 +138,7 @@ TODO marker in the current implementation; admins should expect the entry
 to appear in app logs and treat the in-UI notification surface as
 evolving.
 
-## Change types {#change-types}
-
-Everything that goes through Delivery is one of these `DeliveryChangeType`
-values, grouped by what they govern:
-
-| Group | Change types |
-|---|---|
-| **Access** | `GRANT`, `REVOKE` |
-| **Tags** | `TAG_ASSIGN`, `TAG_REMOVE`, `TAG_CREATE`, `TAG_UPDATE`, `TAG_DELETE` |
-| **Data entities** | `CONTRACT_CREATE` / `CONTRACT_UPDATE` / `CONTRACT_DELETE`, `PRODUCT_CREATE` / `PRODUCT_UPDATE` / `PRODUCT_DELETE`, `DOMAIN_CREATE` / `DOMAIN_UPDATE` / `DOMAIN_DELETE` |
-| **Roles** | `ROLE_CREATE`, `ROLE_UPDATE`, `ROLE_DELETE` |
-
-Each change type is meaningful in each mode independently — `GRANT` in
-Direct issues a UC GRANT; `GRANT` in Indirect writes a grant manifest to
-Git; `GRANT` in Manual creates a notification reading "grant SELECT to
-group-x on catalog.schema.table".
-
-Not every mode handles every change type yet. Direct currently
-implements `GRANT`/`REVOKE` only; the other change types serialize via
-Indirect or notify via Manual. Tag-assignment delivery to UC is described
-in the next section because it travels via a different path today.
-
-## How concept → UC tag actually flows {#concept-to-uc-tag}
+### How concept → UC tag actually flows {#concept-to-uc-tag}
 
 This is the question customers ask most often, and it deserves an honest
 answer because there are two paths and only one of them is fully wired.
@@ -186,7 +166,7 @@ a job (not the Delivery Service direct mode). The Delivery Service path
 for tag assignment is being filled in; the workflow path is what's
 running in customer demos right now.
 
-## How agreements use Delivery {#agreement-integration}
+### How agreements use Delivery {#agreement-integration}
 
 Approval workflows produce signed Agreements. The post-approval side
 effect — actually granting UC access to the consumer — lives in the
@@ -206,7 +186,7 @@ See [grant_permissions step](agreement-workflow.md#grant-permissions-step)
 for the requirements (notably: the SP needs explicit `MANAGE` on each
 securable, not `ALL_PRIVILEGES`).
 
-## What each persona sees {#per-persona}
+### What each persona sees {#per-persona}
 
 - **Admin** — Configures which modes are active (Settings → Delivery),
   the dry-run flag, the Git repo connection, and the notification
@@ -219,6 +199,30 @@ securable, not `ALL_PRIVILEGES`).
 - **Data Consumer** — Doesn't see Delivery directly. Sees the end
   effect: their subscription becomes active, their UC `SELECT`
   succeeds.
+
+## Under the hood
+
+### Change types {#change-types}
+
+Everything that goes through Delivery is one of these `DeliveryChangeType`
+values, grouped by what they govern:
+
+| Group | Change types |
+|---|---|
+| **Access** | `GRANT`, `REVOKE` |
+| **Tags** | `TAG_ASSIGN`, `TAG_REMOVE`, `TAG_CREATE`, `TAG_UPDATE`, `TAG_DELETE` |
+| **Data entities** | `CONTRACT_CREATE` / `CONTRACT_UPDATE` / `CONTRACT_DELETE`, `PRODUCT_CREATE` / `PRODUCT_UPDATE` / `PRODUCT_DELETE`, `DOMAIN_CREATE` / `DOMAIN_UPDATE` / `DOMAIN_DELETE` |
+| **Roles** | `ROLE_CREATE`, `ROLE_UPDATE`, `ROLE_DELETE` |
+
+Each change type is meaningful in each mode independently — `GRANT` in
+Direct issues a UC GRANT; `GRANT` in Indirect writes a grant manifest to
+Git; `GRANT` in Manual creates a notification reading "grant SELECT to
+group-x on catalog.schema.table".
+
+Not every mode handles every change type yet. Direct currently
+implements `GRANT`/`REVOKE` only; the other change types serialize via
+Indirect or notify via Manual. Tag-assignment delivery to UC is described
+in the next section because it travels via a different path today.
 
 ## Cross-references {#cross-references}
 

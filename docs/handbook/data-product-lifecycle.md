@@ -11,7 +11,9 @@ In conversation you'll hear "Deliverable" and "Consumable". In the persisted
 ODPS model these are `output_port` and `input_port`. Both vocabularies are
 correct; the customer-facing names are primary.
 
-## What a data product is {#what-is-a-data-product}
+## What you see in Ontos
+
+### What a data product is {#what-is-a-data-product}
 
 A data product groups tables, views, functions, models, dashboards,
 notebooks, and jobs into a single cohesive unit with explicit ownership,
@@ -43,7 +45,7 @@ Databricks extensions on the product:
 - Personal draft fields (`draft_owner_id`, `parent_product_id`,
   `base_name`, `change_summary`).
 
-## Status state machine {#status-state-machine}
+### Status state machine {#status-state-machine}
 
 Data products use the unified `EntityStatus` enum. Valid statuses:
 
@@ -73,7 +75,7 @@ Notes:
   from the status enum). Certification has its own fields and lifecycle.
 - `retired` is terminal. A retired product cannot be revived.
 
-## Ownership model {#ownership}
+### Ownership model {#ownership}
 
 Three orthogonal layers of ownership apply to a data product:
 
@@ -96,7 +98,7 @@ permissions):
   both personal drafts and single-user-owned products).
 - Domain-scoped (`Filtered`) users can edit products in their domains.
 
-## Deliverables (output ports) {#output-port}
+### Deliverables (output ports) {#output-port}
 
 A **Deliverable** describes a consumable surface of the data product. A
 product typically has one or more Deliverables, each pointing at a
@@ -123,7 +125,7 @@ A Deliverable can carry a list of **input contracts** (dependencies on
 other contracts/versions) and an **SBOM** (software bill of materials)
 block.
 
-## Consumables (input ports) {#input-port}
+### Consumables (input ports) {#input-port}
 
 A **Consumable** describes what the product reads. Unlike Deliverables,
 **a `contract_id` is required** on every Consumable (per ODPS v1.0.0).
@@ -132,7 +134,7 @@ against, making upstream changes diffable against the consumed schema.
 
 Databricks extensions: `asset_type`, `asset_identifier`.
 
-## Delivery methods {#delivery-methods}
+### Delivery methods {#delivery-methods}
 
 A Deliverable references a configured Delivery Method. The named values
 shipped with Ontos:
@@ -153,7 +155,7 @@ The list is configurable from Settings → Delivery Methods, so a
 deployment can extend it with org-specific delivery patterns (Postgres
 shares, JDBC handoffs, dbt project handoffs, etc.).
 
-## Management ports {#management-port}
+### Management ports {#management-port}
 
 Management ports expose administrative endpoints for the product:
 discovery, observability, control, dictionary. Required fields are
@@ -161,7 +163,7 @@ discovery, observability, control, dictionary. Required fields are
 `control`, `dictionary`). Optional fields: `port_type` (default
 `rest`), `url`, `channel`, `description`.
 
-## Consumer principals {#consumer-principals}
+### Consumer principals {#consumer-principals}
 
 `consumer_principals` is a JSON list of typed identity references
 describing who is allowed to consume the product's Deliverables. Each
@@ -185,7 +187,7 @@ Two operational rules here:
 - UC accepts only **account-level groups**; workspace-only groups
   will be rejected even if they resolve in Ontos's identity layer.
 
-## Semantic links and tags {#semantic-links-tags}
+### Semantic links and tags {#semantic-links-tags}
 
 A data product can carry:
 
@@ -198,7 +200,7 @@ A data product can carry:
 - **Custom properties** — ODPS-native, free-form `property`/`value`
   pairs at the product level.
 
-## Quality measurement attachment {#quality-attachment}
+### Quality measurement attachment {#quality-attachment}
 
 A data product does not own quality checks directly. Quality checks
 live on the data contract bound to a Deliverable. The product's Quality
@@ -208,7 +210,7 @@ panel is a rollup over the contracts the product binds — see
 Subscribing to a product implicitly registers the consumer for
 compliance alerts when the bound contract's quality checks fail.
 
-## Publication and subscription {#publication-subscription}
+### Publication and subscription {#publication-subscription}
 
 - `publication_scope` controls marketplace visibility: `none` (default),
   `domain`, `organization`, `external`.
@@ -220,7 +222,7 @@ compliance alerts when the bound contract's quality checks fail.
   for groups and service principals (`on_behalf_of_type`,
   `on_behalf_of_value`).
 
-## Versioning {#versioning}
+### Versioning {#versioning}
 
 Versioning is explicit: each version is its own product row. Versions of
 the same product are grouped by a stable family identifier — historically
@@ -237,6 +239,10 @@ the most-relevant version for the caller's role) with an option to
 expand and see every version individually. Detail views surface a
 version navigator so authors and consumers can move between versions
 of the same product without losing context.
+
+## Under the hood
+
+Field-level persistence details (the `DataProductDb` row, the ODPS extension columns `consumer_principals` / `publication_scope` / `certification_level`, the on-behalf-of subscription columns) are documented in `src/backend/src/db_models/data_products.py` and the ODPS v1.0.0 spec the schema implements.
 
 ## Common questions {#common-questions}
 

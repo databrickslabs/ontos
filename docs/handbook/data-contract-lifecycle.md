@@ -10,7 +10,9 @@ contracts. Create v2, inform users about the changes from v1. Ontos can diff
 and include the list of changes.* The two operational ideas underneath that
 sentence are **editor-of-record** and **indirect delivery**.
 
-## What a contract is {#what-is-a-contract}
+## What you see in Ontos
+
+### What a contract is {#what-is-a-contract}
 
 A data contract is the technical and semantic agreement attached to a data
 product's Deliverable. The DataContractsManager owns the lifecycle.
@@ -33,7 +35,7 @@ Databricks extensions: `owner_team_id`, `project_id`, certification fields,
 publication scope, personal draft fields, and parent/base-name links for
 explicit versioning.
 
-## Editor of record {#editor-of-record}
+### Editor of record {#editor-of-record}
 
 The default mental model: **Ontos is the editor of record for the
 contract**. You draft, edit, propose, review, and version the contract
@@ -60,7 +62,7 @@ contract versions >>> trigger a job and notify people."* Ontos owns the
 event of v1 → v2 (with diff + approval gate + notification fan-out);
 the volume / job system owns the *deployment* of the new YAML.
 
-## Status state machine {#status-state-machine}
+### Status state machine {#status-state-machine}
 
 Contracts use the unified `EntityStatus` enum but support a slightly
 smaller set than data products (no `sandbox`):
@@ -83,7 +85,7 @@ Allowed transitions (`DATA_CONTRACT_TRANSITIONS`):
 New contracts default to `draft`. Publishing (in the marketplace sense)
 is governed by `publication_scope`, distinct from status.
 
-## Contracts-First vs Products-First {#contracts-vs-products-first}
+### Contracts-First vs Products-First {#contracts-vs-products-first}
 
 Two equally-supported workflow orderings. The platform doesn't favor one;
 the choice is a team-culture choice.
@@ -105,36 +107,13 @@ Contracts-First gate at contract approval; in Products-First, they gate
 at product certification (and at contract approval if the contract is
 formal).
 
-## Schema objects and properties {#schema-objects}
+### Quality checks {#quality-checks}
 
-A contract's schema is a tree:
-
-- **Schema object** (`SchemaObjectDb`) — table-equivalent. Has `name`,
-  `logical_type` (default `object`), optional `physical_name`,
-  `physical_type`, `business_name`, `description`, `tags`,
-  `data_granularity_description`.
-- **Schema property** (`SchemaPropertyDb`) — column-equivalent. Has
-  `name`, `logical_type`, `physical_type`, flags (`required`, `unique`,
-  `primary_key`, `partitioned`, `critical_data_element`), and rich
-  transformation metadata (`transform_source_objects`,
-  `transform_logic`, `transform_description`). Properties may nest via
-  `parent_property_id` for struct/array types.
-
-Properties can carry ODCS classification (`classification`),
-encrypted-name hints, examples, and a JSON blob of logical-type-specific
-options (`logical_type_options_json`).
-
-Each schema object and property is itself an entity that can carry
-semantic links — see
-[Three-tier linking](ontology-and-knowledge-graph.md#three-tier-linking).
-
-## Quality checks {#quality-checks}
-
-A `DataQualityCheckDb` row is a **check definition** attached to a
-schema object (or a specific property). Definitions are *not*
-execution results — execution and historical scoring are tracked
-separately via `QualityItemDb` and the compliance/notifications
-systems. The full story is in
+A quality check on a contract is a **check definition** attached to a
+schema object (or a specific column). Definitions are *not* execution
+results — execution and historical scoring are tracked separately
+through the Quality panel on the data product and the compliance /
+notifications surfaces. The full story is in
 [data-quality.md](data-quality.md#contract-check-definitions).
 
 A check has:
@@ -149,56 +128,19 @@ A check has:
 - A family of comparator fields (`must_be`, `must_not_be`, `must_be_gt`,
   `must_be_between_min`/`max`, etc.) for declarative thresholds.
 
-Profiling runs (`DataProfilingRunDb`) record discovery/profiling
-activity (DQX, LLM-suggested, manual) and produce
-`SuggestedQualityCheckDb` rows that can be accepted or rejected and
-then promoted into real checks.
+Profiling runs record discovery/profiling activity (DQX, LLM-suggested,
+manual) and produce *suggested* quality checks that can be accepted,
+rejected, or modified before being promoted into real checks on the
+contract.
 
-## Servers and environments {#servers}
-
-A contract's `servers` block lists the environments where the contract
-applies. Each `DataContractServerDb` row carries `type` (required),
-`environment`, optional `description`, and a `properties` collection of
-key/value pairs for connection details. Servers support ODCS v3.1.0
-stable IDs so external referrers can point at a specific server entry
-across version edits.
-
-## Contract roles {#contract-roles}
-
-A contract declares its own access roles (`DataContractRoleDb`)
-independent of Ontos's RBAC roles. Each entry names a role with
-`access`, `first_level_approvers`, `second_level_approvers`, and
-optional custom properties. These represent the **access role** layer of
-the contract — the business statement of who can read or write the
-underlying data — and feed into the agreement workflow as configurable
-approver groups.
-
-## SLAs and support {#sla-support}
-
-- `DataContractSlaPropertyDb` — typed SLA entries with `property`,
-  `value`, `unit`, `element`, and `driver`. Supports ODCS SLA
-  semantics.
-- `DataContractSupportDb` — communication channels for support
-  (`channel`, `url`, `tool`, `scope`, `invitation_url`).
-- `DataContractPricingDb` — single-row pricing block
-  (`price_amount`, `price_currency`, `price_unit`).
-
-## Relationships {#contract-relationships}
-
-ODCS v3.1.0 schema-level and property-level relationships (foreign
-keys) are stored in `data_contract_schema_object_relationships` and
-`data_contract_schema_property_relationships`. Relationship type
-defaults to `foreignKey`; `from_value` / `to_value` are JSON-serialized
-to allow single-string or array references.
-
-## Authoritative definitions {#contract-auth-defs}
+### Authoritative definitions {#contract-auth-defs}
 
 Contracts, schema objects, and individual properties can each link to
 authoritative external definitions (`url` + `type`). This is how a
 contract binds itself to a business term in the glossary, a
 transformation specification, or a regulatory reference.
 
-## Publication and certification {#publication-certification}
+### Publication and certification {#publication-certification}
 
 `publication_scope` (`none`/`domain`/`organization`/`external`)
 replaces the legacy `published` boolean for marketplace visibility.
@@ -207,7 +149,7 @@ Certification fields (`certification_level`,
 `certification_expires_at`, `certification_notes`) operate
 independently from status.
 
-## Relationship to data products {#relationship-to-products}
+### Relationship to data products {#relationship-to-products}
 
 A contract is bound to a data product through a **Deliverable** of the
 product (`OutputPortDb.contract_id`). A single contract may serve
@@ -217,7 +159,7 @@ dependencies, with the contract version pinned at integration time.
 Subscribers to a product receive compliance alerts when the bound
 contract's quality checks fail.
 
-## Versioning and diffing {#versioning-and-diffing}
+### Versioning and diffing {#versioning-and-diffing}
 
 Versions are explicit rows grouped by a stable family identifier —
 historically `base_name` paired with the `parent_contract_id`
@@ -242,6 +184,68 @@ If you also push the YAML to a volume (Indirect delivery — see
 [Delivery and Propagation](delivery-and-propagation.md#indirect-mode)),
 a workspace job picks up the new version and applies it — but the diff
 and the notification fan-out happens in Ontos.
+
+## Under the hood
+
+### Schema objects and properties {#schema-objects}
+
+A contract's schema is a tree:
+
+- **Schema object** (`SchemaObjectDb`) — table-equivalent. Has `name`,
+  `logical_type` (default `object`), optional `physical_name`,
+  `physical_type`, `business_name`, `description`, `tags`,
+  `data_granularity_description`.
+- **Schema property** (`SchemaPropertyDb`) — column-equivalent. Has
+  `name`, `logical_type`, `physical_type`, flags (`required`, `unique`,
+  `primary_key`, `partitioned`, `critical_data_element`), and rich
+  transformation metadata (`transform_source_objects`,
+  `transform_logic`, `transform_description`). Properties may nest via
+  `parent_property_id` for struct/array types.
+
+Properties can carry ODCS classification (`classification`),
+encrypted-name hints, examples, and a JSON blob of logical-type-specific
+options (`logical_type_options_json`).
+
+Each schema object and property is itself an entity that can carry
+semantic links — see
+[Three-tier linking](ontology-and-knowledge-graph.md#three-tier-linking).
+
+### Servers and environments {#servers}
+
+A contract's `servers` block lists the environments where the contract
+applies. Each `DataContractServerDb` row carries `type` (required),
+`environment`, optional `description`, and a `properties` collection of
+key/value pairs for connection details. Servers support ODCS v3.1.0
+stable IDs so external referrers can point at a specific server entry
+across version edits.
+
+### Contract roles {#contract-roles}
+
+A contract declares its own access roles (`DataContractRoleDb`)
+independent of Ontos's RBAC roles. Each entry names a role with
+`access`, `first_level_approvers`, `second_level_approvers`, and
+optional custom properties. These represent the **access role** layer of
+the contract — the business statement of who can read or write the
+underlying data — and feed into the agreement workflow as configurable
+approver groups.
+
+### SLAs and support {#sla-support}
+
+- `DataContractSlaPropertyDb` — typed SLA entries with `property`,
+  `value`, `unit`, `element`, and `driver`. Supports ODCS SLA
+  semantics.
+- `DataContractSupportDb` — communication channels for support
+  (`channel`, `url`, `tool`, `scope`, `invitation_url`).
+- `DataContractPricingDb` — single-row pricing block
+  (`price_amount`, `price_currency`, `price_unit`).
+
+### Relationships {#contract-relationships}
+
+ODCS v3.1.0 schema-level and property-level relationships (foreign
+keys) are stored in `data_contract_schema_object_relationships` and
+`data_contract_schema_property_relationships`. Relationship type
+defaults to `foreignKey`; `from_value` / `to_value` are JSON-serialized
+to allow single-string or array references.
 
 ## Common questions {#common-questions}
 

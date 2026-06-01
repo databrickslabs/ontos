@@ -11,13 +11,15 @@ Customers asking about permissions usually want to know one of three things:
 person need to be able to do?". This doc is structured so you can answer all
 three.
 
-## The permission model {#permission-model}
+## What you see in Ontos
+
+### The permission model {#permission-model}
 
 A **permission** in Ontos is a `feature_id : access_level` pair. The set of
 features (the `APP_FEATURES` map) is the source of truth; each feature
 declares which access levels are valid for it.
 
-### Access levels {#access-levels}
+#### Access levels {#access-levels}
 
 `FeatureAccessLevel` defines six levels in ascending order:
 
@@ -40,7 +42,7 @@ A given feature does not accept every level. Each feature's
 > gets a 403, trust the 403 — the endpoint enforces what it actually
 > enforces, even when stricter than this table.
 
-### Representative features and what each level does {#feature-walkthrough}
+#### Representative features and what each level does {#feature-walkthrough}
 
 This is not the full list — `APP_FEATURES` is the source of truth — but
 these are the features customers ask about most.
@@ -107,7 +109,7 @@ directly — it carries the canonical names, sidebar groups, and
 allowed-levels lists for every feature including the Govern, Deploy,
 and Settings groups.
 
-### Why "what level for what feature" actually matters {#why-permissions-matter}
+#### Why "what level for what feature" actually matters {#why-permissions-matter}
 
 The level matters because the UI and API behave differently per level
 in user-visible ways:
@@ -128,7 +130,7 @@ but `data-contracts:READ_WRITE` inside an inner endpoint will 403 a
 consumer-persona user mid-flow — see the
 [per-execution authorization](#per-execution-authz) section.
 
-## Built-in roles {#built-in-roles}
+### Built-in roles {#built-in-roles}
 
 Ontos seeds six built-in roles on first start when no roles exist yet.
 After seeding they are editable like any other role.
@@ -142,7 +144,7 @@ After seeding they are editable like any other role.
 | [Data Consumer](#data-consumer) | You find products and request access. You don't draft anything — you subscribe, sign agreements, provide feedback. |
 | [Security Officer](#security-officer) | You configure security features, entitlements, access classifications. You're consulted on contract approvals involving PII or restricted data. You sign off on the security side of certification. |
 
-### Admin {#admin}
+#### Admin {#admin}
 
 Granted `Admin` on every feature by default, including all settings
 sub-pages. The Admin role is the canonical carrier of "Ontos admin"
@@ -166,7 +168,7 @@ Producer, Data Consumer, Security Officer) also ship with default
 group bindings matching the conventional group names — see the role
 definitions table below and Settings → RBAC for the live values.
 
-### Data Governance Officer {#data-governance-officer}
+#### Data Governance Officer {#data-governance-officer}
 
 Cross-cutting governance authority.
 
@@ -190,7 +192,7 @@ Cross-cutting governance authority.
 | projects | Read-only |
 | comments | Read/Write |
 
-### Data Steward {#data-steward}
+#### Data Steward {#data-steward}
 
 Curates domains, contracts, glossary terms; reviews assets.
 
@@ -209,7 +211,7 @@ Curates domains, contracts, glossary terms; reviews assets.
 | projects | Read-only |
 | comments | Read/Write |
 
-### Data Producer {#data-producer}
+#### Data Producer {#data-producer}
 
 Creates data products and contracts; manages own teams and projects.
 
@@ -226,7 +228,7 @@ Creates data products and contracts; manages own teams and projects.
 | process-workflows | Read-only |
 | comments | Read/Write |
 
-### Data Consumer {#data-consumer}
+#### Data Consumer {#data-consumer}
 
 Read-only access for discovery, subscription, and commenting.
 
@@ -243,7 +245,7 @@ Read-only access for discovery, subscription, and commenting.
 | projects | Read-only |
 | comments | Read/Write |
 
-### Security Officer {#security-officer}
+#### Security Officer {#security-officer}
 
 Focused on security configuration and entitlements.
 
@@ -259,7 +261,54 @@ Focused on security configuration and entitlements.
 
 Features not listed for a given role default to `None`.
 
-## Identity resolution {#identity-resolution}
+### Filtered (domain-scoped) access {#filtered-access}
+
+The `Filtered` access level signals "read/write, but only to a subset".
+In the current Ontos version it is wired only for the **data-products**
+feature, where it restricts visibility and edit rights to products in
+domains owned by the caller (resolved via team membership and ownership
+ties). Other features list `Filtered` as a permitted level only if the
+feature explicitly implements the scoping; without an implementation,
+the level behaves like `Read/Write` for that feature. This asymmetry is
+evolving — more features may grow scoping in future versions.
+
+### Demo-mode persona override {#persona-override}
+
+For local development and customer demos, Ontos supports a runtime
+persona switch:
+
+- Set `TEST_USER_TOKEN` in the backend environment.
+- The frontend exposes a persona picker (from
+  `data/test_personas.yaml`).
+- Each request from the frontend carries `X-Test-Token`,
+  `X-Test-User-Email`, and optional `X-Test-User-Groups` headers.
+- The backend resolves the identity from these headers instead of OBO
+  SCIM for the duration of the request.
+
+The default persona set covers Admin, Data Governance Officer, Data
+Steward, Data Producer, Data Consumer, Security Officer, and an
+empty-groups "anon" persona for exercising fully-denied paths.
+
+Leave `TEST_USER_TOKEN` unset in production. When it is unset, the
+persona headers are ignored and normal OBO resolution applies.
+
+#### Role override (impersonation) {#role-override}
+
+Independently from the persona-token mechanism, an admin can apply a
+role override for a user via the role-switcher UI. The override is
+held in-memory for the backend process lifetime and replaces the
+user's group-derived role for permission evaluation. Non-admin
+callers may only apply overrides to roles whose `assigned_groups`
+they actually belong to; admins may apply any override. Clearing the
+override returns the user to group-based resolution.
+
+The role override does not affect the workspace-admin shortcut — a
+workspace admin remains a workspace admin even while impersonating a
+non-admin role for the rest of Ontos's permission evaluation.
+
+## Under the hood
+
+### Identity resolution {#identity-resolution}
 
 When a request arrives, Ontos resolves the caller through three layers
 in order:
@@ -277,7 +326,7 @@ in order:
    `assigned_groups`. When multiple roles match, the role with the
    highest summed access-level weight wins.
 
-### Workspace-admin shortcut {#workspace-admin-shortcut}
+#### Workspace-admin shortcut {#workspace-admin-shortcut}
 
 The `is_user_admin` helper checks membership in
 `APP_ADMIN_DEFAULT_GROUPS` (default `["admins"]`). This bypass runs
@@ -303,7 +352,7 @@ is *not* a workspace admin can still be denied by code that hits the
 workspace-admin shortcut — audit both paths when verifying a
 permission change.
 
-### Email-as-implicit-group fallback {#email-as-group-fallback}
+#### Email-as-implicit-group fallback {#email-as-group-fallback}
 
 When SCIM returns an empty group list for a user, Ontos falls back to
 using the user's own email as a single implicit "group" name. This is
@@ -316,18 +365,7 @@ Production deployments should not depend on the email fallback. It
 exists for bootstrapping the first admin when SCIM is unavailable.
 The Ontos Setup guide documents the DB update to fix this case.
 
-## Filtered (domain-scoped) access {#filtered-access}
-
-The `Filtered` access level signals "read/write, but only to a subset".
-In the current Ontos version it is wired only for the **data-products**
-feature, where it restricts visibility and edit rights to products in
-domains owned by the caller (resolved via team membership and ownership
-ties). Other features list `Filtered` as a permitted level only if the
-feature explicitly implements the scoping; without an implementation,
-the level behaves like `Read/Write` for that feature. This asymmetry is
-evolving — more features may grow scoping in future versions.
-
-## Per-execution authorization {#per-execution-authz}
+### Per-execution authorization {#per-execution-authz}
 
 Feature-level checks decide whether a user may enter a feature at all.
 Inside a feature, sensitive operations (approving an agreement,
@@ -343,40 +381,6 @@ outer feature gate gets the persona in the door, but every inner
 sensitive operation may have its own check that was originally written
 assuming a different persona. Audit the gates end to end before
 declaring a permission change done.
-
-## Demo-mode persona override {#persona-override}
-
-For local development and customer demos, Ontos supports a runtime
-persona switch:
-
-- Set `TEST_USER_TOKEN` in the backend environment.
-- The frontend exposes a persona picker (from
-  `data/test_personas.yaml`).
-- Each request from the frontend carries `X-Test-Token`,
-  `X-Test-User-Email`, and optional `X-Test-User-Groups` headers.
-- The backend resolves the identity from these headers instead of OBO
-  SCIM for the duration of the request.
-
-The default persona set covers Admin, Data Governance Officer, Data
-Steward, Data Producer, Data Consumer, Security Officer, and an
-empty-groups "anon" persona for exercising fully-denied paths.
-
-Leave `TEST_USER_TOKEN` unset in production. When it is unset, the
-persona headers are ignored and normal OBO resolution applies.
-
-### Role override (impersonation) {#role-override}
-
-Independently from the persona-token mechanism, an admin can apply a
-role override for a user via the role-switcher UI. The override is
-held in-memory for the backend process lifetime and replaces the
-user's group-derived role for permission evaluation. Non-admin
-callers may only apply overrides to roles whose `assigned_groups`
-they actually belong to; admins may apply any override. Clearing the
-override returns the user to group-based resolution.
-
-The role override does not affect the workspace-admin shortcut — a
-workspace admin remains a workspace admin even while impersonating a
-non-admin role for the rest of Ontos's permission evaluation.
 
 ## Cross-references {#cross-references}
 

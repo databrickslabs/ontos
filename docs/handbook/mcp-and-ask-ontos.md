@@ -5,7 +5,9 @@ copilot** and an **MCP server endpoint**. They share the same underlying
 tools but are accessed by different clients with different rules. Most
 customer questions conflate the two; this doc separates them.
 
-## Ask Ontos — the in-product copilot {#what-is-ask-ontos}
+## What you see in Ontos
+
+### Ask Ontos — the in-product copilot {#what-is-ask-ontos}
 
 Ask Ontos is the chat panel you can open from any page. It's a slim LLM
 client that lets a logged-in user ask natural-language questions, run
@@ -97,7 +99,7 @@ mitigation is grounding plus a refusal default — when a query can't be
 satisfied with confidence, the right behavior is "I don't know" rather
 than a fabricated answer.
 
-## MCP Server — Ontos as a tool catalog for external agents {#mcp-server}
+### MCP Server — Ontos as a tool catalog for external agents {#mcp-server}
 
 Separately from the in-product copilot, Ontos exposes a **Model Context
 Protocol** (MCP) server at `/api/mcp`. This is a JSON-RPC 2.0 endpoint
@@ -106,7 +108,7 @@ can connect to. The server publishes the same tool catalog Ask Ontos
 uses, but with a different authentication scheme and a different
 permission model.
 
-### Why two surfaces {#two-surfaces}
+#### Why two surfaces {#two-surfaces}
 
 The in-product copilot is convenient for an authenticated user who's
 already in Ontos. The MCP server is for cases where an agent running
@@ -125,7 +127,7 @@ Same tool registry, different transport, different authentication:
 | **Permissions** | Inherits the caller's Ontos role | Constrained by the token's scopes |
 | **Transport** | App UI calls backend | JSON-RPC 2.0 over HTTP (with SSE option) |
 
-### Tokens and scopes {#mcp-tokens}
+#### Tokens and scopes {#mcp-tokens}
 
 External clients authenticate with a token — created from Settings → MCP
 Tokens, shown once on creation, then hashed in the DB. Each token
@@ -137,7 +139,7 @@ Admins manage the token store. The MCP feature is gated separately from
 ordinary settings access — a user with `settings:READ_WRITE` does not
 implicitly get MCP token management.
 
-### What MCP exposes {#mcp-exposes}
+#### What MCP exposes {#mcp-exposes}
 
 The same tool catalog as Ask Ontos, surfaced through the MCP protocol's
 `tools/list` and `tools/call` methods. Each tool's input schema is the
@@ -146,13 +148,17 @@ endpoint also implements the protocol's `initialize`, `ping`, and
 notification semantics; SSE transport is available for streaming agent
 sessions.
 
-### What MCP isn't {#mcp-isnt}
+#### What MCP isn't {#mcp-isnt}
 
 The Ontos MCP server is a *server* (it exposes Ontos's tools so
 external agents can call them). It is **not** a *client* of other MCP
 servers. Ontos does not currently consume third-party MCP catalogs at
 runtime to ground its own answers; for that, the in-product copilot
 relies on its concept corpus and tool registry as described above.
+
+## Under the hood
+
+Implementation details (JSON-RPC 2.0 transport, `tool.to_mcp_format()` schemas, SSE streaming, token-hashing storage, `SPARQLQueryValidator`) are documented in the MCP routes and Ask Ontos manager source. See `src/backend/src/routes/mcp_routes.py`, `src/backend/src/controller/llm_search_manager.py`, and `src/backend/src/controller/mcp_token_manager.py` for the canonical wiring.
 
 ## Cross-references {#cross-references}
 

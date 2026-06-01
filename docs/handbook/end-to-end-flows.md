@@ -15,7 +15,9 @@ This doc walks each flow step by step, calls out who does what at each
 step, and points at the questions Ask Ontos can answer along the way.
 Both flows produce semantic links — that's the join.
 
-## Two flows, one bridge {#two-flows-one-bridge}
+## What you see in Ontos
+
+### Two flows, one bridge {#two-flows-one-bridge}
 
 The shared mechanism is a row in `entity_semantic_links`. A bottom-up
 team adds those rows after they have data and need to express what it
@@ -41,12 +43,12 @@ to ground them in real data. Same rows, opposite arrows.
                         two directions of travel)
 ```
 
-## Flow A — Bottom-up: UC → curated catalog {#flow-a-bottom-up}
+### Flow A — Bottom-up: UC → curated catalog {#flow-a-bottom-up}
 
 The canonical phrasing customers use: *"bring asset from UC to Ontos,
 asset to product, product to contract, assign concepts"*. Eight steps.
 
-### Step 0 — Set up domain, team, project {#step-a-0}
+#### Step 0 — Set up domain, team, project {#step-a-0}
 
 **Who:** Admin or Data Governance Officer.
 
@@ -61,7 +63,7 @@ keys off domain ownership too. Don't skip this even for small demos.
 **Ask Ontos at this stage:** "What domains exist?" "Show me teams in
 domain X."
 
-### Step 1 — Bring an asset from UC into Ontos {#step-a-1}
+#### Step 1 — Bring an asset from UC into Ontos {#step-a-1}
 
 **Who:** Data Producer or Data Engineer.
 
@@ -79,7 +81,7 @@ itself doesn't provide.
 **Ask Ontos at this stage:** "Which UC table does this asset point at?"
 "What's the meaning of this column?"
 
-### Step 2 — Create the Data Product {#step-a-2}
+#### Step 2 — Create the Data Product {#step-a-2}
 
 **Who:** Data Producer / Data Product Owner.
 
@@ -98,7 +100,7 @@ primary ones.
 **Ask Ontos at this stage:** "What does this delivery method mean?"
 "What status do I move the product to next?"
 
-### Step 3 — Attach a Data Contract per Deliverable {#step-a-3}
+#### Step 3 — Attach a Data Contract per Deliverable {#step-a-3}
 
 **Who:** Data Producer (drafting) and Data Steward (reviewing).
 
@@ -118,7 +120,7 @@ contrast, are required.
 have NULL contracts?" "Show me contracts in this domain in
 under_review."
 
-### Step 4 — Enrich the product {#step-a-4}
+#### Step 4 — Enrich the product {#step-a-4}
 
 **Who:** Data Producer + Data Steward.
 
@@ -137,7 +139,7 @@ the wrapper.
 this contract — am I missing accuracy on PII fields?" "Which products in
 my domain don't have a documented owner?"
 
-### Step 5 — Assign semantic terms / concepts {#step-a-5}
+#### Step 5 — Assign semantic terms / concepts {#step-a-5}
 
 **Who:** Data Steward, Data Engineer, or Business Analyst.
 
@@ -156,7 +158,7 @@ the right table by concept, not by name.
 **Ask Ontos at this stage:** "Which products in my domain don't have a
 glossary term?" "What concept is this column linked to, and why?"
 
-### Step 6 — Steward review + certify + publish {#step-a-6}
+#### Step 6 — Steward review + certify + publish {#step-a-6}
 
 **Who:** Data Steward (certifies) + Data Product Owner (publishes).
 
@@ -175,7 +177,7 @@ that captures sign-off from named business owners.
 **Ask Ontos at this stage:** "What changed in v2 compared to v1?" "Who
 needs to approve this status change?"
 
-### Step 7 — Consumer discovers + subscribes {#step-a-7}
+#### Step 7 — Consumer discovers + subscribes {#step-a-7}
 
 **Who:** Data Consumer.
 
@@ -191,13 +193,13 @@ principals.
 **Ask Ontos at this stage:** "Where can I find a product about customer
 churn?" "Who owns the daily-orders product?" "How do I request access?"
 
-## Flow B — Top-down: ontology → physical assets → UC tags {#flow-b-top-down}
+### Flow B — Top-down: ontology → physical assets → UC tags {#flow-b-top-down}
 
 The mirror narrative. Five steps. The last one — propagating concept
 assignments back to UC governance tags — ships today through a workflow
 path, with a parallel Delivery Service path being filled in.
 
-### Step 1 — Author the ontology externally {#step-b-1}
+#### Step 1 — Author the ontology externally {#step-b-1}
 
 **Who:** Knowledge Engineer / Data Architect.
 
@@ -219,7 +221,7 @@ requiring human curation, not a finished ontology.
 is writing TTL outside Ontos. Once it's uploaded, Ask Ontos becomes
 useful for exploration.
 
-### Step 2 — Upload + enable + visualize {#step-b-2}
+#### Step 2 — Upload + enable + visualize {#step-b-2}
 
 **Who:** Knowledge Engineer or Admin.
 
@@ -237,7 +239,7 @@ connect to anything, missing domains.
 **Ask Ontos at this stage:** "What concepts does our ontology cover for
 the Sales domain?" "Which concepts have no data mapping yet?"
 
-### Step 3 — Map ontology concepts down to UC assets {#step-b-3}
+#### Step 3 — Map ontology concepts down to UC assets {#step-b-3}
 
 **Who:** Data Steward / Data Engineer.
 
@@ -257,7 +259,7 @@ is the fallback.
 **Ask Ontos at this stage:** "Show me all products that satisfy concept
 X." "What concept does this column embody?"
 
-### Step 4 — Layer a Business Glossary on top {#step-b-4}
+#### Step 4 — Layer a Business Glossary on top {#step-b-4}
 
 **Who:** Data Steward / Business Analyst / Domain Expert.
 
@@ -275,7 +277,7 @@ short list.
 **Ask Ontos at this stage:** "What's the canonical definition of ARR in
 our org?" "Show me certified terms in the Finance glossary."
 
-### Step 5 — Push concept tags back to UC {#step-b-5}
+#### Step 5 — Push concept tags back to UC {#step-b-5}
 
 **Who:** Data Steward / Admin, with the UC tag-sync job installed.
 
@@ -313,7 +315,7 @@ backward pull is the part still evolving.
 the X product been synced to UC yet?" "When was the uc_tag_sync job
 last run?" "Show me UC tables tagged with concept Y."
 
-## Where the flows meet {#where-they-meet}
+### Where the flows meet {#where-they-meet}
 
 Step 5 of Flow A and Step 3 of Flow B are the same action: writing a
 row to `entity_semantic_links`. A team running both flows simultaneously
@@ -327,6 +329,19 @@ defend, that the same concept IRI is reused across links instead of
 being re-created with subtly different IRIs, and that the glossary is
 curated as a published subset of the broader ontology rather than as a
 separate parallel artifact.
+
+## Under the hood
+
+The shared bridge between Flow A and Flow B is the
+`entity_semantic_links` table; Step 5 of Flow A and Step 3 of Flow B
+both write rows into it. The forward propagation from a semantic link
+to a UC governance tag is implemented today by the `uc_tag_sync`
+workflow, which joins `entity_semantic_links` against the
+contract/product/domain/asset metadata and issues
+`ALTER TABLE … SET TAGS (...)` via Spark SQL. The parallel
+Delivery Service path defines `TAG_ASSIGN` as a first-class change
+type — see [Delivery and Propagation](delivery-and-propagation.md#concept-to-uc-tag)
+for the under-the-hood detail.
 
 ## Common questions {#common-questions}
 

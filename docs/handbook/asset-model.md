@@ -4,26 +4,73 @@ A quick reference for the unified Asset entity and its ontology-driven type
 system. For the longer story behind why the ontology is prescriptive,
 see [Ontology and Knowledge Graph](ontology-and-knowledge-graph.md#prescriptive-principle).
 
-## What an Asset is {#what-is-an-asset}
+## What you see in Ontos
 
-An **Asset** is the abstract reference Ontos keeps to a governed "thing".
+### What an Asset is {#what-is-an-asset}
+
+An **Asset** is the Ontos-side handle Ontos keeps for a governed "thing".
 The thing might be a UC table, a UC view, a notebook, a model, a
 dashboard, a job, a pipeline, an API endpoint, a Power BI report — any
 named resource the organization wants to apply governance to. The Asset
-is the Ontos-side handle; the thing itself lives in its native system.
+is the Ontos record; the thing itself lives in its native system.
 
-Persisted as `AssetDb` (`assets` table). Carries a name, description,
-typed `asset_type_id`, optional `domain_id`, platform, `location` (FQN,
-URL, or path), JSON `properties`, quick tags, and lifecycle `status`
-(`draft` / `active` / `deprecated` / `retired`).
+Each Asset carries a name and description, a typed asset type (driven
+by the ontology), an optional domain, a platform, a location (the
+fully-qualified name, URL, or path), free-form properties, quick tags,
+and a lifecycle status (Draft / Active / Deprecated / Retired) shown
+on the Asset detail page.
 
-## Ontology-driven Asset Types {#asset-types-ontology-driven}
+### Ontology-driven Asset Types {#asset-types-ontology-driven}
 
-Asset types are **not** hardcoded in the application. They are derived
-from the ontology TTL at startup, per the
-[prescriptive-ontology principle](ontology-and-knowledge-graph.md#prescriptive-principle):
+Asset types in Ontos are **not** a hardcoded list. They are derived
+from the ontology that ships with the deployment, per the
+[prescriptive-ontology principle](ontology-and-knowledge-graph.md#prescriptive-principle).
 
-1. `ontos-ontology.ttl` is parsed at startup.
+Adding a new entity type to your knowledge model is an ontology edit —
+add a class with the right annotations, re-sync — not a code change.
+The form fields rendered for that type in the Asset Explorer, the icon
+on the type chip, the relationship options in the relationship panel,
+the persona visibility — all driven by the ontology.
+
+### Where Assets show up {#where-assets-show-up}
+
+- **Data Products** — Deliverables (output ports) reference one or more
+  Assets as their backing surface.
+- **Data Contracts** — schema objects link to asset columns via
+  property-level semantic links; assets implement contracts through an
+  "implements contract" relationship.
+- **Marketplace** — Assets surface through the data products they back.
+- **Semantic Links** — Assets are valid targets for semantic links;
+  this is how a concept gets pinned to a UC table.
+- **Asset Explorer** — the unified view across asset types, with
+  persona-based visibility filtering so each role sees the asset types
+  that are relevant to their work.
+
+### Asset Reviews {#asset-reviews}
+
+The **Data Asset Review** workflow lets a Producer request that a
+Steward formally inspect an Asset before it gets attached to a published
+product. Reviews are first-class approval workflows that produce an
+Agreement on completion. The review captures inspection notes, sign-off,
+and an optional approval recommendation.
+
+The feature ships in the current version. The legacy "Datasets" surface
+is deprecated in favor of the unified Asset Explorer.
+
+## Under the hood
+
+### Persisted Asset record {#persisted-asset-record}
+
+Assets persist as `AssetDb` rows in the `assets` table, carrying name,
+description, typed `asset_type_id`, optional `domain_id`, platform,
+`location` (FQN, URL, or path), JSON `properties`, quick tags, and
+lifecycle `status` (`draft` / `active` / `deprecated` / `retired`).
+
+### Asset-type sync from the TTL {#asset-type-sync}
+
+The asset-type pipeline runs at startup:
+
+1. `ontos-ontology.ttl` is parsed.
 2. For every class annotated `ontos:modelTier "asset"`, a row in
    `AssetTypeDb` is created or updated. The row carries the UI icon,
    category, persona visibility, required/optional metadata schemas
@@ -31,12 +78,7 @@ from the ontology TTL at startup, per the
 3. The frontend's Asset Explorer reads `/api/asset-types` at load — it
    doesn't ship a hardcoded list.
 
-The practical implication: adding a new entity type to your knowledge
-model is an ontology edit (new class with the right annotations and a
-fresh sync), not a code change. The form fields rendered for that type,
-the icon, the relationship picker — all driven by the TTL.
-
-## AssetTypeCategory {#asset-type-categories}
+### AssetTypeCategory {#asset-type-categories}
 
 `AssetTypeCategory` is a coarse classification on persisted asset types:
 
@@ -51,7 +93,7 @@ classification (`DATA` / `COMPUTE` / `SEMANTIC` / `VIZ` / `STORAGE` /
 `OTHER`) used by integration adapters when normalizing platform-specific
 types to the unified model.
 
-## Entity Relationships {#entity-relationships}
+### Entity Relationships {#entity-relationships}
 
 Assets connect to each other — and to other Ontos entities — through
 `EntityRelationshipDb` (`entity_relationships` table). The model is
@@ -69,34 +111,7 @@ new relationship type is an ontology edit. The table is indexed on
 both endpoints and on relationship type for fast lookup in either
 direction.
 
-## Where Assets show up {#where-assets-show-up}
-
-- **Data Products** — output ports (Deliverables) reference one or more
-  Assets as their backing surface.
-- **Data Contracts** — schema objects link to asset columns via
-  property-level semantic links; assets implement contracts through the
-  `implementsContract` relationship.
-- **Marketplace** — assets surface through the products they back.
-- **Semantic Links** — assets are valid `entity_type` targets for
-  semantic links; this is how a concept gets pinned to a UC table.
-- **Asset Explorer** — the unified view across asset types, with
-  persona-based visibility filtering driven by the
-  `ontos:uiPersonaVisibility` annotation on the asset class.
-
-## Asset Reviews {#asset-reviews}
-
-The **Data Asset Review** workflow lets a Producer request that a
-Steward formally inspect an Asset before it gets attached to a published
-product. Reviews are first-class workflow executions
-(`workflow_type = "approval"`, trigger `for_request_review`) that
-produce an Agreement on completion. The review captures inspection
-notes, sign-off, and an optional approval recommendation.
-
-The feature ships in the current version. The legacy
-"datasets" endpoints (`/api/datasets`) are deprecated in favor of
-querying assets directly through `/api/assets`.
-
-## Cascade delete {#cascade-delete}
+### Cascade delete {#cascade-delete}
 
 Assets participate in a cascade-delete preview: deleting an asset
 identifies dependent entities (children via hierarchical
@@ -104,6 +119,13 @@ relationships, products / contracts referencing the asset) so the
 caller sees the blast radius before confirming. The preview is
 exposed as a tree via `DeletePreviewItem`; the actual delete uses
 `CascadeDeleteRequest` and returns a per-asset success / failure list.
+
+### Asset Reviews — workflow plumbing {#asset-reviews-plumbing}
+
+Reviews execute as `workflow_type = "approval"` workflow executions
+with trigger `for_request_review`. The legacy "datasets" endpoints
+(`/api/datasets`) are deprecated in favor of querying assets directly
+through `/api/assets`.
 
 ## Cross-references {#cross-references}
 

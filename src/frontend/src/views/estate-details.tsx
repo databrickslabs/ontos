@@ -56,7 +56,7 @@ export interface Estate {
 // --- End TypeScript Interfaces ---
 
 export default function EstateDetailsView() {
-  const { t } = useTranslation(['estates', 'common']);
+  useTranslation(['estates', 'common']);
   const { estateId } = useParams<{ estateId: string }>();
   const navigate = useNavigate();
   const { get, put } = useApi();

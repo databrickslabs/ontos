@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Package, ExternalLink, ShoppingBag, Search, X, LayoutList, Network, Database, Grid2X2, Loader2 } from 'lucide-react';
+import { Package, ExternalLink, ShoppingBag, Search, X, LayoutList, Network, Database, Grid2X2 } from 'lucide-react';
 import { CardSkeleton, SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { useDomains } from '@/hooks/use-domains';

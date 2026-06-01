@@ -34,7 +34,7 @@ function buildToc(markdown: string) {
 }
 
 export default function DocumentationViewer() {
-  const { t } = useTranslation('common');
+  useTranslation('common');
   const { docName } = useParams<{ docName: string }>();
   const [markdown, setMarkdown] = useState<string>('');
   const [title, setTitle] = useState<string>('Documentation');

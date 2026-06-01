@@ -33,7 +33,7 @@ function buildToc(markdown: string) {
 }
 
 export default function UserGuide() {
-  const { t } = useTranslation('common');
+  useTranslation('common');
   const [markdown, setMarkdown] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

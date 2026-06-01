@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, ArrowLeft, PlayCircle, Loader2, Scale, Pencil } from 'lucide-react';
+import { AlertCircle, ArrowLeft, PlayCircle, Scale, Pencil } from 'lucide-react';
 import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';

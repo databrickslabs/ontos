@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Database, BoxSelect, Star, AlertCircle, Info, Bell } from 'lucide-react';
+import { Database, BoxSelect, Star, AlertCircle, Info, Bell } from 'lucide-react';
 import { CardSkeleton, SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { Link } from 'react-router-dom';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';

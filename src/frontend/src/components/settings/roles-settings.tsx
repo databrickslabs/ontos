@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AppRole, FeatureConfig, FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Pencil, Trash2, AlertCircle, ChevronDown, UserPlus, Shield } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, ChevronDown, UserPlus, Shield } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import RoleFormDialog from './role-form-dialog'; // Uncomment and import

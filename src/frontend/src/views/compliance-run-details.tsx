@@ -41,7 +41,7 @@ interface Result {
 }
 
 export default function ComplianceRunDetails() {
-  const { t } = useTranslation(['compliance', 'common']);
+  useTranslation(['compliance', 'common']);
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
   const { get } = useApi();

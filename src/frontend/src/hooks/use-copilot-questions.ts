@@ -30,6 +30,16 @@ function resolveFeatureId(pathname: string, contextFeatureId?: string): string |
   return null;
 }
 
+// Specificity ranking: lower numbers sort first. Entity-templated
+// questions (`requiresEntity`) are the most specific because they
+// embed the current detail-page entity in the prompt; page-scoped
+// questions come next; global ones are last.
+function specificityRank(q: CopilotQuestionDef): number {
+  if (q.requiresEntity === true) return 0;
+  if (q.contexts.length > 0) return 1;
+  return 2;
+}
+
 export function useCopilotQuestions(
   adoptionMode?: AdoptionMode | null,
 ): CopilotQuestionGroup[] {
@@ -72,10 +82,23 @@ export function useCopilotQuestions(
       return hasPermission(q.featureId, q.minAccess);
     });
 
+    // Sort by specificity so the most-context-bound questions surface
+    // first: entity-templated → page-scoped → global. Keeps relative
+    // order stable within a tier (definition order in COPILOT_QUESTIONS).
+    matching.sort((a, b) => specificityRank(a) - specificityRank(b));
+
+    // Cap by page scope. Detail pages (selectedEntity present) and
+    // type-scoped list pages get a tight cap so the most specific
+    // questions dominate; main/marketplace/search get a wider cap.
+    const onDetailPage = !!pageContext?.selectedEntity;
+    const onListScope = !onDetailPage && currentFeatureId !== null;
+    const cap = onDetailPage ? 6 : onListScope ? 6 : 15;
+    const capped = matching.slice(0, cap);
+
     const groups: CopilotQuestionGroup[] = [];
 
     for (const cat of COPILOT_CATEGORIES) {
-      const catQuestions = matching
+      const catQuestions = capped
         .filter((q) => q.category === cat)
         .map((q) => {
           const raw = t(`copilot-questions:questions.${q.key}`);

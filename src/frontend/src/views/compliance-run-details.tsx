@@ -10,6 +10,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import {
+  CardSkeleton,
+  DetailHeaderSkeleton,
+  TableSkeleton,
+} from '@/components/common/list-view-skeleton';
 
 interface Run {
   id: string; // UUID
@@ -99,7 +104,11 @@ export default function ComplianceRunDetails() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-10 text-center text-muted-foreground">{t('common:labels.loading')}</div>
+      <div className="py-6 space-y-6">
+        <DetailHeaderSkeleton actionButtons={1} />
+        <CardSkeleton titleWidth="w-48" descriptionWidth="w-64" contentRows={3} />
+        <TableSkeleton columns={6} rows={6} />
+      </div>
     );
   }
   if (error || !run) {

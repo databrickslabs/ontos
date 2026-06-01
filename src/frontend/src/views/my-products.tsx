@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Package, ExternalLink, ShoppingBag, Search, X, LayoutList, Network, Database, Grid2X2, Loader2 } from 'lucide-react';
-import { CardSkeleton } from '@/components/common/list-view-skeleton';
+import { CardSkeleton, SkeletonBlock } from '@/components/common/list-view-skeleton';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { useDomains } from '@/hooks/use-domains';
 import { useViewModeStore } from '@/stores/view-mode-store';
@@ -265,10 +265,7 @@ export default function MyProducts() {
           </div>
         </div>
         {domainsLoading || domainDetailsLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground h-[220px] justify-center border rounded-lg bg-muted/20">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">{t('marketplace.loadingDomains')}</span>
-          </div>
+          <SkeletonBlock height="h-[220px]" className="rounded-lg" />
         ) : domainBrowserStyle === 'pills' ? (
           <div className="flex flex-wrap gap-2">
             <Button variant={selectedDomainId === null ? 'default' : 'outline'} size="sm" onClick={() => setSelectedDomainId(null)} className="rounded-full">

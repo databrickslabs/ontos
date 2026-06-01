@@ -11,6 +11,7 @@ import { ArrowLeftRight, Plus, Trash2, Edit2, Clock, CheckCircle2, XCircle } fro
 import { ColumnDef } from "@tanstack/react-table"
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
 import { DataTable } from '@/components/ui/data-table'
+import { ListViewSkeleton } from '@/components/common/list-view-skeleton'
 
 interface EntitlementsSyncConfig {
   id: string
@@ -355,13 +356,17 @@ export default function EntitlementsSync() {
         </Dialog>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={configs}
-        searchColumn="name"
-        storageKey="entitlements-sync-sort"
-        isLoading={isLoading}
-      />
+      {isLoading && configs.length === 0 ? (
+        <ListViewSkeleton columns={5} rows={5} toolbarButtons={1} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={configs}
+          searchColumn="name"
+          storageKey="entitlements-sync-sort"
+          isLoading={isLoading}
+        />
+      )}
     </div>
   )
 } 

@@ -19,6 +19,11 @@ import { Label } from '@/components/ui/label';
 // Textarea - unused
 // import { Textarea } from '@/components/ui/textarea';
 import { DataTable } from "@/components/ui/data-table";
+import {
+  CardSkeleton,
+  DetailHeaderSkeleton,
+  TableSkeleton,
+} from '@/components/common/list-view-skeleton';
 import { Toaster } from "@/components/ui/toaster";
 import { RelativeDate } from '@/components/common/relative-date';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -221,7 +226,13 @@ export default function DataAssetReviewDetails() {
 
     // --- Render Logic --- //
     if (loading) {
-        return <div className="flex justify-center items-center h-64"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
+        return (
+            <div className="py-6 space-y-6">
+                <DetailHeaderSkeleton actionButtons={1} />
+                <CardSkeleton titleWidth="w-56" descriptionWidth="w-72" contentRows={4} />
+                <TableSkeleton columns={5} rows={5} />
+            </div>
+        );
     }
     if (error) {
         return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>;

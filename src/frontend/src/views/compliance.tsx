@@ -27,6 +27,10 @@ import { ColumnDef } from "@tanstack/react-table";
 import { useApi } from '@/hooks/use-api';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { DataTable } from '@/components/ui/data-table';
+import {
+  ListViewSkeleton,
+  StatCardsSkeleton,
+} from '@/components/common/list-view-skeleton';
 
 interface CompliancePolicy {
   id: string; // UUID
@@ -316,8 +320,9 @@ export default function Compliance() {
       </div>
 
       {apiIsLoading && !isDialogOpen && (
-        <div className="flex justify-center items-center h-64">
-          <p>{t('compliance:loading')}</p>
+        <div className="space-y-4">
+          <StatCardsSkeleton count={4} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" />
+          <ListViewSkeleton columns={6} rows={5} showToolbar={false} toolbarButtons={0} />
         </div>
       )}
 

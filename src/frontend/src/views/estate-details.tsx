@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Globe, Edit3, PlusCircle, Trash2, Share2, Database, Zap, ZapOff, Settings2, ShieldCheck, ListFilter } from 'lucide-react';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
 import AddSharingPolicyDialog from '@/components/estates/add-sharing-policy-dialog';
 
 // --- TypeScript Interfaces (Consider moving to a shared types/estate.ts file later) ---
@@ -179,7 +180,7 @@ export default function EstateDetailsView() {
   };
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-64">{t('common:labels.loadingEstateDetails')}</div>;
+    return <DetailViewSkeleton cards={3} actionButtons={2} />;
   }
 
   if (error) {

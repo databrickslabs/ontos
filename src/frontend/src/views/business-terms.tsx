@@ -15,8 +15,11 @@ import {
   Plus,
   ChevronDown,
   Upload,
-  Loader2,
 } from 'lucide-react';
+import {
+  FilterBarSkeleton,
+  HierarchyTreeSkeleton,
+} from '@/components/common/list-view-skeleton';
 import type {
   OntologyConcept,
   KnowledgeCollection,
@@ -384,8 +387,9 @@ export default function BusinessTermsView() {
 
       {/* Loading state */}
       {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div className="flex-1 flex flex-col gap-4">
+          <FilterBarSkeleton filterCount={3} />
+          <HierarchyTreeSkeleton groups={4} itemsPerGroup={4} />
         </div>
       ) : (
         <div className="flex-1 flex flex-col gap-4">

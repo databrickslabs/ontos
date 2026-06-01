@@ -6,7 +6,7 @@ import {
   Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain, Activity,
   Server, Shield, BookOpen, Database, FolderOpen, Shapes, FileSpreadsheet, FileInput,
 } from 'lucide-react';
-import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
+import { SplitPaneSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
@@ -414,9 +414,16 @@ export default function AssetExplorerView() {
   }, [canWrite, canAdmin, navigate, selectedTypeId]);
 
   if (apiIsLoading && assetTypes.length === 0) {
+    // Asset Explorer uses a sidebar (asset type nav) + main DataTable layout
     return (
       <div className="py-6">
-        <ListViewSkeleton columns={5} rows={5} toolbarButtons={1} />
+        <SplitPaneSkeleton
+          sidebarVariant="list"
+          sidebarItems={8}
+          main="table"
+          tableColumns={8}
+          tableRows={6}
+        />
       </div>
     );
   }

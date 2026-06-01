@@ -10,6 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { MoreHorizontal, Globe, Plus, Share2, Database, Network } from 'lucide-react';
+import {
+  GraphCanvasSkeleton,
+  ListViewSkeleton,
+} from '@/components/common/list-view-skeleton';
 import { ColumnDef } from "@tanstack/react-table"
 import {
   DropdownMenu,
@@ -78,6 +82,7 @@ export default function EstateManager() {
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const [estates, setEstates] = useState<Estate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedEstate, setSelectedEstate] = useState<Estate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Estate>>({
@@ -108,6 +113,7 @@ export default function EstateManager() {
 
   const fetchEstates = async () => {
     try {
+      setIsLoading(true);
       const response = await get<Estate[]>('/api/estates');
       setEstates(response.data || []);
     } catch (error) {
@@ -117,6 +123,8 @@ export default function EstateManager() {
         variant: 'destructive',
       });
       setEstates([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -384,7 +392,13 @@ export default function EstateManager() {
           />
         </div>
 
-        {viewMode === 'table' ? (
+        {isLoading ? (
+          viewMode === 'table' ? (
+            <ListViewSkeleton columns={8} rows={5} toolbarButtons={1} />
+          ) : (
+            <GraphCanvasSkeleton showToolbar={false} height="h-[calc(100vh-280px)]" />
+          )
+        ) : viewMode === 'table' ? (
           <DataTable
             columns={columns}
             data={estates}

@@ -16,11 +16,12 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { RelativeDate } from '@/components/common/relative-date';
 import { 
   GitCompare, Plus, Play, FileCheck, Link2, 
-  Database, AlertCircle, Loader2,
+  Database, AlertCircle,
   // CheckCircle2, // Available for future use
   Clock, Trash2, Settings2, RefreshCw, Users,
   Merge, Eye
 } from 'lucide-react';
+import { SplitPaneSkeleton } from '@/components/common/list-view-skeleton';
 
 import MdmConfigDialog from '@/components/mdm/mdm-config-dialog';
 import LinkSourceDialog from '@/components/mdm/link-source-dialog';
@@ -282,9 +283,14 @@ export default function MasterDataManagement() {
       )}
 
       {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
+        <SplitPaneSkeleton
+          sidebarWidth="w-1/3"
+          sidebarVariant="cards"
+          sidebarItems={4}
+          main="panel"
+          tableRows={4}
+          showHeader={false}
+        />
       ) : (
         <div className="grid grid-cols-12 gap-6">
           {/* MDM Configurations List */}

@@ -49,6 +49,7 @@ import { ColumnDef, Column } from "@tanstack/react-table";
 import { useApi } from '@/hooks/use-api';
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
 import { DataTable } from '@/components/ui/data-table';
+import { TableSkeleton } from '@/components/common/list-view-skeleton';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import type { 
@@ -1362,9 +1363,7 @@ export default function Workflows() {
         </CardHeader>
         <CardContent>
           {isLoadingWorkflows ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
+            <TableSkeleton columns={5} rows={5} bordered={false} />
           ) : workflows.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <GitBranch className="h-12 w-12 mx-auto mb-4 opacity-20" />
@@ -1430,9 +1429,7 @@ export default function Workflows() {
         </CardHeader>
         <CardContent>
           {isLoadingExecutions ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
+            <TableSkeleton columns={8} rows={5} bordered={false} />
           ) : executions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Play className="h-12 w-12 mx-auto mb-4 opacity-20" />

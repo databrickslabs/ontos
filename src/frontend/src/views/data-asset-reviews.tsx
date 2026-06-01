@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, AlertCircle, Loader2, ClipboardCheck, ChevronDown, Trash2 } from 'lucide-react';
+import { Plus, AlertCircle, ClipboardCheck, ChevronDown, Trash2 } from 'lucide-react';
+import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -209,9 +210,7 @@ export default function DataAssetReviews() {
             )}
 
             {loading ? (
-                <div className="flex justify-center items-center h-64">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                </div>
+                <ListViewSkeleton columns={8} rows={5} toolbarButtons={1} />
             ) : (
                 <DataTable
                     columns={columns}

@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
+import { HierarchyTreeSkeleton } from '@/components/common/list-view-skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // Tabs imports commented out - not currently used
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -791,9 +792,7 @@ const CatalogCommander: React.FC = () => {
             </div>
             <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
               {isLoading ? (
-                <div className="flex items-center justify-center h-full min-h-[200px]">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
+                <HierarchyTreeSkeleton groups={4} itemsPerGroup={4} />
               ) : error ? (
                 <div className="flex flex-col items-center justify-center h-full min-h-[200px] p-4">
                   <div className="text-destructive text-sm mb-3">{error}</div>
@@ -910,9 +909,7 @@ const CatalogCommander: React.FC = () => {
                     </div>
                     <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
                       {isLoading ? (
-                        <div className="flex items-center justify-center h-full min-h-[200px]">
-                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
+                        <HierarchyTreeSkeleton groups={4} itemsPerGroup={4} />
                       ) : error ? (
                         <div className="flex flex-col items-center justify-center h-full min-h-[200px] p-4">
                           <div className="text-destructive text-sm mb-3">{error}</div>

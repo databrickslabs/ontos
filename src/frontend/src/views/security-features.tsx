@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Badge } from '@/components/ui/badge';
+import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 
 interface SecurityFeature {
   id: string;
@@ -32,6 +33,7 @@ interface SecurityFeature {
 const SecurityFeatures: React.FC = () => {
   const { t } = useTranslation(['security-features', 'common']);
   const [features, setFeatures] = useState<SecurityFeature[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFeature, setEditingFeature] = useState<SecurityFeature | null>(null);
   const [newFeature, setNewFeature] = useState<Partial<SecurityFeature>>({
@@ -50,6 +52,7 @@ const SecurityFeatures: React.FC = () => {
 
   const fetchFeatures = async () => {
     try {
+      setIsLoading(true);
       const response = await fetch('/api/security-features');
       if (!response.ok) {
         throw new Error('Failed to fetch security features');
@@ -62,6 +65,8 @@ const SecurityFeatures: React.FC = () => {
         description: t('security-features:toast.loadError'),
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -242,6 +247,9 @@ const SecurityFeatures: React.FC = () => {
         </Dialog>
       </div>
 
+      {isLoading ? (
+        <ListViewSkeleton columns={7} rows={5} showToolbar={false} toolbarButtons={0} />
+      ) : (
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -304,6 +312,7 @@ const SecurityFeatures: React.FC = () => {
           </TableBody>
         </Table>
       </div>
+      )}
     </div>
   );
 };

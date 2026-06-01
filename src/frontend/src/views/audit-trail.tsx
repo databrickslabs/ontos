@@ -37,6 +37,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AuditLog, PaginatedAuditLogResponse, AuditLogFilters } from '@/types/audit-log';
 import { Search, Download, ChevronLeft, ChevronRight, ScrollText } from 'lucide-react';
 import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
+import { TableSkeleton } from '@/components/common/list-view-skeleton';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -254,7 +255,7 @@ export default function AuditTrail() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">{t('results.loading')}</div>
+            <TableSkeleton columns={7} rows={6} bordered={false} showHeader={false} />
           ) : logs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">{t('results.noLogs')}</div>
           ) : (

@@ -5,8 +5,8 @@ import {
   FolderTree,
   Plus,
   Upload,
-  Loader2,
 } from 'lucide-react';
+import { SplitPaneSkeleton } from '@/components/common/list-view-skeleton';
 import type { KnowledgeCollection } from '@/types/ontology';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { usePermissions } from '@/stores/permissions-store';
@@ -200,9 +200,13 @@ export default function CollectionsView() {
 
       {/* Loading state */}
       {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <SplitPaneSkeleton
+          sidebarVariant="list"
+          sidebarItems={5}
+          main="panel"
+          tableRows={3}
+          showHeader={false}
+        />
       ) : (
         <CollectionsTab
           collections={collections}

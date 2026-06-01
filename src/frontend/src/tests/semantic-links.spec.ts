@@ -85,3 +85,46 @@ test('adds schema and property semantic links via wizard', async ({ page }) => {
 })
 
 
+test('assigns and removes a semantic concept link on an asset', async ({ page }) => {
+  // Pick the first asset from the asset list endpoint so the test is data-driven.
+  const assetsResp = await page.request.get('/api/assets?limit=1')
+  test.skip(!assetsResp.ok(), 'No /api/assets endpoint reachable')
+  const assetsBody: any = await assetsResp.json().catch(() => null)
+  const firstAsset = assetsBody?.items?.[0]
+  test.skip(!firstAsset?.id, 'No assets seeded in the backend')
+
+  await page.goto(`/assets/${firstAsset.id}`)
+
+  // Wait for the Overview tab to render the Details card.
+  await expect(page.getByRole('tab', { name: /overview/i })).toBeVisible()
+
+  // Open the concept picker via the "Add" trailing button on the linked chips row.
+  const linkedSection = page.getByText('Linked Business Concepts').first()
+  await linkedSection.scrollIntoViewIfNeeded()
+  const addBtn = page.getByRole('button', { name: /^add$/i }).first()
+  await addBtn.click()
+
+  // Pick the first available concept.
+  const searchInput = page.getByPlaceholder(/search business concepts/i)
+  await expect(searchInput).toBeVisible()
+  const selectBtn = page.getByRole('button', { name: /^select$/i }).first()
+  await selectBtn.click()
+
+  // Verify the link appears via the backend.
+  await page.waitForFunction(async (id) => {
+    const r = await fetch(`/api/semantic-links/entity/asset/${id}`)
+    if (!r.ok) return false
+    const data = await r.json()
+    return Array.isArray(data) && data.length > 0
+  }, firstAsset.id, { timeout: 15000 })
+
+  // Capture the link id and remove via the API to clean up. Hover-based UI
+  // removal is brittle in headless mode; the asset-detail panel calls the
+  // same endpoint so backend coverage is sufficient.
+  const linksResp = await page.request.get(`/api/semantic-links/entity/asset/${firstAsset.id}`)
+  const links: Array<{ id: string }> = await linksResp.json()
+  for (const link of links) {
+    await page.request.delete(`/api/semantic-links/${link.id}`)
+  }
+})
+

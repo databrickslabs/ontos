@@ -8,7 +8,21 @@ from src.common.database import Base
 
 
 class EntitySemanticLinkDb(Base):
-    """Links an entity (data_domain, data_product, data_contract) to a semantic IRI/label; used for knowledge graph and glossary linkage."""
+    """Links an entity to a semantic IRI/label; used for knowledge graph and glossary linkage.
+
+    ``entity_type`` is one of:
+      - ``data_domain``, ``data_product``, ``data_contract``
+      - ``data_contract_schema`` (entity_id = ``{contractId}#{schemaName}``)
+      - ``data_contract_property`` (entity_id = ``{contractId}#{schemaName}#{propertyName}``)
+      - ``asset`` (entity_id = ``AssetDb`` UUID — polymorphic over Table, View,
+        Dataset, Dashboard, Notebook, ML Model, Column, Logical Attribute, ...)
+      - ``uc_catalog`` / ``uc_schema`` / ``uc_table`` / ``uc_column`` (entity_id =
+        UC fully-qualified name; used for raw UC objects not wrapped as Assets)
+      - ``dataset`` (legacy — superseded by ``asset``)
+
+    See ``src/backend/src/models/semantic_links.py`` for the authoritative
+    ``EntityType`` Literal enforced at the API boundary.
+    """
     __tablename__ = "entity_semantic_links"
 
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

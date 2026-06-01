@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { Columns2, FileText, Shapes, X, Link2 } from 'lucide-react';
+import { Columns2, FileText, Shapes, X, Link2, Box } from 'lucide-react';
 import UCAssetLookupDialog from '@/components/data-contracts/uc-asset-lookup-dialog';
 import { UCAssetInfo, UCAssetType } from '@/types/uc-asset';
 
@@ -60,12 +60,15 @@ export default function PropertiesSearch({
 
   // Assign dialog: target type and selection
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [assignTargetType, setAssignTargetType] = useState<'data_contract_property' | 'uc_column' | ''>('');
+  const [assignTargetType, setAssignTargetType] = useState<'data_contract_property' | 'uc_column' | 'asset' | ''>('');
   const [contracts, setContracts] = useState<any[]>([]);
   const [selectedContractId, setSelectedContractId] = useState('');
   const [selectedSchemaName, setSelectedSchemaName] = useState('');
   const [selectedPropertyEntityId, setSelectedPropertyEntityId] = useState('');
   const [ucAssetDialogOpen, setUCAssetDialogOpen] = useState(false);
+  // Column-like assets (Column / Logical Attribute) for the `asset` target type
+  const [columnAssets, setColumnAssets] = useState<Array<{ id: string; name: string; asset_type_name?: string | null; location?: string | null }>>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState('');
 
   const updateUrl = (updates: Partial<{ query: string; iri: string }>) => {
     const params = new URLSearchParams();
@@ -200,6 +203,9 @@ export default function PropertiesSearch({
         } else if (link.entity_type === 'data_contract') {
           const contractRes = await get<any>(`/api/data-contracts/${link.entity_id}`);
           entityName = contractRes.data?.name || contractRes.data?.info?.title || link.entity_id;
+        } else if (link.entity_type === 'asset') {
+          const assetRes = await get<any>(`/api/assets/${link.entity_id}`);
+          entityName = assetRes.data?.name || link.entity_id;
         }
         result.push({ ...link, entity_name: entityName });
       } catch (error) {
@@ -230,6 +236,12 @@ export default function PropertiesSearch({
       get<any[]>('/api/data-contracts')
         .then((res) => setContracts(res.data || []))
         .catch(() => setContracts([]));
+    } else if (assignTargetType === 'asset') {
+      // Restrict to column-like asset types — rdf:Property only makes sense for these.
+      const typeFilter = encodeURIComponent('Column,Logical Attribute');
+      get<{ items: any[]; total: number }>(`/api/assets?asset_type_names=${typeFilter}&limit=200`)
+        .then((res) => setColumnAssets(res.data?.items || []))
+        .catch(() => setColumnAssets([]));
     }
   }, [assignTargetType]);
 
@@ -251,17 +263,18 @@ export default function PropertiesSearch({
   const properties = selectedSchema?.properties || [];
 
   const handleAssignTargetTypeChange = (v: string) => {
-    setAssignTargetType(v as 'data_contract_property' | 'uc_column');
+    setAssignTargetType(v as 'data_contract_property' | 'uc_column' | 'asset');
     setSelectedContractId('');
     setSelectedSchemaName('');
     setSelectedPropertyEntityId('');
+    setSelectedAssetId('');
   };
 
   const handleAssign = async () => {
     if (!selectedProperty || !assignTargetType) return;
 
     let entityId = '';
-    let entityType = assignTargetType;
+    let entityType: 'data_contract_property' | 'uc_column' | 'asset' = assignTargetType as any;
 
     if (assignTargetType === 'data_contract_property') {
       entityId = selectedPropertyEntityId;
@@ -273,7 +286,18 @@ export default function PropertiesSearch({
         });
         return;
       }
+    } else if (assignTargetType === 'asset') {
+      entityId = selectedAssetId;
+      if (!entityId) {
+        toast({
+          title: t('common:toast.error'),
+          description: t('search:properties.messages.selectPropertyTarget'),
+          variant: 'destructive'
+        });
+        return;
+      }
     } else if (assignTargetType === 'uc_column') {
+      // uc_column is handled by the UC asset lookup dialog flow
       return;
     }
 
@@ -296,6 +320,7 @@ export default function PropertiesSearch({
       setSelectedContractId('');
       setSelectedSchemaName('');
       setSelectedPropertyEntityId('');
+      setSelectedAssetId('');
       await selectProperty(selectedProperty);
     } catch (error: any) {
       toast({
@@ -432,8 +457,16 @@ export default function PropertiesSearch({
                         ? t('search:properties.assignDialog.ucColumn')
                         : link.entity_type === 'uc_table'
                         ? t('search:properties.assignDialog.ucTable')
+                        : link.entity_type === 'asset'
+                        ? t('search:properties.assignDialog.asset', { defaultValue: 'Asset' })
                         : link.entity_type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                      const Icon = link.entity_type === 'data_contract_property' ? FileText : link.entity_type === 'uc_column' ? Columns2 : Shapes;
+                      const Icon = link.entity_type === 'data_contract_property'
+                        ? FileText
+                        : link.entity_type === 'uc_column'
+                        ? Columns2
+                        : link.entity_type === 'asset'
+                        ? Box
+                        : Shapes;
                       return (
                         <Badge
                           key={link.id}
@@ -482,6 +515,7 @@ export default function PropertiesSearch({
                 <SelectContent>
                   <SelectItem value="data_contract_property">{t('search:properties.assignDialog.dataContractProperty')}</SelectItem>
                   <SelectItem value="uc_column">{t('search:properties.assignDialog.ucColumn')}</SelectItem>
+                  <SelectItem value="asset">{t('search:properties.assignDialog.asset', { defaultValue: 'Asset (Column / Logical Attribute)' })}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -549,11 +583,41 @@ export default function PropertiesSearch({
               </div>
             )}
 
+            {assignTargetType === 'asset' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {t('search:properties.assignDialog.asset', { defaultValue: 'Asset (Column / Logical Attribute)' })}
+                </label>
+                <Select value={selectedAssetId} onValueChange={setSelectedAssetId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('search:properties.assignDialog.selectAsset', { defaultValue: 'Select asset' })} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {columnAssets.length === 0 ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        {t('search:properties.assignDialog.noColumnAssets', { defaultValue: 'No Column or Logical Attribute assets found' })}
+                      </div>
+                    ) : (
+                      columnAssets.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                          {a.asset_type_name ? ` (${a.asset_type_name})` : ''}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="flex justify-end space-x-2 pt-4">
               <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>{t('common:actions.cancel')}</Button>
-              {assignTargetType === 'data_contract_property' ? (
+              {assignTargetType === 'data_contract_property' && (
                 <Button onClick={handleAssign} disabled={!selectedPropertyEntityId}>{t('common:actions.assign')}</Button>
-              ) : null}
+              )}
+              {assignTargetType === 'asset' && (
+                <Button onClick={handleAssign} disabled={!selectedAssetId}>{t('common:actions.assign')}</Button>
+              )}
             </div>
           </div>
         </DialogContent>

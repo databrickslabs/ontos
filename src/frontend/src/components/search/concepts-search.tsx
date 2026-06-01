@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { Shapes, Columns2, FileText, Package, Globe, X, Link2, Table, Folder, FolderOpen } from 'lucide-react';
+import { Shapes, Columns2, FileText, Package, Globe, X, Link2, Table, Folder, FolderOpen, Box } from 'lucide-react';
 import UCAssetLookupDialog from '@/components/data-contracts/uc-asset-lookup-dialog';
 import { UCAssetInfo, UCAssetType } from '@/types/uc-asset';
 
@@ -265,6 +265,9 @@ export default function ConceptsSearch({
           case 'data_domain':
             endpoint = `/api/data-domains/${link.entity_id}`;
             break;
+          case 'asset':
+            endpoint = `/api/assets/${link.entity_id}`;
+            break;
           case 'data_contract_schema': {
             const [contractId, schemaName] = String(link.entity_id).split('#');
             if (contractId) {
@@ -327,6 +330,12 @@ export default function ConceptsSearch({
         case 'data_domain':
           endpoint = '/api/data-domains';
           break;
+        case 'asset': {
+          // /api/assets returns a paginated envelope {items, total, ...} — unwrap to a flat list.
+          const res = await get<{ items: any[]; total: number }>('/api/assets?limit=200');
+          setAvailableEntities(res.data?.items || []);
+          return;
+        }
         default:
           return;
       }
@@ -359,6 +368,9 @@ export default function ConceptsSearch({
       case 'data_domain':
         path = `/settings/data-domains/${link.entity_id}`;
         break;
+      case 'asset':
+        path = `/assets/${link.entity_id}`;
+        break;
       case 'uc_catalog':
       case 'uc_schema':
       case 'uc_table':
@@ -389,6 +401,7 @@ export default function ConceptsSearch({
       case 'data_product': return t('search:concepts.assignDialog.dataProduct');
       case 'data_contract': return t('search:concepts.assignDialog.dataContract');
       case 'data_domain': return t('search:concepts.assignDialog.dataDomain');
+      case 'asset': return t('search:concepts.assignDialog.asset', { defaultValue: 'Asset' });
       case 'uc_catalog': return t('search:concepts.assignDialog.ucCatalog');
       case 'uc_schema': return t('search:concepts.assignDialog.ucSchema');
       case 'uc_table': return t('search:concepts.assignDialog.ucTable');
@@ -651,6 +664,8 @@ export default function ConceptsSearch({
                         ? Package
                         : link.entity_type === 'data_domain'
                         ? Globe
+                        : link.entity_type === 'asset'
+                        ? Box
                         : link.entity_type === 'uc_catalog'
                         ? Folder
                         : link.entity_type === 'uc_schema'
@@ -718,6 +733,7 @@ export default function ConceptsSearch({
                   <SelectItem value="data_product">{t('search:concepts.assignDialog.dataProduct')}</SelectItem>
                   <SelectItem value="data_contract">{t('search:concepts.assignDialog.dataContract')}</SelectItem>
                   <SelectItem value="data_domain">{t('search:concepts.assignDialog.dataDomain')}</SelectItem>
+                  <SelectItem value="asset">{t('search:concepts.assignDialog.asset', { defaultValue: 'Asset' })}</SelectItem>
                   <SelectItem value="uc_catalog">{t('search:concepts.assignDialog.ucCatalog')}</SelectItem>
                   <SelectItem value="uc_schema">{t('search:concepts.assignDialog.ucSchema')}</SelectItem>
                   <SelectItem value="uc_table">{t('search:concepts.assignDialog.ucTable')}</SelectItem>

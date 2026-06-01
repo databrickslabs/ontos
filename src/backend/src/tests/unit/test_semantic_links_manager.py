@@ -2,10 +2,32 @@
 Unit tests for SemanticLinksManager
 """
 import pytest
+from pydantic import ValidationError
 from unittest.mock import Mock, MagicMock, patch
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
 from src.db_models.semantic_links import EntitySemanticLinkDb
+
+
+class TestEntitySemanticLinkCreateModel:
+    """Validate the EntityType Literal accepts the polymorphic 'asset' value."""
+
+    def test_asset_entity_type_validates(self):
+        payload = EntitySemanticLinkCreate(
+            entity_id="11111111-2222-3333-4444-555555555555",
+            entity_type="asset",
+            iri="http://example.com/schema/Customer",
+            label="Customer",
+        )
+        assert payload.entity_type == "asset"
+
+    def test_unknown_entity_type_rejected(self):
+        with pytest.raises(ValidationError):
+            EntitySemanticLinkCreate(
+                entity_id="x",
+                entity_type="not_an_entity_type",  # type: ignore[arg-type]
+                iri="http://example.com/x",
+            )
 
 
 class TestSemanticLinksManager:
@@ -97,6 +119,21 @@ class TestSemanticLinksManager:
         result = manager._resolve_entity_name("contract-123", "data_contract")
 
         assert result == "Contract Name"
+
+    def test_resolve_entity_name_asset(self, manager, mock_db):
+        """Test resolving entity name for asset (polymorphic AssetDb row)."""
+        mock_result = Mock()
+        mock_result.__getitem__ = Mock(return_value="customers_table")
+        mock_db.execute.return_value.fetchone.return_value = mock_result
+
+        result = manager._resolve_entity_name(
+            "11111111-2222-3333-4444-555555555555", "asset"
+        )
+
+        assert result == "customers_table"
+        # Ensure the SQL targets the shared assets table (same path as dataset)
+        called_sql = str(mock_db.execute.call_args[0][0])
+        assert "FROM assets" in called_sql
 
     def test_resolve_entity_name_not_found(self, manager, mock_db):
         """Test resolving entity name when entity not found."""
@@ -246,6 +283,32 @@ class TestSemanticLinksManager:
         mock_repo.create.assert_called_once()
         manager._db.flush.assert_called_once()
         manager._db.refresh.assert_called_once()
+
+    @patch('src.controller.semantic_links_manager.change_log_manager')
+    @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
+    def test_add_link_for_asset(self, mock_repo, mock_change_log, manager):
+        """Test adding a semantic link with entity_type='asset' (UUID-based)."""
+        asset_uuid = "11111111-2222-3333-4444-555555555555"
+        payload = EntitySemanticLinkCreate(
+            entity_id=asset_uuid,
+            entity_type="asset",
+            iri="http://example.com/schema/Customer",
+            label="Customer",
+        )
+        created_db = Mock(spec=EntitySemanticLinkDb)
+        created_db.id = 42
+        created_db.entity_id = asset_uuid
+        created_db.entity_type = "asset"
+        created_db.iri = "http://example.com/schema/Customer"
+        created_db.label = "Customer"
+        mock_repo.get_by_entity_and_iri.return_value = None
+        mock_repo.create.return_value = created_db
+
+        result = manager.add(payload, created_by="user@example.com")
+
+        assert result.entity_type == "asset"
+        assert result.entity_id == asset_uuid
+        mock_repo.create.assert_called_once()
 
     @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
     def test_add_link_already_exists(self, mock_repo, manager, sample_link_create, sample_link_db):

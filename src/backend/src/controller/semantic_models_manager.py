@@ -1709,6 +1709,25 @@ class SemanticModelsManager:
         except Exception as e:
             logger.debug(f"Skipping data contracts load into graph: {e}")
 
+        # Assets: polymorphic AssetDb rows (Table, View, Dataset, Dashboard, Notebook, Column, ...)
+        # Joined to asset_types so we can emit a per-type rdf:type alongside the generic 'asset' type.
+        try:
+            rows = self._db.execute(sql_text(
+                "SELECT a.id, a.name, at.name AS type_name "
+                "FROM assets a LEFT JOIN asset_types at ON a.asset_type_id = at.id"
+            )).fetchall()
+            for r in rows:
+                subj = URIRef(f"urn:ontos:asset:{r[0]}")
+                context.add((subj, RDF.type, URIRef("urn:ontos:entity-type:asset")))
+                if r[2]:
+                    type_slug = str(r[2]).strip().lower().replace(' ', '_')
+                    if type_slug:
+                        context.add((subj, RDF.type, URIRef(f"urn:ontos:asset-type:{type_slug}")))
+                if r[1]:
+                    context.add((subj, RDFS.label, Literal(str(r[1]))))
+        except Exception as e:
+            logger.debug(f"Skipping assets load into graph: {e}")
+
     def add_entity_semantic_link_to_graph(self, entity_type: str, entity_id: str, iri: str, created_by: Optional[str] = None) -> None:
         """Incrementally add a single semantic link triple into the graph and database.
         

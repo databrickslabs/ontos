@@ -31,6 +31,10 @@ import { RatingPanel } from '@/components/ratings';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import EntityQualityPanel from '@/components/quality/entity-quality-panel';
+import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
+import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
+import type { EntitySemanticLink } from '@/types/semantic-link';
+import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -103,9 +107,12 @@ export default function AssetDetailView() {
   const [ontologyIri, setOntologyIri] = useState<string | null>(null);
   const [isLineageEditorOpen, setIsLineageEditorOpen] = useState(false);
   const [relViewMode, setRelViewMode] = useState<'table' | 'graph'>('table');
+  const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
+  const [iriDialogOpen, setIriDialogOpen] = useState(false);
 
-  const { get: apiGet } = useApi();
+  const { get: apiGet, post: apiPost, delete: apiDelete } = useApi();
   const { i18n } = useTranslation();
+  const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
@@ -113,6 +120,7 @@ export default function AssetDetailView() {
   const featureId = 'assets';
   const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
   const canAdmin = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.ADMIN);
+  const canEditSemanticLinks = !permissionsLoading && hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
 
   const entityType = asset?.asset_type_name || 'Asset';
 
@@ -142,9 +150,13 @@ export default function AssetDetailView() {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiGet<AssetRead>(`/api/assets/${assetId}`);
-      if (response.error) throw new Error(response.error);
-      setAsset(response.data ?? null);
+      const [assetRes, linksRes] = await Promise.all([
+        apiGet<AssetRead>(`/api/assets/${assetId}`),
+        apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`),
+      ]);
+      if (assetRes.error) throw new Error(assetRes.error);
+      setAsset(assetRes.data ?? null);
+      setSemanticLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
     } catch (err: any) {
       setError(err.message || 'Failed to load asset');
     } finally {
@@ -155,6 +167,38 @@ export default function AssetDetailView() {
   useEffect(() => {
     fetchAsset();
   }, [fetchAsset]);
+
+  const addSemanticLink = useCallback(async (iri: string) => {
+    if (!assetId) return;
+    try {
+      const res = await apiPost<EntitySemanticLink>(`/api/semantic-links/`, {
+        entity_id: assetId,
+        entity_type: 'asset',
+        iri,
+      });
+      if (res.error) throw new Error(res.error);
+      // Optimistically refresh just the links rather than re-loading the whole asset
+      const refreshed = await apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`);
+      setSemanticLinks(Array.isArray(refreshed.data) ? refreshed.data : []);
+      setIriDialogOpen(false);
+      toast({ title: 'Linked', description: 'Concept linked to asset.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to link concept', variant: 'destructive' });
+    }
+  }, [assetId, apiPost, apiGet, toast]);
+
+  const removeSemanticLink = useCallback(async (linkId: string) => {
+    if (!assetId) return;
+    try {
+      const res = await apiDelete(`/api/semantic-links/${linkId}`);
+      if (res.error) throw new Error(res.error);
+      const refreshed = await apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`);
+      setSemanticLinks(Array.isArray(refreshed.data) ? refreshed.data : []);
+      toast({ title: 'Removed', description: 'Concept link removed.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to remove link', variant: 'destructive' });
+    }
+  }, [assetId, apiDelete, apiGet, toast]);
 
   useEffect(() => {
     if (asset) {
@@ -351,6 +395,23 @@ export default function AssetDetailView() {
                         <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
                       ))}
                     </div>
+                  </div>
+                </>
+              )}
+
+              {/* Linked Business Concepts */}
+              {(semanticLinks.length > 0 || canEditSemanticLinks) && (
+                <>
+                  <Separator className="my-4" />
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Linked Business Concepts</Label>
+                    <LinkedConceptChips
+                      links={semanticLinks}
+                      onRemove={canEditSemanticLinks ? removeSemanticLink : undefined}
+                      trailing={canEditSemanticLinks ? (
+                        <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">Add</Button>
+                      ) : undefined}
+                    />
                   </div>
                 </>
               )}
@@ -568,6 +629,13 @@ export default function AssetDetailView() {
           onDeleted={() => navigate(-1)}
         />
       )}
+
+      {/* Concept linker */}
+      <ConceptSelectDialog
+        isOpen={iriDialogOpen}
+        onOpenChange={setIriDialogOpen}
+        onSelect={addSemanticLink}
+      />
     </div>
   );
 }

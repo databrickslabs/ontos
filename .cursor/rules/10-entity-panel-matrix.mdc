@@ -34,7 +34,7 @@ These tables use an `entity_type` + `entity_id` pattern to link to any entity.
 | `entity_relationships` | Typed relationships between any two entities |
 | `entity_subscriptions` | User subscriptions / notifications |
 | `entity_tag_associations` | Tag assignments |
-| `entity_semantic_links` | Links to ontology concepts |
+| `entity_semantic_links` | Links to ontology concepts/properties (`entity_type` ∈ {`data_domain`, `data_product`, `data_contract`, `data_contract_schema`, `data_contract_property`, `asset`, `uc_catalog`, `uc_schema`, `uc_table`, `uc_column`, `dataset` _(legacy)_}) |
 | `rich_text_metadata` | Rich-text notes |
 | `link_metadata` | External link bookmarks |
 | `document_metadata` | Uploaded documents |
@@ -81,7 +81,7 @@ Legend: **Y** = yes, show/support | **—** = no, hide/skip | **Σ** = show summ
 | **Relationships** | Y | Y | Y | — | — | — |
 | **Subscriptions** | — | Y | Y | — | — | — |
 | **Tags** | — | Y | Y | — | — | — |
-| **Semantic Links** | — | — | Y | — | — | — |
+| **Semantic Links** | Y | Y | Y | — | — | — |
 | **Metadata (rich/link/doc)** | Y | Y | Y | Y | Y | Y |
 | **Change Log** | — | Y | Y | — | — | — |
 | **Access Grants** | — | Y | — | — | — | — |
@@ -122,6 +122,7 @@ Legend: **Y** = show | **—** = hide | **Σ** = summary only
 | **Relationships** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | **Subscriptions** | — | — | — | — | — | Y | — | — | — | — | — | — | — | — | — | — | — |
 | **Tags** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | — | — | — | Y |
+| **Semantic Links** | — | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | Y |
 | **Metadata (rich/link/doc)** | Y | Y | Y | Y | — | Y | Y | Y | Y | Y | Y | Y | Y | Y | — | — | Y |
 | **Change Log** | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y | Y |
 | **Access Grants** | — | — | Y | Y | — | Y | — | — | — | — | — | — | — | — | — | — | — |
@@ -149,6 +150,15 @@ Legend: **Y** = show | **—** = hide | **Σ** = summary only
 - **Dashboard / ML Model**: Consumable outputs. Ratings and costs apply.
 - **Notebook / API Endpoint**: Development artifacts. Comments and tags yes,
   ratings and costs generally no (cost is tracked at the product level).
+- **Semantic Links (Tier 2)**: All Tier 2 asset-backed entities are addressable
+  via `entity_type='asset'` with `entity_id = AssetDb.id` (UUID). The single
+  `asset` polymorphic type covers Table, View, Dataset, Dashboard, Notebook,
+  ML Model, Column, Logical Attribute, Business Term, etc. — the IRI itself
+  indicates whether the link points at a class (rdfs:Class) or property
+  (rdf:Property). Catalog/Schema are excluded because they are platform
+  containers and instead use the dedicated `uc_catalog` / `uc_schema`
+  entity types when raw UC objects need linking. Delivery Channel is
+  excluded — it has no semantic surface today.
 
 ---
 
@@ -182,6 +192,13 @@ const OWNERSHIP_ELIGIBLE_TYPES = new Set([
   'Table', 'View', 'Dataset', 'Dashboard', 'Notebook',
   'ML Model', 'API Endpoint', 'Stream', 'Policy',
   'Business Term', 'Logical Entity', 'System',
+]);
+// Semantic Links are exposed on all asset-backed entities except containers
+// (Catalog/Schema) and Delivery Channel. The asset detail view always renders
+// the panel — empty state is handled gracefully — so an explicit allow-set
+// is only needed if you ever decide to hide the panel for specific types.
+const SEMANTIC_LINK_INELIGIBLE_TYPES = new Set([
+  'Catalog', 'Schema', 'Delivery Channel',
 ]);
 ```
 

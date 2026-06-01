@@ -81,6 +81,12 @@ const sampleLinks = [
     entity_type: 'uc_table',
     iri: 'https://example.org/onto#Customer',
   },
+  {
+    id: 'link-3',
+    entity_id: '11111111-2222-3333-4444-555555555555',
+    entity_type: 'asset',
+    iri: 'https://example.org/onto#Customer',
+  },
 ]
 
 describe('LinkedObjectsPanel', () => {
@@ -97,6 +103,15 @@ describe('LinkedObjectsPanel', () => {
       if (url.startsWith('/api/data-products/')) {
         return { data: { id: 'product-a', name: 'Product A' } }
       }
+      if (url.startsWith('/api/assets/')) {
+        return {
+          data: {
+            id: '11111111-2222-3333-4444-555555555555',
+            name: 'customers_table',
+            asset_type_name: 'Table',
+          },
+        }
+      }
       return { data: [] }
     })
   })
@@ -108,8 +123,11 @@ describe('LinkedObjectsPanel', () => {
     })
     expect(screen.getByTestId('linked-object-link-1')).toBeInTheDocument()
     expect(screen.getByTestId('linked-object-link-2')).toBeInTheDocument()
+    expect(screen.getByTestId('linked-object-link-3')).toBeInTheDocument()
     expect(screen.getByText(/Product A/)).toBeInTheDocument()
     expect(screen.getByText(/main\.sales\.orders/)).toBeInTheDocument()
+    // Asset row resolves the asset's name via /api/assets/{id}
+    expect(screen.getByText(/customers_table/)).toBeInTheDocument()
   })
 
   it('hides assign button and remove buttons when read-only', async () => {

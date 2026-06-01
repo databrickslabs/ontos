@@ -54,6 +54,18 @@ def _derive_effective_role_label(request: Request, user: UserInfo) -> Optional[s
         if not all_roles:
             return None
 
+        # Honor applied role override first (UI role-switcher).
+        try:
+            override_id = settings_manager.get_applied_role_override_for_user(user.email)
+            if override_id:
+                for role in all_roles:
+                    if role.id == override_id:
+                        return role.name
+                # Override id doesn't match any current role — fall through
+                # to group intersection rather than erroring.
+        except Exception as e:
+            logger.warning(f"Role-override lookup failed; falling back to groups: {e}")
+
         user_groups_lower = set(g.lower() for g in (user.groups or []))
         if not user_groups_lower:
             return None

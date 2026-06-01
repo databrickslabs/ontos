@@ -322,3 +322,65 @@ def test_derive_effective_role_label_joins_multiple_roles():
     assert "Admin" in label
     assert "Data Producer" in label
     assert ", " in label
+
+
+def test_derive_effective_role_label_honors_applied_role_override():
+    """When the user has clicked an "apply role" override in the UI,
+    the override role wins over the group-intersection role — even
+    if the user's groups would otherwise resolve to Admin."""
+    from src.routes.llm_search_routes import _derive_effective_role_label
+    from src.models.users import UserInfo
+
+    admin_role = SimpleNamespace(
+        id="role-admin", name="Admin", assigned_groups=["admins"]
+    )
+    producer_role = SimpleNamespace(
+        id="role-producer", name="Data Producer", assigned_groups=["data-producers"]
+    )
+
+    request = MagicMock()
+    request.app.state.settings_manager = MagicMock()
+    request.app.state.settings_manager.list_app_roles.return_value = [
+        admin_role,
+        producer_role,
+    ]
+    request.app.state.settings_manager.get_applied_role_override_for_user.return_value = (
+        "role-producer"
+    )
+
+    user = UserInfo(
+        email="u@example.com",
+        username="u",
+        user="u",
+        ip="127.0.0.1",
+        groups=["admins"],  # would normally match Admin
+    )
+    assert _derive_effective_role_label(request, user) == "Data Producer"
+
+
+def test_derive_effective_role_label_falls_back_when_override_id_unknown():
+    """If the persisted override id doesn't match any current role
+    (e.g., the role was deleted), fall back to group intersection
+    rather than erroring or returning None."""
+    from src.routes.llm_search_routes import _derive_effective_role_label
+    from src.models.users import UserInfo
+
+    admin_role = SimpleNamespace(
+        id="role-admin", name="Admin", assigned_groups=["admins"]
+    )
+
+    request = MagicMock()
+    request.app.state.settings_manager = MagicMock()
+    request.app.state.settings_manager.list_app_roles.return_value = [admin_role]
+    request.app.state.settings_manager.get_applied_role_override_for_user.return_value = (
+        "role-deleted-long-ago"
+    )
+
+    user = UserInfo(
+        email="u@example.com",
+        username="u",
+        user="u",
+        ip="127.0.0.1",
+        groups=["admins"],
+    )
+    assert _derive_effective_role_label(request, user) == "Admin"

@@ -27,8 +27,8 @@ DQX is the most-tightly-wired integration. It is a complete loop, not a
 one-shot.
 
 **Step 1 — Steward kicks off profiling.** On the contract detail page,
-click the **Profile dataset** action in the top-right. This launches a
-background profiling workflow.
+click the **Profile dataset** action. This launches a background
+profiling workflow.
 
 **Step 2 — Workflow profiles a sample.** For each schema in the
 contract, the workflow profiles a sample of the underlying data

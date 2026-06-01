@@ -5,7 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ShieldCheck, Globe, Link2 } from 'lucide-react'
-import { DetailViewSkeleton } from '@/components/common/list-view-skeleton'
+import {
+  DetailHeaderSkeleton,
+  PanelSkeleton,
+  SkeletonBlock,
+  SkeletonLine,
+  TableSkeleton,
+} from '@/components/common/list-view-skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -1576,7 +1582,34 @@ export default function DataContractDetails() {
   }
 
   if (loading) {
-    return <DetailViewSkeleton cards={4} actionButtons={4} />
+    // Mirrors rendered shape: header with back + version navigator + view-mode
+    // toggle on the left, action buttons on the right; body shows ODCS sections
+    // and a schema property table.
+    return (
+      <div className="py-6 space-y-6">
+        <DetailHeaderSkeleton actionButtons={5} leftControls={2} />
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <SkeletonLine height="h-9" width="w-9" className="rounded" />
+            <SkeletonLine height="h-8" width="w-80" />
+            <SkeletonLine height="h-5" width="w-20" />
+          </div>
+          <SkeletonLine height="h-4" width="w-2/3" />
+        </div>
+        <PanelSkeleton rows={3} rowHeight="h-10" />
+        <div className="border rounded-lg">
+          <div className="p-6 border-b">
+            <div className="flex items-center gap-2">
+              <SkeletonLine height="h-5" width="w-5" />
+              <SkeletonLine height="h-5" width="w-32" />
+            </div>
+          </div>
+          <TableSkeleton columns={6} rows={5} bordered={false} />
+        </div>
+        <PanelSkeleton rows={2} rowHeight="h-12" />
+        <PanelSkeleton rows={2} rowHeight="h-10" />
+      </div>
+    )
   }
   if (error || !contract) {
     return (
@@ -1597,7 +1630,7 @@ export default function DataContractDetails() {
     const totalPages = Math.ceil(totalProps / PROPS_PAGE_SIZE)
 
     if (loadingSchemaProps && props.length === 0) {
-      return <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading columns...</div>
+      return <SkeletonBlock height="h-32" className="rounded-md" />
     }
     if (props.length === 0 && totalProps === 0) return null
     return (

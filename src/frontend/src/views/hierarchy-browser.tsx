@@ -14,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   HierarchyTreeSkeleton,
-  SkeletonLine,
+  HierarchyDetailSkeleton,
 } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -74,22 +74,6 @@ function getEntityRoute(entityType: string, entityId: string): string {
   return `/assets/${entityId}`;
 }
 
-function DetailSkeleton() {
-  return (
-    <div className="space-y-4 p-6">
-      <SkeletonLine height="h-8" width="w-64" />
-      <SkeletonLine width="w-96" />
-      <div className="space-y-2 mt-6">
-        <SkeletonLine height="h-6" width="w-48" />
-        <div className="pl-4 space-y-1.5">
-          <SkeletonLine height="h-5" width="w-56" />
-          <SkeletonLine height="h-5" width="w-52" />
-          <SkeletonLine height="h-5" width="w-60" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 interface DetailPanelProps {
   node: InstanceHierarchyNode | null;
@@ -154,7 +138,7 @@ function DetailPanel({
     onVisibleTypesChange(base);
   }, [visibleTypes, allTypes, onVisibleTypesChange]);
 
-  if (loading) return <DetailSkeleton />;
+  if (loading) return <HierarchyDetailSkeleton showControls treeRows={6} />;
 
   if (!node || !displayNode) {
     return (

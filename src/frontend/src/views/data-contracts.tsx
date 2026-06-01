@@ -540,7 +540,7 @@ export default function DataContracts() {
       )}
 
       {loading ? (
-        <ListViewSkeleton columns={6} rows={5} toolbarButtons={3} />
+        <ListViewSkeleton columns={8} rows={5} toolbarButtons={3} />
       ) : (
         <DataTable
           columns={columns}

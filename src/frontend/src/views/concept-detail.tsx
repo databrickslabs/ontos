@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   SkeletonLine,
-  SkeletonBlock,
+  PanelSkeleton,
 } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -262,8 +262,8 @@ export default function ConceptDetailView() {
     }
   };
 
-  // Loading skeleton mirrors the asset-detail skeleton style for visual
-  // consistency.
+  // Mirrors the rendered concept detail: real back button, title block,
+  // compact definition card, and two side panels (ownership/metadata + links).
   if (isLoading && !concept) {
     return (
       <div className="py-6 space-y-4">
@@ -272,11 +272,15 @@ export default function ConceptDetailView() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             {t('semantic-models:details.backToList', 'Back to Concepts')}
           </Button>
+          <div className="flex items-center gap-2">
+            <SkeletonLine height="h-9" width="w-24" />
+            <SkeletonLine height="h-9" width="w-24" />
+          </div>
         </div>
         <SkeletonLine height="h-9" width="w-2/3" />
         <SkeletonLine height="h-3" width="w-1/2" />
-        <SkeletonBlock height="h-24" className="rounded-lg" />
-        <SkeletonBlock height="h-24" className="rounded-lg" />
+        <PanelSkeleton rows={2} rowHeight="h-10" />
+        <PanelSkeleton rows={3} rowHeight="h-9" />
       </div>
     );
   }

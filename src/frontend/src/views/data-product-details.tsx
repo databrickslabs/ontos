@@ -14,7 +14,12 @@ import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound, Plus, FileText, Download, Bell, BellOff, Users, ShieldCheck, Globe } from 'lucide-react';
-import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
+import {
+  DetailHeaderSkeleton,
+  PanelSkeleton,
+  SkeletonLine,
+  TableSkeleton,
+} from '@/components/common/list-view-skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import TagChip from '@/components/ui/tag-chip';
@@ -1339,7 +1344,35 @@ export default function DataProductDetails() {
     shouldShowSectionForViewMode(viewMode, section);
 
   if (loading || permissionsLoading) {
-    return <DetailViewSkeleton cards={5} actionButtons={5} />;
+    // Match the rendered shape: header has back + version navigator + S/M/L
+    // view-mode toggle on the left, multiple action buttons on the right;
+    // body has a hero, ODPS metadata panels, and an output-ports table.
+    return (
+      <div className="py-6 space-y-6">
+        <DetailHeaderSkeleton actionButtons={6} leftControls={2} />
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <SkeletonLine height="h-9" width="w-9" className="rounded" />
+            <SkeletonLine height="h-8" width="w-80" />
+            <SkeletonLine height="h-5" width="w-20" />
+          </div>
+          <SkeletonLine height="h-4" width="w-2/3" />
+        </div>
+        <PanelSkeleton rows={3} rowHeight="h-12" />
+        <PanelSkeleton rows={2} rowHeight="h-10" />
+        <div className="border rounded-lg">
+          <div className="p-6 border-b">
+            <div className="flex items-center gap-2">
+              <SkeletonLine height="h-5" width="w-5" />
+              <SkeletonLine height="h-5" width="w-40" />
+            </div>
+          </div>
+          <TableSkeleton columns={5} rows={3} bordered={false} />
+        </div>
+        <PanelSkeleton rows={3} rowHeight="h-10" />
+        <PanelSkeleton rows={2} rowHeight="h-10" />
+      </div>
+    );
   }
 
   if (error) {

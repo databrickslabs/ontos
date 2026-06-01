@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Inbox, XCircle, Loader2, ShieldCheck, Package, Bell } from 'lucide-react';
 import { RelativeDate } from '@/components/common/relative-date';
-import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
+import { ListViewSkeleton, SkeletonLine } from '@/components/common/list-view-skeleton';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -194,7 +194,11 @@ export default function MyRequests() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Pending Requests</p>
-                <p className="text-2xl font-bold">{pendingCount}</p>
+                {requestsLoading ? (
+                  <SkeletonLine height="h-7" width="w-10" className="mt-1" />
+                ) : (
+                  <p className="text-2xl font-bold">{pendingCount}</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -207,7 +211,11 @@ export default function MyRequests() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Requests</p>
-                <p className="text-2xl font-bold">{rows.length}</p>
+                {requestsLoading ? (
+                  <SkeletonLine height="h-7" width="w-10" className="mt-1" />
+                ) : (
+                  <p className="text-2xl font-bold">{rows.length}</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -220,7 +228,11 @@ export default function MyRequests() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Active Subscriptions</p>
-                <p className="text-2xl font-bold">{subscriptions.length}</p>
+                {subscriptionsLoading ? (
+                  <SkeletonLine height="h-7" width="w-10" className="mt-1" />
+                ) : (
+                  <p className="text-2xl font-bold">{subscriptions.length}</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -245,7 +257,7 @@ export default function MyRequests() {
 
         <TabsContent value="requests" className="mt-4">
           {requestsLoading ? (
-            <ListViewSkeleton columns={6} rows={5} toolbarButtons={0} showToolbar={false} showPagination={false} />
+            <ListViewSkeleton columns={7} rows={5} toolbarButtons={0} showToolbar={false} showPagination={false} />
           ) : requestsError ? (
             <div className="flex flex-col gap-2">
               <p className="text-destructive">{requestsError}</p>

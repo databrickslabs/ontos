@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
-import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
+import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -179,10 +179,9 @@ export default function AssetDetailView() {
   }, [asset, setStaticSegments, setDynamicTitle]);
 
   if (loading) {
-    // Mirrors the rendered detail view: header with action buttons, core
-    // metadata card, and a few stacked panels (relationships, ownership,
-    // metadata, ratings, costs, quality).
-    return <DetailViewSkeleton cards={4} actionButtons={5} />;
+    // Asset Detail uses a tabbed layout (Overview / Relationships / Lineage /
+    // Impact) above a hero title row. Match that structure.
+    return <TabsDetailSkeleton tabs={4} actionButtons={5} contentVariant="two-col" />;
   }
 
   if (error || !asset) {

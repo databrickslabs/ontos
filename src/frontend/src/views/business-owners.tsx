@@ -126,7 +126,7 @@ export default function BusinessOwnersView() {
       </div>
 
       {(apiIsLoading || permissionsLoading) ? (
-        <ListViewSkeleton columns={5} rows={5} toolbarButtons={0} />
+        <ListViewSkeleton columns={6} rows={5} toolbarButtons={0} />
       ) : !canRead ? (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />

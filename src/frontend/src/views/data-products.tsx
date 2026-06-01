@@ -729,7 +729,7 @@ export default function DataProducts() {
 
       {/* 1. Check Permissions Loading */}
       {permissionsLoading ? (
-        <ListViewSkeleton columns={7} rows={5} toolbarButtons={3} />
+        <ListViewSkeleton columns={9} rows={5} toolbarButtons={3} />
       ) : !canRead ? (
         // 2. Check Read Permission (if permissions loaded)
         <Alert variant="destructive" className="mb-4">
@@ -738,7 +738,7 @@ export default function DataProducts() {
         </Alert>
       ) : loading ? (
         // 3. Check Data Loading (if permissions OK)
-        <ListViewSkeleton columns={7} rows={5} toolbarButtons={3} />
+        <ListViewSkeleton columns={9} rows={5} toolbarButtons={3} />
       ) : (
         // 5. Render Content (if permissions OK and data loaded)
         <div className="space-y-4">

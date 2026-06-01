@@ -44,7 +44,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
+import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
@@ -243,11 +243,11 @@ const DataCatalogDetails: React.FC = () => {
   };
 
   if (isLoading) {
-    // Mirrors rendered shape: header (back button), title with icon and badge,
-    // tabs row, plus the two-column overview cards (Basic Info + Storage).
+    // Mirrors rendered shape: header (back button), icon+title hero, tabs row
+    // (Overview / Permissions / Lineage), and the two-column overview cards.
     return (
       <div className="flex flex-col h-full p-6">
-        <DetailViewSkeleton cards={3} actionButtons={1} />
+        <TabsDetailSkeleton tabs={3} actionButtons={1} contentVariant="two-col" />
       </div>
     );
   }

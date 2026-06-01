@@ -24,7 +24,11 @@ import { RelativeDate } from '@/components/common/relative-date';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 // import { Loader2 } from 'lucide-react'; // Unused
-import { DetailViewSkeleton } from '@/components/common/list-view-skeleton';
+import {
+  DetailViewSkeleton,
+  TableSkeleton,
+  SkeletonLine,
+} from '@/components/common/list-view-skeleton';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { DataDomainFormDialog } from '@/components/data-domains/data-domain-form-dialog';
 import { CommentSidebar } from '@/components/comments';
@@ -540,7 +544,25 @@ export default function DataDomainDetailsView() {
   }, [domain, setDynamicTitle]);
 
   if (isLoading) {
-    return <DetailViewSkeleton cards={4} actionButtons={2} />;
+    // Mirrors rendered shape: header (back + comment + edit), one big metadata
+    // card, hierarchy mini-graph, child domains table, teams table.
+    return (
+      <div className="py-6 space-y-6">
+        <DetailViewSkeleton cards={2} actionButtons={2} />
+        <div className="border rounded-lg">
+          <div className="p-6 border-b">
+            <SkeletonLine height="h-5" width="w-40" />
+          </div>
+          <TableSkeleton columns={4} rows={3} bordered={false} />
+        </div>
+        <div className="border rounded-lg">
+          <div className="p-6 border-b">
+            <SkeletonLine height="h-5" width="w-32" />
+          </div>
+          <TableSkeleton columns={3} rows={3} bordered={false} />
+        </div>
+      </div>
+    );
   }
 
   if (error) {

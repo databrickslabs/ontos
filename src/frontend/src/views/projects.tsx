@@ -285,7 +285,7 @@ export default function ProjectsView() {
       </div>
 
       {(apiIsLoading || permissionsLoading) ? (
-        <ListViewSkeleton columns={5} rows={5} toolbarButtons={1} />
+        <ListViewSkeleton columns={6} rows={5} toolbarButtons={1} />
       ) : !canRead ? (
          <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />

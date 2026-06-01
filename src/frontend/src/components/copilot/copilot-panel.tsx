@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Send, Loader2, Sparkles, X, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { Send, Loader2, Sparkles, X, MessageSquare, Plus, Trash2, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -93,7 +93,8 @@ export default function CopilotPanel() {
   const isOpen = useCopilotStore((s) => s.isOpen);
   const pageContext = useCopilotStore((s) => s.pageContext);
   const panelWidth = useCopilotStore((s) => s.panelWidth);
-  const { closePanel, setPanelWidth } = useCopilotStore((s) => s.actions);
+  const contextScope = useCopilotStore((s) => s.contextScope);
+  const { closePanel, setPanelWidth, setContextScope } = useCopilotStore((s) => s.actions);
 
   // Drag-to-resize: attach window-level listeners only while dragging so the
   // pointer can leave the thin handle without losing the drag. We throttle
@@ -382,20 +383,66 @@ export default function CopilotPanel() {
           </div>
         </div>
 
-        {/* Context badge */}
-        {pageContext?.selectedEntity && (
-          <div className="px-4 py-2 border-b bg-muted/30 shrink-0">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{t('search:copilot.askingAbout')}</span>
-              <Badge variant="outline" className="text-xs font-medium">
-                {pageContext.selectedEntity.name}
-              </Badge>
-              <Badge variant="secondary" className="text-xs">
-                {pageContext.selectedEntity.type}
-              </Badge>
-            </div>
+        {/* Context badge — dropdown lets the user flip between page-
+            scoped ("Asking about <entity>" or "<page name>") and a
+            scope-free "Ontos (general)" mode. */}
+        <div className="px-4 py-2 border-b bg-muted/30 shrink-0">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{t('search:copilot.askingAbout')}</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 rounded-md hover:bg-accent/60 px-1 py-0.5 transition-colors"
+                >
+                  {contextScope === 'general' ? (
+                    <Badge variant="outline" className="text-xs font-medium">
+                      {t('search:copilot.scopeGeneral')}
+                    </Badge>
+                  ) : pageContext?.selectedEntity ? (
+                    <>
+                      <Badge variant="outline" className="text-xs font-medium">
+                        {pageContext.selectedEntity.name}
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {pageContext.selectedEntity.type}
+                      </Badge>
+                    </>
+                  ) : (
+                    <Badge variant="outline" className="text-xs font-medium">
+                      {pageContext?.pageName || t('search:copilot.scopeThisPage')}
+                    </Badge>
+                  )}
+                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setContextScope('page')}
+                  className="gap-2"
+                >
+                  <Check
+                    className={`w-3.5 h-3.5 ${
+                      contextScope === 'page' ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                  <span>{t('search:copilot.scopePageSpecific')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setContextScope('general')}
+                  className="gap-2"
+                >
+                  <Check
+                    className={`w-3.5 h-3.5 ${
+                      contextScope === 'general' ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
+                  <span>{t('search:copilot.scopeGeneral')}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        )}
+        </div>
 
         {/* Messages / Welcome */}
         <ScrollArea className="flex-1 min-h-0">

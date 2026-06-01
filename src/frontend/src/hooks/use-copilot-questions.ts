@@ -46,6 +46,7 @@ export function useCopilotQuestions(
   const { t } = useTranslation(['copilot-questions']);
   const { pathname } = useLocation();
   const pageContext = useCopilotStore((s) => s.pageContext);
+  const contextScope = useCopilotStore((s) => s.contextScope);
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
 
   const currentFeatureId = useMemo(
@@ -58,6 +59,12 @@ export function useCopilotQuestions(
   return useMemo(() => {
     if (permissionsLoading) return [];
 
+    // When the user flips the chip to "Ontos (general)" we drop every
+    // page-scoped or entity-templated question and keep only globals.
+    // The cap also widens to the main-page bucket (15) so the panel
+    // doesn't shrink unexpectedly.
+    const generalScope = contextScope === 'general';
+
     const matching: CopilotQuestionDef[] = COPILOT_QUESTIONS.filter((q) => {
       // Adoption-mode filter: questions tagged with a specific
       // adoption mode are only shown when it matches. When the
@@ -65,6 +72,13 @@ export function useCopilotQuestions(
       // undefined) we hide blank-mode onboarding prompts and keep
       // the regular catalog visible — same as the pre-PR behavior.
       if (q.adoptionMode && q.adoptionMode !== adoptionMode) return false;
+
+      if (generalScope) {
+        // General scope: only globals (no contexts, no entity binding).
+        if (q.requiresEntity === true) return false;
+        if (q.contexts.length > 0) return false;
+        return hasPermission(q.featureId, q.minAccess);
+      }
 
       // Entity-aware filter: questions tagged `requiresEntity` are
       // only surfaced on detail pages where a `selectedEntity` lives
@@ -89,9 +103,10 @@ export function useCopilotQuestions(
 
     // Cap by page scope. Detail pages (selectedEntity present) and
     // type-scoped list pages get a tight cap so the most specific
-    // questions dominate; main/marketplace/search get a wider cap.
-    const onDetailPage = !!pageContext?.selectedEntity;
-    const onListScope = !onDetailPage && currentFeatureId !== null;
+    // questions dominate; main/marketplace/search and general-scope
+    // get a wider cap.
+    const onDetailPage = !generalScope && !!pageContext?.selectedEntity;
+    const onListScope = !generalScope && !onDetailPage && currentFeatureId !== null;
     const cap = onDetailPage ? 6 : onListScope ? 6 : 15;
     const capped = matching.slice(0, cap);
 
@@ -124,5 +139,6 @@ export function useCopilotQuestions(
     adoptionMode,
     pageContext?.selectedEntity,
     selectedEntityName,
+    contextScope,
   ]);
 }

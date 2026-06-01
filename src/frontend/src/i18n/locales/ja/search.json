@@ -124,5 +124,10 @@
       "deleteSessionFailed": "セッションの削除に失敗しました",
       "loadFailed": "LLM検索の読み込みに失敗しました。後でもう一度お試しください。"
     }
+  },
+  "copilot": {
+    "scopePageSpecific": "ページ固有",
+    "scopeGeneral": "Ontos（全般）",
+    "scopeThisPage": "このページ"
   }
 }

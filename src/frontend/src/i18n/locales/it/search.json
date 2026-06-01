@@ -124,5 +124,10 @@
       "deleteSessionFailed": "Eliminazione sessione non riuscita",
       "loadFailed": "Caricamento ricerca LLM non riuscito. Riprova più tardi."
     }
+  },
+  "copilot": {
+    "scopePageSpecific": "Specifico della pagina",
+    "scopeGeneral": "Ontos (generale)",
+    "scopeThisPage": "Questa pagina"
   }
 }

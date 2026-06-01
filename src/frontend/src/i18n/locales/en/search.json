@@ -186,6 +186,9 @@
     "welcome": "Welcome to Ask {{shortName}}!",
     "welcomeDescription": "Get help with modeling, mappings, product creation, and health insights. Try one of the suggested prompts below or type your own question.",
     "askingAbout": "Asking about:",
+    "scopePageSpecific": "Page-specific",
+    "scopeGeneral": "Ontos (general)",
+    "scopeThisPage": "This page",
     "inputPlaceholder": "Ask {{shortName}} anything...",
     "messageSendFailed": "Failed to send message"
   }

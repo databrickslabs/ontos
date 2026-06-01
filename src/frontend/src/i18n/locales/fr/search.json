@@ -124,5 +124,10 @@
       "deleteSessionFailed": "Échec de la suppression de la session",
       "loadFailed": "Échec du chargement de la recherche LLM. Veuillez réessayer plus tard."
     }
+  },
+  "copilot": {
+    "scopePageSpecific": "Spécifique à la page",
+    "scopeGeneral": "Ontos (général)",
+    "scopeThisPage": "Cette page"
   }
 }

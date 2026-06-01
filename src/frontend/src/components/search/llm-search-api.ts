@@ -42,14 +42,18 @@ export async function sendMessage(content: string, sessionId?: string, debug?: b
   // a plain async function, not a hook). Pulling here keeps both the
   // copilot panel and the LLMSearch page on the same payload shape
   // without forcing them to pass it explicitly.
-  const pageContext = useCopilotStore.getState().pageContext;
+  const { pageContext, contextScope } = useCopilotStore.getState();
 
   const body: ChatRequestBody = {
     content,
     session_id: sessionId,
     debug: debug || false,
   };
-  if (pageContext) {
+  // When the user flips the chip to "Ontos (general)", strip every
+  // page-context field so the backend treats this as a scope-free
+  // question — the absence of `page_name`/`feature_id`/etc. matches
+  // the pre-context-aware behavior.
+  if (pageContext && contextScope !== 'general') {
     if (pageContext.pageName) body.page_name = pageContext.pageName;
     if (pageContext.pageUrl) body.page_url = pageContext.pageUrl;
     if (pageContext.featureId) body.feature_id = pageContext.featureId;

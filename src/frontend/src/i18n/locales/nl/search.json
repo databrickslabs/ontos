@@ -124,6 +124,11 @@
       "deleteSessionFailed": "Kon sessie niet verwijderen",
       "loadFailed": "Kon LLM zoeken niet laden. Probeer het later opnieuw."
     }
+  },
+  "copilot": {
+    "scopePageSpecific": "Pagina-specifiek",
+    "scopeGeneral": "Ontos (algemeen)",
+    "scopeThisPage": "Deze pagina"
   }
 }
 

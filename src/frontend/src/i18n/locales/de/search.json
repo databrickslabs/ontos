@@ -169,5 +169,10 @@
       "deleteSessionFailed": "Sitzung konnte nicht gelöscht werden",
       "loadFailed": "LLM-Suche konnte nicht geladen werden. Bitte versuchen Sie es später erneut."
     }
+  },
+  "copilot": {
+    "scopePageSpecific": "Seitenspezifisch",
+    "scopeGeneral": "Ontos (allgemein)",
+    "scopeThisPage": "Diese Seite"
   }
 }

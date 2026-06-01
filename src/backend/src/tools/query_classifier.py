@@ -14,10 +14,23 @@ logger = get_logger(__name__)
 # Category definitions with their trigger keywords
 CATEGORY_KEYWORDS = {
     "unity_catalog": [
-        "catalog", "catalogs", "schema", "schemas", "table", "tables", 
+        "catalog", "catalogs", "schema", "schemas", "table", "tables",
         "view", "views", "database", "databases", "sql", "query", "column",
         "columns", "unity", "uc", "explore", "browse", "list catalog",
         "my catalogs", "own catalog", "owner"
+    ],
+    # Ontos-side governance handle for UC resources (tables, views,
+    # models, dashboards, etc.). The system prompt teaches the LLM
+    # that UC tables become Assets when they enter Ontos via a
+    # Deliverable — these keywords ensure the classifier flags Asset
+    # intent alongside the raw `unity_catalog` browse intent. No tool
+    # currently registers `category = "assets"`, but the matched
+    # category is wired into the per-request category list so future
+    # asset tools and the integration test suite can rely on it.
+    "assets": [
+        "asset", "assets", "table", "tables", "view", "views",
+        "unity catalog", "uc", "catalog", "schema", "delta table",
+        "publish", "govern", "expose",
     ],
     "data_products": [
         "data product", "product", "products", "output port", "output table",

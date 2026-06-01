@@ -20,15 +20,15 @@
     "search_across_all": "Suche über alle Datenprodukte, Verträge und Begriffe.",
 
     "dp_list_domain": "Welche Datenprodukte sind in meiner Domäne verfügbar?",
-    "dp_show_contracts": "Welche Verträge sind mit diesem Datenprodukt verknüpft?",
+    "dp_show_contracts": "Welche Verträge sind mit {{entityName}} verknüpft?",
     "dp_draft_product": "Hilf mir, ein neues Datenprodukt aus bestehenden Tabellen zu entwerfen.",
     "dp_package_tables": "Hilf mir, Analysetabellen als Datenprodukt zu bündeln.",
     "dp_add_output_port": "Wie füge ich einem Datenprodukt einen Output-Port hinzu?",
 
     "ct_show_failing": "Zeige mir Verträge mit fehlgeschlagenen Qualitätsprüfungen.",
-    "ct_explain_quality": "Erkläre die Qualitätsprüfungen in diesem Vertrag.",
+    "ct_explain_quality": "Erkläre die Qualitätsprüfungen in {{entityName}}.",
     "ct_create_contract": "Erstelle einen neuen Datenvertrag für mein Vertriebsschema.",
-    "ct_add_quality_check": "Hilf mir, eine Qualitätsprüfung zu diesem Vertrag hinzuzufügen.",
+    "ct_add_quality_check": "Hilf mir, eine Qualitätsprüfung zu {{entityName}} hinzuzufügen.",
 
     "sm_explain_concept_property": "Erkläre den Unterschied zwischen einem Konzept und einer Eigenschaft.",
     "sm_browse_collections": "Welche Konzeptsammlungen sind verfügbar?",
@@ -37,14 +37,14 @@
 
     "asset_find_unmapped": "Finde Tabellen, die semantische Zuordnungen benötigen.",
     "asset_map_columns": "Wie ordne ich Spalten semantischen Eigenschaften zu?",
-    "asset_show_lineage": "Zeige mir die Herkunft dieses Assets.",
+    "asset_show_lineage": "Zeige mir die Herkunft von {{entityName}}.",
 
     "comp_low_scores": "Zeige Datenprodukte mit niedrigen Compliance-Werten.",
     "comp_failing_checks": "Welche Compliance-Prüfungen schlagen derzeit fehl?",
     "comp_create_policy": "Erstelle eine neue Compliance-Richtlinie für personenbezogene Daten.",
 
     "dom_list_domains": "Liste alle Datendomänen und ihre Verantwortlichen auf.",
-    "dom_domain_health": "Wie ist der Gesundheitsstatus dieser Domäne?",
+    "dom_domain_health": "Wie ist der Gesundheitsstatus von {{entityName}}?",
     "dom_create_domain": "Hilf mir, eine neue Datendomäne zu erstellen.",
 
     "rev_pending_reviews": "Zeige mir ausstehende Asset-Überprüfungen.",

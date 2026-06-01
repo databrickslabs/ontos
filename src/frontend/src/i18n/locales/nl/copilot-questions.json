@@ -20,15 +20,15 @@
     "search_across_all": "Zoek in alle dataproducten, contracten en termen.",
 
     "dp_list_domain": "Welke dataproducten zijn beschikbaar in mijn domein?",
-    "dp_show_contracts": "Welke contracten zijn gekoppeld aan dit dataproduct?",
+    "dp_show_contracts": "Welke contracten zijn gekoppeld aan {{entityName}}?",
     "dp_draft_product": "Help me een nieuw dataproduct te ontwerpen op basis van bestaande tabellen.",
     "dp_package_tables": "Help me analysetabellen als dataproduct te verpakken.",
     "dp_add_output_port": "Hoe voeg ik een uitvoerpoort toe aan een dataproduct?",
 
     "ct_show_failing": "Toon mij contracten met mislukte kwaliteitscontroles.",
-    "ct_explain_quality": "Leg de kwaliteitscontroles uit die in dit contract zijn gedefinieerd.",
+    "ct_explain_quality": "Leg de kwaliteitscontroles uit die in {{entityName}} zijn gedefinieerd.",
     "ct_create_contract": "Maak een nieuw datacontract voor mijn verkoopschema.",
-    "ct_add_quality_check": "Help me een kwaliteitscontrole toe te voegen aan dit contract.",
+    "ct_add_quality_check": "Help me een kwaliteitscontrole toe te voegen aan {{entityName}}.",
 
     "sm_explain_concept_property": "Leg het verschil uit tussen een concept en een eigenschap.",
     "sm_browse_collections": "Welke conceptcollecties zijn beschikbaar?",
@@ -37,14 +37,14 @@
 
     "asset_find_unmapped": "Vind tabellen die semantische mappings nodig hebben.",
     "asset_map_columns": "Hoe map ik kolommen naar semantische eigenschappen?",
-    "asset_show_lineage": "Toon mij de herkomst van dit asset.",
+    "asset_show_lineage": "Toon mij de herkomst van {{entityName}}.",
 
     "comp_low_scores": "Toon dataproducten met lage compliance-scores.",
     "comp_failing_checks": "Welke compliance-controles falen momenteel?",
     "comp_create_policy": "Maak een nieuw compliance-beleid voor persoonsgegevens.",
 
     "dom_list_domains": "Lijst alle datadomeinen en hun eigenaren op.",
-    "dom_domain_health": "Wat is de gezondheidsstatus van dit domein?",
+    "dom_domain_health": "Wat is de gezondheidsstatus van {{entityName}}?",
     "dom_create_domain": "Help me een nieuw datadomein te maken.",
 
     "rev_pending_reviews": "Toon mij openstaande asset-beoordelingen.",

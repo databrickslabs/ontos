@@ -20,15 +20,15 @@
     "search_across_all": "Cerca tra tutti i prodotti dati, contratti e termini.",
 
     "dp_list_domain": "Quali prodotti dati sono disponibili nel mio dominio?",
-    "dp_show_contracts": "Quali contratti sono collegati a questo prodotto dati?",
+    "dp_show_contracts": "Quali contratti sono collegati a {{entityName}}?",
     "dp_draft_product": "Aiutami a creare una bozza di un nuovo prodotto dati da tabelle esistenti.",
     "dp_package_tables": "Aiutami a impacchettare tabelle analitiche come prodotto dati.",
     "dp_add_output_port": "Come aggiungo una porta di uscita a un prodotto dati?",
 
     "ct_show_failing": "Mostrami i contratti con controlli qualità falliti.",
-    "ct_explain_quality": "Spiega i controlli qualità definiti in questo contratto.",
+    "ct_explain_quality": "Spiega i controlli qualità definiti in {{entityName}}.",
     "ct_create_contract": "Crea un nuovo contratto dati per il mio schema vendite.",
-    "ct_add_quality_check": "Aiutami ad aggiungere un controllo qualità a questo contratto.",
+    "ct_add_quality_check": "Aiutami ad aggiungere un controllo qualità a {{entityName}}.",
 
     "sm_explain_concept_property": "Spiega la differenza tra un concetto e una proprietà.",
     "sm_browse_collections": "Quali collezioni di concetti sono disponibili?",
@@ -37,14 +37,14 @@
 
     "asset_find_unmapped": "Trova tabelle che necessitano di mappature semantiche.",
     "asset_map_columns": "Come mappo le colonne alle proprietà semantiche?",
-    "asset_show_lineage": "Mostrami la lineage di questo asset.",
+    "asset_show_lineage": "Mostrami la lineage di {{entityName}}.",
 
     "comp_low_scores": "Mostra prodotti dati con punteggi di conformità bassi.",
     "comp_failing_checks": "Quali controlli di conformità stanno attualmente fallendo?",
     "comp_create_policy": "Crea una nuova politica di conformità per i dati personali.",
 
     "dom_list_domains": "Elenca tutti i domini dati e i loro responsabili.",
-    "dom_domain_health": "Qual è lo stato di salute di questo dominio?",
+    "dom_domain_health": "Qual è lo stato di salute di {{entityName}}?",
     "dom_create_domain": "Aiutami a creare un nuovo dominio dati.",
 
     "rev_pending_reviews": "Mostrami le revisioni di asset in sospeso.",

@@ -43,6 +43,8 @@ export function useCopilotQuestions(
     [pathname, pageContext?.featureId],
   );
 
+  const selectedEntityName = pageContext?.selectedEntity?.name;
+
   return useMemo(() => {
     if (permissionsLoading) return [];
 
@@ -53,6 +55,14 @@ export function useCopilotQuestions(
       // undefined) we hide blank-mode onboarding prompts and keep
       // the regular catalog visible — same as the pre-PR behavior.
       if (q.adoptionMode && q.adoptionMode !== adoptionMode) return false;
+
+      // Entity-aware filter: questions tagged `requiresEntity` are
+      // only surfaced on detail pages where a `selectedEntity` lives
+      // in `pageContext`. The localized text uses `{{entityName}}` —
+      // see substitution below.
+      if (q.requiresEntity === true && !pageContext?.selectedEntity) {
+        return false;
+      }
 
       const contextMatch =
         q.contexts.length === 0 ||
@@ -67,10 +77,11 @@ export function useCopilotQuestions(
     for (const cat of COPILOT_CATEGORIES) {
       const catQuestions = matching
         .filter((q) => q.category === cat)
-        .map((q) => ({
-          key: q.key,
-          text: t(`copilot-questions:questions.${q.key}`),
-        }));
+        .map((q) => {
+          const raw = t(`copilot-questions:questions.${q.key}`);
+          const text = raw.replace(/\{\{entityName\}\}/g, selectedEntityName ?? '');
+          return { key: q.key, text };
+        });
 
       if (catQuestions.length > 0) {
         groups.push({
@@ -82,5 +93,13 @@ export function useCopilotQuestions(
     }
 
     return groups;
-  }, [currentFeatureId, permissionsLoading, hasPermission, t, adoptionMode]);
+  }, [
+    currentFeatureId,
+    permissionsLoading,
+    hasPermission,
+    t,
+    adoptionMode,
+    pageContext?.selectedEntity,
+    selectedEntityName,
+  ]);
 }

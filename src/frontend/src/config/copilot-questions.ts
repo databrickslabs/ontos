@@ -17,6 +17,15 @@ export interface CopilotQuestionDef {
    * - omitted: question is mode-agnostic and shown regardless.
    */
   adoptionMode?: 'blank' | 'active';
+  /**
+   * When `true`, the question is only surfaced on detail pages
+   * where a `selectedEntity` is present in `pageContext`. The
+   * localized text MUST use the `{{entityName}}` placeholder, which
+   * the hook substitutes with the current entity's name (e.g.
+   * `Customer 360`). Without an entity selected, the question is
+   * hidden — list pages stay focused on list-level prompts.
+   */
+  requiresEntity?: boolean;
 }
 
 export const COPILOT_CATEGORIES = [
@@ -63,7 +72,7 @@ export const COPILOT_QUESTIONS: CopilotQuestionDef[] = [
 
   // Data Products – read-only
   { key: 'dp_list_domain',                category: 'build',   contexts: ['data-products'], featureId: 'data-products',   minAccess: FeatureAccessLevel.READ_ONLY },
-  { key: 'dp_show_contracts',             category: 'build',   contexts: ['data-products'], featureId: 'data-products',   minAccess: FeatureAccessLevel.READ_ONLY },
+  { key: 'dp_show_contracts',             category: 'build',   contexts: ['data-products'], featureId: 'data-products',   minAccess: FeatureAccessLevel.READ_ONLY, requiresEntity: true },
   // Data Products – contributor
   { key: 'dp_draft_product',              category: 'build',   contexts: ['data-products'], featureId: 'data-products',   minAccess: FeatureAccessLevel.READ_WRITE },
   { key: 'dp_package_tables',             category: 'build',   contexts: ['data-products'], featureId: 'data-products',   minAccess: FeatureAccessLevel.READ_WRITE },
@@ -71,10 +80,10 @@ export const COPILOT_QUESTIONS: CopilotQuestionDef[] = [
 
   // Data Contracts – read-only
   { key: 'ct_show_failing',               category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_ONLY },
-  { key: 'ct_explain_quality',            category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_ONLY },
+  { key: 'ct_explain_quality',            category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_ONLY, requiresEntity: true },
   // Data Contracts – contributor
   { key: 'ct_create_contract',            category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_WRITE },
-  { key: 'ct_add_quality_check',          category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_WRITE },
+  { key: 'ct_add_quality_check',          category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_WRITE, requiresEntity: true },
 
   // Concepts / Semantic Models – read-only
   { key: 'sm_explain_concept_property',   category: 'build',   contexts: ['concepts'],      featureId: 'semantic-models', minAccess: FeatureAccessLevel.READ_ONLY },
@@ -86,7 +95,7 @@ export const COPILOT_QUESTIONS: CopilotQuestionDef[] = [
   // Assets
   { key: 'asset_find_unmapped',           category: 'build',   contexts: ['assets'],        featureId: 'assets',          minAccess: FeatureAccessLevel.READ_ONLY },
   { key: 'asset_map_columns',             category: 'build',   contexts: ['assets'],        featureId: 'assets',          minAccess: FeatureAccessLevel.READ_WRITE },
-  { key: 'asset_show_lineage',            category: 'build',   contexts: ['assets'],        featureId: 'assets',          minAccess: FeatureAccessLevel.READ_ONLY },
+  { key: 'asset_show_lineage',            category: 'build',   contexts: ['assets'],        featureId: 'assets',          minAccess: FeatureAccessLevel.READ_ONLY, requiresEntity: true },
 
   // ── Govern & Comply ──────────────────────────────────────────────
 
@@ -98,7 +107,7 @@ export const COPILOT_QUESTIONS: CopilotQuestionDef[] = [
 
   // Data Domains
   { key: 'dom_list_domains',              category: 'govern',  contexts: ['data-domains'],  featureId: 'data-domains',    minAccess: FeatureAccessLevel.READ_ONLY },
-  { key: 'dom_domain_health',             category: 'govern',  contexts: ['data-domains'],  featureId: 'data-domains',    minAccess: FeatureAccessLevel.READ_ONLY },
+  { key: 'dom_domain_health',             category: 'govern',  contexts: ['data-domains'],  featureId: 'data-domains',    minAccess: FeatureAccessLevel.READ_ONLY, requiresEntity: true },
   { key: 'dom_create_domain',             category: 'govern',  contexts: ['data-domains'],  featureId: 'data-domains',    minAccess: FeatureAccessLevel.READ_WRITE },
 
   // Asset Reviews

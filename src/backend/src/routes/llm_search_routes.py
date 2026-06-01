@@ -55,11 +55,14 @@ def _derive_effective_role_label(request: Request, user: UserInfo) -> Optional[s
             return None
 
         # Honor applied role override first (UI role-switcher).
+        # ``AppRole.id`` is typed as ``UUID`` but the override is stored as
+        # a string (JSON has no UUID type), so compare via ``str()``.
         try:
             override_id = settings_manager.get_applied_role_override_for_user(user.email)
             if override_id:
+                override_id_s = str(override_id)
                 for role in all_roles:
-                    if role.id == override_id:
+                    if str(role.id) == override_id_s:
                         return role.name
                 # Override id doesn't match any current role — fall through
                 # to group intersection rather than erroring.

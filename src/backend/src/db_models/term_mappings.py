@@ -160,14 +160,16 @@ class MappingSuggestionDb(Base):
     # PUT through the term-mapping decide endpoint, which updates this row
     # and forward-syncs the linked ReviewedAsset. Nullable FKs so the
     # review can be deleted without losing the suggestion.
+    # NOTE: data_asset_review_requests.id + reviewed_assets.id are
+    # String (varchar) PKs, not Postgres uuid; FK column types must match.
     review_request_id = Column(
-        PG_UUID(as_uuid=True),
+        String,
         ForeignKey("data_asset_review_requests.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
     reviewed_asset_id = Column(
-        PG_UUID(as_uuid=True),
+        String,
         ForeignKey("reviewed_assets.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

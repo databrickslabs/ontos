@@ -463,7 +463,14 @@ class LLMSearchManager:
             response_content, tool_calls_executed, sources, debug_info = await self._process_with_llm(
                 session, collect_debug=debug
             )
-            
+
+            # Sanitize orphan asterisk runs. The system prompt forbids
+            # ``****``/``*****`` as visual markers, but the LLM still
+            # emits them occasionally. ``****`` (4+) is never valid
+            # CommonMark, so stripping it is safe.
+            if response_content:
+                response_content = re.sub(r"\*{4,}", "", response_content)
+
             # Add assistant response to database
             assistant_msg = self._session_store.add_message(
                 self._db, session.id, MessageRole.ASSISTANT, content=response_content

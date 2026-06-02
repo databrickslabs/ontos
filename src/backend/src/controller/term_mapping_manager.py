@@ -235,6 +235,10 @@ class TermMappingManager:
     ) -> SuggestionDecisionResult:
         result = SuggestionDecisionResult(accepted=0, rejected=0, skipped=0)
         now = _utcnow()
+        # Track which runs were touched so we can refresh their cached
+        # pending/accepted/rejected counters on `run.stats` (the workbench UI
+        # reads those counters for its tab badges + stats cards).
+        affected_run_ids: set = set()
         for decision in batch.decisions:
             sug = mapping_suggestion_repo.get(db, decision.id)
             if sug is None:
@@ -256,9 +260,41 @@ class TermMappingManager:
                 result.rejected += 1
             sug.decided_by = decided_by
             sug.decided_at = now
+            affected_run_ids.add(sug.run_id)
             db.add(sug)
+        for run_id in affected_run_ids:
+            self._refresh_run_stats(db, run_id)
         db.commit()
         return result
+
+    def _refresh_run_stats(self, db: Session, run_id) -> None:
+        """Recompute the cached pending/accepted/rejected counters on a run.
+
+        We keep the snapshotted `targets`, `suggestions_total`,
+        `suggestions_auto_apply` and `links_created`/`links_skipped` so the
+        history (e.g. how many candidates the suggester originally produced)
+        survives later decisions.
+        """
+        run = mapping_run_repo.get(db, run_id)
+        if run is None:
+            return
+        stats = dict(run.stats or {})
+        sugs = mapping_suggestion_repo.list_for_run(db, run_id, status=None, limit=100_000)
+        by_status: Dict[str, int] = {}
+        for s in sugs:
+            by_status[s.status] = by_status.get(s.status, 0) + 1
+        stats["suggestions_pending"] = by_status.get(SUG_STATUS_PENDING, 0)
+        stats["suggestions_accepted"] = by_status.get(SUG_STATUS_ACCEPTED, 0)
+        stats["suggestions_rejected"] = by_status.get(SUG_STATUS_REJECTED, 0)
+        stats["suggestions_applied"] = by_status.get(SUG_STATUS_APPLIED, 0)
+        # Auto-apply counter only counts *pending* candidates — once decided
+        # they live in accepted/rejected and lose their "would auto-apply"
+        # meaning. Recompute from the live pending set.
+        stats["suggestions_auto_apply"] = sum(
+            1 for s in sugs if s.status == SUG_STATUS_PENDING and s.auto_apply
+        )
+        run.stats = stats
+        db.add(run)
 
     # ------------------------------------------------------------------
     # Apply / Undo
@@ -334,6 +370,10 @@ class TermMappingManager:
             run.status = RUN_STATUS_APPLIED
             run.applied_at = _utcnow()
             # Refresh stats with apply numbers
+            # _refresh_run_stats recomputes pending/accepted/applied counters
+            # from the live suggestions table, then we overlay the apply-side
+            # numbers (created/skipped) which are not derivable from status.
+            self._refresh_run_stats(db, run_id)
             stats = dict(run.stats or {})
             stats["links_created"] = result.links_created
             stats["links_skipped"] = result.links_skipped
@@ -396,6 +436,14 @@ class TermMappingManager:
         run.status = RUN_STATUS_UNDONE
         run.undone_at = _utcnow()
         run.applied_link_ids = []
+        self._refresh_run_stats(db, run.id)
+        # links_created/skipped from the prior apply are no longer accurate
+        # after an undo — zero them out so the UI doesn't keep boasting old
+        # numbers next to a "undone" status.
+        stats = dict(run.stats or {})
+        stats["links_created"] = 0
+        stats["links_skipped"] = 0
+        run.stats = stats
         db.commit()
         return result
 

@@ -32,10 +32,23 @@ import {
 interface SemanticModelLite {
   id: string;
   name: string;
-  display_name?: string;
+  display_name?: string | null;
   enabled?: boolean;
-  source_type?: string;
 }
+
+interface SemanticModelsResponse {
+  semantic_models: SemanticModelLite[];
+}
+
+/**
+ * The /api/semantic-models endpoint returns DB-backed customer models AND
+ * file/schema taxonomies in one list. File/schema rows use synthetic IDs
+ * prefixed with `file-` (see backend route); only the un-prefixed ones are
+ * persisted in the `semantic_models` table and therefore valid as
+ * `urn:semantic-model:*` mapping contexts.
+ */
+const isCustomerModel = (m: SemanticModelLite): boolean =>
+  typeof m.id === 'string' && !m.id.startsWith('file-');
 
 interface RunConfigDialogProps {
   isOpen: boolean;
@@ -93,14 +106,13 @@ export default function RunConfigDialog({
     setModelsLoading(true);
     setModelsError(null);
     try {
-      const res = await get<SemanticModelLite[]>('/api/semantic-models');
+      const res = await get<SemanticModelsResponse>('/api/semantic-models');
       if (res.error) throw new Error(res.error);
-      // Only database-backed (customer) ontologies are valid as ontology_contexts.
-      // Shipped file/schema taxonomies are picked separately via the shipped
-      // opt-in checkboxes below.
-      const customer = (res.data ?? []).filter(
-        (m) => (m.source_type ?? 'database') === 'database' && m.enabled !== false,
-      );
+      // Endpoint returns BOTH DB-backed customer models and file/schema
+      // taxonomies under `semantic_models`. Only customer models are valid as
+      // `ontology_contexts`; shipped taxonomies use the opt-in checkboxes.
+      const all = res.data?.semantic_models ?? [];
+      const customer = all.filter((m) => isCustomerModel(m) && m.enabled !== false);
       setModels(customer);
     } catch (e) {
       setModelsError(e instanceof Error ? e.message : 'Failed to load ontologies');

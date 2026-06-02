@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -82,9 +83,13 @@ class RunCreate(BaseModel):
 
 
 class RunRead(BaseModel):
+    # UUID fields below are typed as `UUID` so Pydantic accepts the SQLAlchemy
+    # PG_UUID instances directly (model_validate from ORM rows). Pydantic v2
+    # serializes UUID to a plain JSON string, so the wire format stays
+    # `"abc-def-..."` and the TS client keeps treating these as strings.
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: UUID
     ontology_contexts: List[str]
     include_shipped: List[str]
     target_filter: Dict[str, Any]
@@ -93,7 +98,7 @@ class RunRead(BaseModel):
     comment: Optional[str] = None
     stats: Dict[str, Any]
     error: Optional[str] = None
-    applied_link_ids: List[str]
+    applied_link_ids: List[UUID]
     created_by: Optional[str] = None
     created_at: datetime
     started_at: Optional[datetime] = None
@@ -104,7 +109,9 @@ class RunRead(BaseModel):
 
 class RunSummary(BaseModel):
     """List-view projection of a run."""
-    id: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
     status: RunStatus
     comment: Optional[str] = None
     stats: Dict[str, Any]
@@ -119,8 +126,8 @@ class RunSummary(BaseModel):
 class SuggestionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    run_id: str
+    id: UUID
+    run_id: UUID
     source_entity_type: str
     source_entity_id: str
     source_label: Optional[str] = None
@@ -136,7 +143,7 @@ class SuggestionRead(BaseModel):
     decided_by: Optional[str] = None
     decided_at: Optional[datetime] = None
     custom_iri: Optional[str] = None
-    applied_link_id: Optional[str] = None
+    applied_link_id: Optional[UUID] = None
     warnings: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
@@ -163,14 +170,14 @@ class SuggestionDecisionResult(BaseModel):
 # ---------- Apply / Undo result shapes ----------
 
 class ApplyResult(BaseModel):
-    run_id: str
+    run_id: UUID
     links_created: int
     links_skipped: int  # e.g. orphan attribute, NEW: prefix, duplicate
     errors: List[str] = Field(default_factory=list)
 
 
 class UndoResult(BaseModel):
-    run_id: str
+    run_id: UUID
     links_removed: int
     suggestions_reverted: int
     errors: List[str] = Field(default_factory=list)

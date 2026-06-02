@@ -9,16 +9,12 @@
     "global_find_customer_data": "顧客データはどこにありますか？",
     "global_business_terms_sales": "営業に関連するビジネス用語は何ですか？",
     "global_what_domains_exist": "組織で定義されているデータドメインは何ですか？",
-
     "mp_browse_products": "顧客ドメインのデータプロダクトを表示してください。",
     "mp_product_cost": "すべてのデータプロダクトのコストはいくらですか？",
     "mp_subscribe_product": "データプロダクトをサブスクライブするにはどうすればよいですか？",
-
     "dc_search_tables": "顧客情報を含むテーブルを検索してください。",
     "dc_find_columns": "すべてのテーブルからメールアドレス関連のカラムを検索してください。",
-
     "search_across_all": "すべてのデータプロダクト、契約、用語を横断検索してください。",
-
     "dp_list_domain": "私のドメインで利用可能なデータプロダクトは何ですか？",
     "dp_show_contracts": "{{entityName}}にリンクされている契約はどれですか？",
     "dp_quality_score": "{{entityName}}のデータ品質スコアはどれくらいですか？",
@@ -32,21 +28,17 @@
     "dp_add_output_port": "データプロダクトに出力ポートを追加するにはどうすればよいですか？",
     "dp_publication_status": "{{entityName}}の公開ステータスはどうなっていますか？",
     "dp_publish_blockers": "{{entityName}}の公開を妨げているものは何ですか？",
-
     "ct_show_failing": "品質チェックに失敗している契約を表示してください。",
-    "ct_explain_quality": "{{entityName}}で定義されている品質チェックを説明してください。",
     "ct_what_covers": "{{entityName}}は何をカバーしていますか？",
     "ct_used_by": "{{entityName}}を使用しているデータプロダクトはどれですか？",
     "ct_owner": "{{entityName}}の所有者は誰ですか？",
     "ct_create_contract": "営業スキーマ用の新しいデータ契約を作成してください。",
     "ct_add_quality_check": "{{entityName}}に品質チェックを追加してください。",
     "ct_version_impact": "{{entityName}}のバージョンを上げると何が変わりますか？",
-
     "sm_explain_concept_property": "コンセプトとプロパティの違いを説明してください。",
     "sm_browse_collections": "利用可能なコンセプトコレクションは何ですか？",
     "sm_define_vocabulary": "顧客ドメインの語彙を定義してください。",
     "sm_suggest_concepts": "サプライチェーンモデルにはどのようなコンセプトを作成すべきですか？",
-
     "asset_find_unmapped": "セマンティックマッピングが必要なテーブルを見つけてください。",
     "asset_map_columns": "カラムをセマンティックプロパティにマッピングするにはどうすればよいですか？",
     "asset_show_lineage": "{{entityName}}のリネージを表示してください。",
@@ -54,11 +46,9 @@
     "asset_freshness": "{{entityName}}の鮮度はどうですか？",
     "asset_quality": "{{entityName}}の品質ステータスはどうですか？",
     "asset_consumers": "{{entityName}}を利用しているのは誰ですか？",
-
     "comp_low_scores": "コンプライアンススコアの低いデータプロダクトを表示してください。",
     "comp_failing_checks": "現在失敗しているコンプライアンスチェックはどれですか？",
     "comp_create_policy": "個人情報向けの新しいコンプライアンスポリシーを作成してください。",
-
     "dom_list_domains": "すべてのデータドメインとその所有者を一覧表示してください。",
     "dom_domain_health": "{{entityName}}の健全性ステータスはどうですか？",
     "dom_create_domain": "新しいデータドメインの作成を手伝ってください。",
@@ -66,17 +56,13 @@
     "dom_business_terms": "{{entityName}}に関連するビジネス用語は何ですか？",
     "dom_owner": "{{entityName}}のガバナンス担当者は誰ですか？",
     "dom_health_detail": "{{entityName}}の健全性はどうですか？",
-
     "rev_pending_reviews": "保留中のアセットレビューを表示してください。",
     "rev_start_review": "テーブルの新しいレビューを開始してください。",
-
     "gov_semantic_coverage": "先週セマンティックカバレッジが低下した理由を教えてください。",
     "gov_domains_ready": "エージェント利用の準備ができているドメインはどれですか？",
-
     "cc_table_columns": "このテーブルにはどのようなカラムがありますか？",
     "cc_table_owner": "このテーブルの所有者は誰ですか？",
     "cc_table_usage": "このテーブルはどのように使用されていますか？",
-
     "settings_manage_roles": "ユーザーロールと権限はどのように管理しますか？",
     "settings_configure_jobs": "バックグラウンドジョブの設定を手伝ってください。"
   }

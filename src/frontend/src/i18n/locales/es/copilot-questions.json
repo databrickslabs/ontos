@@ -9,16 +9,12 @@
     "global_find_customer_data": "¿Dónde puedo encontrar datos de clientes?",
     "global_business_terms_sales": "¿Qué términos de negocio están relacionados con ventas?",
     "global_what_domains_exist": "¿Qué dominios de datos están definidos en la organización?",
-
     "mp_browse_products": "Muéstrame productos de datos en el dominio de Clientes.",
     "mp_product_cost": "¿Cuánto cuestan todos los productos de datos?",
     "mp_subscribe_product": "¿Cómo me suscribo a un producto de datos?",
-
     "dc_search_tables": "Buscar tablas que contengan información de clientes.",
     "dc_find_columns": "Encontrar columnas relacionadas con direcciones de correo electrónico en todas las tablas.",
-
     "search_across_all": "Buscar en todos los productos de datos, contratos y términos.",
-
     "dp_list_domain": "¿Qué productos de datos están disponibles en mi dominio?",
     "dp_show_contracts": "¿Qué contratos están vinculados a {{entityName}}?",
     "dp_quality_score": "¿Cuál es la puntuación de calidad de datos de {{entityName}}?",
@@ -32,21 +28,17 @@
     "dp_add_output_port": "¿Cómo agrego un puerto de salida a un producto de datos?",
     "dp_publication_status": "¿Cuál es el estado de publicación de {{entityName}}?",
     "dp_publish_blockers": "¿Qué impide que {{entityName}} se publique?",
-
     "ct_show_failing": "Muéstrame contratos con controles de calidad fallidos.",
-    "ct_explain_quality": "Explica los controles de calidad definidos en {{entityName}}.",
     "ct_what_covers": "¿Qué cubre {{entityName}}?",
     "ct_used_by": "¿Qué productos de datos usan {{entityName}}?",
     "ct_owner": "¿Quién es el propietario de {{entityName}}?",
     "ct_create_contract": "Crear un nuevo contrato de datos para mi esquema de ventas.",
     "ct_add_quality_check": "Ayúdame a agregar un control de calidad a {{entityName}}.",
     "ct_version_impact": "¿Qué cambia si actualizo la versión de {{entityName}}?",
-
     "sm_explain_concept_property": "Explica la diferencia entre un concepto y una propiedad.",
     "sm_browse_collections": "¿Qué colecciones de conceptos están disponibles?",
     "sm_define_vocabulary": "Ayúdame a definir un vocabulario para nuestro dominio de Clientes.",
     "sm_suggest_concepts": "¿Qué conceptos debería crear para un modelo de cadena de suministro?",
-
     "asset_find_unmapped": "Encontrar tablas que necesitan mapeos semánticos.",
     "asset_map_columns": "¿Cómo mapeo columnas a propiedades semánticas?",
     "asset_show_lineage": "Muéstrame el linaje de {{entityName}}.",
@@ -54,11 +46,9 @@
     "asset_freshness": "¿Cuál es la frescura de {{entityName}}?",
     "asset_quality": "¿Cuál es el estado de calidad de {{entityName}}?",
     "asset_consumers": "¿Quién consume {{entityName}}?",
-
     "comp_low_scores": "Mostrar productos de datos con puntuaciones de cumplimiento bajas.",
     "comp_failing_checks": "¿Qué controles de cumplimiento están fallando actualmente?",
     "comp_create_policy": "Crear una nueva política de cumplimiento para datos personales.",
-
     "dom_list_domains": "Listar todos los dominios de datos y sus responsables.",
     "dom_domain_health": "¿Cuál es el estado de salud de {{entityName}}?",
     "dom_create_domain": "Ayúdame a crear un nuevo dominio de datos.",
@@ -66,17 +56,13 @@
     "dom_business_terms": "¿Qué términos de negocio están vinculados a {{entityName}}?",
     "dom_owner": "¿Quién gobierna {{entityName}}?",
     "dom_health_detail": "¿Cuál es la salud de {{entityName}}?",
-
     "rev_pending_reviews": "Muéstrame las revisiones de activos pendientes.",
     "rev_start_review": "Iniciar una nueva revisión para una tabla.",
-
     "gov_semantic_coverage": "¿Por qué bajó la cobertura semántica la semana pasada?",
     "gov_domains_ready": "¿Qué dominios están listos para el uso de agentes?",
-
     "cc_table_columns": "¿Qué columnas tiene esta tabla?",
     "cc_table_owner": "¿Quién es el propietario de esta tabla?",
     "cc_table_usage": "¿Cómo se utiliza esta tabla?",
-
     "settings_manage_roles": "¿Cómo gestiono los roles de usuario y los permisos?",
     "settings_configure_jobs": "Ayúdame a configurar los trabajos en segundo plano."
   }

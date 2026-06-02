@@ -9,16 +9,12 @@
     "global_find_customer_data": "Wo finde ich Kundendaten?",
     "global_business_terms_sales": "Welche Geschäftsbegriffe beziehen sich auf den Vertrieb?",
     "global_what_domains_exist": "Welche Datendomänen sind in der Organisation definiert?",
-
     "mp_browse_products": "Zeige mir Datenprodukte in der Kundendomäne.",
     "mp_product_cost": "Was kosten alle Datenprodukte?",
     "mp_subscribe_product": "Wie abonniere ich ein Datenprodukt?",
-
     "dc_search_tables": "Suche nach Tabellen mit Kundeninformationen.",
     "dc_find_columns": "Finde Spalten mit E-Mail-Adressen in allen Tabellen.",
-
     "search_across_all": "Suche über alle Datenprodukte, Verträge und Begriffe.",
-
     "dp_list_domain": "Welche Datenprodukte sind in meiner Domäne verfügbar?",
     "dp_show_contracts": "Welche Verträge sind mit {{entityName}} verknüpft?",
     "dp_quality_score": "Wie ist der Datenqualitätswert von {{entityName}}?",
@@ -32,21 +28,17 @@
     "dp_add_output_port": "Wie füge ich einem Datenprodukt einen Output-Port hinzu?",
     "dp_publication_status": "Wie ist der Veröffentlichungsstatus von {{entityName}}?",
     "dp_publish_blockers": "Was verhindert die Veröffentlichung von {{entityName}}?",
-
     "ct_show_failing": "Zeige mir Verträge mit fehlgeschlagenen Qualitätsprüfungen.",
-    "ct_explain_quality": "Erkläre die Qualitätsprüfungen in {{entityName}}.",
     "ct_what_covers": "Was deckt {{entityName}} ab?",
     "ct_used_by": "Welche Datenprodukte nutzen {{entityName}}?",
     "ct_owner": "Wem gehört {{entityName}}?",
     "ct_create_contract": "Erstelle einen neuen Datenvertrag für mein Vertriebsschema.",
     "ct_add_quality_check": "Hilf mir, eine Qualitätsprüfung zu {{entityName}} hinzuzufügen.",
     "ct_version_impact": "Was ändert sich, wenn ich die Version von {{entityName}} erhöhe?",
-
     "sm_explain_concept_property": "Erkläre den Unterschied zwischen einem Konzept und einer Eigenschaft.",
     "sm_browse_collections": "Welche Konzeptsammlungen sind verfügbar?",
     "sm_define_vocabulary": "Hilf mir, ein Vokabular für unsere Kundendomäne zu definieren.",
     "sm_suggest_concepts": "Welche Konzepte sollte ich für ein Supply-Chain-Modell erstellen?",
-
     "asset_find_unmapped": "Finde Tabellen, die semantische Zuordnungen benötigen.",
     "asset_map_columns": "Wie ordne ich Spalten semantischen Eigenschaften zu?",
     "asset_show_lineage": "Zeige mir die Herkunft von {{entityName}}.",
@@ -54,11 +46,9 @@
     "asset_freshness": "Wie aktuell ist {{entityName}}?",
     "asset_quality": "Wie ist der Qualitätsstatus von {{entityName}}?",
     "asset_consumers": "Wer nutzt {{entityName}}?",
-
     "comp_low_scores": "Zeige Datenprodukte mit niedrigen Compliance-Werten.",
     "comp_failing_checks": "Welche Compliance-Prüfungen schlagen derzeit fehl?",
     "comp_create_policy": "Erstelle eine neue Compliance-Richtlinie für personenbezogene Daten.",
-
     "dom_list_domains": "Liste alle Datendomänen und ihre Verantwortlichen auf.",
     "dom_domain_health": "Wie ist der Gesundheitsstatus von {{entityName}}?",
     "dom_create_domain": "Hilf mir, eine neue Datendomäne zu erstellen.",
@@ -66,17 +56,13 @@
     "dom_business_terms": "Welche Geschäftsbegriffe sind mit {{entityName}} verknüpft?",
     "dom_owner": "Wer verwaltet {{entityName}}?",
     "dom_health_detail": "Wie ist die Gesundheit von {{entityName}}?",
-
     "rev_pending_reviews": "Zeige mir ausstehende Asset-Überprüfungen.",
     "rev_start_review": "Starte eine neue Überprüfung für eine Tabelle.",
-
     "gov_semantic_coverage": "Warum ist die semantische Abdeckung letzte Woche gesunken?",
     "gov_domains_ready": "Welche Domänen sind bereit für den Agenteneinsatz?",
-
     "cc_table_columns": "Welche Spalten hat diese Tabelle?",
     "cc_table_owner": "Wem gehört diese Tabelle?",
     "cc_table_usage": "Wie wird diese Tabelle verwendet?",
-
     "settings_manage_roles": "Wie verwalte ich Benutzerrollen und Berechtigungen?",
     "settings_configure_jobs": "Hilf mir, Hintergrundaufträge zu konfigurieren."
   }

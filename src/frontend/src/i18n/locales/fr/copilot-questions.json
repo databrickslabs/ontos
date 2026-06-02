@@ -9,16 +9,12 @@
     "global_find_customer_data": "Où puis-je trouver les données clients ?",
     "global_business_terms_sales": "Quels termes métier sont liés aux ventes ?",
     "global_what_domains_exist": "Quels domaines de données sont définis dans l'organisation ?",
-
     "mp_browse_products": "Montrez-moi les produits de données du domaine Client.",
     "mp_product_cost": "Combien coûtent tous les produits de données ?",
     "mp_subscribe_product": "Comment m'abonner à un produit de données ?",
-
     "dc_search_tables": "Rechercher des tables contenant des informations clients.",
     "dc_find_columns": "Trouver les colonnes liées aux adresses e-mail dans toutes les tables.",
-
     "search_across_all": "Rechercher dans tous les produits de données, contrats et termes.",
-
     "dp_list_domain": "Quels produits de données sont disponibles dans mon domaine ?",
     "dp_show_contracts": "Quels contrats sont liés à {{entityName}} ?",
     "dp_quality_score": "Quel est le score de qualité des données de {{entityName}} ?",
@@ -32,21 +28,17 @@
     "dp_add_output_port": "Comment ajouter un port de sortie à un produit de données ?",
     "dp_publication_status": "Quel est le statut de publication de {{entityName}} ?",
     "dp_publish_blockers": "Qu'est-ce qui empêche {{entityName}} d'être publié ?",
-
     "ct_show_failing": "Montrez-moi les contrats avec des contrôles qualité en échec.",
-    "ct_explain_quality": "Expliquez les contrôles qualité définis dans {{entityName}}.",
     "ct_what_covers": "Que couvre {{entityName}} ?",
     "ct_used_by": "Quels produits de données utilisent {{entityName}} ?",
     "ct_owner": "Qui est propriétaire de {{entityName}} ?",
     "ct_create_contract": "Créer un nouveau contrat de données pour mon schéma de ventes.",
     "ct_add_quality_check": "Aidez-moi à ajouter un contrôle qualité à {{entityName}}.",
     "ct_version_impact": "Que change-t-il si j'incrémente la version de {{entityName}} ?",
-
     "sm_explain_concept_property": "Expliquez la différence entre un concept et une propriété.",
     "sm_browse_collections": "Quelles collections de concepts sont disponibles ?",
     "sm_define_vocabulary": "Aidez-moi à définir un vocabulaire pour notre domaine Client.",
     "sm_suggest_concepts": "Quels concepts devrais-je créer pour un modèle de chaîne logistique ?",
-
     "asset_find_unmapped": "Trouver les tables nécessitant des mappings sémantiques.",
     "asset_map_columns": "Comment mapper des colonnes à des propriétés sémantiques ?",
     "asset_show_lineage": "Montrez-moi le lignage de {{entityName}}.",
@@ -54,11 +46,9 @@
     "asset_freshness": "Quelle est la fraîcheur de {{entityName}} ?",
     "asset_quality": "Quel est l'état de qualité de {{entityName}} ?",
     "asset_consumers": "Qui consomme {{entityName}} ?",
-
     "comp_low_scores": "Montrer les produits de données avec de faibles scores de conformité.",
     "comp_failing_checks": "Quels contrôles de conformité sont actuellement en échec ?",
     "comp_create_policy": "Créer une nouvelle politique de conformité pour les données personnelles.",
-
     "dom_list_domains": "Lister tous les domaines de données et leurs responsables.",
     "dom_domain_health": "Quel est l'état de santé de {{entityName}} ?",
     "dom_create_domain": "Aidez-moi à créer un nouveau domaine de données.",
@@ -66,17 +56,13 @@
     "dom_business_terms": "Quels termes métier sont liés à {{entityName}} ?",
     "dom_owner": "Qui gouverne {{entityName}} ?",
     "dom_health_detail": "Quelle est la santé de {{entityName}} ?",
-
     "rev_pending_reviews": "Montrez-moi les revues d'actifs en attente.",
     "rev_start_review": "Démarrer une nouvelle revue pour une table.",
-
     "gov_semantic_coverage": "Pourquoi la couverture sémantique a-t-elle baissé la semaine dernière ?",
     "gov_domains_ready": "Quels domaines sont prêts pour l'utilisation par des agents ?",
-
     "cc_table_columns": "Quelles colonnes cette table possède-t-elle ?",
     "cc_table_owner": "À qui appartient cette table ?",
     "cc_table_usage": "Comment cette table est-elle utilisée ?",
-
     "settings_manage_roles": "Comment gérer les rôles et les permissions des utilisateurs ?",
     "settings_configure_jobs": "Aidez-moi à configurer les tâches en arrière-plan."
   }

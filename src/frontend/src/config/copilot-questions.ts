@@ -89,7 +89,6 @@ export const COPILOT_QUESTIONS: CopilotQuestionDef[] = [
 
   // Data Contracts – read-only
   { key: 'ct_show_failing',               category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_ONLY },
-  { key: 'ct_explain_quality',            category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_ONLY, requiresEntity: true },
   // Data Contracts – entity-templated (detail-page only)
   { key: 'ct_what_covers',                category: 'explore', contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_ONLY, requiresEntity: true },
   { key: 'ct_used_by',                    category: 'build',   contexts: ['data-contracts'], featureId: 'data-contracts', minAccess: FeatureAccessLevel.READ_ONLY, requiresEntity: true },

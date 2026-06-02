@@ -396,8 +396,12 @@ Tracked as separate issues (or marked for follow-up):
 
 - **LLM-as-judge engine** — `engines/` directory + `engine_metadata` schema
   are scaffolded; only `HeuristicSuggester` ships in v1.
+  [#485](https://github.com/databrickslabs/ontos/issues/485).
 - **Bulk-accept guardrails** — confirm dialog for low-confidence rows when
-  bulk-accepting. See [#482](https://github.com/databrickslabs/ontos/issues/482).
+  bulk-accepting. [#482](https://github.com/databrickslabs/ontos/issues/482).
+- **`test_semantic_links_manager.py` pre-existing failures on main** —
+  unrelated to term-mapping but exercised by Term Mapping's link writes,
+  worth fixing for safety. [#486](https://github.com/databrickslabs/ontos/issues/486).
 - **Background async execution** for large runs.
 - **Schema-drift watcher** and **FK / relationship suggestions** — v2.
 - **Concept minting (`NEW:` IRIs)** — currently rejected; reserved for the

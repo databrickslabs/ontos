@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from src.common.config import Settings, get_settings
 from src.common.logging import get_logger
-from src.controller.system_prompts import get_system_prompt
+from src.tools.system_prompts import get_system_prompt
 from src.models.llm_search import (
     ConversationSession, ChatMessage, ChatResponse, MessageRole,
     ToolCall, ToolName, SessionSummary, LLMSearchStatus,
@@ -65,7 +65,7 @@ def _strip_internal_citations(text: str) -> Tuple[str, List[str], List[str]]:
 # ============================================================================
 #
 # The default prompt and the `LLM_SYSTEM_PROMPT` env-override path now live
-# in `src.controller.system_prompts.get_system_prompt`. This manager calls
+# in `src.tools.system_prompts.get_system_prompt`. This manager calls
 # it once per `_process_with_llm` invocation. Phase 2/3 will start passing
 # personalization context (role, page, selected entity, adoption mode)
 # through that function — the signature already accepts those.

@@ -114,6 +114,16 @@ export default function RunConfigDialog({
       const all = res.data?.semantic_models ?? [];
       const customer = all.filter((m) => isCustomerModel(m) && m.enabled !== false);
       setModels(customer);
+      // Out-of-the-box ergonomics: when the user has zero customer ontologies
+      // loaded, pre-check the Databricks shipped taxonomy so "Create run" is
+      // immediately useful for demos / first-time exploration. They can still
+      // uncheck it. When customer ontologies exist, leave shipped opt-ins off
+      // — those are the authoritative source.
+      if (customer.length === 0) {
+        setShippedSelected((prev) =>
+          prev.size === 0 ? new Set(['urn:taxonomy:databricks_ontology']) : prev,
+        );
+      }
     } catch (e) {
       setModelsError(e instanceof Error ? e.message : 'Failed to load ontologies');
     } finally {

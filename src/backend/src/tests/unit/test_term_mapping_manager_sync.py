@@ -40,13 +40,11 @@ from src.models.term_mappings import (
 
 
 def _make_suggestion(suggestion_id: str = None, *, with_review: bool = True):
-    # Use data_contract_property because semantic_links.EntityType Literal
-    # doesn't yet include 'asset' (separate follow-up; out of scope here).
     return SimpleNamespace(
         id=suggestion_id or str(uuid.uuid4()),
         run_id=uuid.uuid4(),
-        source_entity_type="data_contract_property",
-        source_entity_id="contract-1#schema-a#customer_id",
+        source_entity_type="asset",
+        source_entity_id="col-1",
         source_label="customer_id",
         suggestion_kind="attribute_assignment",
         target_concept_iri="urn:semantic-model:retail#Customer.identifier",

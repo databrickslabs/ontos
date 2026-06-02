@@ -1,16 +1,21 @@
 """
-Concept-search tool for the Ask Ontos copilot.
+Handbook-search tool for the Ask Ontos copilot.
 
-Grounds the LLM in the curated `docs/concepts/` corpus so it can answer
+Grounds the LLM in the curated `docs/handbook/` corpus so it can answer
 "what is X?" / "how does Y work?" / "what's the difference between A and B?"
 questions from authoritative project documentation rather than training
 knowledge. Each result is a section excerpt with a stable
 `file.md#anchor` source URI the model can cite.
 
-The corpus is treated as read-only at runtime; the tool walks the
+The handbook is treated as read-only at runtime; the tool walks the
 directory on every call (it's small — 13 files, ~100KB) and tokenizes
 the query for a simple title/anchor/body-frequency match. Intentionally
 no embeddings, no index — keeps the deployment surface zero.
+
+Naming note: this corpus used to be called "concepts", but "Concept" is
+already an Ontos ontology entity (an RDFS class / SKOS concept in the
+knowledge graph). To avoid overloading the noun in code, API surface,
+and docs, the LLM-grounding markdown corpus is now "handbook".
 """
 
 from __future__ import annotations
@@ -31,35 +36,35 @@ logger = get_logger(__name__)
 # Path resolution
 # ---------------------------------------------------------------------------
 
-# The corpus lives at `docs/concepts/` relative to the repository root.
+# The corpus lives at `docs/handbook/` relative to the repository root.
 # Depending on how the app is laid out at runtime, the repo root is at a
 # different number of parents above this file:
-#   - Local dev:    <ontos>/src/backend/src/tools/concepts.py  (5 parents up)
-#   - Deployed app: <approot>/backend/src/tools/concepts.py    (4 parents up)
-# We walk a small range and pick the first parent that has `docs/concepts/`.
-# An explicit env var `ONTOS_CONCEPTS_DIR` overrides the search for
+#   - Local dev:    <ontos>/src/backend/src/tools/handbook.py  (5 parents up)
+#   - Deployed app: <approot>/backend/src/tools/handbook.py    (4 parents up)
+# We walk a small range and pick the first parent that has `docs/handbook/`.
+# An explicit env var `ONTOS_HANDBOOK_DIR` overrides the search for
 # deployments that ship the corpus to a non-standard location.
 
 _THIS_FILE = Path(__file__).resolve()
-_CONCEPTS_DIR_ENV_VAR = "ONTOS_CONCEPTS_DIR"
+_HANDBOOK_DIR_ENV_VAR = "ONTOS_HANDBOOK_DIR"
 
 
-def _resolve_concepts_dir() -> Optional[Path]:
-    """Return the concept-docs directory if present on disk, else None.
+def _resolve_handbook_dir() -> Optional[Path]:
+    """Return the handbook directory if present on disk, else None.
 
     Resolution order:
-      1. ``ONTOS_CONCEPTS_DIR`` env var (explicit override).
-      2. Walk parents 2..6 above this file looking for ``docs/concepts/``.
+      1. ``ONTOS_HANDBOOK_DIR`` env var (explicit override).
+      2. Walk parents 2..6 above this file looking for ``docs/handbook/``.
       3. Return ``None`` — the tool degrades gracefully (no matches).
     """
-    override = os.environ.get(_CONCEPTS_DIR_ENV_VAR)
+    override = os.environ.get(_HANDBOOK_DIR_ENV_VAR)
     if override:
         candidate = Path(override).expanduser().resolve()
         if candidate.is_dir():
             return candidate
         logger.warning(
             "%s=%s but the directory does not exist; falling back to search.",
-            _CONCEPTS_DIR_ENV_VAR,
+            _HANDBOOK_DIR_ENV_VAR,
             override,
         )
 
@@ -68,7 +73,7 @@ def _resolve_concepts_dir() -> Optional[Path]:
             base = _THIS_FILE.parents[depth]
         except IndexError:
             break
-        candidate = base / "docs" / "concepts"
+        candidate = base / "docs" / "handbook"
         if candidate.is_dir():
             return candidate
     return None
@@ -123,7 +128,7 @@ def _parse_sections(file_path: Path) -> List[_Section]:
     try:
         text = file_path.read_text(encoding="utf-8")
     except OSError as e:
-        logger.warning(f"[search_ontos_concepts] Could not read {file_path}: {e}")
+        logger.warning(f"[search_ontos_handbook] Could not read {file_path}: {e}")
         return []
 
     sections: List[_Section] = []
@@ -262,10 +267,10 @@ def _truncate_excerpt(body: str, max_chars: int = 400) -> str:
 # ---------------------------------------------------------------------------
 
 
-class SearchOntosConceptsTool(BaseTool):
-    """Search Ontos concept documentation for definitions and explanations.
+class SearchOntosHandbookTool(BaseTool):
+    """Search the Ontos handbook for definitions and explanations.
 
-    Returns ranked excerpts from the `docs/concepts/` corpus — the curated
+    Returns ranked excerpts from the `docs/handbook/` corpus — the curated
     grounding source for the Ask Ontos copilot. Use this for any
     conceptual question (definitions, lifecycle states, role
     responsibilities, the agreement workflow, the ontology + knowledge
@@ -273,13 +278,13 @@ class SearchOntosConceptsTool(BaseTool):
     BEFORE answering from training knowledge.
     """
 
-    name = "search_ontos_concepts"
-    # New category — see query_classifier.CATEGORY_KEYWORDS["concepts"].
+    name = "search_ontos_handbook"
+    # New category — see query_classifier.CATEGORY_KEYWORDS["handbook"].
     # Also added to DEFAULT_CATEGORIES so vague / generic questions still
     # see this tool.
-    category = "concepts"
+    category = "handbook"
     description = (
-        "Search the Ontos concept documentation for definitions, role "
+        "Search the Ontos handbook for definitions, role "
         "responsibilities, lifecycle states (data product / data contract "
         "/ agreement / workflow execution), the approval workflow, the "
         "ontology + knowledge graph model, the data quality model, "
@@ -288,7 +293,7 @@ class SearchOntosConceptsTool(BaseTool):
         "USE THIS TOOL FIRST for any 'what is X?' / 'how does Y work?' / "
         "'what's the difference between A and B?' question — do not "
         "answer conceptual questions from training knowledge before "
-        "checking the corpus. Each result includes a `source_uri` "
+        "checking the handbook. Each result includes a `source_uri` "
         "(file.md#anchor) suitable for citation."
     )
     parameters = {
@@ -309,7 +314,7 @@ class SearchOntosConceptsTool(BaseTool):
         },
     }
     required_params = ["query"]
-    # Concept docs are public grounding material; no scope gate.
+    # Handbook docs are public grounding material; no scope gate.
     required_scope = None  # type: ignore[assignment]
 
     async def execute(
@@ -318,7 +323,7 @@ class SearchOntosConceptsTool(BaseTool):
         query: str,
         max_results: int = 5,
     ) -> ToolResult:
-        logger.info(f"[search_ontos_concepts] query='{query}' max_results={max_results}")
+        logger.info(f"[search_ontos_handbook] query='{query}' max_results={max_results}")
 
         if not query or not query.strip():
             return ToolResult(
@@ -328,11 +333,11 @@ class SearchOntosConceptsTool(BaseTool):
 
         max_results = max(1, min(int(max_results or 5), 10))
 
-        concepts_dir = _resolve_concepts_dir()
-        if concepts_dir is None:
+        handbook_dir = _resolve_handbook_dir()
+        if handbook_dir is None:
             logger.warning(
-                "[search_ontos_concepts] docs/concepts/ not found at "
-                f"{_DEFAULT_CONCEPTS_DIR} — returning empty matches"
+                "[search_ontos_handbook] docs/handbook/ not found at "
+                f"{_DEFAULT_HANDBOOK_DIR} — returning empty matches"
             )
             return ToolResult(
                 success=True,
@@ -340,14 +345,14 @@ class SearchOntosConceptsTool(BaseTool):
                     "matches": [],
                     "total_files_searched": 0,
                     "message": (
-                        "Concept docs not available in this deployment."
+                        "Handbook not available in this deployment."
                     ),
                 },
             )
 
         # Walk the corpus
-        md_files = sorted(p for p in concepts_dir.iterdir() if p.suffix == ".md")
-        # Exclude README.md — it's a meta-index, not a concept doc.
+        md_files = sorted(p for p in handbook_dir.iterdir() if p.suffix == ".md")
+        # Exclude README.md — it's a meta-index, not a handbook doc.
         md_files = [p for p in md_files if p.name.lower() != "readme.md"]
 
         tokens = _tokenize(query)
@@ -365,7 +370,7 @@ class SearchOntosConceptsTool(BaseTool):
                 data={
                     "matches": [],
                     "total_files_searched": len(md_files),
-                    "message": "No matching concept docs found.",
+                    "message": "No matching handbook entries found.",
                 },
             )
 
@@ -386,7 +391,7 @@ class SearchOntosConceptsTool(BaseTool):
             })
 
         logger.info(
-            f"[search_ontos_concepts] SUCCESS: {len(results)} matches "
+            f"[search_ontos_handbook] SUCCESS: {len(results)} matches "
             f"(searched {len(md_files)} files, {len(scored)} candidates scored)"
         )
         return ToolResult(

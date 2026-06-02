@@ -1,4 +1,4 @@
-"""Integration tests for the Ask Ontos copilot's new concept-grounding path.
+"""Integration tests for the Ask Ontos copilot's handbook-grounding path.
 
 These tests exercise ``LLMSearchManager._process_with_llm`` end-to-end
 with a fake OpenAI client. Why not hit ``POST /api/llm-search/chat``
@@ -9,7 +9,7 @@ through the TestClient? Two reasons:
    new tool is wired into the registry and that the new prompt is in
    the message stream.
 2. Patching at the manager level lets us script the LLM's tool-call
-   sequence deterministically (call ``search_ontos_concepts`` -> read
+   sequence deterministically (call ``search_ontos_handbook`` -> read
    the result -> emit a final text response). That sequence is what
    we're actually trying to certify.
 
@@ -102,7 +102,7 @@ def llm_manager(db_session, llm_settings, mock_workspace_client):
     """Build a real LLMSearchManager with mocked downstream managers.
 
     The integration boundary we care about is:
-      manager -> tool registry -> SearchOntosConceptsTool -> filesystem
+      manager -> tool registry -> SearchOntosHandbookTool -> filesystem
 
     Nothing else needs to be real.
     """
@@ -125,38 +125,38 @@ def llm_manager(db_session, llm_settings, mock_workspace_client):
 # ---------------------------------------------------------------------------
 
 
-def test_registry_contains_concept_search_tool(llm_manager):
+def test_registry_contains_handbook_search_tool(llm_manager):
     """First-line check: the new tool actually got registered. If this
     fails, the rest of the integration is moot."""
     tool_names = llm_manager._tool_registry.list_tool_names()
-    assert "search_ontos_concepts" in tool_names
+    assert "search_ontos_handbook" in tool_names
 
 
-def test_concepts_category_visible_for_conceptual_query():
-    """The query classifier must surface the ``concepts`` category for
+def test_handbook_category_visible_for_conceptual_query():
+    """The query classifier must surface the ``handbook`` category for
     a 'what is X' question so the new tool is in the LLM's tool list."""
     from src.tools.query_classifier import classify_query
 
     cats = classify_query("what is a data steward?")
-    assert "concepts" in cats
+    assert "handbook" in cats
 
 
-def test_concepts_category_visible_for_default_path():
-    """Vague queries fall back to DEFAULT_CATEGORIES — ``concepts``
+def test_handbook_category_visible_for_default_path():
+    """Vague queries fall back to DEFAULT_CATEGORIES — ``handbook``
     must be in there so the tool is always at least nominally visible."""
     from src.tools.query_classifier import classify_query, DEFAULT_CATEGORIES
 
-    assert "concepts" in DEFAULT_CATEGORIES
+    assert "handbook" in DEFAULT_CATEGORIES
     # An empty query takes the default path explicitly.
     cats = classify_query("")
-    assert "concepts" in cats
+    assert "handbook" in cats
 
 
 @pytest.mark.asyncio
-async def test_chat_calls_concept_search_tool_for_conceptual_question(
+async def test_chat_calls_handbook_search_tool_for_conceptual_question(
     llm_manager, mock_test_user
 ):
-    """Script the LLM to ask for ``search_ontos_concepts`` and then
+    """Script the LLM to ask for ``search_ontos_handbook`` and then
     emit a final text answer. Verify that the manager executed the
     tool, the tool returned real corpus matches, and the final answer
     reached the caller."""
@@ -168,7 +168,7 @@ async def test_chat_calls_concept_search_tool_for_conceptual_question(
             tool_calls=[
                 _make_tool_call(
                     call_id="call_1",
-                    name="search_ontos_concepts",
+                    name="search_ontos_handbook",
                     arguments={"query": "data steward"},
                 )
             ],
@@ -193,7 +193,7 @@ async def test_chat_calls_concept_search_tool_for_conceptual_question(
     # The manager executed exactly one tool call — our new one.
     assert response.tool_calls_executed == 1
     assert response.sources, "expected at least one source recorded"
-    assert response.sources[0]["tool"] == "search_ontos_concepts"
+    assert response.sources[0]["tool"] == "search_ontos_handbook"
     assert response.sources[0]["success"] is True
 
     # The final answer reached us verbatim.
@@ -201,7 +201,7 @@ async def test_chat_calls_concept_search_tool_for_conceptual_question(
 
     # Debug payload records the new tool was offered.
     assert response.debug is not None
-    assert "search_ontos_concepts" in response.debug["query_classification"]["tools_provided"]
+    assert "search_ontos_handbook" in response.debug["query_classification"]["tools_provided"]
 
 
 @pytest.mark.asyncio
@@ -230,7 +230,7 @@ async def test_chat_sends_grounded_system_prompt(llm_manager, mock_test_user):
 
     # Phrasing markers from the new prompt — load-bearing changes that
     # we want to lock in.
-    assert "search_ontos_concepts" in sys_text, (
+    assert "search_ontos_handbook" in sys_text, (
         "system prompt does not mention the new tool — the new prompt is "
         "probably not being assembled"
     )
@@ -238,7 +238,7 @@ async def test_chat_sends_grounded_system_prompt(llm_manager, mock_test_user):
         "system prompt missing the three-tier confidence label scheme"
     )
     assert "Tier 0" in sys_text, (
-        "system prompt missing the new Tier 0 = concept-corpus framing"
+        "system prompt missing the new Tier 0 = handbook-corpus framing"
     )
 
 

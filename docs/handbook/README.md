@@ -1,11 +1,16 @@
-# Ontos Concept Corpus (LLM Grounding)
+# Ontos Handbook (LLM Grounding Corpus)
 
 These documents are **internal grounding material for the Ask Ontos copilot**,
 not user-facing product documentation. They define the canonical vocabulary,
 role model, lifecycle states, ontology stack, data-quality model, and
-end-to-end flows of Ontos so that a retrieval tool (`search_ontos_concepts`,
+end-to-end flows of Ontos so that a retrieval tool (`search_ontos_handbook`,
 grep-style match) can return citable text fragments to the LLM at answer
 time.
+
+Naming note: this corpus used to be called "concepts", but "Concept" is
+already an Ontos ontology entity (an RDFS class / SKOS concept in the
+knowledge graph). To avoid overloading the noun in code, API surface,
+and docs, the LLM-grounding markdown corpus is "handbook".
 
 ## How to read this corpus {#how-to-read}
 

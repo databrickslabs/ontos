@@ -102,8 +102,8 @@ class ToolName(str, Enum):
     # Global search
     GLOBAL_SEARCH = "global_search"
 
-    # Concept-doc search (grounds the copilot in docs/concepts/)
-    SEARCH_ONTOS_CONCEPTS = "search_ontos_concepts"
+    # Handbook search (grounds the copilot in docs/handbook/)
+    SEARCH_ONTOS_HANDBOOK = "search_ontos_handbook"
 
 
 # ============================================================================

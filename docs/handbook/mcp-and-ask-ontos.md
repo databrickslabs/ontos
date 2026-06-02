@@ -21,9 +21,9 @@ contract mean?" and get a grounded answer.
 
 Two complementary sources keep Ask Ontos honest:
 
-- **This concept corpus.** Conceptual questions (lifecycle states,
+- **This handbook corpus.** Conceptual questions (lifecycle states,
   permissions, what a Deliverable is) ground against the docs in
-  `docs/concepts/` — the same files this one belongs to. The retrieval
+  `docs/handbook/` — the same files this one belongs to. The retrieval
   layer finds anchor-tagged sections and gives the model citable
   fragments. If a question can't be grounded, the assistant should
   decline rather than guess.

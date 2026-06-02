@@ -1,16 +1,16 @@
-"""Unit tests for ``SearchOntosConceptsTool``.
+"""Unit tests for ``SearchOntosHandbookTool``.
 
 Exercises:
 
 - Empty query => failure.
-- Real corpus queries (the tool resolves ``docs/concepts/`` relative to
+- Real corpus queries (the tool resolves ``docs/handbook/`` relative to
   the repo root; that directory ships with the branch under test).
-- Known-concept lookups land in the right file.
+- Known-handbook lookups land in the right file.
 - No-match queries return ``success=True`` with an empty match list and
   a friendly ``message`` field.
 - Anchor extraction handles the ``{#kebab-case}`` syntax used across
   the corpus, with a slugified fallback when a section omits an anchor.
-- Graceful degrade when ``docs/concepts/`` is absent (deployed-app case).
+- Graceful degrade when ``docs/handbook/`` is absent (deployed-app case).
 
 We don't mock the corpus contents — the docs are read-only inputs to
 this branch and exercising them directly is the most realistic test we
@@ -28,23 +28,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.tools.base import ToolContext
-from src.tools.concepts import (
-    SearchOntosConceptsTool,
+from src.tools.handbook import (
+    SearchOntosHandbookTool,
     _parse_sections,
     _slugify_fallback_anchor,
-    _resolve_concepts_dir,
+    _resolve_handbook_dir,
 )
 
 
 def _make_ctx() -> ToolContext:
-    """Concept search ignores ``ctx`` entirely — it reads the filesystem
+    """Handbook search ignores ``ctx`` entirely — it reads the filesystem
     directly. A skeletal mock is enough."""
     return ToolContext(db=MagicMock(), settings=MagicMock())
 
 
 @pytest.fixture
-def tool() -> SearchOntosConceptsTool:
-    return SearchOntosConceptsTool()
+def tool() -> SearchOntosHandbookTool:
+    return SearchOntosHandbookTool()
 
 
 # ---------------------------------------------------------------------------
@@ -56,23 +56,23 @@ def test_corpus_is_resolvable_in_this_test_run():
     """Sanity check: the test environment can locate the corpus. If
     this fails, every other test in this module is meaningless — flag
     it loudly rather than hide behind silent skips."""
-    concepts_dir = _resolve_concepts_dir()
-    assert concepts_dir is not None, (
-        "docs/concepts/ not found at the expected location. The path "
-        "resolution math in src/backend/src/tools/concepts.py may have "
+    handbook_dir = _resolve_handbook_dir()
+    assert handbook_dir is not None, (
+        "docs/handbook/ not found at the expected location. The path "
+        "resolution math in src/backend/src/tools/handbook.py may have "
         "drifted relative to the repo layout."
     )
-    assert concepts_dir.is_dir()
+    assert handbook_dir.is_dir()
 
 
-def test_tool_metadata(tool: SearchOntosConceptsTool):
+def test_tool_metadata(tool: SearchOntosHandbookTool):
     """The registered tool name and category are load-bearing — the
     query classifier dispatches on the category and the registry
     surfaces the tool by name. Lock both down."""
-    assert tool.name == "search_ontos_concepts"
-    assert tool.category == "concepts"
+    assert tool.name == "search_ontos_handbook"
+    assert tool.category == "handbook"
     assert "query" in tool.required_params
-    # No scope gate — concept docs are public grounding material.
+    # No scope gate — handbook docs are public grounding material.
     assert tool.required_scope is None
 
 
@@ -82,25 +82,25 @@ def test_tool_metadata(tool: SearchOntosConceptsTool):
 
 
 @pytest.mark.asyncio
-async def test_empty_query_returns_error(tool: SearchOntosConceptsTool):
+async def test_empty_query_returns_error(tool: SearchOntosHandbookTool):
     result = await tool.execute(_make_ctx(), query="")
     assert result.success is False
     assert "non-empty" in (result.error or "").lower()
 
 
 @pytest.mark.asyncio
-async def test_whitespace_only_query_returns_error(tool: SearchOntosConceptsTool):
+async def test_whitespace_only_query_returns_error(tool: SearchOntosHandbookTool):
     result = await tool.execute(_make_ctx(), query="   \t  \n")
     assert result.success is False
 
 
 # ---------------------------------------------------------------------------
-# Known-concept queries (corpus-backed)
+# Known-topic queries (corpus-backed)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_data_steward_query_hits_roles_doc(tool: SearchOntosConceptsTool):
+async def test_data_steward_query_hits_roles_doc(tool: SearchOntosHandbookTool):
     """'data steward' is a built-in role; it must land in roles-and-rbac.md."""
     result = await tool.execute(_make_ctx(), query="data steward")
     assert result.success is True
@@ -122,7 +122,7 @@ async def test_data_steward_query_hits_roles_doc(tool: SearchOntosConceptsTool):
 
 
 @pytest.mark.asyncio
-async def test_delivery_mode_query_hits_delivery_doc(tool: SearchOntosConceptsTool):
+async def test_delivery_mode_query_hits_delivery_doc(tool: SearchOntosHandbookTool):
     """'delivery mode' is the topic of delivery-and-propagation.md."""
     result = await tool.execute(_make_ctx(), query="delivery mode")
     assert result.success is True
@@ -138,7 +138,7 @@ async def test_delivery_mode_query_hits_delivery_doc(tool: SearchOntosConceptsTo
 
 @pytest.mark.asyncio
 async def test_what_is_agreement_query_hits_agreement_workflow(
-    tool: SearchOntosConceptsTool,
+    tool: SearchOntosHandbookTool,
 ):
     """A common conceptual question — exercise the title-match path."""
     result = await tool.execute(_make_ctx(), query="agreement workflow")
@@ -150,7 +150,7 @@ async def test_what_is_agreement_query_hits_agreement_workflow(
 
 
 @pytest.mark.asyncio
-async def test_max_results_caps_returned_matches(tool: SearchOntosConceptsTool):
+async def test_max_results_caps_returned_matches(tool: SearchOntosHandbookTool):
     """A broad query against the corpus must respect max_results."""
     result = await tool.execute(_make_ctx(), query="role", max_results=3)
     assert result.success is True
@@ -158,7 +158,7 @@ async def test_max_results_caps_returned_matches(tool: SearchOntosConceptsTool):
 
 
 @pytest.mark.asyncio
-async def test_max_results_is_clamped(tool: SearchOntosConceptsTool):
+async def test_max_results_is_clamped(tool: SearchOntosHandbookTool):
     """Excessive max_results values are clamped (not rejected)."""
     result = await tool.execute(_make_ctx(), query="role", max_results=999)
     assert result.success is True
@@ -172,7 +172,7 @@ async def test_max_results_is_clamped(tool: SearchOntosConceptsTool):
 
 @pytest.mark.asyncio
 async def test_no_match_query_returns_success_with_empty_list(
-    tool: SearchOntosConceptsTool,
+    tool: SearchOntosHandbookTool,
 ):
     """A query that can't possibly match the corpus (a wholly unrelated
     SRE topic) must return success=True with an empty match list and a
@@ -187,7 +187,7 @@ async def test_no_match_query_returns_success_with_empty_list(
     )
     assert result.success is True
     assert result.data["matches"] == []
-    assert "No matching concept docs found" in result.data.get("message", "")
+    assert "No matching handbook entries found" in result.data.get("message", "")
     assert result.data["total_files_searched"] > 0
 
 
@@ -239,13 +239,13 @@ def test_section_without_explicit_anchor_falls_back_to_slug(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_missing_corpus_returns_empty_matches_not_an_error(
-    tool: SearchOntosConceptsTool,
+    tool: SearchOntosHandbookTool,
 ):
-    """Deployed Apps may not package docs/concepts/. The tool must
+    """Deployed Apps may not package docs/handbook/. The tool must
     still return ``success=True`` so the LLM can fall back to its
     refusal template gracefully."""
     with patch(
-        "src.tools.concepts._resolve_concepts_dir",
+        "src.tools.handbook._resolve_handbook_dir",
         return_value=None,
     ):
         result = await tool.execute(_make_ctx(), query="data steward")

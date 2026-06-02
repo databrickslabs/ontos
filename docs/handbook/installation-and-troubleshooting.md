@@ -128,9 +128,9 @@ The expected sequence:
    `app.yaml` lives at `src/app.yaml` and must end up at the
    workspace path's root. See
    [workspace sync direction](#workspace-sync-direction).
-3. If the update touches the concept corpus
-   (`docs/concepts/*.md`), upload that tree separately via
-   `databricks workspace import-dir docs/concepts/ <ws_path>/docs/concepts/`.
+3. If the update touches the handbook corpus
+   (`docs/handbook/*.md`), upload that tree separately via
+   `databricks workspace import-dir docs/handbook/ <ws_path>/docs/handbook/`.
    `docs/` lives outside `src/` so the regular sync skips it.
 4. `databricks apps deploy <app_name>` to roll the new deployment.
 
@@ -357,12 +357,12 @@ the same way.
 
 #### Ask Ontos returns "I don't have authoritative information" for everything conceptual {#corpus-not-found}
 
-The `docs/concepts/` tree wasn't packaged into the deployment. The
-`search_ontos_concepts` tool can't find the corpus on disk, so
+The `docs/handbook/` tree wasn't packaged into the deployment. The
+`search_ontos_handbook` tool can't find the corpus on disk, so
 every conceptual query returns the refusal default. Fix: upload
-`docs/concepts/` to the deployment path
-(`databricks workspace import-dir docs/concepts/ <ws_path>/docs/concepts/`),
-or set `ONTOS_CONCEPTS_DIR` to point at an alternate corpus
+`docs/handbook/` to the deployment path
+(`databricks workspace import-dir docs/handbook/ <ws_path>/docs/handbook/`),
+or set `ONTOS_HANDBOOK_DIR` to point at an alternate corpus
 location on the container. Restart the app to pick up the new
 files.
 
@@ -403,8 +403,8 @@ If the deployment came from Marketplace, re-install or upgrade
 through the workspace's Marketplace UI; the running deployment is
 replaced and Lakebase state survives. If the deployment came from
 Git, `git pull` the deployed branch, `databricks sync` `src/` to
-the workspace, run `databricks apps deploy`, and (if the concept
-corpus changed) upload `docs/concepts/` separately. See
+the workspace, run `databricks apps deploy`, and (if the handbook
+corpus changed) upload `docs/handbook/` separately. See
 [Updating to a new version](#updates).
 
 **"The app says my Unity Catalog token is missing a scope, but the manifest looks correct. What's wrong?"**

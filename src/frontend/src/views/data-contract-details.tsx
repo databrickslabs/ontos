@@ -279,7 +279,6 @@ export default function DataContractDetails() {
   const [, setTeamMetadata] = useState<{ name?: string; description?: string }>({})
   const [teamMetaName, setTeamMetaName] = useState('')
   const [teamMetaDesc, setTeamMetaDesc] = useState('')
-
   // Link product dialog state
   const [isLinkProductDialogOpen, setIsLinkProductDialogOpen] = useState(false)
 

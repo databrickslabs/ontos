@@ -259,6 +259,7 @@ def initialize_managers(app: FastAPI):
             app.state.term_mapping_manager = TermMappingManager(
                 semantic_models_manager=app.state.semantic_models_manager,
                 reviews_manager=app.state.data_asset_review_manager,
+                notifications_manager=app.state.notifications_manager,
             )
             logger.info("TermMappingManager initialised.")
         except Exception as e:

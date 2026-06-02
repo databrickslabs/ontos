@@ -16,6 +16,7 @@ Architectural notes:
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.controller.semantic_links_manager import SemanticLinksManager
+from src.models.notifications import Notification, NotificationType
 from src.db_models.term_mappings import (
     MappingApplyRunDb,
     MappingSuggestionDb,
@@ -81,6 +83,7 @@ from .term_mapping.types import SuggestionDraft, TargetEntity
 
 if TYPE_CHECKING:
     from src.controller.data_asset_reviews_manager import DataAssetReviewManager
+    from src.controller.notifications_manager import NotificationsManager
     from src.controller.semantic_models_manager import SemanticModelsManager
 
 logger = get_logger(__name__)
@@ -99,14 +102,22 @@ class TermMappingManager:
         self,
         semantic_models_manager: "SemanticModelsManager",
         reviews_manager: Optional["DataAssetReviewManager"] = None,
+        notifications_manager: Optional["NotificationsManager"] = None,
     ):
         self._smm = semantic_models_manager
         self._reviews_manager = reviews_manager
+        self._notifications_manager = notifications_manager
 
     def set_reviews_manager(self, reviews_manager: "DataAssetReviewManager") -> None:
         """Late-binding hook so startup can wire the AR manager after both
         singletons are constructed (avoids construction order coupling)."""
         self._reviews_manager = reviews_manager
+
+    def set_notifications_manager(self, notifications_manager: "NotificationsManager") -> None:
+        """Late-binding hook for the notifications manager, mirroring
+        ``set_reviews_manager``. Kept optional so unit tests can construct a
+        manager without wiring the full notifications stack."""
+        self._notifications_manager = notifications_manager
 
     # ------------------------------------------------------------------
     # Run lifecycle
@@ -702,12 +713,67 @@ class TermMappingManager:
                 db.add(sug)
         db.commit()
 
+        # Reviewer notification is fired by DataAssetReviewsManager itself
+        # (workflow trigger with direct-notification fallback). What's missing
+        # there is a confirmation back to the steward who spawned the review
+        # so they can track it from notifications without polling the runs
+        # list. Notifications manager is optional in unit-test contexts so we
+        # guard the call; failure here must not block review creation.
+        self._notify_review_spawned(
+            run_id=str(run.id),
+            review_id=review.id,
+            suggestion_count=len(candidates),
+            requester_email=effective_requester,
+            reviewer_email=payload.reviewer_email,
+        )
+
         return GenerateReviewResponse(
             run_id=str(run.id),
             review_request_id=review.id,
             suggestion_count=len(candidates),
             message=f"Created review request with {len(candidates)} suggestions",
         )
+
+    def _notify_review_spawned(
+        self,
+        *,
+        run_id: str,
+        review_id: str,
+        suggestion_count: int,
+        requester_email: str,
+        reviewer_email: str,
+    ) -> None:
+        """Confirmation ping to the steward who triggered the AR spawn.
+
+        Mirrors the pattern AR uses for its reviewer notification but is
+        scoped to the requester so they see the review they just created in
+        their own notifications feed. Best-effort: a failed notification
+        must not break the spawn path (AR is already persisted)."""
+        if self._notifications_manager is None:
+            logger.debug(
+                "Notifications manager not wired; skipping spawn confirmation for review %s",
+                review_id,
+            )
+            return
+        try:
+            notification = Notification(
+                id=str(uuid.uuid4()),
+                recipient=requester_email,
+                title="Term-mapping review created",
+                description=(
+                    f"Review request for run {run_id} created with "
+                    f"{suggestion_count} suggestion(s); assigned to {reviewer_email}."
+                ),
+                type=NotificationType.INFO,
+                link=f"/data-asset-reviews/{review_id}",
+                created_at=_utcnow(),
+            )
+            self._notifications_manager.create_notification(notification)
+        except Exception:
+            logger.exception(
+                "Failed to send spawn-confirmation notification for review %s",
+                review_id,
+            )
 
     # ------------------------------------------------------------------
     # Inline suggester (ConceptSelectDialog)

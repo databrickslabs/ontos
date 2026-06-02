@@ -361,6 +361,177 @@ def _resolve_role_to_users(
     return [(role_spec, None)]
 
 
+# Map raw entity_type strings to human-friendly labels used in approval
+# notification subtitles/descriptions. Anything not listed falls back to a
+# title-cased version of the raw string.
+_ENTITY_TYPE_LABELS: Dict[str, str] = {
+    "data_product": "Data Product",
+    "data_contract": "Data Contract",
+    "data_domain": "Data Domain",
+    "data_asset_review": "Data Asset Review",
+    "access_grant": "Access Grant",
+    "asset": "Asset",
+}
+
+
+def _humanize_entity_type(entity_type: Optional[str]) -> str:
+    if not entity_type:
+        return "Entity"
+    label = _ENTITY_TYPE_LABELS.get(entity_type.lower())
+    if label:
+        return label
+    return entity_type.replace("_", " ").title()
+
+
+def _extract_approval_facets(context: "StepContext") -> Dict[str, Any]:
+    """Pull readable request facets out of the trigger entity_data.
+
+    The approval step is generic, but the most common payload — access
+    grant requests — carries the underlying resource + permission/duration/
+    reason inside ``context.entity`` (which is the splatted ``entity_data``
+    from ``AccessGrantsManager.create_request``). We surface these so the
+    notification subtitle/description and the Approve/Reject dialog can
+    show meaningful context instead of bare UUIDs.
+
+    Returns a dict of optional keys. Callers should ``dict.get`` defensively
+    because non-access-grant triggers won't populate any of these.
+    """
+    facets: Dict[str, Any] = {}
+    entity = context.entity if isinstance(context.entity, dict) else {}
+
+    # For ``access_grant`` triggers the proxy ``entity_type`` is
+    # ``access_grant``; the underlying object (data product, contract, …)
+    # is carried inside ``entity_data`` and is what an approver actually
+    # wants to inspect / link to.
+    if context.entity_type and context.entity_type.lower() == "access_grant":
+        underlying_type = entity.get("entity_type")
+        underlying_id = entity.get("entity_id")
+        underlying_name = (
+            entity.get("entity_name")
+            or entity.get("data_product_name")
+        )
+        if underlying_type:
+            facets["underlying_entity_type"] = str(underlying_type)
+        if underlying_id:
+            facets["underlying_entity_id"] = str(underlying_id)
+        if underlying_name:
+            facets["underlying_entity_name"] = str(underlying_name)
+
+        permission = entity.get("permission_level")
+        if permission:
+            facets["permission_level"] = str(permission)
+
+        duration = entity.get("requested_duration_days")
+        if isinstance(duration, (int, float)):
+            facets["requested_duration_days"] = int(duration)
+        elif isinstance(duration, str) and duration.strip().isdigit():
+            facets["requested_duration_days"] = int(duration.strip())
+
+        reason = entity.get("reason")
+        if reason:
+            facets["reason"] = str(reason)
+
+        request_id = entity.get("request_id") or context.entity_id
+        if request_id:
+            facets["request_id"] = str(request_id)
+
+    return facets
+
+
+def _build_approval_subtitle(
+    context: "StepContext",
+    facets: Dict[str, Any],
+    entity_display: str,
+) -> str:
+    """Readable subtitle for the approval notification card.
+
+    Examples:
+        - "Read access to Data Product: Sales Pipeline"
+        - "Data Contract: orders-v1"
+    """
+    if context.entity_type and context.entity_type.lower() == "access_grant":
+        permission = facets.get("permission_level")
+        underlying_type_label = _humanize_entity_type(
+            facets.get("underlying_entity_type")
+        )
+        if permission and facets.get("underlying_entity_name"):
+            return (
+                f"{permission.title()} access to {underlying_type_label}: "
+                f"{facets['underlying_entity_name']}"
+            )
+        if facets.get("underlying_entity_name"):
+            return (
+                f"Access to {underlying_type_label}: "
+                f"{facets['underlying_entity_name']}"
+            )
+        # Fallback: no underlying entity resolved — at least avoid showing
+        # the raw access_grant UUID.
+        return f"Access request from {context.user_email or 'unknown user'}"
+
+    return f"{_humanize_entity_type(context.entity_type)}: {entity_display}"
+
+
+def _build_approval_description(
+    *,
+    context: "StepContext",
+    facets: Dict[str, Any],
+    approval_message: Optional[str],
+) -> str:
+    """Multi-line, label/value description for the approval notification.
+
+    Mirrors what the dialog renders but as plain text so the bell card and
+    email recipients see the same information.
+    """
+    lines: List[str] = []
+
+    requester = context.user_email or "Unknown"
+    lines.append(f"Requester: {requester}")
+
+    underlying_type = facets.get("underlying_entity_type")
+    if underlying_type:
+        resource_label = _humanize_entity_type(underlying_type)
+        resource_name = (
+            facets.get("underlying_entity_name")
+            or facets.get("underlying_entity_id")
+            or ""
+        )
+        if resource_name:
+            lines.append(f"Resource: {resource_label} · {resource_name}")
+        else:
+            lines.append(f"Resource: {resource_label}")
+    elif context.entity_name or context.entity_id:
+        resource_label = _humanize_entity_type(context.entity_type)
+        resource_name = context.entity_name or context.entity_id
+        lines.append(f"Resource: {resource_label} · {resource_name}")
+
+    permission = facets.get("permission_level")
+    if permission:
+        lines.append(f"Permission: {permission}")
+
+    duration = facets.get("requested_duration_days")
+    if isinstance(duration, int):
+        lines.append(f"Duration: {duration} day{'s' if duration != 1 else ''}")
+
+    reason = facets.get("reason")
+    if reason:
+        lines.append(f"Reason: {reason}")
+
+    if approval_message:
+        lines.append(f"Workflow message: {approval_message}")
+
+    # Optional free-form fields carried on the entity. Mirrors the legacy
+    # behaviour for non-access-grant approval payloads.
+    entity = context.entity if isinstance(context.entity, dict) else {}
+    msg = entity.get("message")
+    if msg and msg != approval_message:
+        lines.append(f"Message: {msg}")
+    justification = entity.get("justification")
+    if justification and justification != reason:
+        lines.append(f"Justification: {justification}")
+
+    return "\n".join(lines)
+
+
 class ApprovalStepHandler(StepHandler):
     """Handler for approval steps - creates actionable notifications and pauses workflow."""
 
@@ -384,30 +555,38 @@ class ApprovalStepHandler(StepHandler):
             if not resolved_approvers:
                 return StepResult(passed=False, error="Could not resolve any approvers")
             
-            entity_display = context.entity_name or context.entity_id
-            
+            # Extract human-readable facets from the trigger's entity_data so
+            # the notification + approval dialog can show the underlying
+            # request (requester, resource, permission, duration, reason)
+            # instead of just the proxy ``access_grant`` UUID. Best-effort —
+            # the approval step is generic and only access-grant triggers
+            # populate these fields today.
+            facets = _extract_approval_facets(context)
+
+            entity_display = (
+                facets.get("underlying_entity_name")
+                or context.entity_name
+                or facets.get("underlying_entity_id")
+                or context.entity_id
+            )
+
             # Create actionable notification for each approver
             created_count = 0
             for approver_id, role_uuid in resolved_approvers:
                 try:
-                    # Build description with request details
-                    description = (
-                        f"Approval requested for {context.entity_type} '{entity_display}'.\n\n"
-                        f"Requested by: {context.user_email or 'Unknown'}\n"
+                    subtitle = _build_approval_subtitle(context, facets, entity_display)
+                    description = _build_approval_description(
+                        context=context,
+                        facets=facets,
+                        approval_message=approval_message,
                     )
-                    if approval_message:
-                        description += f"\nMessage: {approval_message}"
-                    if context.entity.get('message'):
-                        description += f"\nMessage: {context.entity.get('message')}"
-                    if context.entity.get('justification'):
-                        description += f"\nJustification: {context.entity.get('justification')}"
-                    
+
                     notification = Notification(
                         id=str(uuid4()),
                         created_at=datetime.utcnow(),
                         type=NotificationType.ACTION_REQUIRED,
                         title="Approval Required",
-                        subtitle=f"{context.entity_type}: {entity_display}",
+                        subtitle=subtitle,
                         description=description,
                         recipient=approver_id,  # Keep for backwards compat / email recipients
                         recipient_role_id=role_uuid,  # Store role UUID if this is a role
@@ -421,6 +600,12 @@ class ApprovalStepHandler(StepHandler):
                             "entity_name": context.entity_name,
                             "requester_email": context.user_email,
                             "timeout_days": timeout_days,
+                            # Structured request context for the approval
+                            # dialog. All optional; only access-grant
+                            # triggers populate the underlying_* / request_*
+                            # fields today.
+                            **facets,
+                            "workflow_message": approval_message or None,
                         },
                         can_delete=False,  # Must respond to this notification
                         read=False,

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -10,9 +11,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Check, XCircle } from 'lucide-react';
+import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
 
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
@@ -31,6 +33,22 @@ interface DefaultResponseWorkflowStep {
 export interface WorkflowApprovalResponseDialogPayload {
   execution_id: string;
   entity_name?: string;
+  // Structured request context populated by the backend approval step
+  // (see ApprovalStepHandler in workflow_executor.py). All optional — only
+  // access-grant triggers populate the underlying_* / permission / duration
+  // / reason fields today, but the dialog renders whatever is present.
+  requester_email?: string;
+  entity_type?: string;
+  entity_id?: string;
+  underlying_entity_type?: string;
+  underlying_entity_id?: string;
+  underlying_entity_name?: string;
+  permission_level?: string;
+  requested_duration_days?: number;
+  reason?: string;
+  request_id?: string;
+  workflow_name?: string;
+  workflow_message?: string;
 }
 
 interface WorkflowApprovalResponseDialogProps {
@@ -39,6 +57,97 @@ interface WorkflowApprovalResponseDialogProps {
   payload: WorkflowApprovalResponseDialogPayload | null;
   notificationId?: string;
   onDecisionMade?: () => void;
+}
+
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  data_product: 'Data Product',
+  data_contract: 'Data Contract',
+  data_domain: 'Data Domain',
+  data_asset_review: 'Data Asset Review',
+  access_grant: 'Access Grant',
+  asset: 'Asset',
+};
+
+function humanizeEntityType(entityType: string | undefined | null): string {
+  if (!entityType) return 'Entity';
+  const key = entityType.toLowerCase();
+  if (ENTITY_TYPE_LABELS[key]) return ENTITY_TYPE_LABELS[key];
+  return entityType
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+interface DetailRow {
+  label: string;
+  value: React.ReactNode;
+}
+
+function buildDetailRows(
+  payload: WorkflowApprovalResponseDialogPayload,
+  onNavigate: () => void,
+): DetailRow[] {
+  const rows: DetailRow[] = [];
+
+  if (payload.requester_email) {
+    rows.push({ label: 'Requester', value: payload.requester_email });
+  }
+
+  const resourceType = payload.underlying_entity_type ?? payload.entity_type;
+  const resourceName =
+    payload.underlying_entity_name ??
+    (resourceType && resourceType.toLowerCase() !== 'access_grant'
+      ? payload.entity_name
+      : undefined);
+  const resourceId = payload.underlying_entity_id ?? payload.entity_id;
+  if (resourceType || resourceName || resourceId) {
+    const typeLabel = humanizeEntityType(resourceType);
+    const displayName = resourceName || resourceId || '—';
+    const detailPath = getUnderlyingEntityDetailPath(
+      payload as unknown as Record<string, unknown>,
+    );
+    const resourceText = `${typeLabel} · ${displayName}`;
+    rows.push({
+      label: 'Resource',
+      value: detailPath ? (
+        <RouterLink
+          to={detailPath}
+          onClick={onNavigate}
+          className="inline-flex items-center gap-1 text-primary hover:underline"
+        >
+          {resourceText}
+          <ExternalLink className="h-3 w-3" />
+        </RouterLink>
+      ) : (
+        resourceText
+      ),
+    });
+  }
+
+  if (payload.permission_level) {
+    rows.push({ label: 'Permission', value: payload.permission_level });
+  }
+
+  if (typeof payload.requested_duration_days === 'number') {
+    const d = payload.requested_duration_days;
+    rows.push({ label: 'Duration', value: `${d} day${d === 1 ? '' : 's'}` });
+  }
+
+  if (payload.reason) {
+    rows.push({ label: 'Reason', value: payload.reason });
+  }
+
+  if (payload.workflow_message) {
+    rows.push({ label: 'Message', value: payload.workflow_message });
+  }
+
+  if (payload.workflow_name) {
+    rows.push({ label: 'Workflow', value: payload.workflow_name });
+  }
+
+  return rows;
 }
 
 export default function WorkflowApprovalResponseDialog({
@@ -145,6 +254,8 @@ export default function WorkflowApprovalResponseDialog({
   const description =
     config.description ?? 'Provide a reason for your approval or rejection decision.';
 
+  const detailRows = payload ? buildDetailRows(payload, () => onOpenChange(false)) : [];
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -158,6 +269,21 @@ export default function WorkflowApprovalResponseDialog({
           </div>
         ) : (
           <>
+            {detailRows.length > 0 && (
+              <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Request details
+                </div>
+                <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
+                  {detailRows.map((row) => (
+                    <div key={row.label} className="contents">
+                      <dt className="text-muted-foreground">{row.label}</dt>
+                      <dd className="break-words">{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="approval-reason">
                 {reasonField?.label ?? 'Reason for approval or rejection'}

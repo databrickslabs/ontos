@@ -9,6 +9,7 @@ import { useUserStore } from './stores/user-store';
 import { usePermissions } from './stores/permissions-store';
 import { useNotificationsStore } from './stores/notifications-store';
 import useTestPersonaStore, { installTestPersonaFetchInterceptor } from './stores/test-persona-store';
+import { usePointerEventsGuard } from './hooks/use-pointer-events-guard';
 
 // Install the fetch interceptor immediately at module load so even very early
 // requests (e.g. probes during component mount) carry the override headers
@@ -78,6 +79,12 @@ const DevLineageView = lazy(() => import('./components/lineage/dev-lineage-route
 
 // Concepts layout
 import ConceptsLayout from './components/concepts/concepts-layout';
+
+// Global route-scoped guards (e.g. recover from stuck Radix body pointer-events lock)
+function RouteGuards() {
+  usePointerEventsGuard();
+  return null;
+}
 
 // Settings layout and sub-views
 import SettingsLayout from './components/settings/settings-layout';
@@ -160,6 +167,7 @@ export default function App() {
         <Router future={{ 
           v7_relativeSplatPath: true,
         }}>
+          <RouteGuards />
           <Layout>
             <RouteErrorBoundary>
             <Routes>

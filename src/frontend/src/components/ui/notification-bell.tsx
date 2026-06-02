@@ -12,33 +12,12 @@ import HandleAccessGrantDialog from '@/components/access/handle-access-grant-dia
 import HandleStewardReviewDialog from '@/components/data-contracts/handle-steward-review-dialog';
 import HandlePublishRequestDialog from '@/components/data-contracts/handle-publish-request-dialog';
 import HandleDeployRequestDialog from '@/components/data-contracts/handle-deploy-request-dialog';
-import WorkflowApprovalResponseDialog from '@/components/workflows/workflow-approval-response-dialog';
+import WorkflowApprovalResponseDialog, {
+  type WorkflowApprovalResponseDialogPayload,
+} from '@/components/workflows/workflow-approval-response-dialog';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Notification, NotificationType } from '@/types/notification';
-
-/** Resolve detail URL for data product / contract notifications (workflow + API payloads). */
-function getEntityDetailPathFromPayload(payload: Record<string, unknown> | null | undefined): string | null {
-  if (!payload || typeof payload !== 'object') return null;
-  const productId = payload.product_id ?? payload.data_product_id;
-  if (typeof productId === 'string' && productId.length > 0) {
-    return `/data-products/${productId}`;
-  }
-  const contractId = payload.contract_id ?? payload.data_contract_id;
-  if (typeof contractId === 'string' && contractId.length > 0) {
-    return `/data-contracts/${contractId}`;
-  }
-  const entityId = payload.entity_id;
-  const rawType = payload.entity_type;
-  if (typeof entityId !== 'string' || !entityId) return null;
-  const entityType = typeof rawType === 'string' ? rawType.toLowerCase() : '';
-  if (entityType === 'data_product' || entityType === 'dataproduct') {
-    return `/data-products/${entityId}`;
-  }
-  if (entityType === 'data_contract' || entityType === 'datacontract') {
-    return `/data-contracts/${entityId}`;
-  }
-  return null;
-}
+import { getEntityDetailPathFromPayload } from '@/lib/entity-detail-path';
 
 /** Only actionable rows should keep the dropdown open on select (Radix default). */
 function shouldPreventMenuCloseOnSelect(notification: Notification): boolean {
@@ -81,10 +60,8 @@ export default function NotificationBell() {
   const [isAccessGrantDialogOpen, setIsAccessGrantDialogOpen] = useState(false);
   const [selectedAccessGrantPayload, setSelectedAccessGrantPayload] = useState<Record<string, any> | null>(null);
   const [isWorkflowApprovalDialogOpen, setIsWorkflowApprovalDialogOpen] = useState(false);
-  const [selectedWorkflowApprovalPayload, setSelectedWorkflowApprovalPayload] = useState<{
-    execution_id: string;
-    entity_name?: string;
-  } | null>(null);
+  const [selectedWorkflowApprovalPayload, setSelectedWorkflowApprovalPayload] =
+    useState<WorkflowApprovalResponseDialogPayload | null>(null);
   const [workflowApprovalNotificationId, setWorkflowApprovalNotificationId] = useState<string | null>(null);
   
   // Removed useEffect that was causing duplicate fetches - notifications are fetched when dropdown opens
@@ -97,10 +74,24 @@ export default function NotificationBell() {
     await markAsRead(id);
   };
 
+  // Defer opening a dialog to the next animation frame so the surrounding
+  // Radix DropdownMenu has time to unmount and release its body
+  // `pointer-events: none` lock. Without this, opening a Dialog from inside
+  // a DropdownMenu and then closing the Dialog can leave the body stuck with
+  // pointer-events disabled, making the whole page unresponsive
+  // (radix-ui/primitives#1241).
+  const openDialogNextFrame = (open: (next: boolean) => void) => {
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => open(true));
+    } else {
+      open(true);
+    }
+  };
+
   const handleOpenConfirmDialog = (payload: Record<string, any> | undefined | null) => {
     if (payload) {
       setSelectedNotificationPayload(payload);
-      setIsConfirmDialogOpen(true);
+      openDialogNextFrame(setIsConfirmDialogOpen);
     } else {
       console.error("Cannot open confirmation dialog: payload is missing.");
     }
@@ -109,7 +100,7 @@ export default function NotificationBell() {
   const handleOpenReviewDialog = (payload: Record<string, any> | undefined | null) => {
     if (payload) {
       setSelectedReviewPayload(payload);
-      setIsReviewDialogOpen(true);
+      openDialogNextFrame(setIsReviewDialogOpen);
     } else {
       console.error("Cannot open review dialog: payload is missing.");
     }
@@ -118,7 +109,7 @@ export default function NotificationBell() {
   const handleOpenPublishDialog = (payload: Record<string, any> | undefined | null) => {
     if (payload) {
       setSelectedPublishPayload(payload);
-      setIsPublishDialogOpen(true);
+      openDialogNextFrame(setIsPublishDialogOpen);
     } else {
       console.error("Cannot open publish dialog: payload is missing.");
     }
@@ -127,7 +118,7 @@ export default function NotificationBell() {
   const handleOpenDeployDialog = (payload: Record<string, any> | undefined | null) => {
     if (payload) {
       setSelectedDeployPayload(payload);
-      setIsDeployDialogOpen(true);
+      openDialogNextFrame(setIsDeployDialogOpen);
     } else {
       console.error("Cannot open deploy dialog: payload is missing.");
     }
@@ -136,17 +127,23 @@ export default function NotificationBell() {
   const handleOpenAccessGrantDialog = (payload: Record<string, any> | undefined | null) => {
     if (payload) {
       setSelectedAccessGrantPayload(payload);
-      setIsAccessGrantDialogOpen(true);
+      openDialogNextFrame(setIsAccessGrantDialogOpen);
     } else {
       console.error("Cannot open access grant dialog: payload is missing.");
     }
   };
 
-  const handleOpenWorkflowApprovalDialog = (payload: { execution_id: string; entity_name?: string } | undefined, notificationId: string) => {
-    if (payload?.execution_id) {
-      setSelectedWorkflowApprovalPayload({ execution_id: payload.execution_id, entity_name: payload.entity_name });
+  const handleOpenWorkflowApprovalDialog = (
+    payload: Record<string, any> | undefined | null,
+    notificationId: string,
+  ) => {
+    if (payload && typeof payload.execution_id === 'string' && payload.execution_id.length > 0) {
+      // Forward the entire action_payload so the dialog can render the
+      // structured request context (requester, underlying resource,
+      // permission, duration, reason, …) — see ApprovalStepHandler.
+      setSelectedWorkflowApprovalPayload(payload as WorkflowApprovalResponseDialogPayload);
       setWorkflowApprovalNotificationId(notificationId);
-      setIsWorkflowApprovalDialogOpen(true);
+      openDialogNextFrame(setIsWorkflowApprovalDialogOpen);
     }
   };
 
@@ -365,7 +362,7 @@ export default function NotificationBell() {
                         className="mt-2 h-7 px-2 text-xs gap-1"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleOpenWorkflowApprovalDialog(notification.action_payload as { execution_id: string; entity_name?: string } | undefined, notification.id);
+                          handleOpenWorkflowApprovalDialog(notification.action_payload ?? undefined, notification.id);
                         }}
                       >
                         <CheckSquare className="h-3.5 w-3.5" />

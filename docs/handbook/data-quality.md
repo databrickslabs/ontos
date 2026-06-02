@@ -14,8 +14,8 @@ via the `external` source.
 
 | System | What it stores | Where you see it |
 |---|---|---|
-| Contract quality checks | Check **definitions** — the rule, dimension, severity, threshold | Contract detail page → Schema tab: per-object and per-column check rows authored by the Steward |
-| Per-entity quality measurements | Check **measurements** — score, pass/fail, when, by which engine | Data Product detail page → Quality panel: rolled-up scores by dimension and source |
+| Contract quality checks | Check **definitions** — the rule, dimension, severity, threshold | Contract detail page → **Quality Rules** section: per-object and per-column check rows authored by the Steward. The contract page also has a **Profile with DQX** button (the action that generates these rules) |
+| Per-entity quality measurements | Check **measurements** — score, pass/fail, when, by which engine | Data Product detail page → **Quality panel**: rolled-up scores by dimension and source |
 
 A contract that has 12 checks defined and zero measurements is normal —
 the contract is the design intent, the measurements are what actually
@@ -27,7 +27,7 @@ DQX is the most-tightly-wired integration. It is a complete loop, not a
 one-shot.
 
 **Step 1 — Steward kicks off profiling.** On the contract detail page,
-click the **Profile dataset** action. This launches a background
+click the **Profile with DQX** action. This launches a background
 profiling workflow.
 
 **Step 2 — Workflow profiles a sample.** For each schema in the
@@ -164,7 +164,7 @@ let measurements flow into that contract.
 
 ### DQX workflow internals {#dqx-internals}
 
-The Profile dataset action launches the `dqx_profile_datasets` workflow.
+The Profile with DQX action launches the `dqx_profile_datasets` workflow.
 For each schema in the contract, the workflow uses
 `databricks.labs.dqx.profiler.profiler.DQProfiler` to profile a sample
 (10% sample, capped at 5000 rows). It hands the profile to `DQGenerator`

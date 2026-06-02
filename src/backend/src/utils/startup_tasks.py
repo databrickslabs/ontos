@@ -356,6 +356,17 @@ def initialize_managers(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize OntologyGeneratorManager: {e}", exc_info=True)
 
+        # --- TermMappingManager ---
+        # Singleton (no per-request state); methods take a Session arg.
+        try:
+            from src.controller.term_mapping_manager import TermMappingManager
+            app.state.term_mapping_manager = TermMappingManager(
+                semantic_models_manager=app.state.semantic_models_manager
+            )
+            logger.info("TermMappingManager initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize TermMappingManager: {e}", exc_info=True)
+
         # --- EntityRelationshipsManager ---
         try:
             from src.controller.entity_relationships_manager import EntityRelationshipsManager

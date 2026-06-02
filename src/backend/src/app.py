@@ -353,6 +353,8 @@ entity_subscription_routes.register_routes(app)
 business_lineage_routes.register_routes(app)
 readiness_routes.register_routes(app)
 suggestion_routes.register_routes(app)
+from src.routes import term_mapping_routes
+term_mapping_routes.register_routes(app)
 certification_levels_routes.register_routes(app)
 data_asset_reviews_routes.register_routes(app)
 data_catalog_routes.register_routes(app)

@@ -136,6 +136,13 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,  # Users request, admins grant
         'group': GROUP_GOVERN,
     },
+    'term-mapping': {
+        'name': 'Term Mapping',
+        # READ_ONLY views the queue/runs; READ_WRITE creates runs + accepts/
+        # rejects + applies; ADMIN gates the destructive "undo applied run".
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_GOVERN,
+    },
 
     # --- Deploy ---
     'estate-manager': {

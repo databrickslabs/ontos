@@ -68,9 +68,11 @@ from src.repositories.term_mapping_repository import (
 
 from .term_mapping.adapters import all_adapters
 from .term_mapping.concept_source import (
+    INTERNAL_BLOCKED_CONTEXTS,
     ConceptSource,
     InvalidContextError,
     resolve_default_customer_contexts,
+    resolve_inline_default_contexts,
     validate_contexts,
 )
 from .term_mapping.engines import HeuristicSuggester
@@ -720,12 +722,31 @@ class TermMappingManager:
 
         Reuses the run-time machinery (adapters → heuristic engine →
         concept source) but skips DB writes. Used by ConceptSelectDialog
-        to inline the "Suggested by mapping" tier."""
-        contexts = list(payload.ontology_contexts) if payload.ontology_contexts else resolve_default_customer_contexts(self._smm)
+        to inline the "Suggested by mapping" tier.
+
+        Context selection is more permissive than bulk runs: when the
+        caller doesn't specify ontology_contexts we fall back to every
+        non-internal, non-shipped context in the graph (see
+        ``resolve_inline_default_contexts``). This catches file-loaded
+        customer ontologies (e.g. ``urn:demo``) that aren't formal
+        ``urn:semantic-model:*`` rows. We still reject internal contexts
+        outright."""
+        if payload.ontology_contexts:
+            contexts = list(payload.ontology_contexts)
+        else:
+            contexts = resolve_inline_default_contexts(self._smm)
+        # Strip any explicitly-blocked context the caller tried to sneak in.
+        contexts = [c for c in contexts if c not in INTERNAL_BLOCKED_CONTEXTS]
+        # Shipped opt-ins still flow through the strict validator below
+        # (they're a closed set anyway).
         try:
-            effective = validate_contexts(contexts, payload.include_shipped)
+            shipped_effective = validate_contexts([], payload.include_shipped)
         except InvalidContextError as e:
             raise ValueError(str(e)) from e
+        effective: List[str] = []
+        for ctx in (*contexts, *shipped_effective):
+            if ctx not in effective:
+                effective.append(ctx)
         if not effective:
             return InlineSuggestResponse(
                 source_entity_type=payload.source_entity_type,
@@ -740,6 +761,19 @@ class TermMappingManager:
                 target = adapter.get_target(db, payload.source_entity_id)
                 if target is not None:
                     break
+        # Synthetic-target fallback: the entity hasn't been persisted yet
+        # (e.g. a property being typed into a form). Build a transient
+        # TargetEntity from the optional hints on the request so the
+        # suggester can still propose matches based on the name alone.
+        if target is None and payload.name:
+            target = TargetEntity(
+                entity_type=payload.source_entity_type,
+                entity_id=payload.source_entity_id,
+                name=payload.name,
+                label=payload.name,
+                type_label=payload.type_label or "",
+                parent_name=payload.parent_name,
+            )
         if target is None:
             return InlineSuggestResponse(
                 source_entity_type=payload.source_entity_type,

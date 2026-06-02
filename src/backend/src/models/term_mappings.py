@@ -233,12 +233,31 @@ class InlineSuggestRequest(BaseModel):
     Cheap, ad-hoc heuristic suggestions for a single entity (e.g. a
     Column being assigned in the ConceptSelectDialog). No persistence,
     no apply: this is purely informational. Returns at most `limit`
-    candidates sorted by confidence desc."""
+    candidates sorted by confidence desc.
+
+    Two resolution modes:
+    - **Persisted entity**: provide source_entity_id that the matching
+      adapter knows how to look up (e.g. AssetDb.id, or
+      contractId#schemaName#propertyName). Suggester uses the real,
+      persisted target with all of its DB-side metadata.
+    - **Synthetic / draft entity**: when the entity hasn't been saved
+      yet (e.g. user is typing a new property in a form), pass `name`
+      and optionally type_label/parent_name. The suggester will build
+      a transient TargetEntity from those fields, bypassing the
+      adapter lookup. Useful for live "Suggested by mapping" UX during
+      authoring."""
     source_entity_type: TargetEntityType
     source_entity_id: str
     ontology_contexts: Optional[List[str]] = None  # defaults to all customer contexts
     include_shipped: List[str] = Field(default_factory=list)
     limit: int = 5
+
+    # Synthetic-target fallback. When set and the adapter lookup
+    # returns nothing, these fields are used to build a transient
+    # TargetEntity in-memory.
+    name: Optional[str] = None
+    type_label: Optional[str] = None
+    parent_name: Optional[str] = None
 
 
 class InlineSuggestion(BaseModel):

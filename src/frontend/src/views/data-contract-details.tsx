@@ -3103,6 +3103,15 @@ export default function DataContractDetails() {
         isOpen={iriDialogOpen}
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
+        mappingSource={
+          contractId
+            ? {
+                entity_type: 'data_contract',
+                entity_id: contractId,
+                ...(contract?.name ? { name: contract.name } : {}),
+              }
+            : undefined
+        }
       />
 
       {contract && (

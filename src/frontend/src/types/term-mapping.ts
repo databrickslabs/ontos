@@ -173,6 +173,13 @@ export interface InlineSuggestRequest {
   ontology_contexts?: string[];
   include_shipped?: string[];
   limit?: number;
+  // Synthetic-target fallback. When the entity isn't persisted yet
+  // (e.g. user is typing a new property in a form), pass `name` (and
+  // optionally type_label/parent_name) so the suggester can still
+  // propose matches based on what's typed.
+  name?: string;
+  type_label?: string;
+  parent_name?: string;
 }
 
 export interface InlineSuggestion {

@@ -28,6 +28,13 @@ interface BusinessConceptsDisplayProps {
   entityType?: string
   entityId?: string
   conceptType?: 'class' | 'property'
+  // Synthetic-target hints forwarded to the inline term-mapping suggester.
+  // Pass these when the entity isn't persisted yet (e.g. a property still
+  // being typed in a form) so suggestions can be derived from the name
+  // alone, before the entity has a stable id in the DB.
+  entityName?: string
+  entityTypeLabel?: string
+  parentEntityName?: string
 }
 
 export default function BusinessConceptsDisplay({
@@ -36,7 +43,10 @@ export default function BusinessConceptsDisplay({
   parentConceptIris,
   entityType,
   entityId,
-  conceptType = 'class'
+  conceptType = 'class',
+  entityName,
+  entityTypeLabel,
+  parentEntityName,
 }: BusinessConceptsDisplayProps) {
   const [showDialog, setShowDialog] = useState(false)
 
@@ -121,7 +131,13 @@ export default function BusinessConceptsDisplay({
         entityType={conceptType}
         mappingSource={
           entityType && entityId && (MAPPING_ENTITY_TYPES as string[]).includes(entityType)
-            ? { entity_type: entityType as TermMappingTargetEntityType, entity_id: entityId }
+            ? {
+                entity_type: entityType as TermMappingTargetEntityType,
+                entity_id: entityId,
+                ...(entityName ? { name: entityName } : {}),
+                ...(entityTypeLabel ? { type_label: entityTypeLabel } : {}),
+                ...(parentEntityName ? { parent_name: parentEntityName } : {}),
+              }
             : undefined
         }
       />

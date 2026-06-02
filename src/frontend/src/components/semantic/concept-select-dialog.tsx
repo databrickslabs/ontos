@@ -17,8 +17,16 @@ type ConceptItem = { value: string; label: string; type: 'class' | 'property' };
 interface MappingSource {
   /** Term-mapping entity_type (e.g. 'asset' or 'data_contract_property'). */
   entity_type: TermMappingTargetEntityType;
-  /** Entity id in the same encoding the term-mapping adapters use. */
+  /** Entity id in the same encoding the term-mapping adapters use.
+   *  Can be a placeholder when the entity isn't saved yet; pair with
+   *  `name` so the backend can still propose suggestions. */
   entity_id: string;
+  /** Display name to use when the entity isn't persisted (draft form). */
+  name?: string;
+  /** Primitive type hint (e.g. "string", "integer"). */
+  type_label?: string;
+  /** Parent entity name (e.g. table name for a column). */
+  parent_name?: string;
 }
 
 interface Props {
@@ -78,6 +86,9 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
           source_entity_type: mappingSource.entity_type,
           source_entity_id: mappingSource.entity_id,
           limit: 5,
+          ...(mappingSource.name ? { name: mappingSource.name } : {}),
+          ...(mappingSource.type_label ? { type_label: mappingSource.type_label } : {}),
+          ...(mappingSource.parent_name ? { parent_name: mappingSource.parent_name } : {}),
         };
         const res = await post<InlineSuggestResponse>('/api/term-mappings/suggestions-for', body);
         if (cancelled) return;
@@ -89,7 +100,16 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
     };
     void run();
     return () => { cancelled = true; };
-  }, [isOpen, mappingSource?.entity_type, mappingSource?.entity_id]);
+    // Re-fetch when the user edits the in-progress name in a draft form
+    // so suggestions track what's actually typed.
+  }, [
+    isOpen,
+    mappingSource?.entity_type,
+    mappingSource?.entity_id,
+    mappingSource?.name,
+    mappingSource?.type_label,
+    mappingSource?.parent_name,
+  ]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

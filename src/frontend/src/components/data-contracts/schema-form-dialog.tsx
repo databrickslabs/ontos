@@ -230,6 +230,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
               entityType="data_contract_schema"
               entityId={name || 'schema'}
               conceptType="class"
+              entityName={name || undefined}
             />
           </div>
 

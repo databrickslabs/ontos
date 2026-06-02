@@ -730,6 +730,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                 entityType="data_contract"
                 entityId={name || 'contract'}
                 conceptType="class"
+                entityName={name || undefined}
               />
             </div>
           </div>
@@ -860,6 +861,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                         entityType="data_contract_schema"
                         entityId={`${name || 'contract'}#${obj.name}`}
                         conceptType="class"
+                        entityName={obj.name || undefined}
                       />
                     </div>
 
@@ -1278,6 +1280,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                             entityType="data_contract_property"
                                             entityId={`${name || 'contract'}#${obj.name}#${col.name}`}
                                             conceptType="property"
+                                            entityName={col.name || undefined}
+                                            entityTypeLabel={col.logicalType || undefined}
+                                            parentEntityName={obj.name || undefined}
                                           />
                                         </div>
                                       </div>

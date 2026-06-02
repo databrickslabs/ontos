@@ -958,6 +958,12 @@ function SchemaPropertyEditorInner(
                   entityType="data_contract_property"
                   entityId={name || 'property'}
                   conceptType="property"
+                  // The property may not be persisted yet (the editor lives
+                  // inside the schema form). Forward the in-progress name +
+                  // type so the inline term-mapping suggester can propose
+                  // matches before save.
+                  entityName={name || undefined}
+                  entityTypeLabel={logicalType || undefined}
                 />
               </div>
             </TabsContent>

@@ -28,10 +28,13 @@ logger = get_logger(__name__)
 
 # Contexts that are NEVER selectable as a concept source for term-mapping.
 # `ontos-ontology` defines internal Asset typing. The remaining `urn:meta:*` /
-# `urn:semantic-links` etc. are internal app indices.
+# `urn:semantic-links` / `urn:app-entities` etc. are internal app indices and
+# carry no business semantics worth mapping to.
 INTERNAL_BLOCKED_CONTEXTS: Set[str] = {
     "urn:taxonomy:ontos-ontology",
     "urn:semantic-links",
+    "urn:app-entities",
+    "urn:meta:sources",
 }
 
 # Shipped customer-usable taxonomies. Excluded from defaults but selectable
@@ -208,6 +211,33 @@ def resolve_default_customer_contexts(
     for ctx in graph.contexts():
         name = str(ctx.identifier)
         if is_customer_context(name) and name not in contexts:
+            contexts.append(name)
+    return sorted(contexts)
+
+
+def resolve_inline_default_contexts(
+    semantic_models_manager: "SemanticModelsManager",
+) -> List[str]:
+    """Inline-suggester default = every context that isn't internal-blocked
+    and isn't a shipped opt-in taxonomy.
+
+    Broader than ``resolve_default_customer_contexts`` because the inline
+    path is non-persistent / non-audit: the goal is to maximise useful
+    matches in the picker, even when the user's customer ontology happens
+    to be loaded from a file (e.g. demo data under ``urn:demo``) rather
+    than registered as a proper ``urn:semantic-model:*`` row.
+
+    Bulk-run defaults stay strict (customer ontologies only) because
+    those decisions get persisted and audited."""
+    graph = semantic_models_manager._graph
+    contexts: List[str] = []
+    for ctx in graph.contexts():
+        name = str(ctx.identifier)
+        if name in INTERNAL_BLOCKED_CONTEXTS:
+            continue
+        if is_shipped_context(name):
+            continue
+        if name not in contexts:
             contexts.append(name)
     return sorted(contexts)
 

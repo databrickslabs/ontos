@@ -2311,6 +2311,15 @@ export default function DataProductDetails() {
         isOpen={iriDialogOpen}
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
+        mappingSource={
+          product?.id
+            ? {
+                entity_type: 'data_product',
+                entity_id: product.id,
+                ...(product.info?.title ? { name: product.info.title } : {}),
+              }
+            : undefined
+        }
       />
 
       <RequestProductActionDialog

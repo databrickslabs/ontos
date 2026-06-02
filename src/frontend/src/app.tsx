@@ -37,6 +37,7 @@ import Entitlements from './views/entitlements';
 import EntitlementsSync from './views/entitlements-sync';
 import DataAssetReviews from './views/data-asset-reviews';
 import DataAssetReviewDetails from './views/data-asset-review-details';
+import TermMappingView from './views/term-mapping';
 import DataCatalog from './views/data-catalog';
 import DataCatalogDetails from './views/data-catalog-details';
 import CatalogCommander from './views/catalog-commander';
@@ -189,6 +190,7 @@ export default function App() {
               <Route path="/ontology-generator" element={<Navigate to="/concepts/generator" replace />} />
               <Route path="/data-asset-reviews" element={<DataAssetReviews />} />
               <Route path="/data-asset-reviews/:requestId" element={<DataAssetReviewDetails />} />
+              <Route path="/term-mapping" element={<TermMappingView />} />
               <Route path="/data-catalog" element={<DataCatalog />} />
               <Route path="/data-catalog/*" element={<DataCatalogDetails />} />
 

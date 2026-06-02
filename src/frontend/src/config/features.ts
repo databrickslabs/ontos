@@ -15,6 +15,7 @@ import {
     Box,
     ShoppingCart,
     ClipboardList,
+    Sparkles,
     type LucideIcon,
   } from 'lucide-react';
   
@@ -158,6 +159,16 @@ import {
       icon: ClipboardCheck,
       group: 'Govern',
       maturity: 'beta',
+      showInLanding: true,
+    },
+    {
+      id: 'term-mapping',
+      name: 'Term Mapping',
+      path: '/term-mapping',
+      description: 'Bulk-suggest, review, and apply ontology term assignments across assets, contracts, and products.',
+      icon: Sparkles,
+      group: 'Govern',
+      maturity: 'alpha',
       showInLanding: true,
     },
     {

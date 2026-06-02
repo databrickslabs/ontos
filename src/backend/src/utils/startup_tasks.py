@@ -253,6 +253,16 @@ def initialize_managers(app: FastAPI):
             set_app_state_manager('semantic_models_manager', app.state.semantic_models_manager)
         except Exception:
             pass
+
+        try:
+            from src.controller.term_mapping_manager import TermMappingManager
+            app.state.term_mapping_manager = TermMappingManager(
+                semantic_models_manager=app.state.semantic_models_manager,
+                reviews_manager=app.state.data_asset_review_manager,
+            )
+            logger.info("TermMappingManager initialised.")
+        except Exception as e:
+            logger.error(f"Failed to initialise TermMappingManager: {e}", exc_info=True)
         # Remove BusinessGlossariesManager; rely solely on SemanticModelsManager
         # app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir, semantic_models_manager=app.state.semantic_models_manager)
 

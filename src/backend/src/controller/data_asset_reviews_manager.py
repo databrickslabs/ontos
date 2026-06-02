@@ -114,7 +114,9 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         # Handle special protocol-based FQNs
         if fqn.startswith('mdm://'):
             return AssetType.MDM_MATCH
-        
+        if fqn.startswith('term-mapping://'):
+            return AssetType.CONCEPT_MAPPING_SUGGESTION
+
         if not self._ws_client:
             logger.warning(f"Cannot determine asset type for {fqn}: WorkspaceClient not available.")
             # Default or raise error? For now, default to TABLE as a fallback.

@@ -3,6 +3,18 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { X, Shapes, Columns2 } from 'lucide-react'
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
+import type { TermMappingTargetEntityType } from '@/types/term-mapping'
+
+// Entity types we know map cleanly to a term-mapping adapter. Strings outside
+// this list silently disable the inline-suggester tier.
+const MAPPING_ENTITY_TYPES: TermMappingTargetEntityType[] = [
+  'asset',
+  'data_contract',
+  'data_contract_schema',
+  'data_contract_property',
+  'data_product',
+  'dataset',
+]
 
 interface BusinessConcept {
   iri: string
@@ -22,6 +34,8 @@ export default function BusinessConceptsDisplay({
   concepts = [],
   onConceptsChange,
   parentConceptIris,
+  entityType,
+  entityId,
   conceptType = 'class'
 }: BusinessConceptsDisplayProps) {
   const [showDialog, setShowDialog] = useState(false)
@@ -105,6 +119,11 @@ export default function BusinessConceptsDisplay({
         onSelect={handleAddConcept}
         parentConceptIris={parentConceptIris}
         entityType={conceptType}
+        mappingSource={
+          entityType && entityId && (MAPPING_ENTITY_TYPES as string[]).includes(entityType)
+            ? { entity_type: entityType as TermMappingTargetEntityType, entity_id: entityId }
+            : undefined
+        }
       />
     </div>
   )

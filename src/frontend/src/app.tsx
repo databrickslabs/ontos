@@ -79,6 +79,7 @@ const DevLineageView = lazy(() => import('./components/lineage/dev-lineage-route
 
 // Concepts layout
 import ConceptsLayout from './components/concepts/concepts-layout';
+import TermMappingView from './views/term-mapping';
 
 // Global route-scoped guards (e.g. recover from stuck Radix body pointer-events lock)
 function RouteGuards() {
@@ -210,7 +211,10 @@ export default function App() {
                 <Route path="graph" element={<OntologyHomeView />} />
                 <Route path="hierarchy" element={<HierarchyBrowserView />} />
                 <Route path="generator" element={<OntologyGeneratorView />} />
+                <Route path="mapping" element={<TermMappingView />} />
               </Route>
+              {/* Old top-level alias from the closed PR */}
+              <Route path="/term-mapping" element={<Navigate to="/concepts/mapping" replace />} />
               {/* Backward compat: redirect old concept paths */}
               <Route path="/semantic-models" element={<Navigate to="/concepts/browser" replace />} />
               <Route path="/collections" element={<Navigate to="/concepts/collections" replace />} />

@@ -53,7 +53,11 @@ class AssetType(str, Enum):
     
     # MDM assets
     MDM_MATCH = "mdm_match"
-    
+
+    # Term-mapping suggestions (one ReviewedAsset == one MappingSuggestionDb).
+    # FQN format: term-mapping://{run_id}/{suggestion_id}
+    CONCEPT_MAPPING_SUGGESTION = "concept_mapping_suggestion"
+
     # Knowledge system assets
     KNOWLEDGE_CONCEPT = "knowledge_concept"
     KNOWLEDGE_COLLECTION = "knowledge_collection"

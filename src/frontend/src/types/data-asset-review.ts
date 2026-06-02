@@ -50,6 +50,9 @@ export enum AssetType {
     
     // MDM assets
     MDM_MATCH = "mdm_match",
+
+    // Term-mapping suggestions (one ReviewedAsset == one MappingSuggestionDb)
+    CONCEPT_MAPPING_SUGGESTION = "concept_mapping_suggestion",
     
     // Generic/external
     EXTERNAL = "external",

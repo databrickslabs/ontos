@@ -85,6 +85,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_BUILD,
     },
+    'term-mapping': {
+        'name': 'Term Mapping',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_BUILD,  # lives under /concepts/mapping alongside Concepts
+    },
     'schema-importer': {
         'name': 'Schema Importer',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,

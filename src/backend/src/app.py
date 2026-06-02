@@ -76,6 +76,7 @@ from src.routes import (
     suggestion_routes,
     certification_levels_routes,
     directory_routes,
+    term_mapping_routes,
 )
 
 from src.common.database import init_db, get_session_factory, SQLAlchemySession
@@ -389,6 +390,7 @@ settings_routes.register_routes(app)
 directory_routes.register_routes(app)
 connection_routes.register_routes(app)
 schema_import_routes.register_routes(app)
+term_mapping_routes.register_routes(app)
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")

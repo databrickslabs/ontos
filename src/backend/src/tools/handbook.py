@@ -336,8 +336,9 @@ class SearchOntosHandbookTool(BaseTool):
         handbook_dir = _resolve_handbook_dir()
         if handbook_dir is None:
             logger.warning(
-                "[search_ontos_handbook] docs/handbook/ not found at "
-                f"{_DEFAULT_HANDBOOK_DIR} — returning empty matches"
+                "[search_ontos_handbook] docs/handbook/ not found "
+                f"(checked ${_HANDBOOK_DIR_ENV_VAR} and parent walk) "
+                "— returning empty matches"
             )
             return ToolResult(
                 success=True,

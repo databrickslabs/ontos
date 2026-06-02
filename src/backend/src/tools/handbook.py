@@ -83,13 +83,14 @@ def _resolve_handbook_dir() -> Optional[Path]:
 # Section parsing
 # ---------------------------------------------------------------------------
 
-# Match a markdown heading line of level 2 or 3, optionally with an explicit
+# Match a markdown heading line of level 2-4, optionally with an explicit
 # {#anchor-id} suffix. Example matches:
 #   "## The permission model {#permission-model}"
 #   "### Access levels {#access-levels}"
+#   "#### Data Steward {#data-steward}"
 #   "## Some heading without an anchor"
 _HEADING_RE = re.compile(
-    r"^(?P<hashes>#{2,3})\s+"
+    r"^(?P<hashes>#{2,4})\s+"
     r"(?P<title>.+?)"
     r"(?:\s+\{#(?P<anchor>[a-z0-9][a-z0-9\-]*)\})?\s*$"
 )
@@ -116,14 +117,20 @@ def _slugify_fallback_anchor(title: str) -> str:
 
 
 def _parse_sections(file_path: Path) -> List[_Section]:
-    """Split a markdown file into h2/h3 sections.
+    """Split a markdown file into h2/h3/h4 sections.
 
-    Each section starts at an h2/h3 heading and runs until the next
-    h2/h3 (or EOF). Content before the first h2/h3 (typically the h1 +
-    intro paragraph) is captured as a synthetic intro section using the
-    filename stem as title and "" as anchor — this is what lets queries
-    like "what is mcp" match doc-level intros even when there isn't an
-    explicit h2 for it.
+    Each section starts at an h2, h3, or h4 heading and runs until the
+    next h2/h3/h4 (or EOF). Content before the first heading (typically
+    the h1 + intro paragraph) is captured as a synthetic intro section
+    using the filename stem as title and "" as anchor — this is what
+    lets queries like "what is mcp" match doc-level intros even when
+    there isn't an explicit h2 for it.
+
+    H4 inclusion matters after the corpus restructure into
+    "What you see in Ontos" / "Under the hood": named entities like
+    individual roles (e.g. `#### Data Steward`) are nested under
+    common parent h3s and would otherwise dilute into a long mixed
+    section body.
     """
     try:
         text = file_path.read_text(encoding="utf-8")
@@ -147,7 +154,7 @@ def _parse_sections(file_path: Path) -> List[_Section]:
             continue
 
         m = _HEADING_RE.match(line)
-        if m and m.group("hashes") in ("##", "###"):
+        if m and m.group("hashes") in ("##", "###", "####"):
             # Flush previous section
             if current_title is not None:
                 sections.append(_Section(

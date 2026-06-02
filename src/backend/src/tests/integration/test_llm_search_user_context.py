@@ -85,7 +85,7 @@ def llm_manager(db_session, llm_settings, mock_workspace_client):
 def test_get_system_prompt_renders_full_user_context_block(llm_settings):
     """All three Phase 3 inputs should produce a fully-populated
     ``## Current user context`` block above the default body."""
-    from src.controller.system_prompts import get_system_prompt
+    from src.tools.system_prompts import get_system_prompt
 
     prompt = get_system_prompt(
         settings=llm_settings,
@@ -111,7 +111,7 @@ def test_get_system_prompt_omits_user_context_when_all_inputs_empty(llm_settings
     """Phase 1 byte-identity contract — when nothing is passed we must
     return the default prompt unchanged so existing tests don't see
     spurious whitespace / preamble drift."""
-    from src.controller.system_prompts import (
+    from src.tools.system_prompts import (
         _DEFAULT_SYSTEM_PROMPT,
         get_system_prompt,
     )
@@ -124,7 +124,7 @@ def test_get_system_prompt_partial_user_context_still_renders(llm_settings):
     """Role alone (no page, no entity) is enough to trigger the
     block — partial payloads are common in practice (e.g., home page
     where the user has a role but no entity selected)."""
-    from src.controller.system_prompts import get_system_prompt
+    from src.tools.system_prompts import get_system_prompt
 
     prompt = get_system_prompt(settings=llm_settings, role="Admin")
     assert "## Current user context" in prompt
@@ -138,7 +138,7 @@ def test_user_context_handles_entity_without_id(llm_settings):
     """When ``selected_entity`` lacks an id (e.g., user is creating a
     new draft), the preamble must still render the type + name
     without crashing or emitting a 'None' literal."""
-    from src.controller.system_prompts import get_system_prompt
+    from src.tools.system_prompts import get_system_prompt
 
     prompt = get_system_prompt(
         settings=llm_settings,

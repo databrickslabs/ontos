@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import {
   Dialog,
@@ -39,6 +40,7 @@ export default function GenerateReviewDialog({
   currentUserEmail,
   onCreated,
 }: Props) {
+  const { t } = useTranslation(['term-mapping', 'common']);
   const { post } = useApi();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -68,7 +70,7 @@ export default function GenerateReviewDialog({
   const handleSubmit = async () => {
     if (!run) return;
     if (!reviewerEmail.trim()) {
-      setError('Reviewer email is required.');
+      setError(t('generateReview.validation.reviewerRequired'));
       return;
     }
     setSubmitting(true);
@@ -86,14 +88,19 @@ export default function GenerateReviewDialog({
       if (res.error) throw new Error(res.error);
       const data = res.data!;
       toast({
-        title: 'Review created',
-        description: `${data.suggestion_count} suggestions queued for review.`,
+        title: t('generateReview.toast.created'),
+        description: t(
+          data.suggestion_count === 1
+            ? 'generateReview.toast.createdDescriptionOne'
+            : 'generateReview.toast.createdDescriptionMany',
+          { count: data.suggestion_count },
+        ),
       });
       onCreated?.(data.review_request_id);
       onOpenChange(false);
       navigate(`/data-asset-reviews/${data.review_request_id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create review');
+      setError(e instanceof Error ? e.message : t('generateReview.toast.failed'));
     } finally {
       setSubmitting(false);
     }
@@ -103,35 +110,30 @@ export default function GenerateReviewDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Generate Review for Run</DialogTitle>
-          <DialogDescription>
-            Spawn a Data Asset Review containing every suggestion in this run.
-            Decisions made in the review flow back to the suggestion queue.
-          </DialogDescription>
+          <DialogTitle>{t('generateReview.title')}</DialogTitle>
+          <DialogDescription>{t('generateReview.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="reviewer-email">Reviewer email *</Label>
+            <Label htmlFor="reviewer-email">{t('generateReview.reviewerEmail')}</Label>
             <Input
               id="reviewer-email"
               type="email"
               value={reviewerEmail}
               onChange={(e) => setReviewerEmail(e.target.value)}
-              placeholder="steward@company.com"
+              placeholder={t('generateReview.reviewerEmailPlaceholder')}
             />
-            <p className="text-xs text-muted-foreground">
-              Defaults to you. Hand off to a domain steward if needed.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('generateReview.reviewerEmailHelp')}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">{t('generateReview.notes')}</Label>
             <Textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional context for the reviewer."
+              placeholder={t('generateReview.notesPlaceholder')}
               className="min-h-[80px]"
             />
           </div>
@@ -143,18 +145,27 @@ export default function GenerateReviewDialog({
               onCheckedChange={(v) => setIncludeAccepted(v === true)}
             />
             <Label htmlFor="include-accepted" className="text-sm font-normal leading-snug">
-              Also include already-accepted suggestions
+              {t('generateReview.includeAccepted')}
               <span className="block text-xs text-muted-foreground">
-                Useful when you want the reviewer to confirm prior decisions, not just
-                triage pending rows.
+                {t('generateReview.includeAcceptedHelp')}
               </span>
             </Label>
           </div>
 
           <Alert>
             <AlertDescription>
-              {eligible} suggestion{eligible === 1 ? '' : 's'} will become reviewable
-              assets ({pending} pending{includeAccepted ? `, ${accepted} accepted` : ''}).
+              {t(
+                eligible === 1
+                  ? 'generateReview.eligibleSummaryOne'
+                  : 'generateReview.eligibleSummaryMany',
+                {
+                  eligible,
+                  pending,
+                  acceptedPart: includeAccepted
+                    ? t('generateReview.acceptedPart', { accepted })
+                    : '',
+                },
+              )}
             </AlertDescription>
           </Alert>
 
@@ -167,11 +178,11 @@ export default function GenerateReviewDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+            {t('actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={submitting || eligible === 0}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Generate Review
+            {t('generateReview.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

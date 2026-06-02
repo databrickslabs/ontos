@@ -1,0 +1,154 @@
+{
+  "title": "Mappage de termes",
+  "subtitle": "Proposez en masse des affectations de concepts d'ontologie pour les actifs, les contrats de données et les produits de données. Les décisions sont prises dans l'espace de revue des actifs.",
+  "actions": {
+    "refresh": "Actualiser",
+    "newRun": "Nouvelle exécution",
+    "cancel": "Annuler",
+    "applyAuto": "Appliquer auto ({{count}})",
+    "generateReview": "Générer une revue",
+    "undo": "Annuler",
+    "selectRunHint": "Sélectionnez une exécution à gauche, ou démarrez-en une nouvelle."
+  },
+  "recent": {
+    "title": "Exécutions récentes",
+    "loading": "Chargement des exécutions…",
+    "empty": "Aucune exécution pour le moment. Lancez-en une avec <strong>Nouvelle exécution</strong>.",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} suggestions"
+  },
+  "detail": {
+    "runLabel": "Exécution",
+    "createdAt": "Créée",
+    "createdBy": "par {{email}}",
+    "sourcesTitle": "Sources des suggestions",
+    "customerOntologies": "Ontologies client",
+    "shippedTaxonomies": "Taxonomies livrées",
+    "reviewsLinkPrefix": "Les revues des stewards se trouvent dans l'espace",
+    "reviewsLinkText": "Revues des actifs",
+    "reviewsLinkSuffix": "Chaque suggestion devient un ReviewedAsset là-bas ; les décisions reviennent automatiquement dans cette exécution."
+  },
+  "stats": {
+    "targets": "Cibles",
+    "suggestions": "Suggestions",
+    "pending": "En attente",
+    "autoApply": "Application auto",
+    "accepted": "Acceptées",
+    "rejected": "Rejetées",
+    "linksCreated": "Liens créés",
+    "linksSkipped": "Liens ignorés"
+  },
+  "toast": {
+    "applied": "Appliqué",
+    "appliedDescription": "{{created}} liens créés, {{skipped}} ignorés",
+    "applyFailed": "Échec de l'application",
+    "undone": "Annulé",
+    "undoneDescription": "{{removed}} liens supprimés, {{reverted}} suggestions annulées",
+    "undoFailed": "Échec de l'annulation",
+    "loadRunFailed": "Échec du chargement de l'exécution",
+    "unknownError": "erreur inconnue"
+  },
+  "confirm": {
+    "undo": "Annuler l'exécution {{id}} ? Cela supprime tous les liens créés par cette exécution."
+  },
+  "errors": {
+    "loadRunsFailed": "Échec du chargement des exécutions"
+  },
+  "runConfig": {
+    "title": "Nouvelle exécution de mappage de termes",
+    "description": "Choisissez les ontologies et les entités cibles. Le suggéreur heuristique proposera des affectations de concepts que vous pourrez examiner avant de les appliquer.",
+    "customerOntologies": "Ontologies client",
+    "enabledCount": "{{count}} activées",
+    "loadingOntologies": "Chargement des ontologies…",
+    "noCustomerOntologies": "Aucune ontologie client n'est encore chargée. Téléchargez-en une dans Paramètres → Sources RDF, ou générez-en une via le Générateur d'Ontologies, puis rouvrez cette boîte de dialogue.",
+    "useAll": "Utiliser toutes les ontologies client activées",
+    "shippedTitle": "Inclure aussi les taxonomies livrées",
+    "shippedHelp": "L'interne <code>urn:taxonomy:ontos-ontology</code> (schéma de typage des actifs Ontos) n'est jamais une cible de mappage valide.",
+    "targetTypes": "Types d'entités cibles",
+    "assetTypesLabel": "Noms des types d'actifs (séparés par des virgules). Par défaut « Column ».",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "Limite",
+    "comment": "Commentaire (facultatif)",
+    "commentPlaceholder": "À quoi sert cette exécution ?",
+    "previewNoOntologies": "(aucune ontologie — choisissez-en une ci-dessus)",
+    "previewCustomerOne": "1 ontologie client",
+    "previewCustomerMany": "{{count}} instances d'ontologie client",
+    "previewShippedOne": "1 taxonomie livrée",
+    "previewShippedMany": "{{count}} taxonomies livrées",
+    "previewTargetTypeOne": "1 type cible",
+    "previewTargetTypeMany": "{{count}} types cibles",
+    "previewLine": "Recherchera dans <strong>{{customerPart}}</strong> sur <strong>{{targetPart}}</strong>.",
+    "previewLineWithShipped": "Recherchera dans <strong>{{customerPart}}</strong> plus <strong>{{shippedPart}}</strong> sur <strong>{{targetPart}}</strong>.",
+    "submit": "Créer l'exécution",
+    "submitting": "Exécution du suggéreur…",
+    "validation": {
+      "noTargetType": "Choisissez au moins un type cible",
+      "noTargetTypeDescription": "Sélectionnez le type d'entité que le suggéreur doit examiner.",
+      "noOntology": "Choisissez au moins une ontologie",
+      "noOntologyDescription": "Laissez « Utiliser toutes les ontologies client activées » coché, ou sélectionnez-en certaines."
+    },
+    "toast": {
+      "created": "Exécution créée",
+      "createdDescriptionOne": "1 suggestion générée sur {{targets}} cible(s).",
+      "createdDescriptionMany": "{{total}} suggestions générées sur {{targets}} cible(s).",
+      "createdEmpty": "Exécution créée mais la réponse était vide",
+      "failed": "Échec de la création de l'exécution",
+      "loadOntologiesFailed": "Échec du chargement des ontologies"
+    }
+  },
+  "generateReview": {
+    "title": "Générer une revue pour l'exécution",
+    "description": "Crée une Revue d'Actif de Données contenant chaque suggestion de cette exécution. Les décisions prises dans la revue reviennent dans la file de suggestions.",
+    "reviewerEmail": "E-mail du relecteur *",
+    "reviewerEmailHelp": "Par défaut vous-même. Déléguez à un steward de domaine si nécessaire.",
+    "reviewerEmailPlaceholder": "steward@entreprise.com",
+    "notes": "Notes",
+    "notesPlaceholder": "Contexte optionnel pour le relecteur.",
+    "includeAccepted": "Inclure aussi les suggestions déjà acceptées",
+    "includeAcceptedHelp": "Utile lorsque vous voulez que le relecteur confirme les décisions précédentes, et pas seulement trier les lignes en attente.",
+    "eligibleSummaryOne": "1 suggestion deviendra un actif révisable ({{pending}} en attente{{acceptedPart}}).",
+    "eligibleSummaryMany": "{{eligible}} suggestions deviendront des actifs révisables ({{pending}} en attente{{acceptedPart}}).",
+    "acceptedPart": ", {{accepted}} acceptées",
+    "submit": "Générer la revue",
+    "validation": {
+      "reviewerRequired": "L'e-mail du relecteur est obligatoire."
+    },
+    "toast": {
+      "created": "Revue créée",
+      "createdDescriptionOne": "1 suggestion en file d'attente pour revue.",
+      "createdDescriptionMany": "{{count}} suggestions en file d'attente pour revue.",
+      "failed": "Échec de la création de la revue"
+    }
+  },
+  "suggestion": {
+    "header": "Suggestion de mappage de termes",
+    "progress": "{{current}} sur {{total}}",
+    "concept": "concept",
+    "confidence": "Confiance",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "candidat à l'application automatique",
+    "whyMatch": "Pourquoi cette correspondance",
+    "noReason": "—",
+    "overrideIri": "Remplacer l'IRI cible (facultatif)",
+    "overrideIriHelp": "Laissez vide pour accepter l'IRI suggéré. Remplacez pour attacher un concept différent de la même ontologie.",
+    "comment": "Commentaire",
+    "commentPlaceholder": "Notes pour le relecteur / piste d'audit.",
+    "needsClarification": "Nécessite des clarifications",
+    "reject": "Rejeter",
+    "acceptApply": "Accepter et appliquer",
+    "acceptNext": "Accepter et suivant",
+    "invalidFqn": "FQN d'actif de mappage de termes invalide.",
+    "errors": {
+      "unparseable": "FQN de mappage de termes non analysable : {{fqn}}",
+      "notFound": "Suggestion introuvable dans l'exécution",
+      "loadFailed": "Échec du chargement de la suggestion"
+    },
+    "toast": {
+      "approved": "Suggestion approuvée",
+      "rejected": "Suggestion rejetée",
+      "clarified": "Marquée pour clarification",
+      "savedWithWarnings": "Enregistré avec des avertissements",
+      "decisionFailed": "Échec de la décision"
+    }
+  }
+}

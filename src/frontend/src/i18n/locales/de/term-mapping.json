@@ -1,0 +1,154 @@
+{
+  "title": "Begriffszuordnung",
+  "subtitle": "Schlagen Sie in großen Mengen Ontologie-Konzeptzuordnungen für Assets, Datenverträge und Datenprodukte vor. Entscheidungen werden im Asset-Reviews-Arbeitsbereich getroffen.",
+  "actions": {
+    "refresh": "Aktualisieren",
+    "newRun": "Neuer Lauf",
+    "cancel": "Abbrechen",
+    "applyAuto": "Auto anwenden ({{count}})",
+    "generateReview": "Review erstellen",
+    "undo": "Rückgängig",
+    "selectRunHint": "Wählen Sie links einen Lauf aus oder starten Sie einen neuen."
+  },
+  "recent": {
+    "title": "Letzte Läufe",
+    "loading": "Läufe werden geladen…",
+    "empty": "Noch keine Läufe. Starten Sie einen mit <strong>Neuer Lauf</strong>.",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} Vorschläge"
+  },
+  "detail": {
+    "runLabel": "Lauf",
+    "createdAt": "Erstellt",
+    "createdBy": "von {{email}}",
+    "sourcesTitle": "Quellen der Vorschläge",
+    "customerOntologies": "Kunden-Ontologien",
+    "shippedTaxonomies": "Mitgelieferte Taxonomien",
+    "reviewsLinkPrefix": "Steward-Reviews finden Sie im",
+    "reviewsLinkText": "Asset-Reviews",
+    "reviewsLinkSuffix": "Arbeitsbereich. Jeder Vorschlag wird dort zu einem ReviewedAsset; Entscheidungen fließen automatisch in diesen Lauf zurück."
+  },
+  "stats": {
+    "targets": "Ziele",
+    "suggestions": "Vorschläge",
+    "pending": "Ausstehend",
+    "autoApply": "Auto-Anwendung",
+    "accepted": "Akzeptiert",
+    "rejected": "Abgelehnt",
+    "linksCreated": "Erstellte Verknüpfungen",
+    "linksSkipped": "Übersprungene Verknüpfungen"
+  },
+  "toast": {
+    "applied": "Angewendet",
+    "appliedDescription": "{{created}} Verknüpfungen erstellt, {{skipped}} übersprungen",
+    "applyFailed": "Anwendung fehlgeschlagen",
+    "undone": "Rückgängig gemacht",
+    "undoneDescription": "{{removed}} Verknüpfungen entfernt, {{reverted}} Vorschläge zurückgenommen",
+    "undoFailed": "Rückgängig machen fehlgeschlagen",
+    "loadRunFailed": "Lauf konnte nicht geladen werden",
+    "unknownError": "Unbekannter Fehler"
+  },
+  "confirm": {
+    "undo": "Lauf {{id}} rückgängig machen? Dadurch werden alle von diesem Lauf erstellten Verknüpfungen entfernt."
+  },
+  "errors": {
+    "loadRunsFailed": "Läufe konnten nicht geladen werden"
+  },
+  "runConfig": {
+    "title": "Neuer Begriffszuordnungslauf",
+    "description": "Wählen Sie die Ontologien und Zielentitäten aus. Der heuristische Vorschläger schlägt Konzeptzuordnungen vor, die Sie vor der Anwendung überprüfen können.",
+    "customerOntologies": "Kunden-Ontologien",
+    "enabledCount": "{{count}} aktiviert",
+    "loadingOntologies": "Ontologien werden geladen…",
+    "noCustomerOntologies": "Es sind noch keine Kunden-Ontologien geladen. Laden Sie eine in den Einstellungen → RDF-Quellen hoch oder erzeugen Sie eine über den Ontologie-Generator und öffnen Sie diesen Dialog erneut.",
+    "useAll": "Jede aktivierte Kunden-Ontologie verwenden",
+    "shippedTitle": "Auch mitgelieferte Taxonomien einbeziehen",
+    "shippedHelp": "Die interne <code>urn:taxonomy:ontos-ontology</code> (Ontos-Asset-Typschema) ist niemals ein gültiges Zuordnungsziel.",
+    "targetTypes": "Zielentitätstypen",
+    "assetTypesLabel": "Asset-Typnamen (kommagetrennt). Standard ist „Column“.",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "Limit",
+    "comment": "Kommentar (optional)",
+    "commentPlaceholder": "Wozu dient dieser Lauf?",
+    "previewNoOntologies": "(keine Ontologien — bitte oben eine auswählen)",
+    "previewCustomerOne": "1 Kunden-Ontologie",
+    "previewCustomerMany": "{{count}} Kunden-Ontologie-Instanzen",
+    "previewShippedOne": "1 mitgelieferte Taxonomie",
+    "previewShippedMany": "{{count}} mitgelieferte Taxonomien",
+    "previewTargetTypeOne": "1 Zieltyp",
+    "previewTargetTypeMany": "{{count}} Zieltypen",
+    "previewLine": "Sucht in <strong>{{customerPart}}</strong> über <strong>{{targetPart}}</strong>.",
+    "previewLineWithShipped": "Sucht in <strong>{{customerPart}}</strong> plus <strong>{{shippedPart}}</strong> über <strong>{{targetPart}}</strong>.",
+    "submit": "Lauf erstellen",
+    "submitting": "Vorschläger läuft…",
+    "validation": {
+      "noTargetType": "Wählen Sie mindestens einen Zieltyp",
+      "noTargetTypeDescription": "Wählen Sie aus, welche Art von Entität der Vorschläger betrachten soll.",
+      "noOntology": "Wählen Sie mindestens eine Ontologie",
+      "noOntologyDescription": "Lassen Sie „Jede aktivierte Kunden-Ontologie verwenden“ aktiviert oder wählen Sie bestimmte aus."
+    },
+    "toast": {
+      "created": "Lauf erstellt",
+      "createdDescriptionOne": "1 Vorschlag für {{targets}} Ziel(e) erzeugt.",
+      "createdDescriptionMany": "{{total}} Vorschläge für {{targets}} Ziel(e) erzeugt.",
+      "createdEmpty": "Lauf erstellt, aber Antwort war leer",
+      "failed": "Lauf konnte nicht erstellt werden",
+      "loadOntologiesFailed": "Ontologien konnten nicht geladen werden"
+    }
+  },
+  "generateReview": {
+    "title": "Review für Lauf erstellen",
+    "description": "Erzeugt ein Daten-Asset-Review mit jedem Vorschlag in diesem Lauf. Im Review getroffene Entscheidungen fließen in die Vorschlagswarteschlange zurück.",
+    "reviewerEmail": "E-Mail des Prüfers *",
+    "reviewerEmailHelp": "Standardmäßig Sie selbst. Übergeben Sie an einen Domain-Steward, falls nötig.",
+    "reviewerEmailPlaceholder": "steward@firma.com",
+    "notes": "Notizen",
+    "notesPlaceholder": "Optionaler Kontext für den Prüfer.",
+    "includeAccepted": "Auch bereits akzeptierte Vorschläge einbeziehen",
+    "includeAcceptedHelp": "Nützlich, wenn der Prüfer frühere Entscheidungen bestätigen soll, statt nur ausstehende Zeilen zu sichten.",
+    "eligibleSummaryOne": "1 Vorschlag wird zu einem prüfbaren Asset ({{pending}} ausstehend{{acceptedPart}}).",
+    "eligibleSummaryMany": "{{eligible}} Vorschläge werden zu prüfbaren Assets ({{pending}} ausstehend{{acceptedPart}}).",
+    "acceptedPart": ", {{accepted}} akzeptiert",
+    "submit": "Review erstellen",
+    "validation": {
+      "reviewerRequired": "E-Mail des Prüfers ist erforderlich."
+    },
+    "toast": {
+      "created": "Review erstellt",
+      "createdDescriptionOne": "1 Vorschlag zur Prüfung eingereiht.",
+      "createdDescriptionMany": "{{count}} Vorschläge zur Prüfung eingereiht.",
+      "failed": "Review konnte nicht erstellt werden"
+    }
+  },
+  "suggestion": {
+    "header": "Begriffszuordnungs-Vorschlag",
+    "progress": "{{current}} von {{total}}",
+    "concept": "Konzept",
+    "confidence": "Konfidenz",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "Auto-Anwendungs-Kandidat",
+    "whyMatch": "Warum diese Übereinstimmung",
+    "noReason": "—",
+    "overrideIri": "Ziel-IRI überschreiben (optional)",
+    "overrideIriHelp": "Leer lassen, um die vorgeschlagene IRI zu akzeptieren. Überschreiben Sie, um ein anderes Konzept aus derselben Ontologie anzuhängen.",
+    "comment": "Kommentar",
+    "commentPlaceholder": "Notizen für den Prüfer / Audit-Trail.",
+    "needsClarification": "Klärung erforderlich",
+    "reject": "Ablehnen",
+    "acceptApply": "Annehmen & anwenden",
+    "acceptNext": "Annehmen & weiter",
+    "invalidFqn": "Ungültige Begriffszuordnungs-Asset-FQN.",
+    "errors": {
+      "unparseable": "Nicht parsbare Begriffszuordnungs-FQN: {{fqn}}",
+      "notFound": "Vorschlag im Lauf nicht gefunden",
+      "loadFailed": "Vorschlag konnte nicht geladen werden"
+    },
+    "toast": {
+      "approved": "Vorschlag genehmigt",
+      "rejected": "Vorschlag abgelehnt",
+      "clarified": "Zur Klärung markiert",
+      "savedWithWarnings": "Mit Warnungen gespeichert",
+      "decisionFailed": "Entscheidung fehlgeschlagen"
+    }
+  }
+}

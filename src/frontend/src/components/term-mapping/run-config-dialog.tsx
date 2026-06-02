@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
+import { Trans, useTranslation } from 'react-i18next';
 
 import {
   Dialog,
@@ -67,6 +68,7 @@ export default function RunConfigDialog({
   onOpenChange,
   onCreated,
 }: RunConfigDialogProps) {
+  const { t } = useTranslation(['term-mapping', 'common']);
   const { toast } = useToast();
   const { get, post } = useApi();
 
@@ -125,7 +127,9 @@ export default function RunConfigDialog({
         );
       }
     } catch (e) {
-      setModelsError(e instanceof Error ? e.message : 'Failed to load ontologies');
+      setModelsError(
+        e instanceof Error ? e.message : t('runConfig.toast.loadOntologiesFailed'),
+      );
     } finally {
       setModelsLoading(false);
     }
@@ -185,17 +189,16 @@ export default function RunConfigDialog({
   const handleSubmit = async () => {
     if (entityTypes.size === 0) {
       toast({
-        title: 'Pick at least one target type',
-        description: 'Select what kind of entity the suggester should look at.',
+        title: t('runConfig.validation.noTargetType'),
+        description: t('runConfig.validation.noTargetTypeDescription'),
         variant: 'destructive',
       });
       return;
     }
     if (allContexts === false && selectedContexts.size === 0 && shippedSelected.size === 0) {
       toast({
-        title: 'Pick at least one ontology',
-        description:
-          'Either leave "Use every enabled customer ontology" on, or pick specific ones.',
+        title: t('runConfig.validation.noOntology'),
+        description: t('runConfig.validation.noOntologyDescription'),
         variant: 'destructive',
       });
       return;
@@ -225,18 +228,24 @@ export default function RunConfigDialog({
       const res = await post<Run>('/api/term-mappings/runs', payload);
       if (res.error) throw new Error(res.error);
       const run = res.data;
-      if (!run || !run.id) throw new Error('Run created but response was empty');
+      if (!run || !run.id) throw new Error(t('runConfig.toast.createdEmpty'));
       const total = (run.stats?.suggestions_total as number) ?? 0;
+      const targets = (run.stats?.targets as number) ?? 0;
       toast({
-        title: 'Run created',
-        description: `Generated ${total} ${total === 1 ? 'suggestion' : 'suggestions'} across ${(run.stats?.targets as number) ?? 0} target${(run.stats?.targets as number) === 1 ? '' : 's'}.`,
+        title: t('runConfig.toast.created'),
+        description: t(
+          total === 1
+            ? 'runConfig.toast.createdDescriptionOne'
+            : 'runConfig.toast.createdDescriptionMany',
+          { total, targets },
+        ),
       });
       onCreated(run);
       onOpenChange(false);
     } catch (e) {
       toast({
-        title: 'Failed to create run',
-        description: e instanceof Error ? e.message : 'Unknown error',
+        title: t('runConfig.toast.failed'),
+        description: e instanceof Error ? e.message : t('toast.unknownError'),
         variant: 'destructive',
       });
     } finally {
@@ -250,27 +259,24 @@ export default function RunConfigDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            New Term Mapping Run
+            {t('runConfig.title')}
           </DialogTitle>
-          <DialogDescription>
-            Pick the ontologies and target entities. The heuristic suggester will
-            propose concept assignments you can review before applying.
-          </DialogDescription>
+          <DialogDescription>{t('runConfig.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           {/* Customer ontologies ---------------------------------------- */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Customer ontologies</Label>
+              <Label className="text-sm font-medium">{t('runConfig.customerOntologies')}</Label>
               <Badge variant="outline" className="text-xs">
-                {enabledCustomerCount} enabled
+                {t('runConfig.enabledCount', { count: enabledCustomerCount })}
               </Badge>
             </div>
             {modelsLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading ontologies…
+                {t('runConfig.loadingOntologies')}
               </div>
             ) : modelsError ? (
               <Alert variant="destructive">
@@ -278,11 +284,7 @@ export default function RunConfigDialog({
               </Alert>
             ) : enabledCustomerCount === 0 ? (
               <Alert>
-                <AlertDescription>
-                  No customer ontologies are loaded yet. Upload one in Settings →
-                  RDF Sources, or generate one via the Ontology Generator, then
-                  re-open this dialog.
-                </AlertDescription>
+                <AlertDescription>{t('runConfig.noCustomerOntologies')}</AlertDescription>
               </Alert>
             ) : (
               <div className="rounded-md border p-3 space-y-2 max-h-48 overflow-y-auto">
@@ -291,7 +293,7 @@ export default function RunConfigDialog({
                     checked={allContexts}
                     onCheckedChange={() => handleToggleAll()}
                   />
-                  <span className="font-medium">Use every enabled customer ontology</span>
+                  <span className="font-medium">{t('runConfig.useAll')}</span>
                 </label>
                 <div className="pl-6 space-y-1.5 border-l">
                   {models.map((m) => {
@@ -318,7 +320,7 @@ export default function RunConfigDialog({
 
           {/* Shipped opt-in --------------------------------------------- */}
           <section className="space-y-2">
-            <Label className="text-sm font-medium">Also include shipped taxonomies</Label>
+            <Label className="text-sm font-medium">{t('runConfig.shippedTitle')}</Label>
             <div className="rounded-md border p-3 space-y-2">
               {SHIPPED_OPT_IN_CONTEXTS.map((opt) => (
                 <label key={opt.value} className="flex items-center gap-2 text-sm">
@@ -334,14 +336,13 @@ export default function RunConfigDialog({
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              The internal <code>urn:taxonomy:ontos-ontology</code> (Ontos asset
-              typing schema) is never a valid mapping target.
+              <Trans i18nKey="term-mapping:runConfig.shippedHelp" components={{ code: <code /> }} />
             </p>
           </section>
 
           {/* Target selection ------------------------------------------- */}
           <section className="space-y-2">
-            <Label className="text-sm font-medium">Target entity types</Label>
+            <Label className="text-sm font-medium">{t('runConfig.targetTypes')}</Label>
             <div className="rounded-md border p-3 grid grid-cols-2 gap-2">
               {(Object.keys(TARGET_ENTITY_TYPE_LABELS) as TermMappingTargetEntityType[])
                 .filter((et) => et !== 'dataset')
@@ -358,13 +359,13 @@ export default function RunConfigDialog({
             {entityTypes.has('asset') && (
               <div className="space-y-1.5 pl-1">
                 <Label htmlFor="tm-asset-types" className="text-xs text-muted-foreground">
-                  Asset type names (comma-separated). Defaults to "Column".
+                  {t('runConfig.assetTypesLabel')}
                 </Label>
                 <Input
                   id="tm-asset-types"
                   value={assetTypeNames}
                   onChange={(e) => setAssetTypeNames(e.target.value)}
-                  placeholder="Column, Table"
+                  placeholder={t('runConfig.assetTypesPlaceholder')}
                 />
               </div>
             )}
@@ -373,7 +374,7 @@ export default function RunConfigDialog({
           {/* Limit + comment -------------------------------------------- */}
           <section className="grid grid-cols-3 gap-3">
             <div className="col-span-1">
-              <Label htmlFor="tm-limit" className="text-sm">Limit</Label>
+              <Label htmlFor="tm-limit" className="text-sm">{t('runConfig.limit')}</Label>
               <Input
                 id="tm-limit"
                 type="number"
@@ -383,13 +384,13 @@ export default function RunConfigDialog({
               />
             </div>
             <div className="col-span-2">
-              <Label htmlFor="tm-comment" className="text-sm">Comment (optional)</Label>
+              <Label htmlFor="tm-comment" className="text-sm">{t('runConfig.comment')}</Label>
               <Textarea
                 id="tm-comment"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={2}
-                placeholder="What is this run for?"
+                placeholder={t('runConfig.commentPlaceholder')}
               />
             </div>
           </section>
@@ -397,36 +398,61 @@ export default function RunConfigDialog({
           {/* Preview line ----------------------------------------------- */}
           <Alert>
             <AlertDescription>
-              Will look in{' '}
-              <strong>
-                {previewContextNames.length === 0
-                  ? '(no ontologies — pick one above)'
-                  : `${previewContextNames.length} customer ontology${previewContextNames.length === 1 ? '' : ' instances'}`}
-              </strong>
-              {shippedSelected.size > 0 && (
-                <>
-                  {' '}plus <strong>{shippedSelected.size} shipped taxonom{shippedSelected.size === 1 ? 'y' : 'ies'}</strong>
-                </>
-              )}
-              {' '}across <strong>{entityTypes.size}</strong> target type{entityTypes.size === 1 ? '' : 's'}.
+              {(() => {
+                const customerPart =
+                  previewContextNames.length === 0
+                    ? t('runConfig.previewNoOntologies')
+                    : t(
+                        previewContextNames.length === 1
+                          ? 'runConfig.previewCustomerOne'
+                          : 'runConfig.previewCustomerMany',
+                        { count: previewContextNames.length },
+                      );
+                const shippedPart =
+                  shippedSelected.size > 0
+                    ? t(
+                        shippedSelected.size === 1
+                          ? 'runConfig.previewShippedOne'
+                          : 'runConfig.previewShippedMany',
+                        { count: shippedSelected.size },
+                      )
+                    : null;
+                const targetPart = t(
+                  entityTypes.size === 1
+                    ? 'runConfig.previewTargetTypeOne'
+                    : 'runConfig.previewTargetTypeMany',
+                  { count: entityTypes.size },
+                );
+                return (
+                  <Trans
+                    i18nKey={
+                      shippedPart
+                        ? 'term-mapping:runConfig.previewLineWithShipped'
+                        : 'term-mapping:runConfig.previewLine'
+                    }
+                    components={{ strong: <strong /> }}
+                    values={{ customerPart, shippedPart: shippedPart ?? '', targetPart }}
+                  />
+                );
+              })()}
             </AlertDescription>
           </Alert>
         </div>
 
         <DialogFooter className="border-t pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
+            {t('actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={submitting || modelsLoading}>
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Running suggester…
+                {t('runConfig.submitting')}
               </>
             ) : (
               <>
                 <Sparkles className="h-4 w-4 mr-2" />
-                Create run
+                {t('runConfig.submit')}
               </>
             )}
           </Button>

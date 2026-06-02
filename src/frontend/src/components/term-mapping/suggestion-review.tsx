@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   ArrowRight,
@@ -63,6 +64,7 @@ export default function TermMappingSuggestionReview({
   totalCount,
   readOnly = false,
 }: Props) {
+  const { t } = useTranslation(['term-mapping', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
   const parsed = parseFqn(assetFqn);
@@ -79,7 +81,7 @@ export default function TermMappingSuggestionReview({
     let cancelled = false;
     const run = async () => {
       if (!parsed) {
-        setError(`Unparseable term-mapping FQN: ${assetFqn}`);
+        setError(t('suggestion.errors.unparseable', { fqn: assetFqn }));
         setLoading(false);
         return;
       }
@@ -95,11 +97,11 @@ export default function TermMappingSuggestionReview({
         if (res.error) throw new Error(res.error);
         if (cancelled) return;
         const found = (res.data ?? []).find((s) => s.id === parsed.suggestionId);
-        if (!found) throw new Error('Suggestion not found in run');
+        if (!found) throw new Error(t('suggestion.errors.notFound'));
         setSuggestion(found);
         setCustomIri(found.custom_iri ?? '');
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load suggestion');
+        if (!cancelled) setError(e instanceof Error ? e.message : t('suggestion.errors.loadFailed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -108,13 +110,13 @@ export default function TermMappingSuggestionReview({
     return () => {
       cancelled = true;
     };
-  }, [assetFqn, get]);
+  }, [assetFqn, get, t]);
 
   if (!parsed) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>Invalid term-mapping asset FQN.</AlertDescription>
+        <AlertDescription>{t('suggestion.invalidFqn')}</AlertDescription>
       </Alert>
     );
   }
@@ -174,7 +176,7 @@ export default function TermMappingSuggestionReview({
       const result = res.data!;
       if (result.errors?.length) {
         toast({
-          title: 'Saved with warnings',
+          title: t('suggestion.toast.savedWithWarnings'),
           description: result.errors[0],
           variant: 'destructive',
         });
@@ -182,18 +184,18 @@ export default function TermMappingSuggestionReview({
         toast({
           title:
             decision === 'accept'
-              ? 'Suggestion approved'
+              ? t('suggestion.toast.approved')
               : decision === 'reject'
-                ? 'Suggestion rejected'
-                : 'Marked for clarification',
+                ? t('suggestion.toast.rejected')
+                : t('suggestion.toast.clarified'),
         });
       }
       onReviewComplete?.(decision === 'accept' ? 'approved' : 'rejected');
       return true;
     } catch (e) {
       toast({
-        title: 'Decision failed',
-        description: e instanceof Error ? e.message : 'unknown error',
+        title: t('suggestion.toast.decisionFailed'),
+        description: e instanceof Error ? e.message : t('toast.unknownError'),
         variant: 'destructive',
       });
       return false;
@@ -218,11 +220,11 @@ export default function TermMappingSuggestionReview({
           <Sparkles className="h-5 w-5 text-purple-500" />
           <div>
             <h3 className="text-base font-semibold leading-tight">
-              Term-mapping suggestion
+              {t('suggestion.header')}
             </h3>
             {typeof currentIndex === 'number' && typeof totalCount === 'number' && (
               <p className="text-xs text-muted-foreground">
-                {currentIndex} of {totalCount}
+                {t('suggestion.progress', { current: currentIndex, total: totalCount })}
               </p>
             )}
           </div>
@@ -244,7 +246,7 @@ export default function TermMappingSuggestionReview({
               {suggestion.source_label || suggestion.source_entity_id}
             </span>
             <ArrowRight className="h-4 w-4 mx-1 shrink-0" />
-            <Badge variant="default" className="text-xs">concept</Badge>
+            <Badge variant="default" className="text-xs">{t('suggestion.concept')}</Badge>
             <span className="text-sm font-medium">
               {suggestion.target_concept_label ?? suggestion.target_concept_iri}
             </span>
@@ -255,21 +257,26 @@ export default function TermMappingSuggestionReview({
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Confidence</span>
+            <span className="text-muted-foreground">{t('suggestion.confidence')}</span>
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${CONFIDENCE_BADGE[bucket]}`}>
-              {(suggestion.confidence * 100).toFixed(0)}% · {bucket}
+              {t('suggestion.confidenceValue', {
+                value: (suggestion.confidence * 100).toFixed(0),
+                bucket,
+              })}
             </span>
             {suggestion.auto_apply && (
-              <Badge variant="outline" className="text-xs">auto-apply candidate</Badge>
+              <Badge variant="outline" className="text-xs">{t('suggestion.autoApply')}</Badge>
             )}
             <Badge variant="outline" className="text-xs capitalize">{suggestion.engine}</Badge>
           </div>
           <Separator />
           <div>
             <Label className="text-xs uppercase text-muted-foreground tracking-wide">
-              Why this match
+              {t('suggestion.whyMatch')}
             </Label>
-            <p className="text-sm mt-1 whitespace-pre-wrap">{suggestion.reason || '—'}</p>
+            <p className="text-sm mt-1 whitespace-pre-wrap">
+              {suggestion.reason || t('suggestion.noReason')}
+            </p>
           </div>
           {suggestion.warnings && suggestion.warnings.length > 0 && (
             <Alert variant="destructive" className="py-2">
@@ -286,7 +293,7 @@ export default function TermMappingSuggestionReview({
       <div className="space-y-3">
         <div className="space-y-1">
           <Label htmlFor="custom-iri" className="text-sm">
-            Override target IRI (optional)
+            {t('suggestion.overrideIri')}
           </Label>
           <Input
             id="custom-iri"
@@ -296,20 +303,17 @@ export default function TermMappingSuggestionReview({
             disabled={disabled}
             className="font-mono text-xs"
           />
-          <p className="text-xs text-muted-foreground">
-            Leave blank to accept the suggested IRI. Override to attach a
-            different concept from the same ontology.
-          </p>
+          <p className="text-xs text-muted-foreground">{t('suggestion.overrideIriHelp')}</p>
         </div>
         <div className="space-y-1">
           <Label htmlFor="decision-comment" className="text-sm">
-            Comment
+            {t('suggestion.comment')}
           </Label>
           <Textarea
             id="decision-comment"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Notes for the reviewer / audit trail."
+            placeholder={t('suggestion.commentPlaceholder')}
             className="min-h-[60px]"
             disabled={disabled}
           />
@@ -324,7 +328,7 @@ export default function TermMappingSuggestionReview({
           onClick={() => submitDecision('clarify')}
           disabled={disabled || submitting}
         >
-          <HelpCircle className="mr-1 h-4 w-4" /> Needs clarification
+          <HelpCircle className="mr-1 h-4 w-4" /> {t('suggestion.needsClarification')}
         </Button>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -334,7 +338,7 @@ export default function TermMappingSuggestionReview({
             disabled={disabled || submitting}
           >
             {submitting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <X className="mr-1 h-4 w-4" />}
-            Reject
+            {t('suggestion.reject')}
           </Button>
           <Button
             size="sm"
@@ -342,7 +346,7 @@ export default function TermMappingSuggestionReview({
             disabled={disabled || submitting}
           >
             {submitting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
-            Accept &amp; apply
+            {t('suggestion.acceptApply')}
           </Button>
           {hasNext && (
             <Button
@@ -351,7 +355,7 @@ export default function TermMappingSuggestionReview({
               onClick={handleAcceptAndNext}
               disabled={disabled || submitting}
             >
-              Accept &amp; next
+              {t('suggestion.acceptNext')}
               <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
           )}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation, Trans } from 'react-i18next';
 import {
   AlertCircle,
   ChevronRight,
@@ -50,6 +51,7 @@ const RUN_STATUS_VARIANT: Record<
 };
 
 export default function TermMappingView() {
+  const { t } = useTranslation(['term-mapping', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -78,11 +80,11 @@ export default function TermMappingView() {
       if (res.error) throw new Error(res.error);
       setRuns(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
-      setRunsError(e instanceof Error ? e.message : 'Failed to load runs');
+      setRunsError(e instanceof Error ? e.message : t('errors.loadRunsFailed'));
     } finally {
       setRunsLoading(false);
     }
-  }, [get]);
+  }, [get, t]);
 
   const fetchRunDetail = useCallback(
     async (runId: string) => {
@@ -93,8 +95,8 @@ export default function TermMappingView() {
         setSelectedRun(res.data ?? null);
       } catch (e) {
         toast({
-          title: 'Failed to load run',
-          description: e instanceof Error ? e.message : 'unknown error',
+          title: t('toast.loadRunFailed'),
+          description: e instanceof Error ? e.message : t('toast.unknownError'),
           variant: 'destructive',
         });
         setSelectedRun(null);
@@ -102,7 +104,7 @@ export default function TermMappingView() {
         setRunDetailLoading(false);
       }
     },
-    [get, toast],
+    [get, toast, t],
   );
 
   useEffect(() => {
@@ -147,14 +149,17 @@ export default function TermMappingView() {
       if (res.error) throw new Error(res.error);
       const r = res.data!;
       toast({
-        title: 'Applied',
-        description: `${r.links_created} links created, ${r.links_skipped} skipped`,
+        title: t('toast.applied'),
+        description: t('toast.appliedDescription', {
+          created: r.links_created,
+          skipped: r.links_skipped,
+        }),
       });
       await Promise.all([fetchRuns(), fetchRunDetail(selectedRun.id)]);
     } catch (e) {
       toast({
-        title: 'Apply failed',
-        description: e instanceof Error ? e.message : 'unknown error',
+        title: t('toast.applyFailed'),
+        description: e instanceof Error ? e.message : t('toast.unknownError'),
         variant: 'destructive',
       });
     } finally {
@@ -164,7 +169,7 @@ export default function TermMappingView() {
 
   const handleUndo = async () => {
     if (!selectedRun) return;
-    if (!confirm(`Undo run ${selectedRun.id}? This removes every link this run created.`)) return;
+    if (!confirm(t('confirm.undo', { id: selectedRun.id }))) return;
     setActionPending(true);
     try {
       const res = await post<UndoResult>(
@@ -174,14 +179,17 @@ export default function TermMappingView() {
       if (res.error) throw new Error(res.error);
       const r = res.data!;
       toast({
-        title: 'Undone',
-        description: `${r.links_removed} links removed, ${r.suggestions_reverted} suggestions reverted`,
+        title: t('toast.undone'),
+        description: t('toast.undoneDescription', {
+          removed: r.links_removed,
+          reverted: r.suggestions_reverted,
+        }),
       });
       await Promise.all([fetchRuns(), fetchRunDetail(selectedRun.id)]);
     } catch (e) {
       toast({
-        title: 'Undo failed',
-        description: e instanceof Error ? e.message : 'unknown error',
+        title: t('toast.undoFailed'),
+        description: e instanceof Error ? e.message : t('toast.unknownError'),
         variant: 'destructive',
       });
     } finally {
@@ -191,14 +199,14 @@ export default function TermMappingView() {
 
   const totalsRow = (stats: Run['stats']) => (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-      <Stat label="Targets" value={stats.targets ?? 0} />
-      <Stat label="Suggestions" value={stats.suggestions_total ?? 0} />
-      <Stat label="Pending" value={stats.suggestions_pending ?? 0} />
-      <Stat label="Auto-apply" value={stats.suggestions_auto_apply ?? 0} />
-      <Stat label="Accepted" value={stats.suggestions_accepted ?? 0} />
-      <Stat label="Rejected" value={stats.suggestions_rejected ?? 0} />
-      <Stat label="Links created" value={stats.links_created ?? 0} />
-      <Stat label="Links skipped" value={stats.links_skipped ?? 0} />
+      <Stat label={t('stats.targets')} value={stats.targets ?? 0} />
+      <Stat label={t('stats.suggestions')} value={stats.suggestions_total ?? 0} />
+      <Stat label={t('stats.pending')} value={stats.suggestions_pending ?? 0} />
+      <Stat label={t('stats.autoApply')} value={stats.suggestions_auto_apply ?? 0} />
+      <Stat label={t('stats.accepted')} value={stats.suggestions_accepted ?? 0} />
+      <Stat label={t('stats.rejected')} value={stats.suggestions_rejected ?? 0} />
+      <Stat label={t('stats.linksCreated')} value={stats.links_created ?? 0} />
+      <Stat label={t('stats.linksSkipped')} value={stats.links_skipped ?? 0} />
     </div>
   );
 
@@ -208,7 +216,7 @@ export default function TermMappingView() {
         <Card className="h-full flex items-center justify-center">
           <CardContent className="text-center py-12 text-muted-foreground">
             <Inbox className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p>Select a run on the left, or start a new one.</p>
+            <p>{t('actions.selectRunHint')}</p>
           </CardContent>
         </Card>
       );
@@ -232,12 +240,15 @@ export default function TermMappingView() {
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Sparkles className="h-4 w-4" />
-                  Run <span className="font-mono text-xs">{selectedRun.id.slice(0, 8)}</span>
+                  {t('detail.runLabel')}{' '}
+                  <span className="font-mono text-xs">{selectedRun.id.slice(0, 8)}</span>
                   <Badge variant={RUN_STATUS_VARIANT[selectedRun.status]}>{selectedRun.status}</Badge>
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Created <RelativeDate date={selectedRun.created_at} />{' '}
-                  {selectedRun.created_by ? `by ${selectedRun.created_by}` : ''}
+                  {t('detail.createdAt')} <RelativeDate date={selectedRun.created_at} />{' '}
+                  {selectedRun.created_by
+                    ? t('detail.createdBy', { email: selectedRun.created_by })
+                    : ''}
                 </p>
                 {selectedRun.comment && (
                   <p className="text-sm mt-2 italic">{selectedRun.comment}</p>
@@ -250,7 +261,7 @@ export default function TermMappingView() {
                   onClick={() => fetchRunDetail(selectedRun.id)}
                   disabled={runDetailLoading}
                 >
-                  <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+                  <RefreshCw className="h-4 w-4 mr-1" /> {t('actions.refresh')}
                 </Button>
                 {canWrite && autoApply > 0 && (
                   <Button
@@ -260,7 +271,7 @@ export default function TermMappingView() {
                     disabled={actionPending}
                   >
                     {actionPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-                    Apply auto ({autoApply})
+                    {t('actions.applyAuto', { count: autoApply })}
                   </Button>
                 )}
                 {canWrite && (pending > 0 || accepted > 0) && (
@@ -269,7 +280,7 @@ export default function TermMappingView() {
                     onClick={() => setIsReviewOpen(true)}
                     disabled={actionPending}
                   >
-                    Generate review
+                    {t('actions.generateReview')}
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 )}
@@ -280,7 +291,7 @@ export default function TermMappingView() {
                     onClick={handleUndo}
                     disabled={actionPending}
                   >
-                    <Undo2 className="h-4 w-4 mr-1" /> Undo
+                    <Undo2 className="h-4 w-4 mr-1" /> {t('actions.undo')}
                   </Button>
                 )}
               </div>
@@ -299,48 +310,47 @@ export default function TermMappingView() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Sources of suggestions</CardTitle>
+            <CardTitle className="text-sm">{t('detail.sourcesTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div>
-              <Label>Customer ontologies</Label>
+              <Label>{t('detail.customerOntologies')}</Label>
               <ContextList items={selectedRun.ontology_contexts} />
             </div>
             <div>
-              <Label>Shipped taxonomies</Label>
+              <Label>{t('detail.shippedTaxonomies')}</Label>
               <ContextList items={selectedRun.include_shipped} />
             </div>
             <Separator />
             <div className="text-xs text-muted-foreground">
-              Steward reviews live in the <Link to="/data-asset-reviews" className="underline">Asset Reviews</Link>{' '}
-              workspace. Each suggestion becomes one ReviewedAsset there; decisions
-              flow back into this run automatically.
+              {t('detail.reviewsLinkPrefix')}{' '}
+              <Link to="/data-asset-reviews" className="underline">
+                {t('detail.reviewsLinkText')}
+              </Link>{' '}
+              {t('detail.reviewsLinkSuffix')}
             </div>
           </CardContent>
         </Card>
       </div>
     );
-  }, [selectedRunId, selectedRun, runDetailLoading, actionPending, canWrite, isAdmin, fetchRunDetail]);
+  }, [selectedRunId, selectedRun, runDetailLoading, actionPending, canWrite, isAdmin, fetchRunDetail, t]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Sparkles className="h-5 w-5" /> Term Mapping
+            <Sparkles className="h-5 w-5" /> {t('title')}
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Bulk-suggest ontology concept assignments for Assets, Data Contracts, and Data Products.
-            Decisions are made in the Asset Reviews workspace.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => void fetchRuns()} disabled={runsLoading}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+            <RefreshCw className="h-4 w-4 mr-1" /> {t('actions.refresh')}
           </Button>
           {canWrite && (
             <Button size="sm" onClick={() => setIsNewRunOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> New run
+              <Plus className="h-4 w-4 mr-1" /> {t('actions.newRun')}
             </Button>
           )}
         </div>
@@ -349,7 +359,7 @@ export default function TermMappingView() {
       <div className="grid grid-cols-1 lg:grid-cols-[20rem_1fr] gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Recent runs</CardTitle>
+            <CardTitle className="text-sm">{t('recent.title')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 p-2">
             {runsError && (
@@ -365,7 +375,10 @@ export default function TermMappingView() {
             )}
             {!runsLoading && runs.length === 0 && !runsError && (
               <p className="text-xs text-muted-foreground text-center py-6">
-                No runs yet. Start one with <strong>New run</strong>.
+                <Trans
+                  i18nKey="term-mapping:recent.empty"
+                  components={{ strong: <strong /> }}
+                />
               </p>
             )}
             {runs.map((run) => {
@@ -389,12 +402,12 @@ export default function TermMappingView() {
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 truncate" title={run.comment ?? undefined}>
-                    {run.comment || '—'}
+                    {run.comment || t('recent.noComment')}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     <RelativeDate date={run.created_at} />
                     {typeof stats.suggestions_total === 'number' &&
-                      ` · ${stats.suggestions_total} suggestions`}
+                      ` · ${t('recent.suggestionsCount', { count: stats.suggestions_total })}`}
                   </p>
                 </button>
               );

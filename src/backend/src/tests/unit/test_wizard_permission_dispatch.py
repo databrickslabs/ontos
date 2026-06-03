@@ -200,7 +200,7 @@ def test_for_approval_response_user_without_notifications_denied() -> None:
 
 def test_for_approval_response_business_owner_with_read_only_allowed() -> None:
     """PR L — non-admin Business Owner with only `notifications:READ_ONLY`
-    (the typical Data Consumer / Daimler-shaped role) clears the outer
+    (the typical Data Consumer / dtag-shaped role) clears the outer
     gate. Real authorization (caller is the assigned recipient of this
     execution's approval notification) happens INSIDE POST
     /handle-approval (see test_handle_approval_per_execution_check)."""

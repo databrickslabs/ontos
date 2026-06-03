@@ -6,7 +6,7 @@ Covers the cascade-bypass admin check used by data-products listing
 1. Short-circuit True when the user belongs to a workspace admin group.
 2. Return True when the user's effective Ontos-role permissions grant
    ``FeatureAccessLevel.ADMIN`` on the named feature, even when they
-   are *not* a workspace admin (the Daimler regression case).
+   are *not* a workspace admin (the dtag regression case).
 3. Return False otherwise.
 4. Honor applied-role overrides (the role-switcher path) when set.
 5. Fail-closed on auth-manager errors — i.e., a transient resolution
@@ -65,10 +65,10 @@ async def test_workspace_admin_short_circuits_true(mock_settings):
 async def test_ontos_role_admin_grants_bypass(mock_settings):
     """Not a workspace admin, but role permissions grant ADMIN → True.
 
-    This is the Daimler / FEVM-Mikhail regression case: the Ontos
-    ``Admin`` role is assigned to a non-``admins`` workspace group
-    (or via email-as-group), and the user's effective permissions
-    include ``ADMIN`` on data-products.
+    This is the dtag regression case: the Ontos ``Admin`` role is
+    assigned to a non-``admins`` workspace group (or via
+    email-as-group), and the user's effective permissions include
+    ``ADMIN`` on data-products.
     """
     from src.common.authorization import is_user_feature_admin
 

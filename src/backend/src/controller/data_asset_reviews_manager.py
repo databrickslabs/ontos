@@ -19,6 +19,7 @@ import os
 from src.models.data_asset_reviews import (
     DataAssetReviewRequest as DataAssetReviewRequestApi,
     DataAssetReviewRequestCreate,
+    DataAssetReviewRequestUpdate,
     DataAssetReviewRequestUpdateStatus,
     ReviewedAsset as ReviewedAssetApi,
     ReviewedAssetUpdate,
@@ -43,6 +44,52 @@ from src.common.sanitization import sanitize_markdown_input # Import shared sani
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
+
+
+def _short_asset_label(fqn: Optional[str]) -> str:
+    """Return a compact human-readable label for an asset FQN.
+
+    - UC objects (``catalog.schema.object``) → last segment (``object``).
+    - Notebook / volume paths → final path segment.
+    - ``mdm://config/run/candidate`` → ``candidate``.
+    - Otherwise → the FQN unchanged.
+    """
+    if not fqn:
+        return "asset"
+    if fqn.startswith("mdm://"):
+        tail = fqn[len("mdm://"):].rstrip("/")
+        last = tail.rsplit("/", 1)[-1] if tail else ""
+        return last or "MDM match"
+    if "/" in fqn:
+        last = fqn.rstrip("/").rsplit("/", 1)[-1]
+        return last or fqn
+    return fqn.split(".")[-1] or fqn
+
+
+def derive_review_title(review: Any) -> str:
+    """Compute a human-readable title for a review request.
+
+    Uses the user-set ``title`` when present (and non-empty); otherwise derives a
+    label from the request contents. Accepts either a Pydantic API model or a
+    SQLAlchemy DB row — anything with ``title``, ``requester_email``, and an
+    ``assets`` iterable of objects exposing ``asset_fqn``.
+    """
+    raw_title = getattr(review, "title", None)
+    if isinstance(raw_title, str) and raw_title.strip():
+        return raw_title.strip()
+
+    assets = list(getattr(review, "assets", None) or [])
+    requester = getattr(review, "requester_email", None) or ""
+
+    if len(assets) == 1:
+        return f"Review of {_short_asset_label(getattr(assets[0], 'asset_fqn', None))}"
+    if len(assets) > 1:
+        first_label = _short_asset_label(getattr(assets[0], "asset_fqn", None))
+        return f"Review of {first_label} (+{len(assets) - 1} more)"
+    if requester:
+        return f"Review request by {requester}"
+    return "Review request"
+
 
 @searchable_asset # Register this manager with the search system
 class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
@@ -159,11 +206,16 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             if not assets_to_review:
                  raise ValueError("No valid or unique assets provided for review.")
                  
+            # Normalize the user-supplied title: trim whitespace; treat blank as None.
+            raw_title = (request_data.title or "").strip() if request_data.title else None
+            normalized_title = raw_title if raw_title else None
+
             # Prepare the full API model for the repository
             full_request = DataAssetReviewRequestApi(
                 id=request_id,
                 requester_email=request_data.requester_email,
                 reviewer_email=request_data.reviewer_email,
+                title=normalized_title,
                 status=ReviewRequestStatus.QUEUED,
                 notes=request_data.notes,
                 created_at=datetime.utcnow(),
@@ -174,8 +226,12 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             # Use the repository to create the request and its assets in DB
             created_db_obj = self._repo.create_with_assets(db=db_session, obj_in=full_request)
 
-            # Convert DB object back to API model for response
+            # Convert DB object back to API model for response and ensure `title` is
+            # always populated for downstream consumers (notifications, search, UI).
             created_api_obj = DataAssetReviewRequestApi.from_orm(created_db_obj)
+            if not (created_api_obj.title and created_api_obj.title.strip()):
+                created_api_obj.title = derive_review_title(created_api_obj)
+            display_title = created_api_obj.title
 
             # --- Trigger workflow for review request --- #
             try:
@@ -196,7 +252,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 executions = trigger_registry.on_request_review(
                     entity_type=EntityType.DATA_ASSET_REVIEW,
                     entity_id=created_api_obj.id,
-                    entity_name=f"Review Request by {created_api_obj.requester_email}",
+                    entity_name=display_title,
                     entity_data=entity_data,
                     user_email=created_api_obj.requester_email,
                     blocking=False,  # Don't block on notification workflows
@@ -209,8 +265,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     notification = Notification(
                         id=str(uuid.uuid4()),
                         recipient=created_api_obj.reviewer_email,
-                        title="New Data Asset Review Request",
-                        description=f"Review request ({created_api_obj.id}) assigned to you by {created_api_obj.requester_email}.",
+                        title=f"New review request: {display_title}",
+                        description=f"Assigned to you by {created_api_obj.requester_email}.",
                         type=NotificationType.INFO,
                         link=f"/data-asset-reviews/{created_api_obj.id}",
                         created_at=datetime.utcnow(),
@@ -242,7 +298,10 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         try:
             request_db = self._repo.get(db=self._db, id=request_id)
             if request_db:
-                return DataAssetReviewRequestApi.from_orm(request_db)
+                api_obj = DataAssetReviewRequestApi.from_orm(request_db)
+                if not (api_obj.title and api_obj.title.strip()):
+                    api_obj.title = derive_review_title(api_obj)
+                return api_obj
             return None
         except SQLAlchemyError as e:
             logger.error(f"Database error getting review request {request_id}: {e}")
@@ -259,7 +318,11 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         try:
             requests_db = self._repo.get_multi(db=self._db, skip=skip, limit=limit)
             # Use parse_obj_as for lists
-            return parse_obj_as(List[DataAssetReviewRequestApi], requests_db)
+            requests_api: List[DataAssetReviewRequestApi] = parse_obj_as(List[DataAssetReviewRequestApi], requests_db)
+            for req in requests_api:
+                if not (req.title and req.title.strip()):
+                    req.title = derive_review_title(req)
+            return requests_api
         except SQLAlchemyError as e:
             logger.error(f"Database error listing review requests: {e}")
             raise
@@ -298,12 +361,14 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                         "notes": update_data.notes,
                     }
                     
+                    display_title = derive_review_title(updated_db_obj)
+
                     executions = trigger_registry.on_status_change(
                         entity_type=EntityType.DATA_ASSET_REVIEW,
                         entity_id=updated_db_obj.id,
                         from_status=from_status,
                         to_status=to_status,
-                        entity_name=f"Review Request {updated_db_obj.id}",
+                        entity_name=display_title,
                         entity_data=entity_data,
                         user_email=updated_db_obj.reviewer_email,
                         blocking=False,
@@ -313,13 +378,13 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                         logger.info(f"Triggered {len(executions)} workflow(s) for review status change {updated_db_obj.id}")
                     else:
                         # Fallback to direct notification if no workflow configured
-                        notification_message = f"Data asset review request ({updated_db_obj.id}) status updated to {to_status} by {updated_db_obj.reviewer_email}."
+                        notification_message = f"\"{display_title}\" status updated to {to_status} by {updated_db_obj.reviewer_email}."
                         notification_type = NotificationType.INFO if updated_db_obj.status == ReviewRequestStatus.APPROVED else NotificationType.WARNING
 
                         notification = Notification(
                             id=str(uuid.uuid4()),
                             user_email=updated_db_obj.requester_email,
-                            title=f"Review Request {to_status.capitalize()}",
+                            title=f"Review {to_status.capitalize()}: {display_title}",
                             description=notification_message,
                             type=notification_type,
                             link=f"/data-asset-reviews/{updated_db_obj.id}"
@@ -330,6 +395,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     logger.error(f"Failed to trigger workflow for review status update {updated_db_obj.id}: {workflow_err}", exc_info=True)
             
             result = DataAssetReviewRequestApi.from_orm(updated_db_obj)
+            if not (result.title and result.title.strip()):
+                result.title = derive_review_title(result)
             self._update_search_index(result)
             return result
         except SQLAlchemyError as e:
@@ -340,6 +407,54 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
              raise ValueError(f"Internal mapping error after update {request_id}: {e}")
         except Exception as e:
             logger.error(f"Unexpected error updating status for request {request_id}: {e}")
+            raise
+
+    def update_review_request(
+        self, request_id: str, update_data: DataAssetReviewRequestUpdate
+    ) -> Optional[DataAssetReviewRequestApi]:
+        """Updates editable fields (title, notes) on a review request.
+
+        Returns ``None`` if the request does not exist.
+        """
+        try:
+            db_obj = self._repo.get(db=self._db, id=request_id)
+            if not db_obj:
+                logger.warning(f"Attempted to update non-existent review request: {request_id}")
+                return None
+
+            payload = update_data.dict(exclude_unset=True)
+            title_set = "title" in payload
+            notes_set = "notes" in payload
+
+            normalized_title: Optional[str] = None
+            if title_set:
+                raw = payload.get("title")
+                if isinstance(raw, str):
+                    raw = raw.strip()
+                normalized_title = raw if raw else None
+
+            updated_db_obj = self._repo.update_request_fields(
+                db=self._db,
+                db_obj=db_obj,
+                title=normalized_title,
+                notes=payload.get("notes") if notes_set else None,
+                title_set=title_set,
+                notes_set=notes_set,
+            )
+
+            api_obj = DataAssetReviewRequestApi.from_orm(updated_db_obj)
+            if not (api_obj.title and api_obj.title.strip()):
+                api_obj.title = derive_review_title(api_obj)
+            self._update_search_index(api_obj)
+            return api_obj
+        except SQLAlchemyError as e:
+            logger.error(f"Database error updating review request {request_id}: {e}")
+            raise
+        except ValidationError as e:
+            logger.error(f"Validation error mapping updated review request {request_id}: {e}")
+            raise ValueError(f"Internal mapping error after update {request_id}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error updating review request {request_id}: {e}")
             raise
 
     def update_reviewed_asset_status(self, request_id: str, asset_id: str, update_data: ReviewedAssetUpdate) -> Optional[ReviewedAssetApi]:
@@ -664,9 +779,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         if not review.id:
             logger.warning(f"Skipping review due to missing id: {review}")
             return None
-        title = f"Review Request by {review.requester_email} for {review.reviewer_email}"
-        if review.assets:
-            title += f" ({len(review.assets)} assets)"
+        title = derive_review_title(review)
         tags = [review.status.value]
         tags.append(f"reviewer:{review.reviewer_email}")
         tags.append(f"requester:{review.requester_email}")
@@ -684,7 +797,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             type="data-asset-review",
             feature_id="data-asset-reviews",
             title=title,
-            description=review.notes or f"Review request {review.id}",
+            description=review.notes or f"Review request by {review.requester_email}",
             link=f"/data-asset-reviews/{review.id}",
             tags=list(set(tags)),
             extra_data=extra_data,

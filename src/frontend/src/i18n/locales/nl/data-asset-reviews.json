@@ -7,11 +7,21 @@
   "loading": "Beoordelingen laden...",
   "noRequests": "Geen beoordelingsverzoeken gevonden.",
   "toast": {
-    "requestCreated": "Beoordelingsverzoek {{id}} aangemaakt.",
+    "requestCreated": "Beoordelingsverzoek \"{{title}}\" aangemaakt.",
     "requestDeleted": "Beoordelingsverzoek verwijderd.",
     "deleteError": "Kon verzoek niet verwijderen.",
     "bulkDeleted": "{{count}} verzoek(en) verwijderd.",
-    "bulkDeleteError": "Sommige verzoeken konden niet worden verwijderd."
+    "bulkDeleteError": "Sommige verzoeken konden niet worden verwijderd.",
+    "titleUpdated": "Titel bijgewerkt.",
+    "idCopied": "ID gekopieerd naar klembord."
+  },
+  "form": {
+    "titleLabel": "Titel (Optioneel)",
+    "titlePlaceholder": "Laat leeg om automatisch te genereren uit geselecteerde assets"
+  },
+  "actions": {
+    "editTitle": "Titel bewerken",
+    "copyId": "ID kopiëren"
   },
   "confirm": {
     "deleteRequest": "Weet je zeker dat je dit beoordelingsverzoek wilt verwijderen?",
@@ -24,7 +34,8 @@
     "rejected": "Afgewezen"
   },
   "table": {
-    "requestId": "Verzoek ID",
+    "title": "Titel",
+    "untitled": "(zonder titel)",
     "asset": "Asset",
     "type": "Type",
     "requester": "Aanvrager",

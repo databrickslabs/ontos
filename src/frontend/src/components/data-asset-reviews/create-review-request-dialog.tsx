@@ -53,6 +53,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
     const [requesterEmail, setRequesterEmail] = useState<string | null>(null);
     const [_, setIsFetchingUser] = useState(false);
     const [reviewerEmail, setReviewerEmail] = useState('');
+    const [title, setTitle] = useState('');
     const [notes, setNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
@@ -118,6 +119,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
             fetchUserInfo();
             fetchCatalogs();
             setReviewerEmail('');
+            setTitle('');
             setNotes('');
             setSelectedAssetFqns(new Set());
             setExpandedNodes(new Set());
@@ -303,10 +305,12 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
             return;
         }
         setIsSubmitting(true);
+        const trimmedTitle = title.trim();
         const payload: DataAssetReviewRequestCreate = {
             requester_email: requesterEmail,
             reviewer_email: reviewerEmail,
             asset_fqns: Array.from(selectedAssetFqns),
+            title: trimmedTitle || null,
             notes: notes || null,
         };
         try {
@@ -353,6 +357,19 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                                 aria-label="Reviewer"
                             />
                         </div>
+                    </div>
+                    <div className="px-1">
+                        <Label htmlFor="review-title">Title (Optional)</Label>
+                        <Input
+                            id="review-title"
+                            value={title}
+                            maxLength={200}
+                            onChange={(e) => {
+                                setTitle(e.target.value);
+                                setFormError(null);
+                            }}
+                            placeholder="Leave empty to auto-generate from selected assets"
+                        />
                     </div>
                     <div className="px-1">
                         <Label htmlFor="notes">Notes (Optional)</Label>

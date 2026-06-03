@@ -7,11 +7,21 @@
   "loading": "Caricamento revisioni...",
   "noRequests": "Nessuna richiesta di revisione trovata.",
   "toast": {
-    "requestCreated": "Richiesta di revisione {{id}} creata.",
+    "requestCreated": "Richiesta di revisione \"{{title}}\" creata.",
     "requestDeleted": "Richiesta di revisione eliminata.",
     "deleteError": "Impossibile eliminare la richiesta.",
     "bulkDeleted": "{{count}} richiesta/e eliminata/e.",
-    "bulkDeleteError": "Alcune richieste non sono state eliminate."
+    "bulkDeleteError": "Alcune richieste non sono state eliminate.",
+    "titleUpdated": "Titolo aggiornato.",
+    "idCopied": "ID copiato negli appunti."
+  },
+  "form": {
+    "titleLabel": "Titolo (Opzionale)",
+    "titlePlaceholder": "Lascia vuoto per generare automaticamente dagli asset selezionati"
+  },
+  "actions": {
+    "editTitle": "Modifica titolo",
+    "copyId": "Copia ID"
   },
   "confirm": {
     "deleteRequest": "Sei sicuro di voler eliminare questa richiesta di revisione?",
@@ -24,7 +34,8 @@
     "rejected": "Rifiutato"
   },
   "table": {
-    "requestId": "ID Richiesta",
+    "title": "Titolo",
+    "untitled": "(senza titolo)",
     "asset": "Asset",
     "type": "Tipo",
     "requester": "Richiedente",

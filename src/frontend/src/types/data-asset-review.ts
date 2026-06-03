@@ -73,6 +73,7 @@ export interface DataAssetReviewRequestCreate {
     requester_email: string;
     reviewer_email: string;
     asset_fqns: string[];
+    title?: string | null;
     notes?: string | null;
 }
 
@@ -81,6 +82,8 @@ export interface DataAssetReviewRequest {
     id: string;
     requester_email: string;
     reviewer_email: string;
+    /** Human-readable title; backend always returns a populated value (derived if not user-set). */
+    title: string;
     status: ReviewRequestStatus;
     notes?: string | null;
     created_at: string; // ISO date string
@@ -91,6 +94,12 @@ export interface DataAssetReviewRequest {
 // Interface for updating the overall request status
 export interface DataAssetReviewRequestUpdateStatus {
     status: ReviewRequestStatus;
+    notes?: string | null;
+}
+
+// Interface for partial updates (PATCH) - title and/or notes
+export interface DataAssetReviewRequestUpdate {
+    title?: string | null;
     notes?: string | null;
 }
 

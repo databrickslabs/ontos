@@ -264,6 +264,64 @@ export const useApi = () => {
     }
   }, []);
 
+  const patch = useCallback(async <T>(url: string, body: any): Promise<ApiResponse<T>> => {
+    setLoading(true);
+    try {
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        let errorBody: any;
+        const contentType = response.headers.get('Content-Type');
+        try {
+          if (contentType?.includes('application/json')) {
+            errorBody = await response.json();
+          } else {
+            errorBody = await response.text();
+          }
+        } catch (parseError) {
+          errorBody = response.statusText;
+        }
+
+        let errorMsg: string;
+        if (Array.isArray(errorBody?.detail) && errorBody.detail.length > 0) {
+          errorMsg = errorBody.detail.map((err: any) => {
+            const loc = Array.isArray(err.loc) ? err.loc.join(' → ') : '';
+            return loc ? `${loc}: ${err.msg}` : err.msg;
+          }).join('; ');
+        } else if (errorBody?.detail) {
+          if (typeof errorBody.detail === 'string') {
+            errorMsg = errorBody.detail;
+          } else if (typeof errorBody.detail === 'object') {
+            errorMsg = errorBody.detail.message || JSON.stringify(errorBody.detail);
+          } else {
+            errorMsg = String(errorBody.detail);
+          }
+        } else if (typeof errorBody === 'string') {
+          errorMsg = errorBody;
+        } else {
+          errorMsg = JSON.stringify(errorBody) || `HTTP error! status: ${response.status}`;
+        }
+
+        console.error("[useApi] PATCH error response from", url, "(", response.status, "):", errorBody);
+        return { data: {} as T, error: errorMsg };
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      console.error("[useApi] PATCH error from", url, ":", error);
+      return { data: {} as T, error: (error as Error).message };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const delete_ = useCallback(async <T = unknown>(url: string): Promise<ApiResponse<T>> => {
     setLoading(true);
     let responseData: T = {} as T;
@@ -329,5 +387,5 @@ export const useApi = () => {
     return { data: responseData, error: errorMsg };
   }, []);
 
-  return { get, post, put, delete: delete_, loading };
+  return { get, post, put, patch, delete: delete_, loading };
 };

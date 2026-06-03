@@ -83,6 +83,7 @@ class DataAssetReviewRequestCreate(BaseModel):
     reviewer_email: EmailStr
     asset_fqns: List[str] = Field(..., description="List of fully qualified names of assets to review")
     # We need to determine AssetType based on fqn, perhaps in the manager
+    title: Optional[str] = Field(None, max_length=200, description="Optional human-readable title; auto-derived from contents when empty")
     notes: Optional[str] = Field(None, description="Optional notes for the reviewer")
 
 # Model representing a full data asset review request (including its reviewed assets)
@@ -90,6 +91,7 @@ class DataAssetReviewRequest(BaseModel):
     id: str = Field(..., description="Unique identifier for the review request")
     requester_email: EmailStr
     reviewer_email: EmailStr
+    title: Optional[str] = Field(None, description="Human-readable title; always populated by the API (derived if not set)")
     status: ReviewRequestStatus = Field(default=ReviewRequestStatus.QUEUED, description="Overall status of the review request")
     notes: Optional[str] = Field(None, description="Optional notes for the reviewer")
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
@@ -104,6 +106,11 @@ class DataAssetReviewRequest(BaseModel):
 class DataAssetReviewRequestUpdateStatus(BaseModel):
     status: ReviewRequestStatus
     notes: Optional[str] = None # Allow updating notes when changing status
+
+# Model for partial updates to a review request (e.g. renaming, editing notes)
+class DataAssetReviewRequestUpdate(BaseModel):
+    title: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = None
 
 # Model for updating the status of a specific asset within a review (by reviewer)
 class ReviewedAssetUpdate(BaseModel):

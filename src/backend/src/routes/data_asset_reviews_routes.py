@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from src.models.data_asset_reviews import (
     DataAssetReviewRequest as DataAssetReviewRequestApi,
     DataAssetReviewRequestCreate,
+    DataAssetReviewRequestUpdate,
     DataAssetReviewRequestUpdateStatus,
     ReviewedAsset as ReviewedAssetApi,
     ReviewedAssetUpdate,
@@ -139,6 +140,56 @@ def get_review_request(
     except Exception as e:
         logger.exception(f"Error getting review request {request_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error getting review request.")
+
+@router.patch("/data-asset-reviews/{request_id}", response_model=DataAssetReviewRequestApi)
+def update_review_request(
+    request: Request,
+    request_id: str,
+    update: DataAssetReviewRequestUpdate,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
+    manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
+):
+    """Update editable fields (title, notes) on a review request."""
+    success = False
+    details: Dict[str, Any] = {
+        "params": {
+            "request_id": request_id,
+            "fields": list(update.dict(exclude_unset=True).keys()),
+        }
+    }
+
+    try:
+        logger.info(f"Updating review request {request_id} fields: {details['params']['fields']}")
+        updated = manager.update_review_request(request_id=request_id, update_data=update)
+        if updated is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
+        success = True
+        return updated
+    except ValueError as e:
+        logger.warning("Value error updating review request %s: %s", request_id, e)
+        details["exception"] = {"type": "ValueError", "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid update")
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        logger.exception("Error updating review request %s", request_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating review request.")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-asset-reviews",
+            action="UPDATE",
+            success=success,
+            details=details,
+        )
+
 
 @router.put("/data-asset-reviews/{request_id}/status", response_model=DataAssetReviewRequestApi)
 def update_review_request_status(

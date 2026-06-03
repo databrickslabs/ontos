@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import { useEntityMetadata, useMergedMetadata, DocumentItem, LinkItem, EntityKind } from '@/hooks/use-entity-metadata';
-import { Bell, Check, Loader2, ArrowLeft, Share2, Star } from 'lucide-react';
+import { Bell, Check, Loader2, ArrowLeft, Share2, Star, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { StarRatingInput } from '@/components/ratings/star-rating-input';
 import { RatingSummary } from '@/components/ratings/rating-summary';
@@ -23,6 +23,8 @@ interface Props {
   isSubscribed?: boolean;
   subscriptionLoading?: boolean;
   showBackButton?: boolean;
+  // Navigate to the full entity detail view (optional)
+  onGoToDetails?: () => void;
   // Inheritance support (for Data Products and Datasets)
   contractIds?: string[];
   maxLevelInheritance?: number;
@@ -88,6 +90,7 @@ export default function EntityInfoDialog({
   isSubscribed,
   subscriptionLoading,
   showBackButton = false,
+  onGoToDetails,
   contractIds,
   maxLevelInheritance = 99,
 }: Props) {
@@ -176,6 +179,7 @@ export default function EntityInfoDialog({
   const toc = useMemo(() => buildToc(concatenatedMarkdown), [concatenatedMarkdown]);
 
   const showSubscribeFooter = onSubscribe !== undefined;
+  const showFooter = showSubscribeFooter || onGoToDetails !== undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -348,7 +352,7 @@ export default function EntityInfoDialog({
           )}
         </div>
 
-        {showSubscribeFooter && (
+        {showFooter && (
           <DialogFooter className="px-6 py-4 border-t flex-shrink-0 bg-background">
             <Button
               variant="outline"
@@ -356,28 +360,39 @@ export default function EntityInfoDialog({
             >
               Close
             </Button>
-            {isSubscribed ? (
-              <Button variant="secondary" disabled>
-                <Check className="mr-2 h-4 w-4" />
-                Already Subscribed
-              </Button>
-            ) : (
+            {onGoToDetails && (
               <Button
-                onClick={onSubscribe}
-                disabled={subscriptionLoading}
+                variant="outline"
+                onClick={onGoToDetails}
               >
-                {subscriptionLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    <Bell className="mr-2 h-4 w-4" />
-                    Subscribe
-                  </>
-                )}
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Go to Details
               </Button>
+            )}
+            {showSubscribeFooter && (
+              isSubscribed ? (
+                <Button variant="secondary" disabled>
+                  <Check className="mr-2 h-4 w-4" />
+                  Already Subscribed
+                </Button>
+              ) : (
+                <Button
+                  onClick={onSubscribe}
+                  disabled={subscriptionLoading}
+                >
+                  {subscriptionLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="mr-2 h-4 w-4" />
+                      Subscribe
+                    </>
+                  )}
+                </Button>
+              )
             )}
           </DialogFooter>
         )}

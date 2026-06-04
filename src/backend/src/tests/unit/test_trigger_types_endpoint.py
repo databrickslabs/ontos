@@ -21,9 +21,12 @@ def _call_endpoint() -> List[Dict[str, Any]]:
     # PermissionChecker is a Depends() — bypassed by calling the underlying
     # coroutine directly with positional args. request is unused by the
     # handler body, so a MagicMock is sufficient.
-    return asyncio.get_event_loop().run_until_complete(
-        get_trigger_types(request=MagicMock(), _=True)
-    )
+    #
+    # asyncio.run() creates and tears down a fresh event loop per call.
+    # asyncio.get_event_loop() is unreliable here: on Python 3.10+ it raises
+    # "There is no current event loop in thread 'MainThread'" when no loop has
+    # been set, which is the case under pytest's default (non-async) runner.
+    return asyncio.run(get_trigger_types(request=MagicMock(), _=True))
 
 
 def test_every_trigger_type_represented_exactly_once() -> None:

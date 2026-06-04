@@ -1150,33 +1150,6 @@ export default function DataProductDetails() {
     }
   };
 
-  const handleDeleteTeamMember = async (index: number) => {
-    if (!productId || !product) return;
-    if (!confirm('Remove this team member?')) return;
-    try {
-      const updatedMembers = (product.team?.members || []).filter((_, i) => i !== index);
-      const updatedTeam = { ...product.team, members: updatedMembers };
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, team: updatedTeam }),
-      });
-      if (!res.ok) throw new Error(`Failed to delete team member (${res.status})`);
-      await fetchProductDetails();
-      toast({
-        title: 'Team Member Removed',
-        description: 'Team member removed successfully.',
-      });
-    } catch (e: any) {
-      toast({
-        title: 'Error',
-        description: e?.message || 'Failed to delete team member',
-        variant: 'destructive',
-      });
-    }
-  };
-
-
   const handleAddSupportChannel = async (channel: Support) => {
     if (!productId || !product) return;
     try {

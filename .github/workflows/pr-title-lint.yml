@@ -16,7 +16,15 @@ permissions:
 jobs:
   validate:
     name: validate title
-    runs-on: ubuntu-latest
+    # Run on the org's self-hosted runner group. The action calls the GitHub
+    # API to read the PR title, and the databrickslabs org enforces an IP
+    # allow list -- GitHub-hosted (ubuntu-latest) runners have dynamic IPs that
+    # are not in the allow list, so every run failed with "your IP address is
+    # not permitted to access this resource". The protected runner group's IPs
+    # are allow-listed, matching the other workflows in this repo.
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017 # v5.5.3
         env:

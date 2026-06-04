@@ -65,8 +65,6 @@ import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/di
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle'
 import { userHasApprovalPrivilege } from '@/lib/permissions'
 import { ApprovalEntity } from '@/types/settings'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 
 // Status-based editability constants
 // Only draft/proposed contracts can be edited in place
@@ -237,7 +235,7 @@ export default function DataContractDetails() {
     availableRoles,
     appliedRoleId,
   } = usePermissions()
-  const { post, get, put } = useApi()
+  const { post, get } = useApi()
   const { userInfo, fetchUserInfo } = useUserStore()
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments)
@@ -281,7 +279,6 @@ export default function DataContractDetails() {
   const [, setTeamMetadata] = useState<{ name?: string; description?: string }>({})
   const [teamMetaName, setTeamMetaName] = useState('')
   const [teamMetaDesc, setTeamMetaDesc] = useState('')
-  const [teamMetaDirty, setTeamMetaDirty] = useState(false)
 
   // Link product dialog state
   const [isLinkProductDialogOpen, setIsLinkProductDialogOpen] = useState(false)
@@ -1067,13 +1064,6 @@ export default function DataContractDetails() {
     setEditingTeamMemberIndex(null)
   }
 
-  const handleDeleteTeamMember = async (index: number) => {
-    if (!contract) return
-    if (!confirm('Remove this team member?')) return
-    const updatedTeam = (contract.team || []).filter((_, i) => i !== index)
-    await updateContract({ team: updatedTeam })
-  }
-
   // Server Config CRUD handlers
   const handleAddServer = async (server: ServerConfig) => {
     if (!contract) return
@@ -1543,21 +1533,6 @@ export default function DataContractDetails() {
     fetchProfileRuns()
   }
 
-
-  const handleSaveTeamMetadata = async () => {
-    if (!contractId) return
-    try {
-      await put(`/api/data-contracts/${contractId}/team-metadata`, {
-        name: teamMetaName || null,
-        description: teamMetaDesc || null
-      })
-      setTeamMetadata({ name: teamMetaName, description: teamMetaDesc })
-      setTeamMetaDirty(false)
-      toast({ title: 'Team metadata saved' })
-    } catch {
-      toast({ title: 'Failed to save team metadata', variant: 'destructive' })
-    }
-  }
 
   // Helper functions for conditional rendering based on view mode
   const shouldShowSection = (section: string): boolean => {

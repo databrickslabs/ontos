@@ -30,8 +30,14 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
+      // Restrict the coverage universe to first-party source. Without an
+      // explicit include, `all: true` lets v8 instrument runtime-imported
+      // deps (e.g. @babel/runtime), which polluted lcov.info with ~1.3k
+      // node_modules entries and made Codecov unable to resolve the
+      // `frontend` flag (badge showed "unknown").
+      include: ['src/**/*.{ts,tsx}'],
       exclude: [
-        'node_modules/',
+        '**/node_modules/**',
         'src/test/',
         '**/*.d.ts',
         '**/*.config.*',
@@ -45,13 +51,15 @@ export default defineConfig({
         'vite.config.ts',
       ],
       all: true,
-      // Gates set to current baseline floors to prevent regressions.
-      // Ratchet up as coverage improves toward the 80% goal.
+      // Gates set to current baseline floors (just under measured coverage)
+      // to prevent regressions. Ratchet up as coverage improves toward the
+      // 80% goal. Measured at time of writing: lines/statements 10.2%,
+      // functions 36.1%, branches 72.1%.
       thresholds: {
-        lines: 3,
-        functions: 25,
-        branches: 55,
-        statements: 3,
+        lines: 10,
+        functions: 35,
+        branches: 70,
+        statements: 10,
       },
     },
   },

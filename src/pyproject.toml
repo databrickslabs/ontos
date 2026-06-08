@@ -92,6 +92,12 @@ asyncio_mode = "strict"
 
 [tool.coverage.run]
 source = ["backend/src"]
+# Record repo-relative file paths (e.g. "backend/src/app.py") instead of paths
+# relative to the source root ("app.py"). Codecov's path fix in codecov.yml
+# (`backend/::src/backend/`) only matches paths that start with "backend/", so
+# without this the backend files never resolve against the repo tree and the
+# `backend` flag badge reported a diluted number instead of the real coverage.
+relative_files = true
 omit = [
     "*/tests/*",
     "*/test_*.py",

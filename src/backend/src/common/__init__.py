@@ -47,5 +47,4 @@ __all__ = [
     'ErrorHandlingMiddleware',
     'CachingWorkspaceClient',
     'get_workspace_client',
-    'get_sql_connection'
 ]

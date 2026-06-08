@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from src.common.config import get_settings, Settings
+from src.common.config import get_settings
 from src.common.logging import get_logger
 from src.common.database import init_db, get_session_factory, Base, engine, cleanup_db
 from src.common.workspace_client import get_workspace_client
@@ -117,7 +117,7 @@ def load_demo_data_from_sql() -> bool:
         return False
 
 
-def initialize_database(settings: Settings): # Keep settings param for future use if needed
+def initialize_database():
     """Initializes the database by calling the main init_db function."""
     logger.info("Triggering database initialization...")
     try:

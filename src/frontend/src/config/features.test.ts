@@ -52,7 +52,7 @@ describe('features config', () => {
     it('groups GA features in canonical group order with no empty groups', () => {
       const groups = getNavigationGroups(['ga']);
       const order = ['Discover', 'Build', 'Govern', 'Deploy'];
-      const seen = groups.map((g) => g.name);
+      const seen: string[] = groups.map((g) => g.name);
       // Names appear in the canonical relative order.
       expect(seen).toEqual([...order].filter((n) => seen.includes(n)));
       for (const g of groups) {

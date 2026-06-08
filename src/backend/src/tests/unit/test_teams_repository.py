@@ -51,7 +51,6 @@ class TestTeamRepository:
         db_session.refresh(team_db)
 
         # Assert
-        assert team_db is not None
         assert team_db.name == "Test Team"
 
     # =====================================================================

@@ -43,7 +43,6 @@ class TestDataProfilingRunsRepository:
         db_session.refresh(run_db)
 
         # Assert
-        assert run_db is not None
         assert run_db.contract_id == sample_contract_id
 
     def test_get_profiling_run_by_id(self, repository, db_session, sample_contract_id):

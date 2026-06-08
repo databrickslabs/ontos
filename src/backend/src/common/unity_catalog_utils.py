@@ -59,7 +59,7 @@ def is_valid_uuid(identifier: str) -> bool:
         return False
 
 
-def sanitize_uc_identifier(identifier: str, max_length: int = 255) -> str:
+def sanitize_uc_identifier(identifier: Optional[str], max_length: int = 255) -> str:
     """Sanitize and validate a Unity Catalog identifier.
     
     Unity Catalog identifiers (catalog, schema, table, column names) must:
@@ -184,7 +184,7 @@ def sanitize_postgres_identifier(identifier: str, max_length: int = 63) -> str:
     return identifier
 
 
-def map_logical_type_to_column_type(logical_type: str) -> ColumnTypeName:
+def map_logical_type_to_column_type(logical_type: Optional[str]) -> ColumnTypeName:
     """Map a logical type string to Databricks ColumnTypeName enum.
     
     Args:

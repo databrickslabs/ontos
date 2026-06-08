@@ -2965,7 +2965,7 @@ class SemanticModelsManager:
         try:
             coll_context = self._graph.get_context(URIRef(collection_iri))
             self._graph.remove_context(coll_context)
-        except:
+        except Exception:
             pass
         
         self._db.commit()

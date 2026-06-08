@@ -39,7 +39,6 @@ class TestAuditLogRepository:
         db_session.refresh(log_db)
 
         # Assert
-        assert log_db is not None
         assert log_db.username == "test-user"
 
     def test_get_audit_log_by_id(self, repository, db_session):

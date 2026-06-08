@@ -51,7 +51,6 @@ class TestWorkflowJobRunRepository:
         db_session.refresh(job_run_db)
 
         # Assert
-        assert job_run_db is not None
         assert job_run_db.run_id == 98765
 
     def test_get_job_run_by_id(self, repository, db_session, sample_installation):

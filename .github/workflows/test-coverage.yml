@@ -57,6 +57,12 @@ jobs:
           files: ./src/coverage.xml
           flags: backend
           name: backend-coverage
+          # Required for uploads to protected branches (main/develop). Without
+          # it Codecov rejects the upload ("Token required because branch is
+          # protected") while the step stays green due to fail_ci_if_error:false,
+          # which silently froze the coverage badges. Forks have no access to the
+          # secret and fall back to tokenless PR uploads, so this is safe there.
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
       - name: Upload HTML coverage report
@@ -111,6 +117,9 @@ jobs:
           files: ./src/frontend/coverage/lcov.info
           flags: frontend
           name: frontend-coverage
+          # See note on the backend upload step above: required so uploads to
+          # protected branches are accepted instead of silently rejected.
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
       - name: Upload HTML coverage report

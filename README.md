@@ -1,9 +1,9 @@
 # Ontos
 
 [![Test Coverage](https://github.com/databrickslabs/ontos/actions/workflows/test-coverage.yml/badge.svg?branch=main)](https://github.com/databrickslabs/ontos/actions/workflows/test-coverage.yml)
-[![codecov](https://codecov.io/gh/databrickslabs/ontos/branch/main/graph/badge.svg)](https://codecov.io/gh/databrickslabs/ontos)
-[![backend coverage](https://codecov.io/gh/databrickslabs/ontos/branch/main/graph/badge.svg?flag=backend)](https://codecov.io/gh/databrickslabs/ontos?flags[0]=backend)
-[![frontend coverage](https://codecov.io/gh/databrickslabs/ontos/branch/main/graph/badge.svg?flag=frontend)](https://codecov.io/gh/databrickslabs/ontos?flags[0]=frontend)
+[![coverage](https://img.shields.io/codecov/c/github/databrickslabs/ontos/main?logo=codecov&label=coverage)](https://codecov.io/gh/databrickslabs/ontos)
+[![backend](https://img.shields.io/codecov/c/github/databrickslabs/ontos/main?flag=backend&logo=codecov&label=backend)](https://codecov.io/gh/databrickslabs/ontos?flags[0]=backend)
+[![frontend](https://img.shields.io/codecov/c/github/databrickslabs/ontos/main?flag=frontend&logo=codecov&label=frontend)](https://codecov.io/gh/databrickslabs/ontos?flags[0]=frontend)
 
 A comprehensive data governance and management platform built for Databricks Unity Catalog.
 

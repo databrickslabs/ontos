@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 export default function SettingsTagsView() {
   const { t } = useTranslation(['settings']);
   return (
-    <SettingsPageWrapper title={t('settings:tabs.tags', 'Tags')} permissionId="settings-tags">
+    <SettingsPageWrapper title={t('settings:tabs.tags', 'Tags')} permissionId="tags">
       <TagsSettings />
     </SettingsPageWrapper>
   );

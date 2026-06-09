@@ -47,12 +47,12 @@ const settingsNavGroups: SettingsNavGroup[] = [
     titleKey: 'settings:nav.groups.referenceData',
     defaultTitle: 'Reference Data',
     items: [
-      { path: '/settings/data-domains', labelKey: 'settings:tabs.dataDomains', defaultLabel: 'Domains', icon: BoxSelect, permissionId: 'settings-data-domains' },
-      { path: '/settings/business-roles', labelKey: 'settings:tabs.businessRoles', defaultLabel: 'Business Roles', icon: Briefcase, permissionId: 'settings-business-roles' },
-      { path: '/settings/delivery-methods', labelKey: 'settings:tabs.deliveryMethods', defaultLabel: 'Delivery Methods', icon: Truck, permissionId: 'settings-delivery-methods' },
+      { path: '/settings/data-domains', labelKey: 'settings:tabs.dataDomains', defaultLabel: 'Domains', icon: BoxSelect, permissionId: 'data-domains' },
+      { path: '/settings/business-roles', labelKey: 'settings:tabs.businessRoles', defaultLabel: 'Business Roles', icon: Briefcase, permissionId: 'business-roles' },
+      { path: '/settings/delivery-methods', labelKey: 'settings:tabs.deliveryMethods', defaultLabel: 'Delivery Methods', icon: Truck, permissionId: 'delivery-methods' },
       { path: '/settings/asset-types', labelKey: 'settings:tabs.assetTypes', defaultLabel: 'Asset Types', icon: Shapes, permissionId: 'settings-asset-types' },
-      { path: '/settings/teams', labelKey: 'settings:tabs.teams', defaultLabel: 'Teams', icon: UserCheck, permissionId: 'settings-teams' },
-      { path: '/settings/projects', labelKey: 'settings:tabs.projects', defaultLabel: 'Projects', icon: FolderOpen, permissionId: 'settings-projects' },
+      { path: '/settings/teams', labelKey: 'settings:tabs.teams', defaultLabel: 'Teams', icon: UserCheck, permissionId: 'teams' },
+      { path: '/settings/projects', labelKey: 'settings:tabs.projects', defaultLabel: 'Projects', icon: FolderOpen, permissionId: 'projects' },
       { path: '/settings/certification-levels', labelKey: 'settings:tabs.certificationLevels', defaultLabel: 'Certification Levels', icon: ShieldCheck, permissionId: 'settings-certification-levels' },
       { path: '/settings/maturity-levels', labelKey: 'settings:tabs.maturityLevels', defaultLabel: 'Maturity Levels', icon: Activity, permissionId: 'settings-maturity-levels' },
     ],
@@ -63,7 +63,7 @@ const settingsNavGroups: SettingsNavGroup[] = [
     items: [
       { path: '/settings/general', labelKey: 'settings:tabs.general', defaultLabel: 'General', icon: Settings, permissionId: 'settings-general' },
       { path: '/settings/ui', labelKey: 'settings:tabs.ui', defaultLabel: 'UI', icon: Palette, permissionId: 'settings-ui' },
-      { path: '/settings/tags', labelKey: 'settings:tabs.tags', defaultLabel: 'Tags', icon: Tags, permissionId: 'settings-tags' },
+      { path: '/settings/tags', labelKey: 'settings:tabs.tags', defaultLabel: 'Tags', icon: Tags, permissionId: 'tags' },
       { path: '/settings/connectors', labelKey: 'settings:tabs.connectors', defaultLabel: 'Connectors', icon: Plug2, permissionId: 'settings-connectors' },
     ],
   },
@@ -82,7 +82,7 @@ const settingsNavGroups: SettingsNavGroup[] = [
     titleKey: 'settings:nav.groups.operations',
     defaultTitle: 'Operations',
     items: [
-      { path: '/settings/jobs', labelKey: 'settings:tabs.jobs', defaultLabel: 'Jobs', icon: Clock, permissionId: 'settings-jobs' },
+      { path: '/settings/jobs', labelKey: 'settings:tabs.jobs', defaultLabel: 'Jobs', icon: Clock, permissionId: 'jobs' },
       { path: '/settings/delivery', labelKey: 'settings:tabs.delivery', defaultLabel: 'Delivery', icon: Briefcase, permissionId: 'settings-delivery' },
       { path: '/settings/workflows', labelKey: 'settings:tabs.workflows', defaultLabel: 'Workflows', icon: GitBranch, permissionId: 'settings-workflows' },
     ],
@@ -92,7 +92,7 @@ const settingsNavGroups: SettingsNavGroup[] = [
     defaultTitle: 'Access Control',
     items: [
       { path: '/settings/roles', labelKey: 'settings:tabs.roles', defaultLabel: 'App Roles', icon: UserCog, permissionId: 'settings-roles' },
-      { path: '/settings/audit', labelKey: 'settings:tabs.audit', defaultLabel: 'Audit Trail', icon: ScrollText, permissionId: 'settings-audit' },
+      { path: '/settings/audit', labelKey: 'settings:tabs.audit', defaultLabel: 'Audit Trail', icon: ScrollText, permissionId: 'audit' },
     ],
   },
 ];

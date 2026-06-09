@@ -1768,13 +1768,18 @@ class SettingsManager:
             # updated_at=role_db.updated_at  # Uncomment if needed
         )
 
-    def get_features_with_access_levels(self) -> Dict[str, Dict[str, str | List[str]]]:
+    def get_features_with_access_levels(self) -> Dict[str, Dict[str, str | List[str] | bool]]:
         """Returns a dictionary of features and their allowed access levels.
 
         Each entry contains:
         - name: human-readable label
         - allowed_levels: list of allowed FeatureAccessLevel values (as strings)
         - group: one of Discover/Build/Govern/Deploy/Settings/Other for UI grouping
+        - hidden_from_role_dialog: optional bool flagging backend-only perms
+          that the role editor should not expose to admins
+        - cross_cutting: optional bool flagging features that have no
+          dedicated sidebar entry and should render in a "Background"
+          sub-section of their group in the role editor
         """
         features_config = get_feature_config()
         all_levels = get_all_access_levels()
@@ -1784,6 +1789,8 @@ class SettingsManager:
                 'name': config['name'],
                 'allowed_levels': [level.value for level in config['allowed_levels']],
                 'group': config.get('group', 'Other'),
+                'hidden_from_role_dialog': bool(config.get('hidden_from_role_dialog', False)),
+                'cross_cutting': bool(config.get('cross_cutting', False)),
             }
             for feature_id, config in features_config.items()
         }

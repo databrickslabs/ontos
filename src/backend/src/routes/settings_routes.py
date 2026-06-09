@@ -168,7 +168,7 @@ async def health_check(manager: SettingsManager = Depends(get_settings_manager))
 @router.get('/settings/job-clusters', response_model=List[JobCluster])
 async def list_job_clusters(
     manager: SettingsManager = Depends(get_settings_manager),
-    _: bool = Depends(PermissionChecker('settings-jobs', FeatureAccessLevel.READ_ONLY)),
+    _: bool = Depends(PermissionChecker('jobs', FeatureAccessLevel.READ_ONLY)),
 ):
     """List all available job clusters"""
     try:

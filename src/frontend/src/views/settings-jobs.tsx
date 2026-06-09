@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 export default function SettingsJobsView() {
   const { t } = useTranslation(['settings']);
   return (
-    <SettingsPageWrapper title={t('settings:tabs.jobs', 'Jobs')} permissionId="settings-jobs">
+    <SettingsPageWrapper title={t('settings:tabs.jobs', 'Jobs')} permissionId="jobs">
       <JobsSettings />
     </SettingsPageWrapper>
   );

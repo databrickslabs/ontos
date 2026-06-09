@@ -23,9 +23,9 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["Tags"])
 
 # --- Tag Namespace Routes ---
-# Namespaces define the tag taxonomy. Management is gated by the Settings -> Tags
-# admin permission so namespace administrators can be delegated independently
-# from regular tag-applying users.
+# Namespaces define the tag taxonomy. Management is gated by the `tags`
+# permission at ADMIN level (the same permission's READ_WRITE level governs
+# tag application elsewhere in the app).
 @router.post("/tags/namespaces", response_model=TagNamespace, status_code=status.HTTP_201_CREATED)
 async def create_tag_namespace(
     namespace_in: TagNamespaceCreate,
@@ -36,7 +36,7 @@ async def create_tag_namespace(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.ADMIN)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.ADMIN)),
 ):
     success = False
     details = {
@@ -109,7 +109,7 @@ async def update_tag_namespace(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.ADMIN)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.ADMIN)),
 ):
     success = False
     details = {
@@ -160,7 +160,7 @@ async def delete_tag_namespace(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.ADMIN)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.ADMIN)),
 ):
     success = False
     details = {
@@ -381,7 +381,7 @@ async def delete_tag(
         )
 
 # --- Tag Namespace Permission Routes ---
-# These manage who can write to a specific namespace. Always Settings -> Tags admin.
+# These manage who can write to a specific namespace. Always requires `tags` ADMIN.
 @router.post("/tags/namespaces/{namespace_id}/permissions", response_model=TagNamespacePermission, status_code=status.HTTP_201_CREATED)
 async def add_namespace_permission(
     namespace_id: UUID,
@@ -392,7 +392,7 @@ async def add_namespace_permission(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.ADMIN)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.ADMIN)),
 ):
     success = False
     details = {
@@ -433,7 +433,7 @@ async def list_namespace_permissions(
     manager: TagsManager = Depends(get_tags_manager),
     skip: int = 0,
     limit: int = Query(default=100, le=1000),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_ONLY)),
 ):
     # Check if namespace exists first (optional, manager method might do it)
     ns = manager.get_namespace(db, namespace_id=namespace_id)
@@ -447,7 +447,7 @@ async def get_namespace_permission_detail(
     permission_id: UUID,
     db: DBSessionDep,
     manager: TagsManager = Depends(get_tags_manager),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.READ_ONLY)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_ONLY)),
 ):
     permission = manager.get_namespace_permission(db, perm_id=permission_id)
     if not permission or permission.namespace_id != namespace_id:
@@ -465,7 +465,7 @@ async def update_namespace_permission(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.ADMIN)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.ADMIN)),
 ):
     success = False
     details = {
@@ -515,7 +515,7 @@ async def delete_namespace_permission(
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager),
-    _: None = Depends(PermissionChecker('settings-tags', FeatureAccessLevel.ADMIN)),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.ADMIN)),
 ):
     success = False
     details = {

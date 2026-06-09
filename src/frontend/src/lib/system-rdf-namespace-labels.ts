@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next';
 
+import { humanizeRdfFilename } from '@/lib/rdf-filename';
+
 /**
  * Known internal graph names / API pseudo-row `name` values (not user taxonomies).
  * Keys use the semantic-models namespace as default when calling `t`.
@@ -37,6 +39,6 @@ export function systemRdfNamespaceDisplayLabel(
   t: TFunction<'semantic-models', undefined> | TFunction,
 ): string {
   const entry = SYSTEM_RDF_NAMESPACE_KEYS[graphKey];
-  if (!entry) return graphKey;
-  return t(entry.i18nKey, { defaultValue: entry.defaultLabel });
+  if (entry) return t(entry.i18nKey, { defaultValue: entry.defaultLabel });
+  return humanizeRdfFilename(graphKey) || graphKey;
 }

@@ -8,6 +8,7 @@ from src.utils.semantic_model_title_candidates import (
     best_display_title_from_graph,
     collect_title_candidates_from_graph,
     extract_title_candidates,
+    humanize_rdf_filename,
     pick_auto_display_name,
 )
 
@@ -92,6 +93,38 @@ def test_collect_and_best_from_in_memory_skos_scheme():
     cands = collect_title_candidates_from_graph(g)
     assert any(c["text"] == "Industry Codes" for c in cands)
     assert best_display_title_from_graph(g) == "Industry Codes"
+
+
+@pytest.mark.parametrize(
+    "filename,expected",
+    [
+        ("pizza.owl", "Pizza"),
+        ("PIZZA.OWL", "Pizza"),
+        ("my_ontology.ttl", "My Ontology"),
+        ("my-ontology-v2.ttl", "My Ontology V2"),
+        ("databricks_ontology.ttl", "Databricks Ontology"),
+        ("fibo-quick-fix.rdf", "FIBO Quick Fix"),
+        ("gs1_taxonomy.skos", "GS1 Taxonomy"),
+        ("Schema.org.jsonld", "Schema Org"),
+        ("foo.bar.baz.owl", "Foo Bar Baz"),
+        ("/tmp/uploads/some_file.rdfs", "Some File"),
+        ("nodot", "Nodot"),
+        ("ALLCAPS.TTL", "Allcaps"),
+        ("abc.TTL", "Abc"),
+    ],
+)
+def test_humanize_rdf_filename(filename, expected):
+    assert humanize_rdf_filename(filename) == expected
+
+
+def test_humanize_rdf_filename_empty():
+    assert humanize_rdf_filename("") == ""
+
+
+def test_humanize_rdf_filename_only_extension():
+    # Stripping everything would leave an empty name; helper should return
+    # the original input unchanged so callers can fall back gracefully.
+    assert humanize_rdf_filename(".ttl") == ".ttl"
 
 
 def test_graph_title_matches_string_parse_path():

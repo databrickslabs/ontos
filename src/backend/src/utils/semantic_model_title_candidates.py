@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -15,6 +16,32 @@ _TITLE_PREDICATES: Tuple[URIRef, ...] = (
     SKOS.prefLabel,
     DCTERMS.title,
     DC.title,
+)
+
+_RDF_FILE_EXTENSIONS: Tuple[str, ...] = (
+    ".ttl",
+    ".owl",
+    ".rdf",
+    ".xml",
+    ".skos",
+    ".rdfs",
+    ".nt",
+    ".n3",
+    ".trig",
+    ".trix",
+    ".jsonld",
+    ".json-ld",
+    ".json",
+)
+
+# Tokens that should keep their original casing instead of being title-cased
+# (acronyms / brand names common in RDF source filenames).
+_PRESERVED_CASE_TOKENS: frozenset[str] = frozenset(
+    {
+        "FIBO", "GS1", "OWL", "RDF", "RDFS", "SKOS", "ODCS", "ODPS",
+        "W3C", "OBO", "GO", "DCAT", "PROV", "SHACL", "QUDT", "FOAF",
+        "DBpedia", "DC", "VOID", "SIOC", "OAI", "ISO",
+    }
 )
 
 
@@ -126,6 +153,45 @@ def extract_title_candidates(content_text: str, format_field: str) -> List[dict]
     graph = Graph()
     graph.parse(data=content_text, format=fmt)
     return collect_title_candidates_from_graph(graph)
+
+
+def humanize_rdf_filename(filename: str) -> str:
+    """Turn an RDF source filename into a human-readable title.
+
+    Steps:
+      1. Take the basename (drop any directory parts).
+      2. Strip a single known RDF extension if present (case-insensitive).
+      3. Replace ``_``, ``-`` and ``.`` with spaces.
+      4. Collapse whitespace.
+      5. Title-case word-by-word, preserving common acronyms (FIBO, GS1, ...).
+
+    Returns the original filename unchanged if it ends up empty after cleaning.
+    """
+    if not filename:
+        return ""
+
+    name = filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    lower = name.lower()
+    for ext in _RDF_FILE_EXTENSIONS:
+        if lower.endswith(ext):
+            name = name[: -len(ext)]
+            break
+
+    cleaned = re.sub(r"[._\-]+", " ", name)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return filename
+
+    parts: List[str] = []
+    for word in cleaned.split(" "):
+        upper = word.upper()
+        if upper in _PRESERVED_CASE_TOKENS:
+            parts.append(upper)
+        elif word.isupper() and len(word) <= 4 and word.isalpha():
+            parts.append(word)
+        else:
+            parts.append(word[:1].upper() + word[1:].lower() if word else word)
+    return " ".join(parts)
 
 
 def pick_auto_display_name(candidates: List[dict]) -> Optional[str]:

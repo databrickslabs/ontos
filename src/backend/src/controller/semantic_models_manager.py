@@ -39,6 +39,7 @@ from src.common.sparql_validator import SPARQLQueryValidator
 from src.utils.semantic_model_title_candidates import (
     best_display_title_from_graph,
     extract_title_candidates,
+    humanize_rdf_filename,
 )
 from src.utils.rdf_serialization_display import serialization_label_for_stored_model
 from src.owl.owl_parser import clean_truncated_turtle
@@ -238,11 +239,30 @@ class SemanticModelsManager:
         return self._to_api(updated)
 
     def get_title_candidates(self, model_id: str) -> Optional[List[dict]]:
-        """Return suggested titles from ontology header resources, or None if model not found."""
+        """Return suggested titles for a model, or None if the model is not found.
+
+        Sources, in priority order:
+          1. ``owl:Ontology`` / ``skos:ConceptScheme`` header literals
+             (``rdfs:label``, ``skos:prefLabel``, ``dcterms:title``, ``dc:title``).
+          2. A humanized version of the original filename
+             (``pizza.owl`` → ``Pizza``) so the user always has a sensible
+             non-custom option in the title-edit dialog.
+        """
         db_obj = semantic_models_repo.get(self._db, id=model_id)
         if not db_obj:
             return None
-        return extract_title_candidates(db_obj.content_text or "", db_obj.format)
+        candidates = extract_title_candidates(db_obj.content_text or "", db_obj.format)
+        source_filename = db_obj.original_filename or db_obj.name
+        humanized = humanize_rdf_filename(source_filename) if source_filename else ""
+        if humanized and humanized != source_filename and not any(
+            (c.get("text") or "").strip() == humanized for c in candidates
+        ):
+            candidates.append({
+                "iri": f"file:{source_filename}",
+                "kind": "filename",
+                "text": humanized,
+            })
+        return candidates
 
     def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str]) -> Optional[SemanticModelApi]:
         db_obj = semantic_models_repo.get(self._db, id=model_id)
@@ -780,7 +800,20 @@ class SemanticModelsManager:
             existing_collections.add(str(subj))
         
         registered_count = 0
-        
+
+        # Pre-build a map of sanitized model name -> stored display_name so we
+        # can honor explicit titles set on uploaded models when registering
+        # their `urn:semantic-model:*` contexts as collections.
+        semantic_model_display_names: Dict[str, str] = {}
+        try:
+            for m in semantic_models_repo.get_multi(self._db, skip=0, limit=10_000):
+                if not m.display_name:
+                    continue
+                sanitized = _sanitize_context_name(m.name)
+                semantic_model_display_names[f"urn:semantic-model:{sanitized}"] = m.display_name.strip()
+        except Exception as e:
+            logger.debug(f"Could not preload semantic model display names: {e}")
+
         # Scan all contexts and register missing ones
         for context in self._graph.contexts():
             context_name = str(context.identifier)
@@ -793,23 +826,33 @@ class SemanticModelsManager:
             if context_name in existing_collections:
                 continue
             
-            # Infer collection type and label from context name
+            # Infer collection type and label from context name. Labels are
+            # produced by `humanize_rdf_filename`, which strips known RDF
+            # extensions and preserves common acronyms (FIBO, GS1, ...).
             if context_name.startswith("urn:taxonomy:"):
                 coll_type = "taxonomy"
-                label = context_name.replace("urn:taxonomy:", "").replace("-", " ").replace("_", " ").title()
+                suffix = context_name[len("urn:taxonomy:"):]
+                label = humanize_rdf_filename(suffix) or suffix
             elif context_name.startswith("urn:glossary:"):
                 coll_type = "glossary"
-                label = context_name.replace("urn:glossary:", "").replace("-", " ").replace("_", " ").title()
+                suffix = context_name[len("urn:glossary:"):]
+                label = humanize_rdf_filename(suffix) or suffix
             elif context_name.startswith("urn:ontology:"):
                 coll_type = "ontology"
-                label = context_name.replace("urn:ontology:", "").replace("-", " ").replace("_", " ").title()
+                suffix = context_name[len("urn:ontology:"):]
+                label = humanize_rdf_filename(suffix) or suffix
             elif context_name.startswith("urn:semantic-model:"):
                 coll_type = "ontology"
-                label = context_name.replace("urn:semantic-model:", "").replace("-", " ").replace("_", " ").title()
+                explicit = semantic_model_display_names.get(context_name)
+                if explicit:
+                    label = explicit
+                else:
+                    suffix = context_name[len("urn:semantic-model:"):]
+                    label = humanize_rdf_filename(suffix) or suffix
             else:
                 coll_type = "ontology"
-                # Extract label from last segment
-                label = context_name.split(":")[-1].replace("-", " ").replace("_", " ").title()
+                suffix = context_name.split(":")[-1]
+                label = humanize_rdf_filename(suffix) or suffix
             
             # Count concepts in this context
             concept_count = len(list(context.subjects(RDF.type, SKOS.Concept)))
@@ -860,10 +903,89 @@ class SemanticModelsManager:
                 )
             
             registered_count += 1
-        
-        if registered_count > 0:
+
+        # Second pass: refresh labels of *existing* imported/system collections
+        # whose stored `rdfs:label` no longer matches what the current humanizer
+        # would produce. Skips user-editable collections so any manual edits via
+        # the Collections tab are never overwritten.
+        refreshed_count = 0
+        managed_prefixes = (
+            "urn:taxonomy:",
+            "urn:glossary:",
+            "urn:ontology:",
+            "urn:semantic-model:",
+        )
+        for coll_iri in existing_collections:
+            if not coll_iri.startswith(managed_prefixes):
+                continue
+            coll_uri = URIRef(coll_iri)
+            is_editable_raw = self._get_literal(meta_context, coll_uri, ONTOS.isEditable)
+            is_editable = (is_editable_raw or "").strip().lower() in {"true", "1"}
+            if is_editable:
+                continue
+
+            # Compute expected label using the same priority chain as new rows.
+            if coll_iri.startswith("urn:semantic-model:"):
+                explicit = semantic_model_display_names.get(coll_iri)
+                if explicit:
+                    expected = explicit
+                else:
+                    suffix = coll_iri[len("urn:semantic-model:"):]
+                    expected = humanize_rdf_filename(suffix) or suffix
+            else:
+                for prefix in managed_prefixes:
+                    if coll_iri.startswith(prefix):
+                        suffix = coll_iri[len(prefix):]
+                        break
+                expected = humanize_rdf_filename(suffix) or suffix
+
+            current = self._get_literal(meta_context, coll_uri, RDFS.label)
+            if not expected or current == expected:
+                continue
+
+            # Update in-memory graph
+            meta_context.remove((coll_uri, RDFS.label, None))
+            meta_context.add((coll_uri, RDFS.label, Literal(expected)))
+
+            # Update persisted triple (delete old literal, insert new one)
+            try:
+                if current is not None:
+                    rdf_triples_repo.remove_triple(
+                        self._db,
+                        subject_uri=coll_iri,
+                        predicate_uri=str(RDFS.label),
+                        object_value=current,
+                        context_name=META_CONTEXT,
+                    )
+                rdf_triples_repo.add_triple(
+                    self._db,
+                    subject_uri=coll_iri,
+                    predicate_uri=str(RDFS.label),
+                    object_value=expected,
+                    object_is_uri=False,
+                    context_name=META_CONTEXT,
+                    source_type="collection",
+                    source_identifier=coll_iri,
+                    created_by="system",
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist refreshed label for %s: %s", coll_iri, e
+                )
+                continue
+
+            logger.info(
+                "Refreshed collection label %s: %r -> %r",
+                coll_iri, current, expected,
+            )
+            refreshed_count += 1
+
+        if registered_count > 0 or refreshed_count > 0:
             self._db.commit()
-            logger.info(f"Auto-registered {registered_count} sources as collections")
+            if registered_count > 0:
+                logger.info(f"Auto-registered {registered_count} sources as collections")
+            if refreshed_count > 0:
+                logger.info(f"Refreshed labels for {refreshed_count} imported collections")
 
     def rebuild_graph_from_enabled(self) -> None:
         """Rebuild the in-memory RDF graph from database and dynamic sources.

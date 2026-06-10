@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Search,
-  Plus,
   ChevronRight,
   ChevronDown,
   Layers,
@@ -30,13 +28,11 @@ interface ConceptsTabProps {
   filteredConcepts: OntologyConcept[];
   selectedConcept?: OntologyConcept | null;
   onSelectConcept: (concept: OntologyConcept) => void;
-  onCreateConcept: () => void;
   // Display options (from unified filter panel)
   groupBySource: boolean;
   showProperties: boolean;
   groupByDomain: boolean;
   selectedLanguage: string;
-  canEdit: boolean;
 }
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -75,12 +71,10 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   filteredConcepts,
   selectedConcept,
   onSelectConcept,
-  onCreateConcept,
   groupBySource,
   showProperties: _showProperties,
   groupByDomain,
   selectedLanguage,
-  canEdit,
 }) => {
   const { t } = useTranslation(['semantic-models', 'common']);
   const expandedGroups = useGlossaryPreferencesStore((s) => s.expandedConceptGroups);
@@ -425,16 +419,6 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
             className="pl-9"
           />
         </div>
-        {canEdit && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCreateConcept}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            {t('semantic-models:actions.createConcept')}
-          </Button>
-        )}
       </div>
 
       <div

@@ -421,8 +421,6 @@ export default function BusinessTermsView() {
             filteredConcepts={filteredConcepts}
             selectedConcept={null}
             onSelectConcept={handleSelectConcept}
-            onCreateConcept={handleCreateConcept}
-            canEdit={canWrite}
             groupBySource={groupBySource}
             showProperties={showProperties}
             groupByDomain={groupByDomain}

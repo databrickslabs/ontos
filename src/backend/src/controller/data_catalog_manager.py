@@ -721,10 +721,11 @@ class DataCatalogManager:
             columns = []
             if table.columns:
                 for idx, col in enumerate(table.columns):
+                    type_name_value = col.type_name.value if col.type_name else None
                     columns.append(ColumnInfo(
                         name=col.name,
-                        type_text=col.type_text or str(col.type_name) if col.type_name else "UNKNOWN",
-                        type_name=str(col.type_name) if col.type_name else None,
+                        type_text=col.type_text or type_name_value or "UNKNOWN",
+                        type_name=type_name_value,
                         position=idx,
                         nullable=col.nullable if col.nullable is not None else True,
                         comment=col.comment,

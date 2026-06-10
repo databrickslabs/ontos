@@ -13,10 +13,12 @@ logic without spinning up a DB.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import List
 from unittest.mock import MagicMock
 
 import pytest
+from databricks.sdk.service.catalog import ColumnTypeName
 
 from src.controller.data_catalog_manager import DataCatalogManager
 from src.models.data_catalog import ColumnDictionaryEntry
@@ -325,3 +327,41 @@ class TestPaginationAndFilters:
         assert resp.total_count == 9
         assert len(resp.columns) == 3
         assert resp.has_more is True
+
+
+class TestTableDetailsTypeNameFormatting:
+    def test_get_table_details_uses_enum_value_and_preserves_type_text(self, manager):
+        manager.client.tables.get.return_value = SimpleNamespace(
+            columns=[
+                SimpleNamespace(
+                    name="amount",
+                    type_text=None,
+                    type_name=ColumnTypeName.DOUBLE,
+                    nullable=True,
+                    comment=None,
+                    partition_index=None,
+                ),
+                SimpleNamespace(
+                    name="price",
+                    type_text="decimal(10,2)",
+                    type_name=None,
+                    nullable=False,
+                    comment=None,
+                    partition_index=None,
+                ),
+            ],
+            tags=[],
+            table_type=None,
+            owner=None,
+            comment=None,
+            storage_location=None,
+        )
+
+        table = manager.get_table_details("main.sales.orders")
+
+        assert table is not None
+        assert len(table.columns) == 2
+        assert table.columns[0].type_name == "DOUBLE"
+        assert table.columns[0].type_text == "DOUBLE"
+        assert table.columns[1].type_name is None
+        assert table.columns[1].type_text == "decimal(10,2)"

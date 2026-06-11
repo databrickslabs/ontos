@@ -343,19 +343,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
 ('01100001-0004-4000-8000-000000000001', 'UNECE R155 Cybersecurity', 'Verify vehicle data pipelines meet UNECE WP.29 R155 cybersecurity management system requirements',
 'Vehicle data pipeline lacks cybersecurity controls. UNECE R155 requires documented threat analysis and risk assessment (TARA) for all vehicle data interfaces.',
-'MATCH (d:DataPipeline) WHERE d.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT d.has_tara = true AND d.encryption_in_transit = true', 'security', 'critical', true, NOW(), NOW()),
+'MATCH (d:DataPipeline) WHERE d.domain IN [''Connected Vehicles'', ''Autonomous Driving''] ASSERT d.has_tara = true AND d.encryption_in_transit = true', 'Security', 'critical', true, NOW(), NOW()),
 
 ('01100002-0004-4000-8000-000000000002', 'IATF 16949 PPAP Compliance', 'Ensure all production parts have approved PPAP submissions at the required level',
 'Part is in production without approved PPAP. IATF 16949 Section 8.3.4.4 requires PPAP approval before production shipment. Interim approval requires documented containment plan.',
-'MATCH (p:Part) WHERE p.production_status = ''active'' ASSERT p.ppap_status IN [''approved'', ''interim_approved'']', 'quality', 'critical', true, NOW(), NOW()),
+'MATCH (p:Part) WHERE p.production_status = ''active'' ASSERT p.ppap_status IN [''approved'', ''interim_approved'']', 'Data Quality', 'critical', true, NOW(), NOW()),
 
 ('01100003-0004-4000-8000-000000000003', 'GDPR Vehicle Data Privacy', 'Verify that vehicle telematics data containing PII is processed in compliance with GDPR/CCPA',
 'Telematics dataset contains PII without proper consent tracking or anonymization. Vehicle location traces, driving behavior, and diagnostic data linked to VIN require explicit consent or pseudonymization.',
-'MATCH (d:Dataset) WHERE d.contains_vehicle_pii = true ASSERT d.consent_mechanism IS NOT NULL AND d.retention_days <= 730', 'governance', 'high', true, NOW(), NOW()),
+'MATCH (d:Dataset) WHERE d.contains_vehicle_pii = true ASSERT d.consent_mechanism IS NOT NULL AND d.retention_days <= 730', 'Governance', 'high', true, NOW(), NOW()),
 
 ('01100004-0004-4000-8000-000000000004', 'ISO 26262 Data Integrity', 'Ensure ADAS training and validation datasets meet ISO 26262 functional safety data integrity requirements',
 'ADAS dataset lacks functional safety traceability. ISO 26262 Part 8 requires documented data management plans, integrity checks, and traceability for safety-relevant data used in ASIL-rated systems.',
-'MATCH (d:Dataset) WHERE d.domain = ''Autonomous Driving'' AND d.safety_relevant = true ASSERT d.asil_rating IS NOT NULL AND d.integrity_checksum IS NOT NULL', 'governance', 'critical', true, NOW(), NOW())
+'MATCH (d:Dataset) WHERE d.domain = ''Autonomous Driving'' AND d.safety_relevant = true ASSERT d.asil_rating IS NOT NULL AND d.integrity_checksum IS NOT NULL', 'Governance', 'critical', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
 

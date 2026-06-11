@@ -385,7 +385,7 @@ export default function Compliance() {
           />
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent>
+            <DialogContent key={selectedPolicy?.id ?? 'new'}>
               <DialogHeader>
                 <DialogTitle>
                   {selectedPolicy ? t('compliance:editRule') : t('compliance:createNewRule')}
@@ -419,6 +419,7 @@ export default function Compliance() {
                       <SelectItem value="Data Quality">{t('compliance:categories.dataQuality')}</SelectItem>
                       <SelectItem value="Privacy">{t('compliance:categories.privacy')}</SelectItem>
                       <SelectItem value="Governance">{t('compliance:categories.governance')}</SelectItem>
+                      <SelectItem value="Maturity">{t('compliance:categories.maturity', 'Maturity')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

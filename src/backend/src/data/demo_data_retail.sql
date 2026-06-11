@@ -562,19 +562,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
 ('01100001-0000-4000-8000-000000000001', 'Naming Conventions', 'Verify that all objects follow corporate naming conventions', 
 'Names must use snake_case format (lowercase letters with underscores). For example: "customer_orders" is valid, but "CustomerOrders" or "customer-orders" are not. Views must be prefixed with "v_".', 
-E'MATCH (obj:Object)\nWHERE obj.type IN [''catalog'', ''schema'', ''table'', ''view'']\nASSERT \n  CASE obj.type\n    WHEN ''catalog'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''schema'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''table'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''view'' THEN obj.name MATCHES ''^v_[a-z][a-z0-9_]*$''\n  END', 'governance', 'high', true, NOW(), NOW()),
+E'MATCH (obj:Object)\nWHERE obj.type IN [''catalog'', ''schema'', ''table'', ''view'']\nASSERT \n  CASE obj.type\n    WHEN ''catalog'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''schema'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''table'' THEN obj.name MATCHES ''^[a-z][a-z0-9_]*$''\n    WHEN ''view'' THEN obj.name MATCHES ''^v_[a-z][a-z0-9_]*$''\n  END', 'Governance', 'high', true, NOW(), NOW()),
 ('01100002-0000-4000-8000-000000000002', 'PII Data Encryption', 'Ensure all PII data is encrypted at rest', 
 'All datasets containing Personally Identifiable Information (PII) must be encrypted using AES-256 encryption. Please enable encryption on the table or contact your security team for assistance.',
-'MATCH (d:Dataset) WHERE d.contains_pii = true ASSERT d.encryption = ''AES256''', 'security', 'critical', true, NOW(), NOW()),
+'MATCH (d:Dataset) WHERE d.contains_pii = true ASSERT d.encryption = ''AES256''', 'Security', 'critical', true, NOW(), NOW()),
 ('01100003-0000-4000-8000-000000000003', 'Data Quality Thresholds', 'Maintain data quality metrics above defined thresholds', 
 'Data quality must meet minimum standards: completeness > 95% and accuracy > 98%. Review the data pipeline for missing or incorrect values before publishing.',
-'MATCH (d:Dataset) ASSERT d.completeness > 0.95 AND d.accuracy > 0.98', 'quality', 'high', true, NOW(), NOW()),
+'MATCH (d:Dataset) ASSERT d.completeness > 0.95 AND d.accuracy > 0.98', 'Data Quality', 'high', true, NOW(), NOW()),
 ('01100004-0000-4000-8000-000000000004', 'Access Control', 'Verify proper access controls on sensitive data', 
 'High-sensitivity datasets must have restricted access controls configured. Please set access_level to "restricted" and ensure only authorized groups have access.',
-'MATCH (d:Dataset) WHERE d.sensitivity = ''high'' ASSERT d.access_level = ''restricted''', 'security', 'critical', true, NOW(), NOW()),
+'MATCH (d:Dataset) WHERE d.sensitivity = ''high'' ASSERT d.access_level = ''restricted''', 'Security', 'critical', true, NOW(), NOW()),
 ('01100005-0000-4000-8000-000000000005', 'Data Freshness', 'Ensure data is updated within defined timeframes', 
 'Data appears to be stale (not updated within the last 24 hours). Check the data pipeline status and ensure scheduled jobs are running correctly.',
-'MATCH (d:Dataset) ASSERT d.last_updated > datetime() - duration(''P1D'')', 'freshness', 'medium', true, NOW(), NOW())
+'MATCH (d:Dataset) ASSERT d.last_updated > datetime() - duration(''P1D'')', 'Data Quality', 'medium', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
 

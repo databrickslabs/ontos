@@ -50,6 +50,9 @@ class TriggerType(str, Enum):
     ON_PUBLISH = "on_publish"  # When an entity is published to marketplace
     ON_UNPUBLISH = "on_unpublish"  # When an entity is unpublished from marketplace
 
+    # Maturity triggers
+    ON_MATURITY_CHANGE = "on_maturity_change"  # When maturity level changes (up or down)
+
     # Access lifecycle triggers
     ON_EXPIRING = "on_expiring"  # When access/entity is about to expire
     ON_REVOKE = "on_revoke"  # When access is revoked

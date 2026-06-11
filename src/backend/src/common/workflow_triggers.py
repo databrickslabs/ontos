@@ -516,6 +516,40 @@ class TriggerRegistry:
         return self.fire_trigger(event, blocking=blocking)
 
     # =========================================================================
+    # Maturity Triggers
+    # =========================================================================
+
+    def on_maturity_change(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        entity_name: Optional[str] = None,
+        entity_data: Optional[Dict[str, Any]] = None,
+        user_email: Optional[str] = None,
+        *,
+        from_level: Optional[int] = None,
+        to_level: Optional[int] = None,
+        blocking: bool = False,
+    ) -> List[WorkflowExecution]:
+        """Fire when an entity's maturity level changes."""
+        data = dict(entity_data or {})
+        data["from_maturity_level"] = from_level
+        data["to_maturity_level"] = to_level
+        event = TriggerEvent(
+            trigger_type=TriggerType.ON_MATURITY_CHANGE,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            entity_data=data,
+            user_email=user_email,
+        )
+        logger.info(
+            f"on_maturity_change fired for {entity_type.value} '{entity_id}': "
+            f"level {from_level} -> {to_level}"
+        )
+        return self.fire_trigger(event, blocking=blocking)
+
+    # =========================================================================
     # Request Triggers
     # =========================================================================
 

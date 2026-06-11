@@ -194,6 +194,11 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_SETTINGS,
     },
+    'settings-maturity-levels': {
+        'name': 'Settings — Maturity Levels',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
 
     # --- Settings: Configuration sub-pages ---
     'settings-general': {

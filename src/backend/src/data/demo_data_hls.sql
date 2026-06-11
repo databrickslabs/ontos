@@ -345,19 +345,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
 ('01100001-0001-4000-8000-000000000001', 'HIPAA PHI De-identification', 'Verify all patient data is de-identified per HIPAA Safe Harbor method',
 'Protected Health Information (PHI) detected in dataset. All 18 HIPAA identifiers must be removed or generalized per the Safe Harbor method before analytical use.',
-'MATCH (d:Dataset) WHERE d.domain IN [''Clinical'', ''Research''] AND d.contains_phi = true ASSERT d.deidentification_method = ''safe_harbor''', 'security', 'critical', true, NOW(), NOW()),
+'MATCH (d:Dataset) WHERE d.domain IN [''Clinical'', ''Research''] AND d.contains_phi = true ASSERT d.deidentification_method = ''safe_harbor''', 'Security', 'critical', true, NOW(), NOW()),
 
 ('01100002-0001-4000-8000-000000000002', '21 CFR Part 11 Audit Trail', 'Ensure electronic records have complete audit trails per FDA regulations',
 'Dataset lacks required audit trail for 21 CFR Part 11 compliance. All clinical trial electronic records must have timestamped, user-attributed audit trails that cannot be modified.',
-'MATCH (d:Dataset) WHERE d.domain = ''Research'' ASSERT d.has_audit_trail = true AND d.audit_trail_immutable = true', 'governance', 'critical', true, NOW(), NOW()),
+'MATCH (d:Dataset) WHERE d.domain = ''Research'' ASSERT d.has_audit_trail = true AND d.audit_trail_immutable = true', 'Governance', 'critical', true, NOW(), NOW()),
 
 ('01100003-0001-4000-8000-000000000003', 'CDISC Standards Compliance', 'Verify clinical trial data conforms to CDISC SDTM/ADaM standards',
 'Clinical trial dataset does not conform to CDISC standards. All submission-ready datasets must follow SDTM or ADaM data models.',
-'MATCH (d:Dataset) WHERE d.domain = ''Research'' AND d.is_submission_ready = true ASSERT d.cdisc_standard IN [''SDTM'', ''ADaM'']', 'quality', 'high', true, NOW(), NOW()),
+'MATCH (d:Dataset) WHERE d.domain = ''Research'' AND d.is_submission_ready = true ASSERT d.cdisc_standard IN [''SDTM'', ''ADaM'']', 'Data Quality', 'high', true, NOW(), NOW()),
 
 ('01100004-0001-4000-8000-000000000004', 'Adverse Event Reporting Timeliness', 'Ensure serious adverse events are reported within regulatory timelines',
 'Serious adverse event reporting exceeds 15-day regulatory deadline. Expedited ICSRs must be submitted within 15 calendar days of initial receipt.',
-'MATCH (ae:AdverseEvent) WHERE ae.seriousness = ''serious'' ASSERT ae.days_to_report <= 15', 'governance', 'critical', true, NOW(), NOW())
+'MATCH (ae:AdverseEvent) WHERE ae.seriousness = ''serious'' ASSERT ae.days_to_report <= 15', 'Governance', 'critical', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
 

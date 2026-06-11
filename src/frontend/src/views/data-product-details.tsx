@@ -53,7 +53,6 @@ import { Link2, Unlink, GitBranch } from 'lucide-react';
 import { AssetSelector } from '@/components/common/asset-selector';
 import { EntityTreePanel } from '@/components/common/entity-tree-panel';
 import { BusinessLineageView } from '@/components/lineage';
-import { ReadinessChecklist } from '@/components/data-products/readiness-checklist';
 import { MaturityInline } from '@/components/common/maturity-inline';
 import { LineageEditor } from '@/components/common/lineage-editor';
 import { useCopilotContext } from '@/hooks/use-copilot-context';

@@ -114,7 +114,6 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         {/* Level progression */}
         {report.levels.map((level: LevelResult) => {
           const isExpanded = expandedLevel === level.level_order;
-          const allPassed = level.achieved;
           const hasWarnings = level.gates.some(g => !g.passed && !g.required);
           const hasFails = level.gates.some(g => !g.passed && g.required);
 

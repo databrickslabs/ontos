@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { systemRdfNamespaceDisplayLabel } from './system-rdf-namespace-labels';
+import { humanizeRdfFilename } from './rdf-filename';
 
 describe('systemRdfNamespaceDisplayLabel', () => {
   // Minimal stand-in for i18next's `t`: echoes the supplied defaultValue.
@@ -22,7 +23,9 @@ describe('systemRdfNamespaceDisplayLabel', () => {
     );
   });
 
-  it('returns the original key for an unknown namespace', () => {
-    expect(systemRdfNamespaceDisplayLabel('urn:something-else', t)).toBe('urn:something-else');
+  it('humanizes an unknown namespace key as a fallback', () => {
+    expect(systemRdfNamespaceDisplayLabel('urn:something-else', t)).toBe(
+      humanizeRdfFilename('urn:something-else'),
+    );
   });
 });

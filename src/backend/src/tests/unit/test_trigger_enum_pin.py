@@ -50,6 +50,7 @@ _EXPECTED_TRIGGER_VALUES = [
     ("FOR_REQUEST_CERTIFY", "for_request_certify"),
     ("FOR_REQUEST_STATUS_CHANGE", "for_request_status_change"),
     ("ON_FIRST_ACCESS", "on_first_access"),
+    ("ON_MATURITY_CHANGE", "on_maturity_change"),
 ]
 
 

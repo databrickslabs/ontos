@@ -29,6 +29,12 @@ export default defineConfig({
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     video: 'retain-on-failure',
+    // Demo mode: slow each browser action so a human can follow the run.
+    // Gated on DEMO so normal/CI runs are unaffected. Override the pause with
+    // DEMO_SLOWMO (ms), e.g. DEMO_SLOWMO=1500 yarn demo.
+    launchOptions: {
+      slowMo: process.env.DEMO ? Number(process.env.DEMO_SLOWMO) || 800 : 0,
+    },
     // Dismiss the Ask Ontos copilot side-panel that opens by default for
     // first-time visitors. Without this, the z-50 fixed panel intercepts
     // pointer events on the main content area and causes click timeouts.
@@ -45,13 +51,28 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
-  webServer: {
-    command: 'yarn dev:frontend --port 3000',
-    url: 'http://localhost:3000',
-    reuseExistingServer: true,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      command: 'yarn dev:frontend --port 3000',
+      url: 'http://localhost:3000',
+      reuseExistingServer: true,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    // Demo mode also brings up the backend so `yarn demo` is a single command.
+    // reuseExistingServer means an already-running backend is reused, never
+    // restarted. Omitted entirely outside demo mode (CI/normal runs manage the
+    // backend themselves).
+    ...(process.env.DEMO ? [{
+      command: 'hatch -e dev run dev-backend',
+      cwd: '..',
+      url: 'http://localhost:8000/api/health',
+      reuseExistingServer: true,
+      timeout: 120_000,
+      stdout: 'pipe' as const,
+      stderr: 'pipe' as const,
+    }] : []),
+  ],
 });
 
 

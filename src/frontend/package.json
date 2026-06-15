@@ -116,6 +116,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
+    "demo": "sh scripts/demo-db-setup.sh && DEMO=1 playwright test --headed --workers=1 --reporter=list",
     "test:all": "npm run test:run && npm run test:e2e",
     "type-check": "tsc --noEmit",
     "license-check": "license-checker --summary",

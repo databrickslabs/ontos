@@ -143,6 +143,14 @@ jobs:
     timeout-minutes: 20
     # E2E tests temporarily disabled on all branches
     if: false
+    # Shard the suite across parallel runners — wall-clock drops ~linearly with
+    # the shard count. Each shard gets its own Postgres service (below), so no
+    # added DB contention. fail-fast: false so one shard failing doesn't cancel
+    # the others (you still get full results). Bump the count to scale further.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       postgres:
@@ -238,22 +246,64 @@ jobs:
         working-directory: ./src/frontend
         env:
           BASE_URL: http://localhost:3000
-        run: yarn test:e2e
+        run: yarn test:e2e --shard=${{ matrix.shard }}/4
 
-      - name: Upload Playwright report
+      - name: Upload blob report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
-          name: playwright-report
-          path: ./src/frontend/playwright-report/
-          retention-days: 7
+          name: blob-report-${{ matrix.shard }}
+          path: ./src/frontend/blob-report/
+          retention-days: 1
 
       - name: Upload test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.shard }}
           path: ./src/frontend/test-results/
+          retention-days: 7
+
+  merge-reports:
+    name: Merge E2E Reports
+    # Mirror e2e-tests being disabled; flip both to re-enable. always() so the
+    # merged report is produced even when some shards have failing tests.
+    if: false
+    needs: [e2e-tests]
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: ./.github/actions/setup-node-jfrog
+        with:
+          node-version: '24'
+
+      - name: Install frontend dependencies
+        working-directory: ./src/frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Download blob reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: ./src/frontend/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge blobs into HTML report
+        working-directory: ./src/frontend
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload merged HTML report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: playwright-report
+          path: ./src/frontend/playwright-report/
           retention-days: 7
 
   type-check:

@@ -2,7 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 // See https://playwright.dev/docs/test-configuration
 export default defineConfig({
-  timeout: 90_000,
+  // 60s is comfortably above the slowest healthy test (~a few s); the old 90s
+  // mainly prolonged hung/broken tests (90s x retries) and slowed CI.
+  timeout: 60_000,
   expect: { timeout: 10_000 },
   testDir: './src/tests',
   globalSetup: './src/tests/global-setup.ts',
@@ -24,7 +26,10 @@ export default defineConfig({
   // timeout. Bump to 2 in CI; the existing retries: 1 covers any flake from
   // workers contending on the shared Postgres service.
   workers: process.env.CI ? 2 : undefined,
-  reporter: process.env.CI ? 'html' : 'list',
+  // CI shards the suite across runners (see e2e-tests matrix). Each shard emits
+  // a 'blob' report; a merge-reports job stitches them into one HTML report.
+  // Locally, 'list' for readable streaming output.
+  reporter: process.env.CI ? 'blob' : 'list',
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
@@ -64,7 +69,10 @@ export default defineConfig({
     // restarted. Omitted entirely outside demo mode (CI/normal runs manage the
     // backend themselves).
     ...(process.env.DEMO ? [{
-      command: 'hatch -e dev run dev-backend',
+      // MOCK_WORKSPACE_CLIENT=true returns a mock Databricks client instantly
+      // instead of calling the workspace, so the demo runs fully locally with
+      // no Databricks connectivity (the core journeys don't need a live client).
+      command: 'MOCK_WORKSPACE_CLIENT=true hatch -e dev run dev-backend',
       cwd: '..',
       url: 'http://localhost:8000/api/health',
       reuseExistingServer: true,

@@ -71,6 +71,20 @@ from src.connectors.bigquery import BigQueryConnector
 
 logger = get_logger(__name__)
 
+
+class StartupSeedError(RuntimeError):
+    """Raised when a non-recoverable seeding step (default roles, admin
+    role backfill, default team/project) fails during startup.
+
+    Distinguished from generic ``Exception`` so the outer manager-init
+    handler can route it into maintenance mode (via ``health["seed_ok"]``)
+    instead of silently logging and letting the app come up half-seeded.
+    Individual manager construction failures remain soft-fails — only
+    seeding steps that leave the role/permission graph inconsistent are
+    surfaced as fatal here.
+    """
+
+
 # Demo data SQL file path
 DEMO_DATA_SQL_FILE = Path(__file__).parent.parent / "data" / "demo_data_retail.sql"
 
@@ -397,22 +411,25 @@ def initialize_managers(app: FastAPI):
         # Defer SearchManager initialization until after initial data loading completes
         logger.info("Deferring SearchManager initialization until after initial data load.")
         
-        # --- Ensure default roles exist using the manager method --- 
-        app.state.settings_manager.ensure_default_roles_exist()
-
-        # --- Backfill Admin role with ADMIN on any newly-added feature IDs ---
-        # Idempotent migration; covers the settings-* sub-page permissions
-        # added by the Settings permissions refactor and any future additions.
-        app.state.settings_manager.upgrade_admin_role_for_new_features()
-
-        # --- Ensure default team and project exist for admins ---
-        app.state.settings_manager.ensure_default_team_and_project()
-
-        # --- Commit session potentially used for default role creation ---
-        # This commit is crucial AFTER all managers are initialized AND
-        # default roles are potentially created by the SettingsManager
-        db_session.commit()
-        logger.info("Manager initialization and default role creation transaction committed.")
+        # --- Seed defaults that leave the role/permission graph inconsistent
+        # if they fail. Wrapped in its own try/except so the outer handler
+        # can route this to maintenance mode (via health["seed_ok"]) instead
+        # of swallowing it: a half-seeded app where only the Admin role
+        # exists is worse than refusing to come up, because non-admins log
+        # in with no role and approval routing silently breaks.
+        try:
+            app.state.settings_manager.ensure_default_roles_exist()
+            # Backfill Admin role with ADMIN on any newly-added feature IDs.
+            # Idempotent migration; covers the settings-* sub-page permissions
+            # added by the Settings permissions refactor and any future additions.
+            app.state.settings_manager.upgrade_admin_role_for_new_features()
+            app.state.settings_manager.ensure_default_team_and_project()
+            db_session.commit()
+            logger.info("Manager initialization and default role creation transaction committed.")
+        except Exception as seed_err:
+            if db_session:
+                db_session.rollback()
+            raise StartupSeedError(f"Default role/team seeding failed: {seed_err}") from seed_err
 
         # --- Start background job polling ---
         try:
@@ -446,8 +463,18 @@ def initialize_managers(app: FastAPI):
             logger.info("APP_DEMO_MODE enabled but APP_DB_DROP_ON_START disabled - skipping automatic demo data loading.")
             logger.info("Use POST /api/settings/demo-data/load to load demo data manually.")
 
+    except StartupSeedError as e:
+        # Non-recoverable: the role/permission graph is inconsistent. Flip
+        # the health flag so MaintenanceMiddleware serves the maintenance
+        # page and /api/health/retry can re-attempt seeding after the
+        # operator fixes settings.yaml / migrations.
+        logger.critical(f"Fatal startup error (role/team seeding): {e}", exc_info=True)
+        if db_session: db_session.rollback()
+        health["seed_ok"] = False
+        health["seed_error"] = str(e)
+        health.setdefault("warnings", []).append(f"Seeding failed: {e}")
     except Exception as e:
-        logger.critical(f"Failed during application startup (manager init or default roles): {e}", exc_info=True)
+        logger.critical(f"Failed during application startup (manager init): {e}", exc_info=True)
         if db_session: db_session.rollback()
         msg = f"Manager initialization failed: {e}"
         health.setdefault("warnings", []).append(msg)

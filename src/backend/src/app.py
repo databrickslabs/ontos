@@ -121,8 +121,10 @@ async def startup_event():
     app.state.health = {
         "db_ok": False,
         "ws_ok": False,
+        "seed_ok": True,
         "warnings": [],
         "db_error": None,
+        "seed_error": None,
     }
     
     # Skip startup tasks if running tests
@@ -136,12 +138,27 @@ async def startup_event():
     settings = get_settings()
     
     try:
-        initialize_database(settings=settings)
+        initialize_database()
         app.state.health["db_ok"] = True
     except Exception as e:
         app.state.health["db_error"] = str(e)
         logger.critical(f"Database init failed — entering maintenance mode: {e}", exc_info=True)
         return  # Skip manager init; MaintenanceMiddleware will serve the maintenance page
+
+    # Seed reference data that alembic data-migrations would have inserted but
+    # that create_all()+stamp cannot.  Idempotent — no-ops when rows exist.
+    try:
+        from src.repositories.certification_levels_repository import certification_levels_repo
+        from src.repositories.maturity_repository import maturity_repo
+        from src.common.database import get_session_factory
+        _sf = get_session_factory()
+        with _sf() as _db:
+            certification_levels_repo.seed_defaults(_db)
+            maturity_repo.seed_defaults(_db)
+            _db.commit()
+        logger.info("Reference data seed step complete.")
+    except Exception as e:
+        logger.warning(f"Failed seeding reference data: {e}", exc_info=True)
 
     initialize_managers(app)  # Soft-fails internally for ws_client; sets health["ws_ok"]
     
@@ -438,7 +455,7 @@ async def retry_startup():
     """
     settings = get_settings()
     try:
-        initialize_database(settings=settings)
+        initialize_database()
         app.state.health["db_ok"] = True
         app.state.health["db_error"] = None
     except Exception as e:
@@ -448,10 +465,18 @@ async def retry_startup():
 
     try:
         app.state.health["warnings"] = []  # Reset warnings before retry
-        initialize_managers(app)  # Sets health["ws_ok"] internally
+        app.state.health["seed_ok"] = True  # Reset seed health; initialize_managers will flip if it fails
+        app.state.health["seed_error"] = None
+        initialize_managers(app)  # Sets health["ws_ok"] / health["seed_ok"] internally
     except Exception as e:
         app.state.health["warnings"].append(f"Manager init failed on retry: {e}")
         logger.error(f"Manager init failed on retry: {e}", exc_info=True)
+
+    if not app.state.health.get("seed_ok", True):
+        return JSONResponse(
+            {"status": "error", "detail": app.state.health.get("seed_error") or "seeding failed"},
+            status_code=503,
+        )
 
     return {"status": "ok", "health": app.state.health}
 

@@ -663,18 +663,36 @@ class SettingsManager:
                     for feat_id, feature_config in all_features_config.items():
                         desired_level = desired_permissions.get(feat_id, FeatureAccessLevel.NONE)
                         allowed_levels = feature_config.get('allowed_levels', [])
-                        
+
                         if desired_level in allowed_levels:
                             final_permissions[feat_id] = desired_level
+                            continue
+
+                        # Fallback path: the desired level (often the implicit
+                        # NONE for features the YAML doesn't mention) is not in
+                        # this feature's allowed_levels. Prefer NONE when it's
+                        # accepted, otherwise pick the lowest allowed level so
+                        # the seeder never produces a payload its own validator
+                        # would reject. Features like `process-workflows` and
+                        # `access-grants` are part of the baseline UX and have
+                        # NONE removed from their allowed_levels; defaulting
+                        # them to READ_ONLY matches the intended baseline.
+                        if FeatureAccessLevel.NONE in allowed_levels:
+                            fallback_level = FeatureAccessLevel.NONE
                         else:
-                            final_permissions[feat_id] = FeatureAccessLevel.NONE
-                            if desired_level != FeatureAccessLevel.NONE:
-                                allowed_str = [lvl.value for lvl in allowed_levels]
-                                logger.warning(
-                                    f"Desired default permission '{desired_level.value}' for role '{role_name}' "
-                                    f"on feature '{feat_id}' is not allowed (Allowed: {allowed_str}). Setting to NONE."
-                                )
-                                
+                            fallback_level = min(
+                                allowed_levels,
+                                key=lambda lvl: ACCESS_LEVEL_ORDER.get(lvl, 0),
+                            )
+                        final_permissions[feat_id] = fallback_level
+                        if desired_level != FeatureAccessLevel.NONE or fallback_level != FeatureAccessLevel.NONE:
+                            allowed_str = [lvl.value for lvl in allowed_levels]
+                            logger.warning(
+                                f"Desired default permission '{desired_level.value}' for role '{role_name}' "
+                                f"on feature '{feat_id}' is not allowed (Allowed: {allowed_str}). "
+                                f"Falling back to '{fallback_level.value}'."
+                            )
+
                     role_data["feature_permissions"] = final_permissions
                     logger.info(f"Assigning default permissions for role '{role_name}': { {k: v.value for k,v in final_permissions.items()} }")
 

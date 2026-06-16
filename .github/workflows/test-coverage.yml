@@ -142,7 +142,7 @@ jobs:
       labels: linux-ubuntu-latest
     timeout-minutes: 20
     # E2E tests temporarily disabled on all branches
-    if: false
+    # if: false
     # Shard the suite across parallel runners — wall-clock drops ~linearly with
     # the shard count. Each shard gets its own Postgres service (below), so no
     # added DB contention. fail-fast: false so one shard failing doesn't cancel

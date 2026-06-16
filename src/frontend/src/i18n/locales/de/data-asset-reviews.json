@@ -7,11 +7,21 @@
   "loading": "Überprüfungen werden geladen...",
   "noRequests": "Keine Überprüfungsanfragen gefunden.",
   "toast": {
-    "requestCreated": "Überprüfungsanfrage {{id}} erstellt.",
+    "requestCreated": "Überprüfungsanfrage \"{{title}}\" erstellt.",
     "requestDeleted": "Überprüfungsanfrage gelöscht.",
     "deleteError": "Anfrage konnte nicht gelöscht werden.",
     "bulkDeleted": "{{count}} Anfrage(n) gelöscht.",
-    "bulkDeleteError": "Einige Anfragen konnten nicht gelöscht werden."
+    "bulkDeleteError": "Einige Anfragen konnten nicht gelöscht werden.",
+    "titleUpdated": "Titel aktualisiert.",
+    "idCopied": "ID in die Zwischenablage kopiert."
+  },
+  "form": {
+    "titleLabel": "Titel (Optional)",
+    "titlePlaceholder": "Leer lassen, um automatisch aus ausgewählten Assets zu generieren"
+  },
+  "actions": {
+    "editTitle": "Titel bearbeiten",
+    "copyId": "ID kopieren"
   },
   "confirm": {
     "deleteRequest": "Sind Sie sicher, dass Sie diese Überprüfungsanfrage löschen möchten?",
@@ -24,7 +34,8 @@
     "rejected": "Abgelehnt"
   },
   "table": {
-    "requestId": "Anfrage-ID",
+    "title": "Titel",
+    "untitled": "(ohne Titel)",
     "asset": "Asset",
     "type": "Typ",
     "requester": "Antragsteller",

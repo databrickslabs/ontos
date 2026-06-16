@@ -28,6 +28,7 @@ import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
+import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
 
 // Register languages (using base import which has the static method)
 SyntaxHighlighterBase.registerLanguage('sql', sql);
@@ -274,6 +275,34 @@ export default function AssetReviewEditor({
                         // Update the asset status in the parent based on MDM review outcome
                         const newStatus = status === 'approved' 
                             ? ReviewedAssetStatus.APPROVED 
+                            : ReviewedAssetStatus.REJECTED;
+                        onReviewSave({
+                            ...asset,
+                            status: newStatus,
+                            updated_at: new Date().toISOString(),
+                        });
+                    }}
+                    onNext={onNext}
+                    hasNext={hasNext}
+                    currentIndex={currentIndex}
+                    totalCount={totalCount}
+                />
+            </div>
+        );
+    }
+
+    // Handle Term-Mapping suggestion assets with the dedicated reviewer.
+    // The component talks directly to the term-mapping decide endpoint, which
+    // forward-syncs the ReviewedAsset.status, so we only need to update our
+    // local copy here for snappy UI.
+    if (asset.asset_type === AssetType.CONCEPT_MAPPING_SUGGESTION) {
+        return (
+            <div className="px-1 pb-1">
+                <TermMappingSuggestionReview
+                    assetFqn={asset.asset_fqn}
+                    onReviewComplete={(status) => {
+                        const newStatus = status === 'approved'
+                            ? ReviewedAssetStatus.APPROVED
                             : ReviewedAssetStatus.REJECTED;
                         onReviewSave({
                             ...asset,

@@ -12,7 +12,11 @@ from src.models.ontology import (
     ConceptSearchResult
 )
 from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate
-from src.utils.semantic_model_title_candidates import extract_title_candidates, pick_auto_display_name
+from src.utils.semantic_model_title_candidates import (
+    extract_title_candidates,
+    humanize_rdf_filename,
+    pick_auto_display_name,
+)
 from src.utils.rdf_serialization_display import serialization_label_for_graph_taxonomy
 from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep, AuditCurrentUserDep
 from src.common.authorization import PermissionChecker
@@ -257,9 +261,16 @@ async def upload_semantic_model(
                 detail=f"Failed to parse ontology file. Please check the file format and syntax. Error: {str(parse_error)}"
             )
         
-        # Create semantic model in database (optional display title from ontology header)
+        # Create semantic model in database.
+        # Display title priority:
+        #   1. owl:Ontology / skos:ConceptScheme header literal (rdfs:label, dcterms:title, ...)
+        #   2. Humanized filename fallback (strip extension, prettify casing)
         title_candidates = extract_title_candidates(content_text, format_type)
         auto_display_name = pick_auto_display_name(title_candidates)
+        if not auto_display_name:
+            humanized = humanize_rdf_filename(safe_filename)
+            if humanized and humanized != safe_filename:
+                auto_display_name = humanized
         create_data = SemanticModelCreate(
             name=safe_filename,
             display_name=auto_display_name,

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from src.common.config import get_settings, Settings
+from src.common.config import get_settings
 from src.common.logging import get_logger
 from src.common.database import init_db, get_session_factory, Base, engine, cleanup_db
 from src.common.workspace_client import get_workspace_client
@@ -71,6 +71,20 @@ from src.connectors.bigquery import BigQueryConnector
 
 logger = get_logger(__name__)
 
+
+class StartupSeedError(RuntimeError):
+    """Raised when a non-recoverable seeding step (default roles, admin
+    role backfill, default team/project) fails during startup.
+
+    Distinguished from generic ``Exception`` so the outer manager-init
+    handler can route it into maintenance mode (via ``health["seed_ok"]``)
+    instead of silently logging and letting the app come up half-seeded.
+    Individual manager construction failures remain soft-fails — only
+    seeding steps that leave the role/permission graph inconsistent are
+    surfaced as fatal here.
+    """
+
+
 # Demo data SQL file path
 DEMO_DATA_SQL_FILE = Path(__file__).parent.parent / "data" / "demo_data_retail.sql"
 
@@ -117,7 +131,7 @@ def load_demo_data_from_sql() -> bool:
         return False
 
 
-def initialize_database(settings: Settings): # Keep settings param for future use if needed
+def initialize_database():
     """Initializes the database by calling the main init_db function."""
     logger.info("Triggering database initialization...")
     try:
@@ -253,6 +267,17 @@ def initialize_managers(app: FastAPI):
             set_app_state_manager('semantic_models_manager', app.state.semantic_models_manager)
         except Exception:
             pass
+
+        try:
+            from src.controller.term_mapping_manager import TermMappingManager
+            app.state.term_mapping_manager = TermMappingManager(
+                semantic_models_manager=app.state.semantic_models_manager,
+                reviews_manager=app.state.data_asset_review_manager,
+                notifications_manager=app.state.notifications_manager,
+            )
+            logger.info("TermMappingManager initialised.")
+        except Exception as e:
+            logger.error(f"Failed to initialise TermMappingManager: {e}", exc_info=True)
         # Remove BusinessGlossariesManager; rely solely on SemanticModelsManager
         # app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir, semantic_models_manager=app.state.semantic_models_manager)
 
@@ -386,22 +411,25 @@ def initialize_managers(app: FastAPI):
         # Defer SearchManager initialization until after initial data loading completes
         logger.info("Deferring SearchManager initialization until after initial data load.")
         
-        # --- Ensure default roles exist using the manager method --- 
-        app.state.settings_manager.ensure_default_roles_exist()
-
-        # --- Backfill Admin role with ADMIN on any newly-added feature IDs ---
-        # Idempotent migration; covers the settings-* sub-page permissions
-        # added by the Settings permissions refactor and any future additions.
-        app.state.settings_manager.upgrade_admin_role_for_new_features()
-
-        # --- Ensure default team and project exist for admins ---
-        app.state.settings_manager.ensure_default_team_and_project()
-
-        # --- Commit session potentially used for default role creation ---
-        # This commit is crucial AFTER all managers are initialized AND
-        # default roles are potentially created by the SettingsManager
-        db_session.commit()
-        logger.info("Manager initialization and default role creation transaction committed.")
+        # --- Seed defaults that leave the role/permission graph inconsistent
+        # if they fail. Wrapped in its own try/except so the outer handler
+        # can route this to maintenance mode (via health["seed_ok"]) instead
+        # of swallowing it: a half-seeded app where only the Admin role
+        # exists is worse than refusing to come up, because non-admins log
+        # in with no role and approval routing silently breaks.
+        try:
+            app.state.settings_manager.ensure_default_roles_exist()
+            # Backfill Admin role with ADMIN on any newly-added feature IDs.
+            # Idempotent migration; covers the settings-* sub-page permissions
+            # added by the Settings permissions refactor and any future additions.
+            app.state.settings_manager.upgrade_admin_role_for_new_features()
+            app.state.settings_manager.ensure_default_team_and_project()
+            db_session.commit()
+            logger.info("Manager initialization and default role creation transaction committed.")
+        except Exception as seed_err:
+            if db_session:
+                db_session.rollback()
+            raise StartupSeedError(f"Default role/team seeding failed: {seed_err}") from seed_err
 
         # --- Start background job polling ---
         try:
@@ -435,8 +463,18 @@ def initialize_managers(app: FastAPI):
             logger.info("APP_DEMO_MODE enabled but APP_DB_DROP_ON_START disabled - skipping automatic demo data loading.")
             logger.info("Use POST /api/settings/demo-data/load to load demo data manually.")
 
+    except StartupSeedError as e:
+        # Non-recoverable: the role/permission graph is inconsistent. Flip
+        # the health flag so MaintenanceMiddleware serves the maintenance
+        # page and /api/health/retry can re-attempt seeding after the
+        # operator fixes settings.yaml / migrations.
+        logger.critical(f"Fatal startup error (role/team seeding): {e}", exc_info=True)
+        if db_session: db_session.rollback()
+        health["seed_ok"] = False
+        health["seed_error"] = str(e)
+        health.setdefault("warnings", []).append(f"Seeding failed: {e}")
     except Exception as e:
-        logger.critical(f"Failed during application startup (manager init or default roles): {e}", exc_info=True)
+        logger.critical(f"Failed during application startup (manager init): {e}", exc_info=True)
         if db_session: db_session.rollback()
         msg = f"Manager initialization failed: {e}"
         health.setdefault("warnings", []).append(msg)
@@ -470,10 +508,12 @@ async def startup_event_handler(app: FastAPI):
         # seed_defaults() calls below are idempotent — they no-op if rows exist.
         try:
             from src.repositories.certification_levels_repository import certification_levels_repo
+            from src.repositories.maturity_repository import maturity_repo
 
             session_factory = get_session_factory()
             with session_factory() as db_session:
                 certification_levels_repo.seed_defaults(db_session)
+                maturity_repo.seed_defaults(db_session)
                 db_session.commit()
             logger.info("Reference data seed step complete.")
         except Exception as e:

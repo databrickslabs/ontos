@@ -7,11 +7,21 @@
   "loading": "Cargando revisiones...",
   "noRequests": "No se encontraron solicitudes de revisión.",
   "toast": {
-    "requestCreated": "Solicitud de revisión {{id}} creada.",
+    "requestCreated": "Solicitud de revisión \"{{title}}\" creada.",
     "requestDeleted": "Solicitud de revisión eliminada.",
     "deleteError": "Error al eliminar la solicitud.",
     "bulkDeleted": "{{count}} solicitud(es) eliminada(s).",
-    "bulkDeleteError": "No se pudieron eliminar algunas solicitudes."
+    "bulkDeleteError": "No se pudieron eliminar algunas solicitudes.",
+    "titleUpdated": "Título actualizado.",
+    "idCopied": "ID copiado al portapapeles."
+  },
+  "form": {
+    "titleLabel": "Título (Opcional)",
+    "titlePlaceholder": "Deja vacío para generar automáticamente desde los activos seleccionados"
+  },
+  "actions": {
+    "editTitle": "Editar título",
+    "copyId": "Copiar ID"
   },
   "confirm": {
     "deleteRequest": "¿Está seguro de que desea eliminar esta solicitud de revisión?",
@@ -24,7 +34,8 @@
     "rejected": "Rechazado"
   },
   "table": {
-    "requestId": "ID de Solicitud",
+    "title": "Título",
+    "untitled": "(sin título)",
     "asset": "Activo",
     "type": "Tipo",
     "requester": "Solicitante",

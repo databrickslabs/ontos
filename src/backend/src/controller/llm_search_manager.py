@@ -7,6 +7,7 @@ business questions about data products, glossary terms, costs, and analytics.
 """
 
 import json
+import re
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from src.common.config import Settings, get_settings
 from src.common.logging import get_logger
+from src.tools.system_prompts import get_system_prompt
 from src.models.llm_search import (
     ConversationSession, ChatMessage, ChatResponse, MessageRole,
     ToolCall, ToolName, SessionSummary, LLMSearchStatus,
@@ -27,115 +29,46 @@ from src.tools import ToolRegistry, ToolContext, create_default_registry
 logger = get_logger(__name__)
 
 
+# Internal grounding markers — the system prompt instructs the model to emit
+# two kinds of markers so reviewers can audit grounding, but neither belongs in
+# the user-facing response. Strip server-side as a safety net:
+#   1. `<!-- ref: file.md#anchor -->` — citation comments. Most markdown
+#      renderers drop HTML comments, but the chat UI surfaces them as text.
+#   2. `[Confirmed]` / `[Documented]` / `[Inferred]` — three-tier confidence
+#      labels. The model still emits them so the act of stratifying anchors
+#      the answer in the right source; we capture for audit but hide from
+#      end users.
+# Capture both into debug_info (`internal_citations`, `confidence_labels`).
+_CITATION_COMMENT_RE = re.compile(r"<!--\s*ref:\s*([^>]+?)\s*-->")
+_CONFIDENCE_LABEL_RE = re.compile(r"\s*\[(Confirmed|Documented|Inferred)\]")
+
+
+def _strip_internal_citations(text: str) -> Tuple[str, List[str], List[str]]:
+    """Remove internal grounding markers from the response.
+
+    Returns (cleaned_text, citations, confidence_labels). The cleaned text has
+    both kinds of markers removed and any triple-newlines created by the strip
+    collapsed back to doubles.
+    """
+    if not text:
+        return text, [], []
+    citations = [m.strip() for m in _CITATION_COMMENT_RE.findall(text)]
+    confidence_labels = list(_CONFIDENCE_LABEL_RE.findall(text))
+    cleaned = _CITATION_COMMENT_RE.sub("", text)
+    cleaned = _CONFIDENCE_LABEL_RE.sub("", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).rstrip()
+    return cleaned, citations, confidence_labels
+
+
 # ============================================================================
 # System Prompt
 # ============================================================================
-
-SYSTEM_PROMPT = """You are Ontos, an intelligent data governance assistant. You help users discover, understand, and analyze data within their organization.
-
-## Your Capabilities
-
-You have access to the following tools:
-
-1. **search_data_products** - Search for data products by name, domain, description, or keywords. Use this to find available datasets.
-
-2. **search_glossary_terms** - Search the knowledge graph for business concepts, terms, and their definitions from loaded ontologies and taxonomies.
-
-3. **get_data_product_costs** - Get cost information for data products, including infrastructure, HR, storage, and other costs.
-
-4. **get_table_schema** - Get the schema (columns and types) of a specific table. Use this before writing analytics queries.
-
-5. **execute_analytics_query** - Execute a read-only SQL SELECT query against Databricks tables. Use this for aggregations, joins, and data analysis.
-
-6. **explore_catalog_schema** - List all tables and views in a Unity Catalog schema with their columns. Use this to understand what data assets exist and suggest semantic models or data products.
-
-7. **create_draft_data_contract** - Create a new draft data contract from schema information. Always create contracts in draft status for user review.
-
-8. **create_draft_data_product** - Create a new draft data product, optionally linked to a contract. Always create products in draft status for user review.
-
-9. **update_data_product** - Update an existing data product's domain, description, or status.
-
-10. **update_data_contract** - Update an existing data contract's domain, description, or status.
-
-11. **add_semantic_link** - Link a data product or contract to a business term/concept from the knowledge graph. Use search_glossary_terms first to find the concept IRI.
-
-12. **list_semantic_links** - List semantic links (business term associations) for a data product or contract.
-
-13. **remove_semantic_link** - Remove a semantic link. Use list_semantic_links first to find the link ID.
-
-14. **search_tags** - Search for existing tags by name, namespace, or description.
-
-15. **create_tag** - Create a new tag. Tags use the format `namespace/tag_name` (e.g., `import/healthcare` creates tag 'healthcare' in namespace 'import'). If no slash is present, the tag goes into the 'default' namespace. Namespaces are auto-created if they don't exist.
-
-16. **assign_tag_to_entity** - Assign an existing tag to a data product, data contract, domain, team, or project. Use search_tags first to find the tag ID.
-
-17. **list_entity_tags** - List all tags assigned to a specific entity.
-
-18. **remove_tag_from_entity** - Remove a tag assignment from an entity.
-
-## Tag Naming Convention
-
-Tags are organized using namespaces with a slash (`/`) separator:
-- `namespace/tag_name` format (e.g., `import/healthcare`, `compliance/gdpr`, `pii/sensitive`)
-- If no slash is present (e.g., just `pii`), the tag uses the 'default' namespace
-- Examples:
-  - `import/healthcare` → namespace='import', tag='healthcare'
-  - `compliance/gdpr` → namespace='compliance', tag='gdpr'
-  - `customer-data` → namespace='default', tag='customer-data'
-
-## Discovery Strategy (IMPORTANT - follow this priority order)
-
-When users ask about finding, discovering, or locating data, ALWAYS follow this priority order:
-
-**Tier 1 - Governed Assets (search first, always):**
-- search_data_products: Search for curated, governed data products
-- global_search: Search across all indexed features (products, contracts, terms)
-- search_glossary_terms + find_entities_by_concept: Find products/contracts linked to business concepts
-
-**Tier 2 - Data Contracts and Semantic Enrichment:**
-- search_data_contracts: Search for data contracts that may describe relevant data
-- search_glossary_terms: Explore business concepts and definitions
-
-**Tier 3 - Unity Catalog Direct Exploration (ONLY when appropriate):**
-- list_catalogs, explore_catalog_schema, get_table_schema: Browse raw catalog assets
-- ONLY use these when:
-  (a) The user explicitly asks to explore catalogs, schemas, or tables, OR
-  (b) Tier 1 and Tier 2 returned no results AND you've communicated that to the user
-
-NEVER skip to Tier 3 directly. Data Products are the primary offering of this platform.
-
-## Additional Guidelines
-
-- When users ask about a concept, topic, or term you don't immediately recognize as a data product or catalog item, always try search_glossary_terms first -- it searches loaded ontologies and taxonomies that may contain the concept (e.g., domain-specific terms like "pizza", "customer", "transaction")
-- When searching for data products by a business concept or topic, also use search_glossary_terms to find matching ontology concepts, then find_entities_by_concept with the concept IRI to discover products linked semantically. Combine results from both search_data_products and the semantic tool chain for comprehensive discovery.
-- When executing analytics queries, first get the table schema to understand available columns
-- Explain your reasoning and cite the data sources you used
-- If you don't have access to certain data or a query fails, explain why and suggest alternatives
-- Format responses with clear sections, tables, and bullet points for readability
-- Be concise but thorough - include relevant context without unnecessary verbosity
-
-## Response Format
-
-When presenting data:
-- Use markdown tables for tabular results. IMPORTANT: Tables must have proper line breaks between each row:
-  ```
-  | Column1 | Column2 |
-  |---------|---------|
-  | value1  | value2  |
-  | value3  | value4  |
-  ```
-  Never put multiple table rows on a single line.
-- Use bullet points for lists
-- Bold important numbers and findings
-- Include units (USD, %, etc.) where applicable
-
-## Limitations
-
-- You can only execute read-only SELECT queries
-- Query results are limited to 1000 rows
-- You can only access tables the user has permissions for
-- Cost data may not be complete for all products
-"""
+#
+# The default prompt and the `LLM_SYSTEM_PROMPT` env-override path now live
+# in `src.tools.system_prompts.get_system_prompt`. This manager calls
+# it once per `_process_with_llm` invocation. Phase 2/3 will start passing
+# personalization context (role, page, selected entity, adoption mode)
+# through that function — the signature already accepts those.
 
 
 # ============================================================================
@@ -564,12 +497,19 @@ class LLMSearchManager:
         from src.tools.query_classifier import classify_query
         user_query = self._get_latest_user_message(session)
         categories = classify_query(user_query)
-        
+
         # Get filtered tool definitions based on query categories
         tool_definitions = self._tool_registry.get_openai_definitions_filtered(categories)
         tool_names = [td["function"]["name"] for td in tool_definitions]
         logger.info(f"Using {len(tool_definitions)} tools for categories: {categories}")
-        
+
+        # Resolve the system prompt once per chat invocation. The
+        # `get_system_prompt` helper honors `Settings.LLM_SYSTEM_PROMPT`
+        # as a verbatim override (previously dead code) and otherwise
+        # returns the default grounded prompt. Phase 2/3 will pass role
+        # / page / entity / adoption-mode context here.
+        system_prompt = get_system_prompt(settings=self._settings)
+
         if debug_info is not None:
             debug_info["query_classification"] = {
                 "user_query": user_query,
@@ -578,7 +518,10 @@ class LLMSearchManager:
                 "tools_count": len(tool_definitions),
             }
             debug_info["model"] = self._settings.LLM_ENDPOINT
-            debug_info["system_prompt_length"] = len(SYSTEM_PROMPT)
+            debug_info["system_prompt_length"] = len(system_prompt)
+            debug_info["system_prompt_source"] = (
+                "env_override" if self._settings.LLM_SYSTEM_PROMPT else "default"
+            )
             # Count prior messages to show if the LLM has conversation context
             prior_msgs = session.messages[:-1]  # exclude the just-added user message
             prior_tool_msgs = [m for m in prior_msgs if m.role == MessageRole.TOOL]
@@ -597,7 +540,7 @@ class LLMSearchManager:
                 raise RuntimeError(f"Session {session_id} not found in cache")
             
             # Build messages for LLM
-            messages = current_session.get_messages_for_llm(SYSTEM_PROMPT)
+            messages = current_session.get_messages_for_llm(system_prompt)
             
             # Call LLM
             try:
@@ -697,13 +640,18 @@ class LLMSearchManager:
                         content=json.dumps(result_dict), tool_call_id=tc.id
                     )
             else:
+                cleaned_content, citations, confidence_labels = _strip_internal_citations(
+                    assistant_message.content or ""
+                )
                 if debug_info is not None:
                     if iter_debug is not None:
                         debug_info["iterations"].append(iter_debug)
                     debug_info["total_tool_calls"] = total_tool_calls
                     debug_info["total_iterations"] = iteration + 1
                     debug_info["total_elapsed_ms"] = int((time.time() - process_start) * 1000)
-                return assistant_message.content or "", total_tool_calls, sources, debug_info
+                    debug_info["internal_citations"] = citations
+                    debug_info["confidence_labels"] = confidence_labels
+                return cleaned_content, total_tool_calls, sources, debug_info
             
             if debug_info is not None and iter_debug is not None:
                 debug_info["iterations"].append(iter_debug)

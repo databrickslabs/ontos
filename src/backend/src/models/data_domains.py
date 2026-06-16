@@ -24,9 +24,7 @@ class DataDomainBase(BaseModel):
 
     @field_validator('tags', mode='before')
     def validate_tags(cls, v):
-        if v is None:
-            return v
-        # All tags should now be AssignedTagCreate objects
+        # All tags should now be AssignedTagCreate objects; passed through as-is.
         return v
 
 # --- Create Model --- #
@@ -43,9 +41,7 @@ class DataDomainUpdate(BaseModel):
 
     @field_validator('tags', mode='before')
     def validate_update_tags(cls, v):
-        if v is None:
-            return v
-        # All tags should now be AssignedTagCreate objects
+        # All tags should now be AssignedTagCreate objects; passed through as-is.
         return v
 
 # --- Read Model (includes DB fields) --- #

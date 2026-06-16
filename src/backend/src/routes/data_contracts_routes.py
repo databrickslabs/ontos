@@ -1072,7 +1072,7 @@ async def handle_deploy_request_response(
     notifications: NotificationsManagerDep,
     payload: HandleDeployPayload = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('self-service', FeatureAccessLevel.READ_WRITE)),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Handle a deployment request decision (approve/deny). Optionally executes deployment."""
     try:

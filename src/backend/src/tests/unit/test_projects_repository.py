@@ -43,7 +43,6 @@ class TestProjectRepository:
         db_session.refresh(project_db)
 
         # Assert
-        assert project_db is not None
         assert project_db.name == "Test Project"
 
     # =====================================================================

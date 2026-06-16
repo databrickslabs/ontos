@@ -334,16 +334,26 @@ class TestSettingsManager:
         assert 'Read/Write' in result['settings']['allowed_levels']
         assert 'Admin' in result['settings']['allowed_levels']
 
-        # Each Settings sub-page has its own dedicated permission ID
+        # Settings sub-pages that need their own dedicated permission ID.
+        # The reference-data sub-pages (data-domains, business-roles,
+        # delivery-methods, teams, projects, audit) and the consolidated
+        # cross-cutting sub-pages (tags, jobs) reuse their consumption
+        # permission instead, so they are no longer expected here.
         expected_subpage_ids = {
-            'settings-data-domains', 'settings-business-roles',
-            'settings-delivery-methods', 'settings-asset-types',
-            'settings-teams', 'settings-projects',
-            'settings-certification-levels', 'settings-general',
-            'settings-ui', 'settings-tags', 'settings-connectors',
-            'settings-git', 'settings-mcp', 'settings-semantic-models',
-            'settings-search', 'settings-jobs', 'settings-delivery',
-            'settings-workflows', 'settings-roles', 'settings-audit',
+            'settings-asset-types',
+            'settings-certification-levels',
+            'settings-maturity-levels',
+            'settings-general',
+            'settings-ui',
+            'settings-connectors',
+            'settings-git',
+            'settings-mcp',
+            'settings-directory',
+            'settings-semantic-models',
+            'settings-search',
+            'settings-delivery',
+            'settings-workflows',
+            'settings-roles',
         }
         missing = expected_subpage_ids - set(result.keys())
         assert not missing, f"Missing settings sub-page IDs: {missing}"

@@ -650,10 +650,11 @@ class DatabricksConnector(AssetConnector):
             if table.columns:
                 columns = []
                 for col in table.columns:
+                    type_name_value = col.type_name.value if col.type_name else None
                     columns.append(ColumnInfo(
                         name=col.name,
-                        data_type=col.type_text or str(col.type_name) if col.type_name else "unknown",
-                        logical_type=str(col.type_name) if col.type_name else None,
+                        data_type=col.type_text or type_name_value or "unknown",
+                        logical_type=type_name_value,
                         nullable=col.nullable if col.nullable is not None else True,
                         description=col.comment,
                         is_partition_key=col.partition_index is not None,
@@ -727,7 +728,7 @@ class DatabricksConnector(AssetConnector):
                     columns.append(ColumnInfo(
                         name=param.name,
                         data_type=param.type_text or "unknown",
-                        logical_type=str(param.type_name) if param.type_name else None,
+                        logical_type=param.type_name.value if param.type_name else None,
                         description=param.comment,
                     ))
                 schema_info = SchemaInfo(columns=columns)

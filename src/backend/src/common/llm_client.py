@@ -52,13 +52,22 @@ def create_openai_client(
         try:
             from databricks.sdk.core import Config
 
-            config = Config()
+            config_kwargs = {}
+            if settings.DATABRICKS_CONFIG_PROFILE:
+                # pydantic doesn't push .env values to os.environ; pass profile explicitly
+                config_kwargs["profile"] = settings.DATABRICKS_CONFIG_PROFILE
+            config = Config(**config_kwargs)
             headers = config.authenticate()
             if headers and "Authorization" in headers:
                 auth_header = headers["Authorization"]
                 if auth_header.startswith("Bearer "):
                     token = auth_header[7:]
-                    logger.info("Using token from Databricks SDK (default config)")
+                    logger.info(
+                        "Using token from Databricks SDK (%s)",
+                        f"profile={settings.DATABRICKS_CONFIG_PROFILE}"
+                        if settings.DATABRICKS_CONFIG_PROFILE
+                        else "default config",
+                    )
         except Exception as sdk_err:
             logger.debug("Could not get token from SDK config: %s", sdk_err)
 

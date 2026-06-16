@@ -3,6 +3,18 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { X, Shapes, Columns2 } from 'lucide-react'
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
+import type { TermMappingTargetEntityType } from '@/types/term-mapping'
+
+// Entity types we know map cleanly to a term-mapping adapter. Strings outside
+// this list silently disable the inline-suggester tier.
+const MAPPING_ENTITY_TYPES: TermMappingTargetEntityType[] = [
+  'asset',
+  'data_contract',
+  'data_contract_schema',
+  'data_contract_property',
+  'data_product',
+  'dataset',
+]
 
 interface BusinessConcept {
   iri: string
@@ -16,13 +28,25 @@ interface BusinessConceptsDisplayProps {
   entityType?: string
   entityId?: string
   conceptType?: 'class' | 'property'
+  // Synthetic-target hints forwarded to the inline term-mapping suggester.
+  // Pass these when the entity isn't persisted yet (e.g. a property still
+  // being typed in a form) so suggestions can be derived from the name
+  // alone, before the entity has a stable id in the DB.
+  entityName?: string
+  entityTypeLabel?: string
+  parentEntityName?: string
 }
 
 export default function BusinessConceptsDisplay({
   concepts = [],
   onConceptsChange,
   parentConceptIris,
-  conceptType = 'class'
+  entityType,
+  entityId,
+  conceptType = 'class',
+  entityName,
+  entityTypeLabel,
+  parentEntityName,
 }: BusinessConceptsDisplayProps) {
   const [showDialog, setShowDialog] = useState(false)
 
@@ -105,6 +129,17 @@ export default function BusinessConceptsDisplay({
         onSelect={handleAddConcept}
         parentConceptIris={parentConceptIris}
         entityType={conceptType}
+        mappingSource={
+          entityType && entityId && (MAPPING_ENTITY_TYPES as string[]).includes(entityType)
+            ? {
+                entity_type: entityType as TermMappingTargetEntityType,
+                entity_id: entityId,
+                ...(entityName ? { name: entityName } : {}),
+                ...(entityTypeLabel ? { type_label: entityTypeLabel } : {}),
+                ...(parentEntityName ? { parent_name: parentEntityName } : {}),
+              }
+            : undefined
+        }
       />
     </div>
   )

@@ -21,36 +21,79 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { normaliseAssignedGroups } from '@/lib/assigned-groups';
 
-// Order within the Settings group should mirror the Settings sidebar
-// (Reference Data → Configuration → Integrations → Operations → Access Control)
-// rather than alphabetical. Anything not listed here falls to the bottom.
-const SETTINGS_GROUP_ORDER: string[] = [
-    // Reference Data
-    'settings-data-domains',
-    'settings-business-roles',
-    'settings-delivery-methods',
-    'settings-asset-types',
-    'settings-teams',
-    'settings-projects',
-    'settings-certification-levels',
-    // Configuration
-    'settings-general',
-    'settings-ui',
-    'settings-tags',
-    'settings-connectors',
-    // Integrations
-    'settings-git',
-    'settings-mcp',
-    'settings-semantic-models',
-    'settings-search',
-    // Operations
-    'settings-jobs',
-    'settings-delivery',
-    'settings-workflows',
-    // Access Control
-    'settings-roles',
-    'settings-audit',
-    // Parent settings gate sits at the very top of the group
+// Sub-groups within the Settings permission group mirror the Settings
+// sidebar layout (Reference Data → Configuration → Integrations →
+// Operations → Access Control). Each sub-group renders as its own
+// heading (e.g. "Settings — Reference Data") so we don't repeat the
+// "Settings — " prefix on every individual permission row.
+interface SettingsSubGroup {
+    titleKey: string;
+    defaultTitle: string;
+    items: string[]; // permission IDs in display order
+}
+
+const SETTINGS_SUB_GROUPS: SettingsSubGroup[] = [
+    {
+        titleKey: 'roles.permissions.settingsSubGroups.referenceData',
+        defaultTitle: 'Reference Data',
+        // Order matches the Settings sidebar (Reference Data section in
+        // settings-layout.tsx). `business-owners` is intentionally NOT
+        // here — it has no Settings sidebar entry and is rendered with
+        // the other cross-cutting consumption perms.
+        items: [
+            'data-domains',
+            'business-roles',
+            'delivery-methods',
+            'settings-asset-types',
+            'teams',
+            'projects',
+            'settings-certification-levels',
+            'settings-maturity-levels',
+        ],
+    },
+    {
+        titleKey: 'roles.permissions.settingsSubGroups.configuration',
+        defaultTitle: 'Configuration',
+        // `tags` gates both the Tags settings page (ADMIN level for
+        // taxonomy management) and tag application throughout the app
+        // (READ_WRITE level for detail panels, pickers, etc.).
+        items: [
+            'settings-general',
+            'settings-ui',
+            'tags',
+            'settings-connectors',
+        ],
+    },
+    {
+        titleKey: 'roles.permissions.settingsSubGroups.integrations',
+        defaultTitle: 'Integrations',
+        items: [
+            'settings-git',
+            'settings-mcp',
+            'settings-directory',
+            'settings-semantic-models',
+            'settings-search',
+        ],
+    },
+    {
+        titleKey: 'roles.permissions.settingsSubGroups.operations',
+        defaultTitle: 'Operations',
+        // `jobs` gates both the Jobs settings page and any cross-app
+        // job APIs (single permission, level expresses scope).
+        items: [
+            'jobs',
+            'settings-delivery',
+            'settings-workflows',
+        ],
+    },
+    {
+        titleKey: 'roles.permissions.settingsSubGroups.accessControl',
+        defaultTitle: 'Access Control',
+        items: [
+            'settings-roles',
+            'audit',
+        ],
+    },
 ];
 
 interface RoleFormDialogProps {
@@ -451,9 +494,12 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 
                                         {(() => {
                                             const orderedFeatureById = new Map(orderedFeatures.map(f => [f.id, f]));
-                                            // Bucket features into groups defined by the backend config.
+                                            // Bucket features into groups defined by the backend config,
+                                            // skipping any flagged hidden_from_role_dialog (backend-only
+                                            // permissions that have no end-user UI surface).
                                             const grouped = new Map<PermissionGroup, [string, FeatureConfig][]>();
                                             for (const [id, conf] of Object.entries(featuresConfig)) {
+                                                if (conf.hidden_from_role_dialog) continue;
                                                 const g = (conf.group ?? 'Other') as PermissionGroup;
                                                 if (!grouped.has(g)) grouped.set(g, []);
                                                 grouped.get(g)!.push([id, conf]);
@@ -462,22 +508,56 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                             const sortByName = (a: [string, FeatureConfig], b: [string, FeatureConfig]) =>
                                                 (a[1].name || a[0]).localeCompare(b[1].name || b[0]);
 
-                                            // Settings group preserves sidebar order; other groups sort alphabetically.
-                                            const settingsRank = (id: string): number => {
-                                                if (id === 'settings') return -1; // parent gate at top
-                                                const idx = SETTINGS_GROUP_ORDER.indexOf(id);
-                                                return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
-                                            };
-                                            const sortSettings = (a: [string, FeatureConfig], b: [string, FeatureConfig]) => {
-                                                const ra = settingsRank(a[0]);
-                                                const rb = settingsRank(b[0]);
+                                            // Each top-level group (Discover/Build/Govern/Deploy) is
+                                            // ordered to match the main-menu nav order. We rank each
+                                            // permission by its index in `orderedFeatures` (the nav
+                                            // config). Permissions that don't appear in the nav (e.g.
+                                            // cross-cutting consumption-side perms like `business-owners`,
+                                            // `comments`, `audit`) fall to the bottom of their group in
+                                            // alphabetical order.
+                                            const navRank = new Map<string, number>();
+                                            orderedFeatures.forEach((f, idx) => {
+                                                const permId = f.permissionId || f.id;
+                                                if (!navRank.has(permId)) navRank.set(permId, idx);
+                                            });
+                                            const sortByNavOrder = (a: [string, FeatureConfig], b: [string, FeatureConfig]) => {
+                                                const ra = navRank.has(a[0]) ? navRank.get(a[0])! : Number.MAX_SAFE_INTEGER;
+                                                const rb = navRank.has(b[0]) ? navRank.get(b[0])! : Number.MAX_SAFE_INTEGER;
                                                 if (ra !== rb) return ra - rb;
                                                 return sortByName(a, b);
                                             };
 
+                                            // Non-Settings groups follow nav order; Settings has bespoke
+                                            // sub-group ordering handled separately below.
                                             for (const [g, items] of grouped) {
-                                                items.sort(g === 'Settings' ? sortSettings : sortByName);
+                                                if (g !== 'Settings') items.sort(sortByNavOrder);
                                             }
+
+                                            // Within each non-Settings group, split into "sidebar
+                                            // items" (have a nav entry) and "cross-cutting items"
+                                            // (no sidebar entry — surfaced inline). Cross-cutting
+                                            // items are flagged on the backend config so the role
+                                            // editor can render them under a separate "Background"
+                                            // heading to distinguish them from the main sidebar
+                                            // features.
+                                            const splitCrossCutting = (
+                                                items: [string, FeatureConfig][],
+                                            ): {
+                                                sidebar: [string, FeatureConfig][];
+                                                crossCutting: [string, FeatureConfig][];
+                                            } => {
+                                                const sidebar: [string, FeatureConfig][] = [];
+                                                const crossCutting: [string, FeatureConfig][] = [];
+                                                for (const entry of items) {
+                                                    if (entry[1].cross_cutting) {
+                                                        crossCutting.push(entry);
+                                                    } else {
+                                                        sidebar.push(entry);
+                                                    }
+                                                }
+                                                crossCutting.sort(sortByName);
+                                                return { sidebar, crossCutting };
+                                            };
 
                                             const groupLabelKey = (g: PermissionGroup) => {
                                                 switch (g) {
@@ -490,13 +570,16 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                 }
                                             };
 
-                                            const renderRow = (featureId: string, featureConf: FeatureConfig) => {
+                                            const renderRow = (
+                                                featureId: string,
+                                                featureConf: FeatureConfig,
+                                            ) => {
                                                 const navFeature = orderedFeatureById.get(featureId);
                                                 const label = featureConf.name || navFeature?.name || featureId;
                                                 const description = navFeature?.description ?? '';
                                                 const allowedLevels = Array.isArray(featureConf.allowed_levels) ? featureConf.allowed_levels : [];
                                                 return (
-                                                    <div key={featureId} className="flex items-center justify-between space-x-4 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                                                    <div key={featureId} className="flex items-center justify-between space-x-4 py-2">
                                                         <Label htmlFor={`permissions-${featureId}`} className="text-sm font-normal flex-1">
                                                             {label}
                                                             {description && <p className="text-xs text-muted-foreground">{description}</p>}
@@ -535,16 +618,98 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                 );
                                             };
 
+                                            // Tailwind classes for a top-level section block. The first
+                                            // section sits flush; every subsequent section gets a divider
+                                            // line and spacing above it.
+                                            const sectionClass = 'space-y-1 pt-6 mt-6 border-t border-gray-200 dark:border-gray-700 first:pt-0 first:mt-0 first:border-t-0';
+                                            // Sub-section (inside the Settings group) — slightly tighter
+                                            // spacing but still divided from its predecessor.
+                                            const subSectionClass = 'space-y-1 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700 first:pt-0 first:mt-0 first:border-t-0';
+
+                                            // Special renderer for the Settings group: parent gate at the
+                                            // top, then each sub-group rendered as its own "Settings — X"
+                                            // heading mirroring the Settings sidebar layout.
+                                            const renderSettingsGroup = (items: [string, FeatureConfig][]): React.ReactElement => {
+                                                const byId = new Map(items);
+                                                const parent = byId.get('settings');
+                                                const consumed = new Set<string>();
+                                                if (parent) consumed.add('settings');
+
+                                                const settingsLabel = t(groupLabelKey('Settings'), 'Settings');
+
+                                                return (
+                                                    <div key="Settings" className={sectionClass}>
+                                                        <h5 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                                                            {settingsLabel}
+                                                        </h5>
+                                                        {parent && renderRow('settings', parent)}
+                                                        {SETTINGS_SUB_GROUPS.map(sub => {
+                                                            const subItems = sub.items
+                                                                .map(id => {
+                                                                    const conf = byId.get(id);
+                                                                    if (conf) consumed.add(id);
+                                                                    return conf ? ([id, conf] as [string, FeatureConfig]) : null;
+                                                                })
+                                                                .filter((x): x is [string, FeatureConfig] => x !== null);
+                                                            if (subItems.length === 0) return null;
+                                                            const subTitle = t(sub.titleKey, sub.defaultTitle);
+                                                            return (
+                                                                <div key={sub.defaultTitle} className={subSectionClass}>
+                                                                    <h6 className="text-sm font-medium text-foreground mb-1">
+                                                                        {`${settingsLabel} — ${subTitle}`}
+                                                                    </h6>
+                                                                    {subItems.map(([id, conf]) => renderRow(id, conf))}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {/* Any Settings-group items not classified into one of the
+                                                            sub-groups above fall here. In practice these are the
+                                                            cross-cutting perms that don't have a sidebar entry
+                                                            (e.g. business-owners). They render under a
+                                                            "Background" heading to distinguish from sidebar
+                                                            pages. */}
+                                                        {(() => {
+                                                            const leftovers = items
+                                                                .filter(([id]) => !consumed.has(id))
+                                                                .sort(sortByName);
+                                                            if (leftovers.length === 0) return null;
+                                                            return (
+                                                                <div key="settings-background" className={subSectionClass}>
+                                                                    <h6 className="text-sm font-medium text-foreground mb-1">
+                                                                        {`${settingsLabel} — ${t('roles.permissions.crossCutting', 'Background')}`}
+                                                                    </h6>
+                                                                    {leftovers.map(([id, conf]) => renderRow(id, conf))}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                );
+                                            };
+
                                             const sections: React.ReactElement[] = [];
                                             for (const g of PERMISSION_GROUP_ORDER) {
                                                 const items = grouped.get(g);
                                                 if (!items || items.length === 0) continue;
+                                                if (g === 'Settings') {
+                                                    sections.push(renderSettingsGroup(items));
+                                                    continue;
+                                                }
+                                                const groupLabel = t(groupLabelKey(g), g);
+                                                const { sidebar, crossCutting } = splitCrossCutting(items);
                                                 sections.push(
-                                                    <div key={g} className="space-y-1 pt-3 first:pt-0">
+                                                    <div key={g} className={sectionClass}>
                                                         <h5 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                                                            {t(groupLabelKey(g), g)}
+                                                            {groupLabel}
                                                         </h5>
-                                                        {items.map(([id, conf]) => renderRow(id, conf))}
+                                                        {sidebar.map(([id, conf]) => renderRow(id, conf))}
+                                                        {crossCutting.length > 0 && (
+                                                            <div className={subSectionClass}>
+                                                                <h6 className="text-sm font-medium text-foreground mb-1">
+                                                                    {`${groupLabel} — ${t('roles.permissions.crossCutting', 'Background')}`}
+                                                                </h6>
+                                                                {crossCutting.map(([id, conf]) => renderRow(id, conf))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             }

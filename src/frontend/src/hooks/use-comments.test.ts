@@ -13,6 +13,7 @@ describe('useComments Hook', () => {
   const mockGet = vi.fn();
   const mockPost = vi.fn();
   const mockPut = vi.fn();
+  const mockPatch = vi.fn();
   const mockDelete = vi.fn();
   const mockToast = vi.fn();
 
@@ -24,6 +25,7 @@ describe('useComments Hook', () => {
       get: mockGet,
       post: mockPost,
       put: mockPut,
+      patch: mockPatch,
       delete: mockDelete,
       loading: false,
     });

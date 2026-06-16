@@ -37,7 +37,6 @@ class TestWorkflowInstallationRepository:
         db_session.refresh(installation_db)
 
         # Assert
-        assert installation_db is not None
         assert installation_db.workflow_id == "test-workflow"
 
     def test_get_installation_by_id(self, repository, db_session):

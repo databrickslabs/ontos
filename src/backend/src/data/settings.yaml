@@ -48,6 +48,8 @@ roles:
       data-asset-reviews: Admin
       catalog-commander: Full
       comments: Read/Write
+      process-workflows: Read-only  # View workflows; admins manage definitions
+      access-grants: Admin  # DGO approves access grants
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY
@@ -83,6 +85,8 @@ roles:
       data-asset-reviews: Read/Write
       catalog-commander: Read-only
       comments: Read/Write
+      process-workflows: Read-only  # View workflows; admins manage definitions
+      access-grants: Read/Write  # Can request grants on behalf of stewarded data
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY
@@ -116,6 +120,8 @@ roles:
       business-glossary: Read-only
       catalog-commander: Read-only
       comments: Read/Write
+      process-workflows: Read-only  # View workflows that affect own requests
+      access-grants: Read-only  # See own grants
     home_sections:
       - DISCOVERY
 
@@ -134,6 +140,8 @@ roles:
       business-glossary: Read-only
       catalog-commander: Read-only
       comments: Read/Write
+      process-workflows: Read-only  # View workflows triggered by own products
+      access-grants: Read/Write  # Can request grants for own products
     home_sections:
       - DATA_CURATION
       - DISCOVERY
@@ -159,6 +167,8 @@ roles:
       compliance: Read/Write
       data-asset-reviews: Read-only
       comments: Read/Write
+      process-workflows: Read-only  # View workflows; admins manage definitions
+      access-grants: Admin  # Security Officer approves access grants
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY

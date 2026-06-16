@@ -35,6 +35,21 @@ export interface FeatureConfig {
     name: string;
     allowed_levels: FeatureAccessLevel[];
     group?: PermissionGroup;
+    /**
+     * When true, the feature is enforced at the API layer but is not
+     * surfaced as a configurable row in the role editor. Used for
+     * backend-only permissions that admins implicitly hold (e.g.
+     * `notifications`, `entity_subscriptions`).
+     */
+    hidden_from_role_dialog?: boolean;
+    /**
+     * When true, the feature has no dedicated sidebar entry — it is
+     * surfaced inline (panels on detail pages, inline actions, etc.).
+     * The role editor renders these features in a separate "Background"
+     * sub-section under their primary group so admins can distinguish
+     * them from the main sidebar features.
+     */
+    cross_cutting?: boolean;
 }
 
 export enum HomeSection {

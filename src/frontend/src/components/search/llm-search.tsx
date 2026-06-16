@@ -34,6 +34,7 @@ import type {
   SessionSummary,
 } from '@/types/llm-search';
 import { fetchLLMStatus, fetchSessions, sendMessage, deleteSession } from './llm-search-api';
+import { useUICustomizationStore } from '@/stores/ui-customization-store';
 
 
 // ============================================================================
@@ -428,6 +429,7 @@ function ExampleQuestions({ onSelectQuestion }: ExampleQuestionsProps) {
 
 export default function LLMSearch() {
   const { t } = useTranslation(['search', 'common']);
+  const shortName = useUICustomizationStore((s) => s.getShortName());
   const [status, setStatus] = useState<LLMSearchStatus | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
@@ -721,7 +723,7 @@ export default function LLMSearch() {
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
-              {t('search:llm.title')}
+              {t('search:llm.title', { shortName })}
             </CardTitle>
             <CardDescription className="mt-1">
               {t('search:llm.subtitle')}

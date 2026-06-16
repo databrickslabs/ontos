@@ -28,6 +28,7 @@ class DataAssetReviewRepository(CRUDBase[DataAssetReviewRequestDb, DataAssetRevi
             "id": obj_in.id,
             "requester_email": obj_in.requester_email,
             "reviewer_email": obj_in.reviewer_email,
+            "title": obj_in.title,
             "status": obj_in.status.value,
             "notes": obj_in.notes,
             # created_at/updated_at handled by DB defaults
@@ -91,6 +92,31 @@ class DataAssetReviewRepository(CRUDBase[DataAssetReviewRequestDb, DataAssetRevi
         if notes is not None:
             db_obj.notes = notes
         # updated_at is handled by onupdate trigger
+        db.add(db_obj)
+        db.flush()
+        db.refresh(db_obj)
+        return db_obj
+
+    def update_request_fields(
+        self,
+        db: Session,
+        *,
+        db_obj: DataAssetReviewRequestDb,
+        title: Optional[str] = None,
+        notes: Optional[str] = None,
+        title_set: bool = False,
+        notes_set: bool = False,
+    ) -> DataAssetReviewRequestDb:
+        """Updates editable scalar fields on a review request (title / notes).
+
+        `*_set` flags distinguish "field not in payload" from "field explicitly cleared
+        to null", since `None` alone cannot represent both.
+        """
+        logger.debug(f"Updating fields for DataAssetReviewRequest (DB) id: {db_obj.id}")
+        if title_set:
+            db_obj.title = title
+        if notes_set:
+            db_obj.notes = notes
         db.add(db_obj)
         db.flush()
         db.refresh(db_obj)

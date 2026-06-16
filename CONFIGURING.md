@@ -26,8 +26,15 @@ Create a `.env` file in the project root (see `.env.example` for a complete temp
 | `DATABRICKS_SCHEMA` | Default Unity Catalog schema | `default` | No |
 | `DATABRICKS_VOLUME` | Volume for storing app-related files | `app_volume` | Yes |
 | `DATABRICKS_TOKEN` | Personal access token (optional - SDK can use other auth methods) | `dapi1234567890abcdef` | No |
+| `DATABRICKS_CONFIG_PROFILE` | Profile name in `~/.databrickscfg` for OAuth U2M auth (auto-refreshes). Used only when `DATABRICKS_TOKEN` is not set. | `DEFAULT` | No |
 
 **Note:** `DATABRICKS_HTTP_PATH` is derived automatically from `DATABRICKS_WAREHOUSE_ID` and does not need to be set manually.
+
+**Databricks auth resolution order (local dev):**
+
+1. `DATABRICKS_TOKEN` — Personal Access Token (PAT). Highest priority; useful for workspaces that still issue PATs.
+2. `DATABRICKS_CONFIG_PROFILE` — named profile in `~/.databrickscfg`. The Databricks SDK uses OAuth U2M and auto-refreshes the token, so this works even when admins disable PATs (run `databricks auth login --profile <name>` once to seed the profile).
+3. SDK implicit auth — used in Databricks Apps where the platform injects credentials.
 
 ### Database Configuration
 

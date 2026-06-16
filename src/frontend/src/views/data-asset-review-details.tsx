@@ -2,19 +2,21 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ColumnDef } from "@tanstack/react-table";
-import { Loader2, AlertCircle, ArrowLeft, X, ArrowUpDown } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, X, ArrowUpDown, Pencil, Check, Copy } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import {
     DataAssetReviewRequest, ReviewedAsset, ReviewRequestStatus,
     ReviewedAssetStatus,
+    DataAssetReviewRequestUpdate,
     DataAssetReviewRequestUpdateStatus
 } from '@/types/data-asset-review';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 // Textarea - unused
 // import { Textarea } from '@/components/ui/textarea';
@@ -49,7 +51,7 @@ export default function DataAssetReviewDetails() {
     const { requestId } = useParams<{ requestId: string }>();
     const navigate = useNavigate();
     const api = useApi();
-    const { get, put } = api;
+    const { get, put, patch } = api;
     const { toast } = useToast();
     const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
     const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
@@ -61,6 +63,9 @@ export default function DataAssetReviewDetails() {
     const [selectedAsset, setSelectedAsset] = useState<ReviewedAsset | null>(null);
     const [selectedAssetIndex, setSelectedAssetIndex] = useState<number>(0);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [titleDraft, setTitleDraft] = useState('');
+    const [isSavingTitle, setIsSavingTitle] = useState(false);
 
     // Navigation helpers for asset review
     const pendingAssets = useMemo(() => 
@@ -100,7 +105,7 @@ export default function DataAssetReviewDetails() {
             const response = await get<DataAssetReviewRequest>(`/api/data-asset-reviews/${requestId}`);
             const requestData = checkApiResponse(response, 'Review Request Details');
             setRequest(requestData);
-            setDynamicTitle(`Review: ${requestData.id.substring(0, 8)}...`);
+            setDynamicTitle(requestData.title || `Review ${requestData.id.substring(0, 8)}`);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to fetch request details';
             setError(errorMessage);
@@ -121,6 +126,52 @@ export default function DataAssetReviewDetails() {
             setDynamicTitle(null);
         };
     }, [requestId, get, toast, setDynamicTitle, setStaticSegments]);
+
+    const beginEditTitle = () => {
+        if (!request) return;
+        setTitleDraft(request.title ?? '');
+        setIsEditingTitle(true);
+    };
+
+    const cancelEditTitle = () => {
+        setIsEditingTitle(false);
+        setTitleDraft('');
+    };
+
+    const handleSaveTitle = async () => {
+        if (!requestId || !request) return;
+        const trimmed = titleDraft.trim();
+        // No-op if unchanged (treat empty draft as "clear / regenerate").
+        if (trimmed === (request.title ?? '').trim()) {
+            cancelEditTitle();
+            return;
+        }
+        setIsSavingTitle(true);
+        const payload: DataAssetReviewRequestUpdate = { title: trimmed || null };
+        try {
+            const response = await patch<DataAssetReviewRequest>(`/api/data-asset-reviews/${requestId}`, payload);
+            const updated = checkApiResponse(response, 'Update Review Title');
+            setRequest(updated);
+            setDynamicTitle(updated.title || `Review ${updated.id.substring(0, 8)}`);
+            toast({ title: t('common:toast.success'), description: t('data-asset-reviews:toast.titleUpdated') });
+            setIsEditingTitle(false);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to update title';
+            toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+        } finally {
+            setIsSavingTitle(false);
+        }
+    };
+
+    const handleCopyId = async () => {
+        if (!request) return;
+        try {
+            await navigator.clipboard.writeText(request.id);
+            toast({ title: t('data-asset-reviews:toast.idCopied') });
+        } catch {
+            // Silently fail if clipboard is unavailable
+        }
+    };
 
     const handleOverallStatusChange = async (newStatus: ReviewRequestStatus) => {
         if (!requestId || !request || newStatus === request.status) return;
@@ -244,13 +295,80 @@ export default function DataAssetReviewDetails() {
     return (
         <div className="py-6">
             <div className="space-y-6">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
+                <div className="flex justify-between items-start mb-4 gap-4">
+                    <div className="min-w-0 flex-1">
                         <Button variant="outline" size="sm" onClick={() => navigate('/data-asset-reviews')} className="mb-2">
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
                         </Button>
-                        <h1 className="text-3xl font-bold">Review Request Details</h1>
-                        <p className="text-sm text-muted-foreground font-mono">ID: {request.id}</p>
+                        {isEditingTitle ? (
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    autoFocus
+                                    value={titleDraft}
+                                    maxLength={200}
+                                    onChange={(e) => setTitleDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleSaveTitle();
+                                        } else if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            cancelEditTitle();
+                                        }
+                                    }}
+                                    placeholder={t('data-asset-reviews:form.titlePlaceholder')}
+                                    className="text-2xl font-bold h-auto py-1 px-2"
+                                    disabled={isSavingTitle}
+                                />
+                                <Button
+                                    size="icon"
+                                    variant="default"
+                                    onClick={handleSaveTitle}
+                                    disabled={isSavingTitle}
+                                    aria-label={t('common:actions.save')}
+                                >
+                                    {isSavingTitle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={cancelEditTitle}
+                                    disabled={isSavingTitle}
+                                    aria-label={t('common:actions.cancel')}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 group">
+                                <h1 className="text-3xl font-bold truncate">
+                                    {request.title || t('data-asset-reviews:table.untitled')}
+                                </h1>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={beginEditTitle}
+                                    aria-label={t('data-asset-reviews:actions.editTitle')}
+                                    title={t('data-asset-reviews:actions.editTitle')}
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="text-xs text-muted-foreground font-mono">{request.id}</span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground"
+                                onClick={handleCopyId}
+                                aria-label={t('data-asset-reviews:actions.copyId')}
+                                title={t('data-asset-reviews:actions.copyId')}
+                            >
+                                <Copy className="h-3 w-3" />
+                            </Button>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <Label htmlFor="overall-status" className="text-sm font-medium">Overall Status:</Label>

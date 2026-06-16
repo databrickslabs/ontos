@@ -78,7 +78,7 @@ export default function DataAssetReviews() {
     };
 
     const handleCreateSuccess = (newRequest: DataAssetReviewRequest) => {
-        toast({ title: t('common:toast.success'), description: t('data-asset-reviews:toast.requestCreated', { id: newRequest.id }) });
+        toast({ title: t('common:toast.success'), description: t('data-asset-reviews:toast.requestCreated', { title: newRequest.title }) });
         fetchRequests(); // Refresh the list
         setIsCreateDialogOpen(false);
         // Optional: Navigate to the new request's details page
@@ -117,13 +117,17 @@ export default function DataAssetReviews() {
     // --- Column Definitions --- //
     const columns = useMemo<ColumnDef<DataAssetReviewRequest>[]>(() => [
         {
-            accessorKey: "id",
+            accessorKey: "title",
             header: ({ column }) => (
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-                    {t('data-asset-reviews:table.requestId')} <ChevronDown className="ml-2 h-4 w-4" />
+                    {t('data-asset-reviews:table.title')} <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
             ),
-            cell: ({ row }) => <div className="text-xs">{row.original.id}</div>,
+            cell: ({ row }) => (
+                <div className="text-sm font-medium">
+                    {row.original.title || t('data-asset-reviews:table.untitled')}
+                </div>
+            ),
         },
         {
             accessorKey: "status",
@@ -215,7 +219,7 @@ export default function DataAssetReviews() {
                 <DataTable
                     columns={columns}
                     data={requests}
-                    searchColumn="reviewer_email" // Or search by ID, requester, etc.
+                    searchColumn="title"
                     toolbarActions={
                         <>
                             <Button onClick={handleOpenCreateDialog} className="gap-2 h-9">

@@ -70,6 +70,10 @@ class DataContractDb(Base):
     certification_expires_at = Column(DateTime(timezone=True), nullable=True)
     certification_notes = Column(Text, nullable=True)
 
+    # ==================== Maturity ====================
+    maturity_level_order = Column(Integer, nullable=True)
+    maturity_evaluated_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     created_by = Column(String, nullable=True)

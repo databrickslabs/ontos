@@ -11,7 +11,7 @@ Manages time-limited access grants to assets including:
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -144,7 +144,7 @@ class AccessGrantsManager:
         )
         
         db.commit()
-        
+
         # Fire the ON_REQUEST_ACCESS trigger.
         # Path-B portable wizard launch: the FE merges fields collected by the
         # ``for_request_access`` approval wizard's ``user_action`` steps into
@@ -203,6 +203,9 @@ class AccessGrantsManager:
         # break the access-grant submission flow.
         if data.entity_type == "data_product":
             try:
+                from src.common.workflow_triggers import (
+                    enrich_entity_data_with_data_product,
+                )
                 from src.repositories.data_products_repository import (
                     data_product_repo,
                 )
@@ -238,14 +241,20 @@ class AccessGrantsManager:
                     # via the wizard.
                     if "consumer_principals" not in entity_data:
                         entity_data["consumer_principals"] = cp_list
+                    # Catalog + output_ports enrichment for webhook
+                    # body_templates that need ${entity.catalogs} and
+                    # ${entity.output_ports}. Helper preserves caller
+                    # keys, same opt-out discipline.
+                    enrich_entity_data_with_data_product(entity_data, dp)
                     if "data_product_name" not in entity_data and dp.name:
                         entity_data["data_product_name"] = dp.name
             except Exception:
                 logger.exception(
                     "Failed to enrich access-grant entity_data with "
                     "data-product fields for entity_id=%s; webhook "
-                    "templates referencing ${entity.consumer_principals} "
-                    "will resolve to nothing.",
+                    "templates referencing ${entity.consumer_principals}, "
+                    "${entity.output_ports}, or ${entity.catalogs} "
+                    "will resolve to empty values.",
                     data.entity_id,
                 )
 

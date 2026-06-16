@@ -21,9 +21,6 @@ class ContractCloner:
     - Sets version metadata (version_family_id, parent_contract_id, change_summary)
     """
 
-    def __init__(self):
-        pass
-
     def clone_for_new_version(
         self,
         source_contract_db,

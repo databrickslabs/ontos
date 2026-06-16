@@ -449,10 +449,11 @@ export default function CompliancePolicyDetails() {
                     <SelectValue placeholder={t('common:placeholders.selectCategory')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="security">{t('compliance:categories.security')}</SelectItem>
-                    <SelectItem value="data_quality">{t('compliance:categories.dataQuality')}</SelectItem>
-                    <SelectItem value="privacy">{t('compliance:categories.privacy')}</SelectItem>
-                    <SelectItem value="governance">{t('compliance:categories.governance')}</SelectItem>
+                    <SelectItem value="Security">{t('compliance:categories.security')}</SelectItem>
+                    <SelectItem value="Data Quality">{t('compliance:categories.dataQuality')}</SelectItem>
+                    <SelectItem value="Privacy">{t('compliance:categories.privacy')}</SelectItem>
+                    <SelectItem value="Governance">{t('compliance:categories.governance')}</SelectItem>
+                    <SelectItem value="Maturity">{t('compliance:categories.maturity', 'Maturity')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

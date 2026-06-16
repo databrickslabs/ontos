@@ -1,0 +1,154 @@
+{
+  "title": "Asignación de términos",
+  "subtitle": "Sugiera en masa asignaciones de conceptos de ontología para activos, contratos de datos y productos de datos. Las decisiones se toman en el espacio de Revisiones de activos.",
+  "actions": {
+    "refresh": "Actualizar",
+    "newRun": "Nueva ejecución",
+    "cancel": "Cancelar",
+    "applyAuto": "Aplicar automático ({{count}})",
+    "generateReview": "Generar revisión",
+    "undo": "Deshacer",
+    "selectRunHint": "Seleccione una ejecución a la izquierda o inicie una nueva."
+  },
+  "recent": {
+    "title": "Ejecuciones recientes",
+    "loading": "Cargando ejecuciones…",
+    "empty": "Aún no hay ejecuciones. Inicie una con <strong>Nueva ejecución</strong>.",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} sugerencias"
+  },
+  "detail": {
+    "runLabel": "Ejecución",
+    "createdAt": "Creada",
+    "createdBy": "por {{email}}",
+    "sourcesTitle": "Fuentes de sugerencias",
+    "customerOntologies": "Ontologías del cliente",
+    "shippedTaxonomies": "Taxonomías incluidas",
+    "reviewsLinkPrefix": "Las revisiones de los administradores viven en el espacio de",
+    "reviewsLinkText": "Revisiones de activos",
+    "reviewsLinkSuffix": "Cada sugerencia se convierte en un ReviewedAsset allí; las decisiones vuelven automáticamente a esta ejecución."
+  },
+  "stats": {
+    "targets": "Objetivos",
+    "suggestions": "Sugerencias",
+    "pending": "Pendientes",
+    "autoApply": "Aplicación automática",
+    "accepted": "Aceptadas",
+    "rejected": "Rechazadas",
+    "linksCreated": "Enlaces creados",
+    "linksSkipped": "Enlaces omitidos"
+  },
+  "toast": {
+    "applied": "Aplicado",
+    "appliedDescription": "{{created}} enlaces creados, {{skipped}} omitidos",
+    "applyFailed": "Aplicación fallida",
+    "undone": "Deshecho",
+    "undoneDescription": "{{removed}} enlaces eliminados, {{reverted}} sugerencias revertidas",
+    "undoFailed": "Deshacer fallido",
+    "loadRunFailed": "No se pudo cargar la ejecución",
+    "unknownError": "error desconocido"
+  },
+  "confirm": {
+    "undo": "¿Deshacer la ejecución {{id}}? Esto elimina todos los enlaces creados por esta ejecución."
+  },
+  "errors": {
+    "loadRunsFailed": "No se pudieron cargar las ejecuciones"
+  },
+  "runConfig": {
+    "title": "Nueva ejecución de asignación de términos",
+    "description": "Elija las ontologías y entidades objetivo. El sugeridor heurístico propondrá asignaciones de conceptos que puede revisar antes de aplicar.",
+    "customerOntologies": "Ontologías del cliente",
+    "enabledCount": "{{count}} habilitadas",
+    "loadingOntologies": "Cargando ontologías…",
+    "noCustomerOntologies": "Aún no hay ontologías del cliente cargadas. Suba una en Configuración → Fuentes RDF o genere una mediante el Generador de Ontologías, luego vuelva a abrir este diálogo.",
+    "useAll": "Usar todas las ontologías de cliente habilitadas",
+    "shippedTitle": "Incluir también taxonomías incluidas",
+    "shippedHelp": "La <code>urn:taxonomy:ontos-ontology</code> interna (esquema de tipificación de activos de Ontos) nunca es un objetivo de asignación válido.",
+    "targetTypes": "Tipos de entidad objetivo",
+    "assetTypesLabel": "Nombres de tipos de activos (separados por comas). Por defecto «Column».",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "Límite",
+    "comment": "Comentario (opcional)",
+    "commentPlaceholder": "¿Para qué es esta ejecución?",
+    "previewNoOntologies": "(sin ontologías — elija una arriba)",
+    "previewCustomerOne": "1 ontología del cliente",
+    "previewCustomerMany": "{{count}} instancias de ontología del cliente",
+    "previewShippedOne": "1 taxonomía incluida",
+    "previewShippedMany": "{{count}} taxonomías incluidas",
+    "previewTargetTypeOne": "1 tipo objetivo",
+    "previewTargetTypeMany": "{{count}} tipos objetivo",
+    "previewLine": "Buscará en <strong>{{customerPart}}</strong> en <strong>{{targetPart}}</strong>.",
+    "previewLineWithShipped": "Buscará en <strong>{{customerPart}}</strong> más <strong>{{shippedPart}}</strong> en <strong>{{targetPart}}</strong>.",
+    "submit": "Crear ejecución",
+    "submitting": "Ejecutando sugeridor…",
+    "validation": {
+      "noTargetType": "Elija al menos un tipo objetivo",
+      "noTargetTypeDescription": "Seleccione qué tipo de entidad debe analizar el sugeridor.",
+      "noOntology": "Elija al menos una ontología",
+      "noOntologyDescription": "Deje activado «Usar todas las ontologías de cliente habilitadas» o elija algunas específicas."
+    },
+    "toast": {
+      "created": "Ejecución creada",
+      "createdDescriptionOne": "Se generó 1 sugerencia para {{targets}} objetivo(s).",
+      "createdDescriptionMany": "Se generaron {{total}} sugerencias para {{targets}} objetivo(s).",
+      "createdEmpty": "Ejecución creada pero la respuesta estaba vacía",
+      "failed": "No se pudo crear la ejecución",
+      "loadOntologiesFailed": "No se pudieron cargar las ontologías"
+    }
+  },
+  "generateReview": {
+    "title": "Generar revisión para la ejecución",
+    "description": "Genera una Revisión de Activo de Datos con cada sugerencia de esta ejecución. Las decisiones tomadas en la revisión vuelven a la cola de sugerencias.",
+    "reviewerEmail": "Correo del revisor *",
+    "reviewerEmailHelp": "Por defecto es usted. Delegue a un administrador de dominio si es necesario.",
+    "reviewerEmailPlaceholder": "steward@empresa.com",
+    "notes": "Notas",
+    "notesPlaceholder": "Contexto opcional para el revisor.",
+    "includeAccepted": "Incluir también las sugerencias ya aceptadas",
+    "includeAcceptedHelp": "Útil cuando quiera que el revisor confirme decisiones anteriores, no solo clasifique filas pendientes.",
+    "eligibleSummaryOne": "1 sugerencia se convertirá en un activo revisable ({{pending}} pendientes{{acceptedPart}}).",
+    "eligibleSummaryMany": "{{eligible}} sugerencias se convertirán en activos revisables ({{pending}} pendientes{{acceptedPart}}).",
+    "acceptedPart": ", {{accepted}} aceptadas",
+    "submit": "Generar revisión",
+    "validation": {
+      "reviewerRequired": "El correo del revisor es obligatorio."
+    },
+    "toast": {
+      "created": "Revisión creada",
+      "createdDescriptionOne": "1 sugerencia en cola para revisión.",
+      "createdDescriptionMany": "{{count}} sugerencias en cola para revisión.",
+      "failed": "No se pudo crear la revisión"
+    }
+  },
+  "suggestion": {
+    "header": "Sugerencia de asignación de términos",
+    "progress": "{{current}} de {{total}}",
+    "concept": "concepto",
+    "confidence": "Confianza",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "candidato a aplicación automática",
+    "whyMatch": "Por qué esta coincidencia",
+    "noReason": "—",
+    "overrideIri": "Sobrescribir IRI objetivo (opcional)",
+    "overrideIriHelp": "Deje en blanco para aceptar la IRI sugerida. Sobrescriba para adjuntar un concepto diferente de la misma ontología.",
+    "comment": "Comentario",
+    "commentPlaceholder": "Notas para el revisor / registro de auditoría.",
+    "needsClarification": "Necesita aclaración",
+    "reject": "Rechazar",
+    "acceptApply": "Aceptar y aplicar",
+    "acceptNext": "Aceptar y siguiente",
+    "invalidFqn": "FQN de activo de asignación de términos no válido.",
+    "errors": {
+      "unparseable": "FQN de asignación de términos no analizable: {{fqn}}",
+      "notFound": "Sugerencia no encontrada en la ejecución",
+      "loadFailed": "No se pudo cargar la sugerencia"
+    },
+    "toast": {
+      "approved": "Sugerencia aprobada",
+      "rejected": "Sugerencia rechazada",
+      "clarified": "Marcada para aclaración",
+      "savedWithWarnings": "Guardado con advertencias",
+      "decisionFailed": "Decisión fallida"
+    }
+  }
+}

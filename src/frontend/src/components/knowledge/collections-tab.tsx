@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   FolderTree,
-  Plus,
   Pencil,
   Trash2,
   Download,
@@ -44,7 +43,6 @@ interface CollectionsTabProps {
   collections: KnowledgeCollection[];
   selectedCollection: KnowledgeCollection | null;
   onSelectCollection: (collection: KnowledgeCollection | null) => void;
-  onCreateCollection: () => void;
   onEditCollection: (collection: KnowledgeCollection) => void;
   onDeleteCollection: (collection: KnowledgeCollection) => void;
   onExportCollection: (collection: KnowledgeCollection, format: 'turtle' | 'rdfxml') => void;
@@ -85,7 +83,6 @@ export const CollectionsTab: React.FC<CollectionsTabProps> = ({
   collections,
   selectedCollection,
   onSelectCollection,
-  onCreateCollection,
   onEditCollection,
   onDeleteCollection,
   onExportCollection,
@@ -263,14 +260,6 @@ export const CollectionsTab: React.FC<CollectionsTabProps> = ({
           data={collections}
           searchColumn="label"
           storageKey="knowledge-collections-sort"
-          toolbarActions={
-            canEdit && (
-              <Button onClick={onCreateCollection}>
-                <Plus className="h-4 w-4 mr-2" />
-                {t('semantic-models:actions.createCollection')}
-              </Button>
-            )
-          }
           onRowClick={(row) => onSelectCollection(
             selectedCollection?.iri === row.original.iri ? null : row.original
           )}

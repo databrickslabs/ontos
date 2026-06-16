@@ -53,7 +53,7 @@ import { Link2, Unlink, GitBranch } from 'lucide-react';
 import { AssetSelector } from '@/components/common/asset-selector';
 import { EntityTreePanel } from '@/components/common/entity-tree-panel';
 import { BusinessLineageView } from '@/components/lineage';
-import { ReadinessChecklist } from '@/components/data-products/readiness-checklist';
+import { MaturityInline } from '@/components/common/maturity-inline';
 import { LineageEditor } from '@/components/common/lineage-editor';
 import { useCopilotContext } from '@/hooks/use-copilot-context';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -1317,9 +1317,6 @@ export default function DataProductDetails() {
     shouldShowSectionForViewMode(viewMode, section);
 
   if (loading || permissionsLoading) {
-    // Match the rendered shape: header has back + version navigator + S/M/L
-    // view-mode toggle on the left, multiple action buttons on the right;
-    // body has a hero, ODPS metadata panels, and an output-ports table.
     return (
       <div className="py-6 space-y-6">
         <DetailHeaderSkeleton actionButtons={6} leftControls={2} />
@@ -1572,14 +1569,17 @@ export default function DataProductDetails() {
                   {product.description?.purpose || 'No description provided'}
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-4 shrink-0">
-                <Badge variant={getStatusColor(product.status)}>
-                  {product.status || '—'}
-                </Badge>
+              <div className="flex items-end gap-5 shrink-0">
+                <div className="flex flex-col items-center gap-1">
+                  <Badge variant={getStatusColor(product.status)}>
+                    {product.status || '—'}
+                  </Badge>
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</span>
+                </div>
                 {qualitySummary && qualitySummary.items_count > 0 && (
-                  <div className="flex flex-col items-end leading-none">
+                  <div className="flex flex-col items-center gap-1">
                     <span
-                      className="text-3xl font-bold"
+                      className="text-2xl font-semibold leading-none"
                       style={{
                         color:
                           qualitySummary.overall_score_percent >= 80
@@ -1591,10 +1591,11 @@ export default function DataProductDetails() {
                     >
                       {Math.round(qualitySummary.overall_score_percent)}%
                     </span>
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">
-                      Quality
-                    </span>
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Quality</span>
                   </div>
+                )}
+                {productId && (
+                  <MaturityInline entityType="DataProduct" entityId={productId} compact />
                 )}
               </div>
             </div>
@@ -1993,9 +1994,6 @@ export default function DataProductDetails() {
         </Card>
       )}
 
-      {/* Production Readiness Checklist */}
-      {shouldShowSection('readiness') && productId && <ReadinessChecklist productId={productId} />}
-
       {/* Consumables (Input Ports) */}
       {shouldShowSection('consumables') && (
         <Card>
@@ -2311,6 +2309,15 @@ export default function DataProductDetails() {
         isOpen={iriDialogOpen}
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
+        mappingSource={
+          product?.id
+            ? {
+                entity_type: 'data_product',
+                entity_id: product.id,
+                ...(product.info?.title ? { name: product.info.title } : {}),
+              }
+            : undefined
+        }
       />
 
       <RequestProductActionDialog

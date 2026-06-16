@@ -8,6 +8,7 @@ import {
   Globe2,
   TreePine,
   Wand2,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -25,6 +26,7 @@ const conceptsNavItems: ConceptsNavItem[] = [
   { path: '/concepts/graph', labelKey: 'concepts:nav.graph', defaultLabel: 'Graph', icon: Globe2 },
   { path: '/concepts/hierarchy', labelKey: 'concepts:nav.hierarchy', defaultLabel: 'Hierarchy', icon: TreePine },
   { path: '/concepts/generator', labelKey: 'concepts:nav.generator', defaultLabel: 'Generator', icon: Wand2 },
+  { path: '/concepts/mapping', labelKey: 'concepts:nav.mapping', defaultLabel: 'Mapping', icon: Sparkles },
 ];
 
 export default function ConceptsLayout() {

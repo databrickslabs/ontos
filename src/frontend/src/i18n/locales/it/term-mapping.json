@@ -1,0 +1,154 @@
+{
+  "title": "Mappatura dei termini",
+  "subtitle": "Suggerisci in blocco assegnazioni di concetti ontologici per Asset, Contratti dati e Prodotti dati. Le decisioni vengono prese nell'area di Revisione degli asset.",
+  "actions": {
+    "refresh": "Aggiorna",
+    "newRun": "Nuova esecuzione",
+    "cancel": "Annulla",
+    "applyAuto": "Applica automatici ({{count}})",
+    "generateReview": "Genera revisione",
+    "undo": "Annulla",
+    "selectRunHint": "Seleziona un'esecuzione a sinistra o avviane una nuova."
+  },
+  "recent": {
+    "title": "Esecuzioni recenti",
+    "loading": "Caricamento esecuzioni…",
+    "empty": "Nessuna esecuzione ancora. Avviane una con <strong>Nuova esecuzione</strong>.",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} suggerimenti"
+  },
+  "detail": {
+    "runLabel": "Esecuzione",
+    "createdAt": "Creata",
+    "createdBy": "da {{email}}",
+    "sourcesTitle": "Fonti dei suggerimenti",
+    "customerOntologies": "Ontologie del cliente",
+    "shippedTaxonomies": "Tassonomie incluse",
+    "reviewsLinkPrefix": "Le revisioni dei steward vivono nell'area",
+    "reviewsLinkText": "Revisioni degli asset",
+    "reviewsLinkSuffix": "Ogni suggerimento diventa un ReviewedAsset lì; le decisioni tornano automaticamente in questa esecuzione."
+  },
+  "stats": {
+    "targets": "Bersagli",
+    "suggestions": "Suggerimenti",
+    "pending": "In sospeso",
+    "autoApply": "Applicazione auto",
+    "accepted": "Accettati",
+    "rejected": "Rifiutati",
+    "linksCreated": "Collegamenti creati",
+    "linksSkipped": "Collegamenti saltati"
+  },
+  "toast": {
+    "applied": "Applicato",
+    "appliedDescription": "{{created}} collegamenti creati, {{skipped}} saltati",
+    "applyFailed": "Applicazione fallita",
+    "undone": "Annullato",
+    "undoneDescription": "{{removed}} collegamenti rimossi, {{reverted}} suggerimenti annullati",
+    "undoFailed": "Annullamento fallito",
+    "loadRunFailed": "Impossibile caricare l'esecuzione",
+    "unknownError": "errore sconosciuto"
+  },
+  "confirm": {
+    "undo": "Annullare l'esecuzione {{id}}? Questo rimuove ogni collegamento creato da questa esecuzione."
+  },
+  "errors": {
+    "loadRunsFailed": "Impossibile caricare le esecuzioni"
+  },
+  "runConfig": {
+    "title": "Nuova esecuzione di mappatura termini",
+    "description": "Scegli le ontologie e le entità target. Il suggeritore euristico proporrà assegnazioni di concetti che puoi rivedere prima di applicarle.",
+    "customerOntologies": "Ontologie del cliente",
+    "enabledCount": "{{count}} abilitate",
+    "loadingOntologies": "Caricamento ontologie…",
+    "noCustomerOntologies": "Nessuna ontologia cliente ancora caricata. Caricane una in Impostazioni → Sorgenti RDF, o generala tramite il Generatore di Ontologie, quindi riapri questa finestra.",
+    "useAll": "Usa ogni ontologia cliente abilitata",
+    "shippedTitle": "Includi anche le tassonomie fornite",
+    "shippedHelp": "L'interna <code>urn:taxonomy:ontos-ontology</code> (schema di tipizzazione degli asset Ontos) non è mai un target di mappatura valido.",
+    "targetTypes": "Tipi di entità target",
+    "assetTypesLabel": "Nomi dei tipi di asset (separati da virgola). Predefinito «Column».",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "Limite",
+    "comment": "Commento (opzionale)",
+    "commentPlaceholder": "A cosa serve questa esecuzione?",
+    "previewNoOntologies": "(nessuna ontologia — scegline una sopra)",
+    "previewCustomerOne": "1 ontologia cliente",
+    "previewCustomerMany": "{{count}} istanze di ontologia cliente",
+    "previewShippedOne": "1 tassonomia fornita",
+    "previewShippedMany": "{{count}} tassonomie fornite",
+    "previewTargetTypeOne": "1 tipo target",
+    "previewTargetTypeMany": "{{count}} tipi target",
+    "previewLine": "Cercherà in <strong>{{customerPart}}</strong> su <strong>{{targetPart}}</strong>.",
+    "previewLineWithShipped": "Cercherà in <strong>{{customerPart}}</strong> più <strong>{{shippedPart}}</strong> su <strong>{{targetPart}}</strong>.",
+    "submit": "Crea esecuzione",
+    "submitting": "Esecuzione del suggeritore…",
+    "validation": {
+      "noTargetType": "Scegli almeno un tipo target",
+      "noTargetTypeDescription": "Seleziona il tipo di entità che il suggeritore dovrebbe considerare.",
+      "noOntology": "Scegli almeno un'ontologia",
+      "noOntologyDescription": "Lascia attivo «Usa ogni ontologia cliente abilitata», oppure selezionane di specifiche."
+    },
+    "toast": {
+      "created": "Esecuzione creata",
+      "createdDescriptionOne": "Generato 1 suggerimento su {{targets}} target.",
+      "createdDescriptionMany": "Generati {{total}} suggerimenti su {{targets}} target.",
+      "createdEmpty": "Esecuzione creata ma la risposta era vuota",
+      "failed": "Impossibile creare l'esecuzione",
+      "loadOntologiesFailed": "Impossibile caricare le ontologie"
+    }
+  },
+  "generateReview": {
+    "title": "Genera revisione per l'esecuzione",
+    "description": "Crea una Revisione di Asset di Dati contenente ogni suggerimento di questa esecuzione. Le decisioni prese nella revisione tornano nella coda dei suggerimenti.",
+    "reviewerEmail": "Email del revisore *",
+    "reviewerEmailHelp": "Predefinito a te. Trasferisci a uno steward di dominio se necessario.",
+    "reviewerEmailPlaceholder": "steward@azienda.com",
+    "notes": "Note",
+    "notesPlaceholder": "Contesto facoltativo per il revisore.",
+    "includeAccepted": "Includi anche i suggerimenti già accettati",
+    "includeAcceptedHelp": "Utile quando vuoi che il revisore confermi decisioni precedenti, non solo smisti le righe in sospeso.",
+    "eligibleSummaryOne": "1 suggerimento diventerà un asset revisionabile ({{pending}} in sospeso{{acceptedPart}}).",
+    "eligibleSummaryMany": "{{eligible}} suggerimenti diventeranno asset revisionabili ({{pending}} in sospeso{{acceptedPart}}).",
+    "acceptedPart": ", {{accepted}} accettati",
+    "submit": "Genera revisione",
+    "validation": {
+      "reviewerRequired": "L'email del revisore è obbligatoria."
+    },
+    "toast": {
+      "created": "Revisione creata",
+      "createdDescriptionOne": "1 suggerimento in coda per la revisione.",
+      "createdDescriptionMany": "{{count}} suggerimenti in coda per la revisione.",
+      "failed": "Impossibile creare la revisione"
+    }
+  },
+  "suggestion": {
+    "header": "Suggerimento di mappatura termini",
+    "progress": "{{current}} di {{total}}",
+    "concept": "concetto",
+    "confidence": "Confidenza",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "candidato all'applicazione automatica",
+    "whyMatch": "Perché questa corrispondenza",
+    "noReason": "—",
+    "overrideIri": "Sovrascrivi IRI target (opzionale)",
+    "overrideIriHelp": "Lascia vuoto per accettare l'IRI suggerito. Sovrascrivi per allegare un concetto diverso della stessa ontologia.",
+    "comment": "Commento",
+    "commentPlaceholder": "Note per il revisore / audit trail.",
+    "needsClarification": "Necessita chiarimenti",
+    "reject": "Rifiuta",
+    "acceptApply": "Accetta e applica",
+    "acceptNext": "Accetta e successivo",
+    "invalidFqn": "FQN di asset di mappatura termini non valido.",
+    "errors": {
+      "unparseable": "FQN di mappatura termini non analizzabile: {{fqn}}",
+      "notFound": "Suggerimento non trovato nell'esecuzione",
+      "loadFailed": "Impossibile caricare il suggerimento"
+    },
+    "toast": {
+      "approved": "Suggerimento approvato",
+      "rejected": "Suggerimento rifiutato",
+      "clarified": "Contrassegnato per chiarimento",
+      "savedWithWarnings": "Salvato con avvisi",
+      "decisionFailed": "Decisione fallita"
+    }
+  }
+}

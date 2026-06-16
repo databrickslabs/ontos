@@ -16,6 +16,7 @@ class DataAssetReviewRequestDb(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     requester_email = Column(String, nullable=False, index=True)
     reviewer_email = Column(String, nullable=False, index=True)
+    title = Column(String(200), nullable=True)
     status = Column(String, default=ReviewRequestStatus.QUEUED.value, nullable=False, index=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

@@ -323,6 +323,14 @@
         "deploy": "Deploy",
         "settings": "Settings",
         "other": "Other"
+      },
+      "crossCutting": "Background",
+      "settingsSubGroups": {
+        "referenceData": "Reference Data",
+        "configuration": "Configuration",
+        "integrations": "Integrations",
+        "operations": "Operations",
+        "accessControl": "Access Control"
       }
     },
     "deployment": {

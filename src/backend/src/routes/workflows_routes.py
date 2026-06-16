@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
 from src.common.database import get_db
-from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, get_notifications_manager, SettingsManagerDep
+from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, get_notifications_manager
 from src.common.authorization import (
     PermissionChecker,
     enforce_feature_permission,
@@ -37,6 +37,7 @@ from src.models.process_workflows import (
     WorkflowExecutionListResponse,
     WorkflowValidationResult,
     StepTypeSchema,
+    TemplateVarsResponse,
     TriggerContext,
     TriggerType,
     EntityType,
@@ -265,6 +266,26 @@ async def get_trigger_types(
     return out
 
 
+@router.get("/template-vars", response_model=TemplateVarsResponse)
+async def get_template_vars(
+    request: Request,
+    trigger: TriggerType = Query(..., description="Trigger type the workflow listens for"),
+    entity_type: EntityType = Query(..., description="Entity type the trigger targets"),
+    manager: WorkflowsManager = Depends(get_workflows_manager),
+    _: bool = Depends(PermissionChecker('settings', FeatureAccessLevel.READ_ONLY)),
+) -> TemplateVarsResponse:
+    """Return ``${...}`` variables available for a given (trigger, entity_type).
+
+    Powers the workflow designer's webhook-template-variable inspector
+    panel. Returns groups of descriptors (entity, flat) so the UI can
+    render an organized side panel next to the body_template Textarea.
+    Combinations without a curated registry entry return an empty
+    ``groups`` list rather than 404 so the UI can show a friendly
+    "no descriptors yet" state.
+    """
+    return manager.get_template_vars(trigger, entity_type)
+
+
 @router.get("/executions", response_model=WorkflowExecutionListResponse)
 async def list_executions(
     request: Request,
@@ -367,36 +388,21 @@ async def list_compliance_policies_for_workflows(
 @router.get("/roles")
 async def list_roles_for_workflows(
     db: DBSessionDep,
-    settings_manager: SettingsManagerDep,
     _: bool = Depends(PermissionChecker('settings-workflows', FeatureAccessLevel.READ_ONLY)),
-    approval_entity: Optional[str] = Query(
-        default=None,
-        description=(
-            "Filter to roles whose approval_privileges flag is True for this entity type. "
-            "Valid values: CONTRACTS, PRODUCTS, DOMAINS, ASSET_REVIEWS. "
-            "Omit to return all roles (backward-compatible)."
-        ),
-    ),
 ) -> List[Dict[str, Any]]:
     """List roles available for workflow approver/recipient selection.
 
     Returns both app roles (RBAC) and business roles (governance) that are
     marked as approvers. Each role includes a 'source' field to distinguish
     between app and business roles.
-
-    When *approval_entity* is provided the app-role list is narrowed to only
-    roles where ``approval_privileges[approval_entity]`` is ``True``. Business
-    roles (is_approver=True) are always included regardless of the filter
-    because they carry entity-level approval semantics through their own flag.
     """
+    from src.db_models.settings import AppRoleDb
     from src.db_models.business_roles import BusinessRoleDb
 
-    # App roles — optionally filtered by approval_entity
-    filtered_app_roles = settings_manager.list_app_roles_for_approval(
-        approval_entity=approval_entity
-    )
+    # App roles (RBAC)
+    app_roles = db.query(AppRoleDb).order_by(AppRoleDb.name).all()
 
-    # Business roles marked as approvers (always returned for backward compat)
+    # Business roles marked as approvers
     business_roles = (
         db.query(BusinessRoleDb)
         .filter(BusinessRoleDb.is_approver.is_(True), BusinessRoleDb.status == "active")
@@ -406,7 +412,7 @@ async def list_roles_for_workflows(
 
     result = []
 
-    for r in filtered_app_roles:
+    for r in app_roles:
         result.append({
             "id": str(r.id),
             "name": r.name,

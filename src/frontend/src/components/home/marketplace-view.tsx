@@ -706,6 +706,13 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
           isSubscribed={productIsSubscribed}
           subscriptionLoading={checkingSubscription}
           showBackButton
+          onGoToDetails={() => {
+            const productId = selectedProduct?.id;
+            if (!productId) return;
+            setInfoDialogOpen(false);
+            setSelectedProduct(null);
+            navigate(`/my-products/${productId}`);
+          }}
         />
       )}
 

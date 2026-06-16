@@ -36,7 +36,6 @@ class TestSemanticModelsRepository:
         db_session.refresh(model_db)
 
         # Assert
-        assert model_db is not None
         assert model_db.name == "Test Model"
 
     def test_get_semantic_model_by_id(self, repository, db_session):

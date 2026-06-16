@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import {
   FolderTree,
   Plus,
-  Upload,
 } from 'lucide-react';
 import { SplitPaneSkeleton } from '@/components/common/list-view-skeleton';
 import type { KnowledgeCollection } from '@/types/ontology';
@@ -191,10 +190,6 @@ export default function CollectionsView() {
               {t('semantic-models:actions.createCollection')}
             </Button>
           )}
-
-          <Button variant="outline" size="icon" title={t('common:actions.import')}>
-            <Upload className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
@@ -212,7 +207,6 @@ export default function CollectionsView() {
           collections={collections}
           selectedCollection={selectedCollection}
           onSelectCollection={setSelectedCollection}
-          onCreateCollection={handleCreateCollection}
           onEditCollection={handleEditCollection}
           onDeleteCollection={handleDeleteCollection}
           onExportCollection={handleExportCollection}

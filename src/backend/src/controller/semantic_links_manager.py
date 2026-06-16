@@ -1,4 +1,5 @@
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, Union, TYPE_CHECKING
+from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import re
@@ -239,7 +240,7 @@ class SemanticLinksManager:
             logger.warning(f"Failed to log change for semantic link add: {log_err}")
         return self._to_api(db_obj)
 
-    def remove(self, link_id: str, removed_by: Optional[str] = None) -> bool:
+    def remove(self, link_id: Union[str, UUID], removed_by: Optional[str] = None) -> bool:
         removed = entity_semantic_links_repo.remove(self._db, id=link_id)
         try:
             manager = None

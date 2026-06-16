@@ -31,6 +31,7 @@ export default function Layout({ children }: LayoutProps) {
   const isSidebarCollapsed = useLayoutStore((state) => state.isSidebarCollapsed);
   const { toggleSidebar } = useLayoutStore((state) => state.actions);
   const isCopilotOpen = useCopilotStore((s) => s.isOpen);
+  const copilotPanelWidth = useCopilotStore((s) => s.panelWidth);
   const { togglePanel } = useCopilotStore((s) => s.actions);
   const [health, setHealth] = useState<HealthState | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -99,11 +100,13 @@ export default function Layout({ children }: LayoutProps) {
       {/* Sidebar/copilot offsets use padding (not margin) so the column
           stays at 100vw and never overflows horizontally. The Sidebar is
           position:fixed and contributes no flex/inline width. */}
-      <div className={cn(
-        "flex flex-col min-h-screen min-w-0 transition-[padding] duration-300 ease-in-out",
-        isSidebarCollapsed ? "pl-[56px]" : "pl-[240px]",
-        isCopilotOpen && "pr-[400px]"
-      )}>
+      <div
+        className={cn(
+          "flex flex-col min-h-screen min-w-0 transition-[padding] duration-300 ease-in-out",
+          isSidebarCollapsed ? "pl-[56px]" : "pl-[240px]"
+        )}
+        style={{ paddingRight: isCopilotOpen ? copilotPanelWidth : undefined }}
+      >
         <Header onToggleSidebar={toggleSidebar} isSidebarCollapsed={isSidebarCollapsed} />
         {/* Alerts wrapped in padded containers (not mx-6 on the Alert itself):
             shadcn Alert is `w-full`, so mx-6 would expand it past the

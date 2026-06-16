@@ -37,7 +37,6 @@ class TestNotificationRepository:
         db_session.refresh(notification_db)
 
         # Assert
-        assert notification_db is not None
         assert notification_db.title == "Test Notification"
 
     def test_get_notification_by_id(self, repository, db_session):

@@ -342,19 +342,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
 ('01100001-0002-4000-8000-000000000001', 'BCBS 239 Data Lineage', 'Verify all risk data has documented end-to-end lineage per BCBS 239 Principle 4',
 'Risk dataset lacks documented data lineage. BCBS 239 requires complete, documented lineage from source to report for all material risk data.',
-'MATCH (d:Dataset) WHERE d.domain IN [''Risk Management'', ''Capital Markets''] ASSERT d.has_lineage = true AND d.lineage_validated = true', 'governance', 'critical', true, NOW(), NOW()),
+'MATCH (d:Dataset) WHERE d.domain IN [''Risk Management'', ''Capital Markets''] ASSERT d.has_lineage = true AND d.lineage_validated = true', 'Governance', 'critical', true, NOW(), NOW()),
 
 ('01100002-0002-4000-8000-000000000002', 'AML Transaction Monitoring Coverage', 'Ensure all customer accounts are covered by AML transaction monitoring',
 'Account not covered by AML monitoring. All retail and commercial accounts must be monitored for suspicious activity per BSA requirements.',
-'MATCH (a:Account) ASSERT a.aml_monitoring_enabled = true', 'security', 'critical', true, NOW(), NOW()),
+'MATCH (a:Account) ASSERT a.aml_monitoring_enabled = true', 'Security', 'critical', true, NOW(), NOW()),
 
 ('01100003-0002-4000-8000-000000000003', 'KYC Periodic Review', 'Verify KYC profiles are reviewed within regulatory timelines based on risk rating',
 'KYC review overdue. High-risk customers must be reviewed annually, medium-risk every 2 years, and low-risk every 3 years.',
-'MATCH (c:Customer) ASSERT c.days_since_kyc_review <= CASE c.risk_rating WHEN ''high'' THEN 365 WHEN ''medium'' THEN 730 ELSE 1095 END', 'governance', 'high', true, NOW(), NOW()),
+'MATCH (c:Customer) ASSERT c.days_since_kyc_review <= CASE c.risk_rating WHEN ''high'' THEN 365 WHEN ''medium'' THEN 730 ELSE 1095 END', 'Governance', 'high', true, NOW(), NOW()),
 
 ('01100004-0002-4000-8000-000000000004', 'Market Data Timeliness', 'Ensure market data feeds are within acceptable staleness thresholds',
 'Market data feed is stale. Real-time feeds must be within 500ms and end-of-day feeds must be available by T+1 06:00 UTC.',
-'MATCH (f:MarketDataFeed) WHERE f.feed_type = ''realtime'' ASSERT f.latency_ms <= 500', 'freshness', 'high', true, NOW(), NOW())
+'MATCH (f:MarketDataFeed) WHERE f.feed_type = ''realtime'' ASSERT f.latency_ms <= 500', 'Data Quality', 'high', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
 

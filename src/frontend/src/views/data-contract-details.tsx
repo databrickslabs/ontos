@@ -23,6 +23,7 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 import EntityQualityPanel from '@/components/quality/entity-quality-panel'
 import { OwnershipPanel } from '@/components/common/ownership-panel'
 import { EntityTreePanel } from '@/components/common/entity-tree-panel'
+import { MaturityInline } from '@/components/common/maturity-inline'
 import { CommentSidebar } from '@/components/comments'
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips'
@@ -279,7 +280,6 @@ export default function DataContractDetails() {
   const [, setTeamMetadata] = useState<{ name?: string; description?: string }>({})
   const [teamMetaName, setTeamMetaName] = useState('')
   const [teamMetaDesc, setTeamMetaDesc] = useState('')
-
   // Link product dialog state
   const [isLinkProductDialogOpen, setIsLinkProductDialogOpen] = useState(false)
 
@@ -1557,9 +1557,6 @@ export default function DataContractDetails() {
   }
 
   if (loading) {
-    // Mirrors rendered shape: header with back + version navigator + view-mode
-    // toggle on the left, action buttons on the right; body shows ODCS sections
-    // and a schema property table.
     return (
       <div className="py-6 space-y-6">
         <DetailHeaderSkeleton actionButtons={5} leftControls={2} />
@@ -1795,10 +1792,16 @@ export default function DataContractDetails() {
                 {contract.description?.purpose || 'No description provided'}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <Badge variant={getStatusColor(contract.status)}>
-                {contract.status || '—'}
-              </Badge>
+            <div className="flex items-end gap-5 shrink-0">
+              <div className="flex flex-col items-center gap-1">
+                <Badge variant={getStatusColor(contract.status)}>
+                  {contract.status || '—'}
+                </Badge>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</span>
+              </div>
+              {contract.id && (
+                <MaturityInline entityType="DataContract" entityId={contract.id} compact />
+              )}
             </div>
           </div>
         </CardHeader>
@@ -2816,6 +2819,7 @@ export default function DataContractDetails() {
         </Card>
       )}
 
+
       {/* Custom Properties */}
       {shouldShowSection('custom-properties') && (
         <Card>
@@ -3103,6 +3107,15 @@ export default function DataContractDetails() {
         isOpen={iriDialogOpen}
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
+        mappingSource={
+          contractId
+            ? {
+                entity_type: 'data_contract',
+                entity_id: contractId,
+                ...(contract?.name ? { name: contract.name } : {}),
+              }
+            : undefined
+        }
       />
 
       {contract && (

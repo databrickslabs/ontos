@@ -86,6 +86,10 @@ class DataProductDb(Base):
     certification_expires_at = Column(DateTime(timezone=True), nullable=True)
     certification_notes = Column(Text, nullable=True)
 
+    # ==================== Maturity ====================
+    maturity_level_order = Column(Integer, nullable=True)
+    maturity_evaluated_at = Column(DateTime(timezone=True), nullable=True)
+
     # ==================== ODPS v1.0.0 Relationships ====================
     description = relationship("DescriptionDb", back_populates="product", uselist=False, cascade="all, delete-orphan", lazy="selectin")
     authoritative_definitions = relationship("AuthoritativeDefinitionDb", back_populates="product", cascade="all, delete-orphan", lazy="selectin")

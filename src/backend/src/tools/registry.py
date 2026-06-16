@@ -214,6 +214,7 @@ def create_default_registry() -> ToolRegistry:
         GetConceptNeighborsTool
     )
     from src.tools.search import GlobalSearchTool
+    from src.tools.handbook import SearchOntosHandbookTool
     from src.tools.analytics import (
         GetTableSchemaTool,
         ExecuteAnalyticsQueryTool,
@@ -307,6 +308,12 @@ def create_default_registry() -> ToolRegistry:
     
     # Search tools
     registry.register(GlobalSearchTool())
+
+    # Handbook search — grounds the LLM in docs/handbook/ for any
+    # "what is X" / "how does Y work" question. New `handbook` category;
+    # see query_classifier.CATEGORY_KEYWORDS["handbook"] and
+    # ALWAYS_INCLUDED_CATEGORIES.
+    registry.register(SearchOntosHandbookTool())
     
     # Analytics tools
     registry.register(GetTableSchemaTool())

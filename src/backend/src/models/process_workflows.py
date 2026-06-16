@@ -50,6 +50,9 @@ class TriggerType(str, Enum):
     ON_PUBLISH = "on_publish"  # When an entity is published to marketplace
     ON_UNPUBLISH = "on_unpublish"  # When an entity is unpublished from marketplace
 
+    # Maturity triggers
+    ON_MATURITY_CHANGE = "on_maturity_change"  # When maturity level changes (up or down)
+
     # Access lifecycle triggers
     ON_EXPIRING = "on_expiring"  # When access/entity is about to expire
     ON_REVOKE = "on_revoke"  # When access is revoked
@@ -677,6 +680,106 @@ class StepTypeSchema(BaseModel):
     config_schema: Dict[str, Any]  # JSON Schema for the config
     has_pass_branch: bool = True
     has_fail_branch: bool = True
+
+
+# --- Template Variable Inspector ---
+#
+# Workflow designers (the React side) need a way to surface every
+# ``${...}`` variable a workflow author can reference in a webhook
+# ``body_template`` for a given (trigger, entity_type) pair. The set is
+# derived from the manager-side enrichment that prepares ``entity_data``
+# right before a trigger fires; the backend exposes it as a static
+# registry so the UI doesn't have to introspect manager code.
+#
+# Drift between the registry and the actual enrichment is caught by a
+# unit test in ``tests/unit/test_template_vars_registry.py`` which walks
+# every descriptor path through ``substitute_template`` against a
+# realistic ``StepContext`` fixture.
+
+
+class TemplateVarDescriptor(BaseModel):
+    """One ``${...}`` variable surfaced in the workflow designer."""
+
+    path: str = Field(
+        ...,
+        description=(
+            "The placeholder body (without the ``${}`` wrapper) that a "
+            "workflow author types into a webhook body_template — e.g. "
+            "``entity.catalogs`` or ``user_email``."
+        ),
+    )
+    type: str = Field(
+        ...,
+        description=(
+            "Coarse runtime type of the resolved value. One of "
+            "``string``, ``number``, ``boolean``, ``array``, ``object``, "
+            "``enum``. Drives the badge styling in the UI."
+        ),
+    )
+    description: str = Field(
+        ...,
+        description=(
+            "One-sentence prose explaining the variable. Shown muted "
+            "next to the path."
+        ),
+    )
+    sample: Optional[Any] = Field(
+        None,
+        description=(
+            "Realistic example value for the variable. Rendered as a "
+            "preview chip so authors know what shape to expect — e.g. "
+            "lists show ``[\"main\", \"prod\"]``."
+        ),
+    )
+    enum_values: Optional[List[str]] = Field(
+        None,
+        description=(
+            "Set of allowed values when ``type == 'enum'``. Otherwise "
+            "``None``."
+        ),
+    )
+
+
+class TemplateVarGroup(BaseModel):
+    """A namespace of related descriptors (``entity``, ``context``, …)."""
+
+    namespace: str = Field(
+        ...,
+        description=(
+            "Short slug for the group. Used as the section header in "
+            "the inspector — e.g. ``entity``, ``context``, ``flat``."
+        ),
+    )
+    description: str = Field(
+        ...,
+        description="One-sentence prose summarizing what this namespace covers.",
+    )
+    variables: List[TemplateVarDescriptor] = Field(
+        default_factory=list,
+        description="Descriptors that live under this namespace.",
+    )
+
+
+class TemplateVarsResponse(BaseModel):
+    """Response payload for ``GET /api/workflows/template-vars``."""
+
+    trigger: TriggerType = Field(
+        ...,
+        description="The trigger this descriptor set applies to.",
+    )
+    entity_type: EntityType = Field(
+        ...,
+        description="The entity type this descriptor set applies to.",
+    )
+    groups: List[TemplateVarGroup] = Field(
+        default_factory=list,
+        description=(
+            "Descriptor groups for this (trigger, entity_type) pair. "
+            "Empty when the combination has no curated registry entry "
+            "— the UI should render a friendly 'no descriptors yet' "
+            "state rather than treat that as an error."
+        ),
+    )
 
 
 # --- API Response Models ---

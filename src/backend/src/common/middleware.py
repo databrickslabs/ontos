@@ -46,9 +46,9 @@ MAINTENANCE_HTML = """<!DOCTYPE html>
 <div class="card">
   <div class="icon">&#9888;&#65039;</div>
   <h1>Service Temporarily Unavailable</h1>
-  <p>The application could not connect to the database during startup.
-     This is usually temporary — for example, a missing access grant or
-     a network issue.</p>
+  <p>The application could not complete startup. This is usually temporary
+     — for example, a database connection issue or a configuration problem
+     that prevents default roles from being seeded.</p>
   <div class="detail" id="err">Loading error details&hellip;</div>
   <button id="btn" onclick="retry()">Retry Connection</button>
   <div class="status" id="msg"></div>
@@ -60,7 +60,7 @@ MAINTENANCE_HTML = """<!DOCTYPE html>
         err=document.getElementById('err');
 
   fetch('/api/health').then(r=>r.json()).then(h=>{
-    err.textContent=h.db_error||'Unknown error';
+    err.textContent=h.db_error||h.seed_error||'Unknown error';
   }).catch(()=>{err.textContent='Could not fetch error details';});
 
   async function retry(){
@@ -92,9 +92,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 class MaintenanceMiddleware(BaseHTTPMiddleware):
-    """Serves a maintenance page when the database is not available.
+    """Serves a maintenance page when startup did not complete cleanly.
 
-    The health endpoint is always allowed through so the retry button works.
+    Triggers on either:
+      * ``db_ok == False`` — the database connection failed or initialization
+        could not complete, or
+      * ``seed_ok == False`` — default-role / team / project seeding failed
+        and the application would otherwise come up half-seeded (only the
+        Admin role exists; non-admin users would log in with no role and
+        approval routing would silently break).
+
+    The health and retry endpoints are always allowed through so the retry
+    button works.
     """
 
     PASSTHROUGH_PREFIXES = ("/api/health",)
@@ -103,15 +112,18 @@ class MaintenanceMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         health = getattr(request.app.state, 'health', {})
-        if not health.get('db_ok', True):
+        db_ok = health.get('db_ok', True)
+        seed_ok = health.get('seed_ok', True)
+        if not db_ok or not seed_ok:
             path = request.url.path
             if any(path.startswith(p) for p in self.PASSTHROUGH_PREFIXES):
                 return await call_next(request)
             accept = request.headers.get('accept', '')
             if 'text/html' in accept:
                 return HTMLResponse(MAINTENANCE_HTML, status_code=503)
+            detail = health.get("db_error") if not db_ok else health.get("seed_error")
             return JSONResponse(
-                {"error": "maintenance", "detail": health.get("db_error")},
+                {"error": "maintenance", "detail": detail},
                 status_code=503,
             )
         return await call_next(request)

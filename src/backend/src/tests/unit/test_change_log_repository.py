@@ -37,7 +37,6 @@ class TestChangeLogRepository:
         db_session.refresh(log_db)
 
         # Assert
-        assert log_db is not None
         assert log_db.entity_type == "data_product"
 
     def test_get_change_log_by_id(self, repository, db_session):

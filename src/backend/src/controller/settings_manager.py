@@ -663,18 +663,36 @@ class SettingsManager:
                     for feat_id, feature_config in all_features_config.items():
                         desired_level = desired_permissions.get(feat_id, FeatureAccessLevel.NONE)
                         allowed_levels = feature_config.get('allowed_levels', [])
-                        
+
                         if desired_level in allowed_levels:
                             final_permissions[feat_id] = desired_level
+                            continue
+
+                        # Fallback path: the desired level (often the implicit
+                        # NONE for features the YAML doesn't mention) is not in
+                        # this feature's allowed_levels. Prefer NONE when it's
+                        # accepted, otherwise pick the lowest allowed level so
+                        # the seeder never produces a payload its own validator
+                        # would reject. Features like `process-workflows` and
+                        # `access-grants` are part of the baseline UX and have
+                        # NONE removed from their allowed_levels; defaulting
+                        # them to READ_ONLY matches the intended baseline.
+                        if FeatureAccessLevel.NONE in allowed_levels:
+                            fallback_level = FeatureAccessLevel.NONE
                         else:
-                            final_permissions[feat_id] = FeatureAccessLevel.NONE
-                            if desired_level != FeatureAccessLevel.NONE:
-                                allowed_str = [lvl.value for lvl in allowed_levels]
-                                logger.warning(
-                                    f"Desired default permission '{desired_level.value}' for role '{role_name}' "
-                                    f"on feature '{feat_id}' is not allowed (Allowed: {allowed_str}). Setting to NONE."
-                                )
-                                
+                            fallback_level = min(
+                                allowed_levels,
+                                key=lambda lvl: ACCESS_LEVEL_ORDER.get(lvl, 0),
+                            )
+                        final_permissions[feat_id] = fallback_level
+                        if desired_level != FeatureAccessLevel.NONE or fallback_level != FeatureAccessLevel.NONE:
+                            allowed_str = [lvl.value for lvl in allowed_levels]
+                            logger.warning(
+                                f"Desired default permission '{desired_level.value}' for role '{role_name}' "
+                                f"on feature '{feat_id}' is not allowed (Allowed: {allowed_str}). "
+                                f"Falling back to '{fallback_level.value}'."
+                            )
+
                     role_data["feature_permissions"] = final_permissions
                     logger.info(f"Assigning default permissions for role '{role_name}': { {k: v.value for k,v in final_permissions.items()} }")
 
@@ -1768,13 +1786,18 @@ class SettingsManager:
             # updated_at=role_db.updated_at  # Uncomment if needed
         )
 
-    def get_features_with_access_levels(self) -> Dict[str, Dict[str, str | List[str]]]:
+    def get_features_with_access_levels(self) -> Dict[str, Dict[str, str | List[str] | bool]]:
         """Returns a dictionary of features and their allowed access levels.
 
         Each entry contains:
         - name: human-readable label
         - allowed_levels: list of allowed FeatureAccessLevel values (as strings)
         - group: one of Discover/Build/Govern/Deploy/Settings/Other for UI grouping
+        - hidden_from_role_dialog: optional bool flagging backend-only perms
+          that the role editor should not expose to admins
+        - cross_cutting: optional bool flagging features that have no
+          dedicated sidebar entry and should render in a "Background"
+          sub-section of their group in the role editor
         """
         features_config = get_feature_config()
         all_levels = get_all_access_levels()
@@ -1784,6 +1807,8 @@ class SettingsManager:
                 'name': config['name'],
                 'allowed_levels': [level.value for level in config['allowed_levels']],
                 'group': config.get('group', 'Other'),
+                'hidden_from_role_dialog': bool(config.get('hidden_from_role_dialog', False)),
+                'cross_cutting': bool(config.get('cross_cutting', False)),
             }
             for feature_id, config in features_config.items()
         }

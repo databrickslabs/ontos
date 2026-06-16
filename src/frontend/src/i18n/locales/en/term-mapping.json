@@ -1,0 +1,154 @@
+{
+  "title": "Term Mapping",
+  "subtitle": "Bulk-suggest ontology concept assignments for Assets, Data Contracts, and Data Products. Decisions are made in the Asset Reviews workspace.",
+  "actions": {
+    "refresh": "Refresh",
+    "newRun": "New run",
+    "cancel": "Cancel",
+    "applyAuto": "Apply auto ({{count}})",
+    "generateReview": "Generate review",
+    "undo": "Undo",
+    "selectRunHint": "Select a run on the left, or start a new one."
+  },
+  "recent": {
+    "title": "Recent runs",
+    "loading": "Loading runs…",
+    "empty": "No runs yet. Start one with <strong>New run</strong>.",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} suggestions"
+  },
+  "detail": {
+    "runLabel": "Run",
+    "createdAt": "Created",
+    "createdBy": "by {{email}}",
+    "sourcesTitle": "Sources of suggestions",
+    "customerOntologies": "Customer ontologies",
+    "shippedTaxonomies": "Shipped taxonomies",
+    "reviewsLinkPrefix": "Steward reviews live in the",
+    "reviewsLinkText": "Asset Reviews",
+    "reviewsLinkSuffix": "workspace. Each suggestion becomes one ReviewedAsset there; decisions flow back into this run automatically."
+  },
+  "stats": {
+    "targets": "Targets",
+    "suggestions": "Suggestions",
+    "pending": "Pending",
+    "autoApply": "Auto-apply",
+    "accepted": "Accepted",
+    "rejected": "Rejected",
+    "linksCreated": "Links created",
+    "linksSkipped": "Links skipped"
+  },
+  "toast": {
+    "applied": "Applied",
+    "appliedDescription": "{{created}} links created, {{skipped}} skipped",
+    "applyFailed": "Apply failed",
+    "undone": "Undone",
+    "undoneDescription": "{{removed}} links removed, {{reverted}} suggestions reverted",
+    "undoFailed": "Undo failed",
+    "loadRunFailed": "Failed to load run",
+    "unknownError": "unknown error"
+  },
+  "confirm": {
+    "undo": "Undo run {{id}}? This removes every link this run created."
+  },
+  "errors": {
+    "loadRunsFailed": "Failed to load runs"
+  },
+  "runConfig": {
+    "title": "New Term Mapping Run",
+    "description": "Pick the ontologies and target entities. The heuristic suggester will propose concept assignments you can review before applying.",
+    "customerOntologies": "Customer ontologies",
+    "enabledCount": "{{count}} enabled",
+    "loadingOntologies": "Loading ontologies…",
+    "noCustomerOntologies": "No customer ontologies are loaded yet. Upload one in Settings → RDF Sources, or generate one via the Ontology Generator, then re-open this dialog.",
+    "useAll": "Use every enabled customer ontology",
+    "shippedTitle": "Also include shipped taxonomies",
+    "shippedHelp": "The internal <code>urn:taxonomy:ontos-ontology</code> (Ontos asset typing schema) is never a valid mapping target.",
+    "targetTypes": "Target entity types",
+    "assetTypesLabel": "Asset type names (comma-separated). Defaults to \"Column\".",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "Limit",
+    "comment": "Comment (optional)",
+    "commentPlaceholder": "What is this run for?",
+    "previewNoOntologies": "(no ontologies — pick one above)",
+    "previewCustomerOne": "1 customer ontology",
+    "previewCustomerMany": "{{count}} customer ontology instances",
+    "previewShippedOne": "1 shipped taxonomy",
+    "previewShippedMany": "{{count}} shipped taxonomies",
+    "previewTargetTypeOne": "1 target type",
+    "previewTargetTypeMany": "{{count}} target types",
+    "previewLine": "Will look in <strong>{{customerPart}}</strong> across <strong>{{targetPart}}</strong>.",
+    "previewLineWithShipped": "Will look in <strong>{{customerPart}}</strong> plus <strong>{{shippedPart}}</strong> across <strong>{{targetPart}}</strong>.",
+    "submit": "Create run",
+    "submitting": "Running suggester…",
+    "validation": {
+      "noTargetType": "Pick at least one target type",
+      "noTargetTypeDescription": "Select what kind of entity the suggester should look at.",
+      "noOntology": "Pick at least one ontology",
+      "noOntologyDescription": "Either leave \"Use every enabled customer ontology\" on, or pick specific ones."
+    },
+    "toast": {
+      "created": "Run created",
+      "createdDescriptionOne": "Generated 1 suggestion across {{targets}} target(s).",
+      "createdDescriptionMany": "Generated {{total}} suggestions across {{targets}} target(s).",
+      "createdEmpty": "Run created but response was empty",
+      "failed": "Failed to create run",
+      "loadOntologiesFailed": "Failed to load ontologies"
+    }
+  },
+  "generateReview": {
+    "title": "Generate Review for Run",
+    "description": "Spawn a Data Asset Review containing every suggestion in this run. Decisions made in the review flow back to the suggestion queue.",
+    "reviewerEmail": "Reviewer email *",
+    "reviewerEmailHelp": "Defaults to you. Hand off to a domain steward if needed.",
+    "reviewerEmailPlaceholder": "steward@company.com",
+    "notes": "Notes",
+    "notesPlaceholder": "Optional context for the reviewer.",
+    "includeAccepted": "Also include already-accepted suggestions",
+    "includeAcceptedHelp": "Useful when you want the reviewer to confirm prior decisions, not just triage pending rows.",
+    "eligibleSummaryOne": "1 suggestion will become a reviewable asset ({{pending}} pending{{acceptedPart}}).",
+    "eligibleSummaryMany": "{{eligible}} suggestions will become reviewable assets ({{pending}} pending{{acceptedPart}}).",
+    "acceptedPart": ", {{accepted}} accepted",
+    "submit": "Generate Review",
+    "validation": {
+      "reviewerRequired": "Reviewer email is required."
+    },
+    "toast": {
+      "created": "Review created",
+      "createdDescriptionOne": "1 suggestion queued for review.",
+      "createdDescriptionMany": "{{count}} suggestions queued for review.",
+      "failed": "Failed to create review"
+    }
+  },
+  "suggestion": {
+    "header": "Term-mapping suggestion",
+    "progress": "{{current}} of {{total}}",
+    "concept": "concept",
+    "confidence": "Confidence",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "auto-apply candidate",
+    "whyMatch": "Why this match",
+    "noReason": "—",
+    "overrideIri": "Override target IRI (optional)",
+    "overrideIriHelp": "Leave blank to accept the suggested IRI. Override to attach a different concept from the same ontology.",
+    "comment": "Comment",
+    "commentPlaceholder": "Notes for the reviewer / audit trail.",
+    "needsClarification": "Needs clarification",
+    "reject": "Reject",
+    "acceptApply": "Accept & apply",
+    "acceptNext": "Accept & next",
+    "invalidFqn": "Invalid term-mapping asset FQN.",
+    "errors": {
+      "unparseable": "Unparseable term-mapping FQN: {{fqn}}",
+      "notFound": "Suggestion not found in run",
+      "loadFailed": "Failed to load suggestion"
+    },
+    "toast": {
+      "approved": "Suggestion approved",
+      "rejected": "Suggestion rejected",
+      "clarified": "Marked for clarification",
+      "savedWithWarnings": "Saved with warnings",
+      "decisionFailed": "Decision failed"
+    }
+  }
+}

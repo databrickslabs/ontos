@@ -348,19 +348,19 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO compliance_policies (id, name, description, failure_message, rule, category, severity, is_active, created_at, updated_at) VALUES
 ('01100001-0003-4000-8000-000000000001', 'ISO 9001 Traceability', 'Verify lot/serial traceability from raw material to finished goods per ISO 9001:2015',
 'Product lot lacks complete material traceability. ISO 9001 Section 8.5.2 requires lot-level traceability for all manufactured products.',
-'MATCH (p:Product) ASSERT p.has_lot_traceability = true AND p.genealogy_complete = true', 'quality', 'critical', true, NOW(), NOW()),
+'MATCH (p:Product) ASSERT p.has_lot_traceability = true AND p.genealogy_complete = true', 'Data Quality', 'critical', true, NOW(), NOW()),
 
 ('01100002-0003-4000-8000-000000000002', 'SPC Out-of-Control Detection', 'Flag processes where SPC control charts indicate out-of-control conditions',
 'Process characteristic is out of statistical control. Western Electric rules violations detected. Production hold and engineering review required.',
-'MATCH (c:Characteristic) ASSERT c.spc_status = ''in_control''', 'quality', 'high', true, NOW(), NOW()),
+'MATCH (c:Characteristic) ASSERT c.spc_status = ''in_control''', 'Data Quality', 'high', true, NOW(), NOW()),
 
 ('01100003-0003-4000-8000-000000000003', 'Equipment Calibration Currency', 'Ensure all measurement equipment has current calibration certification',
 'Measurement equipment calibration is overdue. All gages, CMMs, and test equipment must have valid calibration certificates per the calibration schedule.',
-'MATCH (e:Equipment) WHERE e.type = ''measurement'' ASSERT e.calibration_due_date > datetime()', 'governance', 'critical', true, NOW(), NOW()),
+'MATCH (e:Equipment) WHERE e.type = ''measurement'' ASSERT e.calibration_due_date > datetime()', 'Governance', 'critical', true, NOW(), NOW()),
 
 ('01100004-0003-4000-8000-000000000004', 'OSHA Recordable Reporting', 'Ensure OSHA recordable incidents are documented within 7 calendar days',
 'OSHA recordable incident not documented within required timeframe. Per 29 CFR 1904, OSHA 300 log must be updated within 7 calendar days of incident.',
-'MATCH (i:Incident) WHERE i.is_osha_recordable = true ASSERT i.days_to_document <= 7', 'governance', 'high', true, NOW(), NOW())
+'MATCH (i:Incident) WHERE i.is_osha_recordable = true ASSERT i.days_to_document <= 7', 'Governance', 'high', true, NOW(), NOW())
 
 ON CONFLICT (id) DO NOTHING;
 

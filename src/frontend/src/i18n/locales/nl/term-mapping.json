@@ -1,0 +1,154 @@
+{
+  "title": "Termmapping",
+  "subtitle": "Stel in bulk toewijzingen van ontologie-concepten voor voor Assets, Datacontracten en Dataproducten. Beslissingen worden gemaakt in de Asset Reviews-werkruimte.",
+  "actions": {
+    "refresh": "Vernieuwen",
+    "newRun": "Nieuwe run",
+    "cancel": "Annuleren",
+    "applyAuto": "Auto toepassen ({{count}})",
+    "generateReview": "Review genereren",
+    "undo": "Ongedaan maken",
+    "selectRunHint": "Selecteer een run aan de linkerkant, of start een nieuwe."
+  },
+  "recent": {
+    "title": "Recente runs",
+    "loading": "Runs laden…",
+    "empty": "Nog geen runs. Start er een met <strong>Nieuwe run</strong>.",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} suggesties"
+  },
+  "detail": {
+    "runLabel": "Run",
+    "createdAt": "Aangemaakt",
+    "createdBy": "door {{email}}",
+    "sourcesTitle": "Bronnen van suggesties",
+    "customerOntologies": "Klant-ontologieën",
+    "shippedTaxonomies": "Meegeleverde taxonomieën",
+    "reviewsLinkPrefix": "Steward-reviews staan in de",
+    "reviewsLinkText": "Asset Reviews",
+    "reviewsLinkSuffix": "werkruimte. Elke suggestie wordt daar één ReviewedAsset; beslissingen vloeien automatisch terug in deze run."
+  },
+  "stats": {
+    "targets": "Doelen",
+    "suggestions": "Suggesties",
+    "pending": "In behandeling",
+    "autoApply": "Auto-toepassen",
+    "accepted": "Geaccepteerd",
+    "rejected": "Afgewezen",
+    "linksCreated": "Aangemaakte links",
+    "linksSkipped": "Overgeslagen links"
+  },
+  "toast": {
+    "applied": "Toegepast",
+    "appliedDescription": "{{created}} links aangemaakt, {{skipped}} overgeslagen",
+    "applyFailed": "Toepassen mislukt",
+    "undone": "Ongedaan gemaakt",
+    "undoneDescription": "{{removed}} links verwijderd, {{reverted}} suggesties teruggedraaid",
+    "undoFailed": "Ongedaan maken mislukt",
+    "loadRunFailed": "Kan run niet laden",
+    "unknownError": "onbekende fout"
+  },
+  "confirm": {
+    "undo": "Run {{id}} ongedaan maken? Dit verwijdert elke link die deze run heeft aangemaakt."
+  },
+  "errors": {
+    "loadRunsFailed": "Kan runs niet laden"
+  },
+  "runConfig": {
+    "title": "Nieuwe termmapping-run",
+    "description": "Kies de ontologieën en doelentiteiten. De heuristische suggester stelt concept-toewijzingen voor die je vóór toepassing kunt beoordelen.",
+    "customerOntologies": "Klant-ontologieën",
+    "enabledCount": "{{count}} ingeschakeld",
+    "loadingOntologies": "Ontologieën laden…",
+    "noCustomerOntologies": "Er zijn nog geen klant-ontologieën geladen. Upload er een in Instellingen → RDF-bronnen, of genereer er een via de Ontology Generator, en open dit dialoogvenster opnieuw.",
+    "useAll": "Elke ingeschakelde klant-ontologie gebruiken",
+    "shippedTitle": "Ook meegeleverde taxonomieën opnemen",
+    "shippedHelp": "De interne <code>urn:taxonomy:ontos-ontology</code> (Ontos asset-typeringsschema) is nooit een geldig mapping-doel.",
+    "targetTypes": "Doel-entiteitstypen",
+    "assetTypesLabel": "Asset-typenamen (komma-gescheiden). Standaard «Column».",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "Limiet",
+    "comment": "Opmerking (optioneel)",
+    "commentPlaceholder": "Waar is deze run voor?",
+    "previewNoOntologies": "(geen ontologieën — kies er hierboven een)",
+    "previewCustomerOne": "1 klant-ontologie",
+    "previewCustomerMany": "{{count}} klant-ontologie-instanties",
+    "previewShippedOne": "1 meegeleverde taxonomie",
+    "previewShippedMany": "{{count}} meegeleverde taxonomieën",
+    "previewTargetTypeOne": "1 doeltype",
+    "previewTargetTypeMany": "{{count}} doeltypes",
+    "previewLine": "Zoekt in <strong>{{customerPart}}</strong> over <strong>{{targetPart}}</strong>.",
+    "previewLineWithShipped": "Zoekt in <strong>{{customerPart}}</strong> plus <strong>{{shippedPart}}</strong> over <strong>{{targetPart}}</strong>.",
+    "submit": "Run aanmaken",
+    "submitting": "Suggester wordt uitgevoerd…",
+    "validation": {
+      "noTargetType": "Kies ten minste één doeltype",
+      "noTargetTypeDescription": "Selecteer welk type entiteit de suggester moet bekijken.",
+      "noOntology": "Kies ten minste één ontologie",
+      "noOntologyDescription": "Laat «Elke ingeschakelde klant-ontologie gebruiken» aan staan, of kies specifieke."
+    },
+    "toast": {
+      "created": "Run aangemaakt",
+      "createdDescriptionOne": "1 suggestie gegenereerd over {{targets}} doel(en).",
+      "createdDescriptionMany": "{{total}} suggesties gegenereerd over {{targets}} doel(en).",
+      "createdEmpty": "Run aangemaakt maar antwoord was leeg",
+      "failed": "Kan run niet aanmaken",
+      "loadOntologiesFailed": "Kan ontologieën niet laden"
+    }
+  },
+  "generateReview": {
+    "title": "Review genereren voor run",
+    "description": "Maakt een Data Asset Review met elke suggestie in deze run. Beslissingen in de review vloeien terug naar de suggestiewachtrij.",
+    "reviewerEmail": "E-mail van reviewer *",
+    "reviewerEmailHelp": "Standaard ben jij dat. Draag over aan een domeinsteward indien nodig.",
+    "reviewerEmailPlaceholder": "steward@bedrijf.com",
+    "notes": "Notities",
+    "notesPlaceholder": "Optionele context voor de reviewer.",
+    "includeAccepted": "Ook al geaccepteerde suggesties opnemen",
+    "includeAcceptedHelp": "Handig wanneer je de reviewer eerdere beslissingen wilt laten bevestigen in plaats van alleen openstaande rijen te triëren.",
+    "eligibleSummaryOne": "1 suggestie wordt een te beoordelen asset ({{pending}} in behandeling{{acceptedPart}}).",
+    "eligibleSummaryMany": "{{eligible}} suggesties worden te beoordelen assets ({{pending}} in behandeling{{acceptedPart}}).",
+    "acceptedPart": ", {{accepted}} geaccepteerd",
+    "submit": "Review genereren",
+    "validation": {
+      "reviewerRequired": "E-mail van reviewer is vereist."
+    },
+    "toast": {
+      "created": "Review aangemaakt",
+      "createdDescriptionOne": "1 suggestie in de wachtrij voor review.",
+      "createdDescriptionMany": "{{count}} suggesties in de wachtrij voor review.",
+      "failed": "Kan review niet aanmaken"
+    }
+  },
+  "suggestion": {
+    "header": "Termmapping-suggestie",
+    "progress": "{{current}} van {{total}}",
+    "concept": "concept",
+    "confidence": "Vertrouwen",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "auto-toepassen kandidaat",
+    "whyMatch": "Waarom deze match",
+    "noReason": "—",
+    "overrideIri": "Doel-IRI overschrijven (optioneel)",
+    "overrideIriHelp": "Laat leeg om de voorgestelde IRI te accepteren. Overschrijf om een ander concept uit dezelfde ontologie te koppelen.",
+    "comment": "Opmerking",
+    "commentPlaceholder": "Notities voor reviewer / audit trail.",
+    "needsClarification": "Verduidelijking nodig",
+    "reject": "Afwijzen",
+    "acceptApply": "Accepteren & toepassen",
+    "acceptNext": "Accepteren & volgende",
+    "invalidFqn": "Ongeldige termmapping-asset-FQN.",
+    "errors": {
+      "unparseable": "Niet-ontleedbare termmapping-FQN: {{fqn}}",
+      "notFound": "Suggestie niet gevonden in run",
+      "loadFailed": "Kan suggestie niet laden"
+    },
+    "toast": {
+      "approved": "Suggestie goedgekeurd",
+      "rejected": "Suggestie afgewezen",
+      "clarified": "Gemarkeerd voor verduidelijking",
+      "savedWithWarnings": "Opgeslagen met waarschuwingen",
+      "decisionFailed": "Beslissing mislukt"
+    }
+  }
+}

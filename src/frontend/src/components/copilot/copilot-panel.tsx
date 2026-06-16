@@ -16,7 +16,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import { fetchLLMStatus, fetchSessions, sendMessage, deleteSession } from '@/components/search/llm-search-api';
-import { useCopilotStore, type CopilotPageContext } from '@/stores/copilot-store';
+import {
+  useCopilotStore,
+  type CopilotPageContext,
+  COPILOT_MIN_WIDTH,
+  COPILOT_MAX_WIDTH,
+} from '@/stores/copilot-store';
 import { useCopilotQuestions } from '@/hooks/use-copilot-questions';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import type { LLMConfig } from '@/types/llm';
@@ -37,23 +42,23 @@ function CopilotMessage({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
 
   return (
-    <div className={`flex gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex gap-2 min-w-0 ${isUser ? 'flex-row-reverse' : ''}`}>
       {!isUser && (
         <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0">
           <Sparkles className="w-3 h-3 text-white" />
         </div>
       )}
       <div className={`
-        max-w-[85%] rounded-lg px-3 py-2 text-sm
+        max-w-[85%] min-w-0 rounded-lg px-3 py-2 text-sm break-words
         ${isUser
           ? 'bg-sky-100 dark:bg-sky-900/50 text-sky-900 dark:text-sky-100'
           : 'bg-muted'
         }
       `}>
         {isUser ? (
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.content}</p>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+          <div className="prose prose-sm dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] [&_code]:break-all [&_a]:break-all [&_pre]:whitespace-pre-wrap [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -71,7 +76,7 @@ function CopilotMessage({ message }: { message: ChatMessage }) {
                 code: ({ className, children, ...props }) => {
                   const isInline = !className;
                   return isInline ? (
-                    <code className="bg-muted-foreground/20 px-1 py-0.5 rounded text-xs" {...props}>{children}</code>
+                    <code className="bg-muted-foreground/20 px-1 py-0.5 rounded text-xs break-all" {...props}>{children}</code>
                   ) : (
                     <code className={`${className} block bg-zinc-900 text-zinc-100 p-2 rounded-md overflow-x-auto text-xs`} {...props}>{children}</code>
                   );
@@ -92,8 +97,55 @@ export default function CopilotPanel() {
   const shortName = useUICustomizationStore((s) => s.getShortName());
   const isOpen = useCopilotStore((s) => s.isOpen);
   const pageContext = useCopilotStore((s) => s.pageContext);
-  const { closePanel } = useCopilotStore((s) => s.actions);
+  const panelWidth = useCopilotStore((s) => s.panelWidth);
+  const { closePanel, setPanelWidth } = useCopilotStore((s) => s.actions);
   const questionGroups = useCopilotQuestions();
+
+  // Drag-to-resize: attach window-level listeners only while dragging so the
+  // pointer can leave the thin handle without losing the drag. We throttle
+  // width updates to animation frames to avoid storming the store.
+  const isResizingRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      if (rafIdRef.current !== null) return;
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        const next = window.innerWidth - ev.clientX;
+        setPanelWidth(next);
+      });
+    };
+
+    const onUp = () => {
+      isResizingRef.current = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [setPanelWidth]);
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, []);
 
   const [status, setStatus] = useState<LLMSearchStatus | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -261,9 +313,23 @@ export default function CopilotPanel() {
       />
 
       {/* Panel container — fixed right side, no overlay */}
-      <div className="fixed inset-y-0 right-0 z-50 w-[400px] border-l bg-background shadow-lg flex flex-col animate-in slide-in-from-right duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+      <div
+        className="fixed inset-y-0 right-0 z-50 border-l bg-background shadow-lg flex flex-col animate-in slide-in-from-right duration-300"
+        style={{ width: panelWidth }}
+      >
+        {/* Resize handle — thin strip on the left edge */}
+        <div
+          onMouseDown={startResize}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('search:copilot.resizeHandle', { defaultValue: 'Resize Ask Ontos panel' })}
+          aria-valuemin={COPILOT_MIN_WIDTH}
+          aria-valuemax={COPILOT_MAX_WIDTH}
+          aria-valuenow={panelWidth}
+          className="absolute inset-y-0 -left-0.5 w-1.5 cursor-col-resize z-10 hover:bg-violet-500/40 active:bg-violet-500/60 transition-colors"
+        />
+        {/* Header — h-16 matches the app header so the bottom border aligns */}
+        <div className="flex h-16 items-center justify-between gap-2 px-4 border-b shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5 text-white" />

@@ -105,6 +105,7 @@ import {
   GrantPermissionsNode,
   OnBehalfOfNode,
 } from './workflow-nodes';
+import TemplateVarsInspector from './template-vars-inspector';
 
 import type {
   ProcessWorkflow,
@@ -2452,18 +2453,30 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       
                       <div>
                         <Label>Body Template</Label>
-                        <Textarea
-                          value={(selectedStep.config as { body_template?: string })?.body_template || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, {
-                            config: { ...selectedStep.config, body_template: e.target.value }
-                          })}
-                          placeholder={'{\n  "description": "Alert for ${entity_name}",\n  "entity_type": "${entity_type}"\n}'}
-                          rows={5}
-                          className="font-mono text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Use {'${variable}'} for substitution: entity_type, entity_id, entity_name, user_email, workflow_name
-                        </p>
+                        {/* Two-column layout: textarea on the left, the
+                            variable inspector on the right. The inspector
+                            stacks below the textarea on narrow screens via
+                            the responsive ``md:`` breakpoint. */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                          <div>
+                            <Textarea
+                              value={(selectedStep.config as { body_template?: string })?.body_template || ''}
+                              onChange={(e) => updateStep(selectedStep.step_id, {
+                                config: { ...selectedStep.config, body_template: e.target.value }
+                              })}
+                              placeholder={'{\n  "description": "Alert for ${entity_name}",\n  "entity_type": "${entity_type}"\n}'}
+                              rows={8}
+                              className="font-mono text-sm"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Use {'${variable}'} for substitution. See the panel for all variables in scope.
+                            </p>
+                          </div>
+                          <TemplateVarsInspector
+                            triggerType={triggerType}
+                            entityType={entityTypes[0]}
+                          />
+                        </div>
                       </div>
 
                       {/* Extra parameters forwarded into the UC HTTPConnection call (issue #401).

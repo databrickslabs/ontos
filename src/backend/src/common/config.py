@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     DATABRICKS_SCHEMA: str = Field("app_ontos", env='DATABRICKS_SCHEMA')  # Default schema
     DATABRICKS_VOLUME: Optional[str] = Field(None, env='DATABRICKS_VOLUME')  # Full volume path (injected by Databricks Apps)
     DATABRICKS_TOKEN: Optional[str] = None  # Optional since handled by SDK
+    DATABRICKS_CONFIG_PROFILE: Optional[str] = Field(
+        None, env='DATABRICKS_CONFIG_PROFILE'
+    )  # Local dev: name of profile in ~/.databrickscfg (OAuth U2M with auto-refresh)
     DATABRICKS_HTTP_PATH: Optional[str] = None # Will be computed by validator
     DATABRICKS_APP_NAME: str = Field("ontos", env='DATABRICKS_APP_NAME')  # Name of the Databricks App
 

@@ -316,7 +316,9 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
 
     # Determine authentication mode and cache key
     token = settings.DATABRICKS_TOKEN
-    
+    profile = settings.DATABRICKS_CONFIG_PROFILE
+    skip_cluster_check = False
+
     if token:
         # Explicit token authentication (e.g., local development)
         token_hash = _get_token_hash(token)
@@ -346,6 +348,29 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
         )
         
         cache_identifier = token_hash
+    elif profile:
+        # CLI profile authentication (OAuth U2M from ~/.databrickscfg, auto-refreshes)
+        cache_key = f"profile_{profile}"
+
+        if cache_key in _CLIENT_CACHE:
+            cached_client, cached_identifier, _ = _CLIENT_CACHE[cache_key]
+            _CLIENT_CACHE[cache_key] = (cached_client, cached_identifier, time.time())
+            logger.info(f"Reusing cached profile workspace client (profile={profile})")
+            return cached_client
+
+        logger.info(f"Initializing NEW profile workspace client (profile={profile}, timeout={timeout}s)")
+
+        # Don't pass host explicitly: profile carries it; passing both can make the SDK
+        # ignore the profile's auth and fall back to env-based auth.
+        client = WorkspaceClient(
+            profile=profile,
+            product="ontos",
+            product_version=__version__,
+        )
+
+        cache_identifier = profile
+        # U2M tokens commonly lack clusters:read; use lighter verification
+        skip_cluster_check = True
     else:
         # Implicit authentication (e.g., Databricks Apps)
         cache_key = "implicit_auth"
@@ -370,7 +395,7 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
         cache_identifier = "implicit"
 
     # Verify connectivity and set telemetry headers
-    verified_client = _verify_workspace_client(client)
+    verified_client = _verify_workspace_client(client, skip_cluster_check=skip_cluster_check)
 
     caching_client = CachingWorkspaceClient(verified_client, timeout=timeout)
 

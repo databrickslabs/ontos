@@ -3466,7 +3466,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         subscribe response.
         """
         try:
-            from src.common.workflow_triggers import fire_trigger_safe
+            from src.common.workflow_triggers import (
+                enrich_entity_data_with_data_product,
+                fire_trigger_safe,
+            )
+            from src.db_models.data_products import DataProductDb as _DataProductDb
             from src.models.process_workflows import EntityType
 
             entity_data: Dict[str, Any] = {
@@ -3499,6 +3503,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     p.model_dump() if hasattr(p, 'model_dump') else p
                     for p in principals
                 ]
+
+            # Catalog + output_ports enrichment for ${entity.catalogs} /
+            # ${entity.output_ports}. Requires the DB model (has the
+            # output_ports relationship); ``product`` here is the API model.
+            dp_db = db_session.query(_DataProductDb).filter(
+                _DataProductDb.id == product_id
+            ).first()
+            if dp_db is not None:
+                enrich_entity_data_with_data_product(entity_data, dp_db)
+                if "data_product_name" not in entity_data and dp_db.name:
+                    entity_data["data_product_name"] = dp_db.name
 
             # Fire with entity_type=DATA_PRODUCT (NOT SUBSCRIPTION). Process
             # workflows register with entity_types=["data_product"] because

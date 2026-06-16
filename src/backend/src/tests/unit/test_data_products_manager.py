@@ -602,8 +602,8 @@ class TestDataProductsManager:
         manager = DataProductsManager(db=db_session, ws_client=None)
 
         # Assert
-        # Should initialize but log warning
-        assert manager is not None
+        # Should initialize but log warning; ws_client stored as None
+        assert manager._ws_client is None
         # SDK operations should handle missing client gracefully
 
     def test_manager_without_notifications(self, db_session):
@@ -616,5 +616,5 @@ class TestDataProductsManager:
         )
 
         # Assert
-        assert manager is not None
+        assert manager._notifications_manager is None
         # Should work but notifications won't be sent

@@ -1,0 +1,154 @@
+{
+  "title": "用語マッピング",
+  "subtitle": "アセット、データ契約、データ製品に対するオントロジー概念の割り当てを一括で提案します。決定はアセットレビューのワークスペースで行います。",
+  "actions": {
+    "refresh": "更新",
+    "newRun": "新規実行",
+    "cancel": "キャンセル",
+    "applyAuto": "自動適用 ({{count}})",
+    "generateReview": "レビューを生成",
+    "undo": "元に戻す",
+    "selectRunHint": "左側で実行を選択するか、新しい実行を開始してください。"
+  },
+  "recent": {
+    "title": "最近の実行",
+    "loading": "実行を読み込み中…",
+    "empty": "まだ実行はありません。<strong>新規実行</strong>で開始してください。",
+    "noComment": "—",
+    "suggestionsCount": "{{count}} 件の提案"
+  },
+  "detail": {
+    "runLabel": "実行",
+    "createdAt": "作成日時",
+    "createdBy": "by {{email}}",
+    "sourcesTitle": "提案のソース",
+    "customerOntologies": "顧客オントロジー",
+    "shippedTaxonomies": "同梱の分類体系",
+    "reviewsLinkPrefix": "スチュワードレビューは",
+    "reviewsLinkText": "アセットレビュー",
+    "reviewsLinkSuffix": "のワークスペースにあります。各提案はそこで 1 つの ReviewedAsset になり、決定は自動的にこの実行に反映されます。"
+  },
+  "stats": {
+    "targets": "対象",
+    "suggestions": "提案",
+    "pending": "保留中",
+    "autoApply": "自動適用",
+    "accepted": "承認済み",
+    "rejected": "却下",
+    "linksCreated": "作成されたリンク",
+    "linksSkipped": "スキップされたリンク"
+  },
+  "toast": {
+    "applied": "適用しました",
+    "appliedDescription": "{{created}} 件のリンクを作成、{{skipped}} 件をスキップ",
+    "applyFailed": "適用に失敗しました",
+    "undone": "元に戻しました",
+    "undoneDescription": "{{removed}} 件のリンクを削除、{{reverted}} 件の提案を取り消しました",
+    "undoFailed": "元に戻すのに失敗しました",
+    "loadRunFailed": "実行の読み込みに失敗しました",
+    "unknownError": "不明なエラー"
+  },
+  "confirm": {
+    "undo": "実行 {{id}} を取り消しますか? この実行で作成されたすべてのリンクが削除されます。"
+  },
+  "errors": {
+    "loadRunsFailed": "実行の読み込みに失敗しました"
+  },
+  "runConfig": {
+    "title": "新規用語マッピング実行",
+    "description": "オントロジーと対象エンティティを選択してください。ヒューリスティックな提案エンジンが、適用前に確認できる概念割り当てを提案します。",
+    "customerOntologies": "顧客オントロジー",
+    "enabledCount": "{{count}} 件が有効",
+    "loadingOntologies": "オントロジーを読み込み中…",
+    "noCustomerOntologies": "顧客オントロジーがまだ読み込まれていません。設定 → RDF ソースでアップロードするか、オントロジー ジェネレーターで生成してから、このダイアログを再度開いてください。",
+    "useAll": "有効な顧客オントロジーをすべて使用",
+    "shippedTitle": "同梱の分類体系も含める",
+    "shippedHelp": "内部の <code>urn:taxonomy:ontos-ontology</code>(Ontos アセット型付けスキーマ)は、マッピング対象として有効になることはありません。",
+    "targetTypes": "対象エンティティの種類",
+    "assetTypesLabel": "アセット型名(カンマ区切り)。デフォルトは「Column」です。",
+    "assetTypesPlaceholder": "Column, Table",
+    "limit": "上限",
+    "comment": "コメント(任意)",
+    "commentPlaceholder": "この実行の目的は何ですか?",
+    "previewNoOntologies": "(オントロジーなし — 上で 1 つ選択してください)",
+    "previewCustomerOne": "顧客オントロジー 1 件",
+    "previewCustomerMany": "顧客オントロジー インスタンス {{count}} 件",
+    "previewShippedOne": "同梱の分類体系 1 件",
+    "previewShippedMany": "同梱の分類体系 {{count}} 件",
+    "previewTargetTypeOne": "1 種類の対象",
+    "previewTargetTypeMany": "{{count}} 種類の対象",
+    "previewLine": "<strong>{{customerPart}}</strong> を <strong>{{targetPart}}</strong> にわたって検索します。",
+    "previewLineWithShipped": "<strong>{{customerPart}}</strong> に加えて <strong>{{shippedPart}}</strong> を <strong>{{targetPart}}</strong> にわたって検索します。",
+    "submit": "実行を作成",
+    "submitting": "提案エンジンを実行中…",
+    "validation": {
+      "noTargetType": "少なくとも 1 つの対象タイプを選択してください",
+      "noTargetTypeDescription": "提案エンジンが対象とすべきエンティティの種類を選択してください。",
+      "noOntology": "少なくとも 1 つのオントロジーを選択してください",
+      "noOntologyDescription": "「有効な顧客オントロジーをすべて使用」をオンのままにするか、特定のものを選択してください。"
+    },
+    "toast": {
+      "created": "実行を作成しました",
+      "createdDescriptionOne": "{{targets}} 件の対象に対して 1 件の提案を生成しました。",
+      "createdDescriptionMany": "{{targets}} 件の対象に対して {{total}} 件の提案を生成しました。",
+      "createdEmpty": "実行を作成しましたが、応答が空でした",
+      "failed": "実行の作成に失敗しました",
+      "loadOntologiesFailed": "オントロジーの読み込みに失敗しました"
+    }
+  },
+  "generateReview": {
+    "title": "実行用のレビューを生成",
+    "description": "この実行のすべての提案を含むデータ アセット レビューを生成します。レビュー内で行われた決定は提案キューに反映されます。",
+    "reviewerEmail": "レビュアーのメールアドレス *",
+    "reviewerEmailHelp": "デフォルトはあなたです。必要に応じてドメインのスチュワードに引き継いでください。",
+    "reviewerEmailPlaceholder": "steward@company.com",
+    "notes": "メモ",
+    "notesPlaceholder": "レビュアーへの補足情報(任意)。",
+    "includeAccepted": "既に承認済みの提案も含める",
+    "includeAcceptedHelp": "保留中の行だけでなく、レビュアーに以前の決定を確認させたい場合に便利です。",
+    "eligibleSummaryOne": "1 件の提案がレビュー対象アセットになります({{pending}} 件が保留中{{acceptedPart}})。",
+    "eligibleSummaryMany": "{{eligible}} 件の提案がレビュー対象アセットになります({{pending}} 件が保留中{{acceptedPart}})。",
+    "acceptedPart": "、{{accepted}} 件が承認済み",
+    "submit": "レビューを生成",
+    "validation": {
+      "reviewerRequired": "レビュアーのメールアドレスは必須です。"
+    },
+    "toast": {
+      "created": "レビューを作成しました",
+      "createdDescriptionOne": "1 件の提案をレビュー待ちに追加しました。",
+      "createdDescriptionMany": "{{count}} 件の提案をレビュー待ちに追加しました。",
+      "failed": "レビューの作成に失敗しました"
+    }
+  },
+  "suggestion": {
+    "header": "用語マッピングの提案",
+    "progress": "{{current}} / {{total}}",
+    "concept": "概念",
+    "confidence": "信頼度",
+    "confidenceValue": "{{value}}% · {{bucket}}",
+    "autoApply": "自動適用の候補",
+    "whyMatch": "なぜこの一致か",
+    "noReason": "—",
+    "overrideIri": "対象 IRI を上書き(任意)",
+    "overrideIriHelp": "空欄のままにすると、提案された IRI が採用されます。同じオントロジー内の別の概念に変更する場合は上書きしてください。",
+    "comment": "コメント",
+    "commentPlaceholder": "レビュアー / 監査用のメモ。",
+    "needsClarification": "確認が必要",
+    "reject": "却下",
+    "acceptApply": "承認して適用",
+    "acceptNext": "承認して次へ",
+    "invalidFqn": "用語マッピング アセットの FQN が無効です。",
+    "errors": {
+      "unparseable": "解析できない用語マッピング FQN: {{fqn}}",
+      "notFound": "実行内に提案が見つかりません",
+      "loadFailed": "提案の読み込みに失敗しました"
+    },
+    "toast": {
+      "approved": "提案を承認しました",
+      "rejected": "提案を却下しました",
+      "clarified": "確認が必要としてマークしました",
+      "savedWithWarnings": "警告ありで保存しました",
+      "decisionFailed": "決定に失敗しました"
+    }
+  }
+}

@@ -4847,8 +4847,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from datetime import datetime
         from src.common.workflow_triggers import get_trigger_registry
         from src.models.process_workflows import EntityType
-        from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
-        
+
         contract = data_contract_repo.get(db, id=contract_id)
         if not contract:
             raise ValueError("Contract not found")
@@ -4865,27 +4864,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         
         now = datetime.utcnow()
         request_id = str(uuid4())
-        
-        # Create asset review record
-        try:
-            from src.controller.data_asset_reviews_manager import DataAssetReviewManager
-            from src.models.data_asset_reviews import ReviewedAsset as ReviewedAssetApi
-            from src.common.databricks_utils import get_workspace_client
-            
-            ws_client = get_workspace_client()
-            review_manager = DataAssetReviewManager(db=db, ws_client=ws_client, notifications_manager=notifications_manager)
-            
-            review_asset = ReviewedAssetApi(
-                id=str(uuid4()),
-                asset_fqn=f"contract:{contract_id}",
-                asset_type=AssetType.DATA_CONTRACT,
-                status=ReviewedAssetStatus.PENDING,
-                updated_at=now
-            )
-            logger.info(f"Created asset review record for contract {contract_id}")
-        except Exception as e:
-            logger.warning(f"Failed to create asset review record: {e}", exc_info=True)
-        
+
+        # NOTE: a proposed contract surfaces to stewards through two real paths,
+        # so we deliberately do NOT create a data-asset review record here:
+        #   1. GET /api/approvals/queue lists every contract in proposed/
+        #      under_review status (see ApprovalsManager.get_approvals_queue),
+        #      and the steward acts on it via the contract approve/reject
+        #      endpoints.
+        #   2. The ON_REQUEST_REVIEW trigger below runs any configured review
+        #      workflow (notifications, approval routing).
+        # The /data-asset-reviews surface is for Unity Catalog assets (tables,
+        # views, functions) and needs an explicit reviewer; routing a contract
+        # there would require a steward-assignment policy that doesn't exist
+        # yet. A previous stub here constructed an in-memory ReviewedAsset and
+        # logged "Created asset review record" without ever persisting it —
+        # misleading dead code that is removed.
+
         # Fire the ON_REQUEST_REVIEW trigger
         trigger_registry = get_trigger_registry(db)
         executions = trigger_registry.on_request_review(

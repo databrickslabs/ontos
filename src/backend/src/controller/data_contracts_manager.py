@@ -1652,6 +1652,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         all_properties = []
         all_obj_relationships = []
         all_prop_relationships = []
+        all_quality_checks = []
         # Collect semantic link work to process after bulk insert
         schema_semantic_work = []
         prop_semantic_work = []
@@ -1739,6 +1740,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
                 all_properties.append(prop)
 
+                # Collect property-level (column) quality rules. These arrive
+                # nested under the column as `properties[].quality`; previously
+                # nothing read them here, so column-level rules silently
+                # vanished on save (the only persisted quality was object-level
+                # via the separate `qualityRules` field).
+                for rule_data in (prop_dict.get('quality') or []):
+                    all_quality_checks.append(
+                        self._build_quality_check_db(
+                            rule_data, object_id=schema_obj_id, property_id=prop_id
+                        )
+                    )
+
                 # Collect property-level relationships (ODCS v3.1.0)
                 for rel_data in (prop_dict.get('relationships') or []):
                     if isinstance(rel_data, dict):
@@ -1778,6 +1791,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_obj_relationships)
         if all_prop_relationships:
             db.add_all(all_prop_relationships)
+        if all_quality_checks:
+            db.add_all(all_quality_checks)
         db.flush()
 
         # Process semantic links after bulk insert
@@ -1803,10 +1818,51 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     created_by=current_user
                 )
 
+    @staticmethod
+    def _build_quality_check_db(rule_data, object_id: str, property_id: Optional[str] = None) -> 'DataQualityCheckDb':
+        """Map an incoming quality-rule dict/model to a DataQualityCheckDb row.
+
+        Shared by object-level (``property_id is None``) and property-level
+        (``property_id`` set) persistence so both honour the same ODCS field
+        mapping and camelCase/snake_case aliases. The default ``level`` follows
+        whether the check targets a column or the whole object.
+        """
+        rule_dict = rule_data.model_dump() if hasattr(rule_data, 'model_dump') else rule_data
+        default_level = 'property' if property_id else 'object'
+        return DataQualityCheckDb(
+            object_id=object_id,
+            property_id=property_id,
+            stable_id=rule_dict.get('id'),
+            level=rule_dict.get('level', default_level),
+            name=rule_dict.get('name'),
+            description=rule_dict.get('description'),
+            dimension=rule_dict.get('dimension'),
+            business_impact=rule_dict.get('businessImpact') or rule_dict.get('business_impact'),
+            method=rule_dict.get('method'),
+            schedule=rule_dict.get('schedule'),
+            scheduler=rule_dict.get('scheduler'),
+            severity=rule_dict.get('severity'),
+            type=rule_dict.get('type', 'library'),
+            unit=rule_dict.get('unit'),
+            tags=rule_dict.get('tags'),
+            rule=rule_dict.get('rule'),
+            query=rule_dict.get('query'),
+            engine=rule_dict.get('engine'),
+            implementation=rule_dict.get('implementation'),
+            must_be=rule_dict.get('mustBe') or rule_dict.get('must_be'),
+            must_not_be=rule_dict.get('mustNotBe') or rule_dict.get('must_not_be'),
+            must_be_gt=rule_dict.get('mustBeGt') or rule_dict.get('must_be_gt'),
+            must_be_ge=rule_dict.get('mustBeGe') or rule_dict.get('must_be_ge'),
+            must_be_lt=rule_dict.get('mustBeLt') or rule_dict.get('must_be_lt'),
+            must_be_le=rule_dict.get('mustBeLe') or rule_dict.get('must_be_le'),
+            must_be_between_min=rule_dict.get('mustBeBetweenMin') or rule_dict.get('must_be_between_min'),
+            must_be_between_max=rule_dict.get('mustBeBetweenMax') or rule_dict.get('must_be_between_max'),
+        )
+
     def _create_quality_checks(self, db, contract_id: str, quality_rules: List):
         """
-        Create quality checks for a contract.
-        
+        Create object-level quality checks for a contract.
+
         Args:
             db: Database session
             contract_id: Contract UUID
@@ -1817,43 +1873,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not schema_obj:
             logger.warning(f"No schema objects found for contract {contract_id}, skipping quality checks")
             return
-        
+
         for rule_data in quality_rules:
-            # Support both Pydantic models and dicts
-            if hasattr(rule_data, 'model_dump'):
-                rule_dict = rule_data.model_dump()
-            else:
-                rule_dict = rule_data
-            
-            quality_check = DataQualityCheckDb(
-                object_id=schema_obj.id,
-                stable_id=rule_dict.get('id'),
-                level=rule_dict.get('level', 'object'),
-                name=rule_dict.get('name'),
-                description=rule_dict.get('description'),
-                dimension=rule_dict.get('dimension'),
-                business_impact=rule_dict.get('businessImpact') or rule_dict.get('business_impact'),
-                method=rule_dict.get('method'),
-                schedule=rule_dict.get('schedule'),
-                scheduler=rule_dict.get('scheduler'),
-                severity=rule_dict.get('severity'),
-                type=rule_dict.get('type', 'library'),
-                unit=rule_dict.get('unit'),
-                tags=rule_dict.get('tags'),
-                rule=rule_dict.get('rule'),
-                query=rule_dict.get('query'),
-                engine=rule_dict.get('engine'),
-                implementation=rule_dict.get('implementation'),
-                must_be=rule_dict.get('mustBe') or rule_dict.get('must_be'),
-                must_not_be=rule_dict.get('mustNotBe') or rule_dict.get('must_not_be'),
-                must_be_gt=rule_dict.get('mustBeGt') or rule_dict.get('must_be_gt'),
-                must_be_ge=rule_dict.get('mustBeGe') or rule_dict.get('must_be_ge'),
-                must_be_lt=rule_dict.get('mustBeLt') or rule_dict.get('must_be_lt'),
-                must_be_le=rule_dict.get('mustBeLe') or rule_dict.get('must_be_le'),
-                must_be_between_min=rule_dict.get('mustBeBetweenMin') or rule_dict.get('must_be_between_min'),
-                must_be_between_max=rule_dict.get('mustBeBetweenMax') or rule_dict.get('must_be_between_max')
-            )
-            db.add(quality_check)
+            db.add(self._build_quality_check_db(rule_data, object_id=schema_obj.id))
     
     def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):
         """
@@ -2477,13 +2499,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 ).all()
                 
                 if schema_objects:
-                    # Remove ALL existing quality checks for all schema objects in this contract
+                    # Replace only OBJECT-level checks (property_id IS NULL).
+                    # Property-level (column) checks are owned by the schema
+                    # recreation path above; deleting them here would drop the
+                    # column rules that were just persisted from the same save.
                     for schema_obj in schema_objects:
                         db.query(DataQualityCheckDb).filter(
-                            DataQualityCheckDb.object_id == schema_obj.id
+                            DataQualityCheckDb.object_id == schema_obj.id,
+                            DataQualityCheckDb.property_id.is_(None),
                         ).delete()
-                    
-                    # Add new quality rules
+
+                    # Add new object-level quality rules
                     if data_dict['qualityRules']:
                         self._create_quality_checks(db, contract_id, data_dict['qualityRules'])
             

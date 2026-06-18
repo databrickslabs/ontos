@@ -2211,7 +2211,29 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 domain_id = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
             elif data_dict.get('domain'):
                 domain_id = self._resolve_domain(db, domain_name=data_dict.get('domain'))
-            
+
+            # Reject a duplicate contract name within the same domain. This path
+            # always creates a *new* version family (new versions go through
+            # create_version), so any existing contract sharing the name+domain
+            # is a genuine duplicate, not another version of the same family
+            # (ONT-NEG-002). Name match is case-insensitive.
+            from sqlalchemy import func as _sa_func
+            from src.common.errors import ConflictError
+            new_name = data_dict.get('name', '').strip()
+            dup_query = db.query(DataContractDb).filter(
+                _sa_func.lower(DataContractDb.name) == new_name.lower()
+            )
+            dup_query = (
+                dup_query.filter(DataContractDb.domain_id == domain_id)
+                if domain_id is not None
+                else dup_query.filter(DataContractDb.domain_id.is_(None))
+            )
+            if dup_query.first() is not None:
+                where = "domain" if domain_id is not None else "global scope"
+                raise ConflictError(
+                    f"A data contract named '{new_name}' already exists in this {where}"
+                )
+
             # Resolve owner team if provided
             owner_team_id = data_dict.get('owner_team_id')
             if not owner_team_id and data_dict.get('owner'):

@@ -332,7 +332,9 @@ export default function BusinessTermsView() {
   const editableCollections = collections.filter((c) => c.is_editable);
   const totalConcepts = stats?.total_concepts ?? Object.values(groupedConcepts).flat().length;
   const totalProperties = stats?.total_properties ?? Object.values(groupedProperties).flat().length;
-  const selectedCollection = editableCollections[0] || null;
+  // Seed the editor with a default collection; the dialog lets the user pick
+  // another when more than one editable collection exists.
+  const defaultCollection = editableCollections[0];
 
   return (
     <div className="flex flex-col py-6">
@@ -443,7 +445,7 @@ export default function BusinessTermsView() {
         open={conceptEditorOpen}
         onOpenChange={setConceptEditorOpen}
         concept={null}
-        collection={selectedCollection || editableCollections[0]}
+        collection={defaultCollection}
         collections={editableCollections}
         onSave={handleSaveConcept}
       />

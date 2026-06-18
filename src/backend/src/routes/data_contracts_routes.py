@@ -90,6 +90,7 @@ async def get_contracts(
     db: DBSessionDep,
     domain_id: Optional[str] = None,
     project_id: Optional[str] = None,
+    status: Optional[str] = None,
     include_history: bool = False,
     current_user: CurrentUserDep = None,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
@@ -101,6 +102,11 @@ async def get_contracts(
     one row per ``version_family_id`` — the newest visible version of each
     family, plus a ``versionCount`` field. When True, every visible version
     is returned (used by the "Show all versions" toggle in the UI).
+
+    ``status`` optionally narrows the result to a single lifecycle status
+    (e.g. ``draft``, ``proposed``, ``active``). The filter is applied *after*
+    the role-aware visibility filter, so it can only narrow the set a caller
+    is already permitted to see.
     """
     try:
         # Check if user is admin
@@ -139,6 +145,7 @@ async def get_contracts(
             db,
             domain_id=domain_id,
             project_id=project_id,
+            status=status,
             is_admin=is_admin,
             include_history=include_history,
             caller_email=caller_email,

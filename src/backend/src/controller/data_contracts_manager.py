@@ -2237,12 +2237,28 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             elif not isinstance(description, dict):
                 description = {}
             
+            # A contract created without an owning team would otherwise have no
+            # owner at all, which makes it invisible to its own creator under the
+            # PRD #442 role-aware visibility filter (the family is "elevated" only
+            # for the draft_owner or owner_team members). Stamp the creator as the
+            # personal-draft owner so they can find the contract they just created.
+            # When an owner team is supplied the draft is team-visible from the
+            # start, so we leave draft_owner_id unset (tier-2 visibility). The
+            # draft_owner_id is cleared again on the draft->proposed transition.
+            status_value = data_dict.get('status', 'draft')
+            draft_owner_id = (
+                current_user
+                if (status_value or '').lower() == 'draft' and not owner_team_id
+                else None
+            )
+
             # Create main contract record
             db_obj = DataContractDb(
                 name=data_dict.get('name'),
                 version=data_dict.get('version', '1.0.0'),
-                status=data_dict.get('status', 'draft'),
+                status=status_value,
                 owner_team_id=owner_team_id,
+                draft_owner_id=draft_owner_id,
                 project_id=project_id,  # Add project_id
                 kind=data_dict.get('kind', 'DataContract'),
                 api_version=data_dict.get('apiVersion', 'v3.1.0'),
@@ -4857,8 +4873,12 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if from_status != 'draft':
             raise ValueError(f"Cannot request review from status {contract.status}. Must be DRAFT.")
         
-        # Transition to PROPOSED
+        # Transition to PROPOSED. Clear the personal-draft owner so the contract
+        # is promoted from tier-1 (creator-only) to organisation visibility; a
+        # contract under steward review must be discoverable by stewards and
+        # other team members, not just its author (PRD #442).
         contract.status = 'proposed'
+        contract.draft_owner_id = None
         db.add(contract)
         db.flush()
         self._update_search_index(contract, db)
@@ -5917,6 +5937,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         project_id=None,
         is_admin=False,
         latest_only=True,
+        status=None,
         *,
         caller_email: Optional[str] = None,
         caller_team_ids: Optional[Set[str]] = None,
@@ -5976,6 +5997,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 or (not is_admin_only_status(c) and is_visible_consumer(c))
             ]
 
+        # Optional status filter (e.g. ?status=draft). Applied after the
+        # visibility filter so callers can only ever narrow to statuses they
+        # are already allowed to see — a consumer asking for ?status=draft
+        # still gets nothing because drafts were dropped above.
+        if status:
+            wanted = status.strip().lower()
+            contracts = [
+                c for c in contracts if (c.status or '').lower() == wanted
+            ]
+
         # Family counts are taken from the post-visibility-filter set so
         # the badge reflects what the caller can actually navigate to.
         counts = compute_family_counts(contracts)
@@ -5999,6 +6030,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         db,
         domain_id: Optional[str] = None,
         project_id: Optional[str] = None,
+        status: Optional[str] = None,
         is_admin: bool = False,
         latest_only: bool = True,
         include_history: bool = False,
@@ -6021,6 +6053,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             project_id,
             is_admin,
             latest_only,
+            status=status,
             caller_email=caller_email,
             caller_team_ids=caller_team_ids,
         )

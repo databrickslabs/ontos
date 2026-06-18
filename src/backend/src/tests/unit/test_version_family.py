@@ -402,6 +402,84 @@ class TestContractsListCollapse:
         # versionCount is intentionally omitted on the expanded view.
         assert all(s.versionCount is None for s in summaries)
 
+    def test_status_filter_narrows_to_single_status(
+        self, db_session: Session, family_with_loose_row
+    ):
+        # ``?status=draft`` must actually filter (previously the route had no
+        # such param so it was silently ignored — CUJ-006). Family A's draft
+        # rep (v3) is the only draft; the active rows must be excluded.
+        manager = self._manager(db_session)
+        summaries = manager.list_contracts_from_db(
+            db_session, is_admin=True, status="draft"
+        )
+        ids = {s.id for s in summaries}
+        assert ids == {family_with_loose_row["v3"]}
+
+    def test_status_filter_is_case_insensitive(
+        self, db_session: Session, family_with_loose_row
+    ):
+        manager = self._manager(db_session)
+        summaries = manager.list_contracts_from_db(
+            db_session, is_admin=True, status="ACTIVE", include_history=True
+        )
+        # Three active rows across the two families; the draft (v3) is excluded.
+        assert {s.id for s in summaries} == {
+            family_with_loose_row["v1"],
+            family_with_loose_row["v2"],
+            family_with_loose_row["loose"],
+        }
+
+
+class TestPersonalDraftVisibility:
+    """A draft stamped with ``draft_owner_id`` is visible to its owner but not
+    to other non-admin callers — the elevation path that lets a contract's
+    creator find the draft they just created (CUJ-006)."""
+
+    @pytest.fixture
+    def two_personal_drafts(self, db_session: Session):
+        from datetime import datetime, timezone
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        alice = str(uuid.uuid4())
+        bob = str(uuid.uuid4())
+        db_session.add(DataContractDb(
+            id=alice, name="Alice Draft", version="1.0.0", status="draft",
+            version_family_id=alice, draft_owner_id="alice@example.com",
+            created_at=base, updated_at=base,
+        ))
+        db_session.add(DataContractDb(
+            id=bob, name="Bob Draft", version="1.0.0", status="draft",
+            version_family_id=bob, draft_owner_id="bob@example.com",
+            created_at=base, updated_at=base,
+        ))
+        db_session.commit()
+        return {"alice": alice, "bob": bob}
+
+    def _manager(self, db_session):
+        from pathlib import Path
+        from src.controller.data_contracts_manager import DataContractsManager
+        return DataContractsManager(data_dir=Path("/tmp"))
+
+    def test_owner_sees_own_draft_others_do_not(
+        self, db_session: Session, two_personal_drafts
+    ):
+        manager = self._manager(db_session)
+        summaries = manager.list_contracts_from_db(
+            db_session, is_admin=False, caller_email="alice@example.com"
+        )
+        ids = {s.id for s in summaries}
+        assert two_personal_drafts["alice"] in ids
+        assert two_personal_drafts["bob"] not in ids
+
+    def test_non_owner_consumer_sees_no_drafts(
+        self, db_session: Session, two_personal_drafts
+    ):
+        manager = self._manager(db_session)
+        summaries = manager.list_contracts_from_db(
+            db_session, is_admin=False, caller_email="carol@example.com"
+        )
+        # Carol owns neither personal draft and drafts aren't consumer-visible.
+        assert summaries == []
+
 
 class TestProductsListCollapse:
     """``list_products`` collapses by version_family_id and attaches counts."""

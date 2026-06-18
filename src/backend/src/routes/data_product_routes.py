@@ -2148,6 +2148,33 @@ async def update_data_product(
                 f"continuing without team-ownership branch"
             )
 
+        # Resolve the caller's *feature-level* data-products permission so a
+        # data-products Admin (including via an in-app role override) can edit
+        # any product, not just ones they own. Mirrors the resolution used by
+        # the DP-assets route. Best-effort: on failure we fall back to the
+        # ownership cascade (project / team / draft-owner) only.
+        is_feature_admin = False
+        try:
+            auth_manager = getattr(request.app.state, "authorization_manager", None)
+            settings_manager = getattr(request.app.state, "settings_manager", None)
+            if auth_manager and current_user:
+                applied_role_id = (
+                    settings_manager.get_applied_role_override_for_user(current_user.email)
+                    if settings_manager else None
+                )
+                if applied_role_id and settings_manager:
+                    eff = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+                else:
+                    eff = auth_manager.get_user_effective_permissions(user_groups, None)
+                is_feature_admin = auth_manager.has_permission(
+                    eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
+                )
+        except Exception:
+            logger.exception(
+                "Failed to resolve data-products admin level for product update; "
+                "falling back to ownership cascade"
+            )
+
         updated_product_response = manager.update_product_with_auth(
             product_id=product_id,
             product_data_dict=product_dict,
@@ -2156,6 +2183,7 @@ async def update_data_product(
             db=db,
             background_tasks=background_tasks,
             caller_team_ids=caller_team_ids,
+            is_feature_admin=is_feature_admin,
         )
 
         if not updated_product_response:

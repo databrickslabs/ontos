@@ -19,6 +19,11 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/delivery-methods", tags=["Delivery Methods"])
 FEATURE_ID = "delivery-methods"
+# Reads of the delivery-method catalog are a prerequisite for authoring a
+# deliverable on a data product, so they are gated by the data-products
+# feature (any product author can list/get) rather than the admin-managed
+# delivery-methods feature. Writes stay gated by delivery-methods:READ_WRITE.
+READ_FEATURE_ID = "data-products"
 
 
 def get_delivery_methods_manager():
@@ -68,7 +73,7 @@ def create_delivery_method(
 @router.get(
     "",
     response_model=List[DeliveryMethodRead],
-    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[Depends(PermissionChecker(READ_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )
 def get_all_delivery_methods(
     db: DBSessionDep,
@@ -85,7 +90,7 @@ def get_all_delivery_methods(
 @router.get(
     "/{method_id}",
     response_model=DeliveryMethodRead,
-    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+    dependencies=[Depends(PermissionChecker(READ_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )
 def get_delivery_method(
     method_id: UUID,

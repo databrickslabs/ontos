@@ -218,7 +218,12 @@ async def approve_contract(
         return {'status': updated.status}
     except HTTPException:
         raise
-    except Exception as e:
+    except ValueError as e:
+        # Invalid lifecycle transition (or missing contract) is a client error,
+        # not a server fault — surface it as 409 instead of an opaque 500.
+        logger.warning("Approve contract rejected for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception:
         logger.exception("Approve contract failed for contract_id=%s", contract_id)
         raise HTTPException(status_code=500, detail="Failed to approve contract")
 
@@ -264,7 +269,10 @@ async def reject_contract(
         return {'status': updated.status}
     except HTTPException:
         raise
-    except Exception as e:
+    except ValueError as e:
+        logger.warning("Reject contract rejected for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception:
         logger.exception("Reject contract failed for contract_id=%s", contract_id)
         raise HTTPException(status_code=500, detail="Failed to reject contract")
 

@@ -235,6 +235,69 @@ class TestDataContractsManagerGating:
                 )
 
 
+class TestContractApproveFromProposed:
+    """ONT-CUJ-013: a steward must be able to approve a proposed contract.
+
+    Previously DATA_CONTRACT_TRANSITIONS omitted "approved" from "proposed",
+    so the approve endpoint's transition_status(proposed -> approved) raised
+    ValueError, which the route turned into an opaque 500.
+    """
+
+    def test_lifecycle_map_allows_proposed_to_approved(self):
+        from src.models.lifecycle import DATA_CONTRACT_TRANSITIONS
+        assert 'approved' in DATA_CONTRACT_TRANSITIONS['proposed']
+
+    def test_transition_proposed_to_approved_succeeds(self, db_session):
+        from src.controller.data_contracts_manager import DataContractsManager
+        from src.db_models.data_contracts import DataContractDb
+        import uuid
+        from pathlib import Path
+
+        contract = DataContractDb(
+            id=str(uuid.uuid4()),
+            name="Approvable Contract",
+            version="1.0.0",
+            status="proposed",
+        )
+        db_session.add(contract)
+        db_session.commit()
+
+        mgr = DataContractsManager(data_dir=Path("/tmp"))
+        updated = mgr.transition_status(
+            db=db_session,
+            contract_id=contract.id,
+            new_status='approved',
+            current_user='steward@example.com',
+        )
+        assert updated.status == 'approved'
+
+    def test_invalid_transition_still_raises_valueerror(self, db_session):
+        # A genuinely invalid jump (active -> approved) must still be rejected,
+        # so the route can map it to a 409 rather than silently allowing it.
+        from src.controller.data_contracts_manager import DataContractsManager
+        from src.db_models.data_contracts import DataContractDb
+        import uuid
+        from pathlib import Path
+
+        contract = DataContractDb(
+            id=str(uuid.uuid4()),
+            name="Active Contract",
+            version="1.0.0",
+            status="active",
+        )
+        db_session.add(contract)
+        db_session.commit()
+
+        mgr = DataContractsManager(data_dir=Path("/tmp"))
+        with pytest.raises(ValueError, match="Invalid status transition"):
+            mgr.transition_status(
+                db=db_session,
+                contract_id=contract.id,
+                new_status='approved',
+                current_user='steward@example.com',
+            )
+
+
 # =========================================================================
 # YAML validation — User Story 15
 # =========================================================================

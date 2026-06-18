@@ -35,10 +35,8 @@ import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
+import { systemRdfNamespaceDisplayLabel, SYSTEM_RDF_NAMESPACE_KEY_SET } from '@/lib/system-rdf-namespace-labels';
 import type { TFunction } from 'i18next';
-
-const SYSTEM_CONTEXTS = ['urn:meta:sources', 'urn:semantic-links'];
 
 interface TitleCandidateRow {
   iri: string;
@@ -100,7 +98,7 @@ export default function SemanticModelsSettings() {
   const [titleSaving, setTitleSaving] = useState(false);
 
   const filteredItems = useMemo(() => 
-    items.filter(m => !SYSTEM_CONTEXTS.includes(m.name)),
+    items.filter(m => !SYSTEM_RDF_NAMESPACE_KEY_SET.has(m.name)),
     [items]
   );
 

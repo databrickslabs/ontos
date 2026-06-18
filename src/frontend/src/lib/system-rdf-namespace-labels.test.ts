@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { systemRdfNamespaceDisplayLabel } from './system-rdf-namespace-labels';
+import {
+  systemRdfNamespaceDisplayLabel,
+  SYSTEM_RDF_NAMESPACE_KEY_SET,
+} from './system-rdf-namespace-labels';
 import { humanizeRdfFilename } from './rdf-filename';
 
 describe('systemRdfNamespaceDisplayLabel', () => {
@@ -27,5 +30,23 @@ describe('systemRdfNamespaceDisplayLabel', () => {
     expect(systemRdfNamespaceDisplayLabel('urn:something-else', t)).toBe(
       humanizeRdfFilename('urn:something-else'),
     );
+  });
+});
+
+describe('SYSTEM_RDF_NAMESPACE_KEY_SET', () => {
+  it('contains all known internal namespaces used to filter RDF Sources', () => {
+    for (const key of [
+      'urn:meta:sources',
+      'urn:semantic-links',
+      'urn:x-rdflib:default',
+      'urn:app-entities',
+      'urn:demo',
+    ]) {
+      expect(SYSTEM_RDF_NAMESPACE_KEY_SET.has(key)).toBe(true);
+    }
+  });
+
+  it('does not include user-facing taxonomy contexts', () => {
+    expect(SYSTEM_RDF_NAMESPACE_KEY_SET.has('urn:taxonomy:foo')).toBe(false);
   });
 });

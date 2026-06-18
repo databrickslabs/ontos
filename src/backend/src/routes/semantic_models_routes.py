@@ -31,6 +31,20 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Semantic Models"])
 
+# Internal named-graph contexts that must never surface as user-facing RDF
+# Sources. These are computed/managed graphs (app entities, semantic links,
+# source-registry metadata, the rdflib default graph), not uploaded or bundled
+# taxonomy files. Mirrors the frontend's SYSTEM_RDF_NAMESPACE_KEYS so the two
+# stay aligned.
+INTERNAL_GRAPH_CONTEXTS = frozenset({
+    "urn:meta:sources",
+    "urn:semantic-links",
+    "urn:x-rdflib:default",
+    "urn:app-entities",
+    "urn:demo",
+    "",  # rdflib default-default
+})
+
 def get_semantic_models_manager(request: Request) -> SemanticModelsManager:
     """Retrieves the SemanticModelsManager singleton from app.state."""
     manager = getattr(request.app.state, 'semantic_models_manager', None)
@@ -83,6 +97,10 @@ async def get_semantic_models(
         for tax in graph_taxonomies:
             # Skip if this is a database-backed model (already included above)
             if tax.source_type == 'database':
+                continue
+            # Skip internal/system graphs (app entities, semantic links, etc.)
+            # so they don't leak into the user-facing RDF Sources list.
+            if tax.name in INTERNAL_GRAPH_CONTEXTS:
                 continue
             # Skip if name matches (either original or sanitized version)
             if tax.name in db_model_names or tax.name in db_model_names_sanitized:

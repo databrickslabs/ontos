@@ -6,7 +6,7 @@ import { humanizeRdfFilename } from '@/lib/rdf-filename';
  * Known internal graph names / API pseudo-row `name` values (not user taxonomies).
  * Keys use the semantic-models namespace as default when calling `t`.
  */
-const SYSTEM_RDF_NAMESPACE_KEYS: Record<string, { i18nKey: string; defaultLabel: string }> = {
+export const SYSTEM_RDF_NAMESPACE_KEYS: Record<string, { i18nKey: string; defaultLabel: string }> = {
   'urn:meta:sources': {
     i18nKey: 'rdfSources.systemNamespaces.metaSources',
     defaultLabel: 'Source registry metadata',
@@ -29,6 +29,13 @@ const SYSTEM_RDF_NAMESPACE_KEYS: Record<string, { i18nKey: string; defaultLabel:
     defaultLabel: 'Demo business concepts',
   },
 };
+
+/**
+ * Set of internal graph keys, used to filter system contexts out of user-facing
+ * lists (e.g. the RDF Sources table). Derived from the canonical key map so the
+ * filter automatically covers any new internal namespace added above.
+ */
+export const SYSTEM_RDF_NAMESPACE_KEY_SET = new Set(Object.keys(SYSTEM_RDF_NAMESPACE_KEYS));
 
 /**
  * Human-readable label for internal RDF graph keys, or the original key if unknown.

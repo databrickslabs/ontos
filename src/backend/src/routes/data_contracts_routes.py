@@ -417,8 +417,11 @@ async def request_steward_review(
         
     except ValueError as e:
         logger.error("Request review validation error for contract_id=%s: %s", contract_id, e)
-        error_status = 404 if "not found" in str(e).lower() else 409
-        raise HTTPException(status_code=error_status, detail="Invalid review request")
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Contract not found")
+        # Surface the validation reason (e.g. "schema required before review")
+        # so the UI can explain why the request was blocked.
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

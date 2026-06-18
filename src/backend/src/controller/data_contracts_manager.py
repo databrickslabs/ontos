@@ -4919,7 +4919,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from_status = (contract.status or '').lower()
         if from_status != 'draft':
             raise ValueError(f"Cannot request review from status {contract.status}. Must be DRAFT.")
-        
+
+        # A contract must describe at least one schema object before it can be
+        # proposed for review — there is nothing for a steward to review on an
+        # empty draft. Block the transition and leave the contract in draft
+        # (ONT-NEG-005).
+        schema_object_count = (
+            db.query(SchemaObjectDb)
+            .filter(SchemaObjectDb.contract_id == contract_id)
+            .count()
+        )
+        if schema_object_count == 0:
+            raise ValueError("A schema is required before a contract can be proposed for review.")
+
         # Transition to PROPOSED. Clear the personal-draft owner so the contract
         # is promoted from tier-1 (creator-only) to organisation visibility; a
         # contract under steward review must be discoverable by stewards and

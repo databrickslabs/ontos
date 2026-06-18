@@ -1,0 +1,15 @@
+# ============================================================================
+# ODPS v1.0.0 - Minimal data product
+# ============================================================================
+# Contains ONLY the ODPS-required fields: apiVersion, kind, id, status.
+# No name, version, ports, team, support, tags, or custom properties.
+#
+# Use this to assert the minimal create path and graceful absence of all
+# optional sections. Note: a product with no input/output ports is valid per
+# the ODPS schema's required set, even though it is not useful in practice.
+# ============================================================================
+
+apiVersion: v1.0.0
+kind: DataProduct
+id: minimal-dp-0001
+status: draft

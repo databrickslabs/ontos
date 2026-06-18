@@ -1,0 +1,184 @@
+# ============================================================================
+# ODPS v1.0.0 (Open Data Product Standard) - Full example
+# ============================================================================
+# Comprehensive Bitol ODPS v1.0.0 data product exercising every field the app
+# parses (see src/backend/src/models/data_products.py). Beyond the strict ODPS
+# spec, output ports also carry the app's Databricks extensions
+# (assetType, assetIdentifier, server, containsPii, autoApprove,
+# deliveryMethodId) so the OutputPort model is fully covered.
+# ============================================================================
+
+apiVersion: v1.0.0
+kind: DataProduct
+id: full-example-dp-0001
+name: Seller Analytics Data Product
+version: 1.0.0
+status: active
+domain: seller
+tenant: ClimateQuantumInc
+
+description:
+  purpose: Curated seller analytics for downstream reporting and ML.
+  limitations: Aggregated from seller perspective only; no buyer-side data.
+  usage: Subscribe to the output ports for sales forecasting and dashboards.
+  authoritativeDefinitions:
+    - type: businessDefinition
+      url: https://wiki.example.com/products/seller-analytics
+  customProperties:
+    - property: reviewCadence
+      value: quarterly
+
+authoritativeDefinitions:
+  - type: businessDefinition
+    url: https://wiki.example.com/products/seller-analytics
+  - type: tutorial
+    url: https://youtu.be/seller-analytics-intro
+
+customProperties:
+  - property: costCenter
+    value: CC-4815
+  - property: dataClassification
+    value: internal
+
+tags:
+  - seller
+  - analytics
+  - finance
+
+# --- Input ports (each REQUIRES a contractId per ODPS) ---
+inputPorts:
+  - name: raw-orders
+    version: 1.0.0
+    contractId: raw-orders-contract-001
+    tags:
+      - source
+    assetType: table
+    assetIdentifier: main.raw.orders
+    customProperties:
+      - property: ingestionTool
+        value: autoloader
+    authoritativeDefinitions:
+      - type: implementation
+        url: https://github.com/example/raw-orders-pipeline
+  - name: raw-customers
+    version: 1.0.0
+    contractId: raw-customers-contract-001
+    assetType: table
+    assetIdentifier: main.raw.customers
+
+# --- Output ports (promises; carry Databricks connection extensions) ---
+outputPorts:
+  - id: op-sales-table
+    name: sales-aggregates
+    version: 1.0.0
+    description: Daily sales aggregates published as a Delta table.
+    type: Table
+    contractId: sales-aggregates-contract-001
+    assetType: table
+    assetIdentifier: main.seller_analytics.sales_aggregates
+    status: active
+    containsPii: false
+    autoApprove: true
+    server:
+      database: main
+      schema: seller_analytics
+      table: sales_aggregates
+    sbom:
+      - type: external
+        url: https://sbom.example.com/seller-analytics/sales-aggregates
+    inputContracts:
+      - id: raw-orders-contract-001
+        version: 1.0.0
+      - id: raw-customers-contract-001
+        version: 1.0.0
+    tags:
+      - gold
+    customProperties:
+      - property: refreshSchedule
+        value: 0 6 * * *
+    authoritativeDefinitions:
+      - type: businessDefinition
+        url: https://wiki.example.com/ports/sales-aggregates
+  - id: op-sales-share
+    name: sales-share
+    version: 1.0.0
+    description: Delta Sharing output of the same aggregates for external partners.
+    type: Table
+    contractId: sales-aggregates-contract-001
+    assetType: table
+    assetIdentifier: share.seller_analytics.sales_aggregates
+    status: active
+    containsPii: false
+    autoApprove: false
+    server:
+      share: seller_analytics_share
+      database: main
+      schema: seller_analytics
+
+# --- Management ports (all four ODPS content types) ---
+managementPorts:
+  - name: discovery-endpoint
+    content: discoverability
+    type: rest
+    url: https://api.example.com/products/seller-analytics/discovery
+    description: Discovery and catalog metadata.
+  - name: observability-endpoint
+    content: observability
+    type: rest
+    url: https://api.example.com/products/seller-analytics/health
+    description: Health, freshness, and quality metrics.
+  - name: control-endpoint
+    content: control
+    type: rest
+    url: https://api.example.com/products/seller-analytics/control
+    description: Lifecycle and access control operations.
+  - name: dictionary-topic
+    content: dictionary
+    type: topic
+    channel: seller-analytics-dictionary
+    description: Schema/dictionary change events.
+
+# --- Support channels ---
+support:
+  - channel: '#seller-analytics-help'
+    url: https://example.slack.com/archives/C0SELLER
+    tool: slack
+    scope: interactive
+  - channel: seller-analytics-announce
+    url: mailto:seller-analytics-announce@example.com
+    tool: email
+    scope: announcements
+  - channel: seller-analytics-issues
+    url: https://jira.example.com/projects/SELLER
+    tool: ticket
+    scope: issues
+
+# --- Team (ODPS Team object) ---
+team:
+  name: Seller Analytics Team
+  description: Owns the seller analytics product end to end.
+  tags:
+    - org/seller-analytics
+  customProperties:
+    - property: timezone
+      value: Europe/Berlin
+  authoritativeDefinitions:
+    - type: businessDefinition
+      url: https://wiki.example.com/teams/seller-analytics
+  members:
+    - username: daustin@example.com
+      name: Dirk Austin
+      role: owner
+      dateIn: "2022-10-01"
+    - username: mhopper@example.com
+      name: Mary Hopper
+      role: data steward
+      dateIn: "2022-10-01"
+    - username: ceastwood@example.com
+      name: Clint Eastwood
+      role: data engineer
+      dateIn: "2022-08-02"
+      dateOut: "2022-10-01"
+      replacedByUsername: mhopper@example.com
+
+productCreatedTs: "2022-11-15T02:59:43Z"

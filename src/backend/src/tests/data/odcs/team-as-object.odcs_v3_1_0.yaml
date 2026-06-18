@@ -1,0 +1,76 @@
+# ============================================================================
+# ODCS v3.1.0 - Team-as-object focus fixture
+# ============================================================================
+# Minimal contract whose sole purpose is to exercise the ODCS v3.1.0
+# Team-as-object shape and the _create_team_metadata path
+# (DataContractTeamMetadataDb): team-level id, name, description, tags,
+# customProperties, and authoritativeDefinitions (both a semantic assignment
+# and a plain businessDefinition). Members carry the v3.1.0 dateIn/dateOut/
+# replacedByUsername lifecycle fields.
+# ============================================================================
+
+id: team-object-0001
+kind: DataContract
+apiVersion: v3.1.0
+version: 1.0.0
+status: active
+name: Team As Object Contract
+domain: platform
+tenant: AcmeCorp
+
+description:
+  purpose: Validate ODCS v3.1.0 Team-as-object parsing and team metadata persistence.
+
+schema:
+  - name: events
+    physicalName: events_tbl
+    physicalType: table
+    description: Minimal schema so the contract is not empty.
+    properties:
+      - name: event_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+
+# ODCS v3.1.0 Team object (NOT the deprecated array form).
+team:
+  id: team-platform-core
+  name: Platform Core Team
+  description: Owns and maintains the shared platform event streams.
+  tags:
+    - org/platform
+    - team/core
+  customProperties:
+    - property: costCenter
+      value: CC-1001
+    - property: onCallRotation
+      value: platform-core-oncall
+  authoritativeDefinitions:
+    # Semantic assignment at the team level.
+    - url: "https://ontology.example.com/Team/PlatformCore"
+      type: "http://databricks.com/ontology/uc/semanticAssignment"
+    # Plain (non-semantic) authoritative definition must be preserved.
+    - url: "https://wiki.example.com/teams/platform-core"
+      type: businessDefinition
+  members:
+    - username: alice@example.com
+      name: Alice Anders
+      role: Owner
+      description: Team lead and primary owner.
+      dateIn: "2021-01-15"
+    - username: bob@example.com
+      name: Bob Becker
+      role: Data Engineer
+      dateIn: "2020-06-01"
+      dateOut: "2023-03-31"
+      replacedByUsername: carol@example.com
+    - username: carol@example.com
+      name: Carol Chen
+      role: Data Engineer
+      dateIn: "2023-04-01"
+
+tags:
+  - platform
+  - team/core

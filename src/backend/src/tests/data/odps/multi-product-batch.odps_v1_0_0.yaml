@@ -1,0 +1,73 @@
+# ============================================================================
+# ODPS v1.0.0 - Multi-product batch
+# ============================================================================
+# Top-level YAML LIST of data products, used to drive the batch upload path
+# (DataProductsManager.upload_products_batch). The batch is intentionally a
+# mix of valid and invalid entries so per-item error collection can be
+# asserted:
+#
+#   [0] valid     - complete minimal product.
+#   [1] valid     - product with ports + team.
+#   [2] INVALID   - missing the required `id` field (create should fail and be
+#                   collected into the errors list, not abort the whole batch).
+#   [3] INVALID   - duplicate id (same id as [0]); exercises duplicate handling.
+#
+# Expectation: items [0] and [1] are created; items [2] and [3] are reported
+# in the errors list.
+# ============================================================================
+
+- apiVersion: v1.0.0
+  kind: DataProduct
+  id: batch-product-001
+  name: Batch Product One
+  version: 1.0.0
+  status: active
+  domain: sales
+  description:
+    purpose: First valid product in the batch.
+  tags:
+    - sales
+
+- apiVersion: v1.0.0
+  kind: DataProduct
+  id: batch-product-002
+  name: Batch Product Two
+  version: 1.0.0
+  status: draft
+  domain: marketing
+  description:
+    purpose: Second valid product, with ports and a team.
+  inputPorts:
+    - name: raw-leads
+      version: 1.0.0
+      contractId: raw-leads-contract-001
+  outputPorts:
+    - name: scored-leads
+      version: 1.0.0
+      type: Table
+      contractId: scored-leads-contract-001
+      assetType: table
+      assetIdentifier: main.marketing.scored_leads
+  team:
+    name: Marketing Analytics
+    members:
+      - username: lead-owner@example.com
+        role: owner
+        dateIn: "2023-01-01"
+
+# INVALID: missing required `id` field.
+- apiVersion: v1.0.0
+  kind: DataProduct
+  name: Batch Product Missing Id
+  version: 1.0.0
+  status: active
+  domain: ops
+
+# INVALID: duplicate id (collides with batch-product-001).
+- apiVersion: v1.0.0
+  kind: DataProduct
+  id: batch-product-001
+  name: Batch Product Duplicate Id
+  version: 2.0.0
+  status: active
+  domain: sales

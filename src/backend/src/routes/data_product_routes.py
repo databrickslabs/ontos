@@ -386,6 +386,15 @@ async def request_certify_product(
         if not product_db:
             raise HTTPException(status_code=404, detail="Data product not found")
 
+        # A product with no deliverables (output ports) has nothing to certify;
+        # block the request rather than accepting an empty product into the
+        # certification workflow (ONT-CUJ-019 / ONT-NEG-008).
+        if not (product_db.output_ports or []):
+            raise HTTPException(
+                status_code=409,
+                detail="At least one deliverable is required before requesting certification",
+            )
+
         username = current_user.username if current_user else None
         change_log_manager.log_change_with_details(
             db,

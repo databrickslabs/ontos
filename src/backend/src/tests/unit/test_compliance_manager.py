@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from src.controller.compliance_manager import ComplianceManager
-from src.models.compliance import CompliancePolicy, ComplianceRun, ComplianceResult
+from src.models.compliance import CompliancePolicy, CompliancePolicyCreate, ComplianceRun, ComplianceResult
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 
 
@@ -63,23 +63,25 @@ class TestComplianceManager:
     # =====================================================================
 
     def test_create_policy_success(self, manager, db_session, sample_policy_data):
-        """Test successful policy creation."""
-        # Arrange
-        policy = CompliancePolicy(**{
-            **sample_policy_data,
-            "id": uuid.UUID(sample_policy_data["id"]),
-            "compliance": 0.0,
-            "history": [],
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
-        })
+        """Test successful policy creation. The manager should generate the UUID server-side."""
+        # Arrange - CompliancePolicyCreate intentionally omits id, compliance, history, timestamps
+        policy = CompliancePolicyCreate(
+            name=sample_policy_data["name"],
+            description=sample_policy_data["description"],
+            rule=sample_policy_data["rule"],
+            category=sample_policy_data["category"],
+            severity=sample_policy_data["severity"],
+            is_active=sample_policy_data["is_active"],
+        )
 
-        # Act - Manager should handle UUID to string conversion
+        # Act
         result = manager.create_policy(db_session, policy)
 
         # Assert
         assert result is not None
-        assert result.id == sample_policy_data["id"]  # Compare as strings
+        assert result.id is not None
+        # Server-generated id should be a valid UUID string
+        uuid.UUID(result.id)
         assert result.name == policy.name
         assert result.description == policy.description
         assert result.rule == policy.rule
@@ -464,21 +466,24 @@ class TestComplianceManager:
     # Error Handling Tests
     # =====================================================================
 
-    def test_create_policy_duplicate_id(self, manager, db_session, sample_policy_db, sample_policy_data):
-        """Test creating a policy with duplicate ID fails."""
+    def test_create_policy_generates_unique_ids(self, manager, db_session, sample_policy_data):
+        """Two successive creates with the same payload should yield distinct server-generated ids."""
         # Arrange
-        duplicate_policy = CompliancePolicy(**{
-            **sample_policy_data,
-            "id": uuid.UUID(sample_policy_db.id),
-            "name": "Different Name",
-            "compliance": 0.0,
-            "history": [],
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
-        })
+        payload = CompliancePolicyCreate(
+            name=sample_policy_data["name"],
+            description=sample_policy_data["description"],
+            rule=sample_policy_data["rule"],
+            category=sample_policy_data["category"],
+            severity=sample_policy_data["severity"],
+            is_active=sample_policy_data["is_active"],
+        )
 
-        # Act & Assert
-        with pytest.raises(Exception):  # SQLAlchemy integrity error
-            manager.create_policy(db_session, duplicate_policy)
-            db_session.commit()
+        # Act
+        first = manager.create_policy(db_session, payload)
+        second = manager.create_policy(db_session, payload)
+
+        # Assert
+        assert first.id != second.id
+        uuid.UUID(first.id)
+        uuid.UUID(second.id)
 

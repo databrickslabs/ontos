@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from src.controller.approvals_manager import ApprovalsManager
 from src.controller.data_contracts_manager import DataContractsManager
-from src.db_models.data_contracts import DataContractDb
+from src.db_models.data_contracts import DataContractDb, SchemaObjectDb
 
 
 def _manager():
@@ -28,6 +28,10 @@ def _manager():
 def draft_contract(db_session: Session):
     cid = str(uuid.uuid4())
     db_session.add(DataContractDb(id=cid, name="Reviewable", version="1.0.0", status="draft"))
+    # A contract must describe at least one schema object before it can be
+    # proposed for review (ONT-NEG-005); seed one so the happy-path transition
+    # reflects a reviewable draft.
+    db_session.add(SchemaObjectDb(contract_id=cid, name="orders", logical_type="object"))
     db_session.commit()
     return cid
 

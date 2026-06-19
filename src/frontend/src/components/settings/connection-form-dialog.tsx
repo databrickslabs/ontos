@@ -49,6 +49,13 @@ const formSchema = z.object({
   credentials_secret_scope: z.string().optional(),
   credentials_secret_key: z.string().optional(),
   credentials_path: z.string().optional(),
+  // Snowflake config fields
+  account: z.string().optional(),
+  user: z.string().optional(),
+  warehouse: z.string().optional(),
+  database: z.string().optional(),
+  default_schema: z.string().optional(),
+  role: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -57,6 +64,36 @@ const BQ_CONFIG_FIELDS = [
   'project_id', 'location', 'uc_connection_name',
   'credentials_secret_scope', 'credentials_secret_key', 'credentials_path',
 ] as const;
+
+const SNOWFLAKE_CONFIG_FIELDS = [
+  'account', 'user', 'warehouse', 'database', 'default_schema', 'role',
+] as const;
+
+// Maps a connector type to the set of config field names the form persists.
+// Kept as a pure lookup so it can be unit-tested without rendering the dialog.
+export const CONNECTOR_CONFIG_FIELDS: Record<string, readonly string[]> = {
+  bigquery: BQ_CONFIG_FIELDS,
+  snowflake: SNOWFLAKE_CONFIG_FIELDS,
+};
+
+/**
+ * Build the `config` object that gets persisted for a connection, given the
+ * selected connector type and the raw form values. Only non-empty fields that
+ * belong to the connector type are included.
+ */
+export function buildConnectionConfig(
+  connectorType: string,
+  values: Record<string, any>,
+): Record<string, any> {
+  const config: Record<string, any> = {};
+  const fields = CONNECTOR_CONFIG_FIELDS[connectorType];
+  if (fields) {
+    for (const f of fields) {
+      if (values[f]) config[f] = values[f];
+    }
+  }
+  return config;
+}
 
 const SYSTEM_CREATED_BY = 'system';
 
@@ -134,17 +171,18 @@ export function ConnectionFormDialog({
         credentials_secret_scope: cfg.credentials_secret_scope || '',
         credentials_secret_key: cfg.credentials_secret_key || '',
         credentials_path: cfg.credentials_path || '',
+        account: cfg.account || '',
+        user: cfg.user || '',
+        warehouse: cfg.warehouse || '',
+        database: cfg.database || '',
+        default_schema: cfg.default_schema || '',
+        role: cfg.role || '',
       });
     }
   }, [isOpen, initialConnection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const buildPayload = (values: FormValues) => {
-    const config: Record<string, any> = {};
-    if (values.connector_type === 'bigquery') {
-      for (const f of BQ_CONFIG_FIELDS) {
-        if (values[f]) config[f] = values[f];
-      }
-    }
+    const config = buildConnectionConfig(values.connector_type, values);
     return {
       name: values.name,
       connector_type: values.connector_type,
@@ -469,6 +507,103 @@ export function ConnectionFormDialog({
                     </FormItem>
                   )}
                 />
+              </>
+            )}
+
+            {/* Snowflake-specific config */}
+            {selectedType === 'snowflake' && (
+              <>
+                <Separator />
+                <p className="text-sm font-medium">
+                  {t('settings:connectors.snowflake.configTitle', 'Snowflake Configuration')}
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="account"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings:connectors.snowflake.account', 'Account Identifier')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder="myorg-myaccount" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormDescription>
+                          {t('settings:connectors.snowflake.accountHelp', 'e.g. myorg-myaccount or xy12345.us-east-1')}
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="user"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings:connectors.snowflake.user', 'User')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ONTOS_SVC" {...field} value={field.value || ''} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="warehouse"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings:connectors.snowflake.warehouse', 'Warehouse')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder="COMPUTE_WH" {...field} value={field.value || ''} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="role"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings:connectors.snowflake.role', 'Role')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder="SYSADMIN" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormDescription>
+                          {t('settings:connectors.snowflake.roleHelp', 'Optional. Role to assume for queries.')}
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="database"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings:connectors.snowflake.database', 'Default Database')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ANALYTICS" {...field} value={field.value || ''} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="default_schema"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings:connectors.snowflake.defaultSchema', 'Default Schema')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder="PUBLIC" {...field} value={field.value || ''} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </>
             )}
 

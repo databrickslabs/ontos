@@ -5,6 +5,11 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # Required by the merge queue: GitHub builds each batch on a temporary
+  # gh-readonly-queue/<base>/... branch and fires a merge_group event. The
+  # required status checks must run on that event or queued PRs hang forever
+  # waiting on checks that never report.
+  merge_group:
 
 permissions:
   id-token: write
@@ -354,8 +359,12 @@ jobs:
           gh pr comment ${{ github.event.pull_request.number }} \
             --body "Auto-regenerated \`requirements.txt\` lockfiles to match \`requirements.in\`."
 
-      - name: Fail if drift on fork PR or push to protected branch
-        if: steps.drift.outputs.drifted == 'true' && (github.event_name == 'push' || steps.fork.outputs.is_fork == 'true')
+      - name: Fail if drift on fork PR, push to protected branch, or merge queue
+        # merge_group is included so a queued batch with stale lockfiles fails
+        # the queue instead of silently merging: the auto-commit fixup above is
+        # PR-only (it can't push to the read-only queue branch), so the queue
+        # must hard-fail on drift rather than skip the check.
+        if: steps.drift.outputs.drifted == 'true' && (github.event_name == 'push' || github.event_name == 'merge_group' || steps.fork.outputs.is_fork == 'true')
         run: |
           echo "ERROR: requirements.txt lockfiles are out of sync with .in files."
           echo "Run ./scripts/lock-requirements.sh locally and commit the updated .txt files."

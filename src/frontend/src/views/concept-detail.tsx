@@ -108,8 +108,11 @@ export default function ConceptDetailView() {
     setIsLoading(true);
     setError(null);
     try {
+      // Query-param form (``?iri=``) is required because some HTTP proxies
+      // collapse ``%2F%2F`` in path segments, mangling IRIs like
+      // ``http://ontos.example.org/...`` before they reach the backend.
       const res = await get<{ concept?: OntologyConcept }>(
-        `/api/semantic-models/concepts/${encodeURIComponent(conceptIri)}`,
+        `/api/semantic-models/concepts/by-iri?iri=${encodeURIComponent(conceptIri)}`,
       );
       if (res.error || !res.data?.concept) {
         setError(res.error || 'Concept not found');
@@ -207,7 +210,7 @@ export default function ConceptDetailView() {
     try {
       const url = isNew
         ? '/api/knowledge/concepts'
-        : `/api/knowledge/concepts/${encodeURIComponent(concept.iri)}`;
+        : `/api/knowledge/concepts/by-iri?iri=${encodeURIComponent(concept.iri)}`;
       const method = isNew ? 'POST' : 'PATCH';
       const response = await fetch(url, {
         method,
@@ -240,7 +243,7 @@ export default function ConceptDetailView() {
     if (!concept) return;
     try {
       const response = await fetch(
-        `/api/knowledge/concepts/${encodeURIComponent(concept.iri)}`,
+        `/api/knowledge/concepts/by-iri?iri=${encodeURIComponent(concept.iri)}`,
         { method: 'DELETE' },
       );
       if (!response.ok) {

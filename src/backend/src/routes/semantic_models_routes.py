@@ -630,35 +630,71 @@ async def get_concept_hierarchy(
     try:
         logger.info(f"Retrieving hierarchy for concept: {iri}")
         hierarchy = manager.get_concept_hierarchy(iri)
-        
+
         if not hierarchy:
             raise HTTPException(status_code=404, detail="Concept not found")
-        
+
         return {'hierarchy': hierarchy.model_dump()}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error retrieving concept hierarchy for %s", concept_iri, exc_info=True)
+        logger.error("Error retrieving concept hierarchy for %s", iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve concept hierarchy")
 
-@router.get('/semantic-models/concepts/{concept_iri:path}')
+# -------- /semantic-models/concepts detail (by IRI) --------
+#
+# The path-form route (``/concepts/{concept_iri:path}``) is preserved as a
+# deprecated alias so existing bookmarks keep working, but the canonical form
+# uses a query parameter. This avoids a proxy bug where some HTTP intermediaries
+# (notably the Databricks Apps proxy) decode and collapse ``%2F%2F`` in path
+# segments, breaking IRIs like ``http://ontology.example.org/...`` before they
+# reach FastAPI.
+def _get_concept_details_payload(
+    manager: SemanticModelsManager, concept_iri: str
+) -> dict:
+    logger.info("Retrieving details for concept: %s", concept_iri)
+    concept = manager.get_concept_details(concept_iri)
+    if not concept:
+        raise HTTPException(status_code=404, detail="Concept not found")
+    return {'concept': concept.model_dump()}
+
+
+@router.get('/semantic-models/concepts/by-iri')
+async def get_concept_details_by_iri(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+) -> dict:
+    """Get detailed information about a specific concept (canonical, query-param form)."""
+    try:
+        return _get_concept_details_payload(manager, concept_iri)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error retrieving concept details for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve concept details")
+
+
+@router.get(
+    '/semantic-models/concepts/{concept_iri:path}',
+    deprecated=True,
+)
 async def get_concept_details(
     concept_iri: str,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
 ) -> dict:
-    """Get detailed information about a specific concept"""
+    """DEPRECATED: Get details by path-encoded IRI.
+
+    Prefer ``GET /semantic-models/concepts/by-iri?iri=<urlencoded-iri>`` — this
+    route is retained for backward compatibility with existing clients/bookmarks
+    and will be removed in a future release.
+    """
     try:
-        logger.info(f"Retrieving details for concept: {concept_iri}")
-        concept = manager.get_concept_details(concept_iri)
-        
-        if not concept:
-            raise HTTPException(status_code=404, detail="Concept not found")
-        
-        return {'concept': concept.model_dump()}
+        return _get_concept_details_payload(manager, concept_iri)
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.error("Error retrieving concept details for %s", concept_iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve concept details")
 
@@ -1026,19 +1062,276 @@ async def delete_knowledge_collection(
 # ============================================================================
 # CONCEPT CRUD ENDPOINTS
 # ============================================================================
+#
+# IMPORTANT: ``/knowledge/concepts/by-iri`` (query-param) variants MUST be
+# declared BEFORE the matching ``/{concept_iri:path}`` (path-param) variants in
+# this file. FastAPI matches routes in declaration order, and a ``path``
+# parameter greedily eats anything that follows the prefix; declaring the
+# path-form first would leave ``/by-iri`` unreachable.
+#
+# Why two route shapes?
+# Some HTTP proxies (notably the Databricks Apps proxy) decode and collapse
+# ``%2F%2F`` in path segments, mangling IRIs like ``http://ontos.example.org/...``
+# into ``http:/ontos.example.org/...`` before they reach FastAPI. Query-string
+# values survive that transformation unchanged. The path-form routes are kept
+# as deprecated aliases for backward compatibility with existing bookmarks /
+# clients; new callers should use ``/by-iri?iri=<urlencoded-iri>``.
 
-@router.get('/knowledge/concepts/{concept_iri:path}')
-async def get_concept(
-    concept_iri: str,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
-) -> dict:
-    """Get a concept by IRI with all properties and governance info."""
+
+# -------- helper functions (one per logical operation) --------
+
+def _get_concept_payload(manager: SemanticModelsManager, concept_iri: str) -> dict:
     concept = manager.get_concept(concept_iri)
     if not concept:
         raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
     return concept
 
+
+async def _update_concept_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    request: Request,
+    updated_by: str,
+) -> dict:
+    try:
+        data = await request.json()
+        concept = manager.update_concept(
+            concept_iri=concept_iri,
+            label=data.get('label'),
+            definition=data.get('definition'),
+            synonyms=data.get('synonyms'),
+            examples=data.get('examples'),
+            broader_iris=data.get('broader_iris'),
+            narrower_iris=data.get('narrower_iris'),
+            related_iris=data.get('related_iris'),
+            updated_by=updated_by,
+        )
+        if not concept:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update concept")
+
+
+def _delete_concept_payload(
+    manager: SemanticModelsManager, concept_iri: str, deleted_by: str
+) -> dict:
+    try:
+        success = manager.delete_concept(concept_iri, deleted_by)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return {'success': True, 'message': f"Concept deleted: {concept_iri}"}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete concept")
+
+
+async def _add_concept_owner_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    request: Request,
+    assigned_by: str,
+) -> dict:
+    try:
+        data = await request.json()
+        # Accept user_email directly or extract from user_uri (e.g. "mailto:user@example.com")
+        user_email = data.get('user_email')
+        if not user_email:
+            user_uri = data.get('user_uri', '')
+            if user_uri.startswith('mailto:'):
+                user_email = user_uri[len('mailto:'):]
+            elif user_uri:
+                user_email = user_uri
+        concept = manager.add_concept_owner(
+            concept_iri=concept_iri,
+            user_email=user_email,
+            role=data.get('role'),
+            assigned_by=assigned_by,
+        )
+        if not concept:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error adding owner: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to add owner")
+
+
+def _remove_concept_owner_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    user_email: str,
+    removed_by: str,
+) -> dict:
+    try:
+        concept = manager.remove_concept_owner(
+            concept_iri=concept_iri,
+            user_email=user_email,
+            removed_by=removed_by,
+        )
+        if not concept:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error removing owner: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to remove owner")
+
+
+async def _submit_concept_for_review_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    request: Request,
+    submitted_by: str,
+) -> dict:
+    try:
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        review_data = manager.submit_concept_for_review(
+            concept_iri=concept_iri,
+            reviewer_email=data.get('reviewer_email'),
+            submitted_by=submitted_by,
+            notes=data.get('notes'),
+        )
+        # TODO: Integrate with DataAssetReviewManager to create actual review request
+        # For now, update status directly
+        updated = manager.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="under_review",
+            updated_by=submitted_by,
+        )
+        return {'review_data': review_data, 'concept': updated}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error submitting for review: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to submit for review")
+
+
+def _set_concept_status_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    new_status: str,
+    updated_by: str,
+    *,
+    error_verb: str,
+) -> dict:
+    """Shared body for ``/approve``, ``/certify``, ``/deprecate``, ``/archive``."""
+    try:
+        concept = manager.update_concept_status(
+            concept_iri=concept_iri,
+            new_status=new_status,
+            updated_by=updated_by,
+        )
+        if not concept:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error %s concept: %s", error_verb, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to {error_verb} concept")
+
+
+def _publish_concept_payload(
+    manager: SemanticModelsManager, concept_iri: str, updated_by: str
+) -> dict:
+    try:
+        # Auto-approve if still under_review so publish works in one step
+        existing = manager.get_concept(concept_iri)
+        if existing and existing.get("status") == "under_review":
+            manager.update_concept_status(
+                concept_iri=concept_iri,
+                new_status="approved",
+                updated_by=updated_by,
+            )
+        concept = manager.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="published",
+            updated_by=updated_by,
+        )
+        if not concept:
+            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error publishing concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to publish concept")
+
+
+async def _promote_concept_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    request: Request,
+    promoted_by: str,
+) -> dict:
+    try:
+        data = await request.json()
+        concept = manager.promote_concept(
+            concept_iri=concept_iri,
+            target_collection_iri=data.get('target_collection_iri'),
+            deprecate_source=data.get('deprecate_source', True),
+            promoted_by=promoted_by,
+        )
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error promoting concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to promote concept")
+
+
+async def _migrate_concept_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    request: Request,
+    migrated_by: str,
+) -> dict:
+    try:
+        data = await request.json()
+        concept = manager.migrate_concept(
+            concept_iri=concept_iri,
+            target_collection_iri=data.get('target_collection_iri'),
+            delete_source=data.get('delete_source', False),
+            migrated_by=migrated_by,
+        )
+        return concept
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error migrating concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to migrate concept")
+
+
+# -------- create (no IRI in URL — already collision-free) --------
 
 @router.post('/knowledge/concepts')
 async def create_concept(
@@ -1071,7 +1364,181 @@ async def create_concept(
         raise HTTPException(status_code=500, detail="Failed to create concept")
 
 
-@router.patch('/knowledge/concepts/{concept_iri:path}')
+# -------- /knowledge/concepts/by-iri (canonical, query-param form) --------
+
+@router.get('/knowledge/concepts/by-iri')
+async def get_concept_by_iri(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+) -> dict:
+    """Get a concept by IRI with all properties and governance info."""
+    return _get_concept_payload(manager, concept_iri)
+
+
+@router.patch('/knowledge/concepts/by-iri')
+async def update_concept_by_iri(
+    request: Request,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Update a concept's properties."""
+    return await _update_concept_payload(manager, concept_iri, request, current_user.email)
+
+
+@router.delete('/knowledge/concepts/by-iri')
+async def delete_concept_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Delete a concept (draft status only)."""
+    return _delete_concept_payload(manager, concept_iri, current_user.email)
+
+
+@router.post('/knowledge/concepts/by-iri/owners')
+async def add_concept_owner_by_iri(
+    request: Request,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Add an owner to a concept."""
+    return await _add_concept_owner_payload(manager, concept_iri, request, current_user.email)
+
+
+@router.delete('/knowledge/concepts/by-iri/owners/{user_email}')
+async def remove_concept_owner_by_iri(
+    user_email: str,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Remove an owner from a concept."""
+    return _remove_concept_owner_payload(manager, concept_iri, user_email, current_user.email)
+
+
+@router.post('/knowledge/concepts/by-iri/submit-review')
+async def submit_concept_for_review_by_iri(
+    request: Request,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Submit a concept for review."""
+    return await _submit_concept_for_review_payload(
+        manager, concept_iri, request, current_user.email
+    )
+
+
+@router.post('/knowledge/concepts/by-iri/approve')
+async def approve_concept_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Approve a concept that is under review."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "approved", current_user.email, error_verb="approve"
+    )
+
+
+@router.post('/knowledge/concepts/by-iri/publish')
+async def publish_concept_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Publish an approved concept (auto-approves if under_review)."""
+    return _publish_concept_payload(manager, concept_iri, current_user.email)
+
+
+@router.post('/knowledge/concepts/by-iri/certify')
+async def certify_concept_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.ADMIN))
+) -> dict:
+    """Certify a published concept."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "certified", current_user.email, error_verb="certify"
+    )
+
+
+@router.post('/knowledge/concepts/by-iri/deprecate')
+async def deprecate_concept_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Deprecate a concept."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "deprecated", current_user.email, error_verb="deprecate"
+    )
+
+
+@router.post('/knowledge/concepts/by-iri/archive')
+async def archive_concept_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Archive a deprecated concept."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "archived", current_user.email, error_verb="archive"
+    )
+
+
+@router.post('/knowledge/concepts/by-iri/promote')
+async def promote_concept_by_iri(
+    request: Request,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Promote a concept to a higher-scope collection."""
+    return await _promote_concept_payload(manager, concept_iri, request, current_user.email)
+
+
+@router.post('/knowledge/concepts/by-iri/migrate')
+async def migrate_concept_by_iri(
+    request: Request,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Migrate a concept to a different collection."""
+    return await _migrate_concept_payload(manager, concept_iri, request, current_user.email)
+
+
+# -------- DEPRECATED path-form routes (kept for backward compatibility) --------
+# See module-level note above about why these are deprecated. New callers
+# should use the ``/by-iri`` variants declared above.
+
+@router.get('/knowledge/concepts/{concept_iri:path}', deprecated=True)
+async def get_concept(
+    concept_iri: str,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+) -> dict:
+    """DEPRECATED: use ``GET /knowledge/concepts/by-iri?iri=<urlencoded-iri>``."""
+    return _get_concept_payload(manager, concept_iri)
+
+
+@router.patch('/knowledge/concepts/{concept_iri:path}', deprecated=True)
 async def update_concept(
     concept_iri: str,
     request: Request,
@@ -1079,59 +1546,22 @@ async def update_concept(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Update a concept's properties."""
-    try:
-        data = await request.json()
-        concept = manager.update_concept(
-            concept_iri=concept_iri,
-            label=data.get('label'),
-            definition=data.get('definition'),
-            synonyms=data.get('synonyms'),
-            examples=data.get('examples'),
-            broader_iris=data.get('broader_iris'),
-            narrower_iris=data.get('narrower_iris'),
-            related_iris=data.get('related_iris'),
-            updated_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error updating concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to update concept")
+    """DEPRECATED: use ``PATCH /knowledge/concepts/by-iri?iri=<urlencoded-iri>``."""
+    return await _update_concept_payload(manager, concept_iri, request, current_user.email)
 
 
-@router.delete('/knowledge/concepts/{concept_iri:path}')
+@router.delete('/knowledge/concepts/{concept_iri:path}', deprecated=True)
 async def delete_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Delete a concept (draft status only)."""
-    try:
-        success = manager.delete_concept(concept_iri, current_user.email)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return {'success': True, 'message': f"Concept deleted: {concept_iri}"}
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error deleting concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to delete concept")
+    """DEPRECATED: use ``DELETE /knowledge/concepts/by-iri?iri=<urlencoded-iri>``."""
+    return _delete_concept_payload(manager, concept_iri, current_user.email)
 
 
-# ============================================================================
-# OWNERSHIP ENDPOINTS
-# ============================================================================
-
-@router.post('/knowledge/concepts/{concept_iri:path}/owners')
+@router.post('/knowledge/concepts/{concept_iri:path}/owners', deprecated=True)
 async def add_concept_owner(
     concept_iri: str,
     request: Request,
@@ -1139,36 +1569,11 @@ async def add_concept_owner(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Add an owner to a concept."""
-    try:
-        data = await request.json()
-        # Accept user_email directly or extract from user_uri (e.g. "mailto:user@example.com")
-        user_email = data.get('user_email')
-        if not user_email:
-            user_uri = data.get('user_uri', '')
-            if user_uri.startswith('mailto:'):
-                user_email = user_uri[len('mailto:'):]
-            elif user_uri:
-                user_email = user_uri
-        concept = manager.add_concept_owner(
-            concept_iri=concept_iri,
-            user_email=user_email,
-            role=data.get('role'),
-            assigned_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error adding owner: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to add owner")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/owners?iri=<urlencoded-iri>``."""
+    return await _add_concept_owner_payload(manager, concept_iri, request, current_user.email)
 
 
-@router.delete('/knowledge/concepts/{concept_iri:path}/owners/{user_email}')
+@router.delete('/knowledge/concepts/{concept_iri:path}/owners/{user_email}', deprecated=True)
 async def remove_concept_owner(
     concept_iri: str,
     user_email: str,
@@ -1176,30 +1581,11 @@ async def remove_concept_owner(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Remove an owner from a concept."""
-    try:
-        concept = manager.remove_concept_owner(
-            concept_iri=concept_iri,
-            user_email=user_email,
-            removed_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error removing owner: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to remove owner")
+    """DEPRECATED: use ``DELETE /knowledge/concepts/by-iri/owners/{user_email}?iri=<urlencoded-iri>``."""
+    return _remove_concept_owner_payload(manager, concept_iri, user_email, current_user.email)
 
 
-# ============================================================================
-# LIFECYCLE / GOVERNANCE ENDPOINTS
-# ============================================================================
-
-@router.post('/knowledge/concepts/{concept_iri:path}/submit-review')
+@router.post('/knowledge/concepts/{concept_iri:path}/submit-review', deprecated=True)
 async def submit_concept_for_review(
     concept_iri: str,
     request: Request,
@@ -1207,182 +1593,76 @@ async def submit_concept_for_review(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Submit a concept for review."""
-    try:
-        try:
-            data = await request.json()
-        except Exception:
-            data = {}
-        review_data = manager.submit_concept_for_review(
-            concept_iri=concept_iri,
-            reviewer_email=data.get('reviewer_email'),
-            submitted_by=current_user.email,
-            notes=data.get('notes'),
-        )
-        # TODO: Integrate with DataAssetReviewManager to create actual review request
-        # For now, update status directly
-        updated = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="under_review",
-            updated_by=current_user.email,
-        )
-        return {'review_data': review_data, 'concept': updated}
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error submitting for review: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to submit for review")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/submit-review?iri=<urlencoded-iri>``."""
+    return await _submit_concept_for_review_payload(
+        manager, concept_iri, request, current_user.email
+    )
 
 
-@router.post('/knowledge/concepts/{concept_iri:path}/approve')
+@router.post('/knowledge/concepts/{concept_iri:path}/approve', deprecated=True)
 async def approve_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Approve a concept that is under review."""
-    try:
-        concept = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="approved",
-            updated_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error approving concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to approve concept")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/approve?iri=<urlencoded-iri>``."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "approved", current_user.email, error_verb="approve"
+    )
 
 
-@router.post('/knowledge/concepts/{concept_iri:path}/publish')
+@router.post('/knowledge/concepts/{concept_iri:path}/publish', deprecated=True)
 async def publish_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Publish an approved concept.
-
-    If the concept is currently ``under_review``, it is automatically
-    approved first so callers do not need a separate ``/approve`` step.
-    """
-    try:
-        # Auto-approve if still under_review so publish works in one step
-        existing = manager.get_concept(concept_iri)
-        if existing and existing.get("status") == "under_review":
-            manager.update_concept_status(
-                concept_iri=concept_iri,
-                new_status="approved",
-                updated_by=current_user.email,
-            )
-        concept = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="published",
-            updated_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error publishing concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to publish concept")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/publish?iri=<urlencoded-iri>``."""
+    return _publish_concept_payload(manager, concept_iri, current_user.email)
 
 
-@router.post('/knowledge/concepts/{concept_iri:path}/certify')
+@router.post('/knowledge/concepts/{concept_iri:path}/certify', deprecated=True)
 async def certify_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.ADMIN))
 ) -> dict:
-    """Certify a published concept."""
-    try:
-        concept = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="certified",
-            updated_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error certifying concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to certify concept")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/certify?iri=<urlencoded-iri>``."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "certified", current_user.email, error_verb="certify"
+    )
 
 
-@router.post('/knowledge/concepts/{concept_iri:path}/deprecate')
+@router.post('/knowledge/concepts/{concept_iri:path}/deprecate', deprecated=True)
 async def deprecate_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Deprecate a concept."""
-    try:
-        concept = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="deprecated",
-            updated_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error deprecating concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to deprecate concept")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/deprecate?iri=<urlencoded-iri>``."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "deprecated", current_user.email, error_verb="deprecate"
+    )
 
 
-@router.post('/knowledge/concepts/{concept_iri:path}/archive')
+@router.post('/knowledge/concepts/{concept_iri:path}/archive', deprecated=True)
 async def archive_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Archive a deprecated concept."""
-    try:
-        concept = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="archived",
-            updated_by=current_user.email,
-        )
-        if not concept:
-            raise HTTPException(status_code=404, detail=f"Concept not found: {concept_iri}")
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error archiving concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to archive concept")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/archive?iri=<urlencoded-iri>``."""
+    return _set_concept_status_payload(
+        manager, concept_iri, "archived", current_user.email, error_verb="archive"
+    )
 
 
-# ============================================================================
-# PROMOTION / MIGRATION ENDPOINTS
-# ============================================================================
-
-@router.post('/knowledge/concepts/{concept_iri:path}/promote')
+@router.post('/knowledge/concepts/{concept_iri:path}/promote', deprecated=True)
 async def promote_concept(
     concept_iri: str,
     request: Request,
@@ -1390,26 +1670,11 @@ async def promote_concept(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Promote a concept to a higher-scope collection."""
-    try:
-        data = await request.json()
-        concept = manager.promote_concept(
-            concept_iri=concept_iri,
-            target_collection_iri=data.get('target_collection_iri'),
-            deprecate_source=data.get('deprecate_source', True),
-            promoted_by=current_user.email,
-        )
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error promoting concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to promote concept")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/promote?iri=<urlencoded-iri>``."""
+    return await _promote_concept_payload(manager, concept_iri, request, current_user.email)
 
 
-@router.post('/knowledge/concepts/{concept_iri:path}/migrate')
+@router.post('/knowledge/concepts/{concept_iri:path}/migrate', deprecated=True)
 async def migrate_concept(
     concept_iri: str,
     request: Request,
@@ -1417,23 +1682,8 @@ async def migrate_concept(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Migrate a concept to a different collection."""
-    try:
-        data = await request.json()
-        concept = manager.migrate_concept(
-            concept_iri=concept_iri,
-            target_collection_iri=data.get('target_collection_iri'),
-            delete_source=data.get('delete_source', False),
-            migrated_by=current_user.email,
-        )
-        return concept
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error migrating concept: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to migrate concept")
+    """DEPRECATED: use ``POST /knowledge/concepts/by-iri/migrate?iri=<urlencoded-iri>``."""
+    return await _migrate_concept_payload(manager, concept_iri, request, current_user.email)
 
 
 def register_routes(app):

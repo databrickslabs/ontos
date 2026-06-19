@@ -103,7 +103,7 @@ export default function ConceptsSearch({
       // Load concept from IRI using the exact IRI endpoint
       const loadConceptFromIri = async () => {
         try {
-          const res = await get<{ concept: any }>(`/api/semantic-models/concepts/${encodeURIComponent(urlIri)}`);
+          const res = await get<{ concept: any }>(`/api/semantic-models/concepts/by-iri?iri=${encodeURIComponent(urlIri)}`);
           if (res.data && res.data.concept) {
             const concept = res.data.concept;
             const conceptItem: ConceptItem = {

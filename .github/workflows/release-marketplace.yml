@@ -1,0 +1,151 @@
+name: Release to Marketplace
+
+# Manual ("Run workflow") release step. Bumps the version across all tracked
+# files, commits to main, tags the commit (both the plain `vX.Y.Z` tag and the
+# `marketplace-vX.Y.Z` tag the Databricks Marketplace listing tracks), cuts a
+# GitHub Release, and optionally runs the Databricks deploy.
+#
+# Mirrors the manual steps documented in CONTRIBUTING.md > Release Process,
+# wrapped behind a single button with editable version/tag fields.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version X.Y.Z (e.g. 0.6.5). Drives bump_version.py and the default tags."
+        required: true
+        type: string
+      release_tag:
+        description: "Plain version tag. Leave blank to use v<version>."
+        required: false
+        type: string
+        default: ""
+      marketplace_tag:
+        description: "Marketplace listing tag. Leave blank to use marketplace-v<version>."
+        required: false
+        type: string
+        default: ""
+      create_github_release:
+        description: "Create a GitHub Release for the marketplace tag."
+        required: false
+        type: boolean
+        default: true
+      deploy:
+        description: "Run the Databricks bundle + apps deploy after tagging."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Bump, tag, release
+    # Run from main only — release always cuts from the protected default branch.
+    if: github.ref == 'refs/heads/main'
+    # Self-hosted protected runner group: the databrickslabs org IP allow list
+    # blocks GitHub-hosted runners from the GitHub API and Databricks. Matches
+    # every other workflow in this repo.
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: main
+          fetch-depth: 0
+          # Pushing the bump commit to the protected main branch requires a token
+          # whose identity is a ruleset bypass actor (org admin PAT). The default
+          # GITHUB_TOKEN cannot push to protected main and will fail at the push
+          # step. Tags are not branch-protected, so they push under either token.
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/setup-python-jfrog
+        with:
+          python-version: '3.10'
+
+      - name: Validate version and resolve tags
+        id: vars
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_TAG_IN: ${{ inputs.release_tag }}
+          MARKETPLACE_TAG_IN: ${{ inputs.marketplace_tag }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::Invalid version '$VERSION'. Expected X.Y.Z (optionally -suffix)."
+            exit 1
+          fi
+          release_tag="${RELEASE_TAG_IN:-v$VERSION}"
+          marketplace_tag="${MARKETPLACE_TAG_IN:-marketplace-v$VERSION}"
+          for t in "$release_tag" "$marketplace_tag"; do
+            if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then
+              echo "::error::Tag '$t' already exists. Pick a new version or tag."
+              exit 1
+            fi
+          done
+          {
+            echo "release_tag=$release_tag"
+            echo "marketplace_tag=$marketplace_tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION | tags: $release_tag, $marketplace_tag"
+
+      - name: Bump version across tracked files
+        run: python src/scripts/bump_version.py "${{ inputs.version }}"
+
+      - name: Commit, tag, and push
+        env:
+          RELEASE_TAG: ${{ steps.vars.outputs.release_tag }}
+          MARKETPLACE_TAG: ${{ steps.vars.outputs.marketplace_tag }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "::error::bump_version.py produced no changes — is $VERSION already the current version?"
+            exit 1
+          fi
+          git add -A
+          git commit -m "chore: bump version to $VERSION"
+          git tag -a "$RELEASE_TAG"     -m "Release $VERSION"
+          git tag -a "$MARKETPLACE_TAG" -m "Marketplace release $VERSION"
+          # Push the commit first (needs a bypass-actor token on protected main),
+          # then the tags.
+          git push origin HEAD:main
+          git push origin "$RELEASE_TAG" "$MARKETPLACE_TAG"
+
+      - name: Create GitHub Release
+        if: ${{ inputs.create_github_release }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          MARKETPLACE_TAG: ${{ steps.vars.outputs.marketplace_tag }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$MARKETPLACE_TAG" \
+            --title "Ontos $VERSION" \
+            --generate-notes \
+            --target main
+
+      # --- Databricks deploy -------------------------------------------------
+      # CONFIRM BEFORE ENABLING: this wraps the commands documented in
+      # CONTRIBUTING.md > Release Process > Deploy. The actual Databricks
+      # Marketplace *listing* publish is not a repo script today; if there is a
+      # separate publish command, add it here. Requires DATABRICKS_HOST and
+      # DATABRICKS_TOKEN (or SP OAuth) secrets to be configured in the repo.
+      - name: Databricks deploy
+        if: ${{ inputs.deploy }}
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Deploying version ${{ inputs.version }} ..."
+          # databricks bundle deploy --var="catalog=app_data" --var="schema=app_ontos"
+          # databricks apps deploy <app-name>
+          echo "::warning::Deploy step is a placeholder — confirm the exact publish command + secrets, then uncomment."

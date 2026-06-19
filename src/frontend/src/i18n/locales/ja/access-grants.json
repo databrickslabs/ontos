@@ -20,24 +20,15 @@
       "years_plural": "{{count}}年"
     },
     "submit": "リクエストを送信",
-    "cancel": "キャンセル",
-    "success": "アクセスリクエストが正常に送信されました",
-    "error": "アクセスリクエストの送信に失敗しました"
+    "success": "アクセスリクエストが正常に送信されました"
   },
   "panel": {
     "title": "アクセス権限",
     "description": "このリソースへの期限付きアクセスを持つユーザー",
     "noGrants": "このリソースへのアクセス権限はありません",
     "noGrantsHint": "ユーザーは「アクセスをリクエスト」ボタンを使用して期限付きアクセスをリクエストできます。",
-    "columns": {
-      "user": "ユーザー",
-      "permission": "権限レベル",
-      "granted": "付与日",
-      "expires": "有効期限",
-      "actions": "操作"
-    },
     "revoke": "取り消し",
-    "revokeConfirm": "このアクセス権限を取り消してもよろしいですか？"
+    "revokeConfirm": "{{user}} のアクセス権を取り消してもよろしいですか？"
   },
   "entityTypes": {
     "data_product": "データプロダクト",

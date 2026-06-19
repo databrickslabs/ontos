@@ -20,24 +20,15 @@
       "years_plural": "{{count}} anni"
     },
     "submit": "Invia Richiesta",
-    "cancel": "Annulla",
-    "success": "Richiesta di accesso inviata con successo",
-    "error": "Impossibile inviare la richiesta di accesso"
+    "success": "Richiesta di accesso inviata con successo"
   },
   "panel": {
     "title": "Autorizzazioni di Accesso",
     "description": "Utenti con accesso limitato nel tempo a questa risorsa",
     "noGrants": "Nessuna autorizzazione di accesso per questa risorsa",
     "noGrantsHint": "Gli utenti possono richiedere accesso limitato nel tempo utilizzando il pulsante \"Richiedi Accesso\".",
-    "columns": {
-      "user": "Utente",
-      "permission": "Livello di Permesso",
-      "granted": "Concesso",
-      "expires": "Scade",
-      "actions": "Azioni"
-    },
     "revoke": "Revoca",
-    "revokeConfirm": "Sei sicuro di voler revocare questa autorizzazione di accesso?"
+    "revokeConfirm": "Sei sicuro di voler revocare l'accesso per {{user}}?"
   },
   "entityTypes": {
     "data_product": "prodotto dati",

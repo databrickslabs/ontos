@@ -369,6 +369,30 @@ class TestDataProductsManager:
         assert result is not None
         # Status should transition (actual transition logic verified in integration tests)
 
+    def test_submit_for_review_transitions_draft_to_proposed(
+        self, manager, db_session, sample_product_data
+    ):
+        """A draft product submitted for review/certification must move to 'proposed'.
+
+        Regression guard for ONT-CUJ-019: request-certify returned 202 but the
+        product stayed in 'draft'. The route now calls submit_for_review, so the
+        documented draft -> proposed transition must actually occur and persist.
+        """
+        # Arrange
+        sample_product_data["status"] = "draft"
+        created = manager.create_product(sample_product_data, db=db_session)
+        assert created.status == DataProductStatus.DRAFT.value
+
+        # Act
+        result = manager.submit_for_review(created.id, current_user="requester@example.com")
+
+        # Assert - returned model reflects the transition
+        assert result.status == DataProductStatus.PROPOSED.value
+        # Assert - the change is persisted (a GET would now confirm 'proposed')
+        db_product = db_session.query(DataProductDb).filter_by(id=created.id).first()
+        assert db_product is not None
+        assert db_product.status == DataProductStatus.PROPOSED.value
+
     def test_publish_product_success(
         self, manager, db_session, sample_product_data
     ):

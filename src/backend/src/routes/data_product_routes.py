@@ -480,6 +480,15 @@ async def request_certify_product(
             details={"certification_level": certification_level, "message": message},
         )
 
+        # Advance the lifecycle so the product surfaces in the review/approvals
+        # queue. A pre-review product (draft/sandbox) moves to 'proposed' on a
+        # successful certification request; products already in-flight keep their
+        # current status. Without this the documented draft -> proposed
+        # transition never happened (ONT-CUJ-019).
+        current_status = (product_db.status or 'draft').lower()
+        if current_status in ('draft', 'sandbox'):
+            manager.submit_for_review(product_id, username)
+
         get_trigger_registry(db).on_request_certify(
             EntityType.DATA_PRODUCT,
             product_id,

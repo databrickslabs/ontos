@@ -119,6 +119,19 @@
     "loadFailed": "Metadata laden mislukt",
     "attachSuccess": "Gedeelde asset succesvol bijgevoegd",
     "attachFailed": "Kon gedeelde asset niet bijvoegen"
+  },
+  "tags": {
+    "title": "Tags",
+    "description": "Apply governance tags to this object.",
+    "edit": "Edit tags",
+    "refresh": "Refresh",
+    "placeholder": "Search and select tags...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "noTags": "No tags applied.",
+    "messages": {
+      "saveSuccess": "Tags updated",
+      "saveFailed": "Failed to update tags"
+    }
   }
 }
-

@@ -119,5 +119,19 @@
     "loadFailed": "メタデータの読み込みに失敗しました",
     "attachSuccess": "共有アセットが正常に添付されました",
     "attachFailed": "共有アセットの添付に失敗しました"
+  },
+  "tags": {
+    "title": "Tags",
+    "description": "Apply governance tags to this object.",
+    "edit": "Edit tags",
+    "refresh": "Refresh",
+    "placeholder": "Search and select tags...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "noTags": "No tags applied.",
+    "messages": {
+      "saveSuccess": "Tags updated",
+      "saveFailed": "Failed to update tags"
+    }
   }
 }

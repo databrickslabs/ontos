@@ -119,5 +119,19 @@
     "loadFailed": "Metadaten-Laden fehlgeschlagen",
     "attachSuccess": "Geteiltes Asset erfolgreich angehängt",
     "attachFailed": "Anhängen des geteilten Assets fehlgeschlagen"
+  },
+  "tags": {
+    "title": "Tags",
+    "description": "Apply governance tags to this object.",
+    "edit": "Edit tags",
+    "refresh": "Refresh",
+    "placeholder": "Search and select tags...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "noTags": "No tags applied.",
+    "messages": {
+      "saveSuccess": "Tags updated",
+      "saveFailed": "Failed to update tags"
+    }
   }
 }

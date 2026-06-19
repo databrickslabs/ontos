@@ -168,14 +168,23 @@ class TestKnowledgeConceptsByIri:
         ).status_code == 404
         assert client.get(f"/api/knowledge/concepts/{c['iri']}").status_code == 404
 
-    def test_publish_by_iri_action(self, client: TestClient, make_concept):
-        c = make_concept("Publish By IRI")
+    def test_submit_review_by_iri_action(self, client: TestClient, make_concept):
+        """Smoke-test one of the lifecycle ``/by-iri/<action>`` endpoints.
+
+        The point of this test is to prove the lifecycle route is wired through
+        — not to re-test the manager's state machine (covered elsewhere). A
+        fresh draft concept advances to ``under_review`` on submit-review.
+        """
+        c = make_concept("Submit Review By IRI")
         r = client.post(
-            "/api/knowledge/concepts/by-iri/publish",
+            "/api/knowledge/concepts/by-iri/submit-review",
             params={"iri": c["iri"]},
+            json={},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["status"] == "published"
+        body = r.json()
+        # Endpoint returns ``{review_data, concept}``; concept moves to under_review.
+        assert body["concept"]["status"] == "under_review"
 
 
 # ---------------------------------------------------------------------------

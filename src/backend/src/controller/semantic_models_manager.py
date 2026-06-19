@@ -15,6 +15,7 @@ import signal
 from contextlib import contextmanager
 import json
 import shutil
+import urllib.parse
 from filelock import FileLock
 
 from src.db_models.semantic_models import SemanticModelDb
@@ -35,6 +36,8 @@ from src.models.ontology import (
 from src.repositories.semantic_models_repository import semantic_models_repo
 from src.repositories.rdf_triples_repository import rdf_triples_repo
 from src.common.logging import get_logger
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.search_registry import searchable_asset
 from src.common.sparql_validator import SPARQLQueryValidator
 from src.utils.semantic_model_title_candidates import (
     best_display_title_from_graph,
@@ -46,6 +49,41 @@ from src.owl.owl_parser import clean_truncated_turtle
 
 
 logger = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Concept-type resolution helpers
+# ---------------------------------------------------------------------------
+#
+# A user-facing concept_type ("concept" | "class" | "property" | "individual" |
+# "term") maps onto a small set of canonical RDF types we emit when we create
+# or update a concept. Property concepts also carry a property_type
+# ("object" | "datatype" | "annotation") which selects the OWL property
+# subclass.
+#
+# We need a single source of truth for two reasons:
+#   1. ``create_concept``/``update_concept`` must write the correct rdf:type
+#      triples (the bug fix that motivated this module — properties were being
+#      silently stored as skos:Concept).
+#   2. ``get_concept`` and ``get_concept_details`` must reverse that mapping so
+#      the UI badge matches what the user picked. The previous detection logic
+#      only knew about skos:Concept / rdfs:Class / owl:Class / owl:ObjectProperty
+#      and defaulted to "concept" or "individual" for everything else.
+
+_VALID_CONCEPT_TYPES = {"concept", "class", "property", "individual", "term"}
+_VALID_PROPERTY_TYPES = {"object", "datatype", "annotation"}
+
+
+def _normalise_concept_type(concept_type: Optional[str]) -> str:
+    """Coerce a user-supplied concept_type to a known value."""
+    ct = (concept_type or "concept").strip().lower()
+    return ct if ct in _VALID_CONCEPT_TYPES else "concept"
+
+
+def _normalise_property_type(property_type: Optional[str]) -> str:
+    """Coerce a user-supplied property_type to a known value (defaults object)."""
+    pt = (property_type or "object").strip().lower()
+    return pt if pt in _VALID_PROPERTY_TYPES else "object"
 
 
 def _sanitize_context_name(name: str) -> str:
@@ -111,7 +149,8 @@ class CachedResult:
         return datetime.now() < self.expires_at
 
 
-class SemanticModelsManager:
+@searchable_asset
+class SemanticModelsManager(SearchableAsset):
     def __init__(self, db: Session, data_dir: Optional[Path] = None):
         self._db = db
         self._data_dir = data_dir or Path(__file__).parent.parent / "data"
@@ -2173,9 +2212,12 @@ class SemanticModelsManager:
 
                     source_context = self._extract_source_context(context_name)
 
-                    # For properties, extract domain/range
+                    # For properties, extract domain/range and the property
+                    # subtype so listings / tree views can render the right
+                    # icon (object vs datatype vs annotation).
                     domain_val = None
                     range_val = None
+                    property_type_val: Optional[str] = None
                     if concept_type == "property":
                         domains = list(context.objects(concept_uri, RDFS.domain))
                         domains = [d for d in domains if not isinstance(d, BNode) and not self._is_skolemized_bnode(str(d))]
@@ -2183,6 +2225,7 @@ class SemanticModelsManager:
                         ranges = list(context.objects(concept_uri, RDFS.range))
                         ranges = [r for r in ranges if not isinstance(r, BNode) and not self._is_skolemized_bnode(str(r))]
                         range_val = str(ranges[0]) if ranges else None
+                        _, property_type_val = self._detect_concept_type(context, concept_uri)
 
                     # Extract related concepts (skos:related)
                     related_concepts = [str(r) for r in context.objects(concept_uri, SKOS.related)]
@@ -2194,6 +2237,7 @@ class SemanticModelsManager:
                         comment=comment,
                         comments=comments,
                         concept_type=concept_type,
+                        property_type=property_type_val,
                         source_context=source_context,
                         parent_concepts=parent_concepts,
                         domain=domain_val,
@@ -2255,13 +2299,12 @@ class SemanticModelsManager:
             comments.extend(list(context.objects(concept_uri, SKOS.definition)))
             comment = str(comments[0]) if comments else None
             
-            # Determine type
-            concept_type = "individual"  # default
-            if (concept_uri, RDF.type, RDFS.Class) in context:
-                concept_type = "class"
-            elif (concept_uri, RDF.type, SKOS.Concept) in context:
-                concept_type = "concept"
-            
+            # Determine type from rdf:type triples — same logic as
+            # ``get_concept`` so the two read paths agree. Without this,
+            # owl:ObjectProperty / owl:DatatypeProperty concepts fell into the
+            # "individual" default and the UI badge was wrong.
+            concept_type, _ = self._detect_concept_type(context, concept_uri)
+
             # Get parent concepts
             parent_concepts = []
             # Handle rdfs:subClassOf relationships (class-to-class)
@@ -2307,14 +2350,40 @@ class SemanticModelsManager:
             
             source_context = self._extract_source_context(context_name)
 
+            # Synonyms, examples, related, domain/range, governance, provenance.
+            # Shared with get_concept so the detail view (this path) and the
+            # knowledge CRUD path return the same fields.
+            meta = self._extract_concept_metadata(context, concept_uri)
+
             concept = OntologyConcept(
                 iri=concept_iri,
                 label=label,
                 comment=comment,
                 concept_type=concept_type,
+                property_type=meta["property_type"],
                 source_context=source_context,
                 parent_concepts=parent_concepts,
-                child_concepts=child_concepts
+                child_concepts=child_concepts,
+                related_concepts=meta["related_concepts"],
+                synonyms=meta["synonyms"],
+                examples=meta["examples"],
+                domain=meta["domain"],
+                range=meta["range"],
+                status=meta["status"],
+                version=meta["version"],
+                created_at=meta["created_at"],
+                created_by=meta["created_by"],
+                updated_at=meta["updated_at"],
+                updated_by=meta["updated_by"],
+                published_at=meta["published_at"],
+                published_by=meta["published_by"],
+                certified_at=meta["certified_at"],
+                certified_by=meta["certified_by"],
+                certification_expires_at=meta["certification_expires_at"],
+                source_concept_iri=meta["source_concept_iri"],
+                source_collection_iri=meta["source_collection_iri"],
+                promotion_type=meta["promotion_type"],
+                review_request_id=meta["review_request_id"],
             )
             break  # Found in first matching context
         
@@ -2493,6 +2562,42 @@ class SemanticModelsManager:
             grouped[source].sort(key=lambda c: (c.label or c.iri))
 
         return grouped
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Build SearchIndexItem entries for every indexed ontology concept.
+
+        Backed by ``get_grouped_concepts()`` so it transparently uses the
+        in-memory cache (post-rebuild), the persistent JSON cache (cold start),
+        or a live computation if both are missing. Items emit ``type=glossary-term``
+        which matches the existing search config in ``search_config.yaml``.
+        """
+        items: List[SearchIndexItem] = []
+        try:
+            grouped = self.get_grouped_concepts()
+            for source_context, concepts in grouped.items():
+                for c in concepts:
+                    if not c.iri:
+                        continue
+                    title = c.label or c.iri.rsplit('#', 1)[-1].rsplit('/', 1)[-1]
+                    tags: List[str] = []
+                    if source_context and source_context != "Unassigned":
+                        tags.append(source_context)
+                    if c.concept_type:
+                        tags.append(c.concept_type)
+                    items.append(SearchIndexItem(
+                        id=f"glossary-term::{c.iri}",
+                        type="glossary-term",
+                        title=title,
+                        description=c.comment,
+                        link=f"/concepts/browser?concept={urllib.parse.quote(c.iri, safe='')}",
+                        tags=tags,
+                        feature_id="semantic-models",
+                        extra_data={"synonyms": " ".join(c.synonyms or [])},
+                    ))
+            logger.info(f"Prepared {len(items)} glossary terms for search index.")
+        except Exception as e:
+            logger.error(f"Failed to build glossary-term search index: {e}", exc_info=True)
+        return items
 
     def get_properties_grouped(self) -> Dict[str, List[Dict[str, Any]]]:
         """Return all RDF/OWL properties grouped by their source context name.
@@ -2977,12 +3082,90 @@ class SemanticModelsManager:
     # CONCEPT CRUD
     # ========================================================================
 
+    @staticmethod
+    def _resolve_concept_rdf_types(
+        concept_type: str,
+        property_type: Optional[str],
+    ) -> "tuple[List[URIRef], Optional[str]]":
+        """Map a user-facing (concept_type, property_type) pair onto the RDF
+        types to emit on the concept's subject and an optional explicit
+        annotation value.
+
+        Returns ``(rdf_types, explicit_concept_type_annotation)``:
+          * ``rdf_types`` — one or more ``URIRef`` values to write as
+            ``rdf:type`` triples.
+          * ``explicit_concept_type_annotation`` — when non-None, also write a
+            ``ontos:conceptType`` literal triple so the readback can recover
+            the original user choice when the RDF type alone is ambiguous
+            (today this is only used to round-trip ``"term"`` vs ``"concept"``,
+            since both are ``skos:Concept``).
+        """
+        ct = _normalise_concept_type(concept_type)
+        if ct == "class":
+            return ([OWL.Class], None)
+        if ct == "property":
+            pt = _normalise_property_type(property_type)
+            if pt == "datatype":
+                return ([OWL.DatatypeProperty], None)
+            if pt == "annotation":
+                return ([OWL.AnnotationProperty], None)
+            return ([OWL.ObjectProperty], None)
+        if ct == "individual":
+            return ([OWL.NamedIndividual], None)
+        if ct == "term":
+            return ([SKOS.Concept], "term")
+        return ([SKOS.Concept], None)
+
+    @staticmethod
+    def _detect_concept_type(context, concept_uri) -> "tuple[str, Optional[str]]":
+        """Reverse of ``_resolve_concept_rdf_types``: infer
+        ``(concept_type, property_type)`` from the rdf:type triples present in
+        ``context`` for ``concept_uri``.
+
+        Detection order is most-specific to least-specific so that, e.g., a
+        concept asserted as both ``rdf:Property`` and ``owl:DatatypeProperty``
+        is reported as a datatype property rather than a generic object
+        property.
+        """
+        types = {str(t) for t in context.objects(concept_uri, RDF.type)}
+        property_type: Optional[str] = None
+        concept_type: Optional[str] = None
+
+        if str(OWL.DatatypeProperty) in types:
+            concept_type, property_type = "property", "datatype"
+        elif str(OWL.AnnotationProperty) in types:
+            concept_type, property_type = "property", "annotation"
+        elif str(OWL.ObjectProperty) in types:
+            concept_type, property_type = "property", "object"
+        elif str(RDF.Property) in types:
+            concept_type, property_type = "property", "object"
+        elif str(OWL.Class) in types or str(RDFS.Class) in types:
+            concept_type = "class"
+        elif str(OWL.NamedIndividual) in types:
+            concept_type = "individual"
+        elif str(SKOS.Concept) in types or str(SKOS.ConceptScheme) in types:
+            concept_type = "concept"
+
+        # ``ontos:conceptType`` annotation lets us distinguish "term" from
+        # "concept" (both stored as skos:Concept). Only honour it if the value
+        # is one we recognise.
+        explicit = next(iter(context.objects(concept_uri, ONTOS.conceptType)), None)
+        if explicit is not None:
+            explicit_str = str(explicit).lower()
+            if explicit_str in _VALID_CONCEPT_TYPES:
+                concept_type = explicit_str
+
+        return concept_type or "concept", property_type
+
     def create_concept(
         self,
         collection_iri: str,
         label: str,
         definition: Optional[str] = None,
         concept_type: str = "concept",
+        property_type: Optional[str] = None,
+        domain: Optional[str] = None,
+        range: Optional[str] = None,
         synonyms: List[str] = None,
         examples: List[str] = None,
         broader_iris: List[str] = None,
@@ -2992,30 +3175,49 @@ class SemanticModelsManager:
         created_by: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new concept in a collection.
-        
-        Creates SKOS-compatible triples in the collection's context.
-        New concepts start with status 'draft'.
-        
+
+        Writes RDF triples in the collection's context. The rdf:type triple(s)
+        emitted depend on ``concept_type`` and (for properties) ``property_type``
+        — see ``_resolve_concept_rdf_types``. New concepts start with status
+        ``draft``.
+
         owners: List of dicts with keys: user_uri, role (e.g., business_owner, data_steward)
         """
         from datetime import datetime
-        
+
         # Verify collection exists and is editable
         collection = self.get_collection(collection_iri)
         if not collection:
             raise ValueError(f"Collection not found: {collection_iri}")
         if not collection.get("is_editable"):
             raise ValueError(f"Collection is not editable: {collection_iri}")
-        
+
+        # Normalise type inputs once so write + verify paths agree.
+        normalised_concept_type = _normalise_concept_type(concept_type)
+        normalised_property_type = (
+            _normalise_property_type(property_type)
+            if normalised_concept_type == "property"
+            else None
+        )
+        rdf_types, explicit_annotation = self._resolve_concept_rdf_types(
+            normalised_concept_type, normalised_property_type
+        )
+
+        # Domain/range are only meaningful for properties; silently ignore for
+        # other concept types so the API stays forgiving when the dialog sends
+        # stale form state.
+        effective_domain = domain if normalised_concept_type == "property" else None
+        effective_range = range if normalised_concept_type == "property" else None
+
         # Generate concept IRI
         sanitized = _sanitize_context_name(label.lower().replace(" ", "-"))
         concept_iri = f"{collection_iri}/{sanitized}"
-        
+
         # Check if already exists
         existing = self.get_concept(concept_iri)
         if existing:
             raise ValueError(f"Concept already exists: {concept_iri}")
-        
+
         now = datetime.utcnow().isoformat() + "Z"
         synonyms = synonyms or []
         examples = examples or []
@@ -3023,38 +3225,52 @@ class SemanticModelsManager:
         narrower_iris = narrower_iris or []
         related_iris = related_iris or []
         owners = owners or []
-        
-        # Build triples
-        triples = [
-            (concept_iri, str(RDF.type), str(SKOS.Concept), True),
+
+        # Build triples. ``rdf:type`` is emitted once per resolved type so a
+        # ``property`` concept gets exactly one of owl:ObjectProperty /
+        # DatatypeProperty / AnnotationProperty (not the bare skos:Concept it
+        # used to incorrectly get).
+        triples: List[tuple] = []
+        for rdf_type in rdf_types:
+            triples.append((concept_iri, str(RDF.type), str(rdf_type), True))
+        triples.extend([
             (concept_iri, str(SKOS.prefLabel), label, False),
             (concept_iri, str(ONTOS.status), "draft", False),
             (concept_iri, str(ONTOS.version), "1.0.0", False),
             (concept_iri, str(ONTOS.createdAt), now, False),
-        ]
-        
+        ])
+        if explicit_annotation:
+            triples.append((concept_iri, str(ONTOS.conceptType), explicit_annotation, False))
+
         if definition:
             triples.append((concept_iri, str(SKOS.definition), definition, False))
-        
+
         for syn in synonyms:
             triples.append((concept_iri, str(SKOS.altLabel), syn, False))
-        
+
         for ex in examples:
             triples.append((concept_iri, str(SKOS.example), ex, False))
-        
+
         for broader in broader_iris:
             triples.append((concept_iri, str(SKOS.broader), broader, True))
-        
+
         for narrower in narrower_iris:
             triples.append((concept_iri, str(SKOS.narrower), narrower, True))
-        
+
         for related in related_iris:
             triples.append((concept_iri, str(SKOS.related), related, True))
-        
+
+        # Domain/range are emitted as URI-typed objects, matching how
+        # _extract_concept_metadata reads them back (it skips bnodes / literals).
+        if effective_domain:
+            triples.append((concept_iri, str(RDFS.domain), effective_domain, True))
+        if effective_range:
+            triples.append((concept_iri, str(RDFS.range), effective_range, True))
+
         if created_by:
             user_uri = f"urn:user:{created_by}" if not created_by.startswith("urn:") else created_by
             triples.append((concept_iri, str(ONTOS.createdBy), user_uri, True))
-        
+
         # Add to database
         for subj, pred, obj, is_uri in triples:
             rdf_triples_repo.add_triple(
@@ -3068,16 +3284,21 @@ class SemanticModelsManager:
                 source_identifier=concept_iri,
                 created_by=created_by,
             )
-        
-        # Add to in-memory graph
+
+        # Mirror into the in-memory graph so the next read does not have to
+        # round-trip through the DB. Keep this aligned with the triple list
+        # above — divergence here was the root cause of the property bug.
         coll_context = self._graph.get_context(URIRef(collection_iri))
         concept_uri = URIRef(concept_iri)
-        coll_context.add((concept_uri, RDF.type, SKOS.Concept))
+        for rdf_type in rdf_types:
+            coll_context.add((concept_uri, RDF.type, rdf_type))
         coll_context.add((concept_uri, SKOS.prefLabel, Literal(label)))
         coll_context.add((concept_uri, ONTOS.status, Literal("draft")))
         coll_context.add((concept_uri, ONTOS.version, Literal("1.0.0")))
         coll_context.add((concept_uri, ONTOS.createdAt, Literal(now, datatype=XSD.dateTime)))
-        
+        if explicit_annotation:
+            coll_context.add((concept_uri, ONTOS.conceptType, Literal(explicit_annotation)))
+
         if definition:
             coll_context.add((concept_uri, SKOS.definition, Literal(definition)))
         for syn in synonyms:
@@ -3090,6 +3311,10 @@ class SemanticModelsManager:
             coll_context.add((concept_uri, SKOS.narrower, URIRef(narrower)))
         for related in related_iris:
             coll_context.add((concept_uri, SKOS.related, URIRef(related)))
+        if effective_domain:
+            coll_context.add((concept_uri, RDFS.domain, URIRef(effective_domain)))
+        if effective_range:
+            coll_context.add((concept_uri, RDFS.range, URIRef(effective_range)))
         if created_by:
             user_uri = f"urn:user:{created_by}" if not created_by.startswith("urn:") else created_by
             coll_context.add((concept_uri, ONTOS.createdBy, URIRef(user_uri)))
@@ -3118,6 +3343,97 @@ class SemanticModelsManager:
         
         return self.get_concept(concept_iri)
 
+    def _extract_concept_metadata(self, context, concept_uri) -> Dict[str, Any]:
+        """Extract SKOS annotations, property domain/range, ONTOS governance and
+        lifecycle fields, provenance, and owners for a concept in a context.
+
+        Shared by ``get_concept`` (REST: /knowledge/concepts) and
+        ``get_concept_details`` (REST: /semantic-models/concepts) so the two read
+        paths cannot drift apart again. Historically only ``get_concept`` read
+        synonyms/examples/etc., which made them disappear on the concept detail
+        page and in its edit dialog.
+        """
+        # SKOS annotations
+        synonyms = [str(s) for s in context.objects(concept_uri, SKOS.altLabel)]
+        examples = [str(e) for e in context.objects(concept_uri, SKOS.example)]
+        related = [str(r) for r in context.objects(concept_uri, SKOS.related)]
+
+        # Property type is derived from rdf:type so the UI can render the
+        # right "Object Property / Datatype Property / Annotation Property"
+        # label without hitting the heavier ``_detect_concept_type`` path.
+        _, property_type = self._detect_concept_type(context, concept_uri)
+
+        # Property domain/range (skip blank / skolemized nodes)
+        domains = [
+            d for d in context.objects(concept_uri, RDFS.domain)
+            if not isinstance(d, BNode) and not self._is_skolemized_bnode(str(d))
+        ]
+        ranges = [
+            r for r in context.objects(concept_uri, RDFS.range)
+            if not isinstance(r, BNode) and not self._is_skolemized_bnode(str(r))
+        ]
+        domain_val = str(domains[0]) if domains else None
+        range_val = str(ranges[0]) if ranges else None
+
+        # Governance + lifecycle
+        status = self._get_literal(context, concept_uri, ONTOS.status)
+        version = self._get_literal(context, concept_uri, ONTOS.version)
+        created_at = self._get_literal(context, concept_uri, ONTOS.createdAt)
+        created_by = self._get_uri(context, concept_uri, ONTOS.createdBy)
+        updated_at = self._get_literal(context, concept_uri, ONTOS.updatedAt)
+        updated_by = self._get_uri(context, concept_uri, ONTOS.updatedBy)
+        published_at = self._get_literal(context, concept_uri, ONTOS.publishedAt)
+        published_by = self._get_uri(context, concept_uri, ONTOS.publishedBy)
+        certified_at = self._get_literal(context, concept_uri, ONTOS.certifiedAt)
+        certified_by = self._get_uri(context, concept_uri, ONTOS.certifiedBy)
+        cert_expires = self._get_literal(context, concept_uri, ONTOS.certificationExpiresAt)
+        review_id = self._get_literal(context, concept_uri, ONTOS.reviewRequestId)
+
+        # Provenance
+        source_concept = self._get_uri(context, concept_uri, ONTOS.sourceConceptIri)
+        source_coll = self._get_uri(context, concept_uri, ONTOS.sourceCollectionIri)
+        promotion_type = self._get_literal(context, concept_uri, ONTOS.promotionType)
+
+        # Owners
+        owners = []
+        for owner_uri in context.objects(concept_uri, ONTOS.hasOwner):
+            owner_user = self._get_uri(context, owner_uri, ONTOS.ownershipUser)
+            owner_role = self._get_literal(context, owner_uri, ONTOS.ownershipRole)
+            owner_assigned = self._get_literal(context, owner_uri, ONTOS.ownershipAssignedAt)
+            owner_by = self._get_uri(context, owner_uri, ONTOS.ownershipAssignedBy)
+            if owner_user and owner_role:
+                owners.append({
+                    "user_uri": owner_user,
+                    "role": owner_role,
+                    "assigned_at": owner_assigned,
+                    "assigned_by": owner_by,
+                })
+
+        return {
+            "synonyms": synonyms,
+            "examples": examples,
+            "related_concepts": related,
+            "property_type": property_type,
+            "domain": domain_val,
+            "range": range_val,
+            "status": status,
+            "version": version,
+            "created_at": created_at,
+            "created_by": created_by,
+            "updated_at": updated_at,
+            "updated_by": updated_by,
+            "published_at": published_at,
+            "published_by": published_by,
+            "certified_at": certified_at,
+            "certified_by": certified_by,
+            "certification_expires_at": cert_expires,
+            "source_concept_iri": source_concept,
+            "source_collection_iri": source_coll,
+            "promotion_type": promotion_type,
+            "review_request_id": review_id,
+            "owners": owners,
+        }
+
     def get_concept(self, concept_iri: str) -> Optional[Dict[str, Any]]:
         """Get a concept by IRI with all its properties and governance info."""
         concept_uri = URIRef(concept_iri)
@@ -3139,25 +3455,21 @@ class SemanticModelsManager:
                 if not definition:
                     definition = self._get_literal(context, concept_uri, RDFS.comment)
                 
-                # Determine concept type
-                concept_type = "concept"
-                for rdf_type in context.objects(concept_uri, RDF.type):
-                    type_str = str(rdf_type)
-                    if type_str == str(SKOS.Concept):
-                        concept_type = "concept"
-                    elif type_str == str(RDFS.Class) or type_str == str(OWL.Class):
-                        concept_type = "class"
-                    elif type_str == str(RDF.Property) or type_str == str(OWL.ObjectProperty):
-                        concept_type = "property"
-                
-                # Get synonyms and examples
-                synonyms = [str(s) for s in context.objects(concept_uri, SKOS.altLabel)]
-                examples = [str(e) for e in context.objects(concept_uri, SKOS.example)]
+                # Determine concept type from the canonical rdf:type triple(s).
+                # Covers SKOS / OWL / RDF property variants and named individuals,
+                # plus the ``ontos:conceptType`` override used to round-trip
+                # "term" vs "concept".
+                concept_type, _ = self._detect_concept_type(context, concept_uri)
+
+                # Synonyms, examples, related, governance, provenance, owners.
+                # ``meta["property_type"]`` mirrors the property-subtype detected
+                # above so the response carries enough info for the editor to
+                # restore form state.
+                meta = self._extract_concept_metadata(context, concept_uri)
                 
                 # Get hierarchy
                 broader = [str(b) for b in context.objects(concept_uri, SKOS.broader)]
                 narrower = [str(n) for n in context.objects(concept_uri, SKOS.narrower)]
-                related = [str(r) for r in context.objects(concept_uri, SKOS.related)]
                 
                 # Also check rdfs:subClassOf for classes
                 for parent in context.objects(concept_uri, RDFS.subClassOf):
@@ -3169,67 +3481,36 @@ class SemanticModelsManager:
                     if parent_iri not in broader:
                         broader.append(parent_iri)
                 
-                # Get governance info
-                status = self._get_literal(context, concept_uri, ONTOS.status)
-                version = self._get_literal(context, concept_uri, ONTOS.version)
-                created_at = self._get_literal(context, concept_uri, ONTOS.createdAt)
-                created_by = self._get_uri(context, concept_uri, ONTOS.createdBy)
-                updated_at = self._get_literal(context, concept_uri, ONTOS.updatedAt)
-                updated_by = self._get_uri(context, concept_uri, ONTOS.updatedBy)
-                published_at = self._get_literal(context, concept_uri, ONTOS.publishedAt)
-                published_by = self._get_uri(context, concept_uri, ONTOS.publishedBy)
-                certified_at = self._get_literal(context, concept_uri, ONTOS.certifiedAt)
-                certified_by = self._get_uri(context, concept_uri, ONTOS.certifiedBy)
-                cert_expires = self._get_literal(context, concept_uri, ONTOS.certificationExpiresAt)
-                review_id = self._get_literal(context, concept_uri, ONTOS.reviewRequestId)
-                
-                # Get provenance
-                source_concept = self._get_uri(context, concept_uri, ONTOS.sourceConceptIri)
-                source_coll = self._get_uri(context, concept_uri, ONTOS.sourceCollectionIri)
-                promotion_type = self._get_literal(context, concept_uri, ONTOS.promotionType)
-                
-                # Get owners
-                owners = []
-                for owner_uri in context.objects(concept_uri, ONTOS.hasOwner):
-                    owner_user = self._get_uri(context, owner_uri, ONTOS.ownershipUser)
-                    owner_role = self._get_literal(context, owner_uri, ONTOS.ownershipRole)
-                    owner_assigned = self._get_literal(context, owner_uri, ONTOS.ownershipAssignedAt)
-                    owner_by = self._get_uri(context, owner_uri, ONTOS.ownershipAssignedBy)
-                    if owner_user and owner_role:
-                        owners.append({
-                            "user_uri": owner_user,
-                            "role": owner_role,
-                            "assigned_at": owner_assigned,
-                            "assigned_by": owner_by,
-                        })
-                
                 return {
                     "iri": concept_iri,
                     "label": label,
                     "comment": definition,
                     "concept_type": concept_type,
+                    "property_type": meta["property_type"],
+                    "domain": meta["domain"],
+                    "range": meta["range"],
                     "source_context": context_name,
                     "parent_concepts": broader,
                     "child_concepts": narrower,
-                    "related_concepts": related,
-                    "synonyms": synonyms,
-                    "examples": examples,
-                    "status": status,
-                    "version": version,
-                    "owners": owners,
-                    "created_at": created_at,
-                    "created_by": created_by,
-                    "updated_at": updated_at,
-                    "updated_by": updated_by,
-                    "published_at": published_at,
-                    "published_by": published_by,
-                    "certified_at": certified_at,
-                    "certified_by": certified_by,
-                    "certification_expires_at": cert_expires,
-                    "source_concept_iri": source_concept,
-                    "source_collection_iri": source_coll,
-                    "promotion_type": promotion_type,
-                    "review_request_id": review_id,
+                    "related_concepts": meta["related_concepts"],
+                    "synonyms": meta["synonyms"],
+                    "examples": meta["examples"],
+                    "status": meta["status"],
+                    "version": meta["version"],
+                    "owners": meta["owners"],
+                    "created_at": meta["created_at"],
+                    "created_by": meta["created_by"],
+                    "updated_at": meta["updated_at"],
+                    "updated_by": meta["updated_by"],
+                    "published_at": meta["published_at"],
+                    "published_by": meta["published_by"],
+                    "certified_at": meta["certified_at"],
+                    "certified_by": meta["certified_by"],
+                    "certification_expires_at": meta["certification_expires_at"],
+                    "source_concept_iri": meta["source_concept_iri"],
+                    "source_collection_iri": meta["source_collection_iri"],
+                    "promotion_type": meta["promotion_type"],
+                    "review_request_id": meta["review_request_id"],
                     "tagged_assets": [],
                     "properties": [],
                 }
@@ -3241,6 +3522,10 @@ class SemanticModelsManager:
         concept_iri: str,
         label: Optional[str] = None,
         definition: Optional[str] = None,
+        concept_type: Optional[str] = None,
+        property_type: Optional[str] = None,
+        domain: Optional[str] = None,
+        range: Optional[str] = None,
         synonyms: Optional[List[str]] = None,
         examples: Optional[List[str]] = None,
         broader_iris: Optional[List[str]] = None,
@@ -3249,36 +3534,118 @@ class SemanticModelsManager:
         updated_by: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Update a concept's properties.
-        
-        Only concepts with status 'draft' can be freely edited.
+
+        Only concepts with status 'draft' can be freely edited. ``concept_type``
+        / ``property_type`` / ``domain`` / ``range`` may also be changed in
+        draft, which rewrites the concept's rdf:type triples (e.g. turning a
+        mis-typed ``skos:Concept`` into an ``owl:ObjectProperty``).
         Published concepts require creating a new version.
         """
         from datetime import datetime
-        
+
         existing = self.get_concept(concept_iri)
         if not existing:
             return None
-        
+
         collection_iri = existing.get("source_context")
         if not collection_iri:
             raise ValueError("Cannot determine collection for concept")
-        
+
         # Check if collection is editable
         collection = self.get_collection(collection_iri)
         if collection and not collection.get("is_editable"):
             raise ValueError(f"Collection is not editable: {collection_iri}")
-        
+
         # Check status - only draft can be freely edited
         status = existing.get("status")
         if status and status not in ("draft", None):
             raise ValueError(f"Cannot edit concept with status '{status}'. Submit changes for review or create new version.")
-        
+
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))
         now = datetime.utcnow().isoformat() + "Z"
-        
+
         updates = []
-        
+
+        # If the caller is changing the concept type (or just the property
+        # subtype / domain / range), rewrite the affected triples. We compute
+        # the target type pair using the current values as a fallback so a
+        # caller who only passes ``property_type`` for an existing property
+        # doesn't accidentally demote it to a ``skos:Concept`` — and a caller
+        # who only patches ``range`` keeps the existing ``domain``.
+        rdf_type_change = concept_type is not None or property_type is not None
+        domain_in_patch = domain is not None
+        range_in_patch = range is not None
+        target_concept_type = _normalise_concept_type(
+            concept_type if concept_type is not None else existing.get("concept_type")
+        )
+        target_property_type = (
+            _normalise_property_type(
+                property_type if property_type is not None else existing.get("property_type")
+            )
+            if target_concept_type == "property"
+            else None
+        )
+
+        if rdf_type_change:
+            # Wipe existing rdf:type and the ontos:conceptType annotation,
+            # then re-emit. This is safe for draft concepts; we already
+            # validated the collection is editable and status == draft.
+            new_rdf_types, explicit_annotation = self._resolve_concept_rdf_types(
+                target_concept_type, target_property_type
+            )
+            rdf_triples_repo.remove_by_subject_predicate(
+                self._db, concept_iri, str(RDF.type), collection_iri
+            )
+            coll_context.remove((concept_uri, RDF.type, None))
+            for rdf_type in new_rdf_types:
+                updates.append((concept_iri, str(RDF.type), str(rdf_type), True))
+                coll_context.add((concept_uri, RDF.type, rdf_type))
+
+            rdf_triples_repo.remove_by_subject_predicate(
+                self._db, concept_iri, str(ONTOS.conceptType), collection_iri
+            )
+            coll_context.remove((concept_uri, ONTOS.conceptType, None))
+            if explicit_annotation:
+                updates.append(
+                    (concept_iri, str(ONTOS.conceptType), explicit_annotation, False)
+                )
+                coll_context.add(
+                    (concept_uri, ONTOS.conceptType, Literal(explicit_annotation))
+                )
+
+        # Domain/range only make sense for properties. If the concept is
+        # being transitioned *away* from property, clear any orphaned
+        # triples. Otherwise replace each one only when explicitly present
+        # in the PATCH so a "set range only" call preserves an existing
+        # domain.
+        if rdf_type_change and target_concept_type != "property":
+            rdf_triples_repo.remove_by_subject_predicate(
+                self._db, concept_iri, str(RDFS.domain), collection_iri
+            )
+            rdf_triples_repo.remove_by_subject_predicate(
+                self._db, concept_iri, str(RDFS.range), collection_iri
+            )
+            coll_context.remove((concept_uri, RDFS.domain, None))
+            coll_context.remove((concept_uri, RDFS.range, None))
+        else:
+            if domain_in_patch:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(RDFS.domain), collection_iri
+                )
+                coll_context.remove((concept_uri, RDFS.domain, None))
+                if domain:
+                    updates.append((concept_iri, str(RDFS.domain), domain, True))
+                    coll_context.add((concept_uri, RDFS.domain, URIRef(domain)))
+            if range_in_patch:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(RDFS.range), collection_iri
+                )
+                coll_context.remove((concept_uri, RDFS.range, None))
+                if range:
+                    updates.append((concept_iri, str(RDFS.range), range, True))
+                    coll_context.add((concept_uri, RDFS.range, URIRef(range)))
+
         if label is not None:
             rdf_triples_repo.remove_by_subject_predicate(self._db, concept_iri, str(SKOS.prefLabel), collection_iri)
             updates.append((concept_iri, str(SKOS.prefLabel), label, False))
@@ -3896,12 +4263,17 @@ class SemanticModelsManager:
         if self.get_concept(new_iri):
             raise ValueError(f"Concept already exists in target: {new_iri}")
         
-        # Create new concept with provenance
+        # Create new concept with provenance. Forward property_type/domain/range
+        # so a promoted property keeps its OWL property nature instead of
+        # collapsing back to skos:Concept.
         new_concept = self.create_concept(
             collection_iri=target_collection_iri,
             label=label,
             definition=existing.get("comment"),
             concept_type=existing.get("concept_type", "concept"),
+            property_type=existing.get("property_type"),
+            domain=existing.get("domain"),
+            range=existing.get("range"),
             synonyms=existing.get("synonyms", []),
             examples=existing.get("examples", []),
             broader_iris=existing.get("parent_concepts", []),
@@ -3990,12 +4362,16 @@ class SemanticModelsManager:
         if self.get_concept(new_iri):
             raise ValueError(f"Concept already exists in target: {new_iri}")
         
-        # Create new concept with provenance
+        # Create new concept with provenance. See ``promote_concept`` for why
+        # we forward property_type / domain / range here.
         new_concept = self.create_concept(
             collection_iri=target_collection_iri,
             label=label,
             definition=existing.get("comment"),
             concept_type=existing.get("concept_type", "concept"),
+            property_type=existing.get("property_type"),
+            domain=existing.get("domain"),
+            range=existing.get("range"),
             synonyms=existing.get("synonyms", []),
             examples=existing.get("examples", []),
             broader_iris=existing.get("parent_concepts", []),

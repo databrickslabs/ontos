@@ -110,7 +110,8 @@ class OntologyConcept(BaseModel):
     labels: Dict[str, str] = {}  # Multi-language labels: {"en": "Dataset", "ja": "データセット"}
     comment: Optional[str] = None  # Primary comment (computed from comments dict)
     comments: Dict[str, str] = {}  # Multi-language comments: {"en": "A curated...", "ja": "..."}
-    concept_type: str  # 'class' | 'concept' | 'individual' | 'term'
+    concept_type: str  # 'class' | 'concept' | 'property' | 'individual' | 'term'
+    property_type: Optional[str] = None  # For properties: 'datatype' | 'object' | 'annotation'
     source_context: Optional[str] = None  # The taxonomy/ontology source (collection IRI)
     parent_concepts: List[str] = []  # Parent class/concept IRIs
     child_concepts: List[str] = []   # Child class/concept IRIs
@@ -151,7 +152,11 @@ class ConceptCreate(BaseModel):
     collection_iri: str
     label: str
     definition: Optional[str] = None
-    concept_type: str = "concept"  # 'class' | 'concept' | 'term'
+    concept_type: str = "concept"  # 'class' | 'concept' | 'property' | 'individual' | 'term'
+    # Property-specific fields (used when concept_type == 'property')
+    property_type: Optional[str] = None  # 'datatype' | 'object' | 'annotation'
+    domain: Optional[str] = None  # rdfs:domain (IRI)
+    range: Optional[str] = None   # rdfs:range  (IRI or xsd datatype)
     synonyms: List[str] = []
     examples: List[str] = []
     broader_iris: List[str] = []  # skos:broader
@@ -163,6 +168,12 @@ class ConceptUpdate(BaseModel):
     """Update request for a concept"""
     label: Optional[str] = None
     definition: Optional[str] = None
+    # Type-change fields. Mutating concept_type after creation is allowed only
+    # while the concept is still draft and is handled by SemanticModelsManager.
+    concept_type: Optional[str] = None
+    property_type: Optional[str] = None
+    domain: Optional[str] = None
+    range: Optional[str] = None
     synonyms: Optional[List[str]] = None
     examples: Optional[List[str]] = None
     broader_iris: Optional[List[str]] = None

@@ -218,6 +218,53 @@ class TestKnowledgeConcepts:
         assert body["label"] == "NewName"
         assert sorted(body["synonyms"]) == ["alias-a", "alias-b"]
 
+    def test_concept_detail_endpoint_returns_synonyms_examples_related(
+        self, client: TestClient, make_collection
+    ):
+        """Regression: synonyms/examples/related created on a concept must be
+        returned by BOTH the knowledge CRUD endpoint and the semantic-models
+        detail endpoint (the one the concept detail page + edit dialog consume).
+
+        Previously ``get_concept_details`` dropped them, so synonyms vanished
+        from the detail view and the edit dialog, and were silently wiped on the
+        next save (the form re-PATCHed an empty list).
+        """
+        c = make_collection("Synonym Coll")
+        # A sibling concept to point skos:related at.
+        client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"], "label": "Retention",
+        }).raise_for_status()
+        related_iri = f"{c['iri']}/retention"
+
+        create = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "Customer Churn",
+            "definition": "When a customer stops doing business.",
+            "concept_type": "concept",
+            "synonyms": ["Customer Attrition", "Churn"],
+            "examples": ["monthly churn rate"],
+            "related_iris": [related_iri],
+        })
+        assert create.status_code == 200, create.text
+        iri = f"{c['iri']}/customer-churn"
+
+        # The detail endpoint backing the concept detail page + edit dialog.
+        detail = client.get(f"/api/semantic-models/concepts/{iri}")
+        assert detail.status_code == 200, detail.text
+        concept = detail.json()["concept"]
+        assert sorted(concept["synonyms"]) == ["Churn", "Customer Attrition"]
+        assert concept["examples"] == ["monthly churn rate"]
+        assert concept["related_concepts"] == [related_iri]
+        assert concept["status"] == "draft"
+
+        # Parity with the knowledge CRUD endpoint.
+        crud = client.get(f"/api/knowledge/concepts/{iri}")
+        assert crud.status_code == 200, crud.text
+        crud_body = crud.json()
+        assert sorted(crud_body["synonyms"]) == ["Churn", "Customer Attrition"]
+        assert crud_body["examples"] == ["monthly churn rate"]
+        assert crud_body["related_concepts"] == [related_iri]
+
     def test_delete_draft_concept(self, client: TestClient, make_collection):
         c = make_collection("Delete Concept Coll")
         client.post("/api/knowledge/concepts", json={
@@ -227,6 +274,222 @@ class TestKnowledgeConcepts:
         r = client.delete(f"/api/knowledge/concepts/{iri}")
         assert r.status_code == 200
         assert client.get(f"/api/knowledge/concepts/{iri}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Non-Concept concept types — property / class / individual / term
+# ---------------------------------------------------------------------------
+#
+# Regression: ``POST /api/knowledge/concepts`` used to write ``skos:Concept``
+# for every concept_type, so custom properties (and classes, individuals,
+# terms) showed the wrong badge on the detail page and lost their
+# domain/range/property_type fields entirely. These tests pin the round-trip
+# for each supported user-facing type.
+
+
+class TestKnowledgeConceptTypes:
+    def test_create_object_property_round_trips(
+        self, client: TestClient, make_collection
+    ):
+        c = make_collection("Prop Coll")
+        r = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "hasOwner",
+            "definition": "Links a resource to its owner",
+            "concept_type": "property",
+            "property_type": "object",
+            "domain": "https://schema.org/Thing",
+            "range": "https://schema.org/Person",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["concept_type"] == "property"
+        assert body["property_type"] == "object"
+        assert body["domain"] == "https://schema.org/Thing"
+        assert body["range"] == "https://schema.org/Person"
+
+        # Knowledge CRUD read endpoint
+        iri = body["iri"]
+        crud = client.get(f"/api/knowledge/concepts/{iri}").json()
+        assert crud["concept_type"] == "property"
+        assert crud["property_type"] == "object"
+        assert crud["domain"] == "https://schema.org/Thing"
+        assert crud["range"] == "https://schema.org/Person"
+
+        # Detail endpoint backing the concept-detail page + edit dialog
+        detail = client.get(f"/api/semantic-models/concepts/{iri}").json()["concept"]
+        assert detail["concept_type"] == "property"
+        assert detail["property_type"] == "object"
+        assert detail["domain"] == "https://schema.org/Thing"
+        assert detail["range"] == "https://schema.org/Person"
+
+    def test_create_datatype_property_round_trips(
+        self, client: TestClient, make_collection
+    ):
+        c = make_collection("DT Prop Coll")
+        r = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "name",
+            "concept_type": "property",
+            "property_type": "datatype",
+            "range": "http://www.w3.org/2001/XMLSchema#string",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["concept_type"] == "property"
+        assert body["property_type"] == "datatype"
+        assert body["range"] == "http://www.w3.org/2001/XMLSchema#string"
+
+    def test_create_annotation_property_round_trips(
+        self, client: TestClient, make_collection
+    ):
+        c = make_collection("Anno Prop Coll")
+        r = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "deprecatedReason",
+            "concept_type": "property",
+            "property_type": "annotation",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["concept_type"] == "property"
+        assert body["property_type"] == "annotation"
+
+    def test_create_class_concept_round_trips(
+        self, client: TestClient, make_collection
+    ):
+        c = make_collection("Class Coll")
+        r = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "Vehicle",
+            "concept_type": "class",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["concept_type"] == "class"
+
+    def test_create_individual_concept_round_trips(
+        self, client: TestClient, make_collection
+    ):
+        c = make_collection("Indiv Coll")
+        r = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "Earth",
+            "concept_type": "individual",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["concept_type"] == "individual"
+
+    def test_create_term_concept_round_trips(
+        self, client: TestClient, make_collection
+    ):
+        """A "term" is stored as ``skos:Concept`` plus an ``ontos:conceptType``
+        annotation; the read path must restore the original "term" label so the
+        UI badge matches what the user picked."""
+        c = make_collection("Term Coll")
+        r = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "MRR",
+            "concept_type": "term",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["concept_type"] == "term"
+
+    def test_default_concept_type_is_concept(
+        self, client: TestClient, make_collection
+    ):
+        """Concepts created without a concept_type (the dialog default) must
+        keep their ``skos:Concept`` typing and read back as 'concept', not
+        'individual'."""
+        c = make_collection("Default Coll")
+        r = client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"], "label": "Quality",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["concept_type"] == "concept"
+        # property_type is irrelevant for non-property concepts
+        assert body.get("property_type") is None
+        assert body.get("domain") is None
+        assert body.get("range") is None
+
+    def test_patch_property_updates_property_type_and_domain_range(
+        self, client: TestClient, make_collection
+    ):
+        c = make_collection("Patch Prop Coll")
+        client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "score",
+            "concept_type": "property",
+            "property_type": "object",
+            "domain": "https://schema.org/Thing",
+            "range": "https://schema.org/Number",
+        }).raise_for_status()
+        iri = f"{c['iri']}/score"
+
+        # Switch object → datatype property and replace range
+        r = client.patch(f"/api/knowledge/concepts/{iri}", json={
+            "concept_type": "property",
+            "property_type": "datatype",
+            "range": "http://www.w3.org/2001/XMLSchema#decimal",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["concept_type"] == "property"
+        assert body["property_type"] == "datatype"
+        assert body["range"] == "http://www.w3.org/2001/XMLSchema#decimal"
+        # Domain was not in the PATCH; the previous value should survive.
+        assert body["domain"] == "https://schema.org/Thing"
+
+    def test_patch_property_domain_only_preserves_property_type(
+        self, client: TestClient, make_collection
+    ):
+        """Sending only ``domain`` (a common case when the user edits an
+        existing property in the dialog without re-picking the subtype) must
+        keep the existing ``property_type`` instead of silently demoting it."""
+        c = make_collection("Partial Patch Coll")
+        client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "ownedBy",
+            "concept_type": "property",
+            "property_type": "object",
+            "domain": "https://schema.org/Thing",
+            "range": "https://schema.org/Person",
+        }).raise_for_status()
+        iri = f"{c['iri']}/ownedby"
+
+        r = client.patch(f"/api/knowledge/concepts/{iri}", json={
+            "domain": "https://schema.org/Organization",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["concept_type"] == "property"
+        assert body["property_type"] == "object"
+        assert body["domain"] == "https://schema.org/Organization"
+
+    def test_concepts_grouped_listing_reports_property_subtype(
+        self, client: TestClient, make_collection
+    ):
+        """The grouped-concepts listing (powers tree views and the concepts
+        page) must surface ``property_type`` so the right icon is rendered
+        for object/datatype/annotation properties."""
+        c = make_collection("Grouped Prop Coll")
+        client.post("/api/knowledge/concepts", json={
+            "collection_iri": c["iri"],
+            "label": "publishedAt",
+            "concept_type": "property",
+            "property_type": "datatype",
+            "range": "http://www.w3.org/2001/XMLSchema#dateTime",
+        }).raise_for_status()
+
+        groups = client.get(
+            "/api/semantic-models/concepts-grouped"
+        ).json()["grouped_concepts"]
+        slug = c["iri"].rsplit(":", 1)[-1]
+        assert slug in groups
+        matches = [g for g in groups[slug] if g.get("label") == "publishedAt"]
+        assert matches, f"Expected a 'publishedAt' entry in {slug}"
+        assert matches[0]["concept_type"] == "property"
+        assert matches[0]["property_type"] == "datatype"
 
 
 # ---------------------------------------------------------------------------

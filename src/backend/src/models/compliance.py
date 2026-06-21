@@ -5,13 +5,24 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class CompliancePolicyCreate(BaseModel):
+    """Payload accepted by POST /api/compliance/policies. id, compliance score, and timestamps are server-generated."""
+    name: str = Field(..., description="Name of the compliance policy")
+    description: str = Field(..., description="Description of what the policy checks")
+    failure_message: Optional[str] = Field(default=None, description="Human-readable message shown when policy fails")
+    rule: str = Field(..., description="Policy rule using the compliance DSL")
+    is_active: bool = Field(default=True, description="Whether the policy is active")
+    severity: str = Field(default="medium", description="Severity level: low, medium, high")
+    category: str = Field(default="general", description="Category of the policy")
+
+
 class CompliancePolicy(BaseModel):
     id: UUID = Field(..., description="Unique identifier for the policy (UUID)")
     name: str = Field(..., description="Name of the compliance policy")
     description: str = Field(..., description="Description of what the policy checks")
     failure_message: Optional[str] = Field(default=None, description="Human-readable message shown when policy fails")
     rule: str = Field(..., description="Policy rule using the compliance DSL")
-    compliance: float = Field(..., description="Current compliance score (0-100)")
+    compliance: float = Field(default=0.0, description="Current compliance score (0-100)")
     history: List[float] = Field(default_factory=list, description="Historical compliance scores")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

@@ -90,6 +90,7 @@ async def get_contracts(
     db: DBSessionDep,
     domain_id: Optional[str] = None,
     project_id: Optional[str] = None,
+    status: Optional[str] = None,
     include_history: bool = False,
     current_user: CurrentUserDep = None,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
@@ -101,6 +102,11 @@ async def get_contracts(
     one row per ``version_family_id`` — the newest visible version of each
     family, plus a ``versionCount`` field. When True, every visible version
     is returned (used by the "Show all versions" toggle in the UI).
+
+    ``status`` optionally narrows the result to a single lifecycle status
+    (e.g. ``draft``, ``proposed``, ``active``). The filter is applied *after*
+    the role-aware visibility filter, so it can only narrow the set a caller
+    is already permitted to see.
     """
     try:
         # Check if user is admin
@@ -139,6 +145,7 @@ async def get_contracts(
             db,
             domain_id=domain_id,
             project_id=project_id,
+            status=status,
             is_admin=is_admin,
             include_history=include_history,
             caller_email=caller_email,
@@ -218,7 +225,12 @@ async def approve_contract(
         return {'status': updated.status}
     except HTTPException:
         raise
-    except Exception as e:
+    except ValueError as e:
+        # Invalid lifecycle transition (or missing contract) is a client error,
+        # not a server fault — surface it as 409 instead of an opaque 500.
+        logger.warning("Approve contract rejected for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception:
         logger.exception("Approve contract failed for contract_id=%s", contract_id)
         raise HTTPException(status_code=500, detail="Failed to approve contract")
 
@@ -264,7 +276,10 @@ async def reject_contract(
         return {'status': updated.status}
     except HTTPException:
         raise
-    except Exception as e:
+    except ValueError as e:
+        logger.warning("Reject contract rejected for contract_id=%s: %s", contract_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception:
         logger.exception("Reject contract failed for contract_id=%s", contract_id)
         raise HTTPException(status_code=500, detail="Failed to reject contract")
 
@@ -402,8 +417,11 @@ async def request_steward_review(
         
     except ValueError as e:
         logger.error("Request review validation error for contract_id=%s: %s", contract_id, e)
-        error_status = 404 if "not found" in str(e).lower() else 409
-        raise HTTPException(status_code=error_status, detail="Invalid review request")
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Contract not found")
+        # Surface the validation reason (e.g. "schema required before review")
+        # so the UI can explain why the request was blocked.
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

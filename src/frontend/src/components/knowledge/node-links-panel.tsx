@@ -238,7 +238,7 @@ export const NodeLinksPanel: React.FC<NodeLinksPanelProps> = ({
       // TODO: Handle domain/range for properties
       
       const response = await fetch(
-        `/api/knowledge/concepts/${encodeURIComponent(concept.iri)}`,
+        `/api/knowledge/concepts/by-iri?iri=${encodeURIComponent(concept.iri)}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -280,7 +280,7 @@ export const NodeLinksPanel: React.FC<NodeLinksPanelProps> = ({
       }
       
       const response = await fetch(
-        `/api/knowledge/concepts/${encodeURIComponent(concept.iri)}`,
+        `/api/knowledge/concepts/by-iri?iri=${encodeURIComponent(concept.iri)}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },

@@ -1652,6 +1652,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         all_properties = []
         all_obj_relationships = []
         all_prop_relationships = []
+        all_quality_checks = []
         # Collect semantic link work to process after bulk insert
         schema_semantic_work = []
         prop_semantic_work = []
@@ -1739,6 +1740,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 )
                 all_properties.append(prop)
 
+                # Collect property-level (column) quality rules. These arrive
+                # nested under the column as `properties[].quality`; previously
+                # nothing read them here, so column-level rules silently
+                # vanished on save (the only persisted quality was object-level
+                # via the separate `qualityRules` field).
+                for rule_data in (prop_dict.get('quality') or []):
+                    all_quality_checks.append(
+                        self._build_quality_check_db(
+                            rule_data, object_id=schema_obj_id, property_id=prop_id
+                        )
+                    )
+
                 # Collect property-level relationships (ODCS v3.1.0)
                 for rel_data in (prop_dict.get('relationships') or []):
                     if isinstance(rel_data, dict):
@@ -1778,6 +1791,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_obj_relationships)
         if all_prop_relationships:
             db.add_all(all_prop_relationships)
+        if all_quality_checks:
+            db.add_all(all_quality_checks)
         db.flush()
 
         # Process semantic links after bulk insert
@@ -1803,10 +1818,51 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     created_by=current_user
                 )
 
+    @staticmethod
+    def _build_quality_check_db(rule_data, object_id: str, property_id: Optional[str] = None) -> 'DataQualityCheckDb':
+        """Map an incoming quality-rule dict/model to a DataQualityCheckDb row.
+
+        Shared by object-level (``property_id is None``) and property-level
+        (``property_id`` set) persistence so both honour the same ODCS field
+        mapping and camelCase/snake_case aliases. The default ``level`` follows
+        whether the check targets a column or the whole object.
+        """
+        rule_dict = rule_data.model_dump() if hasattr(rule_data, 'model_dump') else rule_data
+        default_level = 'property' if property_id else 'object'
+        return DataQualityCheckDb(
+            object_id=object_id,
+            property_id=property_id,
+            stable_id=rule_dict.get('id'),
+            level=rule_dict.get('level', default_level),
+            name=rule_dict.get('name'),
+            description=rule_dict.get('description'),
+            dimension=rule_dict.get('dimension'),
+            business_impact=rule_dict.get('businessImpact') or rule_dict.get('business_impact'),
+            method=rule_dict.get('method'),
+            schedule=rule_dict.get('schedule'),
+            scheduler=rule_dict.get('scheduler'),
+            severity=rule_dict.get('severity'),
+            type=rule_dict.get('type', 'library'),
+            unit=rule_dict.get('unit'),
+            tags=rule_dict.get('tags'),
+            rule=rule_dict.get('rule'),
+            query=rule_dict.get('query'),
+            engine=rule_dict.get('engine'),
+            implementation=rule_dict.get('implementation'),
+            must_be=rule_dict.get('mustBe') or rule_dict.get('must_be'),
+            must_not_be=rule_dict.get('mustNotBe') or rule_dict.get('must_not_be'),
+            must_be_gt=rule_dict.get('mustBeGt') or rule_dict.get('must_be_gt'),
+            must_be_ge=rule_dict.get('mustBeGe') or rule_dict.get('must_be_ge'),
+            must_be_lt=rule_dict.get('mustBeLt') or rule_dict.get('must_be_lt'),
+            must_be_le=rule_dict.get('mustBeLe') or rule_dict.get('must_be_le'),
+            must_be_between_min=rule_dict.get('mustBeBetweenMin') or rule_dict.get('must_be_between_min'),
+            must_be_between_max=rule_dict.get('mustBeBetweenMax') or rule_dict.get('must_be_between_max'),
+        )
+
     def _create_quality_checks(self, db, contract_id: str, quality_rules: List):
         """
-        Create quality checks for a contract.
-        
+        Create object-level quality checks for a contract.
+
         Args:
             db: Database session
             contract_id: Contract UUID
@@ -1817,43 +1873,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not schema_obj:
             logger.warning(f"No schema objects found for contract {contract_id}, skipping quality checks")
             return
-        
+
         for rule_data in quality_rules:
-            # Support both Pydantic models and dicts
-            if hasattr(rule_data, 'model_dump'):
-                rule_dict = rule_data.model_dump()
-            else:
-                rule_dict = rule_data
-            
-            quality_check = DataQualityCheckDb(
-                object_id=schema_obj.id,
-                stable_id=rule_dict.get('id'),
-                level=rule_dict.get('level', 'object'),
-                name=rule_dict.get('name'),
-                description=rule_dict.get('description'),
-                dimension=rule_dict.get('dimension'),
-                business_impact=rule_dict.get('businessImpact') or rule_dict.get('business_impact'),
-                method=rule_dict.get('method'),
-                schedule=rule_dict.get('schedule'),
-                scheduler=rule_dict.get('scheduler'),
-                severity=rule_dict.get('severity'),
-                type=rule_dict.get('type', 'library'),
-                unit=rule_dict.get('unit'),
-                tags=rule_dict.get('tags'),
-                rule=rule_dict.get('rule'),
-                query=rule_dict.get('query'),
-                engine=rule_dict.get('engine'),
-                implementation=rule_dict.get('implementation'),
-                must_be=rule_dict.get('mustBe') or rule_dict.get('must_be'),
-                must_not_be=rule_dict.get('mustNotBe') or rule_dict.get('must_not_be'),
-                must_be_gt=rule_dict.get('mustBeGt') or rule_dict.get('must_be_gt'),
-                must_be_ge=rule_dict.get('mustBeGe') or rule_dict.get('must_be_ge'),
-                must_be_lt=rule_dict.get('mustBeLt') or rule_dict.get('must_be_lt'),
-                must_be_le=rule_dict.get('mustBeLe') or rule_dict.get('must_be_le'),
-                must_be_between_min=rule_dict.get('mustBeBetweenMin') or rule_dict.get('must_be_between_min'),
-                must_be_between_max=rule_dict.get('mustBeBetweenMax') or rule_dict.get('must_be_between_max')
-            )
-            db.add(quality_check)
+            db.add(self._build_quality_check_db(rule_data, object_id=schema_obj.id))
     
     def _process_semantic_links(self, db, contract_id: str, contract_data, current_user: Optional[str] = None):
         """
@@ -2211,7 +2233,29 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 domain_id = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
             elif data_dict.get('domain'):
                 domain_id = self._resolve_domain(db, domain_name=data_dict.get('domain'))
-            
+
+            # Reject a duplicate contract name within the same domain. This path
+            # always creates a *new* version family (new versions go through
+            # create_version), so any existing contract sharing the name+domain
+            # is a genuine duplicate, not another version of the same family
+            # (ONT-NEG-002). Name match is case-insensitive.
+            from sqlalchemy import func as _sa_func
+            from src.common.errors import ConflictError
+            new_name = data_dict.get('name', '').strip()
+            dup_query = db.query(DataContractDb).filter(
+                _sa_func.lower(DataContractDb.name) == new_name.lower()
+            )
+            dup_query = (
+                dup_query.filter(DataContractDb.domain_id == domain_id)
+                if domain_id is not None
+                else dup_query.filter(DataContractDb.domain_id.is_(None))
+            )
+            if dup_query.first() is not None:
+                where = "domain" if domain_id is not None else "global scope"
+                raise ConflictError(
+                    f"A data contract named '{new_name}' already exists in this {where}"
+                )
+
             # Resolve owner team if provided
             owner_team_id = data_dict.get('owner_team_id')
             if not owner_team_id and data_dict.get('owner'):
@@ -2237,12 +2281,28 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             elif not isinstance(description, dict):
                 description = {}
             
+            # A contract created without an owning team would otherwise have no
+            # owner at all, which makes it invisible to its own creator under the
+            # PRD #442 role-aware visibility filter (the family is "elevated" only
+            # for the draft_owner or owner_team members). Stamp the creator as the
+            # personal-draft owner so they can find the contract they just created.
+            # When an owner team is supplied the draft is team-visible from the
+            # start, so we leave draft_owner_id unset (tier-2 visibility). The
+            # draft_owner_id is cleared again on the draft->proposed transition.
+            status_value = data_dict.get('status', 'draft')
+            draft_owner_id = (
+                current_user
+                if (status_value or '').lower() == 'draft' and not owner_team_id
+                else None
+            )
+
             # Create main contract record
             db_obj = DataContractDb(
                 name=data_dict.get('name'),
                 version=data_dict.get('version', '1.0.0'),
-                status=data_dict.get('status', 'draft'),
+                status=status_value,
                 owner_team_id=owner_team_id,
+                draft_owner_id=draft_owner_id,
                 project_id=project_id,  # Add project_id
                 kind=data_dict.get('kind', 'DataContract'),
                 api_version=data_dict.get('apiVersion', 'v3.1.0'),
@@ -2477,13 +2537,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 ).all()
                 
                 if schema_objects:
-                    # Remove ALL existing quality checks for all schema objects in this contract
+                    # Replace only OBJECT-level checks (property_id IS NULL).
+                    # Property-level (column) checks are owned by the schema
+                    # recreation path above; deleting them here would drop the
+                    # column rules that were just persisted from the same save.
                     for schema_obj in schema_objects:
                         db.query(DataQualityCheckDb).filter(
-                            DataQualityCheckDb.object_id == schema_obj.id
+                            DataQualityCheckDb.object_id == schema_obj.id,
+                            DataQualityCheckDb.property_id.is_(None),
                         ).delete()
-                    
-                    # Add new quality rules
+
+                    # Add new object-level quality rules
                     if data_dict['qualityRules']:
                         self._create_quality_checks(db, contract_id, data_dict['qualityRules'])
             
@@ -4847,8 +4911,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from datetime import datetime
         from src.common.workflow_triggers import get_trigger_registry
         from src.models.process_workflows import EntityType
-        from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
-        
+
         contract = data_contract_repo.get(db, id=contract_id)
         if not contract:
             raise ValueError("Contract not found")
@@ -4856,36 +4919,47 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from_status = (contract.status or '').lower()
         if from_status != 'draft':
             raise ValueError(f"Cannot request review from status {contract.status}. Must be DRAFT.")
-        
-        # Transition to PROPOSED
+
+        # A contract must describe at least one schema object before it can be
+        # proposed for review — there is nothing for a steward to review on an
+        # empty draft. Block the transition and leave the contract in draft
+        # (ONT-NEG-005).
+        schema_object_count = (
+            db.query(SchemaObjectDb)
+            .filter(SchemaObjectDb.contract_id == contract_id)
+            .count()
+        )
+        if schema_object_count == 0:
+            raise ValueError("A schema is required before a contract can be proposed for review.")
+
+        # Transition to PROPOSED. Clear the personal-draft owner so the contract
+        # is promoted from tier-1 (creator-only) to organisation visibility; a
+        # contract under steward review must be discoverable by stewards and
+        # other team members, not just its author (PRD #442).
         contract.status = 'proposed'
+        contract.draft_owner_id = None
         db.add(contract)
         db.flush()
         self._update_search_index(contract, db)
         
         now = datetime.utcnow()
         request_id = str(uuid4())
-        
-        # Create asset review record
-        try:
-            from src.controller.data_asset_reviews_manager import DataAssetReviewManager
-            from src.models.data_asset_reviews import ReviewedAsset as ReviewedAssetApi
-            from src.common.databricks_utils import get_workspace_client
-            
-            ws_client = get_workspace_client()
-            review_manager = DataAssetReviewManager(db=db, ws_client=ws_client, notifications_manager=notifications_manager)
-            
-            review_asset = ReviewedAssetApi(
-                id=str(uuid4()),
-                asset_fqn=f"contract:{contract_id}",
-                asset_type=AssetType.DATA_CONTRACT,
-                status=ReviewedAssetStatus.PENDING,
-                updated_at=now
-            )
-            logger.info(f"Created asset review record for contract {contract_id}")
-        except Exception as e:
-            logger.warning(f"Failed to create asset review record: {e}", exc_info=True)
-        
+
+        # NOTE: a proposed contract surfaces to stewards through two real paths,
+        # so we deliberately do NOT create a data-asset review record here:
+        #   1. GET /api/approvals/queue lists every contract in proposed/
+        #      under_review status (see ApprovalsManager.get_approvals_queue),
+        #      and the steward acts on it via the contract approve/reject
+        #      endpoints.
+        #   2. The ON_REQUEST_REVIEW trigger below runs any configured review
+        #      workflow (notifications, approval routing).
+        # The /data-asset-reviews surface is for Unity Catalog assets (tables,
+        # views, functions) and needs an explicit reviewer; routing a contract
+        # there would require a steward-assignment policy that doesn't exist
+        # yet. A previous stub here constructed an in-memory ReviewedAsset and
+        # logged "Created asset review record" without ever persisting it —
+        # misleading dead code that is removed.
+
         # Fire the ON_REQUEST_REVIEW trigger
         trigger_registry = get_trigger_registry(db)
         executions = trigger_registry.on_request_review(
@@ -5917,6 +5991,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         project_id=None,
         is_admin=False,
         latest_only=True,
+        status=None,
         *,
         caller_email: Optional[str] = None,
         caller_team_ids: Optional[Set[str]] = None,
@@ -5976,6 +6051,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 or (not is_admin_only_status(c) and is_visible_consumer(c))
             ]
 
+        # Optional status filter (e.g. ?status=draft). Applied after the
+        # visibility filter so callers can only ever narrow to statuses they
+        # are already allowed to see — a consumer asking for ?status=draft
+        # still gets nothing because drafts were dropped above.
+        if status:
+            wanted = status.strip().lower()
+            contracts = [
+                c for c in contracts if (c.status or '').lower() == wanted
+            ]
+
         # Family counts are taken from the post-visibility-filter set so
         # the badge reflects what the caller can actually navigate to.
         counts = compute_family_counts(contracts)
@@ -5999,6 +6084,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         db,
         domain_id: Optional[str] = None,
         project_id: Optional[str] = None,
+        status: Optional[str] = None,
         is_admin: bool = False,
         latest_only: bool = True,
         include_history: bool = False,
@@ -6021,6 +6107,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             project_id,
             is_admin,
             latest_only,
+            status=status,
             caller_email=caller_email,
             caller_team_ids=caller_team_ids,
         )

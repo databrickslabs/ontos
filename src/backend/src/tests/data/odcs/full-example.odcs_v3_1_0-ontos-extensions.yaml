@@ -1,0 +1,315 @@
+# ============================================================================
+# ODCS v3.1.0 full example + ONTOS EXTENSIONS
+# ============================================================================
+# Superset of full-example.odcs_v3_1_0.yaml that additionally exercises every
+# Ontos-specific extension that rides inside a spec-valid ODCS document:
+#
+#   1. Unified tags with namespaces  -> FQN strings in `tags:` arrays
+#      (e.g. "finance/payments"). Bare names (no "/") map to the default
+#      namespace; "ns/name" maps to namespace "ns".
+#   2. Semantic assignments          -> authoritativeDefinitions entries with
+#      type "http://databricks.com/ontology/uc/semanticAssignment" at the
+#      contract, schema, and property levels. Both class (rdfs:Class) and
+#      property (rdf:Property) IRIs are represented.
+#   3. Polymorphic business owners   -> customProperties[].property
+#      "ontos.businessOwners" whose value is a list of
+#      {objectType, userEmail, roleName} records (BusinessOwnerCreate shape).
+#
+# Stable `id` is set on roles, support, slaProperties, customProperties, and
+# servers so the stable_id plumbing in the _create_* helpers is covered.
+# ============================================================================
+
+domain: seller
+dataProduct: my quantum
+version: 1.1.0
+status: active
+id: ontos-ext-53581432-6c55-4ba2-a65f-72344a91553a
+
+authoritativeDefinitions:
+  # Ontos extension: contract-level semantic assignment to an ontology class.
+  - type: "http://databricks.com/ontology/uc/semanticAssignment"
+    url: "https://ontology.example.com/PaymentDataContract"
+  # Plain ODCS authoritative definition (non-semantic) must be preserved.
+  - type: canonical
+    url: https://github.com/bitol-io/open-data-contract-standard/blob/main/docs/examples/all/full-example.odcs.yaml
+    description: Canonical URL to the latest version of the contract.
+
+description:
+  purpose: Views built on top of the seller tables.
+  limitations: Data based on seller perspective, no buyer information
+  usage: Predict sales over time
+  authoritativeDefinitions:
+    - type: privacy-statement
+      url: https://example.com/gdpr.pdf
+tenant: ClimateQuantumInc
+
+kind: DataContract
+apiVersion: v3.1.0
+
+# Infrastructure & servers (stable id on the server)
+servers:
+  - id: srv-001
+    server: my-postgres
+    type: postgres
+    host: localhost
+    port: 5432
+    database: pypl-edw
+    schema: pp_access_views
+
+# Dataset, schema, and quality
+schema:
+  - id: tbl_obj
+    name: tbl
+    physicalName: tbl_1
+    physicalType: table
+    businessName: Core Payment Metrics
+    description: Provides core payment metrics
+    authoritativeDefinitions:
+      - url: https://catalog.data.gov/dataset/air-quality
+        type: businessDefinition
+      # Ontos extension: schema-level semantic assignment to an ontology class.
+      - url: "https://ontology.example.com/PaymentTransaction"
+        type: "http://databricks.com/ontology/uc/semanticAssignment"
+    # Unified tags: bare name + two namespaced FQNs.
+    tags: [ 'finance/payments', 'governance/critical', 'transactions' ]
+    dataGranularityDescription: Aggregation on columns txn_ref_dt, pmt_txn_id
+    relationships:
+      - type: foreignKey
+        from:
+          - tbl.rcvr_id
+          - tbl.rcvr_cntry_code
+        to:
+          - receivers.id
+          - receivers.country_code
+        customProperties:
+          - property: description
+            value: "Composite key linking to receivers table"
+          - property: cardinality
+            value: "many-to-one"
+    properties:
+      - id: txn_ref_dt_prop
+        name: transaction_reference_date
+        physicalName: txn_ref_dt
+        primaryKey: false
+        primaryKeyPosition: -1
+        businessName: transaction reference date
+        logicalType: date
+        physicalType: date
+        required: false
+        description: Reference date for transaction
+        partitioned: true
+        partitionKeyPosition: 1
+        criticalDataElement: false
+        tags: [ 'temporal/reference-date' ]
+        classification: public
+        authoritativeDefinitions:
+          # Ontos extension: property-level semantic assignment to an
+          # ontology property (rdf:Property IRI).
+          - url: "https://ontology.example.com/property/transactionDate"
+            type: "http://databricks.com/ontology/uc/semanticAssignment"
+        transformSourceObjects:
+          - table_name_1
+          - table_name_2
+          - table_name_3
+        transformLogic: sel t1.txn_dt as txn_ref_dt from table_name_1 as t1, table_name_2 as t2, table_name_3 as t3 where t1.txn_dt=date-3
+        transformDescription: defines the logic in business terms; logic for dummies
+        examples:
+          - "2022-10-03"
+          - "2020-01-28"
+        customProperties:
+          - property: anonymizationStrategy
+            value: none
+      - id: rcvr_id_prop
+        name: rcvr_id
+        primaryKey: true
+        primaryKeyPosition: 1
+        businessName: receiver id
+        logicalType: string
+        physicalType: varchar(18)
+        required: false
+        description: A description for column rcvr_id.
+        partitioned: false
+        partitionKeyPosition: -1
+        criticalDataElement: false
+        tags: [ 'identity/uid' ]
+        classification: restricted
+        authoritativeDefinitions:
+          - url: "https://ontology.example.com/property/receiverIdentifier"
+            type: "http://databricks.com/ontology/uc/semanticAssignment"
+        relationships:
+          - to: receivers.id
+            type: foreignKey
+            customProperties:
+              - property: description
+                value: "Links to receiver master data"
+      - id: rcvr_cntry_code_prop
+        name: rcvr_cntry_code
+        primaryKey: false
+        primaryKeyPosition: -1
+        businessName: receiver country code
+        logicalType: string
+        physicalType: varchar(2)
+        required: false
+        description: Country code
+        partitioned: false
+        partitionKeyPosition: -1
+        criticalDataElement: false
+        tags: [ 'pii/country-code' ]
+        classification: public
+        encryptedName: rcvr_cntry_code_encrypted
+        quality:
+          - metric: nullValues
+            mustBe: 0
+            description: column should not contain null values
+            dimension: completeness
+            type: library
+            severity: error
+            businessImpact: operational
+            schedule: 0 20 * * *
+            scheduler: cron
+    quality:
+      - metric: rowCount
+        mustBeGreaterThan: 1000000
+        type: library
+        description: Ensure row count is within expected volume range
+        dimension: completeness
+        method: reconciliation
+        severity: error
+        businessImpact: operational
+        schedule: 0 20 * * *
+        scheduler: cron
+    customProperties:
+      - property: business-key
+        value:
+          - txn_ref_dt
+          - rcvr_id
+
+  # Receivers master table (second schema object).
+  - id: receivers_obj
+    name: receivers
+    physicalName: receivers_master
+    physicalType: table
+    businessName: Receivers Master Data
+    description: Master data for all receivers
+    tags: [ 'master-data', 'governance/critical' ]
+    authoritativeDefinitions:
+      - url: "https://ontology.example.com/Receiver"
+        type: "http://databricks.com/ontology/uc/semanticAssignment"
+    properties:
+      - id: receiver_id_prop
+        name: id
+        primaryKey: true
+        primaryKeyPosition: 1
+        businessName: receiver identifier
+        logicalType: string
+        physicalType: varchar(18)
+        required: true
+        description: Unique identifier for receiver
+        unique: true
+        classification: restricted
+      - id: country_code_prop
+        name: country_code
+        primaryKey: true
+        primaryKeyPosition: 2
+        businessName: receiver country
+        logicalType: string
+        physicalType: varchar(2)
+        required: true
+        description: Country code of the receiver
+        classification: public
+
+# Pricing
+price:
+  priceAmount: 9.95
+  priceCurrency: USD
+  priceUnit: megabyte
+
+# Team (ODCS v3.1.0 Team-as-object with team-level metadata)
+team:
+  id: team-quantum
+  name: my-team
+  description: The team owning the data contract
+  tags: [ 'org/seller-analytics' ]
+  customProperties:
+    - property: costCenter
+      value: CC-4815
+  authoritativeDefinitions:
+    - url: "https://ontology.example.com/Team/SellerAnalytics"
+      type: "http://databricks.com/ontology/uc/semanticAssignment"
+  members:
+    - username: ceastwood
+      role: Data Scientist
+      dateIn: "2022-08-02"
+      dateOut: "2022-10-01"
+      replacedByUsername: mhopper
+    - username: mhopper
+      role: Data Scientist
+      dateIn: "2022-10-01"
+    - username: daustin
+      role: Owner
+      description: Keeper of the grail
+      dateIn: "2022-10-01"
+
+# Roles (stable ids)
+roles:
+  - id: role-001
+    role: microstrategy_user_opr
+    access: read
+    firstLevelApprovers: Reporting Manager
+    secondLevelApprovers: 'mandolorian'
+  - id: role-002
+    role: bq_queryman_user_opr
+    access: read
+    firstLevelApprovers: Reporting Manager
+    secondLevelApprovers: na
+
+# SLA
+slaDefaultElement: tab1.txn_ref_dt
+slaProperties:
+  - id: sla-001
+    property: latency
+    value: 4
+    unit: d
+    element: tab1.txn_ref_dt
+  - id: sla-002
+    property: generalAvailability
+    value: "2022-05-12T09:30:10-08:00"
+
+# Support (stable ids)
+support:
+  - id: sup-001
+    channel: '#product-help'
+    tool: slack
+  - id: sup-002
+    channel: datacontract-ann
+    tool: email
+    url: mailto:datacontract-ann@bitol.io
+
+# Tags: contract-level mix of bare + namespaced FQNs.
+tags:
+  - transactions
+  - domain/seller
+  - governance/critical
+
+# Custom properties, including the Ontos polymorphic-owners extension.
+customProperties:
+  - id: cp-001
+    property: refRulesetName
+    value: gcsc.ruleset.name
+  # Ontos extension: polymorphic business owners. Each record matches the
+  # BusinessOwnerCreate shape (object_type / user_email / role_name). The
+  # objectType values intentionally span multiple polymorphic entity types.
+  - id: cp-owners
+    property: ontos.businessOwners
+    value:
+      - objectType: data_contract
+        userEmail: daustin@example.com
+        roleName: Data Owner
+      - objectType: data_contract
+        userEmail: ceastwood@example.com
+        roleName: Data Steward
+      - objectType: asset
+        userEmail: data-platform@example.com
+        roleName: Technical Owner
+
+contractCreatedTs: "2022-11-15T02:59:43+00:00"

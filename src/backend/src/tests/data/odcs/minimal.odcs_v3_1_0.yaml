@@ -1,0 +1,18 @@
+# ============================================================================
+# ODCS v3.1.0 - Minimal contract
+# ============================================================================
+# Contains ONLY the fields the app treats as required for a usable contract:
+# the ODCS-required id/kind/apiVersion/version/status plus name (required for
+# app usability per ODCSContract). No schema, team, servers, quality, tags,
+# pricing, SLA, support, or custom properties.
+#
+# Use this to assert that optional sections are gracefully absent on
+# import/export and that the minimal create path works end to end.
+# ============================================================================
+
+id: minimal-0001
+kind: DataContract
+apiVersion: v3.1.0
+version: 1.0.0
+status: draft
+name: Minimal Contract

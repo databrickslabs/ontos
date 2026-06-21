@@ -1,0 +1,133 @@
+# ============================================================================
+# ODPS v1.0.0 full example + ONTOS EXTENSIONS
+# ============================================================================
+# Superset of full-example.odps_v1_0_0.yaml that adds Ontos-specific fields:
+#
+#   1. consumer_principals  -> typed principals (group / service_principal /
+#      role / scope). See ConsumerPrincipal in data_products.py.
+#   2. max_level_inheritance -> metadata inheritance depth from contracts.
+#   3. Polymorphic business owners -> customProperties[].property
+#      "ontos.businessOwners" with {objectType, userEmail, roleName} records.
+#   4. Unified tags with namespaces -> FQN strings ("ns/name") mixed with
+#      bare names.
+#   5. Semantic assignments -> authoritativeDefinitions with type
+#      "http://databricks.com/ontology/uc/semanticAssignment" on the product
+#      itself and on individual ports.
+# ============================================================================
+
+apiVersion: v1.0.0
+kind: DataProduct
+id: ontos-ext-dp-0001
+name: Seller Analytics Data Product (Ontos)
+version: 1.0.0
+status: active
+domain: seller
+tenant: ClimateQuantumInc
+
+# Ontos extension: metadata inheritance depth.
+max_level_inheritance: 5
+
+# Ontos extension: typed consumer principals (polymorphic identity methods).
+consumer_principals:
+  - type: group
+    value: seller-analytics-consumers
+  - type: service_principal
+    value: 12345678-90ab-cdef-1234-567890abcdef
+  - type: role
+    value: analytics_reader
+  - type: scope
+    value: read:seller-analytics
+
+description:
+  purpose: Curated seller analytics with Ontos governance metadata.
+  usage: Subscribe via output ports; ownership and semantics are app-managed.
+
+authoritativeDefinitions:
+  # Ontos extension: product-level semantic assignment.
+  - type: "http://databricks.com/ontology/uc/semanticAssignment"
+    url: "https://ontology.example.com/SellerAnalyticsProduct"
+  - type: businessDefinition
+    url: https://wiki.example.com/products/seller-analytics
+
+customProperties:
+  - property: costCenter
+    value: CC-4815
+  # Ontos extension: polymorphic business owners (BusinessOwnerCreate shape).
+  - property: ontos.businessOwners
+    value:
+      - objectType: data_product
+        userEmail: daustin@example.com
+        roleName: Data Owner
+      - objectType: data_product
+        userEmail: mhopper@example.com
+        roleName: Data Steward
+      - objectType: asset
+        userEmail: data-platform@example.com
+        roleName: Technical Owner
+
+# Unified tags: mix of bare names and namespaced FQNs.
+tags:
+  - seller
+  - domain/seller
+  - governance/certified
+
+inputPorts:
+  - name: raw-orders
+    version: 1.0.0
+    contractId: raw-orders-contract-001
+    assetType: table
+    assetIdentifier: main.raw.orders
+
+outputPorts:
+  - id: op-sales-table
+    name: sales-aggregates
+    version: 1.0.0
+    description: Daily sales aggregates published as a Delta table.
+    type: Table
+    contractId: sales-aggregates-contract-001
+    assetType: table
+    assetIdentifier: main.seller_analytics.sales_aggregates
+    status: active
+    containsPii: false
+    autoApprove: true
+    server:
+      database: main
+      schema: seller_analytics
+      table: sales_aggregates
+    tags:
+      - gold
+      - governance/certified
+    authoritativeDefinitions:
+      # Ontos extension: port-level semantic assignment.
+      - type: "http://databricks.com/ontology/uc/semanticAssignment"
+        url: "https://ontology.example.com/SalesAggregate"
+
+managementPorts:
+  - name: observability-endpoint
+    content: observability
+    type: rest
+    url: https://api.example.com/products/seller-analytics/health
+
+support:
+  - channel: '#seller-analytics-help'
+    url: https://example.slack.com/archives/C0SELLER
+    tool: slack
+    scope: interactive
+
+team:
+  name: Seller Analytics Team
+  description: Owns the seller analytics product end to end.
+  authoritativeDefinitions:
+    - type: "http://databricks.com/ontology/uc/semanticAssignment"
+      url: "https://ontology.example.com/Team/SellerAnalytics"
+  members:
+    - username: daustin@example.com
+      name: Dirk Austin
+      role: owner
+      dateIn: "2022-10-01"
+    - username: mhopper@example.com
+      name: Mary Hopper
+      role: data steward
+      dateIn: "2022-10-01"
+
+productCreatedTs: "2022-11-15T02:59:43Z"

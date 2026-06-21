@@ -543,6 +543,17 @@
       "credentialsPath": "Credentials File Path",
       "credentialsPathHelp": "Dev fallback: local path to a service account key JSON file."
     },
+    "snowflake": {
+      "configTitle": "Snowflake Configuration",
+      "account": "Account Identifier",
+      "accountHelp": "e.g. myorg-myaccount or xy12345.us-east-1",
+      "user": "User",
+      "warehouse": "Warehouse",
+      "role": "Role",
+      "roleHelp": "Optional. Role to assume for queries.",
+      "database": "Default Database",
+      "defaultSchema": "Default Schema"
+    },
     "databricks": {
       "systemNote": "This connection is auto-configured from environment variables and cannot be modified."
     },

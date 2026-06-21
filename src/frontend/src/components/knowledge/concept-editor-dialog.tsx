@@ -110,6 +110,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
 
   const isNew = !concept;
   const canEdit = !readOnly && (!concept?.status || concept.status === 'draft');
+  const editableCollections = collections.filter((c) => c.is_editable);
 
   useEffect(() => {
     if (concept) {
@@ -250,7 +251,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4 px-1">
               {/* Collection (for new concepts) */}
-              {isNew && collections.length > 0 && (
+              {isNew && editableCollections.length > 0 && (
                 <div className="grid gap-2">
                   <Label htmlFor="collection">{t('Collection')}</Label>
                   <Select
@@ -258,19 +259,17 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                     onValueChange={(value) =>
                       setFormData((prev) => ({ ...prev, collection_iri: value }))
                     }
-                    disabled={!!collection}
+                    disabled={editableCollections.length <= 1}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={t('Select collection...')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {collections
-                        .filter((c) => c.is_editable)
-                        .map((c) => (
-                          <SelectItem key={c.iri} value={c.iri}>
-                            {c.label}
-                          </SelectItem>
-                        ))}
+                      {editableCollections.map((c) => (
+                        <SelectItem key={c.iri} value={c.iri}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

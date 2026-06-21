@@ -1,0 +1,158 @@
+# ============================================================================
+# ODCS v3.1.0 - Quality rules matrix
+# ============================================================================
+# Dedicated fixture exercising the full breadth of the ODCS quality model so
+# quality parsing/export can be asserted in one place. It covers:
+#
+#   * Every quality `type`: text, library, sql, custom.
+#   * Every comparator: mustBe, mustNotBe, mustBeGreaterThan,
+#     mustBeGreaterOrEqualTo, mustBeLessThan, mustBeLessOrEqualTo,
+#     mustBeBetween, mustNotBeBetween.
+#   * Every ODCS dimension: accuracy, completeness, conformity, consistency,
+#     coverage, timeliness, uniqueness.
+#   * Both business impact values (operational, regulatory) and all severities
+#     (info, warning, error).
+#   * Quality at BOTH the schema-object level and the property level.
+# ============================================================================
+
+id: quality-matrix-0001
+kind: DataContract
+apiVersion: v3.1.0
+version: 1.0.0
+status: active
+name: Quality Rules Matrix Contract
+domain: quality
+
+description:
+  purpose: Exercise every ODCS quality type, comparator, and dimension.
+
+schema:
+  - id: txns_obj
+    name: transactions
+    physicalName: transactions
+    physicalType: table
+    description: Table carrying schema-level and property-level quality rules.
+
+    # --- Schema-level quality rules ---
+    quality:
+      # type: text (free-form human-readable expectation)
+      - type: text
+        description: Row counts should look sensible to a human reviewer.
+        dimension: completeness
+        severity: info
+        businessImpact: operational
+
+      # type: library + mustBeGreaterThan
+      - type: library
+        rule: rowCount
+        mustBeGreaterThan: 1000000
+        dimension: completeness
+        method: reconciliation
+        severity: error
+        businessImpact: operational
+        schedule: 0 20 * * *
+        scheduler: cron
+
+      # type: library + mustBeGreaterOrEqualTo
+      - type: library
+        rule: rowCount
+        mustBeGreaterOrEqualTo: 1000000
+        dimension: coverage
+        severity: warning
+        businessImpact: operational
+
+      # type: library + mustBeBetween (range comparator)
+      - type: library
+        rule: freshnessHours
+        mustBeBetween: [0, 24]
+        unit: hours
+        dimension: timeliness
+        severity: warning
+        businessImpact: operational
+
+      # type: sql + mustBe (custom query returning a single value)
+      - type: sql
+        query: SELECT COUNT(*) FROM transactions WHERE amount < 0
+        mustBe: 0
+        dimension: accuracy
+        severity: error
+        businessImpact: regulatory
+
+      # type: custom (external engine)
+      - type: custom
+        engine: greatExpectations
+        implementation: |
+          expectation_suite: transactions_suite
+          expectations:
+            - expect_table_row_count_to_be_between:
+                min_value: 1
+        dimension: consistency
+        severity: warning
+        businessImpact: operational
+
+    properties:
+      - id: txns_id
+        name: transaction_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        # --- Property-level quality rules ---
+        quality:
+          # uniqueness + mustBe
+          - type: library
+            rule: duplicateCount
+            mustBe: 0
+            dimension: uniqueness
+            severity: error
+            businessImpact: regulatory
+          # completeness + mustNotBe
+          - type: library
+            rule: nullCount
+            mustNotBe: 1
+            dimension: completeness
+            severity: error
+            businessImpact: operational
+
+      - id: txns_amount
+        name: amount
+        logicalType: number
+        physicalType: decimal(10,2)
+        required: true
+        quality:
+          # accuracy + mustBeLessThan
+          - type: library
+            rule: maxValue
+            mustBeLessThan: 1000000
+            dimension: accuracy
+            severity: warning
+            businessImpact: operational
+          # accuracy + mustBeLessOrEqualTo
+          - type: library
+            rule: maxValue
+            mustBeLessOrEqualTo: 999999
+            dimension: accuracy
+            severity: info
+            businessImpact: operational
+          # mustNotBeBetween (exclusion range)
+          - type: library
+            rule: value
+            mustNotBeBetween: [-1, 0]
+            dimension: conformity
+            severity: warning
+            businessImpact: operational
+
+      - id: txns_currency
+        name: currency_code
+        logicalType: string
+        physicalType: varchar(3)
+        required: true
+        quality:
+          # conformity + sql query
+          - type: sql
+            query: SELECT COUNT(*) FROM transactions WHERE LENGTH(currency_code) <> 3
+            mustBe: 0
+            dimension: conformity
+            severity: error
+            businessImpact: regulatory

@@ -119,5 +119,19 @@
     "loadFailed": "Échec du chargement des métadonnées",
     "attachSuccess": "Asset partagé joint avec succès",
     "attachFailed": "Échec de l'attachement de l'asset partagé"
+  },
+  "tags": {
+    "title": "Tags",
+    "description": "Apply governance tags to this object.",
+    "edit": "Edit tags",
+    "refresh": "Refresh",
+    "placeholder": "Search and select tags...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "noTags": "No tags applied.",
+    "messages": {
+      "saveSuccess": "Tags updated",
+      "saveFailed": "Failed to update tags"
+    }
   }
 }

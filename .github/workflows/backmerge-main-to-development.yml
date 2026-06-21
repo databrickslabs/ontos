@@ -1,0 +1,56 @@
+name: Back-merge main into development
+
+# Keeps `development` in sync with `main` ("points main back down to development").
+# On every push to main (and on demand), ensure an open PR exists that merges
+# main -> development. PR-based on purpose: it respects branch protection on
+# `development` and surfaces any merge conflicts for manual resolution instead
+# of force-pushing over them.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: backmerge-main-to-development
+  cancel-in-progress: false
+
+jobs:
+  backmerge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open or reuse back-merge PR (main -> development)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Nothing to do if development already contains every commit on main.
+          if git merge-base --is-ancestor origin/main origin/development; then
+            echo "development already up to date with main; no back-merge needed."
+            exit 0
+          fi
+
+          # Reuse an existing open back-merge PR if one is already there
+          # (a branch-to-branch PR auto-tracks new commits on main).
+          existing="$(gh pr list --base development --head main --state open \
+            --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "Back-merge PR already open: #$existing (it will include the new commits)."
+            exit 0
+          fi
+
+          gh pr create \
+            --base development \
+            --head main \
+            --title "chore: back-merge main into development" \
+            --body "Automated back-merge to keep \`development\` in sync with \`main\`, triggered by a push to \`main\`. If GitHub reports conflicts, resolve them on this PR before merging. (Workflow: \`.github/workflows/backmerge-main-to-development.yml\`.)"

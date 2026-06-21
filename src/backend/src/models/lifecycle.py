@@ -48,7 +48,10 @@ DATA_PRODUCT_TRANSITIONS: dict[str, list[str]] = {
 
 DATA_CONTRACT_TRANSITIONS: dict[str, list[str]] = {
     "draft": ["proposed", "deprecated"],
-    "proposed": ["draft", "under_review", "deprecated"],
+    # A steward can approve directly from "proposed" (the approve endpoint is
+    # documented as PROPOSED/UNDER_REVIEW -> APPROVED). "under_review" stays an
+    # optional intermediate step rather than a mandatory one.
+    "proposed": ["draft", "under_review", "approved", "deprecated"],
     "under_review": ["draft", "approved", "deprecated"],
     "approved": ["active", "draft", "deprecated"],
     "active": ["deprecated"],

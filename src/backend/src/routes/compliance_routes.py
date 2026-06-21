@@ -8,6 +8,7 @@ from src.common.authorization import PermissionChecker
 from src.controller.compliance_manager import ComplianceManager
 from src.models.compliance import (
     CompliancePolicy,
+    CompliancePolicyCreate,
     ComplianceRun,
     ComplianceResult,
     ComplianceRunRequest,
@@ -58,7 +59,7 @@ async def create_policy(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
-    policy: CompliancePolicy = Body(...),
+    policy: CompliancePolicyCreate = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     created = manager.create_policy(

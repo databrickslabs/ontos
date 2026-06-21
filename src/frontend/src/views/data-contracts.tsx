@@ -27,6 +27,8 @@ import VersionCountBadge from '@/components/common/version-count-badge';
 import { Switch } from '@/components/ui/switch';
 import type { CertificationLevel } from '@/types/lifecycle';
 import { useApi } from '@/hooks/use-api';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 
 export default function DataContracts() {
   const { t } = useTranslation(['data-contracts', 'common']);
@@ -51,6 +53,14 @@ export default function DataContracts() {
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([]);
 
   const { get } = useApi();
+  // Permission gating — mirror the data-products list view. Contract creation
+  // (POST /api/data-contracts) requires READ_WRITE; the backend enforces a 403,
+  // so we must also hide the create/upload controls from personas (e.g. Data
+  // Consumer) that lack write access rather than letting them open a dialog
+  // that only fails on save. See CUJ ONT-RBAC-007.
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const featureId = 'data-contracts';
+  const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const { currentProject, hasProjectContext } = useProjectContext();
@@ -563,30 +573,37 @@ export default function DataContracts() {
                   {t('versionFamily.showAllVersions', { defaultValue: 'Show all versions' })}
                 </Label>
               </div>
-              <Button onClick={() => setOpenWizard(true)} className="gap-2 h-9" title={t('common:tooltips.createDataContract')}>
-                <Plus className="h-4 w-4" />
-                {t('newContract')}
-              </Button>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button onClick={() => setOpenUploadDialog(true)} variant="outline" className="gap-2 h-9">
-                      <Upload className="h-4 w-4" />
-                      {t('uploadFile')}
-                      <HelpCircle className="h-3 w-3 ml-1 opacity-50" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <p className="font-medium">Upload Data Contract (ODCS format)</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Accepts JSON, YAML, or text files following the ODCS (Open Data Contract Standard) schema.
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      For Data Products (ODPS), use the Data Products page instead.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Create/Upload actions require write permission (POST
+                  /api/data-contracts). Hidden for read-only personas such as
+                  Data Consumer so the dialog can't be opened. See ONT-RBAC-007. */}
+              {canWrite && (
+                <Button onClick={() => setOpenWizard(true)} className="gap-2 h-9" title={t('common:tooltips.createDataContract')}>
+                  <Plus className="h-4 w-4" />
+                  {t('newContract')}
+                </Button>
+              )}
+              {canWrite && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button onClick={() => setOpenUploadDialog(true)} variant="outline" className="gap-2 h-9">
+                        <Upload className="h-4 w-4" />
+                        {t('uploadFile')}
+                        <HelpCircle className="h-3 w-3 ml-1 opacity-50" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p className="font-medium">Upload Data Contract (ODCS format)</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Accepts JSON, YAML, or text files following the ODCS (Open Data Contract Standard) schema.
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        For Data Products (ODPS), use the Data Products page instead.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </>
           }
           bulkActions={(selectedRows) => (

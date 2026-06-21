@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 import { DataTable } from '@/components/ui/data-table';
@@ -73,12 +73,23 @@ interface Estate {
 }
 // --- End TypeScript Interfaces ---
 
+/**
+ * Builds the route path for an estate's detail view.
+ *
+ * This MUST stay in lock-step with the route registered in `app.tsx`
+ * (`/estates/:estateId`). A previous implementation derived the path from the
+ * current location (`/estate-manager/${id}`), which produced an unregistered
+ * URL and rendered the 404 page when "View Details" was clicked.
+ */
+export function buildEstateDetailPath(estateId: string): string {
+  return `/estates/${estateId}`;
+}
+
 export default function EstateManager() {
   const { t } = useTranslation(['estates', 'common']);
   const { toast } = useToast();
   const { get, post, put, delete: deleteEstateApi } = useApi();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const [estates, setEstates] = useState<Estate[]>([]);
@@ -253,7 +264,7 @@ export default function EstateManager() {
   };
   
   const handleNodeClick = (estateId: string) => {
-    navigate(`${pathname}/${estateId}`);
+    navigate(buildEstateDetailPath(estateId));
   };
 
   const columns: ColumnDef<Estate>[] = [

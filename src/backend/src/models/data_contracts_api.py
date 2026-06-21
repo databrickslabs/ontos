@@ -77,6 +77,12 @@ class ColumnProperty(BaseModel):
     # ODCS v3.1.0 relationships (property-level FKs)
     relationships: Optional[List[SchemaRelationship]] = None
 
+    # ODCS quality checks nested under the column. Declared explicitly (rather
+    # than relying on extra="allow") so the rules survive model_dump and are
+    # persisted by the manager — column-level rules were previously dropped on
+    # save because nothing read this field.
+    quality: Optional[List['QualityRule']] = Field(default_factory=list)
+
     class Config:
         # Accept both JSON keys: "logicalType" (field name) and "logical_type" (alias)
         populate_by_name = True

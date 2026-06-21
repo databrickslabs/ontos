@@ -1,0 +1,141 @@
+# ============================================================================
+# ODCS v3.1.0 - Relationships / composite foreign keys focus fixture
+# ============================================================================
+# Slim contract dedicated to the ODCS v3.1.0 `relationships` model so tests can
+# assert relationship parsing without full-document noise. Covers:
+#
+#   * Schema-level composite foreign key (multi-column from/to arrays).
+#   * Property-level single-column relationship with EXPLICIT `to`
+#     (implicit `from`).
+#   * Property-level relationship with customProperties metadata.
+#   * A relationship that omits an explicit `type` (should default to
+#     "foreignKey" per SchemaRelationship).
+#
+# Three tables: orders (fact) -> customers (dim) and orders -> products (dim),
+# with a composite FK from order_lines to orders.
+# ============================================================================
+
+id: relationships-0001
+kind: DataContract
+apiVersion: v3.1.0
+version: 1.0.0
+status: active
+name: Relationships Composite Keys Contract
+domain: commerce
+
+description:
+  purpose: Exercise schema-level and property-level ODCS relationships.
+
+schema:
+  - id: orders_obj
+    name: orders
+    physicalName: orders
+    physicalType: table
+    description: Order header fact table.
+    properties:
+      - id: orders_order_id
+        name: order_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+      - id: orders_customer_id
+        name: customer_id
+        logicalType: string
+        physicalType: varchar(36)
+        required: true
+        description: FK to customers.
+        # Property-level relationship, explicit `to`, implicit `from`.
+        relationships:
+          - to: customers.customer_id
+            type: foreignKey
+            customProperties:
+              - property: description
+                value: "Each order belongs to exactly one customer"
+              - property: cardinality
+                value: "many-to-one"
+      - id: orders_product_id
+        name: product_id
+        logicalType: string
+        physicalType: varchar(36)
+        required: true
+        description: FK to products.
+        # Relationship with NO explicit type -> should default to foreignKey.
+        relationships:
+          - to: products.product_id
+
+  - id: order_lines_obj
+    name: order_lines
+    physicalName: order_lines
+    physicalType: table
+    description: Order line items keyed by a composite (order_id, line_no).
+    # Schema-level COMPOSITE foreign key (multi-column from/to).
+    relationships:
+      - type: foreignKey
+        from:
+          - order_lines.order_id
+          - order_lines.line_no
+        to:
+          - orders.order_id
+          - orders.line_no
+        customProperties:
+          - property: description
+            value: "Composite key linking order lines back to order header"
+          - property: cardinality
+            value: "many-to-one"
+    properties:
+      - id: order_lines_order_id
+        name: order_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+      - id: order_lines_line_no
+        name: line_no
+        logicalType: integer
+        physicalType: int
+        primaryKey: true
+        primaryKeyPosition: 2
+        required: true
+      - id: order_lines_qty
+        name: quantity
+        logicalType: integer
+        physicalType: int
+        required: true
+
+  - id: customers_obj
+    name: customers
+    physicalName: customers
+    physicalType: table
+    description: Customer dimension (composite natural key for demonstration).
+    properties:
+      - id: customers_customer_id
+        name: customer_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        unique: true
+      - id: customers_region_code
+        name: region_code
+        logicalType: string
+        physicalType: varchar(4)
+        required: true
+
+  - id: products_obj
+    name: products
+    physicalName: products
+    physicalType: table
+    description: Product dimension.
+    properties:
+      - id: products_product_id
+        name: product_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        required: true
+        unique: true

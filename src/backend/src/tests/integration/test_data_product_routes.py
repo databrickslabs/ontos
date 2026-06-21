@@ -322,6 +322,44 @@ class TestDataProductRoutes:
         # Verify audit log
         verify_audit_log("data-products", "SUBMIT_CERTIFICATION", success=True)
 
+    def test_request_certify_without_deliverable_fails(
+        self, client, sample_product_data
+    ):
+        """ONT-CUJ-019 / ONT-NEG-008: requesting certification on a product
+        with zero deliverables (output ports) must be blocked (409)."""
+        sample_product_data["status"] = "draft"
+        create_response = client.post("/api/data-products", json=sample_product_data)
+        product_id = create_response.json()["id"]
+
+        response = client.post(
+            f"/api/data-products/{product_id}/request-certify",
+            json={"certification_level": "gold"},
+        )
+
+        assert response.status_code == 409
+        assert "deliverable" in response.json()["detail"].lower()
+
+    def test_request_certify_with_deliverable_succeeds(
+        self, client, sample_product_data
+    ):
+        """A product with at least one deliverable is accepted for
+        certification (202)."""
+        sample_product_data["status"] = "draft"
+        sample_product_data["outputPorts"] = [{
+            "name": "test-output",
+            "version": "1.0.0",
+            "contractId": "test-contract",
+        }]
+        create_response = client.post("/api/data-products", json=sample_product_data)
+        product_id = create_response.json()["id"]
+
+        response = client.post(
+            f"/api/data-products/{product_id}/request-certify",
+            json={"certification_level": "gold"},
+        )
+
+        assert response.status_code == 202
+
     def test_publish_product_success(self, client, sample_product_data):
         """Test POST /api/data-products/{id}/publish."""
         # Arrange

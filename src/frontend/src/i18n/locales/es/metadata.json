@@ -119,5 +119,19 @@
     "loadFailed": "Error al cargar metadatos",
     "attachSuccess": "Asset compartido adjuntado correctamente",
     "attachFailed": "Error al adjuntar asset compartido"
+  },
+  "tags": {
+    "title": "Tags",
+    "description": "Apply governance tags to this object.",
+    "edit": "Edit tags",
+    "refresh": "Refresh",
+    "placeholder": "Search and select tags...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "noTags": "No tags applied.",
+    "messages": {
+      "saveSuccess": "Tags updated",
+      "saveFailed": "Failed to update tags"
+    }
   }
 }

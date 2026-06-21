@@ -83,8 +83,9 @@ test.describe('CUJ-4 — Business Terms Browser', () => {
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
 
-      // The collection select is auto-filled and disabled when a default
-      // collection is provided — no need to interact with it.
+      // The collection select defaults to the first editable collection. It is
+      // interactive when multiple editable collections exist, but this test
+      // relies on the default, so we don't switch it.
       await dialog.getByLabel(/^label$/i).fill(conceptLabel)
 
       await dialog.getByRole('button', { name: /^create$/i }).click()

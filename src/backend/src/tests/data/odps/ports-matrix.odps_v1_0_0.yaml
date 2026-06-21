@@ -1,0 +1,122 @@
+# ============================================================================
+# ODPS v1.0.0 - Ports matrix
+# ============================================================================
+# Dedicated fixture exercising every input/output/management port variant so
+# port parsing can be asserted in one place. Covers:
+#
+#   Input ports:
+#     * Standard input port with a contract.
+#     * Input port with customProperties + authoritativeDefinitions.
+#   Output ports:
+#     * Table output port + Databricks share server (Delta Sharing).
+#     * Topic output port + Kafka server (host/topic/format).
+#     * S3/file output port + object-store server (location/format/delimiter).
+#     * BigQuery output port + server (project/dataset).
+#     * Contract-less output port (no contractId).
+#     * Output port carrying inheritance-suppressing tags.
+#   Management ports:
+#     * rest type and topic type.
+# ============================================================================
+
+apiVersion: v1.0.0
+kind: DataProduct
+id: ports-matrix-dp-0001
+name: Ports Matrix Data Product
+version: 1.0.0
+status: active
+domain: platform
+
+description:
+  purpose: Exercise the full matrix of ODPS port shapes and server types.
+
+inputPorts:
+  - name: input-with-contract
+    version: 1.0.0
+    contractId: input-contract-001
+  - name: input-with-metadata
+    version: 1.0.0
+    contractId: input-contract-002
+    tags:
+      - source
+    customProperties:
+      - property: ingestionTool
+        value: fivetran
+    authoritativeDefinitions:
+      - type: implementation
+        url: https://github.com/example/input-pipeline
+
+outputPorts:
+  # Databricks Delta Sharing table.
+  - id: op-share
+    name: share-table
+    version: 1.0.0
+    type: Table
+    contractId: share-contract-001
+    assetType: table
+    assetIdentifier: share.analytics.metrics
+    server:
+      share: analytics_share
+      database: main
+      schema: analytics
+
+  # Kafka topic.
+  - id: op-topic
+    name: events-topic
+    version: 1.0.0
+    type: Topic
+    contractId: events-contract-001
+    assetType: stream
+    assetIdentifier: events.metrics
+    server:
+      host: kafka.example.com:9092
+      topic: analytics.metrics
+      format: avro
+
+  # S3 / object-store file output.
+  - id: op-s3
+    name: parquet-export
+    version: 1.0.0
+    type: File
+    contractId: export-contract-001
+    server:
+      location: s3://example-bucket/analytics/metrics/
+      format: parquet
+      delimiter: newline
+
+  # BigQuery output.
+  - id: op-bq
+    name: bigquery-export
+    version: 1.0.0
+    type: Table
+    contractId: bq-contract-001
+    server:
+      project: example-gcp-project
+      dataset: analytics
+
+  # Contract-less output port (contractId omitted).
+  - id: op-no-contract
+    name: adhoc-extract
+    version: 1.0.0
+    type: Table
+    assetType: view
+    assetIdentifier: main.analytics.adhoc_extract
+
+  # Output port carrying inheritance-suppressing tags.
+  - id: op-tagged
+    name: tagged-output
+    version: 1.0.0
+    type: Table
+    contractId: tagged-contract-001
+    tags:
+      - no-inherit
+      - governance/restricted
+
+managementPorts:
+  - name: rest-observability
+    content: observability
+    type: rest
+    url: https://api.example.com/ports-matrix/health
+  - name: topic-control
+    content: control
+    type: topic
+    channel: ports-matrix-control

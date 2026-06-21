@@ -13,7 +13,7 @@ from src.repositories.compliance_repository import (
     compliance_run_repo,
     compliance_result_repo,
 )
-from ..models.compliance import CompliancePolicy, ComplianceRun, ComplianceResult
+from ..models.compliance import CompliancePolicy, CompliancePolicyCreate, ComplianceRun, ComplianceResult
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl, parse_rule, Evaluator
 from src.common.compliance_actions import ActionExecutor, ActionContext, get_action_registry
 from src.common.compliance_entities import (
@@ -168,13 +168,13 @@ class ComplianceManager:
         return db.get(CompliancePolicyDb, policy_id)
 
     def create_policy(
-        self, 
-        db: Session, 
-        policy: CompliancePolicy,
+        self,
+        db: Session,
+        policy: CompliancePolicyCreate,
         current_user: Optional[str] = None,
     ) -> CompliancePolicyDb:
         db_obj = CompliancePolicyDb(
-            id=str(policy.id),  # Convert UUID to string for SQLite
+            id=str(uuid.uuid4()),  # Server-generated UUID
             name=policy.name,
             description=policy.description,
             failure_message=policy.failure_message,

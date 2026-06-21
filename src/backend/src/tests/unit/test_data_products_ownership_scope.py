@@ -340,6 +340,55 @@ class TestUpdateProductWithAuthCascade:
         )
         assert result == "UPDATED_OK"
 
+    # ---- feature-admin path (ONT-CUJ-015) ----
+
+    def test_feature_admin_can_edit_orphan(self, manager, db_session):
+        """A data-products feature admin (is_feature_admin=True) edits an
+        owner-less product even when not a workspace admin."""
+        product = _make_product(db_session, name="orphan")
+
+        result = manager.update_product_with_auth(
+            product_id=product.id,
+            product_data_dict={"name": "renamed"},
+            user_email="role-admin@example.com",
+            user_groups=[],  # not a workspace admin
+            db=db_session,
+            caller_team_ids=[],
+            is_feature_admin=True,
+        )
+        assert result == "UPDATED_OK"
+
+    def test_feature_admin_can_edit_others_product(self, manager, db_session):
+        product = _make_product(
+            db_session, name="theirs", status="draft", draft_owner_id="bob@example.com"
+        )
+
+        result = manager.update_product_with_auth(
+            product_id=product.id,
+            product_data_dict={"name": "renamed"},
+            user_email="role-admin@example.com",
+            user_groups=[],
+            db=db_session,
+            caller_team_ids=[],
+            is_feature_admin=True,
+        )
+        assert result == "UPDATED_OK"
+
+    def test_non_feature_admin_orphan_still_denied(self, manager, db_session):
+        """The default (is_feature_admin=False) preserves fail-closed behavior."""
+        product = _make_product(db_session, name="orphan")
+
+        with pytest.raises(PermissionError):
+            manager.update_product_with_auth(
+                product_id=product.id,
+                product_data_dict={"name": "renamed"},
+                user_email="alice@example.com",
+                user_groups=[],
+                db=db_session,
+                caller_team_ids=[],
+                is_feature_admin=False,
+            )
+
     # ---- project membership branch ----
 
     def test_non_admin_with_project_membership_can_edit(
@@ -501,3 +550,46 @@ class TestUpdateProductWithAuthCascade:
             db=db_session,
         )
         assert result is None
+
+
+class TestCreateProductOwnership:
+    """ONT-CUJ-015: a newly created product must be owned by its creator so
+    the creator can edit it (e.g. add deliverables). Otherwise it is an
+    owner-less orphan that fails the update authorization cascade."""
+
+    @pytest.fixture
+    def manager(self, db_session):
+        mgr = DataProductsManager(
+            db=db_session,
+            ws_client=MagicMock(),
+            notifications_manager=MagicMock(),
+            tags_manager=MagicMock(),
+        )
+        # Focus on ownership stamping — neutralize delivery/search side effects.
+        mgr._queue_delivery = MagicMock()
+        mgr._update_search_index = MagicMock()
+        return mgr
+
+    def _minimal_product(self):
+        return {
+            "info": {"title": "My Product", "owner": "team@example.com"},
+            "name": "My Product",
+            "version": "1.0.0",
+        }
+
+    def test_creator_becomes_draft_owner_when_no_other_owner(
+        self, manager, db_session
+    ):
+        created = manager.create_product(
+            self._minimal_product(), db=db_session, user="alice@example.com"
+        )
+        assert created.draft_owner_id == "alice@example.com"
+
+    def test_explicit_owner_team_is_not_overwritten(self, manager, db_session):
+        data = self._minimal_product()
+        data["owner_team_id"] = "team-A"
+        created = manager.create_product(
+            data, db=db_session, user="alice@example.com"
+        )
+        # Team-owned product stays team-visible; not stamped as a personal draft.
+        assert created.draft_owner_id is None

@@ -164,6 +164,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             product_data.setdefault('kind', 'DataProduct')
             product_data.setdefault('status', DataProductStatus.DRAFT.value)
 
+            # Stamp the creator as the single-user owner when no other owner is
+            # supplied. Without this, a freshly created product has no
+            # project_id, owner_team_id, or draft_owner_id, so the update
+            # authorization cascade fails for *everyone* except a workspace
+            # admin — the creator can't even add deliverables to their own
+            # product (ONT-CUJ-015). Mirrors the personal-draft clone path.
+            if (
+                user
+                and not product_data.get('draft_owner_id')
+                and not product_data.get('draftOwnerId')
+                and not product_data.get('owner_team_id')
+                and not product_data.get('project_id')
+            ):
+                product_data['draft_owner_id'] = user
+
             # Validate
             try:
                 product_api_model = DataProductCreate(**product_data)
@@ -522,6 +537,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         db: Optional[Session] = None,
         background_tasks: Optional[Any] = None,
         caller_team_ids: Optional[List[str]] = None,
+        is_feature_admin: bool = False,
     ) -> Optional[DataProductApi]:
         """
         Update a data product with ownership-scope authorization.
@@ -580,8 +596,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             settings = get_settings()
 
             # Admin always allowed (short-circuit, also matches existing
-            # is_user_project_member behavior).
-            if is_user_admin(user_groups, settings):
+            # is_user_project_member behavior). This covers both workspace
+            # admins (group-based) and callers whose *feature-level*
+            # data-products permission is ADMIN — e.g. an in-app role override
+            # that grants data-products=Admin. The latter is resolved by the
+            # route (which has access to the effective-permissions/role
+            # machinery) and passed in as ``is_feature_admin``; without it an
+            # in-app admin who isn't the object owner was wrongly denied
+            # (ONT-CUJ-015).
+            if is_feature_admin or is_user_admin(user_groups, settings):
                 logger.debug(f"User {user_email} is admin — bypassing ownership cascade")
                 return self.update_product(
                     product_id,

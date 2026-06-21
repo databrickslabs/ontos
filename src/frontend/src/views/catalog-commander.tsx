@@ -42,6 +42,7 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { CommentTimeline } from '@/components/comments/comment-timeline';
 import { cn } from '@/lib/utils';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import EntityTagsPanel from '@/components/metadata/entity-tags-panel';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -1164,6 +1165,14 @@ const CatalogCommander: React.FC = () => {
                           })()}
                         </CardContent>
                       </Card>
+
+                      {/* Tags - apply governance tags to the selected object */}
+                      {getSelectedNodeDetails()?.id && (
+                        <EntityTagsPanel
+                          entityId={getSelectedNodeDetails()?.id || ''}
+                          entityType="catalog-object"
+                        />
+                      )}
 
                       {/* Entity Metadata Panel - Notes, Links, Documents */}
                       {getSelectedNodeDetails() && (

@@ -41,11 +41,19 @@ class ApprovalsManager:
         except Exception as e:
             logger.debug(f"Approvals queue: contracts query failed: {e}", exc_info=True)
         
-        # Products pending certification
+        # Products awaiting steward review (proposed or under_review)
         try:
             from src.db_models.data_products import DataProductDb
-            # ODPS v1.0.0: Query products in 'draft' status (awaiting approval to become 'active')
-            q = db.query(DataProductDb).filter(DataProductDb.status == 'draft')
+            # A product enters the steward review queue once it is submitted for
+            # review: request-certify transitions a pre-review product
+            # (draft/sandbox) to 'proposed' (see DataProductsManager.submit_for_review,
+            # ONT-CUJ-019). Mirror the contracts filter so proposed/under_review
+            # products surface to stewards. Filtering on 'draft' instead listed
+            # not-yet-submitted products and hid the ones actually awaiting
+            # review (ONT-CUJ-020).
+            q = db.query(DataProductDb).filter(
+                DataProductDb.status.in_(['proposed', 'under_review'])
+            )
             for p in q.all():
                 items['products'].append({
                     'id': p.id,

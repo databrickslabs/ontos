@@ -208,7 +208,7 @@ import {
       description: 'Side-by-side catalog explorer for asset management.',
       icon: FolderKanban,
       group: 'Deploy',
-      maturity: 'beta',
+      maturity: 'alpha',
       showInLanding: true,
     },
   ];

@@ -199,8 +199,15 @@ class ConnectionsManager:
     # ------------------------------------------------------------------
 
     def list_connector_types(self) -> List[Dict[str, Any]]:
-        """Return metadata about all registered connector types."""
+        """Return metadata about registered connector types available for use.
+
+        Connectors that are not available (``is_available`` is False) are
+        filtered out so mockup/stub connectors (e.g. Snowflake, PowerBI, Kafka)
+        do not appear in the Add Connection dropdown. The default connector type
+        is always retained so the primary connection path is never hidden.
+        """
         registry = get_registry()
+        default_type = getattr(registry, "_default_connector_type", None)
         result = []
         for ctype in registry.list_registered():
             info: Dict[str, Any] = {
@@ -212,6 +219,10 @@ class ConnectionsManager:
             }
             try:
                 connector = registry.get_connector(ctype)
+                # Hide unavailable connectors (stubs hard-code is_available=False),
+                # but always keep the default connector type.
+                if not connector.is_available and ctype != default_type:
+                    continue
                 info["display_name"] = connector.display_name
                 info["description"] = connector.description
                 info["capabilities"] = {

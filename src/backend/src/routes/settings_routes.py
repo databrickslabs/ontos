@@ -35,7 +35,7 @@ from ..common.authorization import PermissionChecker
 from ..common.features import FeatureAccessLevel
 
 # Configure logging
-from src.common.logging import get_logger
+from src.common.logging import get_logger, redact_sensitive_keys
 logger = get_logger(__name__)
 
 
@@ -72,10 +72,16 @@ async def update_settings(
     success = False
     details = {}
     try:
-        logger.info(f"Received settings update request: {settings_payload}")
+        # Redact secret-shaped keys before logging — `settings_payload` may
+        # contain GitHub PATs, MCP tokens, etc. The unredacted payload is
+        # still passed to `manager.update_settings` below.
+        logger.info(f"Received settings update request: {redact_sensitive_keys(settings_payload)}")
         logger.info(f"job_cluster_id in payload: {settings_payload.get('job_cluster_id')}")
 
-        # Track what settings changed
+        # Track what settings changed. This is an explicit allowlist of
+        # safe keys that land in the audit-log `details` column — do NOT
+        # mirror the full payload here, or secret-shaped fields will leak
+        # into the audit table.
         if 'job_cluster_id' in settings_payload:
             details['job_cluster_id'] = settings_payload.get('job_cluster_id')
         if 'sync_enabled' in settings_payload:

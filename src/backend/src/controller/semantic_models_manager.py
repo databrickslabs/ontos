@@ -3235,6 +3235,11 @@ class SemanticModelsManager(SearchableAsset):
             triples.append((concept_iri, str(RDF.type), str(rdf_type), True))
         triples.extend([
             (concept_iri, str(SKOS.prefLabel), label, False),
+            # Link the concept to its collection's concept scheme. The
+            # collection IRI doubles as the skos:ConceptScheme IRI on export,
+            # so persisting skos:inScheme here gives concepts proper scheme
+            # membership in the data model (ONT-ONTO-005).
+            (concept_iri, str(SKOS.inScheme), collection_iri, True),
             (concept_iri, str(ONTOS.status), "draft", False),
             (concept_iri, str(ONTOS.version), "1.0.0", False),
             (concept_iri, str(ONTOS.createdAt), now, False),
@@ -3293,6 +3298,7 @@ class SemanticModelsManager(SearchableAsset):
         for rdf_type in rdf_types:
             coll_context.add((concept_uri, RDF.type, rdf_type))
         coll_context.add((concept_uri, SKOS.prefLabel, Literal(label)))
+        coll_context.add((concept_uri, SKOS.inScheme, URIRef(collection_iri)))
         coll_context.add((concept_uri, ONTOS.status, Literal("draft")))
         coll_context.add((concept_uri, ONTOS.version, Literal("1.0.0")))
         coll_context.add((concept_uri, ONTOS.createdAt, Literal(now, datatype=XSD.dateTime)))
@@ -4067,35 +4073,97 @@ class SemanticModelsManager(SearchableAsset):
     # COLLECTION EXPORT
     # ========================================================================
 
+    def _build_collection_export_graph(self, collection_iri: str, collection: Dict[str, Any]) -> Graph:
+        """Build a standalone rdflib ``Graph`` for a collection's export.
+
+        Copies every triple from the collection's named-graph context and then
+        enriches it with SKOS concept-scheme membership semantics so the export
+        is a self-describing SKOS document:
+
+        * The collection IRI is declared as a ``skos:ConceptScheme`` (carrying
+          the collection label) so consumers know the scheme exists.
+        * Every concept in the collection is linked to that scheme with a
+          ``skos:inScheme`` triple.
+
+        This is what makes ONT-ONTO-005 pass: prior to this, concepts were
+        emitted as bare ``skos:Concept`` resources with no scheme and no
+        ``skos:inScheme`` linkage. We enrich at export time (rather than relying
+        solely on persisted triples) so collections created before the data
+        model emitted ``skos:inScheme`` also export correctly.
+        """
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        scheme_uri = URIRef(collection_iri)
+
+        export = Graph()
+        export.bind("skos", SKOS)
+        export.bind("rdfs", RDFS)
+        export.bind("owl", OWL)
+        export.bind("ontos", ONTOS)
+
+        # Copy existing triples verbatim.
+        for triple in coll_context:
+            export.add(triple)
+
+        # Declare the collection as a concept scheme.
+        export.add((scheme_uri, RDF.type, SKOS.ConceptScheme))
+        label = collection.get("label") or collection.get("name")
+        if label and not any(export.objects(scheme_uri, RDFS.label)):
+            export.add((scheme_uri, RDFS.label, Literal(label)))
+
+        # Link every concept to the scheme. We treat any subject in the context
+        # that is typed as a SKOS Concept (or any OWL/RDF property/class that the
+        # glossary tracks as a "concept") as a scheme member, excluding the
+        # scheme resource itself.
+        member_types = {
+            SKOS.Concept,
+            OWL.Class,
+            OWL.ObjectProperty,
+            OWL.DatatypeProperty,
+            OWL.AnnotationProperty,
+            RDF.Property,
+            OWL.NamedIndividual,
+        }
+        for subject in set(coll_context.subjects(RDF.type, None)):
+            if subject == scheme_uri:
+                continue
+            types = set(coll_context.objects(subject, RDF.type))
+            if types & member_types:
+                export.add((subject, SKOS.inScheme, scheme_uri))
+
+        return export
+
     def export_collection_as_turtle(self, collection_iri: str) -> str:
         """Export a collection's concepts as Turtle format.
-        
-        Returns the serialized RDF graph for the collection.
+
+        Returns the serialized RDF graph for the collection, including a
+        ``skos:ConceptScheme`` declaration and ``skos:inScheme`` membership
+        triples for its concepts (ONT-ONTO-005).
         """
         collection = self.get_collection(collection_iri)
         if not collection:
             raise ValueError(f"Collection not found: {collection_iri}")
-        
-        # Get the context for this collection
+
         try:
-            coll_context = self._graph.get_context(URIRef(collection_iri))
-            return coll_context.serialize(format='turtle')
+            export = self._build_collection_export_graph(collection_iri, collection)
+            return export.serialize(format='turtle')
         except Exception as e:
             logger.error(f"Failed to export collection: {e}")
             raise ValueError(f"Failed to export collection: {e}")
 
     def export_collection_as_rdfxml(self, collection_iri: str) -> str:
         """Export a collection's concepts as RDF/XML format.
-        
-        Returns the serialized RDF graph for the collection.
+
+        Returns the serialized RDF graph for the collection, including a
+        ``skos:ConceptScheme`` declaration and ``skos:inScheme`` membership
+        triples for its concepts (ONT-ONTO-005).
         """
         collection = self.get_collection(collection_iri)
         if not collection:
             raise ValueError(f"Collection not found: {collection_iri}")
-        
+
         try:
-            coll_context = self._graph.get_context(URIRef(collection_iri))
-            return coll_context.serialize(format='xml')
+            export = self._build_collection_export_graph(collection_iri, collection)
+            return export.serialize(format='xml')
         except Exception as e:
             logger.error(f"Failed to export collection: {e}")
             raise ValueError(f"Failed to export collection: {e}")

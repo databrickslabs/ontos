@@ -104,36 +104,66 @@ def _caller_can_read_product(request, db, current_user, manager, product) -> boo
             if auth_manager.has_permission(eff, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN):
                 return True
 
-        # Non-admin: resolve ownership scope and check the accessible set.
+        # Non-admin: grant only if the caller genuinely OWNS *this* product.
+        #
+        # ONT-NEG-011 follow-up (PR #535 was ineffective): the prior fix
+        # resolved the caller's scope via ``projects_manager.get_user_projects``
+        # and then checked membership of ``manager.list_products(...)``. But
+        # ``get_user_projects`` treats *any* group whose name merely contains
+        # the substring "admin" (e.g. the ubiquitous workspace ``admins``
+        # group) as a global admin and returns EVERY project. A Data Consumer
+        # in such a group therefore got ``caller_project_ids`` = all projects,
+        # which matched the draft's ``project_id`` in ``list_products`` and
+        # leaked the draft. We must NOT trust that broad, substring-admin
+        # scope. Instead resolve the three ownership facts against THIS product
+        # only, using membership-based checks (no substring-admin shortcut):
+        #   * draft_owner_id == caller (creator ownership)
+        #   * owner_team_id in caller's real team memberships
+        #   * project_id where the caller is a genuine project member
         from src.controller.teams_manager import teams_manager
         from src.controller.projects_manager import projects_manager
 
-        caller_team_ids: list = []
-        caller_project_ids: list = []
-        try:
-            user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
-            caller_team_ids = [t.id for t in user_teams if getattr(t, "id", None)]
-            user_projects = projects_manager.get_user_projects(db, caller_email, user_groups)
-            caller_project_ids = [
-                p.id for p in user_projects.projects if getattr(p, "id", None)
-            ]
-        except Exception:
-            logger.exception(
-                "Failed to resolve ownership scope for %s in product read gate; "
-                "falling back to published-only visibility",
-                caller_email,
-            )
+        if not caller_email:
+            return False
 
-        accessible = manager.list_products(
-            skip=0,
-            limit=10_000,
-            is_admin=False,
-            caller_email=caller_email,
-            caller_team_ids=caller_team_ids,
-            caller_project_ids=caller_project_ids,
-        )
-        accessible_ids = {str(p.id) for p in accessible if getattr(p, "id", None)}
-        return product_id in accessible_ids
+        owner_email = getattr(product, "draft_owner_id", None)
+        if owner_email and str(owner_email).lower() == str(caller_email).lower():
+            return True
+
+        product_team_id = getattr(product, "owner_team_id", None)
+        if product_team_id:
+            try:
+                user_teams = teams_manager.get_teams_for_user(db, caller_email, user_groups)
+                if any(str(getattr(t, "id", None)) == str(product_team_id) for t in user_teams):
+                    return True
+            except Exception:
+                logger.exception(
+                    "Team-membership resolution failed for %s in product read gate",
+                    caller_email,
+                )
+
+        product_project_id = getattr(product, "project_id", None)
+        if product_project_id:
+            try:
+                from src.common.config import get_settings
+                # ``is_user_project_member`` uses configured admin groups
+                # (is_user_admin), not a substring match, and verifies real
+                # team membership of the project — so it does not over-grant.
+                if projects_manager.is_user_project_member(
+                    db=db,
+                    user_identifier=caller_email,
+                    user_groups=user_groups or [],
+                    project_id=str(product_project_id),
+                    settings=get_settings(),
+                ):
+                    return True
+            except Exception:
+                logger.exception(
+                    "Project-membership resolution failed for %s in product read gate",
+                    caller_email,
+                )
+
+        return False
     except Exception:
         logger.exception("Product read gate failed for %s; denying", product_id)
         return False

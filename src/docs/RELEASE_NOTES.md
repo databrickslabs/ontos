@@ -1,68 +1,414 @@
-# Ontos Release Notes
+# Release Notes - v1.0.0 (2026-06-22)
 
-This document contains the release history for Ontos. For a complete list of changes, run:
 
-```bash
-python src/scripts/generate_release_notes.py [since-tag]
-```
+## ✨ Features
 
----
+- **maturity**: add configurable multi-level maturity assessment for data products and contracts
+- **term-mapping**: ontology term suggestion, AR-based review, inline suggester
+- **semantic-models**: humanize RDF source labels across UI
+- **auth**: add DATABRICKS_CONFIG_PROFILE OAuth U2M fallback for local dev
+- **asset-reviews**: give review requests a human-readable title
+- **copilot**: make Ask Ontos sidebar resizable and align header
+- **workflows**: add on_behalf_of + consumer_principals descriptors; UX polish
+- **copilot**: instruct the LLM on multi-language handling (#280)
+- **copilot**: ground Ask Ontos in concept docs (#280)
+- **marketplace**: add Go to Details button to info dialog
+- **frontend**: add webhook template-variable inspector to workflow designer
+- **workflows**: add template-variable inspector endpoint and registry
+- **workflows**: enrich DP trigger entity_data with output_ports + catalogs
+- **approvals**: surface request details in notifications and approval dialog
+- **semantic-links**: support linking concepts/properties to Assets
+- **ui**: bespoke skeletons for home, settings, canvas pages (refs #297, part 4/4)
+- **ui**: extend skeleton library with layout-matched helpers (refs #297, part 1/4)
+- **ontology**: async generation with DB-persisted run history (#338)
+- **marketplace**: add data quality badge to product tiles
+- **ui**: runtime-configurable display name and favicon (#240)
+- consolidate Team and Ownership model (PRD implementation)
+- **roles**: seed default group bindings to match test personas
+- **versioning**: role-aware family collapse, family-latest resolver, EntityVersionPicker (PRD #442 phase 3) (#467)
+- **versioning**: list-view collapse with include_history toggle (Phase 2) (#447)
+- **versioning**: unified version family for contracts and products
+- **testing**: runtime user-persona impersonation via X-Test-* headers
+- **settings**: clean up Jobs page, drop dead toggle, POC dirty-tracking action bar
+- **comments**: post-time project picker in composer (#326 follow-up)
+- **comments**: role audience parity with workflows (#326)
+- **workflows**: KeyValueEditor UX — explicit add/edit + validation (#401 follow-up)
+- **workflows**: unified workflow list + Process/Approval clarity (#279, #277)
+- **workflows**: webhook step extra parameters for UC HTTPConnection (#401)
+- **workflows**: filter approver roles by approval_entity (#161)
+- **directory**: Phase 4 — Workflow Designer custom principals + DC wizard wiring
+- **directory**: add Lakebase + File providers
+- **directory**: Phase 3 — Reviews / MDM / Tags / Teams / DP+DC team-member
+- **directory**: Phase 2 — Roles + Entitlements + Comments
+- **workflows**: preview wizard + tame Recent Executions error column
+- **directory**: Phase 1 frontend — Settings tab + PrincipalPicker
+- **directory**: backend foundation for Phase 1 (Directory + Entra)
+- **settings**: granular per-subpage permissions and grouped permissions UI
+- **e2e**: add 104-test CUJ regression suite with multi-persona support
+- **concepts**: full-page browser/detail, links, neighbourhood, robust ontology save
+- **data-catalog**: server-side pagination, asset columns, hierarchy filters, expanded search
+- **data-products**: scope list + update by project/team/draft-owner ownership
+- **alembic**: add workflow_version migration for agreements
+- **access-grants**: enrich entity_data with underlying-DP fields at trigger time
+- **workflows**: trigger picker shows required permission inline
+- **workflows**: rename picker labels (Fires on / Applies to) + access_grant display override
+- **workflows**: trigger-picker UX polish
+- **workflows**: grouped trigger picker + entity-type multiselect
+- **workflows**: canonical trigger labels in workflow-labels.ts
+- **workflows**: add GET /api/workflows/trigger-types catalog endpoint
+- **workflows**: wire unified primary editor + scroll the step config sheet
+- **workflows**: unify Primary field into required-fields editor + validate
+- **workflows**: in-UI editor for user_action required_fields
+- **workflows**: portable workspace dropdown via options_endpoint on user_action
+- **workflows**: wire approval wizard for all for_request_* triggers (Path B)
+- **assets**: scope Data Consumer asset visibility to DP-linked assets (#347)
+- **knowledge-graph**: add interactive controls for layout density and labels
+- **demo-data**: split demo data into 5 standalone vertical presets
+- **workflows**: on_first_access trigger + per-user consent (replaces welcome disclaimer)
+- **workflows**: on_behalf_of as in-wizard step type for clean audit trail
+- **workflows**: subscribe on behalf of group/SP + consumer_groups + resolver fix
+- **settings**: configurable welcome disclaimer with browser-flag tracking
+- **workflows**: conditional field visibility in schema-driven panels
+- **workflows**: complete all 25 PRD #242 user stories
+- **workflows**: real PDF generation, clean tab filters, UI polish
+- **workflows**: PDF download + in_app delivery for approval agreements
+- **workflows**: add type badge to execution rows in Recent Executions
+- **workflows**: show approval sessions on workflows page
+- **workflows**: clickable stat cards + type badge on new workflows
+- **workflows**: non-visual step handlers + default subscription workflow (#242)
+- **workflows**: cross-workflow variable propagation (#291)
+- **workflows**: immutable workflow snapshot on approval sessions (#242)
+- **workflows**: wizard renderers + validation for new approval step types (#242)
+- **workflows**: add grant_permissions step type (#292)
+- **workflows**: approval step catalog with 6 new step types (#242)
+- **workflows**: unified list with type filter, designer type selection (#279)
+- **workflows**: UX clarity for process vs approval workflows
+- **frontend**: grouped role dropdown and is_approver toggle for business roles
+- **backend**: add business roles to workflow approver/recipient resolution
+- **frontend**: add UI validation for unsupported trigger-entity combinations
+- **backend**: wire missing workflow triggers across entity lifecycle
+- **semantic-models**: RDF display titles, serialization, and graph i18n
+- **knowledge-graph**: add label toggle, property shapes, and language-aware labels
+- **contracts**: persist and surface ODCS v3.1.0 relationships, team metadata, and stable IDs
+- **startup**: graceful degradation for database and workspace client failures
+- **frontend**: add edge selection, deletion, and reconnection in workflow editor
+- **lakebase**: support autoscale Lakebase OAuth alongside provisioned instances
+- **contracts**: adopt ODCS v3.1.0 JSON schema
+- **i18n**: add locale-aware formatting for ontology-derived labels
+- **lifecycle**: wire certification and publication into request dialogs, workflows, and marketplace
+- **lifecycle**: decouple status, certification, and publication into orthogonal dimensions
+- **home**: improve Discovery section with working subscriptions
+- **home**: reorganize My Actions section with grouped quick actions
+- **home**: enhance Concepts tile with collection breakdown and reorder overview tiles
+- **home**: add status breakdowns and compliance trend to overview tiles
 
-## Version 0.4.6 (January 2026)
+## 🐛 Bug Fixes
 
-### ✨ Features
+- **settings**: redact secret-shaped keys in update_settings log line (#557)
+- **data-products**: surface proposed products in the steward review queue (#556)
+- **data-products**: actually gate consumer reads of unpublished products (#554)
+- **ontology**: persist concept_type and property metadata in RDF (#540)
+- **data-products**: transition status on request-certify (#549)
+- **contracts**: hide New Contract action for Data Consumer (#546)
+- **catalog-commander**: allow applying a tag to a selected table (#545)
+- **connectors**: Snowflake connector credential fields (#544)
+- **estate-manager**: estate detail route 404 (#543)
+- **contracts**: require a schema before proposing a contract for review (ONT-NEG-005) (#534)
+- **semantic-models**: hide internal graphs from RDF Sources (#524)
+- **compliance**: drop id requirement from POST body (#235) (#537)
+- **semantic-models**: switch concept_iri routes to ?iri= to survive %2F%2F path collapse (#536)
+- **data-products**: gate direct reads of unpublished products (NEG-011) (#535)
+- **contracts**: reject a duplicate contract name within the same domain (#533)
+- **data-products**: require a deliverable before requesting certification (#532)
+- **data-products**: make products editable by creator and feature admins (#531)
+- **contracts**: allow approving a contract directly from proposed (#530)
+- **contracts**: surface proposed contracts to stewards; drop dead review stub (#529)
+- **contracts**: persist column-level data quality rules (#528)
+- **contracts**: make a creator's own draft discoverable (#527)
+- **glossary**: allow choosing collection in Create Concept dialog (#526)
+- **rbac**: unblock default-role seeding for tightened implicit features
+- **ci**: repair type-check and backend/frontend test failures on main
+- clear quick-win + test-cleanup SonarQube criticals
+- resolve all 11 SonarQube blocker issues
+- **alembic**: merge aa1_term_mapping, c1_maturity, g3_review_title heads
+- **term-mapping**: surface inline suggestions in concept picker
+- **term-mapping**: asset entity_type accepts cleanly + dialog pre-checks Databricks taxonomy when no customer ontologies are loaded
+- **term-mapping**: FK types must match data_asset_reviews String PKs
+- **databricks**: serialize catalog type enums as values
+- **concepts**: remove duplicate Create buttons and dead Upload button
+- restore upstream list_products(include_history) + expand groups in FE test
+- **copilot**: replace undefined _DEFAULT_HANDBOOK_DIR in resolve-failure log
+- **copilot**: stop echoing the user's question at the start of responses
+- **copilot**: hide three-tier confidence labels from user-visible response
+- **copilot**: strip internal citation comments from user-visible response
+- **copilot**: make search_ontos_concepts path resolution layout-agnostic
+- **ui**: interpolate shortName in LLM Search title (refs #240)
+- **frontend**: add search + fix copy button overlap in template-vars inspector
+- **workflows**: key on_request_access descriptors on access_grant not data_product
+- repair failing CI checks (type-check, backend event loop, pr-title-lint) (#503)
+- **ui**: replace spinners and loading text with skeletons (refs #297, part 3/4)
+- **ui**: tune column counts and migrated detail skeletons (refs #297, part 2/4)
+- **ui**: recover from stuck Radix body pointer-events lock
+- **ui**: unify skeleton placeholders to match rendered content shape (#297)
+- **demo-data**: complete schemas, add Column assets, dedupe, and add DQ checks
+- **alembic**: rebase g2 ontology_generation_runs onto j1 head
+- **frontend**: handle DB-down in dev + fix root layout horizontal overflow
+- **demo-data**: add version_family_id to data_contracts/data_products seeds
+- **authz**: decouple Ontos admin from settings:ADMIN (#404) (#458)
+- **contracts**: make DataContractRead.model_validate accept ORM rows (#455) (#457)
+- **security**: revert PermissionChecker on demo-data endpoints
+- **security**: close residual auth gaps in settings / connections / tags / schema-import
+- **workflows**: apply path_suffix in inline webhook mode (#401 follow-up)
+- **workflows**: revert inline tab subtitles + sync trigger node with picker state
+- **contracts**: accept ODCS v3.1.0 transformSourceObjects array
+- **navigation**: keep Home link visible on home page (#425)
+- **e2e**: seed certification levels on fresh DB and route workflow-editor tests to a typed designer (#423)
+- **alembic**: create process_workflows tables if missing on old DBs
+- **e2e**: resolve all pre-existing test failures to run clean locally
+- **test**: add pytest-asyncio to dev env (#415)
+- **data-catalog**: drop unused Database icon import
+- **workflows**: relax handle-approval outer gate to notifications:READ_ONLY
+- **workflows**: per-execution authz on handle-approval; gate -> notifications:RW
+- **data-products**: admin cascade-bypass uses Ontos role, not just workspace group
+- **data-products**: clone_product_for_new_version — repair schema drift
+- **workflows**: resolve business-role approvers via underlying entity for proxy triggers
+- **workflows**: dispatch single-workflow GET by trigger + wizard uses it
+- **perms**: drop two read-only gates that 403 the wizard for end users
+- **settings**: tolerate stale feature_ids in role permissions
+- **workflows**: per-trigger permission dispatch on wizard endpoints
+- **data-products**: exclude_unset on PUT so partial updates preserve unmodified fields
+- **data-products**: declare draft_owner_id / base_name / change_summary on Create + Update schemas
+- **data-products**: coerce UUID -> str on OutputPort.deliveryMethodId
+- **data-products**: preserve project_id on POST /api/data-products
+- **data-products**: preserve output-port delivery_method_id on partial updates
+- **roles**: membership-scoped role switcher + backend hardening
+- **schema-importer**: expand functions/MVs/streaming tables; preserve source-system labels
+- **settings**: restore skipped accumulator and demo-foundation DELETEs in clear_demo_data
+- **data-products**: restrict Link Asset picker to ontology-supported deliverable types
+- **auth**: diagnose why deployed app falls back to SP path; add OBO scopes to manifest
+- **auth**: explicitly request groups attribute on SCIM users.list
+- **test**: non-null assert PUT init arg in data-product-create-dialog test
+- **auth**: resolve real SCIM groups in /api/user/details, not just email
+- **workflows**: expose on_first_access trigger in designer dropdown + fix SelectContent overflow
+- **data-products**: wire ConsumerGroupsPicker into the live edit/create dialog
+- **workflows**: document and harden business-role resolution in recipient display
+- **workflows**: map for_* triggers in SUPPORTED_TRIGGER_ENTITY_MAP
+- **data-products**: hoist wizard fields to top-level payload before submit
+- **data-products**: hide form fields when wizard is configured for request
+- **data-products**: null-safety in change-impact analyzer for products without team/description/support
+- **settings**: make clear_demo_data resilient to dropped legacy tables (#342)
+- **data-products**: default request-type to 'access' via configurable prop
+- **alembic**: revert h1 body + add h3 for consumer_principals rename
+- **alembic**: correct g1 down_revision phantom parent
+- **workflows**: on_subscribe entity_type=DATA_PRODUCT, not SUBSCRIPTION
+- **pdf**: render co-signers as readable text instead of dict repr
+- **workflows**: smart-skip /agreements auto-append when path already ends in it
+- **workflows**: close PRD #242 gaps — checklist cap + co_signers delivery
+- **workflows**: thread on_behalf_of through wizard auto-subscribe path
+- **welcome-disclaimer**: change title to 'Before you continue'
+- **workflows**: mirror volume-write fix on PDF download endpoint
+- **workflows**: persist agreement PDFs to UC Volumes via Files API
+- **workflows**: hide email channel from UI + non-blocking validator (out of scope v1)
+- **workflows**: PDF writes to Volume from step config, shows version
+- **workflows**: show workflow version in PDF title and signature block
+- **workflows**: flatten approval result_data for intuitive variable paths
+- **workflows**: grant_permissions — fix target resolution + SDK compat
+- **workflows**: add descriptions to generate_pdf + persist_agreement schemas
+- **workflows**: add user-friendly tooltips to grant_permissions schema
+- **workflows**: Default Workflows count respects type filter
+- **workflows**: Recent Failures filter includes cancelled/abandoned sessions
+- **workflows**: only expose PDF download for workflows with generate_pdf step
+- **workflows**: convert fpdf2 bytearray to bytes for Response
+- **deps**: add defusedxml hash for fpdf2 transitive dependency
+- **workflows**: remove always-visible tab subtitles
+- **workflows**: descriptive spinner messages + grant_permissions banner
+- **workflows**: PDF downloads as file, excludes non-visual steps
+- **workflows**: defer onComplete until user closes completion screen
+- **workflows**: auto-detect scroll-to-end for short legal documents
+- **workflows**: wizard completion UX — progress dots, PDF download, notification link
+- **workflows**: PDF download button, markdown rendering, grey-out gaps
+- **workflows**: show Complete button on last visual step before pass/fail
+- **alembic**: merge both aa9/e2 head revisions in g1 snapshot migration
+- **auth**: include user email as implicit group for role matching
+- style tweaks + remove mock user + add LAKEBASE_INSTANCE_NAME
+- **migrations**: guard quality_items migration against duplicate table
+- **database**: resolve Lakebase endpoint from branch in fallback path
+- **config**: add LAKEBASE_INSTANCE_NAME fallback for SDK compat
+- **database**: Lakebase SDK compat + LAKEBASE_INSTANCE_NAME fallback + IF NOT EXISTS
+- commit singleton session mutations to prevent data loss on restart
+- **settings**: use requester_email in role-request decision audit (#66)
+- **frontend**: webhook Mode dropdown shows correct value after selecting UC Connection
+- **schema-importer**: stop recursive schema listing under table nodes
+- **alembic**: merge aa9_is_approver and e2_semantic_display_name heads
+- **frontend**: remove internal helper text from approvers dropdown
+- deployment fixes for Lakebase Autoscaling and app permissions (#236)
+- **apps**: use postgres_spec for Lakebase Autoscaling manifest
+- **frontend**: add onConnect handler for workflow edge creation in editor
+- **demo-data**: add missing publication_scope column to INSERT statements
+- **schema-importer**: prevent full catalog import and add ancestor controls
+- **workflows**: fix script step handlers and add tests (#83)
+- **workflows**: fix tag step handlers and add tests (#82)
+- **ci**: add TESTING env var for backend static dir skip, cache Playwright browsers
+- remove unused Page import in cuj-0-setup.spec.ts
+- **tests**: update wizard dialog tests for InferFromAssetDialog refactor
+- **frontend**: resolve remaining TypeScript errors and update test for renamed button
+- resolve 7 TypeScript errors from main merge
+- **frontend**: resolve all TypeScript errors and failing tests
+- **frontend**: resolve TypeScript errors breaking vite build
 
-- **Multi-Platform Connector Architecture**: Pluggable connectors for Unity Catalog, Snowflake, Kafka, and Power BI
-- **Unified Asset Type System**: Platform-agnostic asset types for consistent governance across systems
-- **Unity Catalog Metrics**: First-class support for UC metrics in datasets and data products
-- **Declarative Pipelines**: Support for both DLT and Spark Declarative Pipelines (SDP)
-- **Dataset Instance Roles**: Added "Undefined" role option for dataset instances
-- **Full Internationalization**: Asset types localized in 6 languages (EN, DE, ES, FR, IT, JA)
+## 📚 Documentation
 
-### 🐛 Bug Fixes
+- **prds**: add four new product requirement drafts
+- **term-mapping**: cross-link PRD known-gaps to filed follow-up issues (#485, #486)
+- **term-mapping**: i18n the 4 new components + canonical post-impl PRD
+- **concepts**: add installation-and-troubleshooting corpus (#280)
+- **concepts**: add grounding corpus for Ask Ontos (#280)
+- **alembic**: document <letter><number> revision-id convention
+- trim and realign CLAUDE.md and .cursor/rules/
+- **security**: clarify why /api/health/retry is intentionally ungated
+- correct repository URL to databrickslabs/ontos
+- **directory**: ship sample principals CSV + contributor docs for file provider
+- **setup**: fix broken TOC and inline anchor links
+- **prd**: add Governance Event Stream PRD
+- **prd**: amend Entra PRD with Directory abstraction + multi-provider scope
+- **contributing**: document private npm mirror lockfile workflow (#411)
+- **plan**: add directory lookup and principal picker plan
+- **workflows**: add reference grant_permissions seed for on_request_access
+- add coverage and CI status badges to README (#346)
+- **deploy**: document UC grants required for app SP for Volume PDF writes
+- add approvals inbox gap to v1 design decisions
+- add approval workflows v1 design decisions and scope
+- **prds**: add batch of PRDs for upcoming features (#336)
+- add troubleshooting for OAuth scope change issues (#288)
+- add setup guide
 
-- Fixed asset type display names to use "Unity Catalog" instead of "UC" abbreviation
+## ⚡ Performance
 
-### 📚 Documentation
+- **e2e**: move demo-data load/clear to playwright global hooks (#426)
+- **data-catalog**: eliminate N+1 in _get_asset_child_columns
+- **workflows**: client-side type filtering for instant tab switching
 
-- Updated USER-GUIDE.md with multi-platform support documentation
-- Added comprehensive asset type documentation
+## ♻️ Refactoring
 
----
+- **rbac**: consolidate role permissions and restructure role editor
+- **copilot**: rename concepts → handbook to free up the "Concept" namespace (#280)
+- **copilot**: move system_prompts to tools/ (#280)
+- **details**: consolidate entity details header band
+- **workflows**: rename previewWorkflow → previewingWorkflow
+- **data-catalog**: address review nits
+- **assets**: move DP asset-scoping into manager + repos
+- **data-products**: consumer_groups → consumer_principals (typed)
+- **routes,executor**: move business logic out of routes into managers
+- **workflows**: fire on_subscribe trigger from manager, not route
+- **workflows**: merge approval sessions into Recent Executions
+- **backend**: extract fire_trigger_safe helper to eliminate repetitive try/except blocks
+- **home**: hide home button and breadcrumbs on home page
 
-## Version 0.4.5
+## 🧪 Testing
 
-### ✨ Features
+- **fixtures**: add ODCS/ODPS test data matrix with Ontos extensions (#525)
+- raise frontend coverage past 10% and fix coverage badge resolution (#506)
+- **workflows**: cover entity_data enrichment, registry, and inspector
+- **comments**: update audience.test.ts for the new ParsedAudience shape
+- **workflows**: extract preview walker as pure helper + add unit tests
+- **data-catalog**: cover merge/dedup, search matcher, pagination, filters
+- **workflows**: pin TriggerType enum wire values
+- **data-products**: extract pure helpers and add tests to clear 25% function-coverage gate
+- move wizard_manager tests to CI-discovered testpath
+- add unit tests for AgreementWizardManager read methods
+- **e2e**: prod-like coverage for subscribe-on-behalf + on_behalf_of step (real groups, full chain)
+- **e2e**: fix nested-JSON haystack + extend webhook poll to 30s
+- **e2e**: correct cross-workflow wiring step shape + subscribers route
+- **e2e**: codify approval -> process workflow wiring
+- **e2e**: comprehensive E2E for approval workflows v1 UX (PRD #242)
+- **e2e**: fix PDF tests for FlateDecode compressed content
+- **e2e**: update PDF test for real PDF output via fpdf2
+- **e2e**: add 7 more tests for PDF, agreements, delivery, defaults
+- **e2e**: expand approval workflow tests to full step coverage
+- **e2e**: add approval workflow E2E tests + fix snapshot migration
+- **backend**: add unit tests for business role approver resolution
+- **backend**: add trigger wiring integration tests
+- **frontend**: add unit and E2E tests for workflow edge management
+- **workflows**: add end-to-end integration tests for workflow pipeline
+- **workflows**: add notification channels and email tests (#81)
+- **workflows**: add message templating tests (#80)
+- **workflows**: add publish/unpublish trigger tests (#79)
+- **workflows**: add status transition gating tests (#78)
+- **mcp**: add end-to-end test script for MCP server endpoint
 
-- Initial multi-platform dataset support
-- Data Contract Server configuration for external systems
-- ODCS-compliant server type definitions
+## 🔧 Maintenance
 
----
+- hide alpha surfaces and mockup connectors from V1 UI (#553)
+- **deps**: bump amannn/action-semantic-pull-request (#501)
+- **term-mapping**: unblock CI + add review-spawn notification + tests
+- **tests**: scrub customer name from test docstrings
+- ignore local docs/research folder
+- **deps**: bump codecov/codecov-action from 6.0.1 to 7.0.0 (#510)
+- **deps**: bump actions/checkout from 6.0.2 to 6.0.3 (#500)
+- **deps**: bump astral-sh/setup-uv from 8.1.0 to 8.2.0 (#502)
+- **ui**: remove unused Loader2/t imports after skeleton migration
+- **deps**: bundle frontend dependency bumps (#468)
+- **deps**: bump codecov/codecov-action from 5.5.4 to 6.0.1 (#381)
+- **deps**: bump @hookform/resolvers in /src/frontend (#386)
+- drop accidental node_modules symlink from prior commit
+- **deps**: bump databricks-sql-connector from 4.2.5 to 4.2.6 in /src (#305)
+- **deps**: bump psycopg2-binary from 2.9.11 to 2.9.12 in /src (#364)
+- **deps**: bump zustand from 5.0.5 to 5.0.13 in /src/frontend (#361)
+- **deps**: bump filelock from 3.25.2 to 3.29.0 in /src (#363)
+- **deps**: bump @radix-ui/react-dialog in /src/frontend (#360)
+- update yarn.lock for @radix-ui/react-slider
+- **deps**: bump @radix-ui/react-popover in /src/frontend (#359)
+- **deps**: bump python-multipart from 0.0.24 to 0.0.27 in /src (#307)
+- **settings**: extract ROLE_NOT_FOUND constant
+- regenerate requirements lockfiles
+- genericize developer-specific defaults in E2E test scripts
+- **p3**: drop redundant SCIM cache, lower settings-load logs to DEBUG, doc clarifications
+- scrub customer-identifying references
+- **deps**: bump uvicorn from 0.44.0 to 0.46.0 in /src (#308)
+- **deps**: bump pydantic from 2.7.4 to 2.13.3 in /src (#304)
+- **deps**: bump @radix-ui/react-scroll-area in /src/frontend (#320)
+- **deps**: bump react-dropzone from 14.3.8 to 15.0.0 in /src/frontend (#319)
+- **deps**: bump @emotion/styled in /src/frontend (#321)
+- **deps**: bump @types/node from 20.17.51 to 25.6.0 in /src/frontend (#322)
+- **deps**: bump @headless-tree/core in /src/frontend (#306)
+- **deps**: bump @radix-ui/react-progress in /src/frontend (#302)
+- **deps**: bump recharts from 2.15.3 to 2.15.4 in /src/frontend (#301)
+- **deps**: bump @radix-ui/react-slot in /src/frontend (#299)
+- **deps**: bump react-syntax-highlighter in /src/frontend (#298)
+- **deps**: regenerate transitive lockfiles for Python 3.10 (#276)
+- **deps**: bump numpy from 2.2.6 to 2.4.4 in /src (#274)
+- batch dependency updates + fix yarn.lock registry URLs for CI (#228)
+- remove binary artefact
+- fix wrongly named section header
+- set version to v0.6.1
 
-## Version 0.4.0
+## 🔄 Other
 
-### ✨ Features
-
-- Data Products and Data Contracts management
-- Dataset instances with environment tracking
-- Business glossary integration
-- Compliance policy engine with DSL
-- Data asset review workflows
-
----
-
-## Generating Release Notes
-
-To generate release notes from git commits:
-
-```bash
-# Generate notes since a specific tag
-python src/scripts/generate_release_notes.py v0.4.5
-
-# Generate all notes
-python src/scripts/generate_release_notes.py
-```
-
-The script categorizes commits by type (feat, fix, docs, perf, refactor, test, chore) based on conventional commit messages.
-
+- pin actions/checkout to full commit SHA in back-merge workflow (#552)
+- add back-merge workflow to sync main into development (#548)
+- run required checks on merge_group for merge queue (#538)
+- add CODECOV_TOKEN to coverage uploads on protected branches (#512)
+- pin action-semantic-pull-request to v5.5.3 SHA
+- lint pull-request titles against Conventional Commits
+- **ci**: enforce single-head Alembic migration history on PRs
+- extract JFrog auth + Python/Node setup into composite actions (#372)
+- **codecov**: fix flag path mapping so frontend coverage is reported (#370)
+- **coverage**: collect backend/src/tests/unit/ and ratchet gate to 30% (#344)
+- drop [skip ci], use PAT so auto-commit re-triggers CI (#314)
+- auto-commit regenerated lockfiles on PRs instead of failing (#313)
+- enable 80% coverage gates (frontend + backend) (#309)
+- **e2e**: run Playwright with 2 workers to avoid 20-min timeout (#310)
+- pin all transitive Python deps with SHA-256 hashes (#227)
+- use protected runner group, pin remaining deps
+- pin Python dependencies to exact versions
+- remediate GHA supply chain security findings
+- Merge pull request #105 from dfanesiDB/main
+- Add CODEOWNERS requiring ontos-maintain review on all PRs
+- refactor!: remove legacy Dataset entity in favor of ontology-driven Assets
+- restrict E2E to main-only, skip failing tests in CI, fix static dir error
+- enable E2E tests in GitHub Actions with PostgreSQL and mock workspace client
+- add frontend build check to catch broken builds
+- Fix React Hooks violation in tile rendering
+- Remove mock data from ComplianceTrendMini component
+- Add proper empty state fallbacks for all tile customData
+- Implement modular Overview tiles architecture

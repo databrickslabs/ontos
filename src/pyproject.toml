@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ontos"
-version = "0.6.1"
+version = "1.0.0"
 description = "A Business Catalog for the Databricks Platform"
 readme = "../README.md"
 authors = [
@@ -125,7 +125,7 @@ exclude_lines = [
 directory = "backend/htmlcov"
 
 [tool.ruff]
-target-version = "0.6.1"
+target-version = "1.0.0"
 line-length = 100
 src = ["backend/src"]
 

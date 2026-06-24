@@ -46,6 +46,48 @@ Example:
 
 This avoids saying "v1.2 must wait for v1.1." Instead, each lane has maturity states: `proposed -> designed -> in progress -> preview -> stable`.
 
+### Roadmap at a Glance
+
+```mermaid
+gantt
+    title Ontos Post-v1 Workstream Roadmap
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b '%y
+    todayMarker on
+
+    section 1 · Workflow Polish
+    Quick fixes + owner prefill (#570)    :wp1, 2026-06-24, 7d
+    Approval links and references (#571)  :wp2, 2026-06-24, 14d
+    Unified approval UX (#572)            :wp3, 2026-07-01, 14d
+    Daimler / GDMP UX bundle              :wp4, 2026-07-01, 14d
+
+    section 2 · DQ and Contract Ops
+    DQ result panel v0                    :dq1, 2026-07-01, 14d
+    Batch contract import dry-run         :dq2, 2026-07-01, 14d
+    Contract DQ scheduler                 :dq3, 2026-07-15, 35d
+    Semantic rules to DQX                 :dq4, 2026-09-01, 56d
+
+    section 3 · Concept Builder v2
+    UX / IA design                        :cb1, 2026-07-01, 14d
+    v0 rebuild behind feature flag        :cb2, 2026-07-15, 56d
+    Lifecycle and versioning integration  :cb3, 2026-09-15, 56d
+
+    section 4 · Portability
+    Semantic package spec                 :p1, 2026-08-01, 14d
+    SKOS / RDF export v0                  :p2, 2026-08-15, 28d
+    DCAT / DPROD inbound and outbound     :p3, 2026-09-15, 70d
+    UC Glossary connector                 :p4, 2026-10-01, 42d
+
+    section 5 · AI-ready Scorecard
+    Score model and UI v0                 :sc1, 2026-09-01, 42d
+    Governance event stream integration   :sc2, 2026-10-15, 56d
+
+    section 6 · Agentic Build
+    Draft-only UX and prompt design       :ab1, 2026-09-15, 28d
+    First artifact generator              :ab2, 2026-10-15, 42d
+    Multi-artifact governed build flow    :ab3, 2026-12-01, 84d
+```
+
 ## Recommended Workstreams
 
 ### 1. Workflow and Ownership Polish
@@ -363,6 +405,31 @@ The GDMP feedback reinforces several existing lanes rather than creating a separ
 ## Decision Tree for Positioning
 
 Use this as the basis for a visual:
+
+```mermaid
+flowchart TD
+    Q1{"Runtime semantic\nunderstanding\ninside Genie?"}
+    Q2{"Native Databricks\nglossary / semantic\nprimitives?"}
+    Q3{"Curate, certify, version, approve\n& govern semantics across teams?"}
+    Q4{"Other platforms or agents\nneed to consume\ngoverned semantics?"}
+    Q5{"Agents to draft contracts,\nrules, concepts or assignments?"}
+
+    A1(["Genie Ontology"])
+    A2(["UC Semantics /\nUC Glossary"])
+    A3(["Ontos\ngovernance workbench"])
+    A4(["Ontos Portability\nSKOS · RDF · ODCS · DCAT · MCP"])
+    A5(["Ask Ontos / Agentic Build\ndraft → review → approve"])
+
+    Q1 -- Yes --> A1
+    Q1 -- No --> Q2
+    Q2 -- Yes --> A2
+    Q2 -- No --> Q3
+    Q3 -- Yes --> A3
+    A3 --> Q4
+    Q4 -- Yes --> A4
+    Q4 -- No --> Q5
+    Q5 -- Yes --> A5
+```
 
 1. Do you need runtime semantic understanding inside Genie?
    - Use Genie Ontology.

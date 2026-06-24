@@ -282,6 +282,7 @@ References:
 - #59 - Semantic DQ rules.
 - #571/#572 - Approval references and unified approval UX, needed for safe review flows.
 - Customer feedback: "Where do I edit it?", control/versioning/pruning, authoritative experts, semantic sprawl.
+- Existing Ask Ontos knowledge corpus (`docs/concepts/`) — grounded documentation covering Ontos concepts, roles, and workflows; the primary retrieval source for Ask Ontos today and the natural foundation for document-aware artifact generation.
 
 Proposed scope:
 
@@ -292,6 +293,7 @@ Proposed scope:
 - Detect duplicate or overlapping concepts and metrics.
 - Generate workflow templates and approval references.
 - Produce readiness remediation plans.
+- Maintain and extend the Ask Ontos knowledge corpus (`docs/concepts/`) in lockstep with new features; treat documentation coverage as a first-class prerequisite for generation quality — an agentic layer that cannot answer questions about a feature is not ready to draft artifacts for it.
 
 Guardrail:
 
@@ -360,11 +362,11 @@ Verified against the current local Ontos codebase on 2026-06-24. This is not a f
 
 | Area | Current code evidence | Planning impact |
 |---|---|---|
-| Approval requester/justification visibility | `ApprovalStepHandler` builds notification descriptions with requester, resource, permission, duration, reason, and justification fallback. `WorkflowApprovalResponseDialog` renders requester/resource/permission/duration/reason. `HandleAccessGrantDialog` renders requester/resource/duration/permission/submitted/reason. | Treat the original DT blocker as likely fixed in v1; verify with DT and close if confirmed. Keep #572 only for full/custom payload and surface consistency gaps. |
+| Approval requester/justification visibility | `ApprovalStepHandler` builds notification descriptions with requester, resource, permission, duration, reason, and justification fallback. `WorkflowApprovalResponseDialog` renders requester/resource/permission/duration/reason. `HandleAccessGrantDialog` renders requester/resource/duration/permission/submitted/reason. | Treat the original blocker as likely fixed in v1; verify with the customer and close if confirmed. Keep #572 only for full/custom payload and surface consistency gaps. |
 | Approval full/custom payload | `_extract_approval_facets()` is curated and only enriches `access_grant`. `WorkflowApprovalResponseDialogPayload` is a static field list. `RequiredActionsSection` only supports inline approve/deny for role requests; other unified approvals get an Open link. | #572 remains valid, but as "unify surfaces and carry full wizard payload", not "show requester/reason". |
-| Product-owner-specific rules/TOU | Approval wizard has `legal_document` and `acknowledgement_checklist` steps, but `simpleMarkdown()` does not support links, and dormant `document_url` / `document_content` are not broadly rendered as reusable references. | #571 is the right implementation path: generic references/links/acknowledgements, not a DT-specific TOU feature. |
+| Product-owner-specific rules/TOU | Approval wizard has `legal_document` and `acknowledgement_checklist` steps, but `simpleMarkdown()` does not support links, and dormant `document_url` / `document_content` are not broadly rendered as reusable references. | #571 is the right implementation path: generic references/links/acknowledgements, not a customer-specific TOU feature. |
 | Marketplace tile behavior | Marketplace product card click opens an info dialog; a separate external-link icon opens the full product detail page. It does not directly subscribe from the whole tile. | Partially addressed. Decide desired UX: keep info-dialog behavior or make card click open full details. This is UX polish, not roadmap strategy. |
-| Deliverable descriptions | Data product details render `port.description` for deliverables. | Mark "column/deliverable descriptions missing" as likely partly addressed; verify if DT meant linked UC table column descriptions, which are not shown in the deliverables list. |
+| Deliverable descriptions | Data product details render `port.description` for deliverables. | Mark "column/deliverable descriptions missing" as likely partly addressed; verify if the customer meant linked UC table column descriptions, which are not shown in the deliverables list. |
 | Fully qualified deliverable asset names | Linked assets under deliverables display `rel.target_name || rel.target_id`; this may still be a short name rather than `catalog.schema.table`. | Keep as a concrete customer polish item: show/copy full FQN for linked deliverable assets. |
 | Data product vs deliverable confusion | UI uses "Deliverables (Output Ports)" and request/subscription is product-level. | Keep as wording/information-architecture polish. Do not rebuild the product model solely for this. |
 | Group/principal picker | `PrincipalPicker` supports directory-backed search with graceful manual fallback. `/api/workspace/groups` supports searchable group listing. | Basic picker capability exists. Remaining scope should be wiring/coverage in specific flows, not building a new picker from scratch. |
@@ -374,7 +376,7 @@ Verified against the current local Ontos codebase on 2026-06-24. This is not a f
 | Quality/DQ | Generic quality items/panel and product quality badge exist. Contract quality rules exist. DQX profiling generates suggestions. Backend has `data_quality_check_runs/results` models and workflow code, but no obvious API/UI surfacing of execution results. | Map customer DQ/versioning/traceability to rail customer DQ operations. Focus on result surfacing, schedules, job/run status, and notifications, not inventing a second quality model. |
 | Example data / first rows | Catalog Commander has permission-aware dataset preview via `/api/catalogs/dataset/{path}`. This is not surfaced in data product marketplace/details. | Limit scope: optionally reuse existing preview for linked tables; do not make sample data a default marketplace feature without permissions/privacy review. |
 | Global valid data product requirements | There is a readiness API/component and maturity model, but the readiness component appears unused in the product detail page; maturity is shown inline. Defaults are generic, not customer-specific. | This supports the AI-ready scorecard lane. Scope as configurable templates/gates, not customer-specific hard-coded rules. |
-| Semantic graph / ontology | Ontology graph, business terms, entity relationships, lineage views, and relationship editor exist. | DT ask is directionally aligned, but current Concept/ontology UX still needs a rebuild for business maintainability. |
+| Semantic graph / ontology | Ontology graph, business terms, entity relationships, lineage views, and relationship editor exist. | Customer ask is directionally aligned, but current Concept/ontology UX still needs a rebuild for business maintainability. |
 
 ## Enterprise Customer Feedback Triage
 
@@ -384,7 +386,7 @@ The field customer feedback reinforces several existing lanes rather than creati
 |---|---|---|---|
 | Business owner approval requires admin access | Accept as defect/permission hardening | Workflow and Ownership Polish | Fix if still reproducible; do not rely on delegate workaround as target behavior |
 | Duplicate justification for group and workspace | Verify before planning | Workflow and Ownership Polish | Mark as closed if resolved; avoid adding new scope unless still reproducible |
-| Approval popup lacks requester and justification | Code indicates basic requester/reason visibility is addressed in v1; verify with DT and close if confirmed | #572 | Do not reopen broad scope unless remaining gaps exist across surfaces, custom fields, on-behalf-of, acknowledgements, or non-access-grant flows |
+| Approval popup lacks requester and justification | Code indicates basic requester/reason visibility is addressed in v1; verify with the customer and close if confirmed | #572 | Do not reopen broad scope unless remaining gaps exist across surfaces, custom fields, on-behalf-of, acknowledgements, or non-access-grant flows |
 | Product-owner-specific rules/TOU on access request | Accept, but implement generically | #571, #572 | Model as reusable references/acknowledgements per product/workflow |
 | Column descriptions and fully qualified table names | Accept as UX polish, but split | Workflow and Ownership Polish | Deliverable descriptions are already shown; linked asset FQNs and UC column descriptions still need verification/polish |
 | Marketplace tile opens subscribe instead of detail | Partially addressed | Workflow and Ownership Polish | Current card opens info dialog and icon opens full details; decide whether full-card click should navigate to detail |
@@ -392,14 +394,14 @@ The field customer feedback reinforces several existing lanes rather than creati
 | Search/select existing groups and workspaces | Partially implemented, with platform constraints | #335 and ownership/access polish | Principal/group pickers exist; workspace endpoint is current-workspace-only in v1 |
 | Owner team create/unselect | Accept, scoped | #431, #570 | Fix missing None/unselect coverage and #570 prefill first; inline team creation is a separate enhancement |
 | Cannot find catalogs unless workspace enabled | Limit scope | Onboarding docs/admin prerequisite | Product can surface diagnostics, but should not own catalog enablement policy |
-| Unclear target process for safe data sharing | Accept as configurable governance templates | AI-ready scorecard/workflows | Do not hard-code DT process; support templates and references |
+| Unclear target process for safe data sharing | Accept as configurable governance templates | AI-ready scorecard/workflows | Do not hard-code a customer-specific process; support templates and references |
 | S/M/L sizing confusing | Accept as minor UX cleanup | Workflow polish | Explain, rename, or hide unless actionable |
 | Show column names or sample rows when descriptions absent | Limit scope | DQ/contract operations; marketplace UX | Column names are safe metadata; sample rows should reuse existing permission-aware Catalog Commander preview and remain optional |
 | Example data and field validation rules | Split | DQ operations | Field validation maps to contract/DQ rules; example data is optional/controlled preview |
 | DQ, versioning, traceability, change notifications | Accept, consolidate with rail customer | DQ operations; governance event stream | Treat as shared DQ/evidence/change-event lane, not customer-specific |
 | Access roles not usually part of data products | Push back partially | Positioning/workflows | Ontos can govern access workflows for sharing; it should not redefine enterprise IAM ownership |
 | Semantic interfaces and ontology graph | Accept strategically | Concept Builder v2 | Fits Ontos' business-maintained semantic graph role |
-| Ensure globally valid data products | Partially present; accept as configurable readiness | AI-ready scorecard | Readiness/maturity foundations exist, but need surfaced configurable templates/gates; avoid fixed DT requirements |
+| Ensure globally valid data products | Partially present; accept as configurable readiness | AI-ready scorecard | Readiness/maturity foundations exist, but need surfaced configurable templates/gates; avoid fixed customer-specific requirements |
 | End-to-end access/compliance process ownership | Clarify boundary | AI-ready scorecard/workflows | Ontos can orchestrate and evidence controls; external legal/security processes remain customer-owned |
 
 ## Decision Tree for Positioning

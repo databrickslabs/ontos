@@ -59,7 +59,7 @@ gantt
     Quick fixes + owner prefill (#570)    :wp1, 2026-06-24, 7d
     Approval links and references (#571)  :wp2, 2026-06-24, 14d
     Unified approval UX (#572)            :wp3, 2026-07-01, 14d
-    Daimler / GDMP UX bundle              :wp4, 2026-07-01, 14d
+    Enterprise customer UX bundle              :wp4, 2026-07-01, 14d
 
     section 2 · DQ and Contract Ops
     DQ result panel v0                    :dq1, 2026-07-01, 14d
@@ -101,8 +101,8 @@ References:
 - #572 - Unified access-approval UX across notification bell, Handle Access Grant, role requests, and My Actions.
 - #335 - Entra principal picker.
 - #431 - Consolidate team and ownership model.
-- Daimler deferred feedback: column descriptions, fully qualified names, product/deliverable wording, searchable group/SP picker, clearer Owner Team handling.
-- Daimler Truck / GDMP feedback: requester identity and justification in approval popups appears addressed in v1 and should be verified/closed; remaining items include product-owner-specific terms of use, data product tile click behavior, clearer data product vs deliverable mental model, unclear S/M/L sizing labels, catalog onboarding prerequisites.
+- Enterprise customer deferred feedback: column descriptions, fully qualified names, product/deliverable wording, searchable group/SP picker, clearer Owner Team handling.
+- Enterprise customer feedback: requester identity and justification in approval popups appears addressed in v1 and should be verified/closed; remaining items include product-owner-specific terms of use, data product tile click behavior, clearer data product vs deliverable mental model, unclear S/M/L sizing labels, catalog onboarding prerequisites.
 
 Proposed scope:
 
@@ -120,7 +120,7 @@ Effort:
 
 - Quick fixes: 0.5-3 days.
 - Unified approval flow: 1-2 weeks.
-- Daimler polish bundle: 1-2 weeks.
+- Customer polish bundle: 1-2 weeks.
 
 Landing window:
 
@@ -134,9 +134,9 @@ References:
 
 - #59 - SHACL-based semantic DQ rules and DQX checks via Jobs.
 - #125 - Per-entity compliance checks.
-- ProRail requirements: CRON schedule for specific data contracts and DQ checks; DQ results shown back in data contracts; existing repo reading; batch upload of data contracts.
-- Daimler/field feedback: make operational status and failures visible in Ontos.
-- Daimler Truck / GDMP feedback: "Data Quality, Versioning & Traceability"; track quality, timeliness, and changes; notify consumers when data products change.
+- Rail customer requirements: CRON schedule for specific data contracts and DQ checks; DQ results shown back in data contracts; existing repo reading; batch upload of data contracts.
+- Field customer feedback: make operational status and failures visible in Ontos.
+- Enterprise customer feedback: "Data Quality, Versioning & Traceability"; track quality, timeliness, and changes; notify consumers when data products change.
 
 Proposed scope:
 
@@ -175,7 +175,7 @@ References:
 - #95 - Search/discovery.
 - #43 - Ontology actions.
 - Additional ontology requirements doc: RDFS/SKOS, controlled vocabulary -> taxonomy -> ontology progression, concept-to-table and property-to-column assignment, RDF round trip, SPARQL search/validation, SHACL later, `uc:Action` semantics.
-- Daimler Truck / GDMP feedback: semantic interfaces and ontology graph to explain relationships between data products, IDs, tables, joins, and systems; business-maintained UI for company data knowledge.
+- Enterprise customer feedback: semantic interfaces and ontology graph to explain relationships between data products, IDs, tables, joins, and systems; business-maintained UI for company data knowledge.
 
 Proposed scope:
 
@@ -251,7 +251,7 @@ References:
 - #421 - Governance event stream.
 - Customer feedback: security, transparency, authoritative experts, semantic sprawl, role/persona-aware context.
 - BeNeLux customer patterns: governance needs to be visible, explainable, and operational.
-- Daimler Truck / GDMP feedback: ensure newly created data products meet global requirements; clarify which compliance, access, sharing, and security processes are handled by the tool.
+- Enterprise customer feedback: ensure newly created data products meet global requirements; clarify which compliance, access, sharing, and security processes are handled by the tool.
 
 Proposed scope:
 
@@ -329,9 +329,9 @@ Assume Genie Ontology will continue improving quickly in curation, import/export
 |---|---|---:|---|
 | Owner prefill fix | #570 | 0.5-1 day | Obvious v1 bug; high trust impact |
 | Approval links/references | #571 | 2-4 days | Useful across legal, policy, runbook, evidence flows |
-| Daimler/GDMP UX polish | Daimler deferred notes, GDMP feedback | 1-2 weeks | Reduces demo friction and resolves concrete marketplace/detail-page confusion |
-| DQ result panel v0 | ProRail, GDMP, #125 | 1-2 weeks | Makes contracts operational and addresses quality/timeliness visibility |
-| Batch contract import dry-run | ProRail | 1-2 weeks | Practical enterprise onboarding |
+| Enterprise customer UX polish | Enterprise customer deferred notes | 1-2 weeks | Reduces demo friction and resolves concrete marketplace/detail-page confusion |
+| DQ result panel v0 | Rail customer, enterprise customer, #125 | 1-2 weeks | Makes contracts operational and addresses quality/timeliness visibility |
+| Batch contract import dry-run | Rail customer | 1-2 weeks | Practical enterprise onboarding |
 | Positioning decision tree | This RFC | 1-2 days | Helps team/customer alignment |
 
 ### Medium bets
@@ -339,7 +339,7 @@ Assume Genie Ontology will continue improving quickly in curation, import/export
 | Item | References | Effort | Rationale |
 |---|---|---:|---|
 | Unified approval UX | #572 | 1-2 weeks | Enterprise-grade workflow consistency |
-| Contract-specific DQ scheduler | ProRail, GDMP, #59 | 3-5 weeks | Turns DQ into governed operation |
+| Contract-specific DQ scheduler | Rail customer, enterprise customer, #59 | 3-5 weeks | Turns DQ into governed operation |
 | Concept Builder v2 preview | #551, #520, #469/#485/#482 | 6-10 weeks | Strategic core |
 | Semantic package export v0 | #550, #489 | 2-4 weeks | Portability proof point |
 | AI-ready scorecard v0 | #125, #330 | 3-6 weeks | SME positioning and sales narrative |
@@ -356,7 +356,7 @@ Assume Genie Ontology will continue improving quickly in curation, import/export
 
 ## Current Codebase Verification Notes
 
-Verified against the current local Ontos codebase on 2026-06-24. This is not a full QA pass, but it is enough to scope the DT/GDMP feedback more critically.
+Verified against the current local Ontos codebase on 2026-06-24. This is not a full QA pass, but it is enough to scope the enterprise customer feedback more critically.
 
 | Area | Current code evidence | Planning impact |
 |---|---|---|
@@ -365,20 +365,20 @@ Verified against the current local Ontos codebase on 2026-06-24. This is not a f
 | Product-owner-specific rules/TOU | Approval wizard has `legal_document` and `acknowledgement_checklist` steps, but `simpleMarkdown()` does not support links, and dormant `document_url` / `document_content` are not broadly rendered as reusable references. | #571 is the right implementation path: generic references/links/acknowledgements, not a DT-specific TOU feature. |
 | Marketplace tile behavior | Marketplace product card click opens an info dialog; a separate external-link icon opens the full product detail page. It does not directly subscribe from the whole tile. | Partially addressed. Decide desired UX: keep info-dialog behavior or make card click open full details. This is UX polish, not roadmap strategy. |
 | Deliverable descriptions | Data product details render `port.description` for deliverables. | Mark "column/deliverable descriptions missing" as likely partly addressed; verify if DT meant linked UC table column descriptions, which are not shown in the deliverables list. |
-| Fully qualified deliverable asset names | Linked assets under deliverables display `rel.target_name || rel.target_id`; this may still be a short name rather than `catalog.schema.table`. | Keep as a concrete Daimler polish item: show/copy full FQN for linked deliverable assets. |
+| Fully qualified deliverable asset names | Linked assets under deliverables display `rel.target_name || rel.target_id`; this may still be a short name rather than `catalog.schema.table`. | Keep as a concrete customer polish item: show/copy full FQN for linked deliverable assets. |
 | Data product vs deliverable confusion | UI uses "Deliverables (Output Ports)" and request/subscription is product-level. | Keep as wording/information-architecture polish. Do not rebuild the product model solely for this. |
 | Group/principal picker | `PrincipalPicker` supports directory-backed search with graceful manual fallback. `/api/workspace/groups` supports searchable group listing. | Basic picker capability exists. Remaining scope should be wiring/coverage in specific flows, not building a new picker from scratch. |
 | Workspace picker | `/api/workspace/accessible-workspaces` currently returns the current workspace only and explicitly notes true multi-workspace listing as future enhancement. | Keep scope limited. Multi-workspace selection depends on account-level credentials/platform setup. |
 | Owner team unselect/create | One product form has a `None` option, but `data-product-create-dialog.tsx` Owner Team select has no `None` item. `Copy from Team` still opens Assign Owner without passing selected member context. | Keep #570 and owner-team polish. Add "None/unselect in all product forms" as a small concrete fix. Inline team creation may be useful but should be scoped separately. |
 | Catalog not found / onboarding prerequisite | Catalog visibility depends on UC/workspace binding and current OBO visibility. | Product can surface diagnostics/prerequisites, but should not own catalog enablement policy. |
-| Quality/DQ | Generic quality items/panel and product quality badge exist. Contract quality rules exist. DQX profiling generates suggestions. Backend has `data_quality_check_runs/results` models and workflow code, but no obvious API/UI surfacing of execution results. | Map DT DQ/versioning/traceability to ProRail DQ operations. Focus on result surfacing, schedules, job/run status, and notifications, not inventing a second quality model. |
+| Quality/DQ | Generic quality items/panel and product quality badge exist. Contract quality rules exist. DQX profiling generates suggestions. Backend has `data_quality_check_runs/results` models and workflow code, but no obvious API/UI surfacing of execution results. | Map customer DQ/versioning/traceability to rail customer DQ operations. Focus on result surfacing, schedules, job/run status, and notifications, not inventing a second quality model. |
 | Example data / first rows | Catalog Commander has permission-aware dataset preview via `/api/catalogs/dataset/{path}`. This is not surfaced in data product marketplace/details. | Limit scope: optionally reuse existing preview for linked tables; do not make sample data a default marketplace feature without permissions/privacy review. |
-| Global valid data product requirements | There is a readiness API/component and maturity model, but the readiness component appears unused in the product detail page; maturity is shown inline. Defaults are generic, not customer-specific. | This supports the AI-ready scorecard lane. Scope as configurable templates/gates, not DT-specific hard-coded rules. |
+| Global valid data product requirements | There is a readiness API/component and maturity model, but the readiness component appears unused in the product detail page; maturity is shown inline. Defaults are generic, not customer-specific. | This supports the AI-ready scorecard lane. Scope as configurable templates/gates, not customer-specific hard-coded rules. |
 | Semantic graph / ontology | Ontology graph, business terms, entity relationships, lineage views, and relationship editor exist. | DT ask is directionally aligned, but current Concept/ontology UX still needs a rebuild for business maintainability. |
 
-## Daimler Truck / GDMP Feedback Triage
+## Enterprise Customer Feedback Triage
 
-The GDMP feedback reinforces several existing lanes rather than creating a separate DT-only roadmap. Recommended disposition:
+The field customer feedback reinforces several existing lanes rather than creating a customer-specific roadmap. Recommended disposition:
 
 | Feedback theme | Disposition | Roadmap mapping | Scope note |
 |---|---|---|---|
@@ -396,7 +396,7 @@ The GDMP feedback reinforces several existing lanes rather than creating a separ
 | S/M/L sizing confusing | Accept as minor UX cleanup | Workflow polish | Explain, rename, or hide unless actionable |
 | Show column names or sample rows when descriptions absent | Limit scope | DQ/contract operations; marketplace UX | Column names are safe metadata; sample rows should reuse existing permission-aware Catalog Commander preview and remain optional |
 | Example data and field validation rules | Split | DQ operations | Field validation maps to contract/DQ rules; example data is optional/controlled preview |
-| DQ, versioning, traceability, change notifications | Accept, consolidate with ProRail | DQ operations; governance event stream | Treat as shared DQ/evidence/change-event lane, not DT-specific |
+| DQ, versioning, traceability, change notifications | Accept, consolidate with rail customer | DQ operations; governance event stream | Treat as shared DQ/evidence/change-event lane, not customer-specific |
 | Access roles not usually part of data products | Push back partially | Positioning/workflows | Ontos can govern access workflows for sharing; it should not redefine enterprise IAM ownership |
 | Semantic interfaces and ontology graph | Accept strategically | Concept Builder v2 | Fits Ontos' business-maintained semantic graph role |
 | Ensure globally valid data products | Partially present; accept as configurable readiness | AI-ready scorecard | Readiness/maturity foundations exist, but need surfaced configurable templates/gates; avoid fixed DT requirements |
@@ -446,7 +446,7 @@ flowchart TD
 
 - Which lane has a committed contributor now, and which lane needs design first?
 - Should Concept Builder v2 be feature-flagged inside the current app or built as a new route first?
-- What is the minimum viable DQ result schema that supports ProRail and future DQX integration?
+- What is the minimum viable DQ result schema that supports rail customer requirements and future DQX integration?
 - Which portability format should be the first public proof point: SKOS/RDF, ODCS, or DCAT/DPROD?
 - How much of Ask Ontos should be retrieval/Q&A versus artifact generation in the next milestone?
 - What level of UC Glossary integration should be committed before the product/API stabilizes?

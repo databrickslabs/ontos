@@ -281,6 +281,10 @@ def _resolve_role_to_users(
                     return [(r.name, r.id)]
         return [(role_name, role.id if role else None)]
 
+    # Strip "user:" prefix emitted by the PrincipalPicker (e.g. "user:foo@bar.com").
+    if role_spec.startswith('user:'):
+        role_spec = role_spec[len('user:'):]
+
     if '@' in role_spec:
         # Pre-comma-split single email -- treat as a direct recipient.
         return [(role_spec, None)]

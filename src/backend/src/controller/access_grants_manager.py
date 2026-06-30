@@ -241,6 +241,10 @@ class AccessGrantsManager:
                     # via the wizard.
                     if "consumer_principals" not in entity_data:
                         entity_data["consumer_principals"] = cp_list
+                    if "consumer_principals_value" not in entity_data and cp_list:
+                        first = cp_list[0]
+                        if isinstance(first, dict):
+                            entity_data["consumer_principals_value"] = first.get("value", "")
                     # Catalog + output_ports enrichment for webhook
                     # body_templates that need ${entity.catalogs} and
                     # ${entity.output_ports}. Helper preserves caller

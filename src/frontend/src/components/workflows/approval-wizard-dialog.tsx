@@ -651,6 +651,11 @@ export default function ApprovalWizardDialog({
       if (currentStep.step_type === 'user_action' && submissionPayload && typeof submissionPayload === 'object') {
         collectedFieldsRef.current = { ...collectedFieldsRef.current, ...submissionPayload };
       }
+      // Thread on_behalf_of step result through so wizard_data carries it into
+      // entity_data for ${context.on_behalf_of.*} template resolution.
+      if (currentStep.step_type === 'on_behalf_of' && submissionPayload && typeof submissionPayload === 'object') {
+        collectedFieldsRef.current = { ...collectedFieldsRef.current, on_behalf_of: submissionPayload };
+      }
       const res = await post<{ complete?: boolean; agreement_id?: string; pdf_storage_path?: string; pdf_url?: string; current_step?: WizardStep; step_results?: unknown[] }>(
         `/api/approvals/sessions/${sessionId}/steps`,
         { step_id: currentStep.step_id, payload: submissionPayload },

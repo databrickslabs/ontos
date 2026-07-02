@@ -192,6 +192,12 @@ class WorkflowScope(BaseModel):
 
 # --- Step Configurations ---
 
+class ReferenceDocumentConfig(BaseModel):
+    """A labelled hyperlink shown at the bottom of an approval wizard step."""
+    label: str
+    url: str
+
+
 class ValidationStepConfig(BaseModel):
     """Configuration for validation steps."""
     rule: str = Field(..., description="Compliance DSL rule to evaluate")
@@ -234,7 +240,11 @@ class UserActionStepConfig(BaseModel):
         default_factory=list,
         description="List of { id, label, type: 'text'|'text_list', required?: bool }",
     )
-    
+    references: Optional[List[ReferenceDocumentConfig]] = Field(
+        None,
+        description="Optional labelled links shown at the bottom of the step",
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -252,6 +262,10 @@ class LegalDocumentStepConfig(BaseModel):
     require_scroll_to_end: bool = Field(False, description="Require user to scroll to bottom")
     require_acknowledgement_checkbox: bool = Field(False, description="Require acknowledgement checkbox")
     acknowledgement_label: Optional[str] = Field("I have read and understood the above", description="Label for acknowledgement checkbox")
+    references: Optional[List[ReferenceDocumentConfig]] = Field(
+        None,
+        description="Optional labelled links shown at the bottom of the step",
+    )
 
 
 class AcknowledgementChecklistStepConfig(BaseModel):
@@ -261,6 +275,11 @@ class AcknowledgementChecklistStepConfig(BaseModel):
     items: List[Dict[str, Any]] = Field(
         default_factory=list,
         description="List of { id, label, required } checkbox items (max 10)",
+    )
+
+    references: Optional[List[ReferenceDocumentConfig]] = Field(
+        None,
+        description="Optional labelled links shown at the bottom of the step",
     )
 
     @field_validator('items')

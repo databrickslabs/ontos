@@ -214,6 +214,11 @@ export interface EntityActionStepConfig {
   fixed_scope?: EntityActionFixedScope;
 }
 
+export interface ReferenceDocumentConfig {
+  label: string;
+  url: string;
+}
+
 export interface LegalDocumentStepConfig {
   title?: string;
   description?: string;
@@ -221,12 +226,14 @@ export interface LegalDocumentStepConfig {
   require_scroll_to_end?: boolean;
   require_acknowledgement_checkbox?: boolean;
   acknowledgement_label?: string;
+  references?: ReferenceDocumentConfig[];
 }
 
 export interface AcknowledgementChecklistStepConfig {
   title?: string;
   description?: string;
   items?: Array<{ id: string; label: string; required?: boolean }>;
+  references?: ReferenceDocumentConfig[];
 }
 
 export interface CoSignersStepConfig {

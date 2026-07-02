@@ -6,6 +6,7 @@ import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Link } from 'react-router-dom';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
+import WorkflowApprovalResponseDialog, { type WorkflowApprovalResponseDialogPayload } from '@/components/workflows/workflow-approval-response-dialog';
 
 interface ApprovalsQueue {
   contracts: { id: string; name?: string; status?: string }[];
@@ -21,6 +22,8 @@ export default function RequiredActionsSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogPayload, setDialogPayload] = useState<Record<string, any> | null>(null);
   const [roleRequestPage, setRoleRequestPage] = useState(0);
+  const [wfApprovalOpen, setWfApprovalOpen] = useState(false);
+  const [wfApprovalPayload, setWfApprovalPayload] = useState<WorkflowApprovalResponseDialogPayload | null>(null);
 
   useEffect(() => {
     fetchNotifications();
@@ -53,15 +56,22 @@ export default function RequiredActionsSection() {
     n => n.type === 'action_required' && n.action_type === 'handle_role_request'
   );
 
-  // Filter other action items (excluding role requests)
+  // Filter workflow approval items separately so they get inline approve/deny
+  const workflowApprovalNotifications = notifications.filter(
+    n => n.type === 'action_required' && n.action_type === 'workflow_approval'
+  );
+
+  // Filter other action items (excluding role requests and workflow approvals)
   const actionItems = notifications.filter(
-    n => n.type === 'action_required' && n.action_type !== 'handle_role_request'
+    n => n.type === 'action_required'
+      && n.action_type !== 'handle_role_request'
+      && n.action_type !== 'workflow_approval'
   );
 
   // Create unified approvals list
   type UnifiedApproval = {
     id: string;
-    type: 'role_request' | 'contract' | 'product';
+    type: 'role_request' | 'contract' | 'product' | 'workflow_approval';
     title: string;
     subtitle?: string;
     date: string;
@@ -97,6 +107,15 @@ export default function RequiredActionsSection() {
       date: new Date().toISOString(), // Products don't have date from API
       link: `/data-products/${p.id}`,
     })),
+    // Workflow approvals
+    ...workflowApprovalNotifications.map(n => ({
+      id: n.id,
+      type: 'workflow_approval' as const,
+      title: n.action_payload?.entity_name || n.title || 'Approval request',
+      subtitle: n.action_payload?.requester_email || n.subtitle,
+      date: n.created_at,
+      payload: n.action_payload ?? undefined,
+    })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const handleOpenConfirmDialog = (payload: Record<string, any> | null) => {
@@ -108,6 +127,34 @@ export default function RequiredActionsSection() {
     setDialogOpen(false);
     setDialogPayload(null);
     fetchNotifications(); // Refresh notifications after approval/denial
+  };
+
+  const handleOpenWfApproval = (payload: Record<string, any>) => {
+    setWfApprovalPayload({
+      execution_id: payload.execution_id ?? '',
+      entity_name: payload.entity_name,
+      requester_email: payload.requester_email,
+      entity_type: payload.entity_type,
+      entity_id: payload.entity_id,
+      underlying_entity_type: payload.underlying_entity_type,
+      underlying_entity_id: payload.underlying_entity_id,
+      underlying_entity_name: payload.underlying_entity_name,
+      permission_level: payload.permission_level,
+      requested_duration_days: payload.requested_duration_days,
+      reason: payload.reason,
+      request_id: payload.request_id,
+      workflow_name: payload.workflow_name,
+      workflow_message: payload.workflow_message,
+      on_behalf_of: payload.on_behalf_of,
+      full_payload: payload,
+    });
+    setWfApprovalOpen(true);
+  };
+
+  const handleCloseWfApproval = () => {
+    setWfApprovalOpen(false);
+    setWfApprovalPayload(null);
+    fetchNotifications();
   };
 
   // Type badge helper
@@ -124,6 +171,10 @@ export default function RequiredActionsSection() {
       product: {
         label: 'Product',
         className: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-300'
+      },
+      workflow_approval: {
+        label: 'Approval',
+        className: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
       },
     };
     const badge = badges[type];
@@ -202,6 +253,16 @@ export default function RequiredActionsSection() {
                                   <CheckSquare className="h-3.5 w-3.5" />
                                 </Button>
                               </>
+                            ) : item.type === 'workflow_approval' ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2"
+                                onClick={() => handleOpenWfApproval(item.payload!)}
+                                title="Approve/Deny workflow request"
+                              >
+                                <CheckSquare className="h-3.5 w-3.5" />
+                              </Button>
                             ) : (
                               <Button asChild size="sm" variant="ghost" className="h-7 px-2">
                                 <Link to={item.link!}>Open</Link>
@@ -290,6 +351,13 @@ export default function RequiredActionsSection() {
           onDecisionMade={handleCloseDialog}
         />
       )}
+      {/* Workflow Approval Dialog */}
+      <WorkflowApprovalResponseDialog
+        isOpen={wfApprovalOpen}
+        onOpenChange={(open) => { if (!open) handleCloseWfApproval(); }}
+        payload={wfApprovalPayload}
+        onDecisionMade={handleCloseWfApproval}
+      />
     </>
   );
 }

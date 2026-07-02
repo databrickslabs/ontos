@@ -10,7 +10,15 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +57,8 @@ export interface WorkflowApprovalResponseDialogPayload {
   request_id?: string;
   workflow_name?: string;
   workflow_message?: string;
+  on_behalf_of?: { type: string; value: string };
+  full_payload?: Record<string, unknown>;
 }
 
 interface WorkflowApprovalResponseDialogProps {
@@ -80,6 +90,21 @@ function humanizeEntityType(entityType: string | undefined | null): string {
     .join(' ');
 }
 
+const SKIP_KEYS = new Set([
+  'entity_id', 'entity_type', 'underlying_entity_id', 'underlying_entity_type',
+  'request_id', 'workspace_id', 'execution_id', 'workflow_id',
+]);
+
+function renderPayloadValue(val: unknown): string {
+  if (Array.isArray(val)) return val.join(', ');
+  if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+  return String(val);
+}
+
+function humanizeKey(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 interface DetailRow {
   label: string;
   value: React.ReactNode;
@@ -93,6 +118,13 @@ function buildDetailRows(
 
   if (payload.requester_email) {
     rows.push({ label: 'Requester', value: payload.requester_email });
+  }
+
+  if (payload.on_behalf_of) {
+    rows.push({
+      label: 'On behalf of',
+      value: `${payload.on_behalf_of.type} ${payload.on_behalf_of.value}`,
+    });
   }
 
   const resourceType = payload.underlying_entity_type ?? payload.entity_type;
@@ -147,6 +179,23 @@ function buildDetailRows(
     rows.push({ label: 'Workflow', value: payload.workflow_name });
   }
 
+  if (payload.full_payload) {
+    const alreadySurfaced = new Set([
+      'requester_email', 'on_behalf_of', 'entity_type', 'entity_id', 'entity_name',
+      'underlying_entity_type', 'underlying_entity_id', 'underlying_entity_name',
+      'permission_level', 'requested_duration_days', 'reason',
+      'message', 'workflow_name', 'workflow_id', 'execution_id', 'request_id',
+      'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
+    ]);
+    for (const [key, val] of Object.entries(payload.full_payload)) {
+      if (key.startsWith('_')) continue;
+      if (SKIP_KEYS.has(key)) continue;
+      if (alreadySurfaced.has(key)) continue;
+      if (val === null || val === undefined || val === '') continue;
+      rows.push({ label: humanizeKey(key), value: renderPayloadValue(val) });
+    }
+  }
+
   return rows;
 }
 
@@ -163,6 +212,15 @@ export default function WorkflowApprovalResponseDialog({
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reason, setReason] = useState('');
+  const [grantedDays, setGrantedDays] = useState<number | ''>(payload?.requested_duration_days ?? '');
+  const [grantedPermission, setGrantedPermission] = useState<string>(payload?.permission_level ?? '');
+
+  useEffect(() => {
+    if (isOpen) {
+      setGrantedDays(payload?.requested_duration_days ?? '');
+      setGrantedPermission(payload?.permission_level ?? '');
+    }
+  }, [isOpen, payload]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -218,11 +276,14 @@ export default function WorkflowApprovalResponseDialog({
     }
     setSubmitting(true);
     try {
-      const response = await post('/api/workflows/handle-approval', {
+      const body: Record<string, unknown> = {
         execution_id: payload.execution_id,
         approved,
         message: reason.trim() || (approved ? 'Approved' : 'Rejected'),
-      });
+      };
+      if (grantedDays !== '') body.granted_duration_days = Number(grantedDays);
+      if (grantedPermission) body.permission_level = grantedPermission;
+      const response = await post('/api/workflows/handle-approval', body);
       if (response.error) {
         toast({
           title: 'Error',
@@ -282,6 +343,43 @@ export default function WorkflowApprovalResponseDialog({
                     </div>
                   ))}
                 </dl>
+              </div>
+            )}
+            {(payload?.requested_duration_days != null || payload?.permission_level) && (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Adjust approval terms
+                </div>
+                {payload.requested_duration_days != null && (
+                  <div className="space-y-1">
+                    <Label htmlFor="granted-days" className="text-sm">Duration (days)</Label>
+                    <Input
+                      id="granted-days"
+                      type="number"
+                      min={1}
+                      value={grantedDays}
+                      onChange={(e) => setGrantedDays(e.target.value === '' ? '' : Number(e.target.value))}
+                      disabled={submitting}
+                      className="w-32"
+                    />
+                  </div>
+                )}
+                {payload.permission_level && (
+                  <div className="space-y-1">
+                    <Label className="text-sm">Permission level</Label>
+                    <Select value={grantedPermission} onValueChange={setGrantedPermission} disabled={submitting}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Select permission" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="CAN_READ">CAN_READ</SelectItem>
+                        <SelectItem value="CAN_USE">CAN_USE</SelectItem>
+                        <SelectItem value="CAN_EDIT">CAN_EDIT</SelectItem>
+                        <SelectItem value="CAN_MANAGE">CAN_MANAGE</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
             <div className="space-y-2">

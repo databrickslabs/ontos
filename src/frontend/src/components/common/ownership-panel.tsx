@@ -77,6 +77,7 @@ export function OwnershipPanel({
 
   // Assign dialog state
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [pendingMember, setPendingMember] = useState<{ member_identifier: string; member_name?: string } | null>(null);
 
   // Copy from Team dialog state
   const [copyFromTeamOpen, setCopyFromTeamOpen] = useState(false);
@@ -312,7 +313,12 @@ export function OwnershipPanel({
       {/* Assign Owner Dialog */}
       <AssignOwnerDialog
         open={assignDialogOpen}
-        onOpenChange={setAssignDialogOpen}
+        onOpenChange={(open) => {
+          setAssignDialogOpen(open);
+          if (!open) setPendingMember(null);
+        }}
+        initialEmail={pendingMember?.member_identifier}
+        initialName={pendingMember?.member_name}
         objectType={objectType}
         objectId={objectId}
         onSuccess={fetchOwners}
@@ -383,6 +389,7 @@ export function OwnershipPanel({
                           variant="outline"
                           className="h-7 text-xs"
                           onClick={() => {
+                            setPendingMember(member);
                             setCopyFromTeamOpen(false);
                             setAssignDialogOpen(true);
                           }}

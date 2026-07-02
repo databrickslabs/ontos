@@ -14,6 +14,7 @@ from src.models.assets import (
 )
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
 from src.common.errors import ConflictError, NotFoundError, ValidationError
+from src.common.version_visibility import is_visible_consumer
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.database import get_session_factory
@@ -267,8 +268,9 @@ class AssetsManager(SearchableAsset):
             return None
         try:
             products = data_products_manager.list_products(
-                skip=0, limit=10_000, is_admin=False,
+                skip=0, limit=10_000, is_admin=True,
             )
+            products = [p for p in products if is_visible_consumer(p)]
         except Exception:
             logger.exception("Failed to list accessible data products for scoping")
             return []

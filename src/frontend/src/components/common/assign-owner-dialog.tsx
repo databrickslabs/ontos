@@ -22,9 +22,11 @@ interface AssignOwnerDialogProps {
   objectType: OwnerObjectType;
   objectId: string;
   onSuccess: () => void;
+  initialEmail?: string;
+  initialName?: string;
 }
 
-export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, onSuccess }: AssignOwnerDialogProps) {
+export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, onSuccess, initialEmail, initialName }: AssignOwnerDialogProps) {
   const { t } = useTranslation(['business-owners', 'common']);
   const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
@@ -58,6 +60,13 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
       setRoleId('');
     }
   }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      if (initialEmail) setUserEmail(initialEmail);
+      if (initialName) setUserName(initialName);
+    }
+  }, [open, initialEmail, initialName]);
 
   const handleSubmit = async () => {
     if (!userEmail.trim() || !roleId) return;

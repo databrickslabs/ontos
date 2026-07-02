@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from src.repositories.assets_repository import asset_type_repo, asset_repo, asset_relationship_repo
+from src.common.version_visibility import is_visible_consumer
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate, AssetTypeRead, AssetTypeSummary,
     AssetCreate, AssetUpdate, AssetRead, AssetSummary,
@@ -267,8 +268,9 @@ class AssetsManager(SearchableAsset):
             return None
         try:
             products = data_products_manager.list_products(
-                skip=0, limit=10_000, is_admin=False,
+                skip=0, limit=10_000, is_admin=True,
             )
+            products = [p for p in products if is_visible_consumer(p)]
         except Exception:
             logger.exception("Failed to list accessible data products for scoping")
             return []

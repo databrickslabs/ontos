@@ -128,7 +128,7 @@ def _mock_dpm(accessible_dps: List[DataProductDb]):
     """
     dpm = MagicMock()
     dpm.list_products.return_value = [
-        SimpleNamespace(id=dp.id, name=dp.name) for dp in accessible_dps
+        SimpleNamespace(id=dp.id, name=dp.name, status=dp.status) for dp in accessible_dps
     ]
 
     def _linked(db, *, product_ids, port_ids=None):
@@ -232,6 +232,18 @@ def test_assets_manager_resolve_non_admin_no_dps_empty(db_session):
         db_session, data_products_manager=dpm, is_admin=False,
     )
     assert result == []  # empty list, not None
+
+
+def test_assets_manager_resolve_non_admin_filters_non_consumer_statuses(db_session, asset_graph):
+    """list_products(is_admin=True) may return draft/proposed DPs — only active/deprecated
+    should contribute assets to a consumer's visible set."""
+    draft_dp = DataProductDb(id=str(uuid.uuid4()), name="DP_draft", version="0.1.0", status="draft")
+    # Only dp1 (active) is accessible; draft_dp assets must be excluded.
+    dpm = _mock_dpm([asset_graph.dp1, draft_dp])
+    result = assets_manager.resolve_accessible_asset_ids(
+        db_session, data_products_manager=dpm, is_admin=False,
+    )
+    assert set(result) == {asset_graph.a.id, asset_graph.b.id, asset_graph.d.id}
 
 
 def test_assets_manager_resolve_dpm_failure_fails_closed(db_session):

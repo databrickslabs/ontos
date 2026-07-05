@@ -324,6 +324,11 @@ class MCPHandler:
     
     def _has_scope(self, required_scope: str) -> bool:
         """Check if token has required scope."""
+        # Tools may declare required_scope=None meaning "no scope required"
+        # (e.g. get_app_state, search_ontos_handbook). Without this guard,
+        # tools/list crashes on `":" in None` for any non-wildcard token.
+        if not required_scope:
+            return True
         scopes = self._token_info.scopes
         
         # Admin wildcard

@@ -78,6 +78,20 @@ def make_success_response(
     return JSONRPCResponse(result=result, id=request_id)
 
 
+def dump_jsonrpc_response(resp: JSONRPCResponse) -> Dict[str, Any]:
+    """Serialize per JSON-RPC 2.0: exactly ONE of result/error.
+
+    JSONRPCResponse.model_dump() emits both keys (one null), which strict
+    clients (e.g. the MCP Python SDK used by Kasal/CrewAI) reject.
+    """
+    out: Dict[str, Any] = {"jsonrpc": "2.0", "id": resp.id}
+    if resp.error is not None:
+        out["error"] = resp.error.model_dump()
+    else:
+        out["result"] = resp.result
+    return out
+
+
 def generate_session_id() -> str:
     """Generate a cryptographically secure session ID."""
     return secrets.token_urlsafe(32)
@@ -517,10 +531,10 @@ async def mcp_handler(
     
     # Helper to create error response in the appropriate format
     async def error_response(code: int, message: str, request_id: Any = None):
-        response_data = JSONRPCResponse(
+        response_data = dump_jsonrpc_response(JSONRPCResponse(
             error=JSONRPCError(code=code, message=message),
             id=request_id
-        ).model_dump()
+        ))
         
         if use_sse:
             return EventSourceResponse(
@@ -528,6 +542,29 @@ async def mcp_handler(
                 headers={"MCP-Session-Id": session_id} if session_id else {}
             )
         return JSONResponse(content=response_data)
+    
+    # Parse request body first so every error response can carry the id
+    try:
+        body = await request.json()
+    except Exception as e:
+        return await error_response(JSONRPC_PARSE_ERROR, f"Failed to parse JSON: {str(e)}")
+    
+    # Validate JSON-RPC format
+    try:
+        rpc_request = JSONRPCRequest(**body)
+    except Exception as e:
+        return await error_response(JSONRPC_INVALID_REQUEST, f"Invalid request: {str(e)}",
+                                    body.get("id") if isinstance(body, dict) else None)
+    
+    # JSON-RPC notifications (no id) MUST NOT receive a response body — the
+    # MCP spec says unknown notifications are ignored and streamable HTTP
+    # expects 202 Accepted. Replying with an error (id=null) crashes strict
+    # clients (MCP Python SDK / Kasal). notifications/cancelled et al. land here.
+    if rpc_request.id is None and rpc_request.method.startswith("notifications/"):
+        if rpc_request.method == "notifications/initialized" and session_id in _sessions:
+            _sessions[session_id]["initialized"] = True
+        return Response(status_code=202,
+                        headers={"MCP-Session-Id": session_id} if session_id else {})
     
     # Validate API key
     token_info = validate_api_key(db, x_api_key)
@@ -541,19 +578,9 @@ async def mcp_handler(
             success=False,
             details={"reason": "Invalid or missing API key"},
         )
-        return await error_response(MCP_AUTH_FAILED, "Invalid or missing API key")
+        return await error_response(MCP_AUTH_FAILED, "Invalid or missing API key",
+                                    rpc_request.id)
     
-    # Parse request body
-    try:
-        body = await request.json()
-    except Exception as e:
-        return await error_response(JSONRPC_PARSE_ERROR, f"Failed to parse JSON: {str(e)}")
-    
-    # Validate JSON-RPC format
-    try:
-        rpc_request = JSONRPCRequest(**body)
-    except Exception as e:
-        return await error_response(JSONRPC_INVALID_REQUEST, f"Invalid request: {str(e)}")
     
     # Handle session management
     is_initialize = rpc_request.method == "initialize"
@@ -590,7 +617,7 @@ async def mcp_handler(
         logger.error(f"Error committing MCP changes: {e}")
         db.rollback()
     
-    response_data = response.model_dump()
+    response_data = dump_jsonrpc_response(response)
     
     # Build response headers
     response_headers = {}

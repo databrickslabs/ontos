@@ -476,6 +476,7 @@ class SearchDataContractsTool(BaseTool):
         }
     }
     required_params = ["query"]
+    required_scope = "contracts:read"
     
     async def execute(
         self,
@@ -552,6 +553,7 @@ class GetDataContractTool(BaseTool):
         }
     }
     required_params = ["contract_id"]
+    required_scope = "contracts:read"
     
     async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
         """Get a data contract by ID."""
@@ -677,6 +679,7 @@ class DeleteDataContractTool(BaseTool):
         }
     }
     required_params = ["contract_id"]
+    required_scope = "contracts:write"
     
     async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
         """Delete a data contract."""

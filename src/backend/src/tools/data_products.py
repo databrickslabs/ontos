@@ -507,6 +507,7 @@ class GetDataProductTool(BaseTool):
         }
     }
     required_params = ["product_id"]
+    required_scope = "data-products:read"
     
     async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
         """Get a data product by ID."""
@@ -656,6 +657,7 @@ class DeleteDataProductTool(BaseTool):
         }
     }
     required_params = ["product_id"]
+    required_scope = "data-products:write"
     
     async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
         """Delete a data product."""

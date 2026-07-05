@@ -495,6 +495,15 @@ async def mcp_sse_stream(
         }
         logger.info(f"Created new MCP session: {session_id}")
     
+    # Release the DB connection BEFORE streaming: FastAPI keeps dependencies
+    # alive until the response completes, which for a long-lived SSE stream
+    # means each open stream pins one pooled connection indefinitely.
+    # Reconnecting clients (Kasal retries on any hiccup) exhaust the pool
+    # within seconds — after which token validation can't query and every
+    # request 401s or hangs on pool timeout. The stream loop only touches
+    # the in-memory session dict, so the session is safe to close here.
+    db.close()
+
     # Return SSE stream
     return EventSourceResponse(
         sse_stream_generator(token_info, session_id, request),

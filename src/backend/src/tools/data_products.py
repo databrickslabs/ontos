@@ -525,10 +525,12 @@ class GetDataProductTool(BaseTool):
                     error=f"Data product '{product_id}' not found"
                 )
             
-            # Extract description purpose
+            # Extract description purpose (handles Description model, dict, or str)
             desc_purpose = None
             if product.description:
-                if isinstance(product.description, dict):
+                if hasattr(product.description, 'purpose'):
+                    desc_purpose = product.description.purpose
+                elif isinstance(product.description, dict):
                     desc_purpose = product.description.get('purpose')
                 elif isinstance(product.description, str):
                     try:
@@ -537,6 +539,23 @@ class GetDataProductTool(BaseTool):
                             desc_purpose = desc_dict.get('purpose')
                     except Exception:
                         desc_purpose = product.description
+            
+            # Surface output ports so agents can find the physical tables
+            output_ports = []
+            for port in (product.outputPorts or []):
+                server = getattr(port, 'server', None)
+                location = getattr(port, 'assetIdentifier', None)
+                if not location and server is not None:
+                    host = getattr(server, 'host', '') or ''
+                    schema = getattr(server, 'schema_name', '') or ''
+                    location = f"{host}.{schema}" if host and schema else (host or None)
+                output_ports.append({
+                    "name": port.name,
+                    "description": getattr(port, 'description', None),
+                    "contract_id": getattr(port, 'contractId', None),
+                    "contract_name": getattr(port, 'contractName', None),
+                    "location": location,
+                })
             
             logger.info(f"[get_data_product] SUCCESS: Found product {product.name}")
             return ToolResult(
@@ -549,6 +568,8 @@ class GetDataProductTool(BaseTool):
                     "status": product.status,
                     "version": product.version,
                     "owner_team_id": getattr(product, 'owner_team_id', None),
+                    "owner_team_name": getattr(product, 'owner_team_name', None),
+                    "output_ports": output_ports,
                     "tenant": getattr(product, 'tenant', None),
                     "url": f"/data-products/{product.id}"
                 }

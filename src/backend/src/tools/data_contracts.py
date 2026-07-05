@@ -487,12 +487,12 @@ class SearchDataContractsTool(BaseTool):
         """Search for data contracts."""
         logger.info(f"[search_data_contracts] Starting - query='{query}', domain={domain}, status={status}")
         
-        if not ctx.data_contracts_manager:
-            logger.error(f"[search_data_contracts] FAILED: Data contracts manager not available")
-            return ToolResult(success=False, error="Data contracts manager not available")
-        
         try:
-            contracts = ctx.data_contracts_manager.list_contracts()
+            # Query the DB directly: DataContractsManager.list_contracts()
+            # reads a legacy in-memory dict that is never populated, so the
+            # tool always returned zero contracts.
+            from src.db_models.data_contracts import DataContractDb
+            contracts = ctx.db.query(DataContractDb).limit(500).all()
             
             query_lower = query.lower() if query and query != '*' else ''
             filtered = []
@@ -502,7 +502,8 @@ class SearchDataContractsTool(BaseTool):
                 if query_lower:
                     name_match = query_lower in (c.name or "").lower()
                     domain_match = query_lower in (getattr(c, 'domain', '') or "").lower()
-                    desc_match = query_lower in (c.description or "").lower() if c.description else False
+                    desc_text = str(getattr(c, 'description_purpose', None) or getattr(c, 'description', '') or '')
+                    desc_match = query_lower in desc_text.lower()
                     include = name_match or domain_match or desc_match
                 else:
                     include = True
@@ -517,12 +518,12 @@ class SearchDataContractsTool(BaseTool):
                     continue
                 
                 filtered.append({
-                    "id": c.id,
+                    "id": str(c.id),
                     "name": c.name,
-                    "domain": getattr(c, 'domain', None),
+                    "domain": getattr(c, 'domain', None) or getattr(c, 'domain_id', None),
                     "status": c.status,
-                    "version": c.version,
-                    "format": c.format
+                    "version": getattr(c, 'version', None),
+                    "format": getattr(c, 'format', None)
                 })
             
             logger.info(f"[search_data_contracts] SUCCESS: Found {len(filtered)} matching contracts")

@@ -222,7 +222,10 @@ class AppEntityLoader(EntityLoader):
         if 'data_product' in entity_types:
             try:
                 from src.repositories.data_products_repository import data_product_repo
-                for product in data_product_repo.get_multi(self.db, limit=1000):
+                # is_admin: the products repo is fail-closed per caller scope;
+                # compliance evaluates system-wide and its route is already
+                # permission-checked, so it must see every product.
+                for product in data_product_repo.get_multi(self.db, limit=1000, is_admin=True):
                     yield {
                         'type': 'data_product',
                         'id': product.id,

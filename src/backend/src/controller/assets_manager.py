@@ -582,12 +582,17 @@ class AssetsManager(SearchableAsset):
         if asset_db_obj.status == 'retired':
             return None
         type_name = asset_db_obj.asset_type.name if asset_db_obj.asset_type else 'Asset'
-        tags = asset_db_obj.tags if isinstance(asset_db_obj.tags, list) else []
+        tags = list(asset_db_obj.tags) if isinstance(asset_db_obj.tags, list) else []
         _session = object_session(asset_db_obj)
-        primary_domain_id = (
-            entity_domain_repo.get_primary_domain_id(_session, entity_type="asset", entity_id=str(asset_db_obj.id))
-            if _session is not None else None
-        )
+        primary_domain_id = None
+        if _session is not None:
+            # Index every assigned domain NAME so domain-keyed search matches by any of
+            # an entity's domains (primary or additional) — issue #520 story 14.
+            assigned = entity_domain_repo.get_domains_for_entity(
+                _session, entity_type="asset", entity_id=str(asset_db_obj.id)
+            )
+            primary_domain_id = next((d.domain_id for d in assigned if d.is_primary), None)
+            tags = tags + [d.domain_name for d in assigned if d.domain_name]
         return SearchIndexItem(
             id=f"asset::{asset_db_obj.id}",
             type=f"asset-{type_name.lower().replace(' ', '-')}",

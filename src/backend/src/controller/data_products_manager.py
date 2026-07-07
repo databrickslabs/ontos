@@ -2471,6 +2471,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 if member.username and member.username != member.name:
                     team_member_names.append(member.username)
 
+        # Index every assigned domain NAME so domain-keyed search matches by any of the
+        # product's domains (primary or additional) — issue #520 story 14.
+        try:
+            assigned = entity_domain_repo.get_domains_for_entity(
+                self._db, entity_type="data_product", entity_id=str(product.id)
+            )
+            tag_strings = tag_strings + [d.domain_name for d in assigned if d.domain_name]
+        except Exception as dom_err:
+            logger.debug(f"Could not load domains for product {product.id} search index: {dom_err}")
+
         extra_data = {
             "status": product.status or "",
             "version": product.version or "",

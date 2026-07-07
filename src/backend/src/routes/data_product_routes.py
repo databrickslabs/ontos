@@ -1735,6 +1735,8 @@ async def upload_data_products(
 async def get_data_products(
     request: Request,
     project_id: Optional[str] = None,
+    domain_id: Optional[str] = None,
+    domain_ids: Optional[str] = None,
     include_history: bool = False,
     current_user: CurrentUserDep = None,
     db: DBSessionDep = None,
@@ -1808,6 +1810,14 @@ async def get_data_products(
             caller_project_ids=caller_project_ids,
             include_history=include_history,
         )
+        # Any-of domain filter (#520): a product matches when any of its assigned
+        # domains (primary or additional) is in the requested set. domain_ids are
+        # already attached to each DataProduct by the manager.
+        wanted_domains = {d.strip() for d in (domain_ids.split(",") if domain_ids else []) if d.strip()}
+        if domain_id:
+            wanted_domains.add(domain_id)
+        if wanted_domains:
+            products = [p for p in products if wanted_domains & set(getattr(p, "domain_ids", None) or [])]
         logger.info(
             f"Retrieved {len(products)} data products "
             f"(include_history={include_history})"

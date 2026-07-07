@@ -527,9 +527,17 @@ class SemanticModelsManager(SearchableAsset):
     
     def _skolemize_bnode(self, bnode: BNode, context_name: str) -> str:
         """Convert a blank node to a stable URI for persistence.
-        
+
         Blank nodes are graph-local identifiers. To persist them, we convert
         them to URIs that include the context name for global uniqueness.
+
+        IMPORTANT: ``str(bnode)`` is only stable if the bnode came from a graph
+        that has been canonicalised (see ``_import_graph_to_db``). rdflib mints
+        a fresh random id for every ``.parse()``, so without canonicalisation
+        the same blank node yields a different URI on each import — the
+        ``uq_rdf_triple`` constraint never matches and re-imports duplicate the
+        triples without bound. Canonical bnode ids are content-derived and
+        therefore reproducible across parses and process restarts.
         """
         return f"urn:ontos:bnode:{context_name}:{str(bnode)}"
 
@@ -616,8 +624,27 @@ class SemanticModelsManager(SearchableAsset):
         Returns:
             Number of triples actually inserted (excludes duplicates)
         """
+        # Canonicalise blank-node identifiers before persisting. rdflib assigns
+        # random bnode ids on each parse, so without this the skolemised URIs
+        # differ every import and the ON CONFLICT DO NOTHING dedup never fires —
+        # re-imports of any ontology with blank nodes (OWL restrictions, SHACL
+        # shapes, rdf:Lists) grow the table without bound. Canonicalisation
+        # (RGDA1) derives stable, content-based bnode ids, so identical content
+        # produces identical rows and re-imports become true no-ops.
+        # Only pay the O(n log n) cost when blank nodes are actually present.
+        if any(isinstance(t, BNode) for triple in graph for t in (triple[0], triple[2])):
+            try:
+                from rdflib.compare import to_canonical_graph
+                graph = to_canonical_graph(graph)
+            except Exception as e:
+                logger.warning(
+                    "Blank-node canonicalisation failed for %s:%s (%s); "
+                    "falling back to raw import — re-imports may duplicate.",
+                    source_type, source_identifier, e,
+                )
+
         triples_to_insert = []
-        
+
         for subj, pred, obj in graph:
             # Handle subject (can be URI or blank node)
             if isinstance(subj, BNode):
@@ -766,7 +793,14 @@ class SemanticModelsManager(SearchableAsset):
             loaded += 1
 
         logger.info(f"Loaded {loaded} triples into graph (skipped {skipped} from disabled models)")
-        
+
+        # A rebuild against a bloated table is a prime moment to snapshot where
+        # the rows come from (throttled + threshold-gated; no-op when healthy).
+        try:
+            rdf_triples_repo.maybe_log_bloat_diagnostics(self._db, trigger="rebuild")
+        except Exception as e:
+            logger.debug(f"Bloat diagnostic skipped: {e}")
+
         # Log stats by context
         contexts = rdf_triples_repo.list_contexts(self._db)
         for ctx in contexts:
@@ -856,9 +890,19 @@ class SemanticModelsManager(SearchableAsset):
         # Scan all contexts and register missing ones
         for context in self._graph.contexts():
             context_name = str(context.identifier)
-            
-            # Skip system contexts
-            if context_name in ("urn:x-rdflib:default", META_CONTEXT, ""):
+
+            # Skip system contexts. This includes the dynamic, recomputed-every-
+            # rebuild contexts (app entities, semantic links) — they are derived
+            # views, not user collections, and must not be registered as
+            # KnowledgeCollections (doing so pollutes the Collections list and
+            # writes spurious timestamped metadata each time they first appear).
+            if context_name in (
+                "urn:x-rdflib:default",
+                META_CONTEXT,
+                "urn:app-entities",
+                "urn:semantic-links",
+                "",
+            ):
                 continue
             
             # Skip if already registered

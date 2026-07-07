@@ -104,12 +104,17 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
     loadSubscribedProducts();
   }, [loadSubscribedProducts]);
 
-  // Choose a sensible default domain (prefer a domain named "Core")
+  // Choose a sensible default domain. Prefer one named "Core", but fall back to
+  // a top-level (root) domain and finally to the first domain so the graph
+  // always renders — orgs without a "Core" domain previously got stuck on the
+  // "Select a domain" placeholder, making it look like domains never loaded.
   useEffect(() => {
     if (!domainsLoading && domains && domains.length > 0 && !selectedDomainId) {
       const core = domains.find(d => d.name.toLowerCase() === 'core');
-      if (core) {
-        setSelectedDomainId(core.id);
+      const firstRoot = domains.find(d => !d.parent_id);
+      const chosen = core || firstRoot || domains[0];
+      if (chosen) {
+        setSelectedDomainId(chosen.id);
       }
     }
   }, [domainsLoading, domains, selectedDomainId]);

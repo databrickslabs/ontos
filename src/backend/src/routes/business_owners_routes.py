@@ -104,17 +104,22 @@ def get_all_owners(
 
 
 @router.get(
-    "/by-object/{object_type}/{object_id}",
+    "/by-object/{object_type}",
     response_model=List[BusinessOwnerRead],
 )
 def get_owners_for_object(
     object_type: str,
-    object_id: str,
     db: DBSessionDep,
+    object_id: str = Query(..., min_length=1, description="Object id (may be an IRI)"),
     manager=Depends(get_business_owners_manager),
     active_only: bool = Query(True),
 ):
     """Gets all owners for a specific object.
+
+    ``object_id`` is a query parameter (not a path segment) because it may be a
+    concept IRI like ``http://…#Term``. The Databricks Apps proxy collapses
+    ``%2F%2F`` → ``/`` inside path segments, which mangles such IRIs before they
+    reach FastAPI (see PR #536); query-string values survive that intact.
 
     Authenticated-only (no feature-permission gate). Rationale: a user who
     can already view an entity (e.g. a data product in the marketplace)
@@ -134,14 +139,14 @@ def get_owners_for_object(
 
 
 @router.get(
-    "/history/{object_type}/{object_id}",
+    "/history/{object_type}",
     response_model=BusinessOwnerHistory,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )
 def get_owner_history(
     object_type: str,
-    object_id: str,
     db: DBSessionDep,
+    object_id: str = Query(..., min_length=1, description="Object id (may be an IRI)"),
     manager=Depends(get_business_owners_manager),
 ):
     """Gets the full ownership history (current + previous) for an object."""

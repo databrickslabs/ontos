@@ -256,7 +256,7 @@ export default function DataContractDetails() {
   const [links, setLinks] = useState<EntitySemanticLink[]>([])
   const [selectedSchemaIndex, setSelectedSchemaIndex] = useState(0)
   const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
-  const [propertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
+  const [propertyLinks, setPropertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
 
   // Lazy-loaded schema properties with pagination
   const [schemaProperties, setSchemaProperties] = useState<Record<string, SchemaProperty[]>>({})
@@ -448,6 +448,41 @@ export default function DataContractDetails() {
       }
     } catch (e) {
       console.warn('Failed to fetch schema links for', schemaName, ':', e)
+    }
+  }, [contractId])
+
+  // Fetch column-level concept assignments for a schema in one call. Links are
+  // stored with entity_id "{contractId}#{schema}#{property}"; we key state by
+  // "{schema}#{property}" to match the column renderer (see propertyLinks use).
+  const fetchPropertySemanticLinks = useCallback(async (schemaName: string) => {
+    if (!contractId || !schemaName) return
+    try {
+      const prefix = `${contractId}#${schemaName}#`
+      const res = await fetch(`/api/semantic-links/entity-prefix/data_contract_property/${encodeURIComponent(prefix)}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const byKey: Record<string, EntitySemanticLink[]> = {}
+      for (const link of (Array.isArray(data) ? data : [])) {
+        // entity_id: "{contractId}#{schema}#{property}" -> key "{schema}#{property}"
+        const parts = String(link.entity_id).split('#')
+        const propName = parts.slice(2).join('#')
+        if (!propName) continue
+        const key = `${schemaName}#${propName}`
+        ;(byKey[key] = byKey[key] || []).push(link)
+      }
+      // The prefix response is the authoritative full set for this schema, so
+      // replace every "{schemaName}#*" entry rather than merging — otherwise a
+      // property whose last assignment was removed would keep showing a stale
+      // link until a full reload.
+      setPropertyLinks(prev => {
+        const next: Record<string, EntitySemanticLink[]> = {}
+        for (const [key, value] of Object.entries(prev)) {
+          if (!key.startsWith(`${schemaName}#`)) next[key] = value
+        }
+        return { ...next, ...byKey }
+      })
+    } catch (e) {
+      console.warn('Failed to fetch property links for', schemaName, ':', e)
     }
   }, [contractId])
 
@@ -712,7 +747,8 @@ export default function DataContractDetails() {
     if (!schemaLinks[schema.name]) {
       fetchSchemaSemanticLinks(schema.name)
     }
-  }, [contract?.schema, selectedSchemaIndex, fetchSchemaProperties, fetchSchemaSemanticLinks])
+    fetchPropertySemanticLinks(schema.name)
+  }, [contract?.schema, selectedSchemaIndex, fetchSchemaProperties, fetchSchemaSemanticLinks, fetchPropertySemanticLinks])
 
   // Poll for profiling updates while profiling is running
   useEffect(() => {

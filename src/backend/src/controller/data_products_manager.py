@@ -2479,7 +2479,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             tag_strings = tag_strings + [d.domain_name for d in assigned if d.domain_name]
         except Exception as dom_err:
-            logger.debug(f"Could not load domains for product {product.id} search index: {dom_err}")
+            logger.debug("Could not load domains for product %s search index: %s", product.id, dom_err)
 
         extra_data = {
             "status": product.status or "",

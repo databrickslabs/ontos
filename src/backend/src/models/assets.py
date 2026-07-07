@@ -677,6 +677,11 @@ class AssetSummary(BaseModel):
     location: Optional[str] = None
     tags: Optional[List[str]] = None
     status: AssetStatus
+    # Multi-domain assignment (#520): carried on summaries so list rows can show domain
+    # badges and edit dialogs (fed an AssetSummary) preserve domains on save.
+    domain_ids: List[str] = Field(default_factory=list)
+    primary_domain_id: Optional[str] = None
+    domains: List[AssignedDomain] = Field(default_factory=list)
     parent_id: Optional[UUID] = Field(None, description="ID of the parent asset (from hierarchical relationship)")
     parent_name: Optional[str] = Field(None, description="Name of the parent asset")
     updated_at: Optional[datetime] = None

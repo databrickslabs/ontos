@@ -349,8 +349,20 @@ class AssetsManager(SearchableAsset):
             db, skip=skip, limit=limit, **filter_kwargs,
         )
         total = self._asset_repo.count_filtered(db, **filter_kwargs)
+        summaries = [self._asset_to_summary(a) for a in db_assets]
+        # Batch-load domain assignments for the page (avoids N+1) and attach to summaries
+        # so list rows show domain badges and edit dialogs preserve domains on save (#520).
+        if summaries:
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                db, entity_type="asset", entity_ids=[str(s.id) for s in summaries]
+            )
+            for s in summaries:
+                assigned = domains_map.get(str(s.id), [])
+                s.domains = assigned
+                s.domain_ids = [d.domain_id for d in assigned]
+                s.primary_domain_id = next((d.domain_id for d in assigned if d.is_primary), None)
         return PaginatedAssetSummary(
-            items=[self._asset_to_summary(a) for a in db_assets],
+            items=summaries,
             total=total,
             skip=skip,
             limit=limit,

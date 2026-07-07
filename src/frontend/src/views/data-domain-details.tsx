@@ -501,7 +501,7 @@ export default function DataDomainDetailsView() {
     await Promise.all([
       load(`/api/data-products?domain_id=${domainId}`, setDomainProducts),
       load(`/api/data-contracts?domain_id=${domainId}`, setDomainContracts),
-      load(`/api/assets?domain_id=${domainId}&limit=200`, setDomainAssets),
+      load(`/api/assets?domain_id=${domainId}&limit=1000`, setDomainAssets),
     ]);
   }, [get]);
 

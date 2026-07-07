@@ -405,7 +405,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             primary_domain = next((d.domain_name for d in assigned if d.is_primary), "") or ""
             tag_names = tag_names + [d.domain_name for d in assigned if d.domain_name]
         except Exception as dom_err:
-            logger.debug(f"Could not load domains for contract {contract_id} search index: {dom_err}")
+            logger.debug("Could not load domains for contract %s search index: %s", contract_id, dom_err)
 
         extra_data = {
             "version": str(version) if version else "",

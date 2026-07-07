@@ -2,9 +2,9 @@ name: Test Coverage
 
 on:
   push:
-    branches: [main, development]
+    branches: [main, develop, development]
   pull_request:
-    branches: [main, development]
+    branches: [main, develop, development]
   # Required by the merge queue: GitHub builds each batch on a temporary
   # gh-readonly-queue/<base>/... branch and fires a merge_group event. The
   # required status checks must run on that event or queued PRs hang forever

@@ -38,9 +38,9 @@ class DataProductFileModel(FileModel[DataProductDb]):
         result['status'] = entity.status
         result['type'] = entity.type
         
-        # Domain and ownership
-        if entity.domain_id:
-            result['domainId'] = entity.domain_id
+        # Domain assignment is polymorphic (entity_domain_associations) and is emitted by the
+        # ODPS export path (DomainExportAdapter); it is not available on this session-less
+        # YAML serializer. (Previously this referenced entity.domain_id, which never existed.)
         if entity.owner_team_id:
             result['ownerTeamId'] = entity.owner_team_id
         

@@ -45,7 +45,6 @@ def _make_active_source(db: Session, **overrides) -> DataProductDb:
         status="active",
         name="source-product",
         version="1.0.0",
-        domain="d1",
         tenant=None,
         owner_team_id=None,
         max_level_inheritance=99,

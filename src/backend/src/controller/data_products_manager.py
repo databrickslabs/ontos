@@ -56,6 +56,8 @@ from src.models.data_products import (
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
+from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.controller.domain_export_adapter import domain_export_adapter
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -113,6 +115,50 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning("NotificationsManager not provided. Notifications will not be sent.")
         if not self._tags_manager:
             logger.warning("TagsManager not provided. Tag operations will not be available.")
+
+    def _attach_domains(self, api_obj):
+        """Populate a DataProduct API model's domain fields from the junction table."""
+        if api_obj is None or not getattr(api_obj, "id", None):
+            return api_obj
+        try:
+            assigned = entity_domain_repo.get_domains_for_entity(
+                self._db, entity_type="data_product", entity_id=str(api_obj.id)
+            )
+            api_obj.domain_ids = [d.domain_id for d in assigned]
+            primary = next((d for d in assigned if d.is_primary), None)
+            api_obj.primary_domain_id = primary.domain_id if primary else None
+            api_obj.domain = primary.domain_name if primary else None
+        except Exception as e:
+            logger.warning(f"Failed to attach domains for product {getattr(api_obj, 'id', '?')}: {e}")
+        return api_obj
+
+    def _resolve_product_domain_assignment(self, data: dict) -> tuple:
+        """Resolve a product payload to (domain_ids, primary_domain_id).
+
+        Prefers domain_ids + primary_domain_id; falls back to the legacy single ``domain``
+        (which may be a domain ID or name). Names are resolved via the data domain repo.
+        """
+        from src.repositories.data_domain_repository import data_domain_repo
+
+        def _resolve_one(value):
+            if not value:
+                return None
+            if data_domain_repo.get(self._db, value):
+                return value
+            byname = data_domain_repo.get_by_name(self._db, name=value)
+            return byname.id if byname else None
+
+        raw_ids = data.get('domain_ids')
+        if isinstance(raw_ids, list) and raw_ids:
+            resolved = [r for r in (_resolve_one(str(x)) for x in raw_ids) if r]
+            primary = data.get('primary_domain_id')
+            primary = _resolve_one(str(primary)) if primary else None
+            if primary not in resolved:
+                primary = resolved[0] if resolved else None
+            return resolved, primary
+
+        single = _resolve_one(data.get('domain'))
+        return ([single], single) if single else ([], None)
 
     def get_statuses(self) -> List[str]:
         """Get all ODPS v1.0.0 status values."""
@@ -191,6 +237,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Create via repository
             created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
+
+            # Assign domains via the junction table (accepts domain_ids/primary_domain_id
+            # or legacy single `domain` id/name).
+            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(product_data)
+            if prod_domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db_session, entity_type="data_product", entity_id=created_db_obj.id,
+                    domain_ids=prod_domain_ids, primary_domain_id=prod_primary, assigned_by=user,
+                )
 
             # Handle tag assignments
             if tags_data and self._tags_manager:
@@ -477,6 +532,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Update via repository
             updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
 
+            # Replace domain assignments when the caller supplied any domain field.
+            if any(k in product_data_dict for k in ('domain_ids', 'primary_domain_id', 'domain')):
+                upd_domain_ids, upd_primary = self._resolve_product_domain_assignment(product_data_dict)
+                entity_domain_repo.set_domains_for_entity(
+                    db_session, entity_type="data_product", entity_id=product_id,
+                    domain_ids=upd_domain_ids, primary_domain_id=upd_primary, assigned_by=user,
+                )
+
             # Handle tag updates
             if tags_data is not None and self._tags_manager:
                 try:
@@ -673,7 +736,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Get product info before deletion for change log
             product_db = self._repo.get(db=self._db, id=product_id)
             product_name = product_db.name if product_db else None
-            
+
+            entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
             
             if deleted_obj:
@@ -1559,8 +1623,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             new_product_api_model = DataProductCreate(**new_product_data)
             created_db_obj = self._repo.create(db=self._db, obj_in=new_product_api_model)
 
+            # Carry the source product's domain assignments onto the new version.
+            d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
+            if d_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    self._db, entity_type="data_product", entity_id=created_db_obj.id,
+                    domain_ids=d_ids, primary_domain_id=d_primary, assigned_by="system",
+                )
+
             logger.info(f"Successfully created new version {request.new_version} (ID: {created_db_obj.id})")
-            result = DataProductApi.model_validate(created_db_obj)
+            result = self._attach_domains(DataProductApi.model_validate(created_db_obj))
             self._update_search_index(result)
             return result
 
@@ -1678,7 +1750,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 status='draft' if as_personal_draft else DataProductStatus.DRAFT.value,
                 name=source_product.name,
                 version=new_version,
-                domain=source_product.domain,
                 tenant=source_product.tenant,
                 project_id=source_product.project_id,
                 owner_team_id=source_product.owner_team_id,
@@ -1692,6 +1763,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             db.add(new_product)
             db.flush()
+
+            # Copy domain assignments from the source product.
+            src_domains = entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_product", entity_id=source_product.id
+            )
+            if src_domains:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_product", entity_id=new_product.id,
+                    domain_ids=[d.domain_id for d in src_domains],
+                    primary_domain_id=next((d.domain_id for d in src_domains if d.is_primary), None),
+                    assigned_by=current_user,
+                )
             
             # Clone Description (One-to-One)
             if source_product.description:
@@ -1904,7 +1987,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(new_product)
             
             logger.info(f"Successfully cloned product {product_id} to new version {new_version} (ID: {new_id})")
-            return DataProductApi.model_validate(new_product)
+            return self._attach_domains(DataProductApi.model_validate(new_product))
             
         except SQLAlchemyError as e:
             db.rollback()
@@ -2006,7 +2089,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(draft)
             
             logger.info(f"Committed personal draft {draft_id} as version {new_version}")
-            return DataProductApi.model_validate(draft)
+            return self._attach_domains(DataProductApi.model_validate(draft))
             
         except SQLAlchemyError as e:
             db.rollback()
@@ -2470,7 +2553,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
     def _load_product_with_tags(self, db_obj) -> DataProductApi:
         """Helper to load an ODPS data product with its associated tags."""
         try:
-            product_api = DataProductApi.model_validate(db_obj)
+            product_api = self._attach_domains(DataProductApi.model_validate(db_obj))
 
             if self._tags_manager:
                 try:
@@ -2526,7 +2609,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         except Exception as e:
             logger.error(f"Failed to load ODPS product with tags: {e}")
-            return DataProductApi.model_validate(db_obj)
+            return self._attach_domains(DataProductApi.model_validate(db_obj))
 
     def assign_tag_to_product(self, product_id: str, tag_id: str, assigned_value: Optional[str] = None,
                               assigned_by: str = "system") -> bool:
@@ -2663,7 +2746,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             'name': product_name,
             'version': version,
             'status': DataProductStatus.DRAFT.value,
-            'domain': contract_db.domain_id,  # Inherit from contract
             'description': {
                 'purpose': f"Data Product created from contract: {contract_db.name}",
                 'limitations': None,
@@ -2686,6 +2768,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 'name': f"Team from contract {contract_db.name}",
                 'members': []  # Could populate from contract owner
             }
+
+        # Inherit the contract's domain assignments.
+        contract_domains = entity_domain_repo.get_domains_for_entity(
+            self._db, entity_type="data_contract", entity_id=contract_id
+        )
+        if contract_domains:
+            product_data['domain_ids'] = [d.domain_id for d in contract_domains]
+            product_data['primary_domain_id'] = next(
+                (d.domain_id for d in contract_domains if d.is_primary), None
+            )
 
         # Create the product
         created_product = self.create_product(product_data)
@@ -2974,8 +3066,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             odps["name"] = product.name
         if product.version:
             odps["version"] = product.version
-        if product.domain:
-            odps["domain"] = product.domain
+        # Domain fields (primary name + additionalDomains) via the shared export adapter.
+        domain_export_adapter.apply_odcs(odps, session, "data_product", product_id)
         if product.tenant:
             odps["tenant"] = product.tenant
 

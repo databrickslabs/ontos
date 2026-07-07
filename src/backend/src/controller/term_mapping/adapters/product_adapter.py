@@ -28,7 +28,11 @@ class ProductAdapter:
         if filters.product_ids:
             q = q.filter(DataProductDb.id.in_(filters.product_ids))
         if filters.domain_ids:
-            q = q.filter(DataProductDb.domain.in_(filters.domain_ids))
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+            matching_ids = entity_domain_repo.find_entity_ids_by_domains(
+                db, domain_ids=list(filters.domain_ids), entity_type="data_product"
+            )
+            q = q.filter(DataProductDb.id.in_(matching_ids or ["__none__"]))
 
         if filters.limit:
             q = q.limit(filters.limit)

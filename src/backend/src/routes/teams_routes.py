@@ -57,7 +57,7 @@ def create_team(
     """Creates a new team."""
     success = False
     details_for_audit = {
-        "params": {"team_name": team_in.name, "domain_id": team_in.domain_id if hasattr(team_in, 'domain_id') else None},
+        "params": {"team_name": team_in.name, "domain_ids": team_in.domain_ids},
     }
     created_team_id = None
 
@@ -102,12 +102,16 @@ def get_all_teams(
     manager = Depends(get_teams_manager),
     skip: int = 0,
     limit: int = 100,
-    domain_id: Optional[str] = Query(None, description="Filter teams by domain ID")
+    domain_id: Optional[str] = Query(None, description="Filter teams by a single domain ID (any-of)"),
+    domain_ids: Optional[str] = Query(None, description="Filter teams by multiple domain IDs, comma-separated (any-of)")
 ):
-    """Lists all teams, optionally filtered by domain."""
-    logger.debug(f"Fetching teams (skip={skip}, limit={limit}, domain_id={domain_id})")
+    """Lists all teams, optionally filtered by domain(s) (any-of)."""
+    logger.debug(f"Fetching teams (skip={skip}, limit={limit}, domain_id={domain_id}, domain_ids={domain_ids})")
     try:
-        return manager.get_all_teams(db=db, skip=skip, limit=limit, domain_id=domain_id)
+        domain_id_list = [d for d in (domain_ids.split(",") if domain_ids else []) if d.strip()]
+        return manager.get_all_teams(
+            db=db, skip=skip, limit=limit, domain_id=domain_id, domain_ids=domain_id_list or None
+        )
     except Exception as e:
         logger.exception(f"Failed to fetch teams: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch teams")
@@ -121,12 +125,14 @@ def get_all_teams(
 def get_teams_summary(
     db: DBSessionDep,
     manager = Depends(get_teams_manager),
-    domain_id: Optional[str] = Query(None, description="Filter teams by domain ID")
+    domain_id: Optional[str] = Query(None, description="Filter teams by a single domain ID (any-of)"),
+    domain_ids: Optional[str] = Query(None, description="Filter teams by multiple domain IDs, comma-separated (any-of)")
 ):
     """Gets a summary list of teams for dropdowns/selection."""
-    logger.debug(f"Fetching teams summary for domain_id={domain_id}")
+    logger.debug(f"Fetching teams summary for domain_id={domain_id}, domain_ids={domain_ids}")
     try:
-        return manager.get_teams_summary(db=db, domain_id=domain_id)
+        domain_id_list = [d for d in (domain_ids.split(",") if domain_ids else []) if d.strip()]
+        return manager.get_teams_summary(db=db, domain_id=domain_id, domain_ids=domain_id_list or None)
     except Exception as e:
         logger.exception(f"Failed to fetch teams summary: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch teams summary")

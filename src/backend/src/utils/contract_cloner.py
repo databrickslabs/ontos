@@ -75,7 +75,7 @@ class ContractCloner:
             'owner_team_id': source_contract_db.owner_team_id,
             'tenant': source_contract_db.tenant,
             'data_product': source_contract_db.data_product,
-            'domain_id': source_contract_db.domain_id,
+            # domain assignment is copied separately via entity_domain_associations
             'project_id': source_contract_db.project_id,
 
             # Copy descriptions

@@ -7,6 +7,7 @@ Tools for searching, creating, updating, and deleting teams.
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
@@ -42,11 +43,15 @@ class SearchTeamsTool(BaseTool):
         
         try:
             from src.db_models.teams import TeamDb
-            
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
             db_query = ctx.db.query(TeamDb)
             if domain_id:
-                db_query = db_query.filter(TeamDb.domain_id == domain_id)
-            
+                team_ids = entity_domain_repo.find_entity_ids_by_domain(
+                    ctx.db, domain_id=domain_id, entity_type="team"
+                )
+                db_query = db_query.filter(TeamDb.id.in_(team_ids or ["__none__"]))
+
             teams_db = db_query.limit(500).all()
             logger.debug(f"[search_teams] Found {len(teams_db)} total teams in database")
             
@@ -74,7 +79,11 @@ class SearchTeamsTool(BaseTool):
                         "name": t.name,
                         "title": t.title,
                         "description": t.description,
-                        "domain_id": str(t.domain_id) if t.domain_id else None,
+                        "domain_ids": [
+                            d.domain_id for d in entity_domain_repo.get_domains_for_entity(
+                                ctx.db, entity_type="team", entity_id=str(t.id)
+                            )
+                        ],
                         "member_count": len(t.members) if t.members else 0
                     })
             
@@ -142,8 +151,12 @@ class GetTeamTool(BaseTool):
                     "name": team.name,
                     "title": team.title,
                     "description": team.description,
-                    "domain_id": str(team.domain_id) if team.domain_id else None,
-                    "domain_name": team.domain_name,
+                    "domains": [
+                        {"domain_id": d.domain_id, "domain_name": d.domain_name, "is_primary": d.is_primary}
+                        for d in entity_domain_repo.get_domains_for_entity(
+                            ctx.db, entity_type="team", entity_id=str(team.id)
+                        )
+                    ],
                     "member_count": len(team.members) if team.members else 0,
                     "members": members,
                     "created_at": team.created_at.isoformat() if team.created_at else None
@@ -201,7 +214,8 @@ class CreateTeamTool(BaseTool):
                 name=name,
                 title=title,
                 description=description or "",
-                domain_id=domain_id
+                domain_ids=[domain_id] if domain_id else [],
+                primary_domain_id=domain_id or None,
             )
             
             created = teams_manager.create_team(
@@ -285,8 +299,10 @@ class UpdateTeamTool(BaseTool):
             if description is not None:
                 update_data["description"] = description
             if domain_id is not None:
-                update_data["domain_id"] = domain_id if domain_id else None
-            
+                # Single-domain tool contract maps onto multi-domain replace-all.
+                update_data["domain_ids"] = [domain_id] if domain_id else []
+                update_data["primary_domain_id"] = domain_id or None
+
             if not update_data:
                 return ToolResult(
                     success=False,

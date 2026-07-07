@@ -34,6 +34,7 @@ These tables use an `entity_type` + `entity_id` pattern to link to any entity.
 | `entity_relationships` | Typed relationships between any two entities |
 | `entity_subscriptions` | User subscriptions / notifications |
 | `entity_tag_associations` | Tag assignments |
+| `entity_domain_associations` | Data domain assignments — multi-domain with one `is_primary` per entity (`entity_type` ∈ {`team`, `data_contract`, `data_product`, `asset`}). Primary feeds single-value integrations (ODCS/ODPS `domain`, UC `data_domain` tag); additional domains ride extension fields and any-of discovery. See `docs/prds/prd-multi-domain-assignment.md`. |
 | `entity_semantic_links` | Links to ontology concepts/properties (`entity_type` ∈ {`data_domain`, `data_product`, `data_contract`, `data_contract_schema`, `data_contract_property`, `asset`, `uc_catalog`, `uc_schema`, `uc_table`, `uc_column`, `dataset` _(legacy)_}) |
 | `rich_text_metadata` | Rich-text notes |
 | `link_metadata` | External link bookmarks |

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { AssetRead, AssetCreate, AssetUpdate } from '@/types/asset';
 import { EntityFieldDefinition, EntityTypeSchema } from '@/types/ontology-schema';
 import { useTranslation } from 'react-i18next';
@@ -121,6 +122,12 @@ export function AssetFormDialog({
       defaults.status = asset.status || 'draft';
       defaults.platform = asset.platform || '';
       defaults.location = asset.location || '';
+      defaults.domain_ids = (asset.domains && asset.domains.length > 0)
+        ? asset.domains.map(d => d.domain_id)
+        : (asset.domain_id ? [asset.domain_id] : []);
+      defaults.primary_domain_id = asset.primary_domain_id
+        ?? asset.domains?.find(d => d.is_primary)?.domain_id
+        ?? asset.domain_id ?? null;
       const props = asset.properties || {};
       if (schema?.fields) {
         for (const f of schema.fields) {
@@ -134,6 +141,8 @@ export function AssetFormDialog({
       defaults.status = 'draft';
       defaults.platform = '';
       defaults.location = '';
+      defaults.domain_ids = [];
+      defaults.primary_domain_id = null;
       if (schema?.fields) {
         for (const f of schema.fields) {
           if (TOP_LEVEL_FIELDS.has(f.name) || SYSTEM_FIELDS.has(f.name)) continue;
@@ -172,6 +181,8 @@ export function AssetFormDialog({
           status: values.status || null,
           platform: values.platform || null,
           location: values.location || null,
+          domain_ids: values.domain_ids || [],
+          primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPut<AssetRead>(`/api/assets/${asset.id}`, payload);
@@ -186,6 +197,8 @@ export function AssetFormDialog({
           status: values.status || 'draft',
           platform: values.platform || null,
           location: values.location || null,
+          domain_ids: values.domain_ids || [],
+          primary_domain_id: values.primary_domain_id ?? null,
           properties: Object.keys(properties).length > 0 ? properties : null,
         };
         const response = await apiPost<AssetRead>('/api/assets', payload);
@@ -301,6 +314,27 @@ export function AssetFormDialog({
                       <FormLabel>Location</FormLabel>
                       <FormControl>
                         <Input placeholder="e.g. catalog.schema.table" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="domain_ids"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Domains</FormLabel>
+                      <FormControl>
+                        <DomainMultiSelector
+                          value={field.value || []}
+                          primaryDomainId={form.watch('primary_domain_id')}
+                          onChange={(domainIds, primaryDomainId) => {
+                            field.onChange(domainIds);
+                            form.setValue('primary_domain_id', primaryDomainId);
+                          }}
+                          placeholder="Select domains..."
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

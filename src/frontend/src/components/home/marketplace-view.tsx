@@ -292,12 +292,20 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     if (selectedDomainId) {
       if (!matchSets) return []; // Still loading match sets
       filtered = filtered.filter(p => {
+        // Any-of semantics (#520 story 9/10): match when ANY of the product's assigned
+        // domains (primary OR additional) falls in the selected domain (+descendants) set,
+        // not just the primary. domain_ids carries all assignments; fall back to the
+        // legacy primary `domain` id/name for products not yet re-indexed.
+        const assignedIds = (p as any)?.domain_ids as string[] | undefined;
+        if (assignedIds && assignedIds.length > 0) {
+          if (assignedIds.some(id => matchSets.ids.has(String(id)))) return true;
+        }
         const productDomainRaw = p?.domain;
         const productDomainIdLike = productDomainRaw != null ? String(productDomainRaw) : '';
         const productDomainLower = productDomainIdLike.toLowerCase();
         if (!productDomainLower) return false;
-        if (matchSets.ids.has(productDomainIdLike)) return true; // Match by id
-        if (matchSets.namesLower.has(productDomainLower)) return true; // Match by name
+        if (matchSets.ids.has(productDomainIdLike)) return true; // Match by id (primary)
+        if (matchSets.namesLower.has(productDomainLower)) return true; // Match by name (primary)
         return false;
       });
     }

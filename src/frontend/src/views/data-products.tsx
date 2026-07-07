@@ -539,7 +539,10 @@ export default function DataProducts() {
       cell: ({ row }) => {
         const product = row.original;
         const domainName = product.domain;
-        const domainId = getDomainIdByName(domainName);
+        const domainId = product.primary_domain_id || getDomainIdByName(domainName);
+        // Multi-domain (#520): show a +N indicator for additional (non-primary) domains.
+        const totalDomains = product.domain_ids?.length ?? (domainId ? 1 : 0);
+        const additionalCount = Math.max(0, totalDomains - 1);
         return (
           <div>
             <div className="font-medium">{product.name || 'Unnamed Product'}</div>
@@ -551,7 +554,7 @@ export default function DataProducts() {
                   navigate(`/settings/data-domains/${domainId}`);
                 }}
               >
-                ↳ Domain: {domainName}
+                ↳ Domain: {domainName}{additionalCount > 0 && ` +${additionalCount}`}
               </div>
             )}
           </div>

@@ -30,8 +30,10 @@ export type DataContractListItem = {
   // Summary field from list endpoint
   schemaObjectCount?: number
   // Fields returned by summary endpoint for compatibility
-  domain?: string
-  domainId?: string
+  domain?: string // Primary domain name
+  domainId?: string // Legacy single-domain (primary) id
+  domainIds?: string[] // Multi-domain assignment (primary first)
+  primaryDomainId?: string | null
   kind?: string
   apiVersion?: string
   tenant?: string
@@ -257,8 +259,10 @@ export interface DataContract {
   status: string
   name: string
   tenant?: string
-  domain?: string // Legacy field (domain name)
-  domainId?: string // Domain ID for backend API
+  domain?: string // Primary domain name
+  domainId?: string // Legacy single-domain (primary) id
+  domainIds?: string[] // Multi-domain assignment (primary first)
+  primaryDomainId?: string | null
   dataProduct?: string
   owner_team_id?: string // UUID of the owning team
   owner_team_name?: string // Display name of the owning team
@@ -405,6 +409,8 @@ export type DataContractCreate = {
   apiVersion?: string
   domain?: string
   domainId?: string
+  domainIds?: string[] // Multi-domain assignment (primary included)
+  primaryDomainId?: string | null
   tenant?: string
   dataProduct?: string
   description?: ContractDescription

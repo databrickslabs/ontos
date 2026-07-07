@@ -350,10 +350,18 @@ export default function AssetDetailView() {
                     <p className="text-sm mt-1">{asset.platform}</p>
                   </div>
                 )}
-                {asset.domain_id && (
+                {((asset.domains && asset.domains.length > 0) || asset.domain_id) && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Domain</Label>
-                    <p className="text-sm mt-1">{asset.domain_id}</p>
+                    <Label className="text-xs text-muted-foreground">
+                      {asset.domains && asset.domains.length > 1 ? 'Domains' : 'Domain'}
+                    </Label>
+                    <p className="text-sm mt-1">
+                      {asset.domains && asset.domains.length > 0
+                        ? asset.domains
+                            .map(d => (d.is_primary ? `${d.domain_name} (primary)` : d.domain_name))
+                            .join(', ')
+                        : asset.domain_id}
+                    </p>
                   </div>
                 )}
                 {asset.created_by && (

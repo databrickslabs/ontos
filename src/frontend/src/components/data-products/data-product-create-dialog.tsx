@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { ConsumerPrincipal, DataProduct, DataProductStatus } from '@/types/data-product';
-import { useDomains } from '@/hooks/use-domains';
+import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { useTeams } from '@/hooks/use-teams';
 import TagSelector from '@/components/ui/tag-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
@@ -50,7 +50,8 @@ const dataProductCreateSchema = z.object({
   productType: z.enum(productTypes).optional(),
   ownerTeamId: z.string().optional(),
   projectId: z.string().optional(),
-  domain: z.string().optional(),
+  domain_ids: z.array(z.string()).optional(),
+  primary_domain_id: z.string().nullable().optional(),
   tenant: z.string().optional(),
   purpose: z.string().optional(),
   limitations: z.string().optional(),
@@ -79,7 +80,6 @@ export default function DataProductCreateDialog({
   mode = 'create',
 }: DataProductCreateDialogProps) {
   const { toast } = useToast();
-  const { domains, loading: domainsLoading } = useDomains();
   const { teams, loading: teamsLoading } = useTeams();
   const { currentProject, availableProjects, isLoading: projectsLoading, fetchUserProjects } = useProjectContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,7 +94,8 @@ export default function DataProductCreateDialog({
       productType: undefined,
       ownerTeamId: '',
       projectId: '',
-      domain: '',
+      domain_ids: [],
+      primary_domain_id: null,
       tenant: '',
       purpose: '',
       limitations: '',
@@ -124,7 +125,8 @@ export default function DataProductCreateDialog({
           productType: productType || undefined,
           ownerTeamId: product.owner_team_id || '',
           projectId: product.project_id || '',
-          domain: product.domain || '',
+          domain_ids: product.domain_ids || [],
+          primary_domain_id: product.primary_domain_id ?? null,
           tenant: product.tenant || '',
           purpose: product.description?.purpose || '',
           limitations: product.description?.limitations || '',
@@ -141,7 +143,8 @@ export default function DataProductCreateDialog({
           productType: undefined,
           ownerTeamId: '',
           projectId: currentProject?.id || '',
-          domain: '',
+          domain_ids: [],
+          primary_domain_id: null,
           tenant: '',
           purpose: '',
           limitations: '',
@@ -189,7 +192,8 @@ export default function DataProductCreateDialog({
           name: data.name,
           version: data.version,
           status: data.status,
-          domain: data.domain || undefined,
+          domain_ids: data.domain_ids || [],
+          primary_domain_id: data.primary_domain_id ?? null,
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
@@ -252,7 +256,8 @@ export default function DataProductCreateDialog({
           name: data.name,
           version: data.version,
           status: data.status,
-          domain: data.domain || undefined,
+          domain_ids: data.domain_ids || [],
+          primary_domain_id: data.primary_domain_id ?? null,
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
           project_id: data.projectId || undefined,
@@ -478,28 +483,16 @@ export default function DataProductCreateDialog({
           {/* Optional Fields */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="domain">Domain</Label>
-              <Select
-                value={form.watch('domain') || undefined}
-                onValueChange={(value) => form.setValue('domain', value)}
-              >
-                <SelectTrigger id="domain">
-                  <SelectValue placeholder="Select domain..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {domainsLoading ? (
-                    <SelectItem value="loading" disabled>
-                      Loading...
-                    </SelectItem>
-                  ) : (
-                    domains.map((domain) => (
-                      <SelectItem key={domain.id} value={domain.id}>
-                        {domain.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="domain">Domains</Label>
+              <DomainMultiSelector
+                value={form.watch('domain_ids') || []}
+                primaryDomainId={form.watch('primary_domain_id')}
+                onChange={(domainIds, primaryDomainId) => {
+                  form.setValue('domain_ids', domainIds);
+                  form.setValue('primary_domain_id', primaryDomainId);
+                }}
+                placeholder="Select domains..."
+              />
             </div>
 
             <div className="space-y-2">

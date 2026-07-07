@@ -154,7 +154,12 @@ export default function TeamsView() {
       ),
       cell: ({ row }) => {
         const team = row.original;
-        const domainName = team.domain_name || getDomainName(team.domain_id);
+        // Multi-domain (#520): prefer the assigned-domains list; fall back to legacy fields.
+        const primaryId = team.primary_domain_id || team.domain_id || (team.domain_ids && team.domain_ids[0]);
+        const primaryFromList = team.domains?.find(d => d.is_primary) || team.domains?.[0];
+        const primaryName = primaryFromList?.domain_name || team.domain_name || getDomainName(primaryId);
+        const totalDomains = team.domains?.length ?? team.domain_ids?.length ?? (primaryId ? 1 : 0);
+        const additionalCount = Math.max(0, totalDomains - 1);
         return (
           <div>
             <span
@@ -166,15 +171,16 @@ export default function TeamsView() {
             >
               {team.name}
             </span>
-            {domainName && team.domain_id && (
+            {primaryName && primaryId && (
               <div
                 className="text-xs text-muted-foreground cursor-pointer hover:underline"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/settings/data-domains/${team.domain_id}`);
+                  navigate(`/settings/data-domains/${primaryId}`);
                 }}
               >
-                {t('table.domainPrefix')} {domainName}
+                {t('table.domainPrefix')} {primaryName}
+                {additionalCount > 0 && ` +${additionalCount}`}
               </div>
             )}
           </div>

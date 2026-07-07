@@ -331,20 +331,23 @@ export default function DataContracts() {
       },
       cell: ({ row }) => {
         const contract = row.original;
-        const domainId = (contract as any).domain_id || (contract as any).domainId;
-        const domainName = getDomainName(domainId);
+        const primaryId = (contract as any).primaryDomainId || (contract as any).domain_id || (contract as any).domainId;
+        const domainName = (contract as any).domain || getDomainName(primaryId);
+        // Multi-domain (#520): show a +N indicator for additional (non-primary) domains.
+        const totalDomains = (contract as any).domainIds?.length ?? (primaryId ? 1 : 0);
+        const additionalCount = Math.max(0, totalDomains - 1);
         return (
           <div>
             <div className="font-medium">{row.getValue("name")}</div>
-            {domainName && domainId && (
+            {domainName && primaryId && (
               <div
                 className="text-xs text-muted-foreground cursor-pointer hover:underline"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/settings/data-domains/${domainId}`);
+                  navigate(`/settings/data-domains/${primaryId}`);
                 }}
               >
-                ↳ Domain: {domainName}
+                ↳ Domain: {domainName}{additionalCount > 0 && ` +${additionalCount}`}
               </div>
             )}
           </div>

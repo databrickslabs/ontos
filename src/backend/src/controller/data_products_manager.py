@@ -116,13 +116,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not self._tags_manager:
             logger.warning("TagsManager not provided. Tag operations will not be available.")
 
-    def _attach_domains(self, api_obj):
-        """Populate a DataProduct API model's domain fields from the junction table."""
+    def _attach_domains(self, api_obj, db: Optional[Session] = None):
+        """Populate a DataProduct API model's domain fields from the junction table.
+
+        Callers that operate on an explicit session (clone/new-version/import) must pass
+        that ``db`` so associations written-but-not-yet-committed on it are visible;
+        otherwise the manager's own session is used.
+        """
         if api_obj is None or not getattr(api_obj, "id", None):
             return api_obj
+        session = db if db is not None else self._db
         try:
             assigned = entity_domain_repo.get_domains_for_entity(
-                self._db, entity_type="data_product", entity_id=str(api_obj.id)
+                session, entity_type="data_product", entity_id=str(api_obj.id)
             )
             api_obj.domain_ids = [d.domain_id for d in assigned]
             primary = next((d for d in assigned if d.is_primary), None)
@@ -1987,7 +1993,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(new_product)
             
             logger.info(f"Successfully cloned product {product_id} to new version {new_version} (ID: {new_id})")
-            return self._attach_domains(DataProductApi.model_validate(new_product))
+            return self._attach_domains(DataProductApi.model_validate(new_product), db=db)
             
         except SQLAlchemyError as e:
             db.rollback()
@@ -2089,7 +2095,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(draft)
             
             logger.info(f"Committed personal draft {draft_id} as version {new_version}")
-            return self._attach_domains(DataProductApi.model_validate(draft))
+            return self._attach_domains(DataProductApi.model_validate(draft), db=db)
             
         except SQLAlchemyError as e:
             db.rollback()

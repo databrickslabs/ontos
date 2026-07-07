@@ -201,7 +201,9 @@ class AssetBulkManager:
                 asset_ids_for_domain = entity_domain_repo.find_entity_ids_by_domain(
                     db, domain_id=domain_id, entity_type="asset"
                 )
-                query = query.filter(AssetDb.id.in_(asset_ids_for_domain or ["__none__"]))
+                # Empty list -> always-false predicate (no rows). A string sentinel
+                # would crash: AssetDb.id is a Postgres UUID column.
+                query = query.filter(AssetDb.id.in_(asset_ids_for_domain))
             if status:
                 query = query.filter(AssetDb.status == status)
 
@@ -616,7 +618,10 @@ class AssetBulkManager:
             platform_val = row.get("platform", "").strip() or None
             location_val = row.get("location", "").strip() or None
             # domain_ids: semicolon-separated; the first entry is treated as primary.
-            domain_ids_val = [d.strip() for d in row.get("domain_ids", "").split(";") if d.strip()]
+            # Accept the legacy single-value "domain_id" header too, so CSVs exported by
+            # the pre-#520 version still round-trip their domain on re-import.
+            domain_ids_raw = row.get("domain_ids", "") or row.get("domain_id", "")
+            domain_ids_val = [d.strip() for d in domain_ids_raw.split(";") if d.strip()]
             primary_domain_val = domain_ids_val[0] if domain_ids_val else None
             status_val = AssetStatus(status_raw) if status_raw else AssetStatus.ACTIVE
 

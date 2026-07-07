@@ -109,7 +109,9 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             asset_ids = entity_domain_repo.find_entity_ids_by_domains(
                 session, domain_ids=wanted, entity_type="asset"
             )
-            query = query.filter(self.model.id.in_(asset_ids or ["__none__"]))
+            # Empty list -> SQLAlchemy renders an always-false predicate (no rows). A
+            # string sentinel would crash here because AssetDb.id is a Postgres UUID.
+            query = query.filter(self.model.id.in_(asset_ids))
         if status:
             query = query.filter(self.model.status == status)
         if name:

@@ -32,7 +32,7 @@ class ProductAdapter:
             matching_ids = entity_domain_repo.find_entity_ids_by_domains(
                 db, domain_ids=list(filters.domain_ids), entity_type="data_product"
             )
-            q = q.filter(DataProductDb.id.in_(matching_ids or ["__none__"]))
+            q = q.filter(DataProductDb.id.in_(matching_ids))
 
         if filters.limit:
             q = q.limit(filters.limit)
@@ -41,13 +41,20 @@ class ProductAdapter:
         # rows are versioned per-product; for our purposes the product name on
         # DataProductDb itself is good enough (kept in sync by DataProductsManager).
         for product in q.all():
-            yield self._build(product)
+            yield self._build(db, product)
 
     def get_target(self, db: Session, entity_id: str) -> Optional[TargetEntity]:
         product = db.query(DataProductDb).filter(DataProductDb.id == entity_id).first()
-        return self._build(product) if product else None
+        return self._build(db, product) if product else None
 
-    def _build(self, product: DataProductDb) -> TargetEntity:
+    def _build(self, db: Session, product: DataProductDb) -> TargetEntity:
+        # Domain moved to the entity_domain_associations junction (#520); surface the
+        # primary domain name for the target's display metadata.
+        from src.repositories.entity_domain_association_repository import entity_domain_repo
+        assigned = entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_product", entity_id=str(product.id)
+        )
+        primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
         return TargetEntity(
             entity_type="data_product",
             entity_id=str(product.id),
@@ -56,6 +63,6 @@ class ProductAdapter:
             extras={
                 "version": product.version,
                 "status": product.status,
-                "domain": product.domain,
+                "domain": primary_domain,
             },
         )

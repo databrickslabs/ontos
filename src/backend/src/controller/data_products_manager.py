@@ -138,20 +138,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning(f"Failed to attach domains for product {getattr(api_obj, 'id', '?')}: {e}")
         return api_obj
 
-    def _resolve_product_domain_assignment(self, data: dict) -> tuple:
+    def _resolve_product_domain_assignment(self, data: dict, db: Optional[Session] = None) -> tuple:
         """Resolve a product payload to (domain_ids, primary_domain_id).
 
         Prefers domain_ids + primary_domain_id; falls back to the legacy single ``domain``
         (which may be a domain ID or name). Names are resolved via the data domain repo.
+        Uses the caller's ``db`` session when provided so resolution sees rows written in
+        the same request transaction.
         """
         from src.repositories.data_domain_repository import data_domain_repo
+        session = db if db is not None else self._db
 
         def _resolve_one(value):
             if not value:
                 return None
-            if data_domain_repo.get(self._db, value):
+            if data_domain_repo.get(session, value):
                 return value
-            byname = data_domain_repo.get_by_name(self._db, name=value)
+            byname = data_domain_repo.get_by_name(session, name=value)
             return byname.id if byname else None
 
         raw_ids = data.get('domain_ids')
@@ -246,7 +249,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
-            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(product_data)
+            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(product_data, db=db_session)
             if prod_domain_ids:
                 entity_domain_repo.set_domains_for_entity(
                     db_session, entity_type="data_product", entity_id=created_db_obj.id,
@@ -261,7 +264,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     logger.error(f"Failed to assign tags to product {created_db_obj.id}: {e}")
 
             # Load product with tags
-            result = self._load_product_with_tags(created_db_obj)
+            result = self._load_product_with_tags(created_db_obj, db=db_session)
             
             # Log to change log for timeline
             try:
@@ -540,7 +543,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Replace domain assignments when the caller supplied any domain field.
             if any(k in product_data_dict for k in ('domain_ids', 'primary_domain_id', 'domain')):
-                upd_domain_ids, upd_primary = self._resolve_product_domain_assignment(product_data_dict)
+                upd_domain_ids, upd_primary = self._resolve_product_domain_assignment(product_data_dict, db=db_session)
                 entity_domain_repo.set_domains_for_entity(
                     db_session, entity_type="data_product", entity_id=product_id,
                     domain_ids=upd_domain_ids, primary_domain_id=upd_primary, assigned_by=user,
@@ -557,7 +560,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     raise
 
             # Load product with tags
-            result = self._load_product_with_tags(updated_db_obj)
+            result = self._load_product_with_tags(updated_db_obj, db=db_session)
             
             # Log to change log for timeline
             try:
@@ -2556,10 +2559,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to assign tags to ODPS product {product_id}: {e}", exc_info=True)
 
-    def _load_product_with_tags(self, db_obj) -> DataProductApi:
-        """Helper to load an ODPS data product with its associated tags."""
+    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None) -> DataProductApi:
+        """Helper to load an ODPS data product with its associated tags.
+
+        ``db`` must be the caller's request session on write paths (create/update) so the
+        domains just written in that transaction are visible; otherwise the manager's
+        startup session is used and the response would show empty domains.
+        """
         try:
-            product_api = self._attach_domains(DataProductApi.model_validate(db_obj))
+            product_api = self._attach_domains(DataProductApi.model_validate(db_obj), db=db)
 
             if self._tags_manager:
                 try:

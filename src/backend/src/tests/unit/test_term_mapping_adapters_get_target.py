@@ -330,8 +330,8 @@ def test_product_adapter_get_target_builds_entity():
     # Domain now comes from the entity_domain_associations junction (#520): the
     # adapter surfaces the primary domain name.
     with patch.object(
-        edar.entity_domain_repo, "get_domains_for_entity",
-        return_value=[AssignedDomain(domain_id="dom-1", domain_name="customer", is_primary=True)],
+        edar.entity_domain_repo, "get_domains_for_entities",
+        return_value={product_id: [AssignedDomain(domain_id="dom-1", domain_name="customer", is_primary=True)]},
     ):
         target = ProductAdapter().get_target(db, product_id)
     assert target is not None

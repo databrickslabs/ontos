@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, AlertCircle, X, Loader2, Check, ChevronsUpDown } from 'lucide-react';
@@ -963,16 +962,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="domain_ids">Domains</Label>
-                                    <DomainMultiSelector
-                                      value={_watch('domain_ids') || []}
-                                      primaryDomainId={_watch('primary_domain_id')}
-                                      onChange={(domainIds, primaryDomainId) => {
-                                        setValue('domain_ids', domainIds, { shouldDirty: true });
-                                        setValue('primary_domain_id', primaryDomainId, { shouldDirty: true });
-                                      }}
-                                      placeholder="Select domains..."
-                                    />
+                                    <Label htmlFor="info.domain">Domain</Label>
+                                    <Input id="info.domain" {...register("info.domain")} />
+                                    {errors.info?.domain && <p className="text-sm text-red-600 mt-1">{errors.info.domain.message}</p>}
                                   </div>
                                   <div>
                                     <Label htmlFor="info.archetype">Archetype</Label>

@@ -505,14 +505,20 @@ def merge_dataset_tag_infos(contract_datasets: List[DatasetTagInfo], asset_datas
             existing.product_status = existing.product_status or d.product_status
             existing.asset_id = existing.asset_id or d.asset_id
             existing.asset_type_name = existing.asset_type_name or d.asset_type_name
-            # Domain: the primary and its additional domains belong to the SAME source, so
-            # adopt them together. Only take d's domain (+ its additionals) when `existing`
-            # had no primary yet — otherwise we'd tag existing's primary with additionals
-            # that belong to a different source's primary.
+            # Domain: a primary and its additional domains belong to the SAME source.
+            # - existing has no primary yet  -> adopt d's primary + its additionals.
+            # - both sources share the same primary -> union the additionals (both are
+            #   legitimate additional domains for this FQN).
+            # - primaries differ -> keep existing's; do NOT attach d's additionals to a
+            #   different source's primary.
             if not existing.domain_name and d.domain_name:
                 existing.domain_id = d.domain_id
                 existing.domain_name = d.domain_name
                 existing.additional_domain_names = list(d.additional_domain_names)
+            elif existing.domain_name and d.domain_name == existing.domain_name:
+                for name in d.additional_domain_names:
+                    if name not in existing.additional_domain_names:
+                        existing.additional_domain_names.append(name)
             # Union semantic links
             existing_iris = {link.iri for link in existing.semantic_links}
             for link in d.semantic_links:

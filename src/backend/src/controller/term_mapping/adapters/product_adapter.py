@@ -40,21 +40,33 @@ class ProductAdapter:
         # Look up the latest info record for the display name. The DataProductInfoDb
         # rows are versioned per-product; for our purposes the product name on
         # DataProductDb itself is good enough (kept in sync by DataProductsManager).
-        for product in q.all():
-            yield self._build(db, product)
+        products = q.all()
+        # Batch-load primary domains for all products in one query (avoids N+1) — domain
+        # moved to the entity_domain_associations junction (#520).
+        primary_by_id = self._primary_domains(db, [str(p.id) for p in products])
+        for product in products:
+            yield self._build(product, primary_by_id.get(str(product.id)))
 
     def get_target(self, db: Session, entity_id: str) -> Optional[TargetEntity]:
         product = db.query(DataProductDb).filter(DataProductDb.id == entity_id).first()
-        return self._build(db, product) if product else None
+        if not product:
+            return None
+        primary_by_id = self._primary_domains(db, [str(product.id)])
+        return self._build(product, primary_by_id.get(str(product.id)))
 
-    def _build(self, db: Session, product: DataProductDb) -> TargetEntity:
-        # Domain moved to the entity_domain_associations junction (#520); surface the
-        # primary domain name for the target's display metadata.
+    @staticmethod
+    def _primary_domains(db: Session, product_ids: List[str]) -> dict:
+        """Batch map of product_id -> primary domain name from the junction table."""
         from src.repositories.entity_domain_association_repository import entity_domain_repo
-        assigned = entity_domain_repo.get_domains_for_entity(
-            db, entity_type="data_product", entity_id=str(product.id)
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="data_product", entity_ids=product_ids
         )
-        primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
+        return {
+            eid: next((a.domain_name for a in assigned if a.is_primary), None)
+            for eid, assigned in domains_map.items()
+        }
+
+    def _build(self, product: DataProductDb, primary_domain: Optional[str]) -> TargetEntity:
         return TargetEntity(
             entity_type="data_product",
             entity_id=str(product.id),

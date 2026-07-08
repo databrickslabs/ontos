@@ -345,8 +345,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     # --- Implementation of SearchableAsset --- 
 
-    def _build_search_index_item(self, contract_db_obj, db, preloaded_tags=None) -> Optional[SearchIndexItem]:
-        """Build a SearchIndexItem from a contract DB object. Returns None if id or name missing."""
+    def _build_search_index_item(self, contract_db_obj, db, preloaded_tags=None, preloaded_domains=None) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a contract DB object. Returns None if id or name missing.
+
+        ``preloaded_domains`` (list of AssignedDomain) lets the bulk indexer batch the junction
+        lookup once instead of querying per contract; when omitted it queries per contract."""
         contract_id = getattr(contract_db_obj, 'id', None)
         name = getattr(contract_db_obj, 'name', None)
         if not contract_id or not name:
@@ -399,7 +402,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         # contract's domains (primary or additional) — issue #520 story 14.
         primary_domain = ""
         try:
-            assigned = entity_domain_repo.get_domains_for_entity(
+            assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
                 db, entity_type="data_contract", entity_id=str(contract_id)
             )
             primary_domain = next((d.domain_name for d in assigned if d.is_primary), "") or ""
@@ -455,8 +458,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 except Exception as e:
                     logger.debug(f"Batch tag loading for search index failed: {e}")
 
+                # Batch-load domains for all contracts at once (avoids N+1).
+                batch_domains: dict = {}
+                try:
+                    batch_domains = entity_domain_repo.get_domains_for_entities(
+                        db, entity_type="data_contract", entity_ids=contract_ids
+                    )
+                except Exception as e:
+                    logger.debug(f"Batch domain loading for search index failed: {e}")
+
                 for contract_db in contracts_db:
-                    item = self._build_search_index_item(contract_db, db, preloaded_tags=batch_tags.get(str(contract_db.id), []))
+                    item = self._build_search_index_item(
+                        contract_db, db,
+                        preloaded_tags=batch_tags.get(str(contract_db.id), []),
+                        preloaded_domains=batch_domains.get(str(contract_db.id), []),
+                    )
                     if item:
                         items.append(item)
 

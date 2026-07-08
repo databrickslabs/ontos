@@ -2422,7 +2422,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
     # --- SearchableAsset implementation ---
 
-    def _build_search_index_item(self, product: DataProductApi) -> Optional[SearchIndexItem]:
+    def _build_search_index_item(self, product: DataProductApi, preloaded_domains=None) -> Optional[SearchIndexItem]:
         """Convert a single DataProduct API model to a SearchIndexItem."""
         if not product.id or not product.name:
             return None
@@ -2474,7 +2474,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         # Index every assigned domain NAME so domain-keyed search matches by any of the
         # product's domains (primary or additional) — issue #520 story 14.
         try:
-            assigned = entity_domain_repo.get_domains_for_entity(
+            assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
                 self._db, entity_type="data_product", entity_id=str(product.id)
             )
             tag_strings = tag_strings + [d.domain_name for d in assigned if d.domain_name]
@@ -2519,8 +2519,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         items = []
         try:
             products_api = self.list_products(limit=10000, is_admin=True)
+            # Batch-load domains once for the whole index build (avoids N+1).
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_api]
+            ) if products_api else {}
             for product in products_api:
-                item = self._build_search_index_item(product)
+                item = self._build_search_index_item(product, preloaded_domains=domains_map.get(str(product.id), []))
                 if item:
                     items.append(item)
             logger.info(f"Prepared {len(items)} ODPS products for search index.")

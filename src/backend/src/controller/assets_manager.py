@@ -589,20 +589,27 @@ class AssetsManager(SearchableAsset):
     # SearchableAsset implementation
     # ------------------------------------------------------------------
 
-    def _build_search_index_item(self, asset_db_obj: AssetDb) -> Optional[SearchIndexItem]:
-        """Convert a single asset DB object to a SearchIndexItem. Returns None for retired assets."""
+    def _build_search_index_item(self, asset_db_obj: AssetDb, preloaded_domains=None) -> Optional[SearchIndexItem]:
+        """Convert a single asset DB object to a SearchIndexItem. Returns None for retired assets.
+
+        ``preloaded_domains`` (a list of AssignedDomain) lets the bulk indexer batch the
+        junction lookup once instead of querying per asset (avoids N+1); when omitted the
+        single-item path queries via the object's session.
+        """
         if asset_db_obj.status == 'retired':
             return None
         type_name = asset_db_obj.asset_type.name if asset_db_obj.asset_type else 'Asset'
         tags = list(asset_db_obj.tags) if isinstance(asset_db_obj.tags, list) else []
-        _session = object_session(asset_db_obj)
         primary_domain_id = None
-        if _session is not None:
-            # Index every assigned domain NAME so domain-keyed search matches by any of
-            # an entity's domains (primary or additional) — issue #520 story 14.
+        assigned = preloaded_domains
+        if assigned is None:
+            _session = object_session(asset_db_obj)
             assigned = entity_domain_repo.get_domains_for_entity(
                 _session, entity_type="asset", entity_id=str(asset_db_obj.id)
-            )
+            ) if _session is not None else []
+        if assigned:
+            # Index every assigned domain NAME so domain-keyed search matches by any of
+            # an entity's domains (primary or additional) — issue #520 story 14.
             primary_domain_id = next((d.domain_id for d in assigned if d.is_primary), None)
             tags = tags + [d.domain_name for d in assigned if d.domain_name]
         return SearchIndexItem(
@@ -639,8 +646,12 @@ class AssetsManager(SearchableAsset):
 
             with session_factory() as db:
                 all_assets = db.query(AssetDb).filter(AssetDb.status != 'retired').all()
+                # Batch-load domains once for the whole index build (avoids N+1).
+                domains_map = entity_domain_repo.get_domains_for_entities(
+                    db, entity_type="asset", entity_ids=[str(a.id) for a in all_assets]
+                ) if all_assets else {}
                 for a in all_assets:
-                    item = self._build_search_index_item(a)
+                    item = self._build_search_index_item(a, preloaded_domains=domains_map.get(str(a.id), []))
                     if item is not None:
                         items.append(item)
 

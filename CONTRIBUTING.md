@@ -151,6 +151,45 @@ yarn dev:backend
 - Backend API: http://localhost:8000
 - API Docs (Swagger): http://localhost:8000/docs
 
+### Running Multiple Worktrees Side-by-Side
+
+If you develop in more than one git worktree at once (e.g. one per feature
+branch), **each worktree must run its own frontend and backend on distinct
+ports** — otherwise a second worktree's servers bind to the same 3000/8000 and
+either fail to start or, worse, serve one branch's frontend against the other
+branch's backend. The default `3000`/`8000` are fine for a single worktree;
+give every additional worktree its own pair.
+
+All three ports are env-var driven, so no code edits are needed:
+
+| Variable | Default | Controls |
+|----------|---------|----------|
+| `BACKEND_PORT` | `8000` | uvicorn backend port (via the `dev-backend` hatch script) |
+| `BACKEND_HOST` | `0.0.0.0` | uvicorn backend host |
+| `VITE_PORT` | `3000` | Vite dev-server port |
+| `VITE_PROXY_TARGET` | `http://localhost:8000` | backend the Vite dev server proxies `/api`, `/docs`, `/redoc` to |
+
+Point the frontend at its own backend with `VITE_PROXY_TARGET` so the proxy
+targets the matching port. Example — a second worktree on backend `8100` /
+frontend `3100`:
+
+**Backend** (from `src/`):
+```bash
+BACKEND_PORT=8100 yarn dev:backend
+# or, without the yarn wrapper:
+BACKEND_PORT=8100 hatch -e dev run dev-backend
+```
+
+**Frontend** (from `src/frontend/`):
+```bash
+VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 yarn dev:frontend
+```
+
+Both worktrees can share the same local `app_ontos` PostgreSQL database; only
+the HTTP ports need to differ. Persist the values in each worktree's
+`.env` files (`src/backend/.env`, `src/frontend/.env`) to avoid repeating them
+on every launch.
+
 ---
 
 ## Commit Guidelines

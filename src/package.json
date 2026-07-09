@@ -1,7 +1,7 @@
 {
   "name": "ontos-backend-build",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Builds frontend and copies assets into backend static directory.",
   "engines": {
     "node": ">=18"

@@ -1236,6 +1236,39 @@ class SemanticModelsManager(SearchableAsset):
                     shutil.rmtree(temp_dir)
                 raise
 
+    def _ensure_caches_warm(self) -> bool:
+        """Repopulate both cache tiers from the current graph if they are cold.
+
+        Read paths call this on a cache miss so a single request re-warms the
+        caches for every subsequent read, instead of each request recomputing
+        SPARQL over the whole graph forever (the post-invalidation slow path).
+
+        Safe against staleness: it recomputes from ``self._graph``, which every
+        mutation path keeps fresh (full rebuild, or incremental graph edit +
+        invalidate). A warmed cache is therefore never staler than the graph.
+
+        Returns True if the in-memory caches are populated on return.
+        """
+        if (
+            self._cached_concepts is not None
+            and self._cached_taxonomies is not None
+            and self._cached_stats is not None
+        ):
+            return True
+        try:
+            # Reuse the atomic writer: it computes concepts/taxonomies/stats
+            # from the current graph, writes the JSON files under the rebuild
+            # lock, and sets self._cached_* — exactly what a warm-up needs.
+            self._build_persistent_caches_atomic()
+            return (
+                self._cached_concepts is not None
+                and self._cached_taxonomies is not None
+                and self._cached_stats is not None
+            )
+        except Exception as e:
+            logger.warning(f"Failed to warm semantic caches on read miss: {e}")
+            return False
+
     def _compute_taxonomies(self) -> List:
         """Compute taxonomies without caching - used for building persistent cache"""
         from src.models.ontology import SemanticModel as SemanticModelOntology
@@ -1389,9 +1422,14 @@ class SemanticModelsManager(SearchableAsset):
     # Call after create/update/delete/enable/disable
     def on_models_changed(self) -> None:
         try:
+            # rebuild_graph_from_enabled() already clears every cache tier and
+            # then rebuilds both the in-memory snapshots and the persistent JSON
+            # files from the fresh graph. Calling _invalidate_cache() afterwards
+            # would delete those just-built files and null the snapshots again,
+            # forcing every subsequent read to recompute SPARQL over the whole
+            # graph — the root cause of the post-mutation slowdown. So do NOT
+            # invalidate here; the rebuild is the authoritative refresh.
             self.rebuild_graph_from_enabled()
-            # Invalidate cache when models change
-            self._invalidate_cache()
         except Exception as e:
             logger.error(f"Failed to rebuild RDF graph: {e}")
 
@@ -2009,15 +2047,26 @@ class SemanticModelsManager(SearchableAsset):
         if self._cached_taxonomies is not None:
             return self._cached_taxonomies
 
-        # Cold start: fall back to persistent file cache
+        # Cold start: fall back to persistent file cache. Populate the in-memory
+        # snapshot too so we don't re-read + re-parse the file on every request.
+        # (File presence implies no mutation since the last rebuild — invalidation
+        # deletes these files — so loading it into memory is not a staleness risk.)
         cache_file = self._data_dir / "cache" / "taxonomies.json"
         if cache_file.exists():
             try:
                 with open(cache_file, "r") as f:
                     data = json.load(f)
-                    return [SemanticModelOntology(**item) for item in data]
+                    taxonomies = [SemanticModelOntology(**item) for item in data]
+                    self._cached_taxonomies = taxonomies
+                    return taxonomies
             except Exception as e:
                 logger.warning(f"Failed to load taxonomies from persistent cache: {e}")
+
+        # Cold cache: warm both tiers once so subsequent reads hit the cache
+        # instead of recomputing per request. Falls back to a direct compute if
+        # warming fails for any reason.
+        if self._ensure_caches_warm() and self._cached_taxonomies is not None:
+            return self._cached_taxonomies
 
         logger.warning("Persistent cache not found for taxonomies, computing live")
         taxonomies = self._compute_taxonomies()
@@ -2559,9 +2608,15 @@ class SemanticModelsManager(SearchableAsset):
             try:
                 with open(cache_file, "r") as f:
                     data = json.load(f)
-                    return TaxonomyStats(**data)
+                    stats = TaxonomyStats(**data)
+                    self._cached_stats = stats
+                    return stats
             except Exception as e:
                 logger.warning(f"Failed to load stats from persistent cache: {e}")
+
+        # Cold cache: warm both tiers once so subsequent reads hit the cache.
+        if self._ensure_caches_warm() and self._cached_stats is not None:
+            return self._cached_stats
 
         logger.warning("Persistent cache not found for stats, computing live")
         taxonomies = self.get_taxonomies()
@@ -2586,9 +2641,13 @@ class SemanticModelsManager(SearchableAsset):
                     with open(cache_file, "r") as f:
                         data = json.load(f)
                         concepts = [OntologyConcept(**item) for item in data]
+                        self._cached_concepts = concepts
                 except Exception as e:
                     logger.warning(f"Failed to load concepts from persistent cache: {e}")
                     concepts = self.get_concepts_by_taxonomy()
+            elif self._ensure_caches_warm() and self._cached_concepts is not None:
+                # Cold cache: warm both tiers once so subsequent reads hit it.
+                concepts = self._cached_concepts
             else:
                 logger.warning("Persistent cache not found for concepts, computing live")
                 concepts = self.get_concepts_by_taxonomy()

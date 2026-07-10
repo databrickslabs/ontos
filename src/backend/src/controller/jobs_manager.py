@@ -36,6 +36,12 @@ class JobsManager:
         self._running_jobs: Dict[int, str] = {}  # run_id -> notification_id
         self._polling_thread: Optional[threading.Thread] = None
         self._stop_polling = threading.Event()
+        # Tracks whether any workflows are installed, so the polling thread can
+        # skip its per-cycle DB query when there are none. None = unknown (do a
+        # DB check on the next cycle); False = confirmed zero (skip the DB so a
+        # workflow-free deployment lets Lakebase idle down); True = at least one.
+        # Authoritative because JobsManager is a single app-state singleton.
+        self._has_installations: Optional[bool] = None
 
     def list_available_workflows(self) -> List[Dict[str, str]]:
         root = self._workflows_root
@@ -205,6 +211,9 @@ class JobsManager:
             workflow_installation_repo.create(self._db, obj_in=installation)
             self._db.commit()
             logger.info(f"Persisted installation record for workflow '{workflow_id}' with job_id {job_id}")
+            # Wake the polling thread: it may have parked itself after confirming
+            # zero installations. None forces a DB re-check on the next cycle.
+            self._has_installations = None
         except Exception as e:
             logger.error(f"Failed to persist installation record for workflow '{workflow_id}': {e}")
             self._db.rollback()
@@ -1007,11 +1016,25 @@ class JobsManager:
         logger.info("Job state polling thread started")
 
         while not self._stop_polling.is_set():
+            # Skip the whole cycle — including opening a DB session — when we
+            # have confirmed there are zero installed workflows. Touching the DB
+            # every interval otherwise keeps Lakebase compute permanently warm on
+            # deployments that don't use the jobs feature (the reported
+            # "compute always active" symptom). install_workflow() resets this
+            # flag to None so a freshly installed workflow is picked up next cycle.
+            if self._has_installations is False:
+                if not self._stop_polling.is_set():
+                    self._stop_polling.wait(timeout=interval_seconds)
+                continue
+
             # Create a new database session for this polling iteration
             db = next(get_db())
             try:
                 # Get all installed workflows from database
                 installations = workflow_installation_repo.get_all_installed(db)
+                # Cache the presence signal so future cycles can skip the DB
+                # entirely when there is nothing to poll.
+                self._has_installations = len(installations) > 0
                 logger.info(f"Polling {len(installations)} installed workflows...")
 
                 for installation in installations:

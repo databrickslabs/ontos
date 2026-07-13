@@ -2,9 +2,9 @@ name: Test Coverage
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, development]
   pull_request:
-    branches: [main, develop]
+    branches: [main, development]
   # Required by the merge queue: GitHub builds each batch on a temporary
   # gh-readonly-queue/<base>/... branch and fires a merge_group event. The
   # required status checks must run on that event or queued PRs hang forever
@@ -62,7 +62,7 @@ jobs:
           files: ./src/coverage.xml
           flags: backend
           name: backend-coverage
-          # Required for uploads to protected branches (main/develop). Without
+          # Required for uploads to protected branches (main/development). Without
           # it Codecov rejects the upload ("Token required because branch is
           # protected") while the step stays green due to fail_ci_if_error:false,
           # which silently froze the coverage badges. Forks have no access to the

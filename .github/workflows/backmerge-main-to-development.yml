@@ -21,7 +21,13 @@ concurrency:
 
 jobs:
   backmerge:
-    runs-on: ubuntu-latest
+    # Must run on the protected runner group: the databrickslabs org has an IP
+    # allow list, and stock GitHub-hosted runner IPs are not on it, so any
+    # GitHub API call from ubuntu-latest fails with "your IP address is not
+    # permitted to access this resource".
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -31,6 +37,8 @@ jobs:
       - name: Open or reuse back-merge PR (main -> development)
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
 
@@ -42,15 +50,17 @@ jobs:
 
           # Reuse an existing open back-merge PR if one is already there
           # (a branch-to-branch PR auto-tracks new commits on main).
-          existing="$(gh pr list --base development --head main --state open \
-            --json number --jq '.[0].number // empty')"
+          # Plain REST via `gh api`; the gh pr subcommands use GraphQL.
+          existing="$(gh api "repos/${REPO}/pulls?base=development&head=${OWNER}:main&state=open" \
+            --jq '.[0].number // empty')"
           if [ -n "$existing" ]; then
             echo "Back-merge PR already open: #$existing (it will include the new commits)."
             exit 0
           fi
 
-          gh pr create \
-            --base development \
-            --head main \
-            --title "chore: back-merge main into development" \
-            --body "Automated back-merge to keep \`development\` in sync with \`main\`, triggered by a push to \`main\`. If GitHub reports conflicts, resolve them on this PR before merging. (Workflow: \`.github/workflows/backmerge-main-to-development.yml\`.)"
+          gh api "repos/${REPO}/pulls" \
+            -f base=development \
+            -f head=main \
+            -f title="chore: back-merge main into development" \
+            -f body="Automated back-merge to keep \`development\` in sync with \`main\`, triggered by a push to \`main\`. If GitHub reports conflicts, resolve them on this PR before merging. (Workflow: \`.github/workflows/backmerge-main-to-development.yml\`.)" \
+            --jq '"Opened back-merge PR #" + (.number | tostring)'

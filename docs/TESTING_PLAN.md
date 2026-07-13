@@ -1082,7 +1082,7 @@ name: Test Coverage
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, development]
   pull_request:
     branches: [main]
 

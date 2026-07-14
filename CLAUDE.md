@@ -22,6 +22,6 @@ Project-specific guidance for Claude Code lives in [`.cursor/rules/`](./.cursor/
 
 - **NEVER restart the dev server processes.** Backend and frontend run with auto-reload. See `08-testing-and-deployment.mdc`.
 - Backend logs: `/tmp/backend.log`. Frontend logs: `/tmp/frontend.log`. Read them for debugging.
-- Backend port: **8000**. Frontend port: **3000**. In a *separate* worktree, run your own servers on distinct ports (`BACKEND_PORT`, `VITE_PORT`, `VITE_PROXY_TARGET`) — never rebind 8000/3000. See `08-testing-and-deployment.mdc`.
+- Backend port: **8000**. Frontend port: **3000**. In a *separate* worktree, run your own servers on distinct ports — frontend via `VITE_PORT`/`VITE_PROXY_TARGET`, backend by invoking `uvicorn ... --port=<port>` directly (the `dev-backend` script is hard-coded to 8000) — never rebind 8000/3000. See `08-testing-and-deployment.mdc`.
 - Run Python via `hatch -e dev run ...`.
 - Frontend package manager is **yarn**, not npm.

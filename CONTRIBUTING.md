@@ -160,12 +160,11 @@ either fail to start or, worse, serve one branch's frontend against the other
 branch's backend. The default `3000`/`8000` are fine for a single worktree;
 give every additional worktree its own pair.
 
-All three ports are env-var driven, so no code edits are needed:
+The frontend port and proxy target are env-var driven; the backend port is
+passed directly to `uvicorn`:
 
 | Variable | Default | Controls |
 |----------|---------|----------|
-| `BACKEND_PORT` | `8000` | uvicorn backend port (via the `dev-backend` hatch script) |
-| `BACKEND_HOST` | `0.0.0.0` | uvicorn backend host |
 | `VITE_PORT` | `3000` | Vite dev-server port |
 | `VITE_PROXY_TARGET` | `http://localhost:8000` | backend the Vite dev server proxies `/api`, `/docs`, `/redoc` to |
 
@@ -173,11 +172,11 @@ Point the frontend at its own backend with `VITE_PROXY_TARGET` so the proxy
 targets the matching port. Example — a second worktree on backend `8100` /
 frontend `3100`:
 
-**Backend** (from `src/`):
+**Backend** (from `src/`): invoke `uvicorn` directly with the port you want.
+The `yarn dev:backend` / `hatch -e dev run dev-backend` shortcut is hard-coded to
+`8000`, so a secondary worktree runs the underlying command instead:
 ```bash
-BACKEND_PORT=8100 yarn dev:backend
-# or, without the yarn wrapper:
-BACKEND_PORT=8100 hatch -e dev run dev-backend
+hatch -e dev run uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8100
 ```
 
 **Frontend** (from `src/frontend/`):
@@ -186,9 +185,7 @@ VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 yarn dev:frontend
 ```
 
 Both worktrees can share the same local `app_ontos` PostgreSQL database; only
-the HTTP ports need to differ. Persist the values in each worktree's
-`.env` files (`src/backend/.env`, `src/frontend/.env`) to avoid repeating them
-on every launch.
+the HTTP ports need to differ.
 
 ---
 

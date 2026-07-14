@@ -165,3 +165,54 @@ class TestWorkflowInstallationRepository:
         # Assert
         assert count == 5
 
+    def test_update_last_polled_only_if_changed_skips_unchanged(self, repository, db_session):
+        """update_last_polled(only_if_changed=True) must not write when the job
+        state is identical — this is what lets a quiet poll cycle perform zero
+        Lakebase writes so the instance can idle."""
+        from unittest.mock import patch
+
+        installation_db = WorkflowInstallationDb(
+            id=str(uuid.uuid4()),
+            workflow_id="poll-wf",
+            name="Poll WF",
+            job_id=999,
+            status="installed",
+        )
+        db_session.add(installation_db)
+        db_session.commit()
+
+        state = {'run_id': 1, 'life_cycle_state': 'TERMINATED', 'result_state': 'SUCCESS'}
+        # First call persists the state.
+        repository.update_last_polled(db_session, workflow_id="poll-wf", job_state=state, only_if_changed=True)
+
+        # Identical state → no write.
+        with patch.object(db_session, "commit") as spy_commit:
+            repository.update_last_polled(
+                db_session, workflow_id="poll-wf", job_state=dict(state), only_if_changed=True,
+            )
+            assert spy_commit.call_count == 0, "unchanged state should not commit"
+
+    def test_update_last_polled_writes_on_change(self, repository, db_session):
+        """A changed job state must still persist under only_if_changed."""
+        installation_db = WorkflowInstallationDb(
+            id=str(uuid.uuid4()),
+            workflow_id="poll-wf2",
+            name="Poll WF2",
+            job_id=1000,
+            status="installed",
+        )
+        db_session.add(installation_db)
+        db_session.commit()
+
+        repository.update_last_polled(
+            db_session, workflow_id="poll-wf2",
+            job_state={'run_id': 1, 'life_cycle_state': 'RUNNING'}, only_if_changed=True,
+        )
+        updated = repository.update_last_polled(
+            db_session, workflow_id="poll-wf2",
+            job_state={'run_id': 1, 'life_cycle_state': 'TERMINATED', 'result_state': 'SUCCESS'},
+            only_if_changed=True,
+        )
+        assert updated is not None
+        assert 'TERMINATED' in (updated.last_job_state or '')
+

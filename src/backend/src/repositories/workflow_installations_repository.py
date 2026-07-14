@@ -60,17 +60,38 @@ class WorkflowInstallationRepository(CRUDBase[WorkflowInstallationDb, WorkflowIn
         """Retrieves all workflow installations."""
         return self.get_multi(db=db)
 
-    def update_last_polled(self, db: Session, *, workflow_id: str, job_state: Optional[Dict[str, Any]] = None) -> Optional[WorkflowInstallationDb]:
-        """Updates last_polled_at and optionally last_job_state."""
+    def update_last_polled(
+        self,
+        db: Session,
+        *,
+        workflow_id: str,
+        job_state: Optional[Dict[str, Any]] = None,
+        only_if_changed: bool = False,
+    ) -> Optional[WorkflowInstallationDb]:
+        """Updates last_polled_at and optionally last_job_state.
+
+        When ``only_if_changed`` is True, the write is skipped entirely if the
+        serialized ``job_state`` matches what is already stored. The background
+        poll uses this so a quiet cycle (no run-state transition) performs zero
+        Lakebase writes, letting the instance idle. ``last_polled_at`` is
+        intentionally NOT bumped on a no-op — its only consumers are the
+        incremental-window poll and human diagnostics, neither of which needs a
+        heartbeat when nothing changed.
+        """
         db_obj = self.get_by_workflow_id(db, workflow_id=workflow_id)
         if not db_obj:
             return None
 
+        serialized_state = json.dumps(job_state) if job_state else None
+        if only_if_changed and serialized_state is not None:
+            if db_obj.last_job_state == serialized_state:
+                return db_obj
+
         update_data = {
             'last_polled_at': datetime.utcnow()
         }
-        if job_state:
-            update_data['last_job_state'] = json.dumps(job_state)
+        if serialized_state is not None:
+            update_data['last_job_state'] = serialized_state
 
         return self.update(db, db_obj=db_obj, obj_in=update_data)
 

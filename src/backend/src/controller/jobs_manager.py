@@ -1015,6 +1015,17 @@ class JobsManager:
 
         logger.info("Job state polling thread started")
 
+        # Adaptive backoff: when a cycle sees no active (non-terminal) runs, the
+        # only thing changing is nothing, so progressively stretch the wait up to
+        # a cap. A cycle that observes an active run (or a state change) snaps the
+        # interval back to the configured base so live jobs are tracked promptly.
+        # This lets an app with only idle/quiet workflows drift toward the cap,
+        # reducing how often Lakebase is touched, without losing timely tracking
+        # once something actually runs.
+        base_interval = interval_seconds
+        max_interval = max(base_interval * 4, base_interval)
+        current_interval = base_interval
+
         while not self._stop_polling.is_set():
             # Skip the whole cycle — including opening a DB session — when we
             # have confirmed there are zero installed workflows. Touching the DB
@@ -1023,9 +1034,16 @@ class JobsManager:
             # "compute always active" symptom). install_workflow() resets this
             # flag to None so a freshly installed workflow is picked up next cycle.
             if self._has_installations is False:
+                # No workflows installed at all: back off to the cap and skip the
+                # DB entirely (see flag docs in __init__).
+                current_interval = max_interval
                 if not self._stop_polling.is_set():
-                    self._stop_polling.wait(timeout=interval_seconds)
+                    self._stop_polling.wait(timeout=current_interval)
                 continue
+
+            # Tracks whether this cycle observed anything worth polling promptly
+            # for: an active (non-terminal) run, or a persisted state change.
+            saw_activity = False
 
             # Create a new database session for this polling iteration
             db = next(get_db())
@@ -1056,11 +1074,27 @@ class JobsManager:
                             # Skip further processing for this installation in this cycle
                             continue
 
-                        # Calculate time range for backfill (default: last 7 days)
+                        # Time window for the runs query. The backfill_days cap
+                        # bounds a cold start (or post-downtime catch-up) to the
+                        # last N days. On steady-state cycles, though, only look
+                        # back to just before the last successful poll — with a
+                        # small overlap to avoid missing a run that started right
+                        # at the boundary. This keeps each cycle fetching a
+                        # handful of recent runs instead of re-scanning the whole
+                        # N-day history (a 10-min job otherwise returns ~1000 runs
+                        # every cycle), and combined with the change-gated upserts
+                        # a quiet cycle results in zero Lakebase writes.
                         backfill_days = self._settings.JOB_POLLING_BACKFILL_DAYS if self._settings else 7
-                        start_time_from = int((datetime.utcnow() - timedelta(days=backfill_days)).timestamp() * 1000)
+                        backfill_floor_ms = int((datetime.utcnow() - timedelta(days=backfill_days)).timestamp() * 1000)
+                        start_time_from = backfill_floor_ms
+                        if installation.last_polled_at:
+                            # 2x the poll interval of overlap comfortably covers
+                            # clock skew and runs straddling the boundary.
+                            overlap = timedelta(seconds=max(interval_seconds * 2, 60))
+                            incremental_ms = int((installation.last_polled_at - overlap).timestamp() * 1000)
+                            # Never look back further than the backfill cap.
+                            start_time_from = max(backfill_floor_ms, incremental_ms)
 
-                        # Get runs from last N days (time range naturally limits results)
                         # This enables backfilling missed runs after app restart/downtime
                         runs = self._client.jobs.list_runs(
                             job_id=installation.job_id,
@@ -1083,6 +1117,12 @@ class JobsManager:
                                 'start_time': run.start_time,
                                 'end_time': run.end_time
                             }
+
+                            # A run that has not reached TERMINATED is still in
+                            # flight — keep polling at the base cadence so we
+                            # track it to completion.
+                            if run.state.life_cycle_state != RunLifeCycleState.TERMINATED:
+                                saw_activity = True
 
                             # Upsert job run record (creates or updates)
                             job_run = workflow_job_run_repo.upsert_run(
@@ -1148,7 +1188,8 @@ class JobsManager:
                             workflow_installation_repo.update_last_polled(
                                 db,
                                 workflow_id=installation.workflow_id,
-                                job_state=latest_run_data
+                                job_state=latest_run_data,
+                                only_if_changed=True,
                             )
 
                     except Exception as e:
@@ -1167,9 +1208,17 @@ class JobsManager:
                 # Always close the session
                 db.close()
 
+            # Adaptive interval: reset to base when there's live activity to
+            # track, otherwise ease off toward the cap so a quiet system stops
+            # waking every base_interval.
+            if saw_activity:
+                current_interval = base_interval
+            else:
+                current_interval = min(max_interval, current_interval * 2)
+
             # Wait for next interval or stop signal (unless stopping)
             if not self._stop_polling.is_set():
-                self._stop_polling.wait(timeout=interval_seconds)
+                self._stop_polling.wait(timeout=current_interval)
 
         logger.info("Job state polling thread stopped")
 

@@ -28,7 +28,14 @@ VERSION_FILES = [
     (
         "pyproject.toml",
         False,
-        r'(version\s*=\s*")[^"]+(")',
+        # Scope the match to the `[project]` table's `version` key ONLY.
+        # After the `[project]` header, the tempered dot `(?:(?!^\[).)*?`
+        # consumes lines lazily but can never cross a line-start `[` (the next
+        # TOML table header), so the anchored `^version = "..."` it finds must
+        # belong to `[project]`. This can never match `target-version` (not at
+        # line start) nor a `version` key under any other table (e.g.
+        # `[tool.*]`). DOTALL+MULTILINE via inline `(?ms)`.
+        r'(?ms)(^\[project\](?:(?!^\[).)*?^version\s*=\s*")[^"]+(")',
         r'\g<1>{version}\g<2>',
     ),
     # Python runtime __version__
@@ -82,8 +89,10 @@ def update_text_version(
         old_match = re.search(r"\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?", match.group(0))
         old_version = old_match.group(0) if old_match else "unknown"
 
-        # Replace with new version
-        new_content = re.sub(pattern, replacement.format(version=new_version), content)
+        # Replace with new version. count=1 guarantees only the first (and, for
+        # the scoped pyproject.toml pattern, the only) match is rewritten, so a
+        # future stray `version = "..."` under another table can never be hit.
+        new_content = re.sub(pattern, replacement.format(version=new_version), content, count=1)
         filepath.write_text(new_content, encoding="utf-8")
         return old_version
     except IOError as e:

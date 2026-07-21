@@ -421,6 +421,10 @@ def get_db_url(settings: Settings) -> str:
     
     if options_list:
         query_params["options"] = " ".join(options_list)
+
+    # Lakebase requires SSL; password/local Postgres may not
+    if not use_password_auth:
+        query_params["sslmode"] = "require"
     
     db_url_obj = URL.create(
         drivername="postgresql+psycopg2",
@@ -492,6 +496,7 @@ def ensure_database_and_schema_exist(settings: Settings):
     # Build connection URL
     # In OAuth mode, connect directly to the target database (must be pre-created)
     # In LOCAL mode, connect to the target database (should already exist)
+    connection_query = {"sslmode": "require"} if not is_local_mode else None
     connection_url = URL.create(
         drivername="postgresql+psycopg2",
         username=username,
@@ -499,6 +504,7 @@ def ensure_database_and_schema_exist(settings: Settings):
         host=settings.PGHOST,
         port=settings.PGPORT,
         database=target_db,
+        query=connection_query,
     )
     
     # Create temporary engine for schema setup
@@ -514,6 +520,7 @@ def ensure_database_and_schema_exist(settings: Settings):
             global _oauth_token
             if _oauth_token:
                 cparams["password"] = _oauth_token
+            cparams["sslmode"] = "require"
     
     try:
         # In OAuth mode, verify we can connect to the target database
@@ -526,7 +533,8 @@ def ensure_database_and_schema_exist(settings: Settings):
                     logger.info(f"✓ Connected to database: {target_db}")
             except Exception as e:
                 error_msg = str(e).lower()
-                if "does not exist" in error_msg or "database" in error_msg:
+                # Require "does not exist" — hostnames often contain the substring "database"
+                if "does not exist" in error_msg:
                     raise RuntimeError(
                         f"Database '{target_db}' does not exist.\n\n"
                         f"SETUP REQUIRED: Before deploying the app, create the database:\n"
@@ -738,6 +746,7 @@ def init_db() -> None:
                 if _oauth_token:
                     cparams["password"] = _oauth_token
                     logger.debug("Injected OAuth token into new database connection")
+                cparams["sslmode"] = "require"
             
             # Start background refresh thread
             start_token_refresh_background(settings)

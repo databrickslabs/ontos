@@ -59,6 +59,27 @@ def is_valid_uuid(identifier: str) -> bool:
         return False
 
 
+def is_valid_databricks_email(identifier: str) -> bool:
+    """Check if a string is a safe Databricks user email for Lakebase role names.
+
+    Lakebase uses Databricks identities (emails) as Postgres roles. Callers must
+    always quote the identifier in SQL (e.g. ``GRANT ... TO "user@x.com"``).
+
+    Only a conservative email shape is accepted to avoid SQL injection vectors.
+    """
+    if not identifier or not isinstance(identifier, str):
+        return False
+    # Reject quotes / control chars that could break out of a quoted identifier
+    if any(c in identifier for c in ('"', "'", ";", "\\", "\n", "\r", "\x00")):
+        return False
+    return bool(
+        re.match(
+            r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+            identifier,
+        )
+    )
+
+
 def sanitize_uc_identifier(identifier: Optional[str], max_length: int = 255) -> str:
     """Sanitize and validate a Unity Catalog identifier.
     
@@ -112,7 +133,9 @@ def sanitize_postgres_identifier(identifier: str, max_length: int = 63) -> str:
     - Not exceed 63 characters (PostgreSQL NAMEDATALEN limit)
     - Not be a PostgreSQL reserved keyword
     
-    Special case: UUIDs are allowed as-is (for Databricks service principals).
+    Special cases (Lakebase / Databricks identities):
+    - UUIDs are allowed as-is (service principals).
+    - Databricks user emails are allowed as-is (must be quoted in SQL by callers).
     
     This function provides SQL injection protection for PostgreSQL DDL operations
     that cannot use parameterized queries (like CREATE DATABASE).
@@ -134,22 +157,32 @@ def sanitize_postgres_identifier(identifier: str, max_length: int = 63) -> str:
         ValueError: Invalid PostgreSQL identifier 'select': cannot use reserved keyword
         >>> sanitize_postgres_identifier("550e8400-e29b-41d4-a716-446655440000")
         "550e8400-e29b-41d4-a716-446655440000"
+        >>> sanitize_postgres_identifier("user@databricks.com")
+        "user@databricks.com"
     """
     if not identifier or not isinstance(identifier, str):
         raise ValueError("PostgreSQL identifier must be a non-empty string")
     
     identifier = identifier.strip()
     
+    # UUIDs are allowed as-is (Databricks service principals)
+    # UUIDs are inherently safe since they follow a strict format
+    if is_valid_uuid(identifier):
+        return identifier
+
+    # Lakebase roles for human users are Databricks emails (quoted in SQL by callers)
+    if is_valid_databricks_email(identifier):
+        if len(identifier) > 254:
+            raise ValueError(
+                f"PostgreSQL identifier (email) exceeds maximum length of 254 characters"
+            )
+        return identifier
+    
     # PostgreSQL max identifier length is 63 bytes (NAMEDATALEN - 1)
     if len(identifier) > max_length:
         raise ValueError(
             f"PostgreSQL identifier exceeds maximum length of {max_length} characters"
         )
-    
-    # UUIDs are allowed as-is (Databricks service principals)
-    # UUIDs are inherently safe since they follow a strict format
-    if is_valid_uuid(identifier):
-        return identifier
     
     # PostgreSQL allows letters, digits, underscores, and dollar signs
     # Must start with letter or underscore

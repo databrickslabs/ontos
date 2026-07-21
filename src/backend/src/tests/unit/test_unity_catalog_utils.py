@@ -109,6 +109,18 @@ class TestUnityCatalogUtils:
         with pytest.raises(ValueError, match="must start with letter or underscore"):
             sanitize_postgres_identifier("my-database")
 
+    def test_sanitize_postgres_identifier_databricks_email(self):
+        """Lakebase roles for human users are Databricks emails."""
+        assert (
+            sanitize_postgres_identifier("laurel.kremer@databricks.com")
+            == "laurel.kremer@databricks.com"
+        )
+
+    def test_sanitize_postgres_identifier_rejects_unsafe_email(self):
+        """Reject email-like strings that could break quoted SQL identifiers."""
+        with pytest.raises(ValueError):
+            sanitize_postgres_identifier('evil@"databricks.com')
+
     # map_logical_type_to_column_type tests
     def test_map_logical_type_integer(self):
         """Test mapping integer types."""

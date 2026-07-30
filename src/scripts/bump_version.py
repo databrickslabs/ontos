@@ -12,7 +12,7 @@ Usage:
 The script updates:
     - src/pyproject.toml (Python/Hatch build config)
     - src/backend/src/__init__.py (Python runtime import)
-    - src/frontend/package.json (Node/Yarn frontend)
+    - src/frontend/package.json (Node/npm frontend)
     - src/package.json (Root build helper)
 """
 

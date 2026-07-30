@@ -455,7 +455,6 @@ After that, reload the UI, it should start to work!
 Depending on the setup, accessing required external repositories during the Databricks Apps deployment process may fail. This often shows in the logs as the deployment being stuck, and eventually a timeout error is shown. You MUST ensure the following FQDNs are NOT blocked:
 
 ```
-registry.yarnpkg.com
 registry.npmjs.org
 pypi.org
 pypi.python.org

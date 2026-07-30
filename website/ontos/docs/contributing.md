@@ -15,11 +15,7 @@ Please be respectful and professional in all interactions. We're building a coll
 ### Prerequisites
 
 - **Python 3.10 - 3.12** (as defined in `pyproject.toml`)
-- **Node.js 18+** (includes npm for installing Yarn)
-- **Yarn** package manager (Version 1.x - Classic):
-  ```bash
-  npm install --global yarn
-  ```
+- **Node.js 18+** (includes npm, the frontend package manager)
 - **Hatch** (Python build tool):
   ```bash
   pip install hatch
@@ -45,7 +41,7 @@ Please be respectful and professional in all interactions. We're building a coll
 ```bash
 # Frontend dependencies
 cd src/frontend
-yarn install
+npm install
 
 # Backend dependencies are managed by Hatch and installed automatically
 ```
@@ -72,13 +68,13 @@ cp .env.example .env
 **Frontend** (Terminal 1):
 ```bash
 cd src/frontend
-yarn dev:frontend
+npm run dev:frontend
 ```
 
 **Backend** (Terminal 2):
 ```bash
 cd src
-yarn dev:backend
+npm run dev:backend
 ```
 
 - Frontend: http://localhost:3000
@@ -168,7 +164,7 @@ Before committing, ensure:
    cd src && hatch -e dev run test
    
    # Frontend tests
-   cd src/frontend && yarn test:run
+   cd src/frontend && npm run test:run
    ```
 
 2. **Linting passes**:
@@ -177,7 +173,7 @@ Before committing, ensure:
    cd src && hatch -e dev run lint:all
    
    # Frontend
-   cd src/frontend && yarn type-check
+   cd src/frontend && npm run type-check
    ```
 
 3. **Commit message follows convention**
@@ -199,7 +195,7 @@ The project tracks version in multiple files:
 |------|---------|
 | `src/pyproject.toml` | Python/Hatch build config (source of truth) |
 | `src/backend/src/__init__.py` | Python runtime `__version__` |
-| `src/frontend/package.json` | Node/Yarn frontend |
+| `src/frontend/package.json` | Node/npm frontend |
 | `src/package.json` | Root build helper |
 
 ### Bump Version Script
@@ -290,12 +286,12 @@ databricks apps deploy <app-name>
 2. **Run tests**:
    ```bash
    cd src && hatch -e dev run test
-   cd src/frontend && yarn test:run
+   cd src/frontend && npm run test:run
    ```
 
 3. **Check types and lint**:
    ```bash
-   cd src/frontend && yarn type-check
+   cd src/frontend && npm run type-check
    ```
 
 ### PR Guidelines
@@ -389,16 +385,16 @@ hatch -e dev run pytest backend/src/tests/unit/test_data_products.py
 cd src/frontend
 
 # Run tests
-yarn test:run
+npm run test:run
 
 # Run with coverage
-yarn test:coverage
+npm run test:coverage
 
 # Run in watch mode
-yarn test:watch
+npm run test:watch
 
 # Run E2E tests
-yarn test:e2e
+npm run test:e2e
 ```
 
 ### Writing Tests

@@ -9,10 +9,10 @@
   "scripts": {
     "build": "bash ./scripts/build_static.sh",
     "clean": "rm -rf ./static",
-    "license-check:frontend": "cd frontend && yarn license-check",
-    "license-check:frontend:full": "cd frontend && yarn license-check:full",
+    "license-check:frontend": "cd frontend && npm run license-check",
+    "license-check:frontend:full": "cd frontend && npm run license-check:full",
     "license-check:backend": "cd backend && pip-licenses --format=markdown --order=license",
     "license-check:backend:json": "cd backend && pip-licenses --format=json --output-file=licenses.json",
-    "license-check:all": "cd frontend && yarn license-check && echo '\n--- Backend Licenses ---\n' && cd ../backend && pip-licenses --format=markdown --order=license"
+    "license-check:all": "cd frontend && npm run license-check && echo '\n--- Backend Licenses ---\n' && cd ../backend && pip-licenses --format=markdown --order=license"
   }
 }

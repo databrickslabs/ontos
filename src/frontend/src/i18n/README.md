@@ -142,10 +142,10 @@ Playwright tests are available in `src/frontend/tests/i18n.spec.ts`:
 
 ```bash
 # Run i18n tests
-yarn test:e2e tests/i18n.spec.ts
+npm run test:e2e -- tests/i18n.spec.ts
 
 # Run in UI mode
-yarn test:e2e:ui tests/i18n.spec.ts
+npm run test:e2e:ui -- tests/i18n.spec.ts
 ```
 
 ## Migration Status

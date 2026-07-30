@@ -28,11 +28,7 @@ Please be respectful and professional in all interactions. We're building a coll
 ### Prerequisites
 
 - **Python 3.10 - 3.12** (as defined in `pyproject.toml`)
-- **Node.js 18+** (includes npm for installing Yarn)
-- **Yarn** package manager (Version 1.x - Classic):
-  ```bash
-  npm install --global yarn
-  ```
+- **Node.js 18+** (includes npm, the frontend package manager)
 - **Hatch** (Python build tool):
   ```bash
   pip install hatch
@@ -60,63 +56,33 @@ Please be respectful and professional in all interactions. We're building a coll
 ```bash
 # Frontend dependencies
 cd src/frontend
-yarn install
+npm install
 
 # Backend dependencies are managed by Hatch and installed automatically
 ```
 
 #### Working Behind a Private npm Mirror (optional)
 
-Some corporate environments block the public npm/yarn registry and require all
+Some corporate environments block the public npm registry and require all
 package traffic to flow through an internal mirror (e.g., Nexus, Artifactory,
-Verdaccio, or an HTTPS pass-through proxy). If that applies to you, running
-`yarn install` will rewrite every `resolved` URL in `src/frontend/yarn.lock`
-from `https://registry.yarnpkg.com/...` to your mirror's URL, producing a huge
-diff on every install. **Do not commit those rewrites** — the lockfile in the
-repo must stay on the public registry URLs so external contributors can
-install without your mirror.
+Verdaccio, or an HTTPS pass-through proxy). npm handles this cleanly: point the
+registry at your mirror and npm rewrites the host of each `resolved` URL at
+install time. Because npm's `replace-registry-host` defaults to `"npmjs"`, the
+committed `package-lock.json` keeps its canonical `https://registry.npmjs.org/`
+URLs, and `npm ci` does **not** persist the rewrite back to the lockfile — so
+there is no diff to worry about and no git filter needed.
 
-To keep the on-disk lockfile pointing at your mirror (so yarn works) while git
-only ever sees the canonical public URLs, install a local git clean/smudge
-filter. This setup is per-clone and is not committed.
+Set the registry per-clone without committing anything:
 
-1. Register the filter in your local git config (replace `<your-mirror-host>`
-   with the host of your internal mirror, e.g. `npm.corp.example.com`):
+```bash
+# In the frontend project (or globally via ~/.npmrc)
+npm config set registry https://<your-mirror-host>/
+```
 
-   ```bash
-   MIRROR=<your-mirror-host>
-   git config filter.npmmirror.clean  "sed 's|https://${MIRROR//./\\.}/|https://registry.yarnpkg.com/|g'"
-   git config filter.npmmirror.smudge "sed 's|https://registry\\.yarnpkg\\.com/|https://${MIRROR}/|g'"
-   git config filter.npmmirror.required true
-   ```
-
-2. Attach the filter to the lockfile via local-only git attributes (lives in
-   `.git/info/attributes`, never committed):
-
-   ```bash
-   mkdir -p .git/info
-   printf 'src/frontend/yarn.lock filter=npmmirror\n' >> .git/info/attributes
-   ```
-
-3. Re-normalize the working tree so existing files match the new filter:
-
-   ```bash
-   git add --renormalize src/frontend/yarn.lock
-   git checkout -- src/frontend/yarn.lock
-   ```
-
-After this, `git diff src/frontend/yarn.lock` should be empty even though the
-on-disk file contains mirror URLs. `yarn install --frozen-lockfile`,
-`yarn add`, and `yarn upgrade` all work normally, and any commits you make
-will contain only real dependency changes against the public registry URLs.
-
-Notes:
-
-- Integrity hashes (`integrity sha512-...`) are independent of the URL, so
-  package verification is unaffected.
-- You must repeat the three steps above on every fresh clone.
-- If your mirror host changes later, re-run step 1 with the new host and then
-  step 3.
+`npm install`, `npm ci`, and `npm install <pkg>` all work normally, and any
+commits you make contain only real dependency changes against the public
+registry URLs. Integrity hashes (`integrity sha512-...`) are independent of the
+URL, so package verification is unaffected.
 
 ### 2. Configure Environment
 
@@ -138,13 +104,13 @@ See **[CONFIGURING.md](CONFIGURING.md)** for complete documentation on:
 **Frontend** (Terminal 1):
 ```bash
 cd src/frontend
-yarn dev:frontend
+npm run dev:frontend
 ```
 
 **Backend** (Terminal 2):
 ```bash
 cd src
-yarn dev:backend
+npm run dev:backend
 ```
 
 - Frontend: http://localhost:3000
@@ -235,7 +201,7 @@ Before committing, ensure:
    cd src && hatch -e dev run test
    
    # Frontend tests
-   cd src/frontend && yarn test:run
+   cd src/frontend && npm run test:run
    ```
 
 2. **Linting passes**:
@@ -244,7 +210,7 @@ Before committing, ensure:
    cd src && hatch -e dev run lint:all
    
    # Frontend
-   cd src/frontend && yarn type-check
+   cd src/frontend && npm run type-check
    ```
 
 3. **Commit message follows convention**
@@ -267,7 +233,7 @@ The project tracks version in multiple files:
 |------|---------|
 | `src/pyproject.toml` | Python/Hatch build config (source of truth) |
 | `src/backend/src/__init__.py` | Python runtime `__version__` |
-| `src/frontend/package.json` | Node/Yarn frontend |
+| `src/frontend/package.json` | Node/npm frontend |
 | `src/package.json` | Root build helper |
 
 ### Bump Version Script
@@ -362,12 +328,12 @@ databricks apps deploy <app-name>
 2. **Run tests**:
    ```bash
    cd src && hatch -e dev run test
-   cd src/frontend && yarn test:run
+   cd src/frontend && npm run test:run
    ```
 
 3. **Check types and lint**:
    ```bash
-   cd src/frontend && yarn type-check
+   cd src/frontend && npm run type-check
    ```
 
 ### PR Guidelines
@@ -465,16 +431,16 @@ hatch -e dev run pytest backend/src/tests/unit/test_data_products.py
 cd src/frontend
 
 # Run tests
-yarn test:run
+npm run test:run
 
 # Run with coverage
-yarn test:coverage
+npm run test:coverage
 
 # Run in watch mode
-yarn test:watch
+npm run test:watch
 
 # Run E2E tests
-yarn test:e2e
+npm run test:e2e
 ```
 
 ### Writing Tests

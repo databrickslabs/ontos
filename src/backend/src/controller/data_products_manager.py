@@ -116,18 +116,22 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         if not self._tags_manager:
             logger.warning("TagsManager not provided. Tag operations will not be available.")
 
-    def _attach_domains(self, api_obj, db: Optional[Session] = None):
+    def _attach_domains(self, api_obj, db: Optional[Session] = None, preloaded_domains=None):
         """Populate a DataProduct API model's domain fields from the junction table.
 
         Callers that operate on an explicit session (clone/new-version/import) must pass
         that ``db`` so associations written-but-not-yet-committed on it are visible;
         otherwise the manager's own session is used.
+
+        ``preloaded_domains`` lets a batch caller (e.g. ``list_products``) hand in the
+        already-loaded ``[AssignedDomain, ...]`` for this product, avoiding a per-row
+        query (N+1) — mirrors the search-index batch path.
         """
         if api_obj is None or not getattr(api_obj, "id", None):
             return api_obj
         session = db if db is not None else self._db
         try:
-            assigned = entity_domain_repo.get_domains_for_entity(
+            assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
                 session, entity_type="data_product", entity_id=str(api_obj.id)
             )
             api_obj.domain_ids = [d.domain_id for d in assigned]
@@ -157,6 +161,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             byname = data_domain_repo.get_by_name(session, name=value)
             return byname.id if byname else None
 
+        # 1. App/API snake_case payload (create/edit forms, batch import rows).
         raw_ids = data.get('domain_ids')
         if isinstance(raw_ids, list) and raw_ids:
             resolved = [r for r in (_resolve_one(str(x)) for x in raw_ids) if r]
@@ -166,8 +171,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 primary = resolved[0] if resolved else None
             return resolved, primary
 
-        single = _resolve_one(data.get('domain'))
-        return ([single], single) if single else ([], None)
+        # 2. Legacy single ``domain`` that is a domain *ID* (pre-#520 form): resolve
+        #    it directly. parse_odcs only resolves a bare ``domain`` by *name*, so an
+        #    ID here would be silently dropped. This form never carried additionals.
+        single = data.get('domain')
+        if single and data_domain_repo.get(session, str(single)):
+            return [str(single)], str(single)
+
+        # 3. ODPS round-trip / re-import: delegate to the shared export adapter so
+        #    camelCase round-trip keys (domainIds/primaryDomainId/domainId) AND the
+        #    ODCS-standard primary ``domain`` name + ``customProperties.additionalDomains``
+        #    are all honoured. Reading only the single ``domain`` name here previously
+        #    dropped additional domains on re-import (round-trip loss).
+        return domain_export_adapter.parse_odcs(data, session)
 
     def get_statuses(self) -> List[str]:
         """Get all ODPS v1.0.0 status values."""
@@ -443,9 +459,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     is_admin=is_admin,
                 )
 
+            # Batch-load domains once for the whole page (avoids N+1: every sibling
+            # list path batches via get_domains_for_entities).
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
+            ) if products_db else {}
+
             products_with_tags = []
             for product_db in products_db:
-                product_with_tags = self._load_product_with_tags(product_db)
+                product_with_tags = self._load_product_with_tags(
+                    product_db, preloaded_domains=domains_map.get(str(product_db.id), [])
+                )
                 fid = getattr(product_db, "version_family_id", None) or product_db.id
                 # Only emit a count on the collapsed view; on the expanded
                 # view the rows speak for themselves and a per-row count
@@ -2573,15 +2597,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to assign tags to ODPS product {product_id}: {e}", exc_info=True)
 
-    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None) -> DataProductApi:
+    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None) -> DataProductApi:
         """Helper to load an ODPS data product with its associated tags.
 
         ``db`` must be the caller's request session on write paths (create/update) so the
         domains just written in that transaction are visible; otherwise the manager's
         startup session is used and the response would show empty domains.
+
+        ``preloaded_domains`` is forwarded to ``_attach_domains`` so batch list callers
+        can supply pre-fetched domains and avoid a per-row lookup (N+1).
         """
         try:
-            product_api = self._attach_domains(DataProductApi.model_validate(db_obj), db=db)
+            product_api = self._attach_domains(
+                DataProductApi.model_validate(db_obj), db=db, preloaded_domains=preloaded_domains
+            )
 
             if self._tags_manager:
                 try:

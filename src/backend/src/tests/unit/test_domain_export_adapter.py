@@ -7,7 +7,6 @@ from src.controller.domain_export_adapter import (
     DomainExportAdapter,
     ADDITIONAL_DOMAINS_PROPERTY,
     UC_DOMAIN_TAG,
-    UC_ADDITIONAL_DOMAIN_TAG,
 )
 from src.models.data_domains import DataDomainCreate
 from src.repositories.data_domain_repository import data_domain_repo
@@ -66,9 +65,11 @@ class TestUcTags:
     def test_primary_then_additional(self, db_session, adapter, domains):
         _assign(db_session, "c1", [domains["Sales"], domains["Marketing"], domains["Finance"]], domains["Marketing"])
         tags = adapter.uc_tags(db_session, ENTITY, "c1")
+        # Primary first under the canonical key, then one numbered tag per additional
+        # domain (UC holds one value per key, so additionals cannot share a key).
         assert tags[0] == (UC_DOMAIN_TAG, "Marketing")
-        additional = {v for k, v in tags if k == UC_ADDITIONAL_DOMAIN_TAG}
-        assert additional == {"Sales", "Finance"}
+        additional = {(k, v) for k, v in tags[1:]}
+        assert additional == {(f"{UC_DOMAIN_TAG}_1", "Finance"), (f"{UC_DOMAIN_TAG}_2", "Sales")}
 
     def test_empty_when_unassigned(self, db_session, adapter):
         assert adapter.uc_tags(db_session, ENTITY, "nope") == []

@@ -2,9 +2,10 @@
 
 Single-value integrations (ODCS/ODPS ``domain`` field, Unity Catalog ``data_domain`` tag)
 consume the *primary* domain as their canonical value; *additional* domains are emitted
-through extension fields (``customProperties.additionalDomains`` for ODCS/ODPS, a repeated
-``data_domain_additional`` tag for UC). This adapter centralises those conventions so both
-the export and import code paths stay consistent and testable.
+through extension fields (``customProperties.additionalDomains`` for ODCS/ODPS, numbered
+``data_domain_1`` / ``data_domain_2`` / ... tags for UC — a securable holds one value per
+tag key, so additional domains cannot share a single key). This adapter centralises those
+conventions so both the export and import code paths stay consistent and testable.
 """
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,7 +20,6 @@ logger = get_logger(__name__)
 
 ADDITIONAL_DOMAINS_PROPERTY = "additionalDomains"
 UC_DOMAIN_TAG = "data_domain"
-UC_ADDITIONAL_DOMAIN_TAG = "data_domain_additional"
 
 
 class DomainExportAdapter:
@@ -71,15 +71,20 @@ class DomainExportAdapter:
 
     def uc_tags(self, db: Session, entity_type: str, entity_id: str) -> List[Tuple[str, str]]:
         """Return the Unity Catalog (tag_key, tag_value) pairs for an entity's domains:
-        the primary as ``data_domain`` first, then one ``data_domain_additional`` per extra."""
+        the primary as ``data_domain`` first, then one tag per additional domain.
+
+        A UC securable holds one value per tag key, so additional domains cannot share
+        a single ``data_domain_additional`` key — each gets its own numbered key derived
+        from the primary key (``data_domain_1``, ``data_domain_2``, ...), matching the
+        uc_tag_sync workflow. Names are sorted for deterministic key assignment."""
         assigned = self.get_assigned(db, entity_type, entity_id)
         primary, additional = self.split_primary_additional(assigned)
         tags: List[Tuple[str, str]] = []
         if primary and primary.domain_name:
             tags.append((UC_DOMAIN_TAG, primary.domain_name))
-        for d in additional:
-            if d.domain_name:
-                tags.append((UC_ADDITIONAL_DOMAIN_TAG, d.domain_name))
+        additional_names = sorted(d.domain_name for d in additional if d.domain_name)
+        for idx, name in enumerate(additional_names, start=1):
+            tags.append((f"{UC_DOMAIN_TAG}_{idx}", name))
         return tags
 
     # ---------------------------------------------------------------- imports

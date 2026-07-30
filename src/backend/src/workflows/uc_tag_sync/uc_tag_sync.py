@@ -165,8 +165,9 @@ class DatasetTagInfo:
     product_status: Optional[str]
     # Domain metadata: primary domain (prefer contract, fallback to product).
     # With multi-domain assignment the primary feeds the single-value ``data_domain``
-    # tag; ``additional_domain_names`` carries the non-primary domains (emitted as a
-    # companion ``data_domain_additional`` tag). See DomainExportAdapter.uc_tags.
+    # tag; ``additional_domain_names`` carries the non-primary domains, each emitted as
+    # its own numbered tag (``data_domain_1``, ``data_domain_2``, ...) since a UC
+    # securable holds one value per tag key. See DomainExportAdapter.uc_tags.
     domain_id: Optional[str]
     domain_name: Optional[str]
     # Semantic links
@@ -794,13 +795,15 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
                     tag_key = sanitize_tag_key(tag_key)
                     desired[tag_key] = tag_value
 
-                    # Additional (non-primary) domains ride on a companion tag key.
-                    # For the default ``data_domain`` key this yields
-                    # ``data_domain_additional`` (see DomainExportAdapter.uc_tags);
-                    # UC allows one value per key, so the names are comma-joined.
-                    if d.additional_domain_names:
-                        additional_key = sanitize_tag_key(f"{tag_key}_additional")
-                        desired[additional_key] = ",".join(d.additional_domain_names)
+                    # Additional (non-primary) domains are emitted as separate UC
+                    # tags, one per assignment (PRD story 26). A UC securable holds
+                    # one value per tag key, so each additional domain gets its own
+                    # numbered key derived from the primary key (``data_domain_1``,
+                    # ``data_domain_2``, ...) written after the primary. Names are
+                    # sorted for deterministic key assignment.
+                    for idx, name in enumerate(sorted(d.additional_domain_names), start=1):
+                        additional_key = sanitize_tag_key(f"{tag_key}_{idx}")
+                        desired[additional_key] = name
 
         elif entity_type == "data_contract":
             if d.contract_name:

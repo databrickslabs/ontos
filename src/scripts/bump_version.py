@@ -24,11 +24,13 @@ from pathlib import Path
 # Version file configurations
 # Format: (relative_path, is_json, pattern_to_find, replacement_template)
 VERSION_FILES = [
-    # Python/Hatch build config
+    # Python/Hatch build config.
+    # Anchor to line start (?m) so we only match the top-level `version = "..."`
+    # key and never `target-version` (ruff) or other `*-version` keys.
     (
         "pyproject.toml",
         False,
-        r'(version\s*=\s*")[^"]+(")',
+        r'(?m)^(version\s*=\s*")[^"]+(")',
         r'\g<1>{version}\g<2>',
     ),
     # Python runtime __version__

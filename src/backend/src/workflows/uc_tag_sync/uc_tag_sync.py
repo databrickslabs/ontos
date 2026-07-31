@@ -800,10 +800,18 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
                     # one value per tag key, so each additional domain gets its own
                     # numbered key derived from the primary key (``data_domain_1``,
                     # ``data_domain_2``, ...) written after the primary. Names are
-                    # sorted for deterministic key assignment.
-                    for idx, name in enumerate(sorted(d.additional_domain_names), start=1):
+                    # sorted for deterministic key assignment. The running index skips
+                    # any key already present in ``desired`` (e.g. one produced by
+                    # another tag-sync config) so a numbered key never silently
+                    # clobbers an unrelated tag.
+                    idx = 1
+                    for name in sorted(d.additional_domain_names):
                         additional_key = sanitize_tag_key(f"{tag_key}_{idx}")
+                        while additional_key in desired:
+                            idx += 1
+                            additional_key = sanitize_tag_key(f"{tag_key}_{idx}")
                         desired[additional_key] = name
+                        idx += 1
 
         elif entity_type == "data_contract":
             if d.contract_name:

@@ -124,6 +124,18 @@ class TeamsManager:
             logger.error(f"Error resolving domain name '{domain_name}': {e}")
             return None
 
+    @staticmethod
+    def _normalize_primary_domain(domain_ids: List[str], primary_domain_id: Optional[str]) -> Optional[str]:
+        """Clamp the primary to the assigned set: keep it when present, else fall back to
+        the first id (or None when unassigned). Mirrors the contract/product resolvers so a
+        primary_domain_id outside domain_ids can't reach set_domains_for_entity and turn its
+        ValueError into an HTTP 500."""
+        if not domain_ids:
+            return None
+        if primary_domain_id and primary_domain_id in domain_ids:
+            return primary_domain_id
+        return domain_ids[0]
+
     # Team CRUD operations
     def create_team(self, db: Session, team_in: TeamCreate, current_user_id: str) -> TeamRead:
         """Creates a new team."""
@@ -142,7 +154,7 @@ class TeamsManager:
         # Extract tags + domains before serialization
         tags_data = db_obj_data.get('tags', [])
         domain_ids = team_in.domain_ids or []
-        primary_domain_id = team_in.primary_domain_id
+        primary_domain_id = self._normalize_primary_domain(domain_ids, team_in.primary_domain_id)
         self._serialize_list_fields(db_obj_data)
 
         db_team = TeamDb(**db_obj_data)
@@ -263,7 +275,7 @@ class TeamsManager:
         tags_data = update_data.get('tags')
         domains_provided = 'domain_ids' in update_data
         domain_ids = update_data.get('domain_ids') or []
-        primary_domain_id = update_data.get('primary_domain_id')
+        primary_domain_id = self._normalize_primary_domain(domain_ids, update_data.get('primary_domain_id'))
         self._serialize_list_fields(update_data)
 
         try:

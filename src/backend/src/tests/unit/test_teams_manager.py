@@ -91,6 +91,25 @@ class TestTeamsManager:
         assert result.primary_domain_id == domain_id
         assert len(result.domains) == 1 and result.domains[0].is_primary
 
+    def test_create_team_primary_not_in_domain_ids_is_clamped(self, manager, db_session):
+        """A primary_domain_id outside domain_ids must be clamped to the first id, not
+        propagated to set_domains_for_entity (which would raise ValueError -> HTTP 500)."""
+        a = _make_domain(db_session, "Alpha")
+        b = _make_domain(db_session, "Beta")
+        team_data = TeamCreate(
+            name="Clamp Team",
+            description="primary not in set",
+            domain_ids=[a, b],
+            primary_domain_id="not-a-member",
+        )
+
+        # Act — should not raise; primary falls back to the first domain id.
+        result = manager.create_team(db_session, team_data, current_user_id="user1")
+
+        # Assert
+        assert set(result.domain_ids) == {a, b}
+        assert result.primary_domain_id == a
+
     # =====================================================================
     # Get Team Tests
     # =====================================================================

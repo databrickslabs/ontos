@@ -1802,7 +1802,17 @@ async def get_data_products(
                     f"caller will see only their draft-owned products"
                 )
 
-        products = manager.list_products(
+        # Any-of domain filter (#520): a product matches when any of its assigned
+        # domains (primary or additional) is in the requested set.
+        wanted_domains = {d.strip() for d in (domain_ids.split(",") if domain_ids else []) if d.strip()}
+        if domain_id:
+            wanted_domains.add(domain_id)
+
+        # The domain filter is applied in-process (domain_ids are attached per product
+        # by the manager), so a domain-filtered request must load the full candidate set
+        # rather than the default page — otherwise products assigned to the domain past
+        # the first page would be silently dropped.
+        list_kwargs = dict(
             project_id=project_id,
             is_admin=is_admin,
             caller_email=caller_email,
@@ -1810,12 +1820,10 @@ async def get_data_products(
             caller_project_ids=caller_project_ids,
             include_history=include_history,
         )
-        # Any-of domain filter (#520): a product matches when any of its assigned
-        # domains (primary or additional) is in the requested set. domain_ids are
-        # already attached to each DataProduct by the manager.
-        wanted_domains = {d.strip() for d in (domain_ids.split(",") if domain_ids else []) if d.strip()}
-        if domain_id:
-            wanted_domains.add(domain_id)
+        if wanted_domains:
+            list_kwargs["limit"] = 10000
+        products = manager.list_products(**list_kwargs)
+
         if wanted_domains:
             products = [p for p in products if wanted_domains & set(getattr(p, "domain_ids", None) or [])]
         logger.info(

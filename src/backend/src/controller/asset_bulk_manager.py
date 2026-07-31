@@ -249,16 +249,18 @@ class AssetBulkManager:
         from sqlalchemy.orm import object_session
         from src.repositories.entity_domain_association_repository import entity_domain_repo
 
+        # Batch-load domains once for the whole export (avoids N+1), mirroring the
+        # list/search paths. get_domains_for_entities already orders primary-first.
+        _session = object_session(assets[0]) if assets else None
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            _session, entity_type="asset", entity_ids=[str(a.id) for a in assets]
+        ) if _session is not None and assets else {}
+
         rows = []
         for a in assets:
             # Emit domain_ids as a semicolon-separated list, primary first (round-trips on import).
-            _session = object_session(a)
-            domain_ids_str = ""
-            if _session is not None:
-                assigned = entity_domain_repo.get_domains_for_entity(
-                    _session, entity_type="asset", entity_id=str(a.id)
-                )
-                domain_ids_str = ";".join(d.domain_id for d in assigned)
+            assigned = domains_map.get(str(a.id), [])
+            domain_ids_str = ";".join(d.domain_id for d in assigned)
             rows.append({
                 "id": str(a.id),
                 "name": a.name or "",

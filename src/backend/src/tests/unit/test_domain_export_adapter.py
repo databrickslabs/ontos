@@ -61,6 +61,31 @@ class TestApplyOdcs:
         assert len(entries) == 1 and entries[0]["value"] == ["Finance"]
 
 
+class TestMergeCustomProperties:
+    """Guards the export round-trip: rebuilding customProperties must not drop the
+    additionalDomains entry apply_odcs injected (would lose additional domains on export)."""
+
+    def test_preserves_additional_domains_when_rebuilding(self, adapter):
+        applied = [{"property": ADDITIONAL_DOMAINS_PROPERTY, "value": ["Marketing", "Finance"]}]
+        rebuilt = [{"property": "sla", "value": "gold"}]
+        out = adapter.merge_custom_properties(rebuilt, applied)
+        assert {"property": "sla", "value": "gold"} in out
+        addl = [c for c in out if c.get("property") == ADDITIONAL_DOMAINS_PROPERTY]
+        assert addl and addl[0]["value"] == ["Marketing", "Finance"]
+
+    def test_no_previous_returns_rebuilt(self, adapter):
+        rebuilt = [{"property": "sla", "value": "gold"}]
+        assert adapter.merge_custom_properties(rebuilt, None) == rebuilt
+        assert adapter.merge_custom_properties(rebuilt, []) == rebuilt
+
+    def test_dedupes_stale_additional_in_rebuilt(self, adapter):
+        applied = [{"property": ADDITIONAL_DOMAINS_PROPERTY, "value": ["Fresh"]}]
+        rebuilt = [{"property": ADDITIONAL_DOMAINS_PROPERTY, "value": ["Stale"]}]
+        out = adapter.merge_custom_properties(rebuilt, applied)
+        addl = [c for c in out if c.get("property") == ADDITIONAL_DOMAINS_PROPERTY]
+        assert len(addl) == 1 and addl[0]["value"] == ["Fresh"]
+
+
 class TestUcTags:
     def test_primary_then_additional(self, db_session, adapter, domains):
         _assign(db_session, "c1", [domains["Sales"], domains["Marketing"], domains["Finance"]], domains["Marketing"])

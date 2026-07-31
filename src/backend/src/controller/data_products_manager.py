@@ -2299,8 +2299,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # Step 3: Get product details for formatting
                 products = [self._repo.get(db, id=pid) for pid in product_ids if self._repo.get(db, id=pid)]
 
+                # Resolve each product's primary domain from the junction (the legacy
+                # DataProductDb.domain column was dropped) so the Genie instructions keep
+                # showing the Domain line.
+                genie_domains_map = entity_domain_repo.get_domains_for_entities(
+                    db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
+                ) if products else {}
+                product_domains = {
+                    str(pid): next((a.domain_name for a in assigned if a.is_primary), None)
+                    for pid, assigned in genie_domains_map.items()
+                }
+
                 # Step 4: Format metadata as instructions
-                instructions = genie_client.format_metadata_for_genie(metadata_map, products)
+                instructions = genie_client.format_metadata_for_genie(
+                    metadata_map, products, product_domains=product_domains
+                )
                 logger.info(f"Formatted {len(instructions)} characters of metadata")
 
                 # Step 5: Create Genie Space via API
@@ -3187,10 +3200,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 odps["team"]["name"] = team_name
 
         if product.custom_properties:
-            odps["customProperties"] = [
+            rebuilt_props = [
                 {"property": cp.property, "value": cp.value}
                 for cp in product.custom_properties
             ]
+            # Preserve the additionalDomains entry apply_odcs injected above; a plain
+            # overwrite here drops additional domains on export/round-trip.
+            odps["customProperties"] = domain_export_adapter.merge_custom_properties(
+                rebuilt_props, odps.get("customProperties")
+            )
 
         if product.authoritative_definitions:
             odps["authoritativeDefinitions"] = [

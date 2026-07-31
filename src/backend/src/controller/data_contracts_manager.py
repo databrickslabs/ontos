@@ -1454,7 +1454,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if getattr(prop, 'stable_id', None):
                     cp_item['id'] = prop.stable_id
                 custom_props_list.append(cp_item)
-            odcs['customProperties'] = custom_props_list
+            # Preserve the additionalDomains entry apply_odcs injected above; a plain
+            # overwrite here drops additional domains on export/round-trip.
+            odcs['customProperties'] = domain_export_adapter.merge_custom_properties(
+                custom_props_list, odcs.get('customProperties')
+            )
 
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:

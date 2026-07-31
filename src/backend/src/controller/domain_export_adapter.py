@@ -69,6 +69,33 @@ class DomainExportAdapter:
                 odcs["customProperties"] = custom
         return odcs
 
+    def merge_custom_properties(
+        self, rebuilt: List[Any], previous: Optional[List[Any]]
+    ) -> List[Any]:
+        """Re-attach the domain-managed customProperties entries (``additionalDomains``)
+        onto a freshly rebuilt customProperties list.
+
+        Export builders that reconstruct ``customProperties`` from the entity's own stored
+        properties would otherwise overwrite the ``additionalDomains`` entry that
+        :meth:`apply_odcs` injected, silently dropping additional domains on export (and
+        thus on ODCS/ODPS round-trip). Call this with the newly built list and the value
+        ``apply_odcs`` had placed on the dict to preserve that entry.
+        """
+        if not previous:
+            return rebuilt
+        preserved = [
+            c for c in previous
+            if isinstance(c, dict) and c.get("property") == ADDITIONAL_DOMAINS_PROPERTY
+        ]
+        if not preserved:
+            return rebuilt
+        # Drop any stale additionalDomains the rebuilt list may carry, then re-attach.
+        kept = [
+            c for c in rebuilt
+            if not (isinstance(c, dict) and c.get("property") == ADDITIONAL_DOMAINS_PROPERTY)
+        ]
+        return kept + preserved
+
     def uc_tags(self, db: Session, entity_type: str, entity_id: str) -> List[Tuple[str, str]]:
         """Return the Unity Catalog (tag_key, tag_value) pairs for an entity's domains:
         the primary as ``data_domain`` first, then one tag per additional domain.

@@ -26,3 +26,6 @@ We suggest using tags to enhance discoverability, management, and governance. Ch
 
 5. Click on *Create Domain*.
 
+:::info
+To edit/modify your team’s attributes, click on the the teams name on the Teams page. 
+:::

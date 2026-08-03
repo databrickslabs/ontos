@@ -37,8 +37,8 @@ import styles from './index.module.css';
 const Hero = () => {
   return (
 
-  <header className={styles.heroBanner}>  
-    <div className="px-4 md:px-10 min-h-screen flex flex-col justify-center items-center w-full">
+  <header className={styles.heroBanner}>
+    <div className="container flex flex-col items-center w-full">
       {/* Logo Section */}
       <div className={styles.imageOntos}>
         <AnimatedOntosLogo width={300} height={300} />
@@ -91,10 +91,8 @@ export default function Home(): JSX.Element {
   return (
     <Layout>
       <main>
-        <div className='flex justify-center mx-auto'>
-          <div className='max-w-screen-lg'>
-            <Hero />
-          </div>
+        <div className="container padding-top--md padding-bottom--lg padding-horiz--none">
+          <Hero />
         </div>
       </main>
     </Layout>

@@ -68,10 +68,6 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           exclude: ['dev_guide/api_reference.md', 
             'dev_guide/custom_migrations.md',
-            'admin_guide/**',
-            'user_guide/**',
-            'getting_started/install_local.md',
-            'getting_started/demo_project.md',
             'troubleshooting.md'],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
@@ -85,6 +81,9 @@ const config: Config = {
       } satisfies Preset.Options,
     ],
   ],
+
+
+  
 
   themeConfig: {
     // Replace with your project's social card
@@ -110,8 +109,9 @@ const config: Config = {
           className: 'header-github-link',
           'aria-label': 'GitHub repository',
         },
-
       ],
+
+
     },
     footer: {
       style: 'dark',

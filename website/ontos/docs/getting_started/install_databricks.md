@@ -2,7 +2,7 @@
 sidebar_position: 1
 ---
 
-# Setup on Databricks
+# Databricks Labs setup
 
 The following section will walk you through the basic installation and configuration of Ontos in a Databricks workspace. 
 

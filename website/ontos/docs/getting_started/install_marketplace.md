@@ -2,8 +2,9 @@
 sidebar_position: 2
 ---
 
-# Organize Teams
-organize teams in ontos
+# Databricks Marketplace setup
+
+Installation guide for Ontos from the Databricks Marketplace
 
 # TODO
 

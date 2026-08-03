@@ -2,12 +2,27 @@
 sidebar_position: 1
 ---
 
-# Work with Domains 
+# Work with Domains
 
-work with domains
+As an Admin, you can create and manage multiple logical grouping elements in Ontos, including Domains. 
 
-## Level 2 title
+Admins can perform multiple actions such as creating, modifying, and deleting domains.
 
-### Level 3 title
+:::tip
+We suggest using tags to enhance discoverability, management, and governance. Check the [Tags](../admin_guide/configs) guide to understand the process.
+:::
 
-#### Level 4 title
+## Create a domain
+
+1. Navigate to the ⚙️ *Settings* page located in the upper right corner.
+
+![Domains in the Settings sidebar](../assets/domains_settings.png)
+
+2. Select the *Domains* tab from the *Settings* sidebar.
+3. Click on *Add new Domain*.
+4. Provide a name, description, tags, and associated parent domains.
+
+![Create a new Data Domain](../assets/domains_create.png)
+
+5. Click on *Create Domain*.
+

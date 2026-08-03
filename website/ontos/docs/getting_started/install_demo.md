@@ -1,9 +1,10 @@
 ---
-sidebar_position: 2
+sidebar_position: 3
 ---
 
-# Organize Teams
-organize teams in ontos
+# Demo Project 
+
+Demo project walkthrough
 
 # TODO
 

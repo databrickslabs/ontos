@@ -2373,10 +2373,10 @@
     "@types/d3-transition" "*"
     "@types/d3-zoom" "*"
 
-"@types/dagre@^0.7.52":
-  version "0.7.52"
-  resolved "https://registry.yarnpkg.com/@types/dagre/-/dagre-0.7.52.tgz#edbf0bca6922cd0ad1936a7486f9d03523d7565a"
-  integrity sha512-XKJdy+OClLk3hketHi9Qg6gTfe1F3y+UFnHxKA2rn9Dw+oXa4Gb378Ztz9HlMgZKSxpPmn4BNVh9wgkpvrK1uw==
+"@types/dagre@^0.7.54":
+  version "0.7.54"
+  resolved "https://registry.yarnpkg.com/@types/dagre/-/dagre-0.7.54.tgz#4f3be2a3f89938b0483013739362a477ec978a84"
+  integrity sha512-QjcRY+adGbYvBFS7cwv5txhVIwX1XXIUswWl+kSQTbI6NjgZydrZkEKX/etzVd7i+bCsCb40Z/xlBY5eoFuvWQ==
 
 "@types/debug@^4.0.0":
   version "4.1.12"

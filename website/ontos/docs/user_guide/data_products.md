@@ -2,7 +2,7 @@
 sidebar_position: 5
 ---
 
-# Building Data Products
+# Build Data Products
 work with data products
 
 # TODO

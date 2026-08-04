@@ -4,11 +4,7 @@ sidebar_position: 3
 
 # Projects and Teams
 
-Teams and Projects are organizational structures within the workspace that facilitate collaboration and management of data initiatives.
-
-**Teams** consist of members, which can include individual users or Databricks workspace groups, and may be associated with specific domains. Members can have custom roles within the team through role overrides, and team metadata can include Slack channels, leads, and tools.
-
-**Projects** serve as workspace containers that organize these initiatives and provide defined boundaries. *Personal projects* are auto-created workspaces for individual users, while *team projects* are shared workspaces designed for collaborative efforts.
+Teams and Projects are organizational structures within the workspace that facilitate collaboration and management of data initiatives. Refer to the [Core Concepts](../introduction/concepts) page for Teams and Projects definitions. 
 
 :::info
 Multiple teams can be assigned to a single project, providing logical boundaries that support different development or operational activities.

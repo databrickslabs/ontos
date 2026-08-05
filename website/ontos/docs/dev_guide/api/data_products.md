@@ -1,11 +1,11 @@
 ---
 sidebar_position: 5
 id: data_products
-title: data products
+title: data product
 description: Create, version, review, certify, publish, and subscribe to ODPS v1.0.0 data products.
 ---
 
-# Data Products 
+# Data Product
 
 Data Products implement the [Open Data Product Standard (ODPS) v1.0.0](https://bitol-io.github.io/open-data-product-standard/). A product bundles input ports, output ports (each optionally governed by a data contract), management ports, support channels, and team information, and moves through a lifecycle from draft to active and beyond. Consumers subscribe to products to be notified about status changes, compliance violations, and new versions.
 

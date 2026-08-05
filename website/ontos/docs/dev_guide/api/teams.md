@@ -1,11 +1,11 @@
 ---
 sidebar_position: 2
 id: teams
-title: Teams API
+title: team
 description: Manage teams, team membership, and the domains a team belongs to.
 ---
 
-# teams
+# Team
 
 Teams group users and Databricks groups so they can own domains, projects, contracts, and products. A team may be assigned to any number of data domains (one marked primary), or to none at all — a *standalone* team.
 

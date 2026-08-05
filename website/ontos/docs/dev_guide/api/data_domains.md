@@ -5,7 +5,7 @@ title: data domain
 description: Create, read, update, and delete data domains, and inspect the impact of deleting one.
 ---
 
-# Data Domains 
+# Data Domain
 
 Data Domains organize data products, contracts, teams, and assets into business areas. Domains are hierarchical — a domain may have a parent and any number of children — and entities can be assigned to multiple domains, one of which is the *primary* (canonical) domain.
 

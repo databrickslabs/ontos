@@ -5,7 +5,7 @@ title: data contract
 description: Create, version, review, certify, and publish ODCS v3.1.0 data contracts, and manage their schemas and sub-resources.
 ---
 
-# Data Contracts
+# Data Contract
 
 Data Contracts implement the [Open Data Contract Standard (ODCS) v3.1.0](https://bitol-io.github.io/open-data-contract-standard/). This is the largest route group in Ontos: beyond CRUD it covers the contract lifecycle, the approval and certification workflows, semantic versioning with personal drafts, schema and property management, quality profiling, and a set of ODCS sub-resources (roles, support channels, pricing, custom properties, authoritative definitions, relationships).
 

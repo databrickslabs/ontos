@@ -1,11 +1,11 @@
 ---
 sidebar_position: 7
 id: costs
-title: costs
+title: cost
 description: Record and summarize cost items attached to data domains, products, and contracts.
 ---
 
-# Costs API
+# Cost
 
 Cost items attach recurring or one-off cost figures to a governed entity so that the cost of running a domain, product, or contract can be reported alongside it. Each item belongs to a cost center, carries an amount in minor currency units, and is active over a month range.
 

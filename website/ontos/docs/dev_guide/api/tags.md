@@ -1,11 +1,11 @@
 ---
 sidebar_position: 6
 id: tags
-title: Tags API
+title: tag
 description: Manage tag namespaces, tags, namespace permissions, and tag assignments on any entity.
 ---
 
-# tags
+# Tag
 Tags in Ontos are namespaced, governed objects rather than free-text labels. A **namespace** groups related tags and carries group-level permissions; a **tag** lives in exactly one namespace, may declare a set of allowed values, and can be arranged into a hierarchy through `parent_id`. Tags are then **assigned** to entities — data products, contracts, domains, catalog objects, and so on.
 
 A tag's fully qualified name (FQN) is `{namespace}/{tag_name}`, for example `default/pii`.

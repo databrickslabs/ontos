@@ -1,11 +1,11 @@
 ---
 sidebar_position: 3
 id: projects
-title: Projects API
+title: project
 description: Manage projects, their assigned teams, and the caller's project context and access requests.
 ---
 
-# projects
+# Project
 
 Projects scope work across teams. A project is owned by one team, may have additional teams assigned to it, and acts as a visibility boundary for data contracts and data products. Users see a project when they belong to one of its assigned teams.
 

@@ -66,8 +66,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          exclude: ['dev_guide/api_reference.md', 
-            'dev_guide/custom_migrations.md',
+          exclude: [
             'troubleshooting.md'],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.

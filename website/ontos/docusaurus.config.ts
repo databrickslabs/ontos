@@ -66,7 +66,9 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          exclude: [
+          exclude: ['admin_guide/jobs_workflows.md',
+            'admin_guide/previews.md',
+            'admin_guide/roles.md',
             'troubleshooting.md'],
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.

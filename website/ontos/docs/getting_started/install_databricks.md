@@ -1,19 +1,10 @@
 ---
-sidebar_position: 1
+sidebar_position: 2
 ---
 
 # Databricks Labs setup
 
 The following section will walk you through the basic installation and configuration of Ontos in a Databricks workspace. 
-
-## Prerequisites
-
-The following items must be available on the workspace where Ontos will be deployed:
-- Access to a foundational model API (e.g., databricks-claude-sonnet-4-5)
-- Access to a DBSQL Serverless or DBSQL Pro endpoint
-- Permissions: 
-    - User that deploys application has Workspace admin rights
-    - `APP_ADMIN_DEFAULT_GROUPS` in `app.yaml` corresponds to IdP admin group
 
 ## Configuration process
 
@@ -29,22 +20,8 @@ The following items must be available on the workspace where Ontos will be deplo
 :::info[**Reusing Lakebase Instance**]
 If you prefer to reuse an existing instance and schema/database, you can **skip** this step and proceed to [Step 3](#dbsetup_step3).
 :::
-   1. Select *Compute* from the left-hand side menu in Databricks
-   2. Go to the *Lakebase Provisioned* tab
-   3. Click on *Create database instance*. 
-   4. Provide a name to the instance, size in CUs, and additional configurations (if needed)
+To configure a new Lakebase instance that Ontos will use, refer to the process described in [Lakebase Instance](../dev_guide/lakebase_setup.md) before moving on with this tutorial.
 
-![Create lakebase](../assets/create_lakebase.gif)
-
-   5. Once the instance is created, create the required database for Ontos using the SQL Editor for PostgreSQL or the psql client to run the following commands:
-
-   ```sql
-    DROP DATABASE IF EXISTS "<your_app_database_name>";
-    CREATE DATABASE "<your_app_database_name>";
-    ```
-:::tip[**Supported SQL Clients**]
-In this example, `your_app_database_name` can be app_ontos. To access the database instance using client tools, refer to the official Databricks [documentation](https://docs.databricks.com/aws/en/oltp/instances/query/psql).
-:::
 
 ### Step 3: Create App {#dbsetup_step3}
 

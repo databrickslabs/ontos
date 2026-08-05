@@ -6,7 +6,7 @@ sidebar_position: 3
 
 Teams and Projects are organizational structures within the workspace that facilitate collaboration and management of data initiatives. Refer to the [Core Concepts](../introduction/concepts) page for Teams and Projects definitions. 
 
-:::info
+:::tip
 Multiple teams can be assigned to a single project, providing logical boundaries that support different development or operational activities.
 :::
 

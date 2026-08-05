@@ -65,7 +65,7 @@ const Hero = () => {
         <Button
           variant="secondary"
           outline={true}
-          link="/docs/category/getting-started"
+          link="/docs/getting_started"
           size="large"
           label={"Getting Started"}
           className="w-full md:w-auto"

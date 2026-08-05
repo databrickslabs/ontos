@@ -20,11 +20,11 @@ Because the backend is a FastAPI application, it ships with an always up-to-date
 | `/openapi.json` | The raw OpenAPI 3.1 schema |
 
 ```bash
-# Local development (backend on port 8000)
-open http://localhost:8000/docs
+# Browse the interactive Swagger UI
+open https://<your-ontos-app-url>/docs
 
 # Fetch the raw schema for code generation
-curl -s http://localhost:8000/openapi.json -o ontos-openapi.json
+curl -s https://<your-ontos-app-url>/openapi.json -o ontos-openapi.json
 ```
 
 :::tip

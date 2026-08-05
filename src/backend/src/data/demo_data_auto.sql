@@ -684,16 +684,16 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
 ('02b00101-0004-4000-8000-000000000001', '02a00101-0004-4000-8000-000000000001', 'cybersec_review', 'Cybersecurity Officer Review',
- 'manual_approval',
- '{"approver_role": "0f000003-0004-4000-8000-000000000003"}',
+ 'approval',
+ '{"approvers": "business:0f000003-0004-4000-8000-000000000003"}',
  'safety_review', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
 ('02b00102-0004-4000-8000-000000000002', '02a00101-0004-4000-8000-000000000001', 'safety_review',   'Functional Safety Sign-off',
- 'manual_approval',
- '{"approver_role": "0f000002-0004-4000-8000-000000000002"}',
+ 'approval',
+ '{"approvers": "business:0f000002-0004-4000-8000-000000000002"}',
  'pgm_approval',  'reject', 2, '{"x": 300, "y": 100}', NOW(), NOW()),
 ('02b00103-0004-4000-8000-000000000003', '02a00101-0004-4000-8000-000000000001', 'pgm_approval',    'Program Manager Approval',
- 'manual_approval',
- '{"approver_role": "0f000001-0004-4000-8000-000000000001"}',
+ 'approval',
+ '{"approvers": "business:0f000001-0004-4000-8000-000000000001"}',
  'approve',       'reject', 3, '{"x": 500, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 

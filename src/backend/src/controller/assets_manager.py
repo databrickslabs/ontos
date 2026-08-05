@@ -617,7 +617,7 @@ class AssetsManager(SearchableAsset):
             type=f"asset-{type_name.lower().replace(' ', '-')}",
             title=asset_db_obj.name,
             description=asset_db_obj.description or '',
-            link=f"/governance/assets/{asset_db_obj.id}",
+            link=f"/assets/{asset_db_obj.id}",
             tags=tags,
             feature_id="assets",
             extra_data={

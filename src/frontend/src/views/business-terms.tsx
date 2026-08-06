@@ -69,6 +69,7 @@ export default function BusinessTermsView() {
   // Glossary preferences from persistent store
   const {
     hiddenSources,
+    groupByDimension,
     groupBySource,
     showProperties,
     groupByDomain,
@@ -76,9 +77,8 @@ export default function BusinessTermsView() {
     toggleSource,
     selectAllSources,
     selectNoneSources,
-    setGroupBySource,
+    setGroupByDimension,
     setShowProperties,
-    setGroupByDomain,
     setFilterExpanded,
   } = useGlossaryPreferencesStore();
 
@@ -404,12 +404,10 @@ export default function BusinessTermsView() {
             onToggleSource={toggleSource}
             onSelectAllSources={selectAllSources}
             onSelectNoneSources={selectNoneSources}
-            groupBySource={groupBySource}
+            groupByDimension={groupByDimension}
+            onSetGroupByDimension={setGroupByDimension}
             showProperties={showProperties}
-            groupByDomain={groupByDomain}
-            onSetGroupBySource={setGroupBySource}
             onSetShowProperties={setShowProperties}
-            onSetGroupByDomain={setGroupByDomain}
             selectedLanguage={selectedLanguage}
             onSetSelectedLanguage={setSelectedLanguage}
             isFilterExpanded={isFilterExpanded}

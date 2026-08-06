@@ -23,12 +23,12 @@ import {
   Filter,
   FolderTree,
   Zap,
-  Layers,
   Languages,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
 import type { OntologyConcept } from '@/types/ontology';
+import type { GroupByDimension } from '@/stores/glossary-preferences-store';
 import { getAvailableLanguages, getLanguageDisplayName } from '@/lib/ontology-utils';
 
 interface GlossaryFilterPanelProps {
@@ -42,12 +42,12 @@ interface GlossaryFilterPanelProps {
   onSelectAllSources: () => void;
   onSelectNoneSources: (sources: string[]) => void;
   // Display options
-  groupBySource: boolean;
+  // The "Group by" lens re-organizes terms under dimension headers. This is a
+  // LENS, not a second filter -- filtering stays driven by the source chips above.
+  groupByDimension: GroupByDimension;
+  onSetGroupByDimension: (dimension: GroupByDimension) => void;
   showProperties: boolean;
-  groupByDomain: boolean;
-  onSetGroupBySource: (enabled: boolean) => void;
   onSetShowProperties: (enabled: boolean) => void;
-  onSetGroupByDomain: (enabled: boolean) => void;
   // Language selection
   selectedLanguage: string;
   onSetSelectedLanguage: (lang: string) => void;
@@ -64,12 +64,10 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
   onToggleSource,
   onSelectAllSources,
   onSelectNoneSources,
-  groupBySource,
+  groupByDimension,
+  onSetGroupByDimension,
   showProperties,
-  groupByDomain,
-  onSetGroupBySource,
   onSetShowProperties,
-  onSetGroupByDomain,
   selectedLanguage,
   onSetSelectedLanguage,
   isFilterExpanded,
@@ -158,21 +156,35 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
             })}
           </div>
           
-          {/* Display toggles */}
+          {/* Display toggles. This row lives inside the collapsible advanced
+              area, so the "Group by" lens below is only reachable once the
+              panel is expanded. */}
           <div className="flex flex-wrap items-center gap-6 pt-2 border-t">
-            {/* Group by Source Toggle */}
+            {/* Group by lens (advanced): re-organizes the same chips/terms under
+                dimension headers. It is a LENS, not a second filter.
+                TODO: wire visibility to global advanced mode when one exists;
+                for now it is gated behind the expanded filter panel. */}
             <div className="flex items-center gap-2">
-              <Label htmlFor="group-by-source" className="text-sm flex items-center gap-2 cursor-pointer">
+              <Label htmlFor="group-by-dimension" className="text-sm flex items-center gap-2 cursor-pointer">
                 <FolderTree className="h-4 w-4" />
-                {t('semantic-models:filters.groupBySource')}
+                {t('semantic-models:filters.groupBy', 'Group by')}
               </Label>
-              <Switch
-                id="group-by-source"
-                checked={groupBySource}
-                onCheckedChange={onSetGroupBySource}
-              />
+              <Select
+                value={groupByDimension}
+                onValueChange={(value) => onSetGroupByDimension(value as GroupByDimension)}
+              >
+                <SelectTrigger id="group-by-dimension" className="w-32 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('semantic-models:filters.groupByNone', 'None')}</SelectItem>
+                  <SelectItem value="scheme">{t('semantic-models:filters.groupByScheme', 'Scheme')}</SelectItem>
+                  <SelectItem value="source">{t('semantic-models:filters.groupBySource')}</SelectItem>
+                  <SelectItem value="domain">{t('semantic-models:filters.groupByDomain')}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            
+
             {/* Show Properties Toggle */}
             <div className="flex items-center gap-2">
               <Label htmlFor="show-properties" className="text-sm flex items-center gap-2 cursor-pointer">
@@ -185,22 +197,7 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
                 onCheckedChange={onSetShowProperties}
               />
             </div>
-            
-            {/* Group by Domain Toggle - only visible when properties are shown */}
-            {showProperties && (
-              <div className="flex items-center gap-2">
-                <Label htmlFor="group-by-domain" className="text-sm flex items-center gap-2 cursor-pointer">
-                  <Layers className="h-4 w-4" />
-                  {t('semantic-models:filters.groupByDomain')}
-                </Label>
-                <Switch
-                  id="group-by-domain"
-                  checked={groupByDomain}
-                  onCheckedChange={onSetGroupByDomain}
-                />
-              </div>
-            )}
-            
+
             {/* Label Language Selector */}
             {availableLanguages.length > 0 && (
               <div className="flex items-center gap-2">

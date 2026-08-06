@@ -50,6 +50,7 @@ vi.mock('@/stores/knowledge-graph-store', () => ({
 vi.mock('@/stores/glossary-preferences-store', () => ({
   useGlossaryPreferencesStore: () => ({
     hiddenSources: [],
+    groupByDimension: 'none',
     groupBySource: false,
     showProperties: false,
     groupByDomain: false,
@@ -60,6 +61,7 @@ vi.mock('@/stores/glossary-preferences-store', () => ({
     toggleSource: vi.fn(),
     selectAllSources: vi.fn(),
     selectNoneSources: vi.fn(),
+    setGroupByDimension: vi.fn(),
     setGroupBySource: vi.fn(),
     setShowProperties: vi.fn(),
     setGroupByDomain: vi.fn(),

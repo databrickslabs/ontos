@@ -45,6 +45,7 @@ from src.tools.registry import ToolRegistry, create_default_registry
 from src.tools.data_products import (
     SearchDataProductsTool,
     GetDataProductTool,
+    ListDataProductsTool,
     CreateDraftDataProductTool,
     UpdateDataProductTool,
     DeleteDataProductTool
@@ -54,6 +55,7 @@ from src.tools.data_products import (
 from src.tools.data_contracts import (
     SearchDataContractsTool,
     GetDataContractTool,
+    ListDataContractsTool,
     CreateDraftDataContractTool,
     UpdateDataContractTool,
     DeleteDataContractTool
@@ -129,13 +131,15 @@ __all__ = [
     # Data Products tools (full CRUD)
     "SearchDataProductsTool",
     "GetDataProductTool",
+    "ListDataProductsTool",
     "CreateDraftDataProductTool",
     "UpdateDataProductTool",
     "DeleteDataProductTool",
-    
+
     # Data Contracts tools (full CRUD)
     "SearchDataContractsTool",
     "GetDataContractTool",
+    "ListDataContractsTool",
     "CreateDraftDataContractTool",
     "UpdateDataContractTool",
     "DeleteDataContractTool",

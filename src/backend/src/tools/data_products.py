@@ -14,6 +14,55 @@ from src.tools.base import BaseTool, ToolContext, ToolResult
 logger = get_logger(__name__)
 
 
+def _description_purpose(product: Any) -> Optional[str]:
+    """Read the purpose text off a product, whichever shape it arrives in.
+
+    ``DataProductDb.description`` is a relationship to ``DescriptionDb``
+    (columns ``purpose``/``usage``/``limitations``), while the API model
+    carries a plain dict and some legacy rows carry a JSON string. Reading
+    ``.get('purpose')`` off the ORM object silently yields ``None``, which
+    is why tool results used to come back with an empty description and
+    why description search never matched.
+    """
+    desc = getattr(product, "description", None)
+    if desc is None:
+        return None
+    if isinstance(desc, str):
+        try:
+            parsed = json.loads(desc)
+        except Exception:
+            return desc or None
+        return parsed.get("purpose") if isinstance(parsed, dict) else None
+    if isinstance(desc, dict):
+        return desc.get("purpose")
+    return getattr(desc, "purpose", None)
+
+
+def _output_port_names(product: Any) -> List[str]:
+    """Names of a product's output ports, ORM rows or JSON alike.
+
+    ``DataProductDb.output_ports`` is a relationship to ``OutputPortDb``; the
+    ``isinstance(port, dict)`` path only ever matched the JSON shape, so ORM
+    rows yielded an empty list.
+    """
+    ports = getattr(product, "output_ports", None)
+    if isinstance(ports, str):
+        try:
+            ports = json.loads(ports)
+        except Exception:
+            return []
+    if not ports:
+        return []
+
+    names = []
+    for port in ports:
+        if isinstance(port, dict):
+            names.append(port.get("name", "Unknown"))
+        else:
+            names.append(getattr(port, "name", None) or "Unknown")
+    return names
+
+
 class GetDataProductTool(BaseTool):
     """Get a single data product by ID."""
     
@@ -55,28 +104,9 @@ class GetDataProductTool(BaseTool):
             )
             primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
 
-            # Extract description purpose from JSON
-            desc_purpose = None
-            if product.description:
-                try:
-                    desc_dict = json.loads(product.description) if isinstance(product.description, str) else product.description
-                    if isinstance(desc_dict, dict):
-                        desc_purpose = desc_dict.get('purpose')
-                except Exception:
-                    pass
-            
-            # Extract output tables from output_ports JSON
-            output_tables = []
-            if product.output_ports:
-                try:
-                    ports = json.loads(product.output_ports) if isinstance(product.output_ports, str) else product.output_ports
-                    if isinstance(ports, list):
-                        for port in ports:
-                            if isinstance(port, dict):
-                                output_tables.append(port.get('name', 'Unknown'))
-                except Exception:
-                    pass
-            
+            desc_purpose = _description_purpose(product)
+            output_tables = _output_port_names(product)
+
             logger.info(f"[get_data_product] SUCCESS: Found product {product_id}")
             return ToolResult(
                 success=True,
@@ -245,16 +275,9 @@ class SearchDataProductsTool(BaseTool):
                     # Match on name
                     name_match = query_lower in (p.name or "").lower()
 
-                    # Match on description (stored as JSON)
-                    desc_match = False
-                    if p.description:
-                        try:
-                            desc_dict = json.loads(p.description) if isinstance(p.description, str) else p.description
-                            if isinstance(desc_dict, dict):
-                                desc_text = desc_dict.get('purpose', '')
-                                desc_match = query_lower in desc_text.lower()
-                        except Exception:
-                            pass
+                    # Match on the structured description's purpose text
+                    purpose = _description_purpose(p)
+                    desc_match = bool(purpose) and query_lower in purpose.lower()
 
                     # Match on domain (any assigned domain — primary or additional)
                     domain_match = any(query_lower in (n or "").lower() for n in p_domain_names)
@@ -271,28 +294,9 @@ class SearchDataProductsTool(BaseTool):
                     if status and p.status != status:
                         continue
                     
-                    # Extract output tables from output_ports JSON
-                    output_tables = []
-                    if p.output_ports:
-                        try:
-                            ports = json.loads(p.output_ports) if isinstance(p.output_ports, str) else p.output_ports
-                            if isinstance(ports, list):
-                                for port in ports:
-                                    if isinstance(port, dict):
-                                        output_tables.append(port.get('name', 'Unknown'))
-                        except Exception:
-                            pass
-                    
-                    # Extract description purpose from JSON
-                    desc_purpose = None
-                    if p.description:
-                        try:
-                            desc_dict = json.loads(p.description) if isinstance(p.description, str) else p.description
-                            if isinstance(desc_dict, dict):
-                                desc_purpose = desc_dict.get('purpose')
-                        except Exception:
-                            pass
-                    
+                    output_tables = _output_port_names(p)
+                    desc_purpose = _description_purpose(p)
+
                     filtered.append({
                         "id": str(p.id),
                         "name": p.name,
@@ -517,71 +521,6 @@ class UpdateDataProductTool(BaseTool):
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 
 
-class GetDataProductTool(BaseTool):
-    """Get a data product by ID."""
-    
-    name = "get_data_product"
-    category = "data_products"
-    description = "Get detailed information about a specific data product by its ID."
-    parameters = {
-        "product_id": {
-            "type": "string",
-            "description": "ID of the data product to retrieve"
-        }
-    }
-    required_params = ["product_id"]
-    
-    async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
-        """Get a data product by ID."""
-        logger.info(f"[get_data_product] Starting - product_id={product_id}")
-        
-        if not ctx.data_products_manager:
-            logger.error(f"[get_data_product] FAILED: Data products manager not available")
-            return ToolResult(success=False, error="Data products manager not available")
-        
-        try:
-            product = ctx.data_products_manager.get_product(product_id)
-            
-            if not product:
-                return ToolResult(
-                    success=False,
-                    error=f"Data product '{product_id}' not found"
-                )
-            
-            # Extract description purpose
-            desc_purpose = None
-            if product.description:
-                if isinstance(product.description, dict):
-                    desc_purpose = product.description.get('purpose')
-                elif isinstance(product.description, str):
-                    try:
-                        desc_dict = json.loads(product.description)
-                        if isinstance(desc_dict, dict):
-                            desc_purpose = desc_dict.get('purpose')
-                    except Exception:
-                        desc_purpose = product.description
-            
-            logger.info(f"[get_data_product] SUCCESS: Found product {product.name}")
-            return ToolResult(
-                success=True,
-                data={
-                    "id": product.id,
-                    "name": product.name,
-                    "domain": product.domain,
-                    "description": desc_purpose,
-                    "status": product.status,
-                    "version": product.version,
-                    "owner_team_id": getattr(product, 'owner_team_id', None),
-                    "tenant": getattr(product, 'tenant', None),
-                    "url": f"/data-products/{product.id}"
-                }
-            )
-            
-        except Exception as e:
-            logger.error(f"[get_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
-
-
 class ListDataProductsTool(BaseTool):
     """List all data products with optional filters."""
     
@@ -615,43 +554,45 @@ class ListDataProductsTool(BaseTool):
     ) -> ToolResult:
         """List all data products."""
         logger.info(f"[list_data_products] Starting - domain={domain}, status={status}, limit={limit}")
-        
-        if not ctx.data_products_manager:
-            logger.error(f"[list_data_products] FAILED: Data products manager not available")
-            return ToolResult(success=False, error="Data products manager not available")
-        
+
         try:
-            # Use list_products method with filters
-            products = ctx.data_products_manager.list_products(
-                skip=0,
-                limit=limit,
-                domain=domain,
-                status=status
+            # Read straight from the DB, the same way ``search_data_products``
+            # does. ``DataProductsManager.list_products`` takes no domain/status
+            # kwargs and fail-closes to an empty list without caller scope, and
+            # the tool layer has no caller identity to give it.
+            from src.db_models.data_products import DataProductDb
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+            db_query = ctx.db.query(DataProductDb)
+            if status:
+                db_query = db_query.filter(DataProductDb.status == status)
+            products_db = db_query.limit(500).all()
+
+            # Domain lives in the entity_domain_associations junction (#520);
+            # a product matches when *any* assigned domain matches.
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                ctx.db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
             )
-            
+
             result_list = []
-            for p in products:
-                desc_purpose = None
-                if p.description:
-                    if isinstance(p.description, dict):
-                        desc_purpose = p.description.get('purpose')
-                    elif isinstance(p.description, str):
-                        try:
-                            desc_dict = json.loads(p.description)
-                            if isinstance(desc_dict, dict):
-                                desc_purpose = desc_dict.get('purpose')
-                        except Exception:
-                            pass
-                
+            for p in products_db:
+                assigned = domains_map.get(str(p.id), [])
+                domain_names = [a.domain_name for a in assigned if a.domain_name]
+                if domain and not any(n.lower() == domain.lower() for n in domain_names):
+                    continue
+
                 result_list.append({
-                    "id": p.id,
+                    "id": str(p.id),
                     "name": p.name,
-                    "domain": p.domain,
-                    "description": desc_purpose,
+                    "domain": next((a.domain_name for a in assigned if a.is_primary), None),
+                    "description": _description_purpose(p),
                     "status": p.status,
                     "version": p.version
                 })
-            
+
+                if len(result_list) >= limit:
+                    break
+
             logger.info(f"[list_data_products] SUCCESS: Found {len(result_list)} products")
             return ToolResult(
                 success=True,
@@ -665,61 +606,4 @@ class ListDataProductsTool(BaseTool):
             logger.error(f"[list_data_products] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 
-
-class DeleteDataProductTool(BaseTool):
-    """Delete a data product by ID."""
-    
-    name = "delete_data_product"
-    category = "data_products"
-    description = "Delete a data product by its ID. This action cannot be undone."
-    parameters = {
-        "product_id": {
-            "type": "string",
-            "description": "ID of the data product to delete"
-        }
-    }
-    required_params = ["product_id"]
-    
-    async def execute(self, ctx: ToolContext, product_id: str) -> ToolResult:
-        """Delete a data product."""
-        logger.info(f"[delete_data_product] Starting - product_id={product_id}")
-        
-        if not ctx.data_products_manager:
-            logger.error(f"[delete_data_product] FAILED: Data products manager not available")
-            return ToolResult(success=False, error="Data products manager not available")
-        
-        try:
-            # Get product name first for the response
-            product = ctx.data_products_manager.get_product(product_id)
-            if not product:
-                return ToolResult(
-                    success=False,
-                    error=f"Data product '{product_id}' not found"
-                )
-            
-            product_name = product.name
-            
-            # Delete the product
-            success = ctx.data_products_manager.delete_product(product_id)
-            
-            if not success:
-                return ToolResult(
-                    success=False,
-                    error=f"Failed to delete data product '{product_id}'"
-                )
-            
-            logger.info(f"[delete_data_product] SUCCESS: Deleted product {product_name}")
-            return ToolResult(
-                success=True,
-                data={
-                    "success": True,
-                    "product_id": product_id,
-                    "name": product_name,
-                    "message": f"Data product '{product_name}' deleted successfully."
-                }
-            )
-            
-        except Exception as e:
-            logger.error(f"[delete_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 

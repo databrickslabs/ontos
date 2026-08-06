@@ -13,6 +13,33 @@ from src.tools.base import BaseTool, ToolContext, ToolResult
 logger = get_logger(__name__)
 
 
+def _description_purpose(contract: Any) -> Optional[str]:
+    """Read the purpose text off a contract, whichever shape it arrives in.
+
+    ``DataContractDb`` has no ``description`` attribute at all — the ODCS
+    description is split across ``description_purpose`` / ``description_usage``
+    / ``description_limitations``. Touching ``contract.description`` on an ORM
+    row raises ``AttributeError``; the API/legacy models carry a dict or a
+    JSON string instead, so accept all three shapes.
+    """
+    purpose = getattr(contract, "description_purpose", None)
+    if purpose:
+        return purpose
+
+    desc = getattr(contract, "description", None)
+    if desc is None:
+        return None
+    if isinstance(desc, str):
+        try:
+            parsed = json.loads(desc)
+        except Exception:
+            return desc or None
+        return parsed.get("purpose") if isinstance(parsed, dict) else None
+    if isinstance(desc, dict):
+        return desc.get("purpose")
+    return getattr(desc, "purpose", None)
+
+
 class SearchDataContractsTool(BaseTool):
     """Search for data contracts by name, domain, or status."""
     
@@ -83,17 +110,8 @@ class SearchDataContractsTool(BaseTool):
                 else:
                     name_match = query_lower in (c.name or "").lower()
 
-                    desc_match = False
-                    if c.description:
-                        try:
-                            desc_dict = json.loads(c.description) if isinstance(c.description, str) else c.description
-                            if isinstance(desc_dict, dict):
-                                desc_text = desc_dict.get('purpose', '')
-                                desc_match = query_lower in desc_text.lower()
-                            elif isinstance(desc_dict, str):
-                                desc_match = query_lower in desc_dict.lower()
-                        except Exception:
-                            pass
+                    purpose = _description_purpose(c)
+                    desc_match = bool(purpose) and query_lower in purpose.lower()
 
                     domain_match = any(query_lower in (n or "").lower() for n in c_domain_names)
                     include = name_match or desc_match or domain_match
@@ -104,14 +122,7 @@ class SearchDataContractsTool(BaseTool):
                     if status and c.status != status:
                         continue
 
-                    desc_purpose = None
-                    if c.description:
-                        try:
-                            desc_dict = json.loads(c.description) if isinstance(c.description, str) else c.description
-                            if isinstance(desc_dict, dict):
-                                desc_purpose = desc_dict.get('purpose')
-                        except Exception:
-                            pass
+                    desc_purpose = _description_purpose(c)
 
                     filtered.append({
                         "id": str(c.id),
@@ -177,14 +188,7 @@ class GetDataContractTool(BaseTool):
             )
             primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
 
-            desc_purpose = None
-            if contract.description:
-                try:
-                    desc_dict = json.loads(contract.description) if isinstance(contract.description, str) else contract.description
-                    if isinstance(desc_dict, dict):
-                        desc_purpose = desc_dict.get('purpose')
-                except Exception:
-                    pass
+            desc_purpose = _description_purpose(contract)
 
             logger.info(f"[get_data_contract] SUCCESS: Found contract {contract_id}")
             return ToolResult(
@@ -234,14 +238,22 @@ class DeleteDataContractTool(BaseTool):
             return ToolResult(success=False, error="Data contracts manager not available")
         
         try:
-            success = ctx.data_contracts_manager.delete_contract(contract_id)
-            
+            # ``delete_contract`` is the legacy in-memory store, which is never
+            # populated at runtime and so reports "not found" for every real
+            # contract. Contracts live in Postgres — delete them there.
+            try:
+                success = ctx.data_contracts_manager.delete_contract_from_db(
+                    db=ctx.db, contract_id=contract_id
+                )
+            except ValueError:
+                success = False
+
             if not success:
                 return ToolResult(
                     success=False,
                     error=f"Data contract '{contract_id}' not found or could not be deleted"
                 )
-            
+
             ctx.db.commit()
             
             logger.info(f"[delete_data_contract] SUCCESS: Deleted contract {contract_id}")
@@ -476,142 +488,6 @@ class UpdateDataContractTool(BaseTool):
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 
 
-class SearchDataContractsTool(BaseTool):
-    """Search for data contracts by name, domain, or keywords."""
-    
-    name = "search_data_contracts"
-    category = "data_contracts"
-    description = "Search for data contracts by name, domain, description, or keywords."
-    parameters = {
-        "query": {
-            "type": "string",
-            "description": "Search query for data contracts"
-        },
-        "domain": {
-            "type": "string",
-            "description": "Optional filter by domain"
-        },
-        "status": {
-            "type": "string",
-            "enum": ["draft", "active", "deprecated"],
-            "description": "Optional filter by status"
-        }
-    }
-    required_params = ["query"]
-    
-    async def execute(
-        self,
-        ctx: ToolContext,
-        query: str,
-        domain: Optional[str] = None,
-        status: Optional[str] = None
-    ) -> ToolResult:
-        """Search for data contracts."""
-        logger.info(f"[search_data_contracts] Starting - query='{query}', domain={domain}, status={status}")
-        
-        if not ctx.data_contracts_manager:
-            logger.error(f"[search_data_contracts] FAILED: Data contracts manager not available")
-            return ToolResult(success=False, error="Data contracts manager not available")
-        
-        try:
-            contracts = ctx.data_contracts_manager.list_contracts()
-            
-            query_lower = query.lower() if query and query != '*' else ''
-            filtered = []
-            
-            for c in contracts:
-                # Filter by query
-                if query_lower:
-                    name_match = query_lower in (c.name or "").lower()
-                    domain_match = query_lower in (getattr(c, 'domain', '') or "").lower()
-                    desc_match = query_lower in (c.description or "").lower() if c.description else False
-                    include = name_match or domain_match or desc_match
-                else:
-                    include = True
-                
-                if not include:
-                    continue
-                
-                # Apply filters
-                if domain and getattr(c, 'domain', None) and getattr(c, 'domain', '').lower() != domain.lower():
-                    continue
-                if status and c.status != status:
-                    continue
-                
-                filtered.append({
-                    "id": c.id,
-                    "name": c.name,
-                    "domain": getattr(c, 'domain', None),
-                    "status": c.status,
-                    "version": c.version,
-                    "format": c.format
-                })
-            
-            logger.info(f"[search_data_contracts] SUCCESS: Found {len(filtered)} matching contracts")
-            return ToolResult(
-                success=True,
-                data={
-                    "contracts": filtered[:20],
-                    "total_found": len(filtered)
-                }
-            )
-            
-        except Exception as e:
-            logger.error(f"[search_data_contracts] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
-
-
-class GetDataContractTool(BaseTool):
-    """Get a data contract by ID."""
-    
-    name = "get_data_contract"
-    category = "data_contracts"
-    description = "Get detailed information about a specific data contract by its ID."
-    parameters = {
-        "contract_id": {
-            "type": "string",
-            "description": "ID of the data contract to retrieve"
-        }
-    }
-    required_params = ["contract_id"]
-    
-    async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
-        """Get a data contract by ID."""
-        logger.info(f"[get_data_contract] Starting - contract_id={contract_id}")
-        
-        if not ctx.data_contracts_manager:
-            logger.error(f"[get_data_contract] FAILED: Data contracts manager not available")
-            return ToolResult(success=False, error="Data contracts manager not available")
-        
-        try:
-            contract = ctx.data_contracts_manager.get_contract(contract_id)
-            
-            if not contract:
-                return ToolResult(
-                    success=False,
-                    error=f"Data contract '{contract_id}' not found"
-                )
-            
-            logger.info(f"[get_data_contract] SUCCESS: Found contract {contract.name}")
-            return ToolResult(
-                success=True,
-                data={
-                    "id": contract.id,
-                    "name": contract.name,
-                    "domain": getattr(contract, 'domain', None),
-                    "description": contract.description,
-                    "status": contract.status,
-                    "version": contract.version,
-                    "format": contract.format,
-                    "url": f"/data-contracts/{contract.id}"
-                }
-            )
-            
-        except Exception as e:
-            logger.error(f"[get_data_contract] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
-
-
 class ListDataContractsTool(BaseTool):
     """List all data contracts."""
     
@@ -645,33 +521,44 @@ class ListDataContractsTool(BaseTool):
     ) -> ToolResult:
         """List all data contracts."""
         logger.info(f"[list_data_contracts] Starting - domain={domain}, status={status}, limit={limit}")
-        
-        if not ctx.data_contracts_manager:
-            logger.error(f"[list_data_contracts] FAILED: Data contracts manager not available")
-            return ToolResult(success=False, error="Data contracts manager not available")
-        
+
         try:
-            contracts = ctx.data_contracts_manager.list_contracts()
-            
+            # Read straight from the DB, the same way ``search_data_contracts``
+            # does. ``list_contracts()`` is the legacy in-memory store and is
+            # never populated at runtime.
+            from src.db_models.data_contracts import DataContractDb
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+            db_query = ctx.db.query(DataContractDb)
+            if status:
+                db_query = db_query.filter(DataContractDb.status == status)
+            contracts_db = db_query.limit(500).all()
+
+            # Domain lives in the entity_domain_associations junction (#520);
+            # a contract matches when *any* assigned domain matches.
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                ctx.db, entity_type="data_contract", entity_ids=[str(c.id) for c in contracts_db]
+            )
+
             filtered = []
-            for c in contracts:
-                if domain and getattr(c, 'domain', None) and getattr(c, 'domain', '').lower() != domain.lower():
+            for c in contracts_db:
+                assigned = domains_map.get(str(c.id), [])
+                domain_names = [a.domain_name for a in assigned if a.domain_name]
+                if domain and not any(n.lower() == domain.lower() for n in domain_names):
                     continue
-                if status and c.status != status:
-                    continue
-                
+
                 filtered.append({
-                    "id": c.id,
+                    "id": str(c.id),
                     "name": c.name,
-                    "domain": getattr(c, 'domain', None),
+                    "domain": next((a.domain_name for a in assigned if a.is_primary), None),
+                    "description": _description_purpose(c),
                     "status": c.status,
-                    "version": c.version,
-                    "format": c.format
+                    "version": c.version
                 })
-                
+
                 if len(filtered) >= limit:
                     break
-            
+
             logger.info(f"[list_data_contracts] SUCCESS: Found {len(filtered)} contracts")
             return ToolResult(
                 success=True,
@@ -685,60 +572,4 @@ class ListDataContractsTool(BaseTool):
             logger.error(f"[list_data_contracts] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 
-
-class DeleteDataContractTool(BaseTool):
-    """Delete a data contract by ID."""
-    
-    name = "delete_data_contract"
-    category = "data_contracts"
-    description = "Delete a data contract by its ID. This action cannot be undone."
-    parameters = {
-        "contract_id": {
-            "type": "string",
-            "description": "ID of the data contract to delete"
-        }
-    }
-    required_params = ["contract_id"]
-    
-    async def execute(self, ctx: ToolContext, contract_id: str) -> ToolResult:
-        """Delete a data contract."""
-        logger.info(f"[delete_data_contract] Starting - contract_id={contract_id}")
-        
-        if not ctx.data_contracts_manager:
-            logger.error(f"[delete_data_contract] FAILED: Data contracts manager not available")
-            return ToolResult(success=False, error="Data contracts manager not available")
-        
-        try:
-            # Get contract name first
-            contract = ctx.data_contracts_manager.get_contract(contract_id)
-            if not contract:
-                return ToolResult(
-                    success=False,
-                    error=f"Data contract '{contract_id}' not found"
-                )
-            
-            contract_name = contract.name
-            
-            success = ctx.data_contracts_manager.delete_contract(contract_id)
-            
-            if not success:
-                return ToolResult(
-                    success=False,
-                    error=f"Failed to delete data contract '{contract_id}'"
-                )
-            
-            logger.info(f"[delete_data_contract] SUCCESS: Deleted contract {contract_name}")
-            return ToolResult(
-                success=True,
-                data={
-                    "success": True,
-                    "contract_id": contract_id,
-                    "name": contract_name,
-                    "message": f"Data contract '{contract_name}' deleted successfully."
-                }
-            )
-            
-        except Exception as e:
-            logger.error(f"[delete_data_contract] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 

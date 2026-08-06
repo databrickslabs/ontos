@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
@@ -35,6 +36,7 @@ import { FeatureAccessLevel } from '@/types/settings'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import type { DataContract, SchemaObject, QualityRule, TeamMember, ServerConfig, SLARequirements } from '@/types/data-contract'
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
+import { useJobCapabilitiesStore } from '@/stores/job-capabilities-store'
 import RequestContractActionDialog from '@/components/data-contracts/request-contract-action-dialog'
 import CreateVersionDialog from '@/components/data-products/create-version-dialog'
 import DataContractBasicFormDialog from '@/components/data-contracts/data-contract-basic-form-dialog'
@@ -362,6 +364,14 @@ export default function DataContractDetails() {
   const [latestProfileRun, setLatestProfileRun] = useState<DataProfilingRun | null>(null)
   const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0)
   const [isProfilingRunning, setIsProfilingRunning] = useState(false)
+  const [isRequestingDqxJob, setIsRequestingDqxJob] = useState(false)
+
+  // The DQX profiling button is backed by a background job an admin has to enable;
+  // without it, clicking through only produces an error.
+  const fetchJobCapabilities = useJobCapabilitiesStore(state => state.fetchCapabilities)
+  const isDqxJobInstalled = useJobCapabilitiesStore(state => state.isWorkflowInstalled('dqx_profile_datasets'))
+  const canRequestJobEnablement = useJobCapabilitiesStore(state => state.enablementRequestsAllowed)
+  const requestJobEnablement = useJobCapabilitiesStore(state => state.requestEnablement)
 
   // Editing states
   const [editingSchemaIndex, setEditingSchemaIndex] = useState<number | null>(null)
@@ -637,8 +647,11 @@ export default function DataContractDetails() {
           setLatestProfileRun(latest)
           setPendingSuggestionsCount(latest.suggestion_counts?.pending || 0)
           
-          // Check if profiling is still running
-          const isRunning = latest.status === 'running' || latest.status === 'pending'
+          // Check if profiling is still running. Nothing can advance a run while the
+          // DQX job is not installed, so a lingering 'pending'/'running' record is
+          // stale (e.g. left behind by an earlier failed start) rather than live work.
+          const isRunning =
+            (latest.status === 'running' || latest.status === 'pending') && isDqxJobInstalled
           setIsProfilingRunning(isRunning)
           
           // Notify when profiling completes
@@ -670,7 +683,7 @@ export default function DataContractDetails() {
       console.warn('Failed to fetch profile runs:', e)
       setIsProfilingRunning(false)
     }
-  }, [contractId, isProfilingRunning, toast])
+  }, [contractId, isProfilingRunning, isDqxJobInstalled, toast])
 
   // Determine default view mode based on user role and ownership
   const getDefaultViewMode = useCallback((): ViewMode => {
@@ -717,6 +730,10 @@ export default function DataContractDetails() {
       if (Array.isArray(data)) setCertificationLevels(data)
     })
   }, [get])
+
+  useEffect(() => {
+    fetchJobCapabilities()
+  }, [fetchJobCapabilities])
 
   useEffect(() => {
     setStaticSegments([{ label: 'Data Contracts', path: listPath }])
@@ -1534,8 +1551,10 @@ export default function DataContractDetails() {
         body: JSON.stringify({ schema_names: selectedSchemaNames })
       })
       if (!res.ok) {
-        const errorText = await res.text()
-        throw new Error(errorText || 'Failed to start profiling')
+        // The backend returns an actionable `detail` (e.g. the DQX job is not enabled);
+        // prefer it over the raw response body.
+        const errorDetail = await res.json().catch(() => null)
+        throw new Error(errorDetail?.detail || 'Failed to start profiling')
       }
       await res.json()
       toast({ 
@@ -1553,6 +1572,37 @@ export default function DataContractDetails() {
         description: e instanceof Error ? e.message : 'Could not start DQX profiling', 
         variant: 'destructive' 
       })
+    }
+  }
+
+  const handleRequestDqxJob = async () => {
+    setIsRequestingDqxJob(true)
+    try {
+      const result = await requestJobEnablement('dqx_profile_datasets')
+      if (result === 'already_installed') {
+        toast({
+          title: 'DQX profiling is already enabled',
+          description: 'Reload the page to start profiling.'
+        })
+      } else if (result === 'already_requested') {
+        toast({
+          title: 'Request already pending',
+          description: 'An administrator has already been notified about this job.'
+        })
+      } else {
+        toast({
+          title: 'Administrators notified',
+          description: 'They have been asked to enable the DQX profiling background job.'
+        })
+      }
+    } catch (e) {
+      toast({
+        title: 'Failed to notify administrators',
+        description: e instanceof Error ? e.message : 'Could not submit the request',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsRequestingDqxJob(false)
     }
   }
 
@@ -2037,15 +2087,38 @@ export default function DataContractDetails() {
               <CardDescription>Database schema definitions</CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={() => setIsDqxSchemaSelectOpen(true)}
-                disabled={!contract.schema || contract.schema.length === 0}
-              >
-                <Sparkles className="h-4 w-4 mr-1.5" />
-                Profile with DQX
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* Wrapper span: a disabled button emits no pointer events of its own. */}
+                  <span tabIndex={isDqxJobInstalled ? -1 : 0}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsDqxSchemaSelectOpen(true)}
+                      disabled={!contract.schema || contract.schema.length === 0 || !isDqxJobInstalled}
+                    >
+                      <Sparkles className="h-4 w-4 mr-1.5" />
+                      Profile with DQX
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!isDqxJobInstalled && (
+                  <TooltipContent className="max-w-xs">
+                    <p>Ask your admin to enable the background job.</p>
+                    {canRequestJobEnablement && (
+                      <button
+                        type="button"
+                        onClick={handleRequestDqxJob}
+                        disabled={isRequestingDqxJob}
+                        className="mt-1 inline-flex items-center underline underline-offset-2 hover:no-underline disabled:opacity-60"
+                      >
+                        {isRequestingDqxJob && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                        {isRequestingDqxJob ? 'Notifying admin...' : 'Notify admin'}
+                      </button>
+                    )}
+                  </TooltipContent>
+                )}
+              </Tooltip>
               {canEditInPlace && (
                 <>
                   <Button size="sm" variant="outline" onClick={() => setIsInferFromCatalogOpen(true)} disabled={isInferringSchema}>

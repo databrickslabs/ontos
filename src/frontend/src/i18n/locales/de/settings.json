@@ -50,6 +50,13 @@
       "placeholder": "audit_logs",
       "help": "Verzeichnis, in dem Audit-Log-Dateien gespeichert werden."
     },
+    "backgroundJobs": {
+      "title": "Hintergrundjobs",
+      "allowEnablementRequests": {
+        "label": "Benutzern erlauben, die Aktivierung von Hintergrundjobs anzufordern",
+        "help": "Wenn ein Benutzer eine Funktion aufruft, deren Hintergrundjob nicht aktiviert ist, kann er eine Benachrichtigung an einen Administrator senden, um die Aktivierung anzufordern."
+      }
+    },
     "llm": {
       "title": "AI / LLM Konfiguration",
       "enabled": {

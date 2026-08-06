@@ -143,6 +143,13 @@
       "placeholder": "audit_logs",
       "help": "Directory where audit log files are stored."
     },
+    "backgroundJobs": {
+      "title": "Background Jobs",
+      "allowEnablementRequests": {
+        "label": "Allow users to request background job enablement",
+        "help": "When a user hits a feature whose background job is not enabled, they can send a notification asking an administrator to enable it."
+      }
+    },
     "llm": {
       "title": "AI / LLM Configuration",
       "enabled": {

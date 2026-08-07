@@ -3,9 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
   Layers,
-  Network,
   Brain,
-  Globe2,
   TreePine,
   Wand2,
   Sparkles,
@@ -69,13 +67,15 @@ const SECTIONS: Section[] = [
     defaultLabel: 'Explore',
     icon: Compass,
     basePath: '/concepts/browser',
+    // /concepts/graph still resolves (it redirects into the unified browser),
+    // so keep it a member for active-section detection. Search + hierarchy are
+    // demoted out of the Explore toggle (see below) but remain routable.
     memberPaths: ['/concepts/browser', '/concepts/search', '/concepts/graph', '/concepts/hierarchy'],
-    subItems: [
-      { path: '/concepts/browser', labelKey: 'concepts:nav.browser', defaultLabel: 'Concepts', icon: Network },
-      { path: '/concepts/search', labelKey: 'concepts:nav.search', defaultLabel: 'Search', icon: Brain },
-      { path: '/concepts/hierarchy', labelKey: 'concepts:nav.hierarchy', defaultLabel: 'Hierarchy', icon: TreePine },
-      { path: '/concepts/graph', labelKey: 'concepts:nav.graph', defaultLabel: 'Graph', icon: Globe2 },
-    ],
+    // Explore is now ONE unified browse surface (List | Tree | Graph live as an
+    // in-page view-mode switch inside the browser view, not as separate nav
+    // toggles). No sub-nav toggles here; power-user links (Search / SPARQL,
+    // estate hierarchy) are rendered separately, out of the toggle strip.
+    subItems: [],
   },
   {
     id: 'enrich',
@@ -106,11 +106,22 @@ function resolveActiveSection(pathname: string): Section {
   return match ?? SECTIONS[1];
 }
 
+// Power-user links surfaced next to the Explore section. These are NOT
+// view-modes (List/Tree/Graph live inside the browser view); they are distinct
+// destinations kept reachable so old URLs and cross-links do not break.
+const EXPLORE_SECONDARY_LINKS: SubNavItem[] = [
+  { path: '/concepts/search', labelKey: 'concepts:nav.searchSparql', defaultLabel: 'Search / SPARQL', icon: Brain },
+  { path: '/concepts/hierarchy', labelKey: 'concepts:nav.hierarchy', defaultLabel: 'Estate hierarchy', icon: TreePine },
+];
+
 export default function ConceptsLayout() {
   const { t } = useTranslation(['concepts']);
   const { pathname } = useLocation();
   const activeSection = resolveActiveSection(pathname);
-  const useToggles = activeSection.id === 'explore';
+  // The Explore section no longer uses a toggle strip — its browse modes live
+  // inside the view. Define/Enrich keep their entry-point link rows.
+  const useToggles = false;
+  const showExploreSecondary = activeSection.id === 'explore';
 
   return (
     <div className="space-y-6">
@@ -146,41 +157,51 @@ export default function ConceptsLayout() {
         </div>
 
         {/* Sub-navigation for the active section.
-            Explore renders view toggles (segmented control); Define/Enrich render
-            entry-point links. */}
-        <div
-          role={useToggles ? 'tablist' : undefined}
-          aria-label={
-            useToggles ? t('concepts:explore.viewLabel', 'Explore views') : undefined
-          }
-          className={cn(
-            useToggles
-              ? 'inline-flex items-center gap-1 rounded-lg border bg-card p-1'
-              : 'flex flex-wrap items-center gap-1'
-          )}
-        >
-          {activeSection.subItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              role={useToggles ? 'tab' : undefined}
-              className={({ isActive }) =>
-                cn(
-                  'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
-                  isActive
-                    ? 'bg-accent text-accent-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                )
+            Define/Enrich render entry-point links. Explore renders no toggle
+            strip (List/Tree/Graph live inside the browser view); instead it
+            surfaces power-user destinations (Search/SPARQL, estate hierarchy)
+            as plain links. */}
+        {(() => {
+          const links = showExploreSecondary
+            ? EXPLORE_SECONDARY_LINKS
+            : activeSection.subItems;
+          if (links.length === 0) return null;
+          return (
+            <div
+              role={useToggles ? 'tablist' : undefined}
+              aria-label={
+                useToggles ? t('concepts:explore.viewLabel', 'Explore views') : undefined
               }
-              aria-selected={
-                useToggles ? isPathActive(pathname, item.path) : undefined
-              }
+              className={cn(
+                useToggles
+                  ? 'inline-flex items-center gap-1 rounded-lg border bg-card p-1'
+                  : 'flex flex-wrap items-center gap-1'
+              )}
             >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {t(item.labelKey, item.defaultLabel)}
-            </NavLink>
-          ))}
-        </div>
+              {links.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  role={useToggles ? 'tab' : undefined}
+                  className={({ isActive }) =>
+                    cn(
+                      'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                      isActive
+                        ? 'bg-accent text-accent-foreground font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                    )
+                  }
+                  aria-selected={
+                    useToggles ? isPathActive(pathname, item.path) : undefined
+                  }
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {t(item.labelKey, item.defaultLabel)}
+                </NavLink>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="min-w-0">

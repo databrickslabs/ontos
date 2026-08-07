@@ -7,12 +7,16 @@
     "enrich": "Enrich"
   },
   "explore": {
-    "viewLabel": "Explore views"
+    "viewLabel": "Explore views",
+    "viewList": "List",
+    "viewTree": "Tree",
+    "viewGraph": "Graph"
   },
   "nav": {
     "collections": "Collections",
     "browser": "Concepts",
     "search": "Search",
+    "searchSparql": "Search / SPARQL",
     "graph": "Graph",
     "hierarchy": "Hierarchy",
     "generator": "Generator",

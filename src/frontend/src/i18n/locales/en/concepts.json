@@ -1,10 +1,22 @@
 {
   "title": "Concepts",
+  "sections": {
+    "label": "Concept sections",
+    "define": "Define",
+    "explore": "Explore",
+    "enrich": "Enrich"
+  },
+  "explore": {
+    "viewLabel": "Explore views"
+  },
   "nav": {
     "collections": "Collections",
     "browser": "Concepts",
     "search": "Search",
     "graph": "Graph",
-    "hierarchy": "Hierarchy"
+    "hierarchy": "Hierarchy",
+    "generator": "Generator",
+    "import": "Import",
+    "mapping": "Mapping"
   }
 }

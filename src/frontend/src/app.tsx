@@ -212,6 +212,8 @@ export default function App() {
                 <Route path="graph" element={<OntologyHomeView />} />
                 <Route path="hierarchy" element={<HierarchyBrowserView />} />
                 <Route path="generator" element={<OntologyGeneratorView />} />
+                {/* Define > Import — reuses SchemaImporterView inside the Concepts shell */}
+                <Route path="import" element={<SchemaImporterView />} />
                 <Route path="mapping" element={<TermMappingView />} />
               </Route>
               {/* Old top-level alias from the closed PR */}

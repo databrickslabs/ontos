@@ -9,6 +9,16 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -36,7 +46,7 @@ import {
   Plus,
   Shapes,
   Table,
-  X,
+  Trash2,
 } from 'lucide-react'
 import { useApi } from '@/hooks/use-api'
 import { useToast } from '@/hooks/use-toast'
@@ -108,7 +118,7 @@ export default function LinkedObjectsPanel({
   const listMaxHeight = maxVisibleRows
     ? { maxHeight: ROW_HEIGHT_PX * maxVisibleRows }
     : undefined
-  const { get, post } = useApi()
+  const { get, post, delete: deleteLink } = useApi()
   const { toast } = useToast()
   const navigate = useNavigate()
   const { t } = useTranslation(['search', 'common', 'semantic-models'])
@@ -123,6 +133,10 @@ export default function LinkedObjectsPanel({
   const [selectedEntityType, setSelectedEntityType] = useState('')
   const [selectedEntityId, setSelectedEntityId] = useState('')
   const [availableEntities, setAvailableEntities] = useState<any[]>([])
+
+  // Single-link removal confirm dialog: holds the link awaiting confirmation.
+  const [linkPendingRemoval, setLinkPendingRemoval] = useState<EnrichedSemanticLink | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
 
   const enrichLinks = useCallback(
     async (raw: SemanticLink[]): Promise<EnrichedSemanticLink[]> => {
@@ -375,13 +389,15 @@ export default function LinkedObjectsPanel({
     }
   }
 
-  const handleRemoveLink = async (link: EnrichedSemanticLink) => {
+  const handleRemoveLink = async () => {
+    const link = linkPendingRemoval
+    if (!link) return
+    setIsRemoving(true)
     try {
-      const res = await fetch(`/api/semantic-links/${link.id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(text || `HTTP ${res.status}`)
-      }
+      const res = await deleteLink(`/api/semantic-links/${link.id}`)
+      if (res.error) throw new Error(res.error)
+
+      setLinkPendingRemoval(null)
       bumpKnowledgeGraphRefresh('semantic-link-mutated')
       onChanged?.()
       await fetchLinks()
@@ -402,6 +418,8 @@ export default function LinkedObjectsPanel({
           }),
         variant: 'destructive',
       })
+    } finally {
+      setIsRemoving(false)
     }
   }
 
@@ -439,10 +457,10 @@ export default function LinkedObjectsPanel({
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              handleRemoveLink(link)
+              setLinkPendingRemoval(link)
             }}
           >
-            <X className="h-3 w-3" />
+            <Trash2 className="h-3 w-3" />
           </Button>
         )}
       </div>
@@ -603,6 +621,48 @@ export default function LinkedObjectsPanel({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Remove-link confirm dialog */}
+      <AlertDialog
+        open={linkPendingRemoval !== null}
+        onOpenChange={(open) => {
+          if (!open) setLinkPendingRemoval(null)
+        }}
+      >
+        <AlertDialogContent data-testid="linked-object-remove-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('semantic-models:linkedObjects.removeConfirmTitle', {
+                defaultValue: 'Remove this link?',
+              })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('semantic-models:linkedObjects.removeConfirmBody', {
+                label: linkPendingRemoval?.entity_name || linkPendingRemoval?.entity_id,
+                defaultValue:
+                  'This unlinks "{{label}}" from this concept. It does not delete the entity itself.',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemoving}>
+              {t('common:actions.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="linked-object-remove-confirm-button"
+              disabled={isRemoving}
+              onClick={(e) => {
+                // Keep the dialog mounted until the request resolves so we can
+                // surface an error toast without it closing underneath us.
+                e.preventDefault()
+                handleRemoveLink()
+              }}
+            >
+              {t('common:actions.remove', { defaultValue: 'Remove' })}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Collapsible>
   )
 }

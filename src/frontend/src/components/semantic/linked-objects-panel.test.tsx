@@ -8,13 +8,14 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 
 const mockGet = vi.fn()
 const mockPost = vi.fn()
+const mockDelete = vi.fn()
 
 vi.mock('@/hooks/use-api', () => ({
   useApi: () => ({
     get: mockGet,
     post: mockPost,
     put: vi.fn(),
-    delete: vi.fn(),
+    delete: mockDelete,
   }),
 }))
 
@@ -93,6 +94,7 @@ describe('LinkedObjectsPanel', () => {
   beforeEach(() => {
     mockGet.mockReset()
     mockPost.mockReset()
+    mockDelete.mockReset()
     bumpRefreshNonce.mockReset()
     toastSpy.mockReset()
     // default mocks: links + entity enrichment
@@ -147,13 +149,8 @@ describe('LinkedObjectsPanel', () => {
     })
   })
 
-  it('fires DELETE and bumps refresh store when removing a link', async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 204,
-      text: async () => '',
-    })
-    global.fetch = fetchSpy as unknown as typeof fetch
+  it('confirms then fires DELETE via the api client and bumps refresh store', async () => {
+    mockDelete.mockResolvedValue({ data: null, error: null })
 
     const onChanged = vi.fn()
     renderPanel({ onChanged })
@@ -163,14 +160,16 @@ describe('LinkedObjectsPanel', () => {
     })
 
     const user = userEvent.setup()
-    const removeBtn = screen.getByTestId('linked-object-remove-link-1')
-    await user.click(removeBtn)
+    // Clicking the row trash affordance opens the confirm dialog; it must NOT
+    // delete on its own.
+    await user.click(screen.getByTestId('linked-object-remove-link-1'))
+    expect(mockDelete).not.toHaveBeenCalled()
+
+    const confirm = await screen.findByTestId('linked-object-remove-confirm-button')
+    await user.click(confirm)
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/semantic-links/link-1',
-        expect.objectContaining({ method: 'DELETE' }),
-      )
+      expect(mockDelete).toHaveBeenCalledWith('/api/semantic-links/link-1')
     })
     expect(bumpRefreshNonce).toHaveBeenCalledWith('semantic-link-mutated')
     expect(onChanged).toHaveBeenCalled()

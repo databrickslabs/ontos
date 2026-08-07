@@ -150,6 +150,16 @@ class _RecipientMembership:
         # A bare group name (stored before the designer sent ``group:``)
         return bool(not recipient_role_id and self.in_group(recipient))
 
+
+class NotificationNotDeletableError(Exception):
+    """Raised when a notification is marked ``can_delete=False``.
+
+    Actionable notifications (approval requests, access grants, contract
+    deploy requests, role access requests) are created with
+    ``can_delete=False`` to mean "you must respond to this, you cannot
+    dismiss it". Only an admin may override.
+    """
+
 class NotificationsManager:
     def __init__(self, settings_manager: 'SettingsManager'):
         """Initialize the notification manager.
@@ -160,6 +170,20 @@ class NotificationsManager:
         # self.notifications: List[Notification] = [] # REMOVE In-memory list
         self._repo = notification_repo # Use the repository instance
         self._settings_manager = settings_manager # Store the manager
+
+    def is_app_admin(self, user_info: Optional[UserInfo]) -> bool:
+        """Whether the user holds the 'Admin' app role.
+
+        The same notion of admin that ``get_notifications`` uses when it
+        overrides ``can_delete`` to True and that ``can_user_access_notification``
+        uses (``_RecipientMembership.is_admin``), so what the API reports and
+        what it enforces stay in step. Distinct from ``FeatureAccessLevel.ADMIN``
+        on the notifications feature, which is a per-feature permission. Fails
+        closed: False when there is no user or the roles cannot be read.
+        """
+        if not user_info:
+            return False
+        return self._membership(user_info, "the admin check").is_admin
 
     def get_notification_by_id(self, db: Session, notification_id: str) -> Optional[Notification]:
         """Get a single notification by ID."""
@@ -344,11 +368,56 @@ class NotificationsManager:
              logger.error(f"Error creating notification in DB: {e}", exc_info=True)
              raise # Re-raise to be handled by the caller/route
 
-    def delete_notification(self, db: Session, notification_id: str) -> bool:
-        """Delete a notification by ID using the repository."""
+    def delete_notification(
+        self,
+        db: Session,
+        notification_id: str,
+        *,
+        is_admin: bool = False,
+    ) -> bool:
+        """Delete a notification by ID using the repository.
+
+        Enforces ``can_delete`` server-side. The flag was previously honoured
+        by the frontend alone, so a direct API call could dismiss a
+        notification that exists specifically to force a response.
+
+        Admins may override, matching ``get_notifications``, which reports
+        ``can_delete=True`` on every notification an admin can see. Without the
+        override an admin's UI would offer a delete button that always fails,
+        and orphaned notifications from dead workflows would be undeletable.
+
+        Args:
+            db: Database session
+            notification_id: ID of the notification to delete
+            is_admin: Whether the caller holds the 'Admin' app role
+
+        Returns:
+            True if the notification was deleted
+
+        Raises:
+            NotificationNotFoundError: No notification with that ID
+            NotificationNotDeletableError: ``can_delete`` is False and the
+                caller is not an admin
+        """
         try:
-             deleted_obj = self._repo.remove(db=db, id=notification_id)
-             return deleted_obj is not None
+            db_obj = self._repo.get(db=db, id=notification_id)
+            if not db_obj:
+                raise NotificationNotFoundError(f"Notification {notification_id} not found")
+
+            if not db_obj.can_delete and not is_admin:
+                raise NotificationNotDeletableError(
+                    f"Notification {notification_id} is marked as non-deletable"
+                )
+
+            if not db_obj.can_delete:
+                logger.info(
+                    f"Admin override: deleting non-deletable notification {notification_id}"
+                )
+
+            deleted_obj = self._repo.remove(db=db, id=notification_id)
+            return deleted_obj is not None
+        except (NotificationNotFoundError, NotificationNotDeletableError):
+            raise
         except Exception as e:
              logger.error(f"Error deleting notification {notification_id}: {e}", exc_info=True)
              raise

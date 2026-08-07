@@ -14,6 +14,7 @@ import {
   Zap,
   User,
   Network,
+  GitCompare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -316,6 +317,10 @@ export default function ConceptDetailView() {
     (concept.synonyms?.length ?? 0) > 0 || (concept.examples?.length ?? 0) > 0;
   const isProperty = concept.concept_type === 'property';
   const hasDomainRange = isProperty && (concept.domain || concept.range);
+  // A draft concept is one forked off a certified baseline; only in this state
+  // does the "Changes from <baseline>" comparison make sense. Certified /
+  // imported concepts have no in-flight diff to show.
+  const isDraft = !concept.status || concept.status === 'draft';
 
   return (
     <div className="py-4 space-y-3">
@@ -388,6 +393,25 @@ export default function ConceptDetailView() {
           >
             <ExternalLink className="h-3 w-3" />
           </a>
+          {/* Version + Compare affordance. Version + diff are a UX placeholder;
+              real concept versioning is a separate backend track.
+              TODO(cb-v2): wire to real version-diff endpoint (Track 3, pending
+              granularity decision). */}
+          <span className="font-mono shrink-0">v1.0.0</span>
+          {isDraft && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-primary hover:underline shrink-0"
+              onClick={() =>
+                document
+                  .getElementById('concept-version-diff')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+              }
+            >
+              <GitCompare className="h-3 w-3" />
+              {t('semantic-models:versionDiff.compare', 'Compare')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -515,6 +539,97 @@ export default function ConceptDetailView() {
       />
 
       <EntityMetadataPanel entityType="concept" entityId={concept.iri} />
+
+      {/* Version-diff panel — MOCK / PLACEHOLDER. Draft concepts are forked
+          from a certified baseline; this shows the field-level delta from that
+          baseline. The rows below are illustrative sample content, not live
+          data.
+          TODO(cb-v2): wire to real version-diff endpoint (Track 3, pending
+          granularity decision). */}
+      {isDraft && (
+        <section
+          id="concept-version-diff"
+          className="rounded-lg border bg-card p-3 space-y-2"
+        >
+          <div className="flex items-center gap-2">
+            <GitCompare className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-medium">
+              {t('semantic-models:versionDiff.title', 'Changes from v1.0.0')}
+            </h2>
+            <Badge variant="secondary" className="text-[10px] uppercase">
+              {t('semantic-models:versionDiff.mock', 'Preview')}
+            </Badge>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {t('semantic-models:versionDiff.baseline', 'certified baseline')}
+            </span>
+          </div>
+          <div className="divide-y text-sm">
+            {[
+              {
+                field: t('semantic-models:fields.definition', 'Definition'),
+                kind: 'changed' as const,
+                detail: t(
+                  'semantic-models:versionDiff.sample.definition',
+                  'wording tightened',
+                ),
+              },
+              {
+                field: t('semantic-models:fields.synonyms', 'Synonyms'),
+                kind: 'added' as const,
+                detail: t(
+                  'semantic-models:versionDiff.sample.synonyms',
+                  'added 1',
+                ),
+              },
+              {
+                field: t('semantic-models:versionDiff.parent', 'Parent'),
+                kind: 'unchanged' as const,
+                detail: t(
+                  'semantic-models:versionDiff.sample.parent',
+                  'unchanged',
+                ),
+              },
+              {
+                field: t(
+                  'semantic-models:linkedObjects.title',
+                  'Linked Entities',
+                ),
+                kind: 'unchanged' as const,
+                detail: t(
+                  'semantic-models:versionDiff.sample.links',
+                  'unchanged',
+                ),
+              },
+            ].map((row) => (
+              <div
+                key={row.field}
+                className="flex items-center gap-3 py-1.5"
+              >
+                <span className="w-28 shrink-0 font-medium">{row.field}</span>
+                <Badge
+                  variant="outline"
+                  className={
+                    row.kind === 'changed'
+                      ? 'text-xs border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                      : row.kind === 'added'
+                        ? 'text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                        : 'text-xs'
+                  }
+                >
+                  {row.kind === 'changed'
+                    ? t('semantic-models:versionDiff.changed', 'changed')
+                    : row.kind === 'added'
+                      ? t('semantic-models:versionDiff.added', 'added')
+                      : t('semantic-models:versionDiff.unchanged', 'unchanged')}
+                </Badge>
+                <span className="text-muted-foreground text-xs">
+                  {row.detail}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {concept.created_at && (
         <p className="text-xs text-muted-foreground">

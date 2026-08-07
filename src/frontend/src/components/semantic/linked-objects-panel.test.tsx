@@ -193,6 +193,55 @@ describe('LinkedObjectsPanel', () => {
     expect(screen.queryByTestId(/^linked-object-link-/)).not.toBeInTheDocument()
   })
 
+  it('renders an Open affordance per row (aligned columns)', async () => {
+    renderPanel()
+    await waitFor(() => {
+      expect(screen.getByTestId('linked-object-link-1')).toBeInTheDocument()
+    })
+    // One "Open" control per link row (label + external-link icon).
+    const openControls = screen.getAllByRole('button', { name: /open/i })
+    expect(openControls.length).toBe(sampleLinks.length)
+  })
+
+  it('nests an asset under its parent when parent_entity_id resolves', async () => {
+    mockGet.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/semantic-links/iri/')) {
+        return {
+          data: [
+            {
+              id: 'link-contract',
+              entity_id: 'contract-1',
+              entity_type: 'data_contract',
+              iri: 'https://example.org/onto#Customer',
+            },
+            {
+              id: 'link-asset',
+              entity_id: 'main.sales.orders',
+              entity_type: 'uc_table',
+              iri: 'https://example.org/onto#Customer',
+              parent_entity_id: 'contract-1',
+            },
+          ],
+        }
+      }
+      if (url.startsWith('/api/data-contracts/')) {
+        return { data: { id: 'contract-1', name: 'Finance SLA' } }
+      }
+      return { data: [] }
+    })
+    renderPanel()
+    await waitFor(() => {
+      expect(screen.getByTestId('linked-object-link-asset')).toBeInTheDocument()
+    })
+    // Parent renders at top level, child asset is indented (depth=1).
+    expect(
+      screen.getByTestId('linked-object-link-contract').getAttribute('data-depth'),
+    ).toBe('0')
+    expect(
+      screen.getByTestId('linked-object-link-asset').getAttribute('data-depth'),
+    ).toBe('1')
+  })
+
   it('always shows the title row', async () => {
     renderPanel({ canAssign: false })
     const heading = await screen.findByText('Linked Entities')

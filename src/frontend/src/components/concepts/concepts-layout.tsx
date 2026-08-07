@@ -48,8 +48,8 @@ const SECTIONS: Section[] = [
     labelKey: 'concepts:sections.define',
     defaultLabel: 'Define',
     icon: PenLine,
-    basePath: '/concepts/collections',
-    memberPaths: ['/concepts/collections', '/concepts/generator', '/concepts/import', '/schema-importer'],
+    basePath: '/concepts/define',
+    memberPaths: ['/concepts/define', '/concepts/collections', '/concepts/generator', '/concepts/import', '/schema-importer'],
     subItems: [
       { path: '/concepts/collections', labelKey: 'concepts:nav.collections', defaultLabel: 'Collections', icon: Layers },
       { path: '/concepts/generator', labelKey: 'concepts:nav.generator', defaultLabel: 'Generator', icon: Wand2 },
@@ -80,8 +80,8 @@ const SECTIONS: Section[] = [
     labelKey: 'concepts:sections.enrich',
     defaultLabel: 'Enrich',
     icon: Sparkles,
-    basePath: '/concepts/mapping',
-    memberPaths: ['/concepts/mapping'],
+    basePath: '/concepts/enrich',
+    memberPaths: ['/concepts/enrich', '/concepts/mapping'],
     subItems: [
       { path: '/concepts/mapping', labelKey: 'concepts:nav.mapping', defaultLabel: 'Mapping', icon: Boxes },
       // TODO(cb-v2): the Enrich wireframe (enrich.html) also has a delivery lane

@@ -36,6 +36,7 @@ import {
   ChevronRight,
   Columns2,
   Database,
+  ExternalLink,
   FileText,
   Folder,
   FolderOpen,
@@ -58,6 +59,11 @@ interface SemanticLink {
   entity_type: string
   iri: string
   label?: string
+  // Optional chain hint: when an asset link resolves *through* a data
+  // contract or data product, the backend may point it at that parent so we
+  // can render it as a nested child row. Absent for direct concept->asset
+  // links, which stay at the top level.
+  parent_entity_id?: string
 }
 
 interface EnrichedSemanticLink extends SemanticLink {
@@ -423,7 +429,38 @@ export default function LinkedObjectsPanel({
     }
   }
 
-  const renderLinkRow = (link: EnrichedSemanticLink) => {
+  // One flat list, but assets that resolve *through* a linked contract or
+  // product are nested as indented child rows under that parent (chain:
+  // concept -> contract/product -> asset). Links without a resolvable parent
+  // stay at the top level (direct concept -> asset). Data fetching is
+  // untouched; this only reorders/indents what fetchLinks already produced.
+  const orderedLinks = (() => {
+    const byId = new Map(links.map((l) => [l.entity_id, l]))
+    const children = new Map<string, EnrichedSemanticLink[]>()
+    const roots: EnrichedSemanticLink[] = []
+    for (const link of links) {
+      const parentId = link.parent_entity_id
+      if (parentId && byId.has(parentId) && parentId !== link.entity_id) {
+        const bucket = children.get(parentId) ?? []
+        bucket.push(link)
+        children.set(parentId, bucket)
+      } else {
+        roots.push(link)
+      }
+    }
+    const out: Array<{ link: EnrichedSemanticLink; depth: number }> = []
+    for (const root of roots) {
+      out.push({ link: root, depth: 0 })
+      for (const child of children.get(root.entity_id) ?? []) {
+        out.push({ link: child, depth: 1 })
+      }
+    }
+    return out
+  })()
+
+  // Aligned columns: [icon] name … [type pill] [Open] [remove]. The name cell
+  // flexes; the trailing cells keep a fixed footprint so every row lines up.
+  const renderLinkRow = (link: EnrichedSemanticLink, depth = 0) => {
     const Icon = iconFor(link.entity_type)
     const typeLabel = getEntityTypeLabel(link.entity_type)
     const colour = ENTITY_TYPE_COLORS[link.entity_type] || ''
@@ -431,21 +468,38 @@ export default function LinkedObjectsPanel({
       <div
         key={link.id}
         data-testid={`linked-object-${link.id}`}
-        className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 group"
+        data-depth={depth}
+        className={`flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 group ${
+          depth > 0 ? 'ml-4 border-l pl-3' : ''
+        }`}
       >
-        <Badge variant="outline" className={`text-xs ${colour}`}>
-          {typeLabel}
-        </Badge>
-        <Icon className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+        <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
         <button
           type="button"
-          className="text-sm text-primary hover:underline text-left truncate"
+          className="text-sm text-primary hover:underline text-left truncate flex-1 min-w-0"
           onClick={() => navigateToEntity(link)}
           title={`${typeLabel}: ${link.entity_name || link.entity_id} • ${link.iri}`}
         >
           {link.entity_name || link.entity_id}
         </button>
-        {canAssign && (
+        <Badge
+          variant="outline"
+          className={`text-xs flex-shrink-0 ${colour}`}
+        >
+          {typeLabel}
+        </Badge>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground flex-shrink-0 w-14 justify-end"
+          onClick={() => navigateToEntity(link)}
+          aria-label={t('semantic-models:linkedObjects.open', {
+            defaultValue: 'Open',
+          })}
+        >
+          {t('semantic-models:linkedObjects.open', { defaultValue: 'Open' })}
+          <ExternalLink className="h-3 w-3" />
+        </button>
+        {canAssign ? (
           <Button
             variant="ghost"
             size="icon"
@@ -453,7 +507,7 @@ export default function LinkedObjectsPanel({
             aria-label={t('semantic-models:linkedObjects.removeAria', {
               defaultValue: 'Remove linked entity',
             })}
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 flex-shrink-0 ml-auto"
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 flex-shrink-0"
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
@@ -462,6 +516,8 @@ export default function LinkedObjectsPanel({
           >
             <Trash2 className="h-3 w-3" />
           </Button>
+        ) : (
+          <span className="w-6 flex-shrink-0" aria-hidden="true" />
         )}
       </div>
     )
@@ -525,7 +581,7 @@ export default function LinkedObjectsPanel({
                 })}
               </p>
             ) : (
-              links.map(renderLinkRow)
+              orderedLinks.map(({ link, depth }) => renderLinkRow(link, depth))
             )}
           </div>
         </CollapsibleContent>

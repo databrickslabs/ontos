@@ -26,6 +26,8 @@ import DataProductDetails from './views/data-product-details';
 import DataContracts from './views/data-contracts';
 import DataContractDetails from './views/data-contract-details';
 import ExploreView from './views/explore';
+import DefineView from './views/define';
+import EnrichView from './views/enrich';
 import ConceptDetailView from './views/concept-detail';
 import Compliance from './views/compliance';
 import CompliancePolicyDetails from './views/compliance-policy-details';
@@ -204,6 +206,10 @@ export default function App() {
               {/* Concepts - sidebar layout with nested routes */}
               <Route path="/concepts" element={<ConceptsLayout />}>
                 <Route index element={<Navigate to="/concepts/browser" replace />} />
+                {/* Define landing: Author / Generate / Import path cards + in-progress list */}
+                <Route path="define" element={<DefineView />} />
+                {/* Enrich: Map (coverage + inline review) + Deliver lanes */}
+                <Route path="enrich" element={<EnrichView />} />
                 <Route path="collections" element={<CollectionsView />} />
                 {/* Unified Explore surface: List | Tree | Graph over one fetch. */}
                 <Route path="browser" element={<ExploreView />} />

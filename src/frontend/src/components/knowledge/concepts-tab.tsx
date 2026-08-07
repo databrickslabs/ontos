@@ -33,6 +33,10 @@ interface ConceptsTabProps {
   showProperties: boolean;
   groupByDomain: boolean;
   selectedLanguage: string;
+  // Render mode. 'tree' (default) preserves the existing hierarchical engine;
+  // 'list' renders a flat, alphabetically-sorted list of concepts with no
+  // broader/narrower nesting. Additive — the tree path is unchanged.
+  viewMode?: 'list' | 'tree';
 }
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -75,6 +79,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   showProperties: _showProperties,
   groupByDomain,
   selectedLanguage,
+  viewMode = 'tree',
 }) => {
   const { t } = useTranslation(['semantic-models', 'common']);
   const expandedGroups = useGlossaryPreferencesStore((s) => s.expandedConceptGroups);
@@ -227,14 +232,36 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     [selectedLanguage],
   );
 
+  // Flat list (list view-mode only): all concepts from the same filtered/typed
+  // selection the tree is built from, sorted alphabetically by label. No
+  // broader/narrower nesting. groupByDomain still hides domain-owned properties
+  // (mirrors the tree's rootConcepts logic) so the two modes cover the same set.
+  const flatConcepts = useMemo(() => {
+    return Array.from(treeData.conceptMap.values())
+      .filter(concept => {
+        if (groupByDomain && concept.concept_type === 'property' && concept.domain) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) =>
+        conceptLabel(a).localeCompare(conceptLabel(b), undefined, { sensitivity: 'base' }),
+      );
+  }, [treeData, groupByDomain, conceptLabel]);
+
   // Render a single tree row with rich content (icon + label + type + collection
   // + status pill + property hints).
-  const renderTreeItem = (itemId: string, level: number = 0): React.ReactNode => {
+  //
+  // `flat` (default false) is used ONLY by the list view-mode: it forces the row
+  // to render as a leaf (no expand chevron, no child recursion) so the SAME row
+  // markup can be reused for a flat list without a divergent copy. The tree path
+  // never passes `flat`, so its rendering output is unchanged.
+  const renderTreeItem = (itemId: string, level: number = 0, flat: boolean = false): React.ReactNode => {
     const isSourceGroup = groupBySource && treeData.sourceContexts.includes(itemId);
     const concept = treeData.conceptMap.get(itemId);
-    const isExpanded = expandedGroups.includes(itemId) || (searchQuery.length > 0);
-    const hasChildren = isFolder(itemId);
-    const children = getChildren(itemId);
+    const isExpanded = !flat && (expandedGroups.includes(itemId) || (searchQuery.length > 0));
+    const hasChildren = !flat && isFolder(itemId);
+    const children = flat ? [] : getChildren(itemId);
     const isSelected = selectedConcept?.iri === itemId;
 
     if (isSourceGroup && searchQuery) {
@@ -435,13 +462,50 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
         }}
       >
         <div className="p-2 min-w-max">
-          {rootConcepts.map(id => renderTreeItem(id, 0))}
+          {viewMode === 'list' ? (
+            <>
+              {groupBySource
+                ? treeData.sourceContexts.map(source => {
+                    const rows = flatConcepts
+                      .filter(c => c.source_context === source)
+                      .map(c => renderTreeItem(c.iri, 0, true))
+                      .filter(Boolean);
+                    if (rows.length === 0) return null;
+                    return (
+                      <div key={`flat-group-${source}`}>
+                        <div className="flex items-center gap-2 px-2 py-1 rounded-md font-semibold bg-muted/40">
+                          <FolderTree className="h-4 w-4 shrink-0 text-orange-500" />
+                          <span className="truncate text-sm">
+                            {systemRdfNamespaceDisplayLabel(source, t)}
+                          </span>
+                          <Badge variant="secondary" className="text-xs ml-auto">
+                            {rows.length}
+                          </Badge>
+                        </div>
+                        {rows}
+                      </div>
+                    );
+                  })
+                : flatConcepts.map(c => renderTreeItem(c.iri, 0, true))}
 
-          {rootConcepts.length === 0 && (
-            <div className="text-center text-muted-foreground py-12">
-              <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>{t('semantic-models:messages.noConceptsFound')}</p>
-            </div>
+              {flatConcepts.length === 0 && (
+                <div className="text-center text-muted-foreground py-12">
+                  <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>{t('semantic-models:messages.noConceptsFound')}</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {rootConcepts.map(id => renderTreeItem(id, 0))}
+
+              {rootConcepts.length === 0 && (
+                <div className="text-center text-muted-foreground py-12">
+                  <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>{t('semantic-models:messages.noConceptsFound')}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

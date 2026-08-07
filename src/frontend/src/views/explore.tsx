@@ -369,14 +369,9 @@ export default function ExploreView() {
           </div>
 
           {/* Surface — same filteredConcepts feeds every mode.
-              List and Tree both render through ConceptsTab. ConceptsTab always
-              builds a hierarchy internally; the List-vs-Tree distinction is
-              expressed via the Group-by lens (grouping off = flat-ish list,
-              grouping on = grouped tree) rather than a dedicated internal
-              toggle.
-              TODO(cb-v2): dedicated tree/list toggle inside ConceptsTab — the
-              engine has no flat/hierarchical switch of its own yet; do NOT
-              rewrite ConceptsTab to add one here. */}
+              List and Tree both render through ConceptsTab, which now honours a
+              genuine viewMode: 'list' renders a flat alphabetical list, 'tree'
+              renders the broader/narrower hierarchy. Graph uses GraphTab. */}
           {viewMode === 'graph' ? (
             <GraphTab
               concepts={filteredConcepts}
@@ -397,6 +392,7 @@ export default function ExploreView() {
               showProperties={showProperties}
               groupByDomain={groupByDomain}
               selectedLanguage={selectedLanguage}
+              viewMode={viewMode === 'tree' ? 'tree' : 'list'}
             />
           )}
         </div>

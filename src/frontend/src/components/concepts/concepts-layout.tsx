@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
   Layers,
-  Brain,
-  TreePine,
   Wand2,
   Sparkles,
   Upload,
@@ -106,14 +104,6 @@ function resolveActiveSection(pathname: string): Section {
   return match ?? SECTIONS[1];
 }
 
-// Power-user links surfaced next to the Explore section. These are NOT
-// view-modes (List/Tree/Graph live inside the browser view); they are distinct
-// destinations kept reachable so old URLs and cross-links do not break.
-const EXPLORE_SECONDARY_LINKS: SubNavItem[] = [
-  { path: '/concepts/search', labelKey: 'concepts:nav.searchSparql', defaultLabel: 'Search / SPARQL', icon: Brain },
-  { path: '/concepts/hierarchy', labelKey: 'concepts:nav.hierarchy', defaultLabel: 'Estate hierarchy', icon: TreePine },
-];
-
 export default function ConceptsLayout() {
   const { t } = useTranslation(['concepts']);
   const { pathname } = useLocation();
@@ -121,12 +111,13 @@ export default function ConceptsLayout() {
   // The Explore section no longer uses a toggle strip — its browse modes live
   // inside the view. Define/Enrich keep their entry-point link rows.
   const useToggles = false;
-  const showExploreSecondary = activeSection.id === 'explore';
 
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold">{t('concepts:title', 'Concepts')}</h1>
+        {/* No standalone page title here — the section tab strip below states
+            the location, and each view owns its own header/actions row. This
+            keeps a single header and avoids the duplicate "Concepts" title. */}
 
         {/* Primary section switch — horizontal tab strip (Define / Explore / Enrich) */}
         <div
@@ -157,14 +148,12 @@ export default function ConceptsLayout() {
         </div>
 
         {/* Sub-navigation for the active section.
-            Define/Enrich render entry-point links. Explore renders no toggle
-            strip (List/Tree/Graph live inside the browser view); instead it
-            surfaces power-user destinations (Search/SPARQL, estate hierarchy)
-            as plain links. */}
+            Define/Enrich render entry-point links. Explore renders no
+            secondary link row at all — List/Tree/Graph live as a view-mode
+            switch inside the browser view, and estate/search surfaces are
+            reached from global nav, not from Explore. */}
         {(() => {
-          const links = showExploreSecondary
-            ? EXPLORE_SECONDARY_LINKS
-            : activeSection.subItems;
+          const links = activeSection.subItems;
           if (links.length === 0) return null;
           return (
             <div

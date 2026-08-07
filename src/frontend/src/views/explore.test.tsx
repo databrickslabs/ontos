@@ -82,11 +82,13 @@ vi.mock('@/hooks/use-explore-concepts', () => ({
 
 // Engine stubs record which filteredConcepts they receive.
 let conceptsTabConcepts: OntologyConcept[] | null = null;
+let conceptsTabViewMode: string | null = null;
 let graphTabConcepts: OntologyConcept[] | null = null;
 
 vi.mock('@/components/knowledge', () => ({
-  ConceptsTab: ({ filteredConcepts }: { filteredConcepts: OntologyConcept[] }) => {
+  ConceptsTab: ({ filteredConcepts, viewMode }: { filteredConcepts: OntologyConcept[]; viewMode?: string }) => {
     conceptsTabConcepts = filteredConcepts;
+    conceptsTabViewMode = viewMode ?? null;
     return <div data-testid="concepts-tab">{filteredConcepts.length} concepts</div>;
   },
   GraphTab: ({ concepts }: { concepts: OntologyConcept[] }) => {
@@ -103,6 +105,7 @@ import ExploreView from './explore';
 
 beforeEach(() => {
   conceptsTabConcepts = null;
+  conceptsTabViewMode = null;
   graphTabConcepts = null;
   global.fetch = vi.fn(async () => ({
     ok: true, status: 200, json: async () => ({}), text: async () => '',
@@ -143,6 +146,16 @@ describe('Explore unified surface', () => {
     expect(conceptsTabConcepts).toEqual(FILTERED);
   });
 
+  it('passes viewMode="list" to ConceptsTab by default', () => {
+    renderExplore();
+    expect(conceptsTabViewMode).toBe('list');
+  });
+
+  it('passes viewMode="tree" to ConceptsTab when ?view=tree', () => {
+    renderExplore('/concepts/browser?view=tree');
+    expect(conceptsTabViewMode).toBe('tree');
+  });
+
   it('switching to Graph swaps to GraphTab with the SAME filteredConcepts', async () => {
     renderExplore();
     const graphTab = screen.getByRole('tab', { name: /Graph/ });
@@ -157,6 +170,7 @@ describe('Explore unified surface', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Tree/ }));
     await waitFor(() => expect(screen.getByTestId('concepts-tab')).toBeInTheDocument());
     expect(conceptsTabConcepts).toEqual(FILTERED);
+    expect(conceptsTabViewMode).toBe('tree');
   });
 
   it('redirects legacy ?concept=IRI to /concepts/browser/:iri', async () => {

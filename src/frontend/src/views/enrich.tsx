@@ -207,8 +207,11 @@ export default function EnrichView() {
           'Planned: live tag-drift detection. Today Ontos tracks its own coverage (links written vs pending), not whether a synced tag was later changed on the platform.',
         ),
         actionable: platform === 'uc',
-        onConfigure: () => undefined,
-        onSync: () => undefined,
+        // The uc_tag_sync trigger from Ontos is not wired yet — show the actions
+        // disabled with a reason rather than clickable no-ops.
+        // TODO(cb-v2): wire Configure (tag template/trigger) + Sync now
+        // (run uc_tag_sync job) and drop comingSoon.
+        comingSoon: true,
       },
       {
         id: 'descriptions',
@@ -297,9 +300,27 @@ export default function EnrichView() {
                 </button>
               </div>
             )}
-            <Button variant="outline" size="sm" disabled={!canWrite}>
-              {t('enrich.map.suggest', 'Suggest matches')}
-            </Button>
+            {/* Suggest matches is not wired to the suggester run yet. Show it
+                disabled with a clear reason rather than an inert button.
+                TODO(cb-v2): trigger the term-mapping suggester and route results
+                to the shared Review Board. */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button variant="outline" size="sm" disabled>
+                      {t('enrich.map.suggest', 'Suggest matches')}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px]">
+                  {t(
+                    'enrich.map.suggestSoon',
+                    'Coming soon: runs the match suggester and sends candidates to the Review Board.',
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
         <p className="ml-8 text-sm text-muted-foreground">

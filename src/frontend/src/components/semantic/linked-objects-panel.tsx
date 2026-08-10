@@ -312,6 +312,14 @@ export default function LinkedObjectsPanel({
       case 'data_contract':
         navigate(`/data-contracts/${link.entity_id}`)
         return
+      case 'data_contract_schema':
+      case 'data_contract_property': {
+        // entity_id is {contractId}#{schema}[#{property}] — navigate to the
+        // parent contract (the schema/property live inside it).
+        const contractId = String(link.entity_id).split('#')[0]
+        navigate(`/data-contracts/${contractId}`)
+        return
+      }
       case 'asset':
         navigate(`/assets/${link.entity_id}`)
         return

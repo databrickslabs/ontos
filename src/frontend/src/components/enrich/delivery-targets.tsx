@@ -53,6 +53,9 @@ export interface DeliveryTarget {
   note?: string;
   /** Whether Configure/Sync actions are enabled for this target. */
   actionable?: boolean;
+  /** When true, actions are disabled with a "coming soon" tooltip (the write
+   *  path isn't wired yet), instead of appearing clickable but doing nothing. */
+  comingSoon?: boolean;
   onConfigure?: () => void;
   onSync?: () => void;
 }
@@ -143,22 +146,46 @@ export default function DeliveryTargets({ targets, advanced = false, canWrite = 
               </p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!target.actionable || !canWrite}
-                onClick={target.onConfigure}
-              >
-                {t('enrich.deliver.configure', 'Configure')}
-              </Button>
-              {target.status === 'live' && (
-                <Button
-                  size="sm"
-                  disabled={!target.actionable || !canWrite}
-                  onClick={target.onSync}
-                >
-                  {t('enrich.deliver.syncNow', 'Sync now')}
-                </Button>
+              {target.comingSoon ? (
+                // Write path not wired yet: disabled with a clear reason, so the
+                // buttons don't look actionable while doing nothing.
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button variant="outline" size="sm" disabled>
+                          {t('enrich.deliver.configure', 'Configure')}
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[260px]">
+                      {t(
+                        'enrich.deliver.comingSoon',
+                        'Coming soon: configuring and running this sync from Ontos is not wired yet.',
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!target.actionable || !canWrite}
+                    onClick={target.onConfigure}
+                  >
+                    {t('enrich.deliver.configure', 'Configure')}
+                  </Button>
+                  {target.status === 'live' && (
+                    <Button
+                      size="sm"
+                      disabled={!target.actionable || !canWrite}
+                      onClick={target.onSync}
+                    >
+                      {t('enrich.deliver.syncNow', 'Sync now')}
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -289,11 +289,12 @@ export default function ExploreView() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={handleCreateConcept}>
-                    {t('semantic-models:actions.createConcept')}
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t('concepts:explore.createConcept', 'New concept')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleCreateCollection}>
                     <FolderTree className="h-4 w-4 mr-2" />
-                    {t('semantic-models:actions.createCollection')}
+                    {t('concepts:explore.createScheme', 'New concept scheme')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

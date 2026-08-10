@@ -2232,6 +2232,11 @@ class SemanticModelsManager(SearchableAsset):
                     # Extract related concepts (skos:related)
                     related_concepts = [str(r) for r in context.objects(concept_uri, SKOS.related)]
 
+                    # Governance status (ONTOS.status). Needed so the Explore
+                    # list can render the Status column; without it every row
+                    # showed a blank status. Falls back to the created default.
+                    status_val = self._get_literal(context, concept_uri, ONTOS.status)
+
                     concepts.append(OntologyConcept(
                         iri=concept_iri,
                         label=primary_label,
@@ -2244,7 +2249,8 @@ class SemanticModelsManager(SearchableAsset):
                         parent_concepts=parent_concepts,
                         domain=domain_val,
                         range=range_val,
-                        related_concepts=related_concepts
+                        related_concepts=related_concepts,
+                        status=status_val,
                     ))
             except Exception as e:
                 logger.warning(f"Failed to query concepts in context {context_name}: {e}")

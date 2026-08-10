@@ -1,11 +1,11 @@
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import List, Optional, Union, TYPE_CHECKING, Dict
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import re
 
 from src.db_models.semantic_links import EntitySemanticLinkDb
-from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
+from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate, MappingStatus
 from src.repositories.semantic_links_repository import entity_semantic_links_repo
 from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
@@ -98,28 +98,77 @@ class SemanticLinksManager:
 
         return None
 
-    def _to_api(self, db_obj: EntitySemanticLinkDb) -> EntitySemanticLink:
+    def _to_api(self, db_obj: EntitySemanticLinkDb, parent_entity_id: Optional[str] = None) -> EntitySemanticLink:
         label = db_obj.label
         if not label:
             # Derive concept label from IRI local name (fragment or last path segment)
             iri = db_obj.iri or ''
             tail = iri.split('#')[-1].split('/')[-1]
             label = tail.replace('_', ' ') if tail else None
-        
+
         return EntitySemanticLink(
             id=str(db_obj.id),
             entity_id=db_obj.entity_id,
             entity_type=db_obj.entity_type,  # type: ignore
             iri=db_obj.iri,
             label=label,
+            parent_entity_id=parent_entity_id,
         )
+
+    def _compute_nesting_for_links(self, links: List[EntitySemanticLink]) -> None:
+        """Compute parent_entity_id for nestable links (contract-schema-property chain).
+
+        Modifies links in-place. For data_contract_schema and data_contract_property links,
+        sets parent_entity_id to point to their parent data_contract link if present.
+
+        Nesting logic:
+        - data_contract_schema#{contractId} links are nested under the data_contract link
+          with entity_id={contractId}.
+        - data_contract_property#{contractId}#{schemaName}#{propertyName} links are nested
+          under their parent data_contract_schema link.
+        - All other links stay at top level (parent_entity_id remains None).
+
+        This is a O(n) algorithm over the concept's own link set; no extra DB queries.
+        """
+        # Build a map of entity_id -> link for quick lookup
+        by_entity_id: Dict[str, EntitySemanticLink] = {}
+        for link in links:
+            by_entity_id[link.entity_id] = link
+
+        # Process each link to find its parent (if any)
+        for link in links:
+            if link.entity_type == 'data_contract_schema':
+                # Extract contractId from entity_id format: {contractId}#{schemaName}
+                parts = link.entity_id.split('#', 1)
+                if len(parts) >= 1:
+                    contract_id = parts[0]
+                    # Look for a data_contract link with this contract_id
+                    if contract_id in by_entity_id and by_entity_id[contract_id].entity_type == 'data_contract':
+                        link.parent_entity_id = contract_id
+
+            elif link.entity_type == 'data_contract_property':
+                # Extract schemaName from entity_id format: {contractId}#{schemaName}#{propertyName}
+                parts = link.entity_id.split('#', 2)
+                if len(parts) >= 2:
+                    schema_entity_id = f"{parts[0]}#{parts[1]}"  # {contractId}#{schemaName}
+                    # Look for a data_contract_schema link with this entity_id
+                    if schema_entity_id in by_entity_id and by_entity_id[schema_entity_id].entity_type == 'data_contract_schema':
+                        link.parent_entity_id = schema_entity_id
 
     def list_for_entity(self, entity_id: str, entity_type: str) -> List[EntitySemanticLink]:
         items = entity_semantic_links_repo.list_for_entity(self._db, entity_id, entity_type)
-        return [self._to_api(it) for it in items]
+        results = [self._to_api(it) for it in items]
+        self._compute_nesting_for_links(results)
+        return results
 
     def list_for_iri(self, iri: str) -> List[EntitySemanticLink]:
-        """Get all entities linked to an IRI, including both explicit links and inferred type relationships."""
+        """Get all entities linked to an IRI, including both explicit links and inferred type relationships.
+
+        For physical assets linked through data contracts or products, parent_entity_id is set to
+        enable frontend nesting (concept -> contract -> asset in a visual hierarchy).
+        Only contract-structured nesting is currently implemented (safe, deterministic);
+        fuzzy FQN->product matching is deferred (uncertain and risky).
+        """
         # Get explicit links from database
         items = entity_semantic_links_repo.list_for_iri(self._db, iri)
         results = [self._to_api(it) for it in items]
@@ -129,7 +178,55 @@ class SemanticLinksManager:
             inferred = self._get_inferred_links_from_graph(iri)
             results.extend(inferred)
 
+        # Compute nesting relationships for the concept's links
+        self._compute_nesting_for_links(results)
+
         return results
+
+    def mapping_status_for_iris(self, iris: List[str]) -> Dict[str, MappingStatus]:
+        """Get mapping status for a batch of IRIs.
+
+        Returns a dict mapping each IRI to its layer status (asset/product/contract).
+        Only uses stored links (not inferred graph links) for efficiency in batch queries.
+
+        Args:
+            iris: List of IRI strings to query
+
+        Returns:
+            Dict[iri, MappingStatus] where MappingStatus indicates linked layers.
+            IRIs with no links are included with all flags false.
+        """
+        # Entity types that belong to each layer
+        physical_layer_types = {'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'}
+        product_layer_types = {'data_product'}
+        contract_layer_types = {'data_contract', 'data_contract_schema', 'data_contract_property'}
+
+        # Initialize all IRIs with false status
+        statuses: Dict[str, MappingStatus] = {
+            iri: MappingStatus(asset=False, product=False, contract=False)
+            for iri in iris
+        }
+
+        if not iris:
+            return statuses
+
+        # Batch query for all links matching these IRIs
+        links = entity_semantic_links_repo.list_for_iris(self._db, iris)
+
+        # Group by IRI and update status flags
+        for link in links:
+            if link.iri not in statuses:
+                # IRI not requested; skip it
+                continue
+
+            if link.entity_type in physical_layer_types:
+                statuses[link.iri].asset = True
+            elif link.entity_type in product_layer_types:
+                statuses[link.iri].product = True
+            elif link.entity_type in contract_layer_types:
+                statuses[link.iri].contract = True
+
+        return statuses
 
     def _get_inferred_links_from_graph(self, iri: str) -> List[EntitySemanticLink]:
         """Query RDF graph for entities that have rdf:type matching the given IRI."""

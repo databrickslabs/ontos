@@ -24,6 +24,8 @@ from src.models.semantic_models import (
     SemanticModelCreate,
     SemanticModelUpdate,
     SemanticModelPreview,
+    CoverageSchemeRow,
+    CoverageResponse,
 )
 from src.models.ontology import (
     OntologyConcept,
@@ -4422,6 +4424,116 @@ class SemanticModelsManager(SearchableAsset):
         self._invalidate_cache()
         
         return self.get_concept(new_iri)
+
+    def get_coverage_metrics(self, semantic_links_manager) -> CoverageResponse:
+        """Compute semantic enrichment coverage metrics per scheme.
+
+        Fetches all concepts grouped by source_context, then batch-queries semantic links
+        to compute coverage per scheme: concepts with >=1 link, distinct product/contract/asset
+        link counts.
+
+        Args:
+            semantic_links_manager: SemanticLinksManager instance for link lookups.
+
+        Returns:
+            CoverageResponse with per-scheme metrics and totals.
+        """
+        # Get all concepts grouped by source_context
+        grouped_concepts = self.get_grouped_concepts()
+
+        # Entity types that belong to each layer
+        product_layer_types = {'data_product'}
+        contract_layer_types = {'data_contract', 'data_contract_schema', 'data_contract_property'}
+        asset_layer_types = {'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'}
+
+        scheme_rows: List[CoverageSchemeRow] = []
+        total_concepts = 0
+        total_with_links = 0
+        total_products_set = set()
+        total_contracts_set = set()
+        total_assets_set = set()
+
+        for source_context, concepts in sorted(grouped_concepts.items()):
+            scheme = source_context  # 'Unassigned' or a taxonomy name
+            total_concepts += len(concepts)
+
+            # Extract all IRIs from concepts in this scheme
+            iris = [c.iri for c in concepts if c.iri]
+            if not iris:
+                # Empty scheme (no concepts with IRIs)
+                scheme_rows.append(CoverageSchemeRow(
+                    scheme=scheme,
+                    label=scheme if scheme != "Unassigned" else None,
+                    concepts=len(concepts),
+                    coverage_pct=0,
+                    products=0,
+                    contracts=0,
+                    assets=0,
+                    suggested=0,
+                ))
+                continue
+
+            # Batch-fetch links for all IRIs in this scheme. The repo is a
+            # module-level singleton (not an attribute of the links manager), so
+            # import and use it directly.
+            from src.repositories.semantic_links_repository import entity_semantic_links_repo
+            links = entity_semantic_links_repo.list_for_iris(
+                semantic_links_manager._db, iris
+            )
+
+            # Group links by IRI to track which concepts have >=1 link
+            links_by_iri = {}
+            for link in links:
+                if link.iri not in links_by_iri:
+                    links_by_iri[link.iri] = []
+                links_by_iri[link.iri].append(link)
+
+            # Count concepts with at least one link
+            concepts_with_links = len(links_by_iri)
+            total_with_links += concepts_with_links
+            coverage_pct = int(100 * concepts_with_links / len(concepts)) if concepts else 0
+
+            # Deduplicate entity_ids by layer within this scheme
+            scheme_products = set()
+            scheme_contracts = set()
+            scheme_assets = set()
+
+            for link in links:
+                if link.entity_type in product_layer_types:
+                    scheme_products.add(link.entity_id)
+                    total_products_set.add(link.entity_id)
+                elif link.entity_type in contract_layer_types:
+                    scheme_contracts.add(link.entity_id)
+                    total_contracts_set.add(link.entity_id)
+                elif link.entity_type in asset_layer_types:
+                    scheme_assets.add(link.entity_id)
+                    total_assets_set.add(link.entity_id)
+
+            scheme_rows.append(CoverageSchemeRow(
+                scheme=scheme,
+                label=scheme if scheme != "Unassigned" else None,
+                concepts=len(concepts),
+                coverage_pct=coverage_pct,
+                products=len(scheme_products),
+                contracts=len(scheme_contracts),
+                assets=len(scheme_assets),
+                suggested=0,
+            ))
+
+        # Compute totals
+        total_coverage_pct = int(100 * total_with_links / total_concepts) if total_concepts > 0 else 0
+        totals = CoverageSchemeRow(
+            scheme="__total__",
+            label=None,
+            concepts=total_concepts,
+            coverage_pct=total_coverage_pct,
+            products=len(total_products_set),
+            contracts=len(total_contracts_set),
+            assets=len(total_assets_set),
+            suggested=0,
+        )
+
+        return CoverageResponse(schemes=scheme_rows, totals=totals)
 
     # ========================================================================
     # HELPER METHODS

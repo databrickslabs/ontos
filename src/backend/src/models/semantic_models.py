@@ -49,3 +49,21 @@ class SemanticModelPreview(BaseModel):
     preview: str
 
 
+class CoverageSchemeRow(BaseModel):
+    """Per-scheme semantic enrichment coverage metrics."""
+    scheme: str  # source_context (e.g., 'enterprise-glossary')
+    label: Optional[str] = None  # human-readable scheme name
+    concepts: int  # total concepts in this scheme
+    coverage_pct: int  # % of concepts with >=1 semantic link, 0-100
+    products: int  # distinct data_product links across the scheme
+    contracts: int  # distinct data_contract* links across the scheme
+    assets: int  # distinct physical layer (uc_*/asset) links across the scheme
+    suggested: int = 0  # suggested matches (not yet implemented; placeholder)
+
+
+class CoverageResponse(BaseModel):
+    """Batch coverage metrics for all schemes."""
+    schemes: list[CoverageSchemeRow]
+    totals: CoverageSchemeRow  # aggregate across all schemes
+
+

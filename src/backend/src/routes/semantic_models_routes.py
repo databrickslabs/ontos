@@ -11,7 +11,7 @@ from src.models.ontology import (
     TaxonomyStats,
     ConceptSearchResult
 )
-from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate
+from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate, CoverageResponse
 from src.utils.semantic_model_title_candidates import (
     extract_title_candidates,
     humanize_rdf_filename,
@@ -1351,6 +1351,31 @@ async def _migrate_concept_payload(
     except Exception as e:
         logger.error(f"Error migrating concept: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to migrate concept")
+
+
+# -------- coverage metrics --------
+
+@router.get('/knowledge/coverage', response_model=CoverageResponse)
+async def get_coverage_metrics(
+    db: DBSessionDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+):
+    """Get semantic enrichment coverage metrics per scheme.
+
+    Returns concept count, coverage percentage (% with >=1 semantic link),
+    and distinct entity counts per layer (products/contracts/assets) for each
+    source_context (scheme/taxonomy).
+    """
+    try:
+        from src.controller.semantic_links_manager import SemanticLinksManager
+
+        semantic_links_manager = SemanticLinksManager(db, semantic_models_manager=manager)
+        coverage = manager.get_coverage_metrics(semantic_links_manager)
+        return coverage
+    except Exception as e:
+        logger.error(f"Error computing coverage metrics: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute coverage metrics")
 
 
 # -------- create (no IRI in URL — already collision-free) --------

@@ -26,6 +26,20 @@ class EntitySemanticLinksRepository(CRUDBase[EntitySemanticLinkDb, EntitySemanti
     def list_all(self, db: Session) -> List[EntitySemanticLinkDb]:
         return db.query(self.model).all()
 
+    def list_for_iris(self, db: Session, iris: List[str]) -> List[EntitySemanticLinkDb]:
+        """Batch query for semantic links matching any of the given IRIs.
+
+        Args:
+            db: SQLAlchemy session
+            iris: List of IRI strings to query
+
+        Returns:
+            List of EntitySemanticLinkDb objects, empty if iris is empty
+        """
+        if not iris:
+            return []
+        return db.query(self.model).filter(self.model.iri.in_(iris)).all()
+
 
 entity_semantic_links_repo = EntitySemanticLinksRepository(EntitySemanticLinkDb)
 

@@ -2,13 +2,9 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
-  Layers,
-  Wand2,
   Sparkles,
-  Upload,
   PenLine,
   Compass,
-  Boxes,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -50,14 +46,7 @@ const SECTIONS: Section[] = [
     icon: PenLine,
     basePath: '/concepts/define',
     memberPaths: ['/concepts/define', '/concepts/collections', '/concepts/generator', '/concepts/import', '/schema-importer'],
-    subItems: [
-      { path: '/concepts/collections', labelKey: 'concepts:nav.collections', defaultLabel: 'Collections', icon: Layers },
-      { path: '/concepts/generator', labelKey: 'concepts:nav.generator', defaultLabel: 'Generator', icon: Wand2 },
-      // Import reuses the existing SchemaImporterView, now also mounted inside the
-      // /concepts outlet at /concepts/import so the Concepts shell stays visible.
-      // The legacy top-level /schema-importer route still works.
-      { path: '/concepts/import', labelKey: 'concepts:nav.import', defaultLabel: 'Import', icon: Upload },
-    ],
+    subItems: [],
   },
   {
     id: 'explore',
@@ -82,13 +71,7 @@ const SECTIONS: Section[] = [
     icon: Sparkles,
     basePath: '/concepts/enrich',
     memberPaths: ['/concepts/enrich', '/concepts/mapping'],
-    subItems: [
-      { path: '/concepts/mapping', labelKey: 'concepts:nav.mapping', defaultLabel: 'Mapping', icon: Boxes },
-      // TODO(cb-v2): the Enrich wireframe (enrich.html) also has a delivery lane
-      // (tags / descriptions / glossary). No standalone view component exists for
-      // it yet — delivery config currently lives under Settings > Delivery. Wire a
-      // dedicated Enrich delivery surface here once that component lands.
-    ],
+    subItems: [],
   },
 ];
 

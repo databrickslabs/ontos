@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Wand2, Loader2, Copy, Download, Save, XCircle, Clock, CheckCircle2, AlertCircle, History, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -105,8 +106,11 @@ export default function OntologyGeneratorView() {
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 
-  // Generation options
-  const [guidelines, setGuidelines] = useState('');
+  // Generation options. Guidelines can be pre-filled from ?guidelines= when the
+  // user arrives via the Define > Generate guided dialog (which composes a prompt
+  // from a few questions), so they land on the generator with the prompt ready.
+  const [searchParams] = useSearchParams();
+  const [guidelines, setGuidelines] = useState(() => searchParams.get('guidelines') || '');
   const [baseUri, setBaseUri] = useState('http://ontos.example.org/ontology#');
   const [includeDataProperties, setIncludeDataProperties] = useState(true);
   const [includeRelationships, setIncludeRelationships] = useState(true);
@@ -133,7 +137,12 @@ export default function OntologyGeneratorView() {
   const [showRecentRuns, setShowRecentRuns] = useState(false);
 
   useEffect(() => {
-    setStaticSegments([]);
+    // Generator is reached from Define, so anchor the trail there:
+    // Concepts > Define > Ontology Generator.
+    setStaticSegments([
+      { label: 'Concepts', path: '/concepts/browser' },
+      { label: 'Define', path: '/concepts/define' },
+    ]);
     setDynamicTitle('Ontology Generator');
     return () => {
       setStaticSegments([]);

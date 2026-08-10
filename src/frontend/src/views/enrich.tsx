@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info, Sparkles } from 'lucide-react';
+import { Info } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
+import { useConceptMode, ConceptModeSwitch } from '@/components/concepts/mode-switch';
 
 import CoverageMatrix, { type CoverageRow } from '@/components/enrich/coverage-matrix';
 import ReviewSuggestionsDialog, {
@@ -65,8 +66,6 @@ const PLATFORM_NOUN: Record<Platform, string> = {
   bigquery: 'BigQuery',
   powerbi: 'Power BI',
 };
-
-const MODE_STORAGE_KEY = 'ontosConceptMode';
 
 // PLACEHOLDER coverage rows — see coverage-matrix.tsx TODO(cb-v2).
 const PLACEHOLDER_ROWS: CoverageRow[] = [
@@ -150,26 +149,43 @@ export default function EnrichView() {
   const canWrite = hasPermission('term-mapping', FeatureAccessLevel.READ_WRITE);
 
   const [platform, setPlatform] = useState<Platform>('uc');
-  const [advanced, setAdvanced] = useState(false);
+  const [mode] = useConceptMode();
+  const advanced = mode === 'advanced';
   const [reviewScheme, setReviewScheme] = useState<CoverageRow | null>(null);
 
-  // Read the shared Simple/Advanced mode (owned by the integrator's store).
+  // Real per-scheme coverage from GET /api/knowledge/coverage. Falls back to the
+  // placeholder rows only if the endpoint is unavailable, so the frame is never
+  // empty during review.
+  const [coverageRows, setCoverageRows] = useState<CoverageRow[] | null>(null);
   useEffect(() => {
-    try {
-      setAdvanced(localStorage.getItem(MODE_STORAGE_KEY) === 'advanced');
-    } catch {
-      /* localStorage unavailable — default to Simple */
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/knowledge/coverage');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !Array.isArray(data?.schemes)) return;
+        const rows: CoverageRow[] = data.schemes.map((s: any) => ({
+          id: s.scheme,
+          name: s.label || s.scheme,
+          concepts: s.concepts ?? 0,
+          coveragePct: s.coverage_pct ?? 0,
+          products: s.products ?? 0,
+          contracts: s.contracts ?? 0,
+          assets: s.assets ?? 0,
+          suggested: s.suggested ?? 0,
+        }));
+        setCoverageRows(rows);
+      } catch {
+        /* endpoint unavailable — keep placeholder rows */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const setMode = useCallback((mode: 'simple' | 'advanced') => {
-    setAdvanced(mode === 'advanced');
-    try {
-      localStorage.setItem(MODE_STORAGE_KEY, mode);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const rows = coverageRows ?? PLACEHOLDER_ROWS;
 
   const platformNoun = PLATFORM_NOUN[platform];
 
@@ -225,53 +241,12 @@ export default function EnrichView() {
 
   return (
     <div className="max-w-[1180px] space-y-6">
-      {/* Header + Simple/Advanced switch */}
+      {/* Subtitle + Simple/Advanced switch (title is in section tab) */}
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Sparkles className="h-5 w-5" />
-            {t('enrich.title', 'Enrich')}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t('enrich.subtitle', 'Map your concepts to assets, then deliver governed metadata onto the platform.')}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div
-            role="tablist"
-            aria-label={t('enrich.mode.label', 'View mode')}
-            className="inline-flex items-center gap-1 rounded-lg bg-muted p-1"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!advanced}
-              onClick={() => setMode('simple')}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                !advanced ? 'bg-background text-foreground shadow' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t('enrich.mode.simple', 'Simple')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={advanced}
-              onClick={() => setMode('advanced')}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                advanced ? 'bg-background text-foreground shadow' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t('enrich.mode.advanced', 'Advanced view')}
-            </button>
-          </div>
-          <InfoDot
-            text={t(
-              'enrich.mode.tip',
-              'Advanced view reveals delivery-mode detail (Direct/Indirect), platform provenance, and job internals. Simple keeps the essentials.',
-            )}
-          />
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {t('enrich.subtitle', 'Map your concepts to assets, then deliver governed metadata onto the platform.')}
+        </p>
+        <ConceptModeSwitch tipLeft />
       </div>
 
       {/* Platform selector */}
@@ -336,7 +311,7 @@ export default function EnrichView() {
         </p>
         <div className="ml-8">
           <CoverageMatrix
-            rows={PLACEHOLDER_ROWS}
+            rows={rows}
             platformNoun={platformNoun}
             canWrite={canWrite}
             onReview={(row) => setReviewScheme(row)}

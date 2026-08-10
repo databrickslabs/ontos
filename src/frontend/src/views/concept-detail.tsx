@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 import {
   SkeletonLine,
   PanelSkeleton,
@@ -100,6 +101,10 @@ export default function ConceptDetailView() {
   const [error, setError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [neighbourhoodOpen, setNeighbourhoodOpen] = useState(true);
+  // Relations and the neighbourhood graph are the same /neighbors data rendered
+  // two ways, so they share ONE block with a List (relations) / Graph switch.
+  // Defaults to the relations list (per wireframe); graph is opt-in.
+  const [relationsView, setRelationsView] = useState<'list' | 'graph'>('list');
   const selectedLanguage = i18n.language?.split('-')[0] || 'en';
 
   // Fetch the focused concept by IRI. This is intentionally separated from
@@ -324,7 +329,7 @@ export default function ConceptDetailView() {
 
   return (
     <div className="py-4 space-y-3">
-      {/* Top action row: back + edit/delete (matches asset-detail). */}
+      {/* Top action row: back + edit/delete + mode switch. */}
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
@@ -334,23 +339,26 @@ export default function ConceptDetailView() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           {t('semantic-models:details.backToList', 'Back to Concepts')}
         </Button>
-        {isEditable && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditorOpen(true)}>
-              <Pencil className="mr-2 h-4 w-4" />
-              {t('common:actions.edit')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={handleDelete}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {t('common:actions.delete')}
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <ConceptModeSwitch tipLeft />
+          {isEditable && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setEditorOpen(true)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                {t('common:actions.edit')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={handleDelete}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('common:actions.delete')}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Title + meta block (no extra card; mirrors asset-detail). */}
@@ -378,8 +386,9 @@ export default function ConceptDetailView() {
           )}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+          {/* Raw IRI + external link are the ontology layer — advanced only. */}
           <code
-            className="px-1.5 py-0.5 bg-muted rounded font-mono truncate"
+            className="adv-only px-1.5 py-0.5 bg-muted rounded font-mono truncate"
             title={concept.iri}
           >
             {concept.iri}
@@ -388,7 +397,7 @@ export default function ConceptDetailView() {
             href={concept.iri}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center text-muted-foreground hover:text-foreground shrink-0"
+            className="adv-only inline-flex items-center text-muted-foreground hover:text-foreground shrink-0"
             aria-label="Open IRI"
           >
             <ExternalLink className="h-3 w-3" />
@@ -488,57 +497,243 @@ export default function ConceptDetailView() {
         </section>
       )}
 
-      <ConceptRelationsPanel
-        conceptIri={concept.iri}
-        onNavigate={handleNavigateToConcept}
-        maxVisibleRows={MAX_VISIBLE_ROWS}
-      />
+      {/* Two-column panel grid (item 7 of CB v2 changes).
+          Layout (md breakpoint):
+          - Row 1: Owners + Details
+          - Row 2: Related concepts + Hierarchy
+          - Row 3: Linked assets (full width)
+          - Row 4: Metadata + Change history
+          - Row 5: Neighbourhood graph (full width) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Row 1: Owners panel */}
+        <OwnershipPanel
+          objectType="business_term"
+          objectId={concept.iri}
+          canAssign={canLinkEntities}
+        />
 
-      <LinkedObjectsPanel
-        conceptIri={concept.iri}
-        conceptLabel={conceptTitle}
-        canAssign={canLinkEntities}
-        onChanged={fetchConcept}
-        maxVisibleRows={MAX_VISIBLE_ROWS}
-      />
-
-      {/* Inline neighbourhood graph at full width. Clicking any node updates
-          the :iri route in place so the user can keep walking the graph. */}
-      <Collapsible open={neighbourhoodOpen} onOpenChange={setNeighbourhoodOpen}>
-        <div className="border rounded-lg">
-          <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-muted/50">
-            <div className="flex items-center gap-2">
-              {neighbourhoodOpen ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-              <Network className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium text-sm">
-                {t('semantic-models:neighborhood.title', {
-                  defaultValue: 'Concept Neighbourhood',
-                })}
-              </span>
+        {/* Row 1: Details — scheme/source/created, plus IRI + type in advanced. */}
+        <div className="rounded-lg border bg-card p-3">
+          <h3 className="text-sm font-medium mb-2">
+            {t('semantic-models:details.title', 'Details')}
+          </h3>
+          <dl className="text-sm divide-y">
+            {collection?.label && (
+              <div className="flex justify-between gap-3 py-1.5">
+                <dt className="text-muted-foreground">
+                  {t('semantic-models:fields.scheme', 'Concept scheme')}
+                </dt>
+                <dd className="font-medium text-right truncate">{collection.label}</dd>
+              </div>
+            )}
+            {concept.source_context && (
+              <div className="flex justify-between gap-3 py-1.5">
+                <dt className="text-muted-foreground">
+                  {t('semantic-models:fields.source', 'Source')}
+                </dt>
+                <dd className="font-medium text-right truncate">
+                  {systemRdfNamespaceDisplayLabel(concept.source_context, t)}
+                </dd>
+              </div>
+            )}
+            {concept.created_at && (
+              <div className="flex justify-between gap-3 py-1.5">
+                <dt className="text-muted-foreground">
+                  {t('semantic-models:fields.created', 'Created')}
+                </dt>
+                <dd className="font-medium text-right">
+                  {new Date(concept.created_at).toLocaleDateString()}
+                </dd>
+              </div>
+            )}
+            {/* Advanced-only: the ontology layer (type + raw IRI). */}
+            <div className="adv-only flex justify-between gap-3 py-1.5">
+              <dt className="text-muted-foreground">
+                {t('semantic-models:fields.type', 'Type')}
+              </dt>
+              <dd className="font-mono text-xs text-right truncate">
+                {concept.concept_type}
+              </dd>
             </div>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="border-t">
-              <ConceptNeighborhoodGraph
-                concept={concept}
-                onNavigate={handleNavigateToConcept}
-              />
+            <div className="adv-only flex justify-between gap-3 py-1.5">
+              <dt className="text-muted-foreground">IRI</dt>
+              <dd className="font-mono text-xs text-right truncate" title={concept.iri}>
+                {concept.iri}
+              </dd>
             </div>
-          </CollapsibleContent>
+          </dl>
         </div>
-      </Collapsible>
 
-      <OwnershipPanel
-        objectType="business_term"
-        objectId={concept.iri}
-        canAssign={canLinkEntities}
-      />
+        {/* Row 2: Hierarchy — broader (parents) / narrower (children) concepts.
+            Relations moved into the shared "Relations / Graph" block below
+            (they were the same /neighbors data rendered twice). */}
+        <div className="rounded-lg border bg-card p-3 md:col-span-2">
+          <h3 className="text-sm font-medium mb-2">
+            {t('semantic-models:hierarchy.title', 'Hierarchy')}
+          </h3>
+          {(concept.parent_concepts?.length ?? 0) === 0
+            && (concept.child_concepts?.length ?? 0) === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t('semantic-models:hierarchy.none', 'No broader or narrower concepts.')}
+            </p>
+          ) : (
+            <div className="space-y-2 text-sm">
+              {(concept.parent_concepts?.length ?? 0) > 0 && (
+                <div className="flex gap-2">
+                  <span className="w-16 shrink-0 text-xs text-muted-foreground pt-0.5">
+                    {t('semantic-models:hierarchy.parent', 'Parent')}
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {concept.parent_concepts.map((iri) => (
+                      <Badge
+                        key={iri}
+                        variant="secondary"
+                        className="cursor-pointer"
+                        onClick={() => handleNavigateToConcept(iri)}
+                      >
+                        {iri.split(/[/#]/).pop() || iri}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(concept.child_concepts?.length ?? 0) > 0 && (
+                <div className="flex gap-2">
+                  <span className="w-16 shrink-0 text-xs text-muted-foreground pt-0.5">
+                    {t('semantic-models:hierarchy.children', 'Children')}
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {concept.child_concepts.map((iri) => (
+                      <Badge
+                        key={iri}
+                        variant="secondary"
+                        className="cursor-pointer"
+                        onClick={() => handleNavigateToConcept(iri)}
+                      >
+                        {iri.split(/[/#]/).pop() || iri}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-      <EntityMetadataPanel entityType="concept" entityId={concept.iri} />
+        {/* Row 3: Linked assets (full width) */}
+        <div className="md:col-span-2">
+          <LinkedObjectsPanel
+            conceptIri={concept.iri}
+            conceptLabel={conceptTitle}
+            canAssign={canLinkEntities}
+            onChanged={fetchConcept}
+            maxVisibleRows={MAX_VISIBLE_ROWS}
+          />
+        </div>
+
+        {/* Row 4: Metadata */}
+        <EntityMetadataPanel entityType="concept" entityId={concept.iri} />
+
+        {/* Row 4: Change history (Preview placeholder) */}
+        <div className="rounded-lg border bg-card p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-medium">Change history</h3>
+            <Badge variant="secondary" className="text-[10px] uppercase">
+              {t('semantic-models:versionDiff.mock', 'Preview')}
+            </Badge>
+          </div>
+          <ul className="space-y-1 text-xs">
+            <li className="flex gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
+              <span><span className="font-medium">@anna</span> certified <span className="text-muted-foreground">Jun 16</span></span>
+            </li>
+            <li className="flex gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
+              <span><span className="font-medium">@anna</span> approved <span className="text-muted-foreground">Jun 15</span></span>
+            </li>
+            <li className="flex gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
+              <span><span className="font-medium">@marco</span> submitted for review <span className="text-muted-foreground">Jun 14</span></span>
+            </li>
+            <li className="flex gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
+              <span><span className="font-medium">@marco</span> created <span className="text-muted-foreground">Jun 12</span></span>
+            </li>
+          </ul>
+        </div>
+
+        {/* Row 5: Relations + neighbourhood graph — ONE block, two views over
+            the same /neighbors data. List = relations; Graph = node-link. */}
+        <Collapsible open={neighbourhoodOpen} onOpenChange={setNeighbourhoodOpen} className="md:col-span-2">
+          <div className="border rounded-lg">
+            <div className="flex items-center justify-between p-3 hover:bg-muted/50">
+              <CollapsibleTrigger className="flex items-center gap-2 flex-1 text-left">
+                {neighbourhoodOpen ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+                <Network className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-sm">
+                  {t('semantic-models:relations.title', { defaultValue: 'Relations' })}
+                </span>
+              </CollapsibleTrigger>
+              {neighbourhoodOpen && (
+                <div
+                  role="tablist"
+                  aria-label={t('semantic-models:relations.viewLabel', 'Relations view')}
+                  className="inline-flex items-center gap-1 rounded-md border bg-card p-0.5"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={relationsView === 'list'}
+                    onClick={() => setRelationsView('list')}
+                    className={
+                      relationsView === 'list'
+                        ? 'rounded px-2 py-0.5 text-xs bg-accent text-accent-foreground font-medium'
+                        : 'rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground'
+                    }
+                  >
+                    {t('semantic-models:neighborhood.list', 'List')}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={relationsView === 'graph'}
+                    onClick={() => setRelationsView('graph')}
+                    className={
+                      relationsView === 'graph'
+                        ? 'rounded px-2 py-0.5 text-xs bg-accent text-accent-foreground font-medium'
+                        : 'rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground'
+                    }
+                  >
+                    {t('semantic-models:neighborhood.graph', 'Graph')}
+                  </button>
+                </div>
+              )}
+            </div>
+            <CollapsibleContent>
+              <div className="border-t">
+                {relationsView === 'list' ? (
+                  <ConceptRelationsPanel
+                    conceptIri={concept.iri}
+                    onNavigate={handleNavigateToConcept}
+                    maxVisibleRows={MAX_VISIBLE_ROWS}
+                    embedded
+                  />
+                ) : (
+                  <ConceptNeighborhoodGraph
+                    concept={concept}
+                    onNavigate={handleNavigateToConcept}
+                    view="graph"
+                  />
+                )}
+              </div>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
+      </div>
 
       {/* Version-diff panel — MOCK / PLACEHOLDER. Draft concepts are forked
           from a certified baseline; this shows the field-level delta from that

@@ -18,9 +18,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ImportConceptsDialog } from '@/components/knowledge';
-import type { KnowledgeCollection } from '@/types/ontology';
+import { ImportConceptsDialog, CollectionEditorDialog } from '@/components/knowledge';
+import type {
+  KnowledgeCollection,
+  KnowledgeCollectionCreate,
+  KnowledgeCollectionUpdate,
+} from '@/types/ontology';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { useToast } from '@/hooks/use-toast';
+import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
+import { GuidedGenerateDialog } from '@/components/concepts/guided-generate-dialog';
 
 // A recent creation-work item shown in the "In progress" list. Sourced from the
 // ontology generator runs endpoint (real data). Imports do not yet have a
@@ -44,7 +51,10 @@ export default function DefineView() {
   const { t } = useTranslation(['semantic-models', 'common']);
   const navigate = useNavigate();
 
+  const { toast } = useToast();
   const [importOpen, setImportOpen] = useState(false);
+  const [authorOpen, setAuthorOpen] = useState(false);
+  const [guidedOpen, setGuidedOpen] = useState(false);
   const [collections, setCollections] = useState<KnowledgeCollection[]>([]);
   const [runs, setRuns] = useState<GenerationRunSummary[]>([]);
   const [runsLoading, setRunsLoading] = useState(true);
@@ -92,6 +102,34 @@ export default function DefineView() {
     fetchRuns();
   }, [fetchCollections, fetchRuns]);
 
+  // Author flow: create a new concept scheme (collection) in place, then land
+  // the user in Explore scoped to it so they can add concepts within it.
+  const handleCreateScheme = useCallback(
+    async (data: KnowledgeCollectionCreate | KnowledgeCollectionUpdate, _isNew: boolean) => {
+      const res = await fetch('/api/knowledge/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.detail || 'Failed to create concept scheme');
+      }
+      const created = await res.json();
+      toast({
+        title: t('common:toast.success', 'Success'),
+        description: t('semantic-models:messages.collectionCreated', 'Concept scheme created'),
+      });
+      setAuthorOpen(false);
+      await fetchCollections();
+      // Scope Explore to the new scheme (source filter) so the user starts
+      // adding concepts within it.
+      const iri = created?.iri;
+      navigate(iri ? `/concepts/browser?source=${encodeURIComponent(iri)}` : '/concepts/browser');
+    },
+    [fetchCollections, navigate, t, toast],
+  );
+
   // Creation work still open: not-yet-kept generator runs.
   const inProgress = runs.filter(
     (r) => r.status === 'pending' || r.status === 'running' || r.status === 'completed'
@@ -112,6 +150,15 @@ export default function DefineView() {
   return (
     <TooltipProvider>
     <div className="flex flex-col py-6 max-w-[1180px]">
+      {/* Header — description + shared Simple/Advanced switch (keeps mode in
+          sync with Explore/Enrich/detail via the ontosConceptMode key). */}
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <p className="text-sm text-muted-foreground">
+          {t('concepts:define.description', 'Author, generate, or import your business concept schemes.')}
+        </p>
+        <ConceptModeSwitch tipLeft />
+      </div>
+
       {/* Path cards */}
       <h2 className="text-base font-semibold mb-3">
         {t('semantic-models:define.startWith', 'Start with…')}
@@ -142,9 +189,15 @@ export default function DefineView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button className="w-full" onClick={() => navigate('/concepts/collections')}>
+            <Button className="w-full" onClick={() => setAuthorOpen(true)}>
               {t('semantic-models:define.author.cta', 'New concept scheme')}
             </Button>
+            <p className="adv-only mt-3 pt-2 border-t border-dashed text-xs text-muted-foreground leading-relaxed">
+              {t(
+                'semantic-models:define.author.adv',
+                'Creates skos:Concept entries in a skos:ConceptScheme. Terms can harden into owl:Class or rdf:Property as the scheme matures.',
+              )}
+            </p>
           </CardContent>
         </Card>
 
@@ -173,9 +226,15 @@ export default function DefineView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto">
-            <Button className="w-full" onClick={() => navigate('/concepts/generator')}>
+            <Button className="w-full" onClick={() => setGuidedOpen(true)}>
               {t('semantic-models:define.generate.cta', 'Start guided build')}
             </Button>
+            <p className="adv-only mt-3 pt-2 border-t border-dashed text-xs text-muted-foreground leading-relaxed">
+              {t(
+                'semantic-models:define.generate.adv',
+                'The interview keeps the model on a fixed predicate palette (skos:Concept, rdfs:Class, rdf:Property) so the draft stays valid SKOS/OWL.',
+              )}
+            </p>
           </CardContent>
         </Card>
 
@@ -208,8 +267,23 @@ export default function DefineView() {
               <Upload className="h-4 w-4 mr-2" />
               {t('semantic-models:define.import.cta', 'Upload files')}
             </Button>
+            <p className="adv-only mt-3 pt-2 border-t border-dashed text-xs text-muted-foreground leading-relaxed">
+              {t(
+                'semantic-models:define.import.adv',
+                'owl:Class / skos:Concept from each file map into a skos:ConceptScheme per your choice. The source graph is preserved for round-trip export.',
+              )}
+            </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Advanced-only: what a "concept scheme" maps to under the hood. */}
+      <div className="adv-only -mt-5 mb-9 rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed">
+        <span className="font-semibold text-foreground">Under the hood: </span>
+        {t(
+          'semantic-models:define.underTheHood',
+          'a concept scheme is a skos:ConceptScheme. Maturity runs glossary → taxonomy → ontology (flat terms → broader/narrower hierarchy → formal owl:Class / rdf:Property a reasoner can use). Start light, harden where you need it.',
+        )}
       </div>
 
       {/* In progress */}
@@ -260,6 +334,19 @@ export default function DefineView() {
           ))}
         </div>
       )}
+
+      {/* Author: create a new concept scheme in place (reuses the collection
+          editor; a collection IS a concept scheme in the domain model). */}
+      <CollectionEditorDialog
+        open={authorOpen}
+        onOpenChange={setAuthorOpen}
+        collection={null}
+        collections={collections}
+        onSave={handleCreateScheme}
+      />
+
+      {/* Generate: guided prompt-builder that feeds the existing generator. */}
+      <GuidedGenerateDialog open={guidedOpen} onOpenChange={setGuidedOpen} />
 
       {/* Import dialog */}
       <ImportConceptsDialog

@@ -1,7 +1,16 @@
-import { useEffect, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
 import {
   Search,
   ChevronRight,
@@ -11,6 +20,8 @@ import {
   Zap,
   User,
   FolderTree,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
@@ -37,7 +48,23 @@ interface ConceptsTabProps {
   // 'list' renders a flat, alphabetically-sorted list of concepts with no
   // broader/narrower nesting. Additive — the tree path is unchanged.
   viewMode?: 'list' | 'tree';
+  // Callback to open editor for a concept (list view only)
+  onEditConcept?: (concept: OntologyConcept) => void;
+  // Called after a bulk action mutates concepts, so the parent can refetch.
+  onConceptsChanged?: () => void;
 }
+
+// Bulk "Set status" targets → the real lifecycle transition endpoints. Only
+// the safe, always-available forward transitions are offered here; the backend
+// still enforces VALID_TRANSITIONS and returns an error for invalid ones.
+const BULK_STATUS_ACTIONS: { action: string; labelKey: string; defaultLabel: string }[] = [
+  { action: 'submit-review', labelKey: 'semantic-models:bulk.status.submitReview', defaultLabel: 'Submit for review' },
+  { action: 'approve', labelKey: 'semantic-models:bulk.status.approve', defaultLabel: 'Approve' },
+  { action: 'publish', labelKey: 'semantic-models:bulk.status.publish', defaultLabel: 'Publish' },
+  { action: 'certify', labelKey: 'semantic-models:bulk.status.certify', defaultLabel: 'Certify' },
+  { action: 'deprecate', labelKey: 'semantic-models:bulk.status.deprecate', defaultLabel: 'Deprecate' },
+  { action: 'archive', labelKey: 'semantic-models:bulk.status.archive', defaultLabel: 'Archive' },
+];
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-4 w-4 text-emerald-500 shrink-0" />,
@@ -69,6 +96,36 @@ const STATUS_VARIANTS: Record<string, string> = {
   retired: 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30',
 };
 
+// Per-concept mapping status, from POST /api/semantic-links/mapping-status.
+// Whether a concept links to a physical Asset, a data Product, and/or a data
+// Contract. The three are independent (a concept can link to several), so they
+// do not partition — they drive the single "Mapping" summary column.
+interface MappingStatus {
+  asset?: boolean;
+  product?: boolean;
+  contract?: boolean;
+}
+
+// Reduce a MappingStatus to the one label the wireframe shows in the Mapping
+// column. `undefined` status => not yet loaded (or endpoint unavailable).
+function mappingLabel(
+  status: MappingStatus | undefined,
+  t: (k: string, d?: any) => string,
+): { text: string; none: boolean } | null {
+  if (!status) return null; // not loaded — caller renders a muted dash
+  const product = !!status.product || !!status.contract;
+  if (status.asset && product) {
+    return { text: t('semantic-models:mapping.assetAndProduct', 'Asset + product'), none: false };
+  }
+  if (status.asset) {
+    return { text: t('semantic-models:mapping.asset', 'Asset'), none: false };
+  }
+  if (product) {
+    return { text: t('semantic-models:mapping.product', 'Product'), none: false };
+  }
+  return { text: t('semantic-models:mapping.none', 'Not mapped'), none: true };
+}
+
 export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   collections,
   groupedConcepts: _groupedConcepts,
@@ -80,8 +137,11 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   groupByDomain,
   selectedLanguage,
   viewMode = 'tree',
+  onEditConcept,
+  onConceptsChanged,
 }) => {
   const { t } = useTranslation(['semantic-models', 'common']);
+  const { toast } = useToast();
   const expandedGroups = useGlossaryPreferencesStore((s) => s.expandedConceptGroups);
   const toggleConceptGroup = useGlossaryPreferencesStore((s) => s.toggleConceptGroup);
   const setExpandedConceptGroups = useGlossaryPreferencesStore((s) => s.setExpandedConceptGroups);
@@ -91,6 +151,72 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   const setSearchQuery = useGlossaryPreferencesStore((s) => s.setConceptListSearch);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Bulk-select state (list view only). Tracks selected concept IRIs; a light
+  // bulk-action bar appears when any are selected. Selection is component-local
+  // and resets when the view mode changes.
+  const [selectedIris, setSelectedIris] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSelectedIris(new Set());
+  }, [viewMode]);
+
+  const toggleRowSelect = useCallback((iri: string) => {
+    setSelectedIris((prev) => {
+      const next = new Set(prev);
+      if (next.has(iri)) next.delete(iri);
+      else next.add(iri);
+      return next;
+    });
+  }, []);
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  // Bulk "Set status": POST the chosen lifecycle transition for every selected
+  // concept. The backend enforces VALID_TRANSITIONS, so concepts in a state
+  // that can't take the transition come back as errors — we count and report
+  // successes vs failures rather than assuming all succeed.
+  const runBulkStatus = useCallback(
+    async (action: string, label: string) => {
+      const iris = Array.from(selectedIris);
+      if (iris.length === 0) return;
+      setBulkBusy(true);
+      let ok = 0;
+      let failed = 0;
+      for (const iri of iris) {
+        try {
+          const res = await fetch(
+            `/api/knowledge/concepts/by-iri/${action}?iri=${encodeURIComponent(iri)}`,
+            { method: 'POST' },
+          );
+          if (res.ok) ok += 1;
+          else failed += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      setBulkBusy(false);
+      toast({
+        title:
+          failed === 0
+            ? t('common:toast.success', 'Success')
+            : t('semantic-models:bulk.partial', 'Completed with some errors'),
+        description: t(
+          'semantic-models:bulk.statusResult',
+          '{{label}}: {{ok}} updated, {{failed}} skipped',
+          { label, ok, failed },
+        ),
+        variant: failed > 0 && ok === 0 ? 'destructive' : undefined,
+      });
+      setSelectedIris(new Set());
+      onConceptsChanged?.();
+    },
+    [selectedIris, toast, t, onConceptsChanged],
+  );
+
+  // Per-IRI mapping status, fetched in one batch from the read-model endpoint.
+  // Degrades gracefully: if the endpoint is unavailable (e.g. not yet deployed),
+  // the map stays empty and the Mapping column shows a muted dash.
+  const [mappingStatus, setMappingStatus] = useState<Record<string, MappingStatus>>({});
 
   // Restore scroll position once after mount, then again whenever the data
   // size changes substantially. Saving happens on scroll.
@@ -248,6 +374,38 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
         conceptLabel(a).localeCompare(conceptLabel(b), undefined, { sensitivity: 'base' }),
       );
   }, [treeData, groupByDomain, conceptLabel]);
+
+  // Batch-fetch mapping status for the concepts currently on screen (list view).
+  // One request for the whole visible set, not per-row. Only IRIs we don't
+  // already have are requested, so paging/filtering top-ups stay cheap.
+  useEffect(() => {
+    if (viewMode !== 'list') return;
+    const iris = flatConcepts
+      .map((c) => c.iri)
+      .filter((iri) => !(iri in mappingStatus));
+    if (iris.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/semantic-links/mapping-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iris }),
+        });
+        if (!res.ok) return; // endpoint unavailable — leave column as muted dash
+        const data = await res.json();
+        if (cancelled || !data?.statuses) return;
+        setMappingStatus((prev) => ({ ...prev, ...data.statuses }));
+      } catch {
+        // Network/endpoint error — degrade silently to muted dash.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, flatConcepts]);
 
   // Render a single tree row with rich content (icon + label + type + collection
   // + status pill + property hints).
@@ -415,6 +573,21 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                   {t(`semantic-models:status.${concept.status}`, concept.status)}
                 </Badge>
               )}
+              {onEditConcept && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  aria-label={t('common:actions.edit')}
+                  title={t('common:actions.edit')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditConcept(concept);
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           )}
 
@@ -433,6 +606,162 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       </div>
     );
   };
+
+  // Grid column template shared by the list header and list rows so cells align.
+  // checkbox | name+definition | Kind | Scheme | Mapping | Status | edit
+  // Name is capped (minmax with a max) and Scheme/Mapping get flexible shares so
+  // on wide screens the columns spread out instead of clustering on the right.
+  const LIST_GRID =
+    'grid grid-cols-[28px_minmax(220px,1.6fr)_110px_minmax(120px,1fr)_minmax(120px,0.8fr)_110px_40px] gap-4 items-center';
+
+  // Render one flat LIST row: a real table row with columns, a bulk-select
+  // checkbox, and an inline edit pencil. Distinct from renderTreeItem so the
+  // tree engine stays untouched; only the list gets the columnar layout.
+  const renderListRow = (concept: OntologyConcept): React.ReactNode => {
+    const label = conceptLabel(concept);
+    const definition = concept.comment || '';
+    const collection = concept.source_context ? getCollection(concept.source_context) : null;
+    const collectionLabel = collection?.label
+      || (concept.source_context ? systemRdfNamespaceDisplayLabel(concept.source_context, t) : '');
+    const map = mappingLabel(mappingStatus[concept.iri], t);
+    const checked = selectedIris.has(concept.iri);
+
+    return (
+      <div
+        key={concept.iri}
+        data-testid={`concept-row-${concept.iri}`}
+        className={cn(
+          LIST_GRID,
+          'px-3 py-2 border-b last:border-b-0 cursor-pointer transition-colors',
+          checked ? 'bg-sky-500/[0.08]' : 'hover:bg-accent',
+        )}
+        onClick={() => handleSelect(concept)}
+      >
+        <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+          <Checkbox
+            checked={checked}
+            onCheckedChange={() => toggleRowSelect(concept.iri)}
+            aria-label={t('common:actions.select', 'Select')}
+          />
+        </div>
+
+        <div className="flex items-center gap-2 min-w-0">
+          {typeIcons[concept.concept_type] || typeIcons.concept}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium" title={label}>{label}</div>
+            {definition && (
+              <div className="truncate text-xs text-muted-foreground" title={definition}>
+                {definition}
+              </div>
+            )}
+            {/* Raw IRI is the ontology layer — shown only in Advanced view. */}
+            <div className="adv-only truncate text-[10px] font-mono text-muted-foreground/80" title={concept.iri}>
+              {concept.iri}
+            </div>
+          </div>
+        </div>
+
+        <span className="text-xs text-muted-foreground truncate">
+          {t(`semantic-models:types.${concept.concept_type}`)}
+        </span>
+
+        <span className="text-sm truncate" title={collectionLabel}>{collectionLabel}</span>
+
+        <span
+          className={cn(
+            'text-sm truncate',
+            map?.none && 'text-amber-700 dark:text-amber-400',
+          )}
+        >
+          {map ? map.text : <span className="text-muted-foreground">—</span>}
+        </span>
+
+        <span className="min-w-0">
+          {concept.status && (
+            <Badge
+              variant="outline"
+              className={cn('text-[10px] font-medium', STATUS_VARIANTS[concept.status] || '')}
+            >
+              {t(`semantic-models:status.${concept.status}`, concept.status)}
+            </Badge>
+          )}
+        </span>
+
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          {onEditConcept && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              aria-label={t('common:actions.edit')}
+              title={t('common:actions.edit')}
+              onClick={() => onEditConcept(concept)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Column header row for the list. Labels live here so cells stay quiet text.
+  const listHeader = (
+    <div
+      className={cn(
+        LIST_GRID,
+        'px-3 py-2 border-b bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sticky top-0 z-10',
+      )}
+    >
+      <span />
+      <span>{t('semantic-models:columns.name', 'Name')}</span>
+      <span>{t('semantic-models:columns.kind', 'Kind')}</span>
+      <span>{t('semantic-models:columns.scheme', 'Scheme')}</span>
+      <span>{t('semantic-models:columns.mapping', 'Mapping')}</span>
+      <span>{t('semantic-models:columns.status', 'Status')}</span>
+      <span />
+    </div>
+  );
+
+  // Light bulk-action bar, shown when any rows are selected (list view only).
+  const bulkBar = selectedIris.size > 0 && (
+    <div className="flex items-center gap-3 px-3 py-2 mb-2 rounded-md border border-sky-500/30 bg-sky-500/[0.08] text-sm">
+      <b className="font-semibold">
+        {t('semantic-models:bulk.selected', '{{count}} selected', { count: selectedIris.size })}
+      </b>
+      <div className="ml-auto flex items-center gap-2">
+        {/* Set status: real lifecycle transitions across the selection. The
+            backend enforces which transitions are valid per concept. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-7" disabled={bulkBusy}>
+              {t('semantic-models:bulk.setStatus', 'Set status')}
+              <ChevronDown className="h-3.5 w-3.5 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {BULK_STATUS_ACTIONS.map((a) => {
+              const label = t(a.labelKey, a.defaultLabel);
+              return (
+                <DropdownMenuItem key={a.action} onClick={() => runBulkStatus(a.action, label)}>
+                  {label}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          aria-label={t('common:actions.clear', 'Clear')}
+          onClick={() => setSelectedIris(new Set())}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="border rounded-lg flex flex-col bg-card overflow-hidden max-h-[calc(100vh-260px)]">
@@ -461,19 +790,18 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           }
         }}
       >
-        <div className="p-2 min-w-max">
+        <div className={cn('p-2', viewMode === 'list' ? 'min-w-[760px]' : 'min-w-max')}>
           {viewMode === 'list' ? (
             <>
+              {bulkBar}
+              {flatConcepts.length > 0 && listHeader}
               {groupBySource
                 ? treeData.sourceContexts.map(source => {
-                    const rows = flatConcepts
-                      .filter(c => c.source_context === source)
-                      .map(c => renderTreeItem(c.iri, 0, true))
-                      .filter(Boolean);
+                    const rows = flatConcepts.filter(c => c.source_context === source);
                     if (rows.length === 0) return null;
                     return (
                       <div key={`flat-group-${source}`}>
-                        <div className="flex items-center gap-2 px-2 py-1 rounded-md font-semibold bg-muted/40">
+                        <div className="flex items-center gap-2 px-3 py-1.5 font-semibold bg-muted/40 border-b">
                           <FolderTree className="h-4 w-4 shrink-0 text-orange-500" />
                           <span className="truncate text-sm">
                             {systemRdfNamespaceDisplayLabel(source, t)}
@@ -482,11 +810,11 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                             {rows.length}
                           </Badge>
                         </div>
-                        {rows}
+                        {rows.map(c => renderListRow(c))}
                       </div>
                     );
                   })
-                : flatConcepts.map(c => renderTreeItem(c.iri, 0, true))}
+                : flatConcepts.map(c => renderListRow(c))}
 
               {flatConcepts.length === 0 && (
                 <div className="text-center text-muted-foreground py-12">

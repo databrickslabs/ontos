@@ -33,6 +33,11 @@ interface ConceptRelationsPanelProps {
   maxVisibleRows?: number
   // Optional cap on how many neighbours to fetch from the backend.
   fetchLimit?: number
+  // When true, render ONLY the relations list body (no collapsible card/header).
+  // Used when embedded inside a shared "Relations / Graph" block that owns its
+  // own header + view switch (concept detail). Default false keeps the
+  // standalone card behaviour unchanged.
+  embedded?: boolean
 }
 
 // Predicates whose values are already surfaced elsewhere on the page
@@ -98,6 +103,7 @@ export default function ConceptRelationsPanel({
   onNavigate,
   maxVisibleRows,
   fetchLimit = 500,
+  embedded = false,
 }: ConceptRelationsPanelProps) {
   const { get } = useApi()
   const { t } = useTranslation(['semantic-models', 'common'])
@@ -247,6 +253,34 @@ export default function ConceptRelationsPanel({
     [onNavigate, t],
   )
 
+  // Just the relations list body — reused by both the standalone card and the
+  // embedded (shared Relations/Graph block) mode.
+  const listBody = (
+    <div
+      className={`px-2 py-1 ${maxVisibleRows ? 'overflow-y-auto' : ''}`}
+      style={listMaxHeight}
+      data-testid="concept-relations-list"
+    >
+      {isLoading && relations.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {t('semantic-models:relations.loading', { defaultValue: 'Loading relations...' })}
+        </div>
+      ) : relations.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2 px-2">
+          {t('semantic-models:relations.empty', { defaultValue: 'No relations found.' })}
+        </p>
+      ) : (
+        relations.map(renderRow)
+      )}
+    </div>
+  )
+
+  // Embedded: no card/header/collapsible — the parent block owns those.
+  if (embedded) {
+    return listBody
+  }
+
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="border rounded-lg">
@@ -282,28 +316,7 @@ export default function ConceptRelationsPanel({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div
-            className={`border-t px-2 py-1 ${maxVisibleRows ? 'overflow-y-auto' : ''}`}
-            style={listMaxHeight}
-            data-testid="concept-relations-list"
-          >
-            {isLoading && relations.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 px-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t('semantic-models:relations.loading', {
-                  defaultValue: 'Loading relations...',
-                })}
-              </div>
-            ) : relations.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2 px-2">
-                {t('semantic-models:relations.empty', {
-                  defaultValue: 'No relations found.',
-                })}
-              </p>
-            ) : (
-              relations.map(renderRow)
-            )}
-          </div>
+          <div className="border-t">{listBody}</div>
         </CollapsibleContent>
       </div>
     </Collapsible>

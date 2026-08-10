@@ -27,12 +27,32 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/stores/breadcrumb-store', () => ({ default: () => () => undefined }));
 
 let importDialogOpen = false;
+let authorDialogOpen = false;
 vi.mock('@/components/knowledge', () => ({
   ImportConceptsDialog: ({ open }: { open: boolean }) => {
     importDialogOpen = open;
     return open ? <div data-testid="import-dialog" /> : null;
   },
+  // Author reuses the collection editor as the "New concept scheme" dialog.
+  CollectionEditorDialog: ({ open }: { open: boolean }) => {
+    authorDialogOpen = open;
+    return open ? <div data-testid="author-dialog" /> : null;
+  },
 }));
+
+let guidedDialogOpen = false;
+vi.mock('@/components/concepts/guided-generate-dialog', () => ({
+  GuidedGenerateDialog: ({ open }: { open: boolean }) => {
+    guidedDialogOpen = open;
+    return open ? <div data-testid="guided-dialog" /> : null;
+  },
+}));
+
+vi.mock('@/components/concepts/mode-switch', () => ({
+  ConceptModeSwitch: () => <div data-testid="mode-switch" />,
+}));
+
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 import DefineView from './define';
 
@@ -57,6 +77,8 @@ const RUNS = {
 
 beforeEach(() => {
   importDialogOpen = false;
+  authorDialogOpen = false;
+  guidedDialogOpen = false;
   global.fetch = vi.fn(async (url: any) => {
     const u = String(url);
     if (u.includes('/api/ontology/runs')) {
@@ -94,16 +116,18 @@ describe('DefineView', () => {
     expect(screen.getByText('Import')).toBeInTheDocument();
   });
 
-  it('Author card navigates to collections', async () => {
-    const getObserved = renderDefine();
+  it('Author card opens the New concept scheme dialog in place', async () => {
+    renderDefine();
     fireEvent.click(screen.getByText('New concept scheme'));
-    await waitFor(() => expect(getObserved().pathname).toBe('/concepts/collections'));
+    await waitFor(() => expect(screen.getByTestId('author-dialog')).toBeInTheDocument());
+    expect(authorDialogOpen).toBe(true);
   });
 
-  it('Generate card navigates to the generator', async () => {
-    const getObserved = renderDefine();
+  it('Generate card opens the guided build dialog in place', async () => {
+    renderDefine();
     fireEvent.click(screen.getByText('Start guided build'));
-    await waitFor(() => expect(getObserved().pathname).toBe('/concepts/generator'));
+    await waitFor(() => expect(screen.getByTestId('guided-dialog')).toBeInTheDocument());
+    expect(guidedDialogOpen).toBe(true);
   });
 
   it('Import card opens the import dialog', async () => {

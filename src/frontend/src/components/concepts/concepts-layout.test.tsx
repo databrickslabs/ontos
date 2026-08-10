@@ -33,15 +33,18 @@ describe('ConceptsLayout — v2 3-section nav', () => {
     expect(labels).toEqual(expect.arrayContaining(['Define', 'Explore', 'Enrich']));
   });
 
-  it('marks Explore active on the browser (default) route and shows view toggles', () => {
+  it('marks Explore active on the browser (default) route with no legacy sub-nav', () => {
     renderAt('/concepts/browser');
     const exploreTab = screen.getByRole('tab', { name: 'Explore' });
     expect(exploreTab).toHaveAttribute('aria-selected', 'true');
-    // Explore view toggles reuse the four existing views.
-    expect(screen.getByRole('tab', { name: 'Concepts' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Search' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Hierarchy' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Graph' })).toBeInTheDocument();
+    // v2: Explore is one unified browse surface. List/Tree/Graph live as an
+    // in-page view switch inside the view (not the layout), and the old
+    // per-view sub-nav tabs (Concepts/Search/Hierarchy) are gone.
+    expect(screen.queryByRole('tab', { name: 'Concepts' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Search' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Hierarchy' })).not.toBeInTheDocument();
+    // Only the three primary section tabs remain.
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
   });
 
   it('marks Define active on Collections/Generator/Import routes', () => {

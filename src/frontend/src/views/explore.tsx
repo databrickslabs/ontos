@@ -12,7 +12,6 @@ import {
 import { cn } from '@/lib/utils';
 import {
   FolderTree,
-  Layers,
   Plus,
   ChevronDown,
   Upload,
@@ -33,6 +32,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useToast } from '@/hooks/use-toast';
 import { useExploreConcepts } from '@/hooks/use-explore-concepts';
+import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 import {
   ConceptsTab,
   GraphTab,
@@ -86,8 +86,6 @@ export default function ExploreView() {
     availableSources,
     sourceConceptCounts,
     filteredConcepts,
-    totalConcepts,
-    totalProperties,
     refetch,
   } = useExploreConcepts();
 
@@ -117,6 +115,7 @@ export default function ExploreView() {
   const [collectionEditorOpen, setCollectionEditorOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<KnowledgeCollection | null>(null);
   const [conceptEditorOpen, setConceptEditorOpen] = useState(false);
+  const [editingConcept, setEditingConcept] = useState<OntologyConcept | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // Language selection - defaults to UI language
@@ -264,20 +263,20 @@ export default function ExploreView() {
 
   return (
     <div className="flex flex-col py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Layers className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold">{t('semantic-models:tabs.concepts')}</h1>
-            <p className="text-sm text-muted-foreground">
-              {totalConcepts} {t('common:terms.concepts')}
-              {showProperties && ` / ${totalProperties} ${t('common:terms.properties')}`}
-            </p>
-          </div>
+      {/* Header — page description only (the section tab strip already names
+          "Concepts"/"Explore", so no redundant page title here). */}
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'concepts:explore.description',
+              'Author, browse, and deliver your business concept schemes.'
+            )}
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <ConceptModeSwitch tipLeft />
           {canWrite && (
             <>
               <DropdownMenu>
@@ -290,7 +289,6 @@ export default function ExploreView() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={handleCreateConcept}>
-                    <Layers className="h-4 w-4 mr-2" />
                     {t('semantic-models:actions.createConcept')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleCreateCollection}>
@@ -393,6 +391,11 @@ export default function ExploreView() {
               groupByDomain={groupByDomain}
               selectedLanguage={selectedLanguage}
               viewMode={viewMode === 'tree' ? 'tree' : 'list'}
+              onEditConcept={(concept) => {
+                setEditingConcept(concept);
+                setConceptEditorOpen(true);
+              }}
+              onConceptsChanged={refetch}
             />
           )}
         </div>
@@ -407,12 +410,15 @@ export default function ExploreView() {
         onSave={handleSaveCollection}
       />
 
-      {/* Concept Editor Dialog (create-only from this view) */}
+      {/* Concept Editor Dialog (edit from list or create from action bar) */}
       <ConceptEditorDialog
         open={conceptEditorOpen}
-        onOpenChange={setConceptEditorOpen}
-        concept={null}
-        collection={defaultCollection}
+        onOpenChange={(open) => {
+          setConceptEditorOpen(open);
+          if (!open) setEditingConcept(null);
+        }}
+        concept={editingConcept}
+        collection={editingConcept ? undefined : defaultCollection}
         collections={editableCollections}
         onSave={handleSaveConcept}
       />

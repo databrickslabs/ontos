@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { useDomains } from '@/hooks/use-domains'
+import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
@@ -34,6 +34,8 @@ type BasicFormProps = {
     owner_team_id?: string
     project_id?: string
     domain?: string
+    domainIds?: string[]
+    primaryDomainId?: string | null
     tenant?: string
     descriptionUsage?: string
     descriptionPurpose?: string
@@ -45,7 +47,6 @@ type BasicFormProps = {
 const statuses = ['draft', 'active', 'deprecated', 'archived']
 
 export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSubmit, initial }: BasicFormProps) {
-  const { domains, loading: domainsLoading } = useDomains()
   const { toast } = useToast()
   const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -57,7 +58,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [status, setStatus] = useState('draft')
   const [ownerTeamId, setOwnerTeamId] = useState('')
   const [projectId, setProjectId] = useState('')
-  const [domain, setDomain] = useState('')
+  const [domainIds, setDomainIds] = useState<string[]>([])
+  const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null)
   const [tenant, setTenant] = useState('')
   const [descriptionUsage, setDescriptionUsage] = useState('')
   const [descriptionPurpose, setDescriptionPurpose] = useState('')
@@ -100,7 +102,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       status: initial.status || 'draft',
       ownerTeamId: initial.owner_team_id || '',
       projectId: initial.project_id || '',
-      domain: initial.domain || '',
+      domainIds: initial.domainIds || (initial.domain ? [initial.domain] : []),
+      primaryDomainId: initial.primaryDomainId ?? initial.domain ?? null,
       tenant: initial.tenant || '',
       descriptionUsage: initial.descriptionUsage || '',
       descriptionPurpose: initial.descriptionPurpose || '',
@@ -112,7 +115,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       status: 'draft',
       ownerTeamId: '',
       projectId: currentProject?.id || '',
-      domain: '',
+      domainIds: [],
+      primaryDomainId: null,
       tenant: '',
       descriptionUsage: '',
       descriptionPurpose: '',
@@ -125,7 +129,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     setStatus(initValues.status)
     setOwnerTeamId(initValues.ownerTeamId)
     setProjectId(initValues.projectId)
-    setDomain(initValues.domain)
+    setDomainIds(initValues.domainIds)
+    setPrimaryDomainId(initValues.primaryDomainId)
     setTenant(initValues.tenant)
     setDescriptionUsage(initValues.descriptionUsage)
     setDescriptionPurpose(initValues.descriptionPurpose)
@@ -150,14 +155,15 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       status !== initialFormValues.status ||
       ownerTeamId !== initialFormValues.ownerTeamId ||
       projectId !== initialFormValues.projectId ||
-      domain !== initialFormValues.domain ||
+      domainIds.join(',') !== (initialFormValues.domainIds || []).join(',') ||
+      (primaryDomainId || '') !== (initialFormValues.primaryDomainId || '') ||
       tenant !== initialFormValues.tenant ||
       descriptionUsage !== initialFormValues.descriptionUsage ||
       descriptionPurpose !== initialFormValues.descriptionPurpose ||
       descriptionLimitations !== initialFormValues.descriptionLimitations ||
       currentTagsNormalized !== initialTagsNormalized
     )
-  }, [initialFormValues, name, version, status, ownerTeamId, projectId, domain, tenant, descriptionUsage, descriptionPurpose, descriptionLimitations, tags])
+  }, [initialFormValues, name, version, status, ownerTeamId, projectId, domainIds, primaryDomainId, tenant, descriptionUsage, descriptionPurpose, descriptionLimitations, tags])
 
   const handleCloseAttempt = () => {
     if (isFormDirty && !isSubmitting) {
@@ -181,7 +187,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
 
     console.log('[DEBUG FORM] State values before submit:')
     console.log('  - projectId:', projectId)
-    console.log('  - domain:', domain)
+    console.log('  - domainIds:', domainIds)
     console.log('  - ownerTeamId:', ownerTeamId)
     
     setIsSubmitting(true)
@@ -202,7 +208,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         project_id: projectId && projectId !== '__none__' ? projectId : undefined,
         kind: 'DataContract',
         apiVersion: 'v3.1.0',
-        domainId: domain && domain !== '__none__' ? domain : undefined,
+        domainIds: domainIds,
+        primaryDomainId: primaryDomainId,
         tenant: tenant.trim() || undefined,
         tags: normalizedTags.length > 0 ? normalizedTags as any : undefined,
         description: {
@@ -342,29 +349,18 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         </p>
       </div>
 
-      {/* Domain */}
+      {/* Domains */}
       <div className="space-y-2">
-        <Label htmlFor="domain">Domain</Label>
-        <Select 
-          value={domain || '__none__'} 
-          onValueChange={(value) => {
-            console.log('[DEBUG] Domain onValueChange fired:', value);
-            setDomain(value === '__none__' ? '' : value);
-          }} 
-          disabled={domainsLoading}
-        >
-          <SelectTrigger id="domain">
-            <SelectValue placeholder="Select a domain (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">None</SelectItem>
-            {domains.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Label htmlFor="domain">Domains</Label>
+        <DomainMultiSelector
+          value={domainIds}
+          primaryDomainId={primaryDomainId}
+          onChange={(nextIds, nextPrimary) => {
+            setDomainIds(nextIds)
+            setPrimaryDomainId(nextPrimary)
+          }}
+          placeholder="Select domains (optional)"
+        />
       </div>
 
           {/* Tenant */}

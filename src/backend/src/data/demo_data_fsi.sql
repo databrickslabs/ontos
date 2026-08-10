@@ -716,12 +716,12 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  '{"policy_id": "01100001-0002-4000-8000-000000000001"}',
  'cro_attest', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
 ('02b00102-0002-4000-8000-000000000002', '02a00101-0002-4000-8000-000000000001', 'cro_attest',        'CRO Attestation',
- 'manual_approval',
- '{"approver_role": "0f000001-0002-4000-8000-000000000001"}',
+ 'approval',
+ '{"approvers": "business:0f000001-0002-4000-8000-000000000001"}',
  'approve', 'reject', 2, '{"x": 300, "y": 100}', NOW(), NOW()),
 ('02b00103-0002-4000-8000-000000000003', '02a00102-0002-4000-8000-000000000002', 'mrm_review',        'Model Risk Manager Review',
- 'manual_approval',
- '{"approver_role": "0f000003-0002-4000-8000-000000000003"}',
+ 'approval',
+ '{"approvers": "business:0f000003-0002-4000-8000-000000000003"}',
  'approve', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 

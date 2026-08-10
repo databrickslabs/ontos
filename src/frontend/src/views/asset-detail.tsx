@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { TabsDetailSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AssetDeleteDialog } from '@/components/assets/asset-delete-dialog';
+import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetRead } from '@/types/asset';
 import { EntityTypeDefinition } from '@/types/ontology-schema';
@@ -350,10 +351,19 @@ export default function AssetDetailView() {
                     <p className="text-sm mt-1">{asset.platform}</p>
                   </div>
                 )}
-                {asset.domain_id && (
+                {((asset.domains && asset.domains.length > 0) || asset.domain_id) && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Domain</Label>
-                    <p className="text-sm mt-1">{asset.domain_id}</p>
+                    <Label className="text-xs text-muted-foreground">
+                      {asset.domains && asset.domains.length > 1 ? 'Domains' : 'Domain'}
+                    </Label>
+                    <div className="mt-1">
+                      <DomainBadgeList
+                        domains={asset.domains}
+                        domainIds={asset.domain_id ? [asset.domain_id] : []}
+                        primaryDomainId={asset.primary_domain_id ?? asset.domain_id}
+                        onDomainClick={(id) => navigate(`/settings/data-domains/${id}`)}
+                      />
+                    </div>
                   </div>
                 )}
                 {asset.created_by && (

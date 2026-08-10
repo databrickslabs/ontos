@@ -12,6 +12,9 @@ import uuid
 from src.repositories.teams_repository import TeamRepository
 from src.models.teams import TeamCreate
 from src.db_models.teams import TeamDb
+from src.models.data_domains import DataDomainCreate
+from src.repositories.data_domain_repository import data_domain_repo
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 
 
 class TestTeamRepository:
@@ -173,12 +176,13 @@ class TestTeamRepository:
     # =====================================================================
 
     def test_get_teams_by_domain(self, repository, db_session):
-        """Test filtering teams by domain."""
+        """Test filtering teams by domain (any-of via junction)."""
         # Arrange
+        domain = data_domain_repo.create(db=db_session, obj_in=DataDomainCreate(name="Domain 123"))
+        db_session.commit()
         team_with_domain = TeamDb(
             id=str(uuid.uuid4()),
             name="Domain Team",
-            domain_id="domain-123",
             created_by="test-user",
             updated_by="test-user",
             extra_metadata='{}',
@@ -193,9 +197,13 @@ class TestTeamRepository:
         db_session.add(team_with_domain)
         db_session.add(team_without_domain)
         db_session.commit()
+        entity_domain_repo.set_domains_for_entity(
+            db_session, entity_type="team", entity_id=team_with_domain.id, domain_ids=[domain.id]
+        )
+        db_session.commit()
 
         # Act
-        domain_teams = repository.get_teams_by_domain(db_session, domain_id="domain-123")
+        domain_teams = repository.get_teams_by_domain(db_session, domain_id=domain.id)
 
         # Assert
         assert len(domain_teams) == 1

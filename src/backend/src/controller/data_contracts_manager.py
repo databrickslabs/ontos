@@ -57,6 +57,8 @@ from src.db_models.data_contracts import (
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.repositories.teams_repository import team_repo
+from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.controller.domain_export_adapter import domain_export_adapter
 
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
@@ -343,8 +345,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
     # --- Implementation of SearchableAsset --- 
 
-    def _build_search_index_item(self, contract_db_obj, db, preloaded_tags=None) -> Optional[SearchIndexItem]:
-        """Build a SearchIndexItem from a contract DB object. Returns None if id or name missing."""
+    def _build_search_index_item(self, contract_db_obj, db, preloaded_tags=None, preloaded_domains=None) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a contract DB object. Returns None if id or name missing.
+
+        ``preloaded_domains`` (list of AssignedDomain) lets the bulk indexer batch the junction
+        lookup once instead of querying per contract; when omitted it queries per contract."""
         contract_id = getattr(contract_db_obj, 'id', None)
         name = getattr(contract_db_obj, 'name', None)
         if not contract_id or not name:
@@ -392,13 +397,24 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 logger.debug(f"Could not load unified tags for contract {contract_id}: {tag_err}")
 
         owner = ""
-        domain = ""
+
+        # Index every assigned domain NAME so domain-keyed search matches by any of the
+        # contract's domains (primary or additional) — issue #520 story 14.
+        primary_domain = ""
+        try:
+            assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_contract", entity_id=str(contract_id)
+            )
+            primary_domain = next((d.domain_name for d in assigned if d.is_primary), "") or ""
+            tag_names = tag_names + [d.domain_name for d in assigned if d.domain_name]
+        except Exception as dom_err:
+            logger.debug("Could not load domains for contract %s search index: %s", contract_id, dom_err)
 
         extra_data = {
             "version": str(version) if version else "",
             "status": str(status) if status else "",
             "owner": owner,
-            "domain": domain,
+            "domain": primary_domain,
         }
 
         return SearchIndexItem(
@@ -442,8 +458,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 except Exception as e:
                     logger.debug(f"Batch tag loading for search index failed: {e}")
 
+                # Batch-load domains for all contracts at once (avoids N+1).
+                batch_domains: dict = {}
+                try:
+                    batch_domains = entity_domain_repo.get_domains_for_entities(
+                        db, entity_type="data_contract", entity_ids=contract_ids
+                    )
+                except Exception as e:
+                    logger.debug(f"Batch domain loading for search index failed: {e}")
+
                 for contract_db in contracts_db:
-                    item = self._build_search_index_item(contract_db, db, preloaded_tags=batch_tags.get(str(contract_db.id), []))
+                    item = self._build_search_index_item(
+                        contract_db, db,
+                        preloaded_tags=batch_tags.get(str(contract_db.id), []),
+                        preloaded_domains=batch_domains.get(str(contract_db.id), []),
+                    )
                     if item:
                         items.append(item)
 
@@ -790,19 +819,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             'status': db_obj.status,
         }
         
-        # Resolve and include domain name if domain_id is set
-        domain_resolution_failed = False
+        # Apply multi-domain fields via the export adapter: primary name in `domain`,
+        # additional domains under customProperties.additionalDomains, plus app round-trip
+        # keys (domainIds / primaryDomainId). Best-effort; skip if resolution fails.
         try:
-            if getattr(db_obj, 'domain_id', None) and db_session is not None:
-                from src.repositories.data_domain_repository import data_domain_repo
-                domain = data_domain_repo.get(db_session, id=db_obj.domain_id)
-                if domain and getattr(domain, 'name', None):
-                    odcs['domain'] = domain.name
+            if db_session is not None:
+                domain_export_adapter.apply_odcs(odcs, db_session, "data_contract", db_obj.id)
         except Exception:
-            # Best-effort; skip if resolution fails
-            domain_resolution_failed = True
-
-        # Do not emit domainId in ODCS export; only emit human-readable domain name when resolvable
+            logger.warning("Failed to apply domain fields for contract %s", getattr(db_obj, 'id', '?'))
 
         # Add optional top-level fields
         if db_obj.tenant:
@@ -1430,7 +1454,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 if getattr(prop, 'stable_id', None):
                     cp_item['id'] = prop.stable_id
                 custom_props_list.append(cp_item)
-            odcs['customProperties'] = custom_props_list
+            # Preserve the additionalDomains entry apply_odcs injected above; a plain
+            # overwrite here drops additional domains on export/round-trip.
+            odcs['customProperties'] = domain_export_adapter.merge_custom_properties(
+                custom_props_list, odcs.get('customProperties')
+            )
 
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
@@ -1641,7 +1669,37 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.warning(f"Domain resolution failed: {e}")
             return None
-    
+
+    def _resolve_domain_assignment(self, db, data_dict: dict) -> tuple[List[str], Optional[str]]:
+        """Resolve a contract payload's domain assignment to (domain_ids, primary_domain_id).
+
+        Preference order:
+        1. ``domain_ids`` (list of IDs) + optional ``primary_domain_id``.
+        2. Legacy single ``domainId`` (ID) or ``domain`` (name) → single primary.
+        Each ID is validated (and names resolved) via ``_resolve_domain``.
+        """
+        raw_ids = data_dict.get('domain_ids') or data_dict.get('domainIds')
+        if isinstance(raw_ids, list) and raw_ids:
+            resolved = []
+            for did in raw_ids:
+                rid = self._resolve_domain(db, domain_id=str(did))
+                if rid:
+                    resolved.append(rid)
+            primary = data_dict.get('primary_domain_id') or data_dict.get('primaryDomainId')
+            if primary:
+                primary = self._resolve_domain(db, domain_id=str(primary))
+            if primary not in resolved:
+                primary = resolved[0] if resolved else None
+            return resolved, primary
+
+        # Legacy single-domain fallback.
+        single = None
+        if data_dict.get('domainId'):
+            single = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
+        elif data_dict.get('domain'):
+            single = self._resolve_domain(db, domain_name=data_dict.get('domain'))
+        return ([single], single) if single else ([], None)
+
     def _create_schema_objects(self, db, contract_id: str, schema_data: List, current_user: Optional[str] = None):
         """
         Create schema objects and properties for a contract using bulk inserts.
@@ -2227,34 +2285,32 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             if not data_dict.get('name') or not data_dict.get('name', '').strip():
                 raise ValueError("Contract name is required")
             
-            # Resolve domain_id from provided domainId or domain name
-            domain_id = None
-            if data_dict.get('domainId'):
-                domain_id = self._resolve_domain(db, domain_id=data_dict.get('domainId'))
-            elif data_dict.get('domain'):
-                domain_id = self._resolve_domain(db, domain_name=data_dict.get('domain'))
+            # Resolve the domain assignment set (multi-domain). Accepts domain_ids +
+            # primary_domain_id (preferred) and falls back to legacy single domainId/domain name.
+            resolved_domain_ids, resolved_primary_domain_id = self._resolve_domain_assignment(db, data_dict)
 
-            # Reject a duplicate contract name within the same domain. This path
-            # always creates a *new* version family (new versions go through
-            # create_version), so any existing contract sharing the name+domain
-            # is a genuine duplicate, not another version of the same family
-            # (ONT-NEG-002). Name match is case-insensitive.
+            # Reject a duplicate contract name within the same (primary) domain. This
+            # path always creates a *new* version family (new versions go through
+            # create_version), so any existing contract sharing the name + primary
+            # domain is a genuine duplicate, not another version of the same family
+            # (ONT-NEG-002). Name match is case-insensitive. Domain now lives in the
+            # entity_domain_associations junction, so resolve each name match's primary
+            # domain there rather than reading the dropped DataContractDb.domain_id.
             from sqlalchemy import func as _sa_func
             from src.common.errors import ConflictError
             new_name = data_dict.get('name', '').strip()
-            dup_query = db.query(DataContractDb).filter(
+            name_matches = db.query(DataContractDb.id).filter(
                 _sa_func.lower(DataContractDb.name) == new_name.lower()
-            )
-            dup_query = (
-                dup_query.filter(DataContractDb.domain_id == domain_id)
-                if domain_id is not None
-                else dup_query.filter(DataContractDb.domain_id.is_(None))
-            )
-            if dup_query.first() is not None:
-                where = "domain" if domain_id is not None else "global scope"
-                raise ConflictError(
-                    f"A data contract named '{new_name}' already exists in this {where}"
+            ).all()
+            for (existing_id,) in name_matches:
+                existing_primary = entity_domain_repo.get_primary_domain_id(
+                    db, entity_type="data_contract", entity_id=str(existing_id)
                 )
+                if existing_primary == resolved_primary_domain_id:
+                    where = "domain" if resolved_primary_domain_id is not None else "global scope"
+                    raise ConflictError(
+                        f"A data contract named '{new_name}' already exists in this {where}"
+                    )
 
             # Resolve owner team if provided
             owner_team_id = data_dict.get('owner_team_id')
@@ -2308,7 +2364,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 api_version=data_dict.get('apiVersion', 'v3.1.0'),
                 tenant=data_dict.get('tenant'),
                 data_product=data_dict.get('dataProduct'),
-                domain_id=domain_id,
                 description_usage=description.get('usage'),
                 description_purpose=description.get('purpose'),
                 description_limitations=description.get('limitations'),
@@ -2316,6 +2371,14 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 updated_by=current_user,
             )
             created = data_contract_repo.create(db=db, obj_in=db_obj)
+
+            # Assign domains via the junction table.
+            if resolved_domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=created.id,
+                    domain_ids=resolved_domain_ids, primary_domain_id=resolved_primary_domain_id,
+                    assigned_by=current_user,
+                )
             
             # Create schema objects and properties if provided
             if data_dict.get('contract_schema') or data_dict.get('schema'):
@@ -2427,14 +2490,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             # Extract tags (handled separately)
             tags_data = data_dict.get('tags')
             
-            # Handle domain_id - convert empty string to None and validate existence
-            domain_id = data_dict.get('domainId')
-            if domain_id is not None:
-                if not domain_id.strip():
-                    domain_id = None
-                else:
-                    domain_id = self._resolve_domain(db, domain_id=domain_id)
-            
+            # Determine whether the caller supplied a domain assignment (multi-domain).
+            domains_provided = any(
+                k in data_dict and data_dict.get(k) is not None
+                for k in ('domain_ids', 'domainIds', 'primary_domain_id', 'primaryDomainId', 'domainId', 'domain')
+            )
+            resolved_domain_ids, resolved_primary_domain_id = (
+                self._resolve_domain_assignment(db, data_dict) if domains_provided else ([], None)
+            )
+
             # Extract description fields from nested dict or flat keys
             description = data_dict.get('description')
             if isinstance(description, str):
@@ -2461,7 +2525,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 'description_limitations': desc_limitations,
                 'api_version': data_dict.get('apiVersion'),
                 'kind': data_dict.get('kind'),
-                'domain_id': domain_id,
             }
             for k, v in payload_map.items():
                 if v is not None:
@@ -2473,7 +2536,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             logger.info(f"[DEBUG MANAGER] Full update_payload: {update_payload}")
             
             updated = data_contract_repo.update(db=db, db_obj=db_obj, obj_in=update_payload)
-            
+
+            # Replace domain assignments when the caller supplied any domain field.
+            if domains_provided:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=updated.id,
+                    domain_ids=resolved_domain_ids, primary_domain_id=resolved_primary_domain_id,
+                    assigned_by=current_user,
+                )
+
             logger.info(f"[DEBUG MANAGER] After update, db_obj.owner_team_id = {updated.owner_team_id}")
             
             # Handle schema objects if provided
@@ -2689,8 +2760,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             raise ValueError(f"Contract {contract_id} not found")
         
         contract_name = db_obj.name
-        
-        # Perform deletion
+
+        # Remove domain assignments, then perform deletion
+        entity_domain_repo.remove_all_for_entity(db, entity_type="data_contract", entity_id=contract_id)
         data_contract_repo.remove(db=db, id=contract_id)
         
         # Log to change log for timeline
@@ -2853,15 +2925,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             elif not isinstance(description, dict):
                 description = {}
             
-            # Resolve domain_id from parsed payload
-            domain_id = None
-            parsed_domain_id = parsed_odcs.get('domainId') or parsed_odcs.get('domain_id')
-            parsed_domain_name = parsed_odcs.get('domain')
-            if parsed_domain_id:
-                domain_id = self._resolve_domain(db, domain_id=parsed_domain_id)
-            elif parsed_domain_name:
-                domain_id = self._resolve_domain(db, domain_name=parsed_domain_name)
-            
+            # Resolve the domain assignment from the parsed ODCS payload (primary name +
+            # customProperties.additionalDomains, or app round-trip domainIds).
+            import_domain_ids, import_primary_domain_id = domain_export_adapter.parse_odcs(parsed_odcs, db)
+
             # Try to resolve owner as team name
             owner_team_id = self._resolve_team_name_to_id(db, owner_val)
             
@@ -2886,7 +2953,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 tenant=parsed_odcs.get('tenant'),
                 # Store dataProduct from imported ODCS for reference, but actual linkage is via Output Ports
                 data_product=parsed_odcs.get('dataProduct') or parsed_odcs.get('data_product'),
-                domain_id=domain_id,
                 description_usage=description.get('usage'),
                 description_purpose=description.get('purpose'),
                 description_limitations=description.get('limitations'),
@@ -2896,7 +2962,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 updated_by=current_user,
             )
             created = data_contract_repo.create(db=db, obj_in=db_obj)
-            
+
+            # Assign imported domains via the junction table.
+            if import_domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=created.id,
+                    domain_ids=import_domain_ids, primary_domain_id=import_primary_domain_id,
+                    assigned_by=current_user,
+                )
+
             # Parse and create schema objects if present
             # Accept both ODCS standard 'schema' and Pydantic field name 'contract_schema'
             schema_data = parsed_odcs.get('schema') or parsed_odcs.get('contract_schema', [])
@@ -4355,7 +4429,19 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add(new_contract)
             db.flush()
             db.refresh(new_contract)
-            
+
+            # Copy domain assignments from the source contract.
+            src_domains = entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_contract", entity_id=source_contract.id
+            )
+            if src_domains:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_contract", entity_id=new_contract.id,
+                    domain_ids=[d.domain_id for d in src_domains],
+                    primary_domain_id=next((d.domain_id for d in src_domains if d.is_primary), None),
+                    assigned_by=current_user or "system",
+                )
+
             # Clone all nested entities
             # Tags
             if source_contract.tags:
@@ -4862,7 +4948,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             description_usage=original.description_usage,
             description_purpose=original.description_purpose,
             description_limitations=original.description_limitations,
-            domain_id=original.domain_id,
             parent_contract_id=original.id,
             version_family_id=original.version_family_id,
             created_by=current_user,
@@ -4870,9 +4955,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         )
         db.add(clone)
         db.flush()
+
+        # Copy the original's domain assignments onto the clone.
+        original_domains = entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_contract", entity_id=original.id
+        )
+        if original_domains:
+            entity_domain_repo.set_domains_for_entity(
+                db, entity_type="data_contract", entity_id=clone.id,
+                domain_ids=[d.domain_id for d in original_domains],
+                primary_domain_id=next((d.domain_id for d in original_domains if d.is_primary), None),
+                assigned_by=current_user,
+            )
+
         db.commit()
         db.refresh(clone)
-        
+
         self._update_search_index(clone, db)
         return clone
     
@@ -5993,6 +6091,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         latest_only=True,
         status=None,
         *,
+        domain_ids=None,
         caller_email: Optional[str] = None,
         caller_team_ids: Optional[Set[str]] = None,
     ):
@@ -6012,8 +6111,15 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             is_visible_consumer,
         )
 
-        if domain_id:
-            query = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id)
+        wanted_domain_ids = list(domain_ids or [])
+        if domain_id and domain_id not in wanted_domain_ids:
+            wanted_domain_ids.append(domain_id)
+        if wanted_domain_ids:
+            # Any-of domain filter via the junction table (primary OR additional).
+            contract_ids = entity_domain_repo.find_entity_ids_by_domains(
+                db, domain_ids=wanted_domain_ids, entity_type="data_contract"
+            )
+            query = db.query(DataContractDb).filter(DataContractDb.id.in_(contract_ids or ["__none__"]))
             if not is_admin and project_id:
                 logger.debug(f"Filtering contracts by project_id: {project_id} and domain_id: {domain_id}")
                 query = query.filter(
@@ -6089,6 +6195,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         latest_only: bool = True,
         include_history: bool = False,
         *,
+        domain_ids: Optional[List[str]] = None,
         caller_email: Optional[str] = None,
         caller_team_ids: Optional[Set[str]] = None,
     ):
@@ -6108,6 +6215,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             is_admin,
             latest_only,
             status=status,
+            domain_ids=domain_ids,
             caller_email=caller_email,
             caller_team_ids=caller_team_ids,
         )
@@ -6131,16 +6239,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not contracts:
             return []
 
-        # Batch-resolve domain names
-        domain_ids = {c.domain_id for c in contracts if c.domain_id}
-        domain_map = {}
-        if domain_ids:
-            try:
-                from src.db_models.data_domains import DataDomainDb
-                rows = db.query(DataDomainDb.id, DataDomainDb.name).filter(DataDomainDb.id.in_(domain_ids)).all()
-                domain_map = {str(r.id): r.name for r in rows}
-            except Exception as e:
-                logger.debug(f"Batch domain resolution failed: {e}")
+        # Batch-resolve domain assignments via the junction table (any-of, avoids N+1).
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            db, entity_type="data_contract", entity_ids=[c.id for c in contracts]
+        )
 
         # Batch-resolve team names
         team_ids = {c.owner_team_id for c in contracts if c.owner_team_id}
@@ -6213,6 +6315,9 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 family_counts.get(family_id) if family_counts is not None else None
             )
 
+            assigned_domains = domains_map.get(c.id, [])
+            primary_domain = next((d for d in assigned_domains if d.is_primary), None)
+
             results.append(DataContractSummary(
                 id=c.id,
                 name=c.name,
@@ -6225,8 +6330,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 kind=c.kind,
                 apiVersion=c.api_version,
                 tenant=c.tenant,
-                domain=domain_map.get(c.domain_id) if c.domain_id else None,
-                domainId=c.domain_id,
+                domain=primary_domain.domain_name if primary_domain else None,
+                domainId=primary_domain.domain_id if primary_domain else None,
+                domainIds=[d.domain_id for d in assigned_domains],
+                primaryDomainId=primary_domain.domain_id if primary_domain else None,
                 dataProduct=c.data_product,
                 description=description,
                 tags=tags_map.get(c.id, []),
@@ -6267,20 +6374,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         from src.repositories.data_domain_repository import data_domain_repo
         from src.repositories.tags_repository import entity_tag_repo
         
-        # Resolve domain name from domain_id if available
-        logger.debug(f"[BUILD API] db_contract.domain_id = {db_contract.domain_id}")
         logger.debug(f"[BUILD API] db_contract.project_id = {db_contract.project_id}")
         logger.debug(f"[BUILD API] db_contract.owner_team_id = {db_contract.owner_team_id}")
-        
-        domain_name = None
-        if db_contract.domain_id:
-            try:
-                domain = data_domain_repo.get(db, id=db_contract.domain_id)
-                if domain:
-                    domain_name = domain.name
-            except Exception as e:
-                logger.warning(f"Failed to resolve domain name for domain_id {db_contract.domain_id}: {e}")
-        
+
+        # Resolve domain assignments from the junction table.
+        assigned_domains = entity_domain_repo.get_domains_for_entity(
+            db, entity_type="data_contract", entity_id=db_contract.id
+        )
+        primary_domain = next((d for d in assigned_domains if d.is_primary), None)
+        domain_name = primary_domain.domain_name if primary_domain else None
+        contract_domain_ids = [d.domain_id for d in assigned_domains]
+        contract_primary_domain_id = primary_domain.domain_id if primary_domain else None
+
         # Build description
         description = None
         if db_contract.description_usage or db_contract.description_purpose or db_contract.description_limitations:
@@ -6521,8 +6626,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             kind=db_contract.kind,
             apiVersion=db_contract.api_version,
             tenant=db_contract.tenant,
-            domain=domain_name,  # Resolved domain name
-            domainId=db_contract.domain_id,  # Provide domain ID for frontend resolution
+            domain=domain_name,  # Primary domain name
+            domainId=contract_primary_domain_id,  # Primary domain ID
+            domainIds=contract_domain_ids,  # All assigned domain IDs (primary first)
+            primaryDomainId=contract_primary_domain_id,
             dataProduct=db_contract.data_product,
             description=description,
             tags=tags,  # Include tags in response

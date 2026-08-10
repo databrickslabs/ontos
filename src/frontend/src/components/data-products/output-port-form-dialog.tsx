@@ -428,8 +428,8 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
       onOpenChange={setIsCreateContractOpen}
       onSuccess={handleContractCreated}
       prefillData={{
-        domain: product?.domain,
-        domainId: product?.domain,
+        domainIds: product?.domain_ids,
+        primaryDomainId: product?.primary_domain_id,
         tenant: product?.tenant,
         owner_team_id: product?.owner_team_id
       }}

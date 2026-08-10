@@ -39,15 +39,22 @@ class GetDataProductTool(BaseTool):
         
         try:
             from src.db_models.data_products import DataProductDb
-            
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
             product = ctx.db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
-            
+
             if not product:
                 return ToolResult(
                     success=False,
                     error=f"Data product '{product_id}' not found"
                 )
-            
+
+            # Domain now lives in the entity_domain_associations junction; use the primary.
+            assigned = entity_domain_repo.get_domains_for_entity(
+                ctx.db, entity_type="data_product", entity_id=str(product.id)
+            )
+            primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
+
             # Extract description purpose from JSON
             desc_purpose = None
             if product.description:
@@ -76,7 +83,7 @@ class GetDataProductTool(BaseTool):
                 data={
                     "id": str(product.id),
                     "name": product.name,
-                    "domain": product.domain,
+                    "domain": primary_domain,
                     "description": desc_purpose,
                     "status": product.status,
                     "version": product.version,
@@ -182,16 +189,31 @@ class SearchDataProductsTool(BaseTool):
             # Query database directly using the session
             from src.db_models.data_products import DataProductDb
             from src.db_models.semantic_links import EntitySemanticLinkDb
-            
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
             products_db = ctx.db.query(DataProductDb).limit(500).all()
             logger.debug(f"[search_data_products] Found {len(products_db)} total products in database")
-            
+
             if not products_db:
                 logger.info(f"[search_data_products] No products found in database")
                 return ToolResult(
                     success=True,
                     data={"products": [], "total_found": 0, "message": "No data products found"}
                 )
+
+            # Batch-load domain assignments (domain moved to the junction table).
+            # {product_id: [domain names]} with the primary name tracked separately.
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                ctx.db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
+            )
+            product_domain_names: Dict[str, List[str]] = {
+                pid: [a.domain_name for a in assigned if a.domain_name]
+                for pid, assigned in domains_map.items()
+            }
+            product_primary_domain: Dict[str, Optional[str]] = {
+                pid: next((a.domain_name for a in assigned if a.is_primary), None)
+                for pid, assigned in domains_map.items()
+            }
             
             # Filter by query (name, description, domain)
             query_lower = query.lower() if query and query != '*' else ''
@@ -215,13 +237,14 @@ class SearchDataProductsTool(BaseTool):
                     logger.warning(f"[search_data_products] Semantic link lookup failed: {e}")
             
             for p in products_db:
+                p_domain_names = product_domain_names.get(str(p.id), [])
                 # If query is empty or '*', include all products
                 if not query_lower:
                     include = True
                 else:
                     # Match on name
                     name_match = query_lower in (p.name or "").lower()
-                    
+
                     # Match on description (stored as JSON)
                     desc_match = False
                     if p.description:
@@ -232,18 +255,18 @@ class SearchDataProductsTool(BaseTool):
                                 desc_match = query_lower in desc_text.lower()
                         except Exception:
                             pass
-                    
-                    # Match on domain
-                    domain_match = query_lower in (p.domain or "").lower()
-                    
+
+                    # Match on domain (any assigned domain — primary or additional)
+                    domain_match = any(query_lower in (n or "").lower() for n in p_domain_names)
+
                     # Match via semantic links (ontology concepts)
                     semantic_match = str(p.id) in semantic_product_ids
-                    
+
                     include = name_match or desc_match or domain_match or semantic_match
-                
+
                 if include:
-                    # Apply filters
-                    if domain and p.domain and p.domain.lower() != domain.lower():
+                    # Apply filters (any-of over assigned domains)
+                    if domain and not any(n.lower() == domain.lower() for n in p_domain_names):
                         continue
                     if status and p.status != status:
                         continue
@@ -273,7 +296,7 @@ class SearchDataProductsTool(BaseTool):
                     filtered.append({
                         "id": str(p.id),
                         "name": p.name,
-                        "domain": p.domain,
+                        "domain": product_primary_domain.get(str(p.id)),
                         "description": desc_purpose,
                         "status": p.status,
                         "output_tables": output_tables[:5],  # Limit for response size

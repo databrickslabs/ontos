@@ -17,6 +17,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.models.domain_associations import AssignedDomain
+
 
 # ============================================================================
 # Asset Categories (Connector-level)
@@ -628,7 +630,8 @@ class AssetBase(BaseModel):
     asset_type_id: UUID = Field(..., description="ID of the persisted asset type")
     platform: Optional[str] = Field(None, description="Platform (e.g., Databricks, Power BI)")
     location: Optional[str] = Field(None, description="FQDN, URL, or path")
-    domain_id: Optional[str] = Field(None, description="Data domain ID")
+    domain_ids: List[str] = Field(default_factory=list, description="Assigned data domain IDs (primary included)")
+    primary_domain_id: Optional[str] = Field(None, description="Primary data domain ID")
     properties: Optional[Dict[str, Any]] = Field(None, description="Type-specific metadata")
     tags: Optional[List[str]] = Field(None, description="Quick tags/classifications")
     status: AssetStatus = Field(AssetStatus.ACTIVE, description="Lifecycle status")
@@ -644,7 +647,8 @@ class AssetUpdate(BaseModel):
     asset_type_id: Optional[UUID] = None
     platform: Optional[str] = None
     location: Optional[str] = None
-    domain_id: Optional[str] = None
+    domain_ids: Optional[List[str]] = None
+    primary_domain_id: Optional[str] = None
     properties: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
     status: Optional[AssetStatus] = None
@@ -652,6 +656,7 @@ class AssetUpdate(BaseModel):
 
 class AssetRead(AssetBase):
     id: UUID
+    domains: List[AssignedDomain] = Field(default_factory=list, description="Assigned domains with names + primary flag")
     asset_type_name: Optional[str] = Field(None, description="Resolved asset type name")
     relationships: List[AssetRelationshipRead] = Field(default_factory=list)
     created_by: Optional[str] = None
@@ -672,6 +677,11 @@ class AssetSummary(BaseModel):
     location: Optional[str] = None
     tags: Optional[List[str]] = None
     status: AssetStatus
+    # Multi-domain assignment (#520): carried on summaries so list rows can show domain
+    # badges and edit dialogs (fed an AssetSummary) preserve domains on save.
+    domain_ids: List[str] = Field(default_factory=list)
+    primary_domain_id: Optional[str] = None
+    domains: List[AssignedDomain] = Field(default_factory=list)
     parent_id: Optional[UUID] = Field(None, description="ID of the parent asset (from hierarchical relationship)")
     parent_name: Optional[str] = Field(None, description="Name of the parent asset")
     updated_at: Optional[datetime] = None

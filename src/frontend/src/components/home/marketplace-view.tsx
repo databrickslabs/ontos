@@ -51,7 +51,12 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+  // Multi-domain filter (#520 story 10): the marketplace filters by one or MORE
+  // domains and shows entities matching ANY of them (union). Empty = all domains.
+  const [selectedDomainIds, setSelectedDomainIds] = useState<string[]>([]);
+  // Graph view focuses a single domain for the mini-graph; kept separate from the
+  // multi-select filter so browsing the graph doesn't collapse the filter to one.
+  const [graphFocusId, setGraphFocusId] = useState<string | null>(null);
   const [scopeFilter, setScopeFilter] = useState<string>('all');
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([]);
   
@@ -169,18 +174,18 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     }
   }, []);
 
-  // Load domain details when switching to graph mode or changing selection
+  // Load domain details when switching to graph mode or changing the graph focus.
   useEffect(() => {
-    if (domainBrowserStyle === 'graph' && selectedDomainId) {
-      loadDomainDetails(selectedDomainId);
-    } else if (domainBrowserStyle === 'graph' && !selectedDomainId && domains.length > 0) {
-      // Auto-select first root domain for graph view
+    if (domainBrowserStyle === 'graph' && graphFocusId) {
+      loadDomainDetails(graphFocusId);
+    } else if (domainBrowserStyle === 'graph' && !graphFocusId && domains.length > 0) {
+      // Auto-focus first root domain for graph view (focus only; does not filter).
       const rootDomain = domains.find(d => !d.parent_id) || domains[0];
       if (rootDomain) {
-        setSelectedDomainId(rootDomain.id);
+        setGraphFocusId(rootDomain.id);
       }
     }
-  }, [domainBrowserStyle, selectedDomainId, domains, loadDomainDetails]);
+  }, [domainBrowserStyle, graphFocusId, domains, loadDomainDetails]);
 
   // Fade-in effect for graph when domain changes
   useEffect(() => {
@@ -223,42 +228,16 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     return result;
   }, [domains]);
 
-  // Build match sets based on exact/children selection
-  // Uses the already-loaded domains array to walk the tree client-side (no API calls needed)
+  // Build match sets from the selected domains (union / any-of, #520 story 10).
+  // Uses the already-loaded domains array to walk the tree client-side (no API calls needed).
+  // "Include children" (default) unions each selected domain with its descendants (story 11).
   useEffect(() => {
-    if (!selectedDomainId) { 
-      setMatchSets(null); 
-      return; 
-    }
-    
-    const selected = domains.find(d => d.id === selectedDomainId);
-    if (!selected) {
-      // Domain not found in our list - try matching by name in case selectedDomainId is a name
-      const byName = domains.find(d => d.name.toLowerCase() === selectedDomainId.toLowerCase());
-      if (byName) {
-        // Use the found domain
-        const ids = new Set<string>([byName.id]);
-        const namesLower = new Set<string>([byName.name.toLowerCase()]);
-        setMatchSets({ ids, namesLower });
-      } else {
-        setMatchSets({ ids: new Set([selectedDomainId]), namesLower: new Set([selectedDomainId.toLowerCase()]) });
-      }
+    if (selectedDomainIds.length === 0) {
+      setMatchSets(null);
       return;
     }
-    
-    // Exact match: only the selected domain
-    if (exactMatchesOnly) {
-      const ids = new Set<string>([String(selectedDomainId)]);
-      const namesLower = new Set<string>([selected.name.toLowerCase()]);
-      setMatchSets({ ids, namesLower });
-      return;
-    }
-    
-    // Include children: walk all descendants using the domains array (client-side)
-    const ids = new Set<string>();
-    const namesLower = new Set<string>();
-    
-    // Build a map of parent_id -> children for efficient lookup
+
+    // Build a map of parent_id -> children once for descendant walks.
     const childrenByParentId = new Map<string, DataDomain[]>();
     domains.forEach(d => {
       if (d.parent_id) {
@@ -268,36 +247,63 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
         childrenByParentId.get(d.parent_id)!.push(d);
       }
     });
-    
-    // Walk the tree from the selected domain
-    const queue: DataDomain[] = [selected];
-    while (queue.length > 0) {
-      const domain = queue.shift()!;
-      ids.add(domain.id);
-      namesLower.add(domain.name.toLowerCase());
-      
-      // Add children to queue
-      const children = childrenByParentId.get(domain.id) || [];
-      queue.push(...children);
+
+    const ids = new Set<string>();
+    const namesLower = new Set<string>();
+
+    for (const selectedId of selectedDomainIds) {
+      const selected =
+        domains.find(d => d.id === selectedId) ||
+        domains.find(d => d.name.toLowerCase() === selectedId.toLowerCase());
+
+      if (!selected) {
+        // Unknown id/name: match it literally so a stale selection still filters.
+        ids.add(selectedId);
+        namesLower.add(selectedId.toLowerCase());
+        continue;
+      }
+
+      if (exactMatchesOnly) {
+        ids.add(selected.id);
+        namesLower.add(selected.name.toLowerCase());
+        continue;
+      }
+
+      // Include children: walk all descendants from this selected domain.
+      const queue: DataDomain[] = [selected];
+      while (queue.length > 0) {
+        const domain = queue.shift()!;
+        ids.add(domain.id);
+        namesLower.add(domain.name.toLowerCase());
+        queue.push(...(childrenByParentId.get(domain.id) || []));
+      }
     }
-    
+
     setMatchSets({ ids, namesLower });
-  }, [selectedDomainId, exactMatchesOnly, domains]);
+  }, [selectedDomainIds, exactMatchesOnly, domains]);
 
   // Filter products based on search and domain
   const filteredProducts = useMemo(() => {
     let filtered = allProducts;
     
     // Filter by domain using matchSets
-    if (selectedDomainId) {
+    if (selectedDomainIds.length > 0) {
       if (!matchSets) return []; // Still loading match sets
       filtered = filtered.filter(p => {
+        // Any-of semantics (#520 story 9/10): match when ANY of the product's assigned
+        // domains (primary OR additional) falls in the selected domain (+descendants) set,
+        // not just the primary. domain_ids carries all assignments; fall back to the
+        // legacy primary `domain` id/name for products not yet re-indexed.
+        const assignedIds = (p as any)?.domain_ids as string[] | undefined;
+        if (assignedIds && assignedIds.length > 0) {
+          if (assignedIds.some(id => matchSets.ids.has(String(id)))) return true;
+        }
         const productDomainRaw = p?.domain;
         const productDomainIdLike = productDomainRaw != null ? String(productDomainRaw) : '';
         const productDomainLower = productDomainIdLike.toLowerCase();
         if (!productDomainLower) return false;
-        if (matchSets.ids.has(productDomainIdLike)) return true; // Match by id
-        if (matchSets.namesLower.has(productDomainLower)) return true; // Match by name
+        if (matchSets.ids.has(productDomainIdLike)) return true; // Match by id (primary)
+        if (matchSets.namesLower.has(productDomainLower)) return true; // Match by name (primary)
         return false;
       });
     }
@@ -313,7 +319,22 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
     }
 
     return filtered;
-  }, [allProducts, selectedDomainId, searchQuery, matchSets]);
+  }, [allProducts, selectedDomainIds, searchQuery, matchSets]);
+
+  // Toggle a domain in the multi-select filter (add if absent, remove if present).
+  const toggleDomain = useCallback((domainId: string) => {
+    setSelectedDomainIds(prev =>
+      prev.includes(domainId) ? prev.filter(id => id !== domainId) : [...prev, domainId]
+    );
+  }, []);
+
+  // Add a domain to the filter (idempotent). Used by the graph view, where a node
+  // click both focuses the graph and includes that domain in the filter — adding
+  // (not toggling) so navigating back to an already-selected node never silently
+  // removes it from the filter.
+  const addDomainToFilter = useCallback((domainId: string) => {
+    setSelectedDomainIds(prev => (prev.includes(domainId) ? prev : [...prev, domainId]));
+  }, []);
 
   // Handle product card click
   const handleProductClick = async (product: DataProduct) => {
@@ -510,8 +531,8 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium">{t('marketplace.browseDataDomains')}</div>
           <div className="flex items-center gap-4">
-            {/* Exact match toggle - only show when a domain is selected */}
-            {selectedDomainId && (
+            {/* Exact match toggle - only show when at least one domain is selected */}
+            {selectedDomainIds.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{t('marketplace.exactMatchOnly')}</span>
                 <Switch 
@@ -555,9 +576,9 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
           /* Pills View */
           <div className="flex flex-wrap gap-2">
             <Button
-              variant={selectedDomainId === null ? "default" : "outline"}
+              variant={selectedDomainIds.length === 0 ? "default" : "outline"}
               size="sm"
-              onClick={() => setSelectedDomainId(null)}
+              onClick={() => setSelectedDomainIds([])}
               className="rounded-full"
             >
               {t('marketplace.allDomains')}
@@ -570,9 +591,9 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
                 <HoverCard key={domain.id} openDelay={300} closeDelay={100}>
                   <HoverCardTrigger asChild>
                     <Button
-                      variant={selectedDomainId === domain.id ? "default" : "outline"}
+                      variant={selectedDomainIds.includes(domain.id) ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setSelectedDomainId(domain.id)}
+                      onClick={() => toggleDomain(domain.id)}
                       className="rounded-full"
                     >
                       {domain.name}
@@ -613,7 +634,11 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             <div className={`transition-opacity duration-300 ${graphFadeIn ? 'opacity-100' : 'opacity-0'}`}>
               <DataDomainMiniGraph
                 currentDomain={selectedDomainDetails}
-                onNodeClick={(id) => setSelectedDomainId(id)}
+                // Node click focuses the graph AND includes that domain in the filter.
+                // We add (never remove) so re-visiting a node during navigation can't
+                // silently drop it from the filter; clearing is done via the pills view
+                // or the "clear filters" control.
+                onNodeClick={(id) => { setGraphFocusId(id); addDomainToFilter(id); }}
               />
             </div>
           ) : (
@@ -675,7 +700,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             <div className="text-center py-12 text-muted-foreground">
               <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
               <p>{t('marketplace.products.noProducts')}</p>
-              {(searchQuery || selectedDomainId || scopeFilter !== 'all') && (
+              {(searchQuery || selectedDomainIds.length > 0 || scopeFilter !== 'all') && (
                 <p className="text-sm mt-1">{t('marketplace.products.adjustFilters')}</p>
               )}
             </div>

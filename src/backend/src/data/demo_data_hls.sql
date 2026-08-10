@@ -737,16 +737,16 @@ INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, o
  '{"policy_id": "01100002-0001-4000-8000-000000000002"}',
  'irb_active', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
 ('02b00102-0001-4000-8000-000000000002', '02a00101-0001-4000-8000-000000000001', 'irb_active',     'IRB Approval Active',
- 'manual_approval',
- '{"approver_role": "0f000003-0001-4000-8000-000000000003"}',
+ 'approval',
+ '{"approvers": "business:0f000003-0001-4000-8000-000000000003"}',
  'approve', 'reject', 2, '{"x": 300, "y": 100}', NOW(), NOW()),
 ('02b00103-0001-4000-8000-000000000003', '02a00102-0001-4000-8000-000000000002', 'phi_classification', 'PHI Classification',
  'policy_check',
  '{"policy_id": "01100001-0001-4000-8000-000000000001"}',
  'phi_review', 'block', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
 ('02b00104-0001-4000-8000-000000000004', '02a00102-0001-4000-8000-000000000002', 'phi_review', 'Privacy Officer Review',
- 'manual_approval',
- '{"approver_role": "0f000004-0001-4000-8000-000000000004"}',
+ 'approval',
+ '{"approvers": "business:0f000004-0001-4000-8000-000000000004"}',
  'approve', 'block', 2, '{"x": 300, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 

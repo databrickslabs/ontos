@@ -56,6 +56,8 @@ from src.models.data_products import (
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
+from src.repositories.entity_domain_association_repository import entity_domain_repo
+from src.controller.domain_export_adapter import domain_export_adapter
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -113,6 +115,75 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning("NotificationsManager not provided. Notifications will not be sent.")
         if not self._tags_manager:
             logger.warning("TagsManager not provided. Tag operations will not be available.")
+
+    def _attach_domains(self, api_obj, db: Optional[Session] = None, preloaded_domains=None):
+        """Populate a DataProduct API model's domain fields from the junction table.
+
+        Callers that operate on an explicit session (clone/new-version/import) must pass
+        that ``db`` so associations written-but-not-yet-committed on it are visible;
+        otherwise the manager's own session is used.
+
+        ``preloaded_domains`` lets a batch caller (e.g. ``list_products``) hand in the
+        already-loaded ``[AssignedDomain, ...]`` for this product, avoiding a per-row
+        query (N+1) — mirrors the search-index batch path.
+        """
+        if api_obj is None or not getattr(api_obj, "id", None):
+            return api_obj
+        session = db if db is not None else self._db
+        try:
+            assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
+                session, entity_type="data_product", entity_id=str(api_obj.id)
+            )
+            api_obj.domain_ids = [d.domain_id for d in assigned]
+            primary = next((d for d in assigned if d.is_primary), None)
+            api_obj.primary_domain_id = primary.domain_id if primary else None
+            api_obj.domain = primary.domain_name if primary else None
+        except Exception as e:
+            logger.warning(f"Failed to attach domains for product {getattr(api_obj, 'id', '?')}: {e}")
+        return api_obj
+
+    def _resolve_product_domain_assignment(self, data: dict, db: Optional[Session] = None) -> tuple:
+        """Resolve a product payload to (domain_ids, primary_domain_id).
+
+        Prefers domain_ids + primary_domain_id; falls back to the legacy single ``domain``
+        (which may be a domain ID or name). Names are resolved via the data domain repo.
+        Uses the caller's ``db`` session when provided so resolution sees rows written in
+        the same request transaction.
+        """
+        from src.repositories.data_domain_repository import data_domain_repo
+        session = db if db is not None else self._db
+
+        def _resolve_one(value):
+            if not value:
+                return None
+            if data_domain_repo.get(session, value):
+                return value
+            byname = data_domain_repo.get_by_name(session, name=value)
+            return byname.id if byname else None
+
+        # 1. App/API snake_case payload (create/edit forms, batch import rows).
+        raw_ids = data.get('domain_ids')
+        if isinstance(raw_ids, list) and raw_ids:
+            resolved = [r for r in (_resolve_one(str(x)) for x in raw_ids) if r]
+            primary = data.get('primary_domain_id')
+            primary = _resolve_one(str(primary)) if primary else None
+            if primary not in resolved:
+                primary = resolved[0] if resolved else None
+            return resolved, primary
+
+        # 2. Legacy single ``domain`` that is a domain *ID* (pre-#520 form): resolve
+        #    it directly. parse_odcs only resolves a bare ``domain`` by *name*, so an
+        #    ID here would be silently dropped. This form never carried additionals.
+        single = data.get('domain')
+        if single and data_domain_repo.get(session, str(single)):
+            return [str(single)], str(single)
+
+        # 3. ODPS round-trip / re-import: delegate to the shared export adapter so
+        #    camelCase round-trip keys (domainIds/primaryDomainId/domainId) AND the
+        #    ODCS-standard primary ``domain`` name + ``customProperties.additionalDomains``
+        #    are all honoured. Reading only the single ``domain`` name here previously
+        #    dropped additional domains on re-import (round-trip loss).
+        return domain_export_adapter.parse_odcs(data, session)
 
     def get_statuses(self) -> List[str]:
         """Get all ODPS v1.0.0 status values."""
@@ -192,6 +263,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Create via repository
             created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
 
+            # Assign domains via the junction table (accepts domain_ids/primary_domain_id
+            # or legacy single `domain` id/name).
+            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(product_data, db=db_session)
+            if prod_domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db_session, entity_type="data_product", entity_id=created_db_obj.id,
+                    domain_ids=prod_domain_ids, primary_domain_id=prod_primary, assigned_by=user,
+                )
+
             # Handle tag assignments
             if tags_data and self._tags_manager:
                 try:
@@ -200,7 +280,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     logger.error(f"Failed to assign tags to product {created_db_obj.id}: {e}")
 
             # Load product with tags
-            result = self._load_product_with_tags(created_db_obj)
+            result = self._load_product_with_tags(created_db_obj, db=db_session)
             
             # Log to change log for timeline
             try:
@@ -379,9 +459,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     is_admin=is_admin,
                 )
 
+            # Batch-load domains once for the whole page (avoids N+1: every sibling
+            # list path batches via get_domains_for_entities).
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
+            ) if products_db else {}
+
             products_with_tags = []
             for product_db in products_db:
-                product_with_tags = self._load_product_with_tags(product_db)
+                product_with_tags = self._load_product_with_tags(
+                    product_db, preloaded_domains=domains_map.get(str(product_db.id), [])
+                )
                 fid = getattr(product_db, "version_family_id", None) or product_db.id
                 # Only emit a count on the collapsed view; on the expanded
                 # view the rows speak for themselves and a per-row count
@@ -477,6 +565,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Update via repository
             updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
 
+            # Replace domain assignments when the caller supplied any domain field.
+            if any(k in product_data_dict for k in ('domain_ids', 'primary_domain_id', 'domain')):
+                upd_domain_ids, upd_primary = self._resolve_product_domain_assignment(product_data_dict, db=db_session)
+                entity_domain_repo.set_domains_for_entity(
+                    db_session, entity_type="data_product", entity_id=product_id,
+                    domain_ids=upd_domain_ids, primary_domain_id=upd_primary, assigned_by=user,
+                )
+
             # Handle tag updates
             if tags_data is not None and self._tags_manager:
                 try:
@@ -488,7 +584,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     raise
 
             # Load product with tags
-            result = self._load_product_with_tags(updated_db_obj)
+            result = self._load_product_with_tags(updated_db_obj, db=db_session)
             
             # Log to change log for timeline
             try:
@@ -673,7 +769,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             # Get product info before deletion for change log
             product_db = self._repo.get(db=self._db, id=product_id)
             product_name = product_db.name if product_db else None
-            
+
+            entity_domain_repo.remove_all_for_entity(self._db, entity_type="data_product", entity_id=product_id)
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
             
             if deleted_obj:
@@ -1559,8 +1656,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             new_product_api_model = DataProductCreate(**new_product_data)
             created_db_obj = self._repo.create(db=self._db, obj_in=new_product_api_model)
 
+            # Carry the source product's domain assignments onto the new version.
+            d_ids, d_primary = self._resolve_product_domain_assignment(new_product_data)
+            if d_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    self._db, entity_type="data_product", entity_id=created_db_obj.id,
+                    domain_ids=d_ids, primary_domain_id=d_primary, assigned_by="system",
+                )
+
             logger.info(f"Successfully created new version {request.new_version} (ID: {created_db_obj.id})")
-            result = DataProductApi.model_validate(created_db_obj)
+            result = self._attach_domains(DataProductApi.model_validate(created_db_obj))
             self._update_search_index(result)
             return result
 
@@ -1678,7 +1783,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 status='draft' if as_personal_draft else DataProductStatus.DRAFT.value,
                 name=source_product.name,
                 version=new_version,
-                domain=source_product.domain,
                 tenant=source_product.tenant,
                 project_id=source_product.project_id,
                 owner_team_id=source_product.owner_team_id,
@@ -1692,6 +1796,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             )
             db.add(new_product)
             db.flush()
+
+            # Copy domain assignments from the source product.
+            src_domains = entity_domain_repo.get_domains_for_entity(
+                db, entity_type="data_product", entity_id=source_product.id
+            )
+            if src_domains:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type="data_product", entity_id=new_product.id,
+                    domain_ids=[d.domain_id for d in src_domains],
+                    primary_domain_id=next((d.domain_id for d in src_domains if d.is_primary), None),
+                    assigned_by=current_user,
+                )
             
             # Clone Description (One-to-One)
             if source_product.description:
@@ -1904,7 +2020,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(new_product)
             
             logger.info(f"Successfully cloned product {product_id} to new version {new_version} (ID: {new_id})")
-            return DataProductApi.model_validate(new_product)
+            return self._attach_domains(DataProductApi.model_validate(new_product), db=db)
             
         except SQLAlchemyError as e:
             db.rollback()
@@ -2006,7 +2122,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             db.refresh(draft)
             
             logger.info(f"Committed personal draft {draft_id} as version {new_version}")
-            return DataProductApi.model_validate(draft)
+            return self._attach_domains(DataProductApi.model_validate(draft), db=db)
             
         except SQLAlchemyError as e:
             db.rollback()
@@ -2183,8 +2299,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 # Step 3: Get product details for formatting
                 products = [self._repo.get(db, id=pid) for pid in product_ids if self._repo.get(db, id=pid)]
 
+                # Resolve each product's primary domain from the junction (the legacy
+                # DataProductDb.domain column was dropped) so the Genie instructions keep
+                # showing the Domain line.
+                genie_domains_map = entity_domain_repo.get_domains_for_entities(
+                    db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
+                ) if products else {}
+                product_domains = {
+                    str(pid): next((a.domain_name for a in assigned if a.is_primary), None)
+                    for pid, assigned in genie_domains_map.items()
+                }
+
                 # Step 4: Format metadata as instructions
-                instructions = genie_client.format_metadata_for_genie(metadata_map, products)
+                instructions = genie_client.format_metadata_for_genie(
+                    metadata_map, products, product_domains=product_domains
+                )
                 logger.info(f"Formatted {len(instructions)} characters of metadata")
 
                 # Step 5: Create Genie Space via API
@@ -2330,7 +2459,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
     # --- SearchableAsset implementation ---
 
-    def _build_search_index_item(self, product: DataProductApi) -> Optional[SearchIndexItem]:
+    def _build_search_index_item(self, product: DataProductApi, preloaded_domains=None) -> Optional[SearchIndexItem]:
         """Convert a single DataProduct API model to a SearchIndexItem."""
         if not product.id or not product.name:
             return None
@@ -2379,6 +2508,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 if member.username and member.username != member.name:
                     team_member_names.append(member.username)
 
+        # Index every assigned domain NAME so domain-keyed search matches by any of the
+        # product's domains (primary or additional) — issue #520 story 14.
+        try:
+            assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
+                self._db, entity_type="data_product", entity_id=str(product.id)
+            )
+            tag_strings = tag_strings + [d.domain_name for d in assigned if d.domain_name]
+        except Exception as dom_err:
+            logger.debug("Could not load domains for product %s search index: %s", product.id, dom_err)
+
         extra_data = {
             "status": product.status or "",
             "version": product.version or "",
@@ -2417,8 +2556,12 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         items = []
         try:
             products_api = self.list_products(limit=10000, is_admin=True)
+            # Batch-load domains once for the whole index build (avoids N+1).
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_api]
+            ) if products_api else {}
             for product in products_api:
-                item = self._build_search_index_item(product)
+                item = self._build_search_index_item(product, preloaded_domains=domains_map.get(str(product.id), []))
                 if item:
                     items.append(item)
             logger.info(f"Prepared {len(items)} ODPS products for search index.")
@@ -2467,10 +2610,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to assign tags to ODPS product {product_id}: {e}", exc_info=True)
 
-    def _load_product_with_tags(self, db_obj) -> DataProductApi:
-        """Helper to load an ODPS data product with its associated tags."""
+    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None) -> DataProductApi:
+        """Helper to load an ODPS data product with its associated tags.
+
+        ``db`` must be the caller's request session on write paths (create/update) so the
+        domains just written in that transaction are visible; otherwise the manager's
+        startup session is used and the response would show empty domains.
+
+        ``preloaded_domains`` is forwarded to ``_attach_domains`` so batch list callers
+        can supply pre-fetched domains and avoid a per-row lookup (N+1).
+        """
         try:
-            product_api = DataProductApi.model_validate(db_obj)
+            product_api = self._attach_domains(
+                DataProductApi.model_validate(db_obj), db=db, preloaded_domains=preloaded_domains
+            )
 
             if self._tags_manager:
                 try:
@@ -2526,7 +2679,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         except Exception as e:
             logger.error(f"Failed to load ODPS product with tags: {e}")
-            return DataProductApi.model_validate(db_obj)
+            return self._attach_domains(DataProductApi.model_validate(db_obj))
 
     def assign_tag_to_product(self, product_id: str, tag_id: str, assigned_value: Optional[str] = None,
                               assigned_by: str = "system") -> bool:
@@ -2663,7 +2816,6 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             'name': product_name,
             'version': version,
             'status': DataProductStatus.DRAFT.value,
-            'domain': contract_db.domain_id,  # Inherit from contract
             'description': {
                 'purpose': f"Data Product created from contract: {contract_db.name}",
                 'limitations': None,
@@ -2686,6 +2838,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 'name': f"Team from contract {contract_db.name}",
                 'members': []  # Could populate from contract owner
             }
+
+        # Inherit the contract's domain assignments.
+        contract_domains = entity_domain_repo.get_domains_for_entity(
+            self._db, entity_type="data_contract", entity_id=contract_id
+        )
+        if contract_domains:
+            product_data['domain_ids'] = [d.domain_id for d in contract_domains]
+            product_data['primary_domain_id'] = next(
+                (d.domain_id for d in contract_domains if d.is_primary), None
+            )
 
         # Create the product
         created_product = self.create_product(product_data)
@@ -2974,8 +3136,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             odps["name"] = product.name
         if product.version:
             odps["version"] = product.version
-        if product.domain:
-            odps["domain"] = product.domain
+        # Domain fields (primary name + additionalDomains) via the shared export adapter.
+        domain_export_adapter.apply_odcs(odps, session, "data_product", product_id)
         if product.tenant:
             odps["tenant"] = product.tenant
 
@@ -3038,10 +3200,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 odps["team"]["name"] = team_name
 
         if product.custom_properties:
-            odps["customProperties"] = [
+            rebuilt_props = [
                 {"property": cp.property, "value": cp.value}
                 for cp in product.custom_properties
             ]
+            # Preserve the additionalDomains entry apply_odcs injected above; a plain
+            # overwrite here drops additional domains on export/round-trip.
+            odps["customProperties"] = domain_export_adapter.merge_custom_properties(
+                rebuilt_props, odps.get("customProperties")
+            )
 
         if product.authoritative_definitions:
             odps["authoritativeDefinitions"] = [

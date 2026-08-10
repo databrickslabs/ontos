@@ -216,14 +216,22 @@ class AppEntityLoader(EntityLoader):
             # Data Products
             if 'data_product' in entity_types:
                 from src.repositories.data_products_repository import data_product_repo
+                from src.repositories.entity_domain_association_repository import entity_domain_repo
                 products = data_product_repo.list(self.db)
+                # Domain moved to the entity_domain_associations junction; batch-load the
+                # primary domain name per product (the legacy `domain` column was dropped).
+                domains_map = entity_domain_repo.get_domains_for_entities(
+                    self.db, entity_type="data_product", entity_ids=[str(p.id) for p in products]
+                ) if products else {}
                 for product in products:
+                    assigned = domains_map.get(str(product.id), [])
+                    primary_domain = next((a.domain_name for a in assigned if a.is_primary), None)
                     yield {
                         'type': 'data_product',
                         'id': product.id,
                         'name': product.name,
                         'description': product.description,
-                        'domain': product.domain,
+                        'domain': primary_domain,
                         'status': product.status,
                         'version': product.version,
                         'owner': product.owner,

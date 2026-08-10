@@ -1,4 +1,5 @@
 import { AssignedTag } from '@/components/ui/tag-chip';
+import { AssignedDomain } from '@/types/data-domain';
 
 /**
  * ODPS v1.0.0 (Open Data Product Standard) TypeScript Types
@@ -253,7 +254,10 @@ export interface DataProduct {
   // ODPS v1.0.0 optional fields
   name?: string;
   version?: string;
-  domain?: string;
+  domain?: string; // Primary domain name (populated by backend); prefer domain_ids
+  domain_ids?: string[]; // Multi-domain assignment (primary included)
+  primary_domain_id?: string | null;
+  domains?: AssignedDomain[]; // Assigned domains with names + primary flag
   tenant?: string;
   authoritativeDefinitions?: AuthoritativeDefinition[];
   description?: Description;

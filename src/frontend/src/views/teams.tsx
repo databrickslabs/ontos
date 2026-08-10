@@ -23,7 +23,7 @@ import SettingsPageWrapper from '@/components/settings/settings-page-wrapper';
 import { useProjectContext } from '@/stores/project-store';
 import { TeamFormDialog } from '@/components/teams/team-form-dialog';
 import { useNavigate } from 'react-router-dom';
-import { useDomains } from '@/hooks/use-domains';
+import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { useTranslation } from 'react-i18next';
 
 // Check API response helper
@@ -49,7 +49,6 @@ export default function TeamsView() {
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const navigate = useNavigate();
-  const { getDomainName } = useDomains();
   const { currentProject, hasProjectContext } = useProjectContext();
 
   const featureId = 'teams';
@@ -154,9 +153,11 @@ export default function TeamsView() {
       ),
       cell: ({ row }) => {
         const team = row.original;
-        const domainName = team.domain_name || getDomainName(team.domain_id);
+        // Multi-domain (#520): render every assigned domain as a badge (primary starred).
+        const domainIds = team.domain_ids ?? (team.domain_id ? [team.domain_id] : []);
+        const primaryId = team.primary_domain_id || team.domain_id || domainIds[0] || null;
         return (
-          <div>
+          <div className="space-y-1">
             <span
               className="font-medium cursor-pointer hover:underline"
               onClick={(e) => {
@@ -166,17 +167,12 @@ export default function TeamsView() {
             >
               {team.name}
             </span>
-            {domainName && team.domain_id && (
-              <div
-                className="text-xs text-muted-foreground cursor-pointer hover:underline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/settings/data-domains/${team.domain_id}`);
-                }}
-              >
-                {t('table.domainPrefix')} {domainName}
-              </div>
-            )}
+            <DomainBadgeList
+              domains={team.domains}
+              domainIds={domainIds}
+              primaryDomainId={primaryId}
+              onDomainClick={(id) => navigate(`/settings/data-domains/${id}`)}
+            />
           </div>
         );
       },
@@ -280,7 +276,7 @@ export default function TeamsView() {
         );
       },
     },
-  ], [canWrite, canAdmin, getDomainName, navigate, t, handleOpenEditDialog]);
+  ], [canWrite, canAdmin, navigate, t, handleOpenEditDialog]);
 
   return (
     <SettingsPageWrapper title={t('title')} permissionId="teams">

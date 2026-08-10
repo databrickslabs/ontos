@@ -96,6 +96,27 @@ obj.owner != 'unknown' AND obj.status = 'active'
 NOT obj.deprecated
 ```
 
+## Literal Values
+
+Values on the right-hand side of a comparison may be:
+
+- **Strings** — single or double quoted, e.g. `'active'`, `"AES256"`
+- **Numbers** — integers or floats, e.g. `42`, `95.5`
+- **Booleans** — `True` / `False` (case-insensitive, so `true`/`false` also work)
+- **Lists** — e.g. `['table', 'view']` (used with `IN`)
+
+Booleans are real boolean values, so a rule can compare directly against a
+boolean entity property:
+
+```
+# has_owner is a boolean property on the entity
+ASSERT obj.has_owner = True
+ASSERT obj.has_pii != True
+```
+
+> Note: `True` unquoted is a boolean literal, whereas `'true'` (quoted) is the
+> string `"true"`. Compare boolean properties against unquoted `True`/`False`.
+
 ## Functions
 
 ### Tag Functions

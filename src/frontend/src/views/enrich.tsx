@@ -196,6 +196,34 @@ export default function EnrichView() {
 
   const rows = coverageRows ?? PLACEHOLDER_ROWS;
 
+  // Real tag-delivery stats (eligible links + pending since last sync + last
+  // run). Null until loaded / when the endpoint is unavailable.
+  interface TagStats {
+    eligible: number;
+    pending: number;
+    synced: number;
+    last_run_state: string | null;
+    last_run_at: string | null;
+    job_installed: boolean;
+  }
+  const [tagStats, setTagStats] = useState<TagStats | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/knowledge/tag-delivery-stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setTagStats(data);
+      } catch {
+        /* endpoint unavailable — Tags row omits the coverage readout */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const platformNoun = PLATFORM_NOUN[platform];
 
   const targets = useMemo<DeliveryTarget[]>(
@@ -209,8 +237,18 @@ export default function EnrichView() {
           'Key/value governance tags on tables and columns. Drives discovery and access policy.',
         ),
         via: t('enrich.deliver.tags.via', 'via uc_tag_sync'),
-        // PLACEHOLDER coverage — see delivery-targets.tsx TODO(cb-v2).
-        coverage: { synced: 82, total: 100, pending: 18, lastRun: '3 hours ago' },
+        // Real coverage from /api/knowledge/tag-delivery-stats: eligible links,
+        // pending = created since last successful sync. Omitted until loaded.
+        coverage: tagStats
+          ? {
+              synced: tagStats.synced,
+              total: tagStats.eligible,
+              pending: tagStats.pending,
+              lastRun: tagStats.last_run_at
+                ? new Date(tagStats.last_run_at).toLocaleString()
+                : undefined,
+            }
+          : undefined,
         note: t(
           'enrich.deliver.tags.note',
           'Tag delivery runs through the shared uc_tag_sync job, which also covers other aspects beyond semantic assignment. Configure its scope and schedule in Settings > Jobs.',
@@ -245,7 +283,7 @@ export default function EnrichView() {
         actionable: false,
       },
     ],
-    [t, platform],
+    [t, platform, tagStats],
   );
 
   return (
@@ -296,19 +334,9 @@ export default function EnrichView() {
           </span>
           <h3 className="text-base font-semibold">{t('enrich.map.title', 'Map')}</h3>
           <div className="ml-auto flex items-center gap-2">
-            {advanced && (
-              <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1" aria-label="Match engine">
-                <button type="button" className="rounded-md bg-background px-2.5 py-1 text-xs font-medium shadow">
-                  {t('enrich.map.engine.heuristic', 'Heuristic')}
-                </button>
-                <button type="button" className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                  {t('enrich.map.engine.llm', 'LLM judge')}
-                </button>
-              </div>
-            )}
-            {/* Suggest matches: opens the configure dialog, runs the suggester,
-                and routes candidates to the Review Board. Requires write access
-                on term-mapping. */}
+            {/* Suggest matches: opens the full run-config dialog (engine, target,
+                contexts live there), runs the suggester, and routes candidates
+                to the Review Board. Requires write access on term-mapping. */}
             <Button
               variant="outline"
               size="sm"
@@ -331,6 +359,7 @@ export default function EnrichView() {
             rows={rows}
             platformNoun={platformNoun}
             canWrite={canWrite}
+            isLive={coverageRows !== null}
             onReview={(row) => setReviewScheme(row)}
           />
         </div>

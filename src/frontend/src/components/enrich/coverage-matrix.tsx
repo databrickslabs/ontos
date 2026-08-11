@@ -56,6 +56,9 @@ interface Props {
   onReview: (row: CoverageRow) => void;
   /** Whether the current user may act on suggestions. */
   canWrite?: boolean;
+  /** True when rows come from the live coverage read-model; false when the
+   *  endpoint was unavailable and placeholder rows are shown. */
+  isLive?: boolean;
 }
 
 function InfoDot({ text }: { text: string }) {
@@ -82,6 +85,7 @@ export default function CoverageMatrix({
   platformNoun,
   onReview,
   canWrite = true,
+  isLive = true,
 }: Props) {
   const { t } = useTranslation(['concepts', 'common']);
 
@@ -221,14 +225,17 @@ export default function CoverageMatrix({
         />
       </p>
 
-      {/* Placeholder-data disclosure — these counts are NOT live yet. */}
-      <p className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        {t(
-          'enrich.map.placeholderNote',
-          'Coverage figures are sample data. A per-scheme coverage read-model endpoint does not exist yet; once it lands these counts become live.',
-        )}{' '}
-        <span className="font-mono">({platformNoun})</span>
-      </p>
+      {/* Disclosure only when the live coverage read-model is unavailable and
+          we are showing placeholder rows. When live, no note is needed. */}
+      {!isLive && (
+        <p className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          {t(
+            'enrich.map.placeholderNote',
+            'Coverage figures are sample data — the live coverage service is unavailable right now.',
+          )}{' '}
+          <span className="font-mono">({platformNoun})</span>
+        </p>
+      )}
     </div>
   );
 }

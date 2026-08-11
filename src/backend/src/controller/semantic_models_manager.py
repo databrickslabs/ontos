@@ -4541,6 +4541,78 @@ class SemanticModelsManager(SearchableAsset):
 
         return CoverageResponse(schemes=scheme_rows, totals=totals)
 
+    def get_tag_delivery_stats(self, db) -> 'TagDeliveryStats':
+        """Real tag-delivery stats for the Enrich Tags row.
+
+        eligible = concept->asset semantic links (what semantic_assignment tags
+        target). pending = eligible links created AFTER the last successful
+        uc_tag_sync run end_time (the new links a re-run would deliver); if the
+        job never ran successfully, everything eligible is pending. synced =
+        eligible - pending. Also reports last-run state/time and install status.
+
+        This is a 'changes since last sync' signal from data we already have
+        (link created_at vs job end_time), not a UC-verified tag count. Links
+        carry no updated_at, so in-place edits are not counted as pending.
+        """
+        from datetime import datetime, timezone
+        from src.models.semantic_models import TagDeliveryStats
+        from src.repositories.semantic_links_repository import entity_semantic_links_repo
+        from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
+
+        ASSET_LAYER = {'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'}
+
+        # Eligible = concept->asset links.
+        all_links = entity_semantic_links_repo.list_all(db)
+        eligible_links = [l for l in all_links if l.entity_type in ASSET_LAYER]
+        eligible = len(eligible_links)
+
+        # Last SUCCESSFUL uc_tag_sync run (end_time is ms epoch).
+        last_state: Optional[str] = None
+        last_at: Optional[str] = None
+        installed = False
+        last_success_end_ms: Optional[int] = None
+        try:
+            runs = workflow_job_run_repo.get_recent_runs(db, workflow_id='uc_tag_sync', limit=20)
+            installed = len(runs) > 0
+            if runs:
+                # Most recent run overall (for state/time display).
+                newest = runs[0]
+                last_state = newest.result_state or newest.life_cycle_state
+                if newest.end_time:
+                    last_at = datetime.fromtimestamp(newest.end_time / 1000, tz=timezone.utc).isoformat()
+                # Most recent SUCCESS drives the pending cutoff.
+                for r in runs:
+                    if r.result_state == 'SUCCESS' and r.end_time:
+                        last_success_end_ms = r.end_time
+                        break
+        except Exception as e:
+            logger.warning(f"tag-delivery-stats: could not read job runs: {e}")
+
+        # Pending = eligible links created since the last successful sync.
+        if last_success_end_ms is None:
+            pending = eligible  # never synced successfully → all pending
+        else:
+            cutoff = datetime.fromtimestamp(last_success_end_ms / 1000, tz=timezone.utc)
+            pending = 0
+            for l in eligible_links:
+                created = getattr(l, 'created_at', None)
+                if created is None:
+                    continue
+                # Normalize naive timestamps to UTC for a safe comparison.
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if created > cutoff:
+                    pending += 1
+
+        return TagDeliveryStats(
+            eligible=eligible,
+            pending=pending,
+            synced=max(eligible - pending, 0),
+            last_run_state=last_state,
+            last_run_at=last_at,
+            job_installed=installed,
+        )
+
     # ========================================================================
     # HELPER METHODS
     # ========================================================================

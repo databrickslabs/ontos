@@ -67,3 +67,20 @@ class CoverageResponse(BaseModel):
     totals: CoverageSchemeRow  # aggregate across all schemes
 
 
+class TagDeliveryStats(BaseModel):
+    """Real tag-delivery stats for the Enrich Tags row.
+
+    'synced vs pending' is derived honestly from data Ontos already has:
+    eligible = concept->asset links (what semantic_assignment tags target);
+    pending = those created since the last successful uc_tag_sync run (i.e. new
+    links a re-run would deliver). No per-link delivery log exists, so this is a
+    'changes since last sync' signal, not a UC-verified tag count. It catches
+    new/removed links, not in-place edits (links carry no updated_at)."""
+    eligible: int  # concept->asset semantic links eligible for tag delivery
+    pending: int  # eligible links created since the last successful sync
+    synced: int  # eligible - pending (delivered as of the last successful run)
+    last_run_state: Optional[str] = None  # SUCCESS / FAILED / ... or None if never run
+    last_run_at: Optional[str] = None  # ISO timestamp of the last run end, or None
+    job_installed: bool = False  # whether uc_tag_sync is installed in this workspace
+
+

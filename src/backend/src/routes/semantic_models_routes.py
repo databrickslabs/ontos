@@ -11,7 +11,7 @@ from src.models.ontology import (
     TaxonomyStats,
     ConceptSearchResult
 )
-from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate, CoverageResponse
+from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate, CoverageResponse, TagDeliveryStats
 from src.utils.semantic_model_title_candidates import (
     extract_title_candidates,
     humanize_rdf_filename,
@@ -1376,6 +1376,25 @@ async def get_coverage_metrics(
     except Exception as e:
         logger.error(f"Error computing coverage metrics: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to compute coverage metrics")
+
+
+# -------- tag delivery stats --------
+
+@router.get('/knowledge/tag-delivery-stats', response_model=TagDeliveryStats)
+async def get_tag_delivery_stats(
+    db: DBSessionDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+):
+    """Real tag-delivery stats for the Enrich Tags row: eligible concept->asset
+    links, how many are pending (created since the last successful uc_tag_sync
+    run), and the last run's state/time. See TagDeliveryStats for the honesty
+    caveats (no per-link delivery log; edits not counted as pending)."""
+    try:
+        return manager.get_tag_delivery_stats(db)
+    except Exception as e:
+        logger.error(f"Error computing tag delivery stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute tag delivery stats")
 
 
 # -------- create (no IRI in URL — already collision-free) --------

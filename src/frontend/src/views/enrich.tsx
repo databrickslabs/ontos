@@ -26,6 +26,8 @@ import ReviewSuggestionsDialog, {
 } from '@/components/enrich/review-suggestions-dialog';
 import DeliveryTargets, { type DeliveryTarget } from '@/components/enrich/delivery-targets';
 import DeliveryModes from '@/components/enrich/delivery-modes';
+import TagSyncDialog from '@/components/enrich/tag-sync-dialog';
+import SuggestMatchesDialog from '@/components/enrich/suggest-matches-dialog';
 
 // ---------------------------------------------------------------------------
 // Enrich — Concept Builder v2 delivery frame (wireframe: enrich.html).
@@ -147,11 +149,15 @@ export default function EnrichView() {
   const { hasPermission } = usePermissions();
   // Term-mapping governs concept-to-asset enrichment writes.
   const canWrite = hasPermission('term-mapping', FeatureAccessLevel.READ_WRITE);
+  // Jobs admin needed to trigger uc_tag_sync workflow.
+  const hasJobsAdmin = hasPermission('jobs', FeatureAccessLevel.ADMIN);
 
   const [platform, setPlatform] = useState<Platform>('uc');
   const [mode] = useConceptMode();
   const advanced = mode === 'advanced';
   const [reviewScheme, setReviewScheme] = useState<CoverageRow | null>(null);
+  const [tagSyncDialogOpen, setTagSyncDialogOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   // Real per-scheme coverage from GET /api/knowledge/coverage. Falls back to the
   // placeholder rows only if the endpoint is unavailable, so the frame is never
@@ -207,11 +213,7 @@ export default function EnrichView() {
           'Planned: live tag-drift detection. Today Ontos tracks its own coverage (links written vs pending), not whether a synced tag was later changed on the platform.',
         ),
         actionable: platform === 'uc',
-        // The uc_tag_sync trigger from Ontos is not wired yet — show the actions
-        // disabled with a reason rather than clickable no-ops.
-        // TODO(cb-v2): wire Configure (tag template/trigger) + Sync now
-        // (run uc_tag_sync job) and drop comingSoon.
-        comingSoon: true,
+        onConfigure: () => setTagSyncDialogOpen(true),
       },
       {
         id: 'descriptions',
@@ -300,27 +302,17 @@ export default function EnrichView() {
                 </button>
               </div>
             )}
-            {/* Suggest matches is not wired to the suggester run yet. Show it
-                disabled with a clear reason rather than an inert button.
-                TODO(cb-v2): trigger the term-mapping suggester and route results
-                to the shared Review Board. */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0}>
-                    <Button variant="outline" size="sm" disabled>
-                      {t('enrich.map.suggest', 'Suggest matches')}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[260px]">
-                  {t(
-                    'enrich.map.suggestSoon',
-                    'Coming soon: runs the match suggester and sends candidates to the Review Board.',
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Suggest matches: opens the configure dialog, runs the suggester,
+                and routes candidates to the Review Board. Requires write access
+                on term-mapping. */}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canWrite}
+              onClick={() => setSuggestOpen(true)}
+            >
+              {t('enrich.map.suggest', 'Suggest matches')}
+            </Button>
           </div>
         </div>
         <p className="ml-8 text-sm text-muted-foreground">
@@ -378,6 +370,20 @@ export default function EnrichView() {
         placeholders={reviewScheme ? PLACEHOLDER_SUGGESTIONS[reviewScheme.id] ?? [] : []}
         driftCount={reviewScheme ? Math.min(3, reviewScheme.suggested) : 0}
         reviewBoardHref="/data-asset-reviews"
+      />
+
+      {/* Tag sync configuration dialog */}
+      <TagSyncDialog
+        open={tagSyncDialogOpen}
+        onOpenChange={setTagSyncDialogOpen}
+        hasJobsAdmin={hasJobsAdmin}
+      />
+
+      {/* Suggest matches: run the term-mapping suggester and route to review. */}
+      <SuggestMatchesDialog
+        open={suggestOpen}
+        onOpenChange={setSuggestOpen}
+        canWrite={canWrite}
       />
     </div>
   );

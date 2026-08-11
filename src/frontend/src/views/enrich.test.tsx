@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 // ---------------------------------------------------------------------------
 // Enrich view tests — assert the two-lane frame wiring, not backend behavior:
@@ -50,6 +51,10 @@ vi.mock('@/components/term-mapping/suggestion-review', () => ({
 
 import EnrichView from './enrich';
 
+// EnrichView mounts dialogs that use useNavigate (Suggest matches routes to the
+// Review Board), so it needs a Router in tests even when those dialogs are closed.
+const renderEnrich = () => render(<EnrichView />, { wrapper: MemoryRouter });
+
 describe('EnrichView', () => {
   beforeEach(() => {
     try {
@@ -60,7 +65,7 @@ describe('EnrichView', () => {
   });
 
   it('renders both lanes and the coverage matrix', () => {
-    render(<EnrichView />);
+    renderEnrich();
     expect(screen.getByText('Map')).toBeInTheDocument();
     expect(screen.getByText('Deliver')).toBeInTheDocument();
     // Coverage rows + totals.
@@ -70,7 +75,7 @@ describe('EnrichView', () => {
   });
 
   it('renders delivery targets with correct status badges', () => {
-    render(<EnrichView />);
+    renderEnrich();
     expect(screen.getByText('Tags')).toBeInTheDocument();
     expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByText('Column descriptions')).toBeInTheDocument();
@@ -80,7 +85,7 @@ describe('EnrichView', () => {
   });
 
   it('opens the inline review modal without navigating', () => {
-    render(<EnrichView />);
+    renderEnrich();
     const reviewButtons = screen.getAllByRole('button', { name: 'Review' });
     fireEvent.click(reviewButtons[0]);
     // Dialog title is the inline review header.
@@ -91,7 +96,7 @@ describe('EnrichView', () => {
   });
 
   it('reveals delivery-mode cards only in advanced view', () => {
-    render(<EnrichView />);
+    renderEnrich();
     // Simple (default): mode cards hidden.
     expect(screen.queryByText('Direct')).not.toBeInTheDocument();
     // Switch to advanced.

@@ -457,19 +457,8 @@ export default function ConceptDetailView() {
           </h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge
-            variant="outline"
-            className={typeColors[concept.concept_type] || ''}
-          >
-            {t(`semantic-models:types.${concept.concept_type}`)}
-          </Badge>
-          {concept.status && (
-            <Badge variant="outline">
-              {t(`semantic-models:status.${concept.status}`, concept.status)}
-            </Badge>
-          )}
-          {/* Version badge. Real concept versioning is a separate backend track;
-              TODO(cb-v2): wire version + diff to the version-diff endpoint. */}
+          {/* Version badge first (leftmost). Real concept versioning is a
+              separate backend track; TODO(cb-v2): wire version + diff. */}
           <Badge variant="secondary" className="font-mono text-xs">v1.0.0</Badge>
           {isDraft && (
             <button
@@ -484,6 +473,17 @@ export default function ConceptDetailView() {
               <GitCompare className="h-3 w-3" />
               {t('semantic-models:versionDiff.compare', 'Compare')}
             </button>
+          )}
+          <Badge
+            variant="outline"
+            className={typeColors[concept.concept_type] || ''}
+          >
+            {t(`semantic-models:types.${concept.concept_type}`)}
+          </Badge>
+          {concept.status && (
+            <Badge variant="outline">
+              {t(`semantic-models:status.${concept.status}`, concept.status)}
+            </Badge>
           )}
           {concept.source_context && (
             <span className="text-xs text-muted-foreground">

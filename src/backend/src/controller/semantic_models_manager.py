@@ -4589,11 +4589,24 @@ class SemanticModelsManager(SearchableAsset):
             logger.warning(f"tag-delivery-stats: could not read job runs: {e}")
 
         # Pending = eligible links created since the last successful sync.
+        # Collect the actual items (not just a count) so the UI can drill in.
+        from src.models.semantic_models import TagPendingItem
+
+        def _to_item(l) -> 'TagPendingItem':
+            created = getattr(l, 'created_at', None)
+            return TagPendingItem(
+                entity_id=l.entity_id,
+                entity_type=l.entity_type,
+                iri=l.iri,
+                label=getattr(l, 'label', None),
+                created_at=created.isoformat() if created is not None else None,
+            )
+
         if last_success_end_ms is None:
-            pending = eligible  # never synced successfully → all pending
+            pending_links = list(eligible_links)  # never synced successfully → all pending
         else:
             cutoff = datetime.fromtimestamp(last_success_end_ms / 1000, tz=timezone.utc)
-            pending = 0
+            pending_links = []
             for l in eligible_links:
                 created = getattr(l, 'created_at', None)
                 if created is None:
@@ -4602,7 +4615,10 @@ class SemanticModelsManager(SearchableAsset):
                 if created.tzinfo is None:
                     created = created.replace(tzinfo=timezone.utc)
                 if created > cutoff:
-                    pending += 1
+                    pending_links.append(l)
+
+        pending = len(pending_links)
+        pending_items = [_to_item(l) for l in pending_links]
 
         return TagDeliveryStats(
             eligible=eligible,
@@ -4611,6 +4627,7 @@ class SemanticModelsManager(SearchableAsset):
             last_run_state=last_state,
             last_run_at=last_at,
             job_installed=installed,
+            pending_items=pending_items,
         )
 
     # ========================================================================

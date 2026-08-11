@@ -67,6 +67,16 @@ class CoverageResponse(BaseModel):
     totals: CoverageSchemeRow  # aggregate across all schemes
 
 
+class TagPendingItem(BaseModel):
+    """One eligible concept->asset link that is pending delivery (created since
+    the last successful sync)."""
+    entity_id: str  # the physical asset FQN / id
+    entity_type: str  # asset / uc_table / uc_column / ...
+    iri: str  # the concept IRI the asset is linked to
+    label: Optional[str] = None  # concept label (link.label), if present
+    created_at: Optional[str] = None  # ISO timestamp the link was created
+
+
 class TagDeliveryStats(BaseModel):
     """Real tag-delivery stats for the Enrich Tags row.
 
@@ -82,5 +92,6 @@ class TagDeliveryStats(BaseModel):
     last_run_state: Optional[str] = None  # SUCCESS / FAILED / ... or None if never run
     last_run_at: Optional[str] = None  # ISO timestamp of the last run end, or None
     job_installed: bool = False  # whether uc_tag_sync is installed in this workspace
+    pending_items: list[TagPendingItem] = []  # the actual pending links (for drill-in)
 
 

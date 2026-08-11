@@ -26,6 +26,14 @@ import ReviewSuggestionsDialog, {
 } from '@/components/enrich/review-suggestions-dialog';
 import DeliveryTargets, { type DeliveryTarget } from '@/components/enrich/delivery-targets';
 import DeliveryModes from '@/components/enrich/delivery-modes';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import RunConfigDialog from '@/components/term-mapping/run-config-dialog';
 import GenerateReviewDialog from '@/components/term-mapping/generate-review-dialog';
 import { useUserStore } from '@/stores/user-store';
@@ -198,6 +206,13 @@ export default function EnrichView() {
 
   // Real tag-delivery stats (eligible links + pending since last sync + last
   // run). Null until loaded / when the endpoint is unavailable.
+  interface TagPendingItem {
+    entity_id: string;
+    entity_type: string;
+    iri: string;
+    label: string | null;
+    created_at: string | null;
+  }
   interface TagStats {
     eligible: number;
     pending: number;
@@ -205,8 +220,10 @@ export default function EnrichView() {
     last_run_state: string | null;
     last_run_at: string | null;
     job_installed: boolean;
+    pending_items: TagPendingItem[];
   }
   const [tagStats, setTagStats] = useState<TagStats | null>(null);
+  const [pendingOpen, setPendingOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -256,6 +273,9 @@ export default function EnrichView() {
         actionable: platform === 'uc',
         // Shared job — manage scope/schedule in Settings, not from here.
         manageHref: '/settings/jobs',
+        // Make the pending count clickable to list the actual pending changes.
+        onShowPending:
+          tagStats && tagStats.pending > 0 ? () => setPendingOpen(true) : undefined,
       },
       {
         id: 'descriptions',
@@ -421,6 +441,45 @@ export default function EnrichView() {
         run={reviewRun}
         currentUserEmail={currentUser?.email ?? undefined}
       />
+
+      {/* Pending tag changes — the actual list behind the "N pending" count. */}
+      <Dialog open={pendingOpen} onOpenChange={setPendingOpen}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>{t('enrich.deliver.pendingTitle', 'Pending tag changes')}</DialogTitle>
+            <DialogDescription>
+              {t(
+                'enrich.deliver.pendingSubtitle',
+                'Concept-to-asset links created since the last successful tag sync. A re-run of uc_tag_sync would deliver these.',
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[420px] overflow-auto divide-y">
+            {(tagStats?.pending_items ?? []).length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {t('enrich.deliver.pendingEmpty', 'Nothing pending.')}
+              </p>
+            ) : (
+              (tagStats?.pending_items ?? []).map((it) => (
+                <div key={`${it.entity_type}:${it.entity_id}:${it.iri}`} className="flex items-center gap-3 py-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-mono text-xs truncate" title={it.entity_id}>{it.entity_id}</div>
+                    <div className="text-xs text-muted-foreground truncate" title={it.iri}>
+                      {t('enrich.deliver.pendingLinkedTo', 'linked to')} {it.label || it.iri}
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 text-[10px]">{it.entity_type}</Badge>
+                  {it.created_at && (
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {new Date(it.created_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -48,8 +48,11 @@ export interface DeliveryTarget {
   via?: string;
   /** External assist note (e.g. dbxmetagen). */
   assist?: string;
-  /** Coverage readout — PLACEHOLDER metrics. Omit when nothing synced. */
+  /** Coverage readout. Omit when nothing synced. */
   coverage?: { synced: number; total: number; pending: number; lastRun?: string };
+  /** When set, the "N pending" figure becomes a button that opens a list of
+   *  the actual pending changes. */
+  onShowPending?: () => void;
   /** Extra tooltip (e.g. the tag-drift clarification). */
   note?: string;
   /** Whether Configure/Sync actions are enabled for this target. */
@@ -135,17 +138,38 @@ export default function DeliveryTargets({ targets, advanced = false, canWrite = 
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${synced ? 'bg-emerald-500' : 'bg-border'}`}
                 />
-                {synced && target.coverage ? (
-                  t(
-                    'enrich.deliver.coverage',
-                    '{{synced}} of {{total}} synced · {{pending}} pending{{run}}',
-                    {
-                      synced: target.coverage.synced,
-                      total: target.coverage.total,
-                      pending: target.coverage.pending,
-                      run: target.coverage.lastRun ? ` · last run ${target.coverage.lastRun}` : '',
-                    },
-                  )
+                {target.coverage ? (
+                  <span>
+                    {t(
+                      'enrich.deliver.coverageSynced',
+                      '{{synced}} of {{total}} synced · ',
+                      { synced: target.coverage.synced, total: target.coverage.total },
+                    )}
+                    {/* Pending is clickable when a handler is provided, so the
+                        user can see the actual list of unsynced changes. */}
+                    {target.onShowPending ? (
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={target.onShowPending}
+                      >
+                        {t('enrich.deliver.pendingCount', '{{pending}} pending', {
+                          pending: target.coverage.pending,
+                        })}
+                      </button>
+                    ) : (
+                      <span>
+                        {t('enrich.deliver.pendingCount', '{{pending}} pending', {
+                          pending: target.coverage.pending,
+                        })}
+                      </span>
+                    )}
+                    {target.coverage.lastRun
+                      ? t('enrich.deliver.lastRun', ' · last run {{run}}', {
+                          run: target.coverage.lastRun,
+                        })
+                      : ''}
+                  </span>
                 ) : (
                   t('enrich.deliver.notSynced', 'Not synced yet')
                 )}

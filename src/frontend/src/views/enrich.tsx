@@ -26,8 +26,10 @@ import ReviewSuggestionsDialog, {
 } from '@/components/enrich/review-suggestions-dialog';
 import DeliveryTargets, { type DeliveryTarget } from '@/components/enrich/delivery-targets';
 import DeliveryModes from '@/components/enrich/delivery-modes';
-import TagSyncDialog from '@/components/enrich/tag-sync-dialog';
-import SuggestMatchesDialog from '@/components/enrich/suggest-matches-dialog';
+import RunConfigDialog from '@/components/term-mapping/run-config-dialog';
+import GenerateReviewDialog from '@/components/term-mapping/generate-review-dialog';
+import { useUserStore } from '@/stores/user-store';
+import type { Run } from '@/types/term-mapping';
 
 // ---------------------------------------------------------------------------
 // Enrich — Concept Builder v2 delivery frame (wireframe: enrich.html).
@@ -147,17 +149,18 @@ function InfoDot({ text }: { text: string }) {
 export default function EnrichView() {
   const { t } = useTranslation(['concepts', 'term-mapping', 'common']);
   const { hasPermission } = usePermissions();
+  const currentUser = useUserStore((s) => s.userInfo);
   // Term-mapping governs concept-to-asset enrichment writes.
   const canWrite = hasPermission('term-mapping', FeatureAccessLevel.READ_WRITE);
-  // Jobs admin needed to trigger uc_tag_sync workflow.
-  const hasJobsAdmin = hasPermission('jobs', FeatureAccessLevel.ADMIN);
 
   const [platform, setPlatform] = useState<Platform>('uc');
   const [mode] = useConceptMode();
   const advanced = mode === 'advanced';
   const [reviewScheme, setReviewScheme] = useState<CoverageRow | null>(null);
-  const [tagSyncDialogOpen, setTagSyncDialogOpen] = useState(false);
-  const [suggestOpen, setSuggestOpen] = useState(false);
+  // Suggest matches reuses the full term-mapping run dialog, then the shared
+  // review dialog (which spawns the Review Board request and navigates there).
+  const [runConfigOpen, setRunConfigOpen] = useState(false);
+  const [reviewRun, setReviewRun] = useState<Run | null>(null);
 
   // Real per-scheme coverage from GET /api/knowledge/coverage. Falls back to the
   // placeholder rows only if the endpoint is unavailable, so the frame is never
@@ -210,10 +213,11 @@ export default function EnrichView() {
         coverage: { synced: 82, total: 100, pending: 18, lastRun: '3 hours ago' },
         note: t(
           'enrich.deliver.tags.note',
-          'Planned: live tag-drift detection. Today Ontos tracks its own coverage (links written vs pending), not whether a synced tag was later changed on the platform.',
+          'Tag delivery runs through the shared uc_tag_sync job, which also covers other aspects beyond semantic assignment. Configure its scope and schedule in Settings > Jobs.',
         ),
         actionable: platform === 'uc',
-        onConfigure: () => setTagSyncDialogOpen(true),
+        // Shared job — manage scope/schedule in Settings, not from here.
+        manageHref: '/settings/jobs',
       },
       {
         id: 'descriptions',
@@ -309,7 +313,7 @@ export default function EnrichView() {
               variant="outline"
               size="sm"
               disabled={!canWrite}
-              onClick={() => setSuggestOpen(true)}
+              onClick={() => setRunConfigOpen(true)}
             >
               {t('enrich.map.suggest', 'Suggest matches')}
             </Button>
@@ -372,18 +376,24 @@ export default function EnrichView() {
         reviewBoardHref="/data-asset-reviews"
       />
 
-      {/* Tag sync configuration dialog */}
-      <TagSyncDialog
-        open={tagSyncDialogOpen}
-        onOpenChange={setTagSyncDialogOpen}
-        hasJobsAdmin={hasJobsAdmin}
+      {/* Suggest matches — reuse the full term-mapping run dialog. On a
+          completed run, open the shared review dialog which spawns the Review
+          Board request and navigates there. */}
+      <RunConfigDialog
+        isOpen={runConfigOpen}
+        onOpenChange={setRunConfigOpen}
+        onCreated={(run) => {
+          setRunConfigOpen(false);
+          setReviewRun(run);
+        }}
       />
-
-      {/* Suggest matches: run the term-mapping suggester and route to review. */}
-      <SuggestMatchesDialog
-        open={suggestOpen}
-        onOpenChange={setSuggestOpen}
-        canWrite={canWrite}
+      <GenerateReviewDialog
+        isOpen={reviewRun !== null}
+        onOpenChange={(open) => {
+          if (!open) setReviewRun(null);
+        }}
+        run={reviewRun}
+        currentUserEmail={currentUser?.email ?? undefined}
       />
     </div>
   );

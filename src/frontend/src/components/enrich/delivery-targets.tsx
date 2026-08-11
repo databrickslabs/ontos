@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Info, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Info, Sparkles, ExternalLink } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -56,6 +57,10 @@ export interface DeliveryTarget {
   /** When true, actions are disabled with a "coming soon" tooltip (the write
    *  path isn't wired yet), instead of appearing clickable but doing nothing. */
   comingSoon?: boolean;
+  /** When set, the row shows stats read-only plus a single "Manage in Settings"
+   *  action that navigates here. Used when delivery is driven by a shared job
+   *  (uc_tag_sync) that owns many aspects and shouldn't be run/scoped from here. */
+  manageHref?: string;
   onConfigure?: () => void;
   onSync?: () => void;
 }
@@ -82,6 +87,7 @@ interface Props {
 
 export default function DeliveryTargets({ targets, advanced = false, canWrite = true }: Props) {
   const { t } = useTranslation(['concepts', 'common']);
+  const navigate = useNavigate();
 
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
@@ -146,7 +152,19 @@ export default function DeliveryTargets({ targets, advanced = false, canWrite = 
               </p>
             </div>
             <div className="flex shrink-0 gap-2">
-              {target.comingSoon ? (
+              {target.manageHref ? (
+                // Delivery is driven by a shared job (uc_tag_sync) that owns many
+                // aspects beyond semantic assignment, so we don't run/scope it
+                // here — the row is read-only stats + a link to the job settings.
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(target.manageHref!)}
+                >
+                  {t('enrich.deliver.manageInSettings', 'Manage in Settings')}
+                  <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
+                </Button>
+              ) : target.comingSoon ? (
                 // Write path not wired yet: disabled with a clear reason, so the
                 // buttons don't look actionable while doing nothing.
                 <TooltipProvider>

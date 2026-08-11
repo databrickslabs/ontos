@@ -20,7 +20,7 @@ Collections of users and Databricks workspace groups working on data initiatives
 
 ### Projects
 Workspace containers that organize team initiatives with defined boundaries.
-There are tow types of projects, namely _Personal_ (auto-created for individual users) and _Team_ (shared for collaborative work). Teams provide logical isolation for development work and allows multiple teams to collaborate.
+There are two types of projects, namely _Personal_ (auto-created for individual users) and _Team_ (shared for collaborative work). Teams provide logical isolation for development work and allow multiple teams to collaborate.
 
 Now let's explore concepts related to _data assets and specifications_. These ideas describe the physical data, its defined specifications, and how it is packaged for use.
 
@@ -39,7 +39,7 @@ Lastly, the definitions below relate to Ontos elements used for _governance, mod
 In Ontos, Semantic Models are used as a knowledge graph that connects technical data assets to high-level business concepts (e.g., Customer, Transaction) and properties (email, customerId). They are used as Frameworks, based on standard ontology formats (RDF/RDFS) to ensure interoperability.
 
 ## ✅ Compliance Policies
-Compliance Policies act as rules that automatically check data assets against governance requirements. They are witten in a SQL-like Domain-Specific Language (DSL), can check various entity types (catalogs, tables, app entities), and trigger actions like tagging or validation failures. Compliance rules run on schedules for continuous monitoring.
+Compliance Policies act as rules that automatically check data assets against governance requirements. They are written in a SQL-like Domain-Specific Language (DSL), can check various entity types (catalogs, tables, app entities), and trigger actions like tagging or validation failures. Compliance rules run on schedules for continuous monitoring.
 
 ## 🤖 Connectors
 Connectors or Platform Integrations are modular components that enable Ontos to manage assets from various data platforms beyond Unity Catalog. They support platform-independent governance and asset discovery through a unified interface. Currently, Ontos supports Databricks/Unity Catalog and plans to add support for Snowflake, Apache Kafka, and Microsoft Power BI.

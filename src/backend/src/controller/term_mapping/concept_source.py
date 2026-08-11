@@ -44,7 +44,21 @@ SHIPPED_OPT_IN_CONTEXTS: Set[str] = {
     "urn:taxonomy:odcs-ontology",
 }
 
+# Uploaded RDF sources land here; kept as a named constant for messages and
+# back-compat, but it is no longer the ONLY valid concept source (see below).
 CUSTOMER_CONTEXT_PREFIX = "urn:semantic-model:"
+
+# Any concept scheme is a valid source: authored/imported schemes
+# (urn:glossary / urn:taxonomy / urn:ontology) and uploaded RDF sources
+# (urn:semantic-model). Ontos does not gate the suggester by provenance — a
+# scheme is a scheme. Internal indexes stay blocked; shipped taxonomies stay
+# opt-in (excluded from defaults to avoid noise, selectable via include_shipped).
+CONCEPT_SCHEME_PREFIXES = (
+    "urn:semantic-model:",
+    "urn:glossary:",
+    "urn:taxonomy:",
+    "urn:ontology:",
+)
 
 
 class InvalidContextError(ValueError):
@@ -52,7 +66,11 @@ class InvalidContextError(ValueError):
 
 
 def is_customer_context(ctx: str) -> bool:
-    return ctx.startswith(CUSTOMER_CONTEXT_PREFIX)
+    """A valid, user-selectable concept-scheme context: any concept scheme that
+    is not an internal index and not a shipped opt-in taxonomy."""
+    if ctx in INTERNAL_BLOCKED_CONTEXTS or ctx in SHIPPED_OPT_IN_CONTEXTS:
+        return False
+    return ctx.startswith(CONCEPT_SCHEME_PREFIXES)
 
 
 def is_shipped_context(ctx: str) -> bool:
@@ -67,7 +85,7 @@ def validate_contexts(
 
     Rules:
       * INTERNAL_BLOCKED_CONTEXTS are rejected outright (HTTP 422 surface).
-      * ontology_contexts items must be customer contexts.
+      * ontology_contexts items must be selectable concept schemes.
       * include_shipped items must be in SHIPPED_OPT_IN_CONTEXTS.
     """
     seen: List[str] = []
@@ -76,7 +94,7 @@ def validate_contexts(
         if ctx in INTERNAL_BLOCKED_CONTEXTS:
             raise InvalidContextError(
                 f"Context '{ctx}' is internal to Ontos and not assignable. "
-                f"Use a customer ontology (urn:semantic-model:*) instead."
+                f"Select a concept scheme instead."
             )
         if ctx in SHIPPED_OPT_IN_CONTEXTS:
             raise InvalidContextError(
@@ -85,8 +103,8 @@ def validate_contexts(
             )
         if not is_customer_context(ctx):
             raise InvalidContextError(
-                f"Context '{ctx}' is not recognised as a customer ontology "
-                f"(must start with '{CUSTOMER_CONTEXT_PREFIX}')."
+                f"Context '{ctx}' is not a selectable concept scheme "
+                f"(expected one of {CONCEPT_SCHEME_PREFIXES})."
             )
         if ctx not in seen:
             seen.append(ctx)
@@ -204,8 +222,11 @@ class ConceptSource:
 def resolve_default_customer_contexts(
     semantic_models_manager: "SemanticModelsManager",
 ) -> List[str]:
-    """Default = every enabled ``urn:semantic-model:*`` context present in
-    the graph. Excludes disabled rows (already filtered by SemanticModelsManager)."""
+    """Default = every selectable concept scheme present in the graph:
+    authored/imported schemes (urn:glossary / urn:taxonomy / urn:ontology) and
+    uploaded RDF sources (urn:semantic-model). Internal indexes and shipped
+    opt-in taxonomies are excluded (via is_customer_context). Disabled rows are
+    already filtered out by SemanticModelsManager."""
     graph = semantic_models_manager._graph
     contexts: List[str] = []
     for ctx in graph.contexts():

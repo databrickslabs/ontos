@@ -32,7 +32,6 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import { useToast } from '@/hooks/use-toast';
 import { useExploreConcepts } from '@/hooks/use-explore-concepts';
-import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 import {
   ConceptsTab,
   GraphTab,
@@ -262,10 +261,11 @@ export default function ExploreView() {
   const defaultCollection = editableCollections[0];
 
   return (
-    <div className="flex flex-col py-6">
+    <div className="flex flex-col pt-3 pb-6">
       {/* Header — page description only (the section tab strip already names
-          "Concepts"/"Explore", so no redundant page title here). */}
-      <div className="flex items-start justify-between gap-4 mb-6">
+          "Concepts"/"Explore"; the Simple/Advanced switch lives up in the tab
+          row). Kept tight to the nav boundary to avoid a blank gap. */}
+      <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <p className="text-sm text-muted-foreground">
             {t(
@@ -276,7 +276,6 @@ export default function ExploreView() {
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          <ConceptModeSwitch tipLeft />
           {canWrite && (
             <>
               <DropdownMenu>

@@ -43,8 +43,12 @@ describe('ConceptsLayout — v2 3-section nav', () => {
     expect(screen.queryByRole('tab', { name: 'Concepts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Search' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Hierarchy' })).not.toBeInTheDocument();
-    // Only the three primary section tabs remain.
-    expect(screen.getAllByRole('tab')).toHaveLength(3);
+    // The three primary section tabs are present (a Simple/Advanced switch also
+    // renders as tabs in this row, so assert the section tabs specifically
+    // rather than the total tab count).
+    expect(screen.getByRole('tab', { name: 'Define' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Explore' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Enrich' })).toBeInTheDocument();
   });
 
   it('marks Define active on Collections/Generator/Import routes', () => {

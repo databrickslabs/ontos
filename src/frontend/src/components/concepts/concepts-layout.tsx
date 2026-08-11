@@ -7,6 +7,7 @@ import {
   Compass,
   type LucideIcon,
 } from 'lucide-react';
+import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 
 // ---------------------------------------------------------------------------
 // Concept Builder v2 navigation — 3 primary sections (Define / Explore / Enrich).
@@ -102,7 +103,10 @@ export default function ConceptsLayout() {
             the location, and each view owns its own header/actions row. This
             keeps a single header and avoids the duplicate "Concepts" title. */}
 
-        {/* Primary section switch — horizontal tab strip (Define / Explore / Enrich) */}
+        {/* Primary section switch — horizontal tab strip (Define / Explore /
+            Enrich), with the Simple/Advanced switch aligned on the same row and
+            a bottom boundary separating the nav from the view below. */}
+        <div className="flex items-center justify-between gap-4 border-b pb-3">
         <div
           role="tablist"
           aria-label={t('concepts:sections.label', 'Concept sections')}
@@ -128,6 +132,11 @@ export default function ConceptsLayout() {
               </NavLink>
             );
           })}
+        </div>
+
+          {/* Simple/Advanced switch, aligned with the section tabs. Shared
+              across all Concepts views; per-view copies are removed. */}
+          <ConceptModeSwitch tipLeft />
         </div>
 
         {/* Sub-navigation for the active section.

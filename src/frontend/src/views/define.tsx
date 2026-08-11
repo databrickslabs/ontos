@@ -26,7 +26,6 @@ import type {
 } from '@/types/ontology';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useToast } from '@/hooks/use-toast';
-import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 import { GuidedGenerateDialog } from '@/components/concepts/guided-generate-dialog';
 
 // A recent creation-work item shown in the "In progress" list. Sourced from the
@@ -149,14 +148,12 @@ export default function DefineView() {
 
   return (
     <TooltipProvider>
-    <div className="flex flex-col py-6 max-w-[1180px]">
-      {/* Header — description + shared Simple/Advanced switch (keeps mode in
-          sync with Explore/Enrich/detail via the ontosConceptMode key). */}
-      <div className="flex items-start justify-between gap-4 mb-6">
+    <div className="flex flex-col pt-3 pb-6 max-w-[1180px]">
+      {/* Header — description only (Simple/Advanced switch lives in the tab row). */}
+      <div className="mb-4">
         <p className="text-sm text-muted-foreground">
           {t('concepts:define.description', 'Author, generate, or import your business concept schemes.')}
         </p>
-        <ConceptModeSwitch tipLeft />
       </div>
 
       {/* Path cards */}

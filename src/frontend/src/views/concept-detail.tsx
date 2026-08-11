@@ -18,7 +18,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   SkeletonLine,
   PanelSkeleton,
@@ -69,6 +74,27 @@ const typeColors: Record<string, string> = {
 // scrolling, so the page stays compact regardless of how many relations or
 // linked objects a concept has.
 const MAX_VISIBLE_ROWS = 10;
+
+// Lifecycle transitions valid from each status, mirroring the backend
+// VALID_TRANSITIONS (semantic_models_manager). Each maps to a by-iri action
+// endpoint. draft->under_review is "submit-review"; the rest match their verb.
+const STATUS_TRANSITIONS: Record<string, { action: string; to: string; labelKey: string; defaultLabel: string }[]> = {
+  draft: [{ action: 'submit-review', to: 'under_review', labelKey: 'semantic-models:lifecycle.submitReview', defaultLabel: 'Submit for review' }],
+  under_review: [
+    { action: 'approve', to: 'approved', labelKey: 'semantic-models:lifecycle.approve', defaultLabel: 'Approve' },
+  ],
+  approved: [{ action: 'publish', to: 'published', labelKey: 'semantic-models:lifecycle.publish', defaultLabel: 'Publish' }],
+  published: [
+    { action: 'certify', to: 'certified', labelKey: 'semantic-models:lifecycle.certify', defaultLabel: 'Certify' },
+    { action: 'deprecate', to: 'deprecated', labelKey: 'semantic-models:lifecycle.deprecate', defaultLabel: 'Deprecate' },
+  ],
+  certified: [
+    { action: 'deprecate', to: 'deprecated', labelKey: 'semantic-models:lifecycle.deprecate', defaultLabel: 'Deprecate' },
+    { action: 'archive', to: 'archived', labelKey: 'semantic-models:lifecycle.archive', defaultLabel: 'Archive' },
+  ],
+  deprecated: [{ action: 'archive', to: 'archived', labelKey: 'semantic-models:lifecycle.archive', defaultLabel: 'Archive' }],
+  archived: [],
+};
 
 export default function ConceptDetailView() {
   const { iri: rawIri } = useParams<{ iri: string }>();
@@ -271,6 +297,38 @@ export default function ConceptDetailView() {
     }
   };
 
+  // Run a lifecycle status transition via its by-iri action endpoint, then
+  // refresh so the status badge + available transitions update.
+  const [statusBusy, setStatusBusy] = useState(false);
+  const handleStatusTransition = async (action: string) => {
+    if (!concept) return;
+    setStatusBusy(true);
+    try {
+      const response = await fetch(
+        `/api/knowledge/concepts/by-iri/${action}?iri=${encodeURIComponent(concept.iri)}`,
+        { method: 'POST' },
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({} as any));
+        throw new Error(err?.detail || 'Failed to change status');
+      }
+      toast({
+        title: t('common:toast.success'),
+        description: t('semantic-models:messages.statusChanged', 'Status updated'),
+      });
+      bumpKnowledgeGraphRefresh('concept-status');
+      await fetchConcept();
+    } catch (err: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
   // Mirrors the rendered concept detail: real back button, title block,
   // compact definition card, and two side panels (ownership/metadata + links).
   if (isLoading && !concept) {
@@ -327,9 +385,17 @@ export default function ConceptDetailView() {
   // imported concepts have no in-flight diff to show.
   const isDraft = !concept.status || concept.status === 'draft';
 
+  // Lifecycle transitions available from the current status. Offered to writers
+  // on concepts whose collection is editable (imported/read-only ontologies have
+  // no lifecycle). Certify is admin-gated server-side; a non-admin gets a clear
+  // 403 toast rather than the option being hidden.
+  const currentStatus = concept.status || 'draft';
+  const availableTransitions =
+    canWrite && collection?.is_editable ? STATUS_TRANSITIONS[currentStatus] ?? [] : [];
+
   return (
     <div className="py-4 space-y-3">
-      {/* Top action row: back + edit/delete + mode switch. */}
+      {/* Top action row: back + status/edit/delete + mode switch. */}
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
@@ -340,7 +406,26 @@ export default function ConceptDetailView() {
           {t('semantic-models:details.backToList', 'Back to Concepts')}
         </Button>
         <div className="flex items-center gap-2">
-          <ConceptModeSwitch tipLeft />
+          {availableTransitions.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={statusBusy}>
+                  {t('semantic-models:lifecycle.changeStatus', 'Change status')}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {availableTransitions.map((tr) => (
+                  <DropdownMenuItem
+                    key={tr.action + tr.to}
+                    onClick={() => handleStatusTransition(tr.action)}
+                  >
+                    {t(tr.labelKey, tr.defaultLabel)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {isEditable && (
             <>
               <Button variant="outline" size="sm" onClick={() => setEditorOpen(true)}>
@@ -361,13 +446,17 @@ export default function ConceptDetailView() {
         </div>
       </div>
 
-      {/* Title + meta block (no extra card; mirrors asset-detail). */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* Title + meta block. Name row carries the icon + title; a single badge
+          row underneath holds type / status / version / source so nothing is
+          orphaned under the icon. The raw IRI is a separate advanced-only row. */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 min-w-0">
           {typeIcons[concept.concept_type] || typeIcons.concept}
           <h1 className="text-2xl font-bold truncate" title={conceptTitle}>
             {conceptTitle}
           </h1>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge
             variant="outline"
             className={typeColors[concept.concept_type] || ''}
@@ -379,38 +468,13 @@ export default function ConceptDetailView() {
               {t(`semantic-models:status.${concept.status}`, concept.status)}
             </Badge>
           )}
-          {concept.source_context && (
-            <span className="text-xs text-muted-foreground ml-1">
-              · {systemRdfNamespaceDisplayLabel(concept.source_context, t)}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
-          {/* Raw IRI + external link are the ontology layer — advanced only. */}
-          <code
-            className="adv-only px-1.5 py-0.5 bg-muted rounded font-mono truncate"
-            title={concept.iri}
-          >
-            {concept.iri}
-          </code>
-          <a
-            href={concept.iri}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="adv-only inline-flex items-center text-muted-foreground hover:text-foreground shrink-0"
-            aria-label="Open IRI"
-          >
-            <ExternalLink className="h-3 w-3" />
-          </a>
-          {/* Version + Compare affordance. Version + diff are a UX placeholder;
-              real concept versioning is a separate backend track.
-              TODO(cb-v2): wire to real version-diff endpoint (Track 3, pending
-              granularity decision). */}
-          <span className="font-mono shrink-0">v1.0.0</span>
+          {/* Version badge. Real concept versioning is a separate backend track;
+              TODO(cb-v2): wire version + diff to the version-diff endpoint. */}
+          <Badge variant="secondary" className="font-mono text-xs">v1.0.0</Badge>
           {isDraft && (
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-primary hover:underline shrink-0"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
               onClick={() =>
                 document
                   .getElementById('concept-version-diff')
@@ -421,6 +485,29 @@ export default function ConceptDetailView() {
               {t('semantic-models:versionDiff.compare', 'Compare')}
             </button>
           )}
+          {concept.source_context && (
+            <span className="text-xs text-muted-foreground">
+              · {systemRdfNamespaceDisplayLabel(concept.source_context, t)}
+            </span>
+          )}
+        </div>
+        {/* Raw IRI + external link — ontology layer, advanced only, own row. */}
+        <div className="adv-only flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+          <code
+            className="px-1.5 py-0.5 bg-muted rounded font-mono truncate"
+            title={concept.iri}
+          >
+            {concept.iri}
+          </code>
+          <a
+            href={concept.iri}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center text-muted-foreground hover:text-foreground shrink-0"
+            aria-label="Open IRI"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
       </div>
 
@@ -467,31 +554,36 @@ export default function ConceptDetailView() {
         </section>
       )}
 
-      {/* Synonyms + examples on a single dense row. */}
+      {/* Synonyms and examples — each on its own row (a shared card), so they
+          are not cramped together. Aligned label column keeps them scannable. */}
       {hasSynonymsOrExamples && (
-        <section className="flex flex-wrap items-start gap-x-6 gap-y-2 rounded-lg border bg-card p-3 text-xs">
+        <section className="rounded-lg border bg-card p-3 text-xs space-y-2">
           {concept.synonyms?.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="font-semibold uppercase tracking-wide text-muted-foreground mr-1">
-                {t('semantic-models:fields.synonyms')}:
+            <div className="flex items-baseline gap-2">
+              <span className="w-20 shrink-0 font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('semantic-models:fields.synonyms')}
               </span>
-              {concept.synonyms.map((s) => (
-                <Badge key={s} variant="outline" className="text-[10px]">
-                  {s}
-                </Badge>
-              ))}
+              <div className="flex flex-wrap gap-1">
+                {concept.synonyms.map((s) => (
+                  <Badge key={s} variant="outline" className="text-[10px]">
+                    {s}
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
           {concept.examples?.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="font-semibold uppercase tracking-wide text-muted-foreground mr-1">
-                {t('semantic-models:fields.examples')}:
+            <div className="flex items-baseline gap-2">
+              <span className="w-20 shrink-0 font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('semantic-models:fields.examples')}
               </span>
-              {concept.examples.map((e) => (
-                <Badge key={e} variant="outline" className="text-[10px]">
-                  {e}
-                </Badge>
-              ))}
+              <div className="flex flex-wrap gap-1">
+                {concept.examples.map((e) => (
+                  <Badge key={e} variant="outline" className="text-[10px]">
+                    {e}
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
         </section>

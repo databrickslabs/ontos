@@ -50,6 +50,7 @@ vi.mock('@/components/term-mapping/suggestion-review', () => ({
 }));
 
 import EnrichView from './enrich';
+import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 
 // EnrichView mounts dialogs that use useNavigate (Suggest matches routes to the
 // Review Board), so it needs a Router in tests even when those dialogs are closed.
@@ -96,7 +97,15 @@ describe('EnrichView', () => {
   });
 
   it('reveals delivery-mode cards only in advanced view', () => {
-    renderEnrich();
+    // The Simple/Advanced switch now lives in the Concepts layout (shared),
+    // not inside EnrichView. Render the switch alongside so toggling it drives
+    // the same shared mode store EnrichView reads.
+    render(
+      <MemoryRouter>
+        <ConceptModeSwitch />
+        <EnrichView />
+      </MemoryRouter>,
+    );
     // Simple (default): mode cards hidden.
     expect(screen.queryByText('Direct')).not.toBeInTheDocument();
     // Switch to advanced.

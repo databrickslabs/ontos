@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/tooltip';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
-import { useConceptMode, ConceptModeSwitch } from '@/components/concepts/mode-switch';
+import { useConceptMode } from '@/components/concepts/mode-switch';
 
 import CoverageMatrix, { type CoverageRow } from '@/components/enrich/coverage-matrix';
 import ReviewSuggestionsDialog, {
@@ -287,14 +287,11 @@ export default function EnrichView() {
   );
 
   return (
-    <div className="max-w-[1180px] space-y-6">
-      {/* Subtitle + Simple/Advanced switch (title is in section tab) */}
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
-          {t('enrich.subtitle', 'Map your concepts to assets, then deliver governed metadata onto the platform.')}
-        </p>
-        <ConceptModeSwitch tipLeft />
-      </div>
+    <div className="max-w-[1180px] space-y-6 pt-3">
+      {/* Subtitle (title + Simple/Advanced switch live in the section tab row). */}
+      <p className="text-sm text-muted-foreground">
+        {t('enrich.subtitle', 'Map your concepts to assets, then deliver governed metadata onto the platform.')}
+      </p>
 
       {/* Platform selector */}
       <div className="flex flex-wrap items-center gap-2.5">

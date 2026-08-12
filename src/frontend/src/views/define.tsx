@@ -8,9 +8,9 @@ import {
   Zap,
   ArrowUpFromLine,
   Loader2,
-  Check,
-  Minus,
-  CircleDashed,
+  List,
+  ListTree,
+  Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,67 @@ function formatDate(iso?: string | null): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// The three output "rungs" — a glossary -> taxonomy -> ontology maturity ladder.
+// Defined once, rendered both in the top legend and (via BuildsRow) inside every
+// path card, so the same icon vocabulary is taught once and reused everywhere.
+const RUNGS = [
+  { key: 'glossary', label: 'Glossary', Icon: List,     blurb: 'agreed terms + definitions' },
+  { key: 'taxonomy', label: 'Taxonomy', Icon: ListTree, blurb: 'terms in a broader/narrower hierarchy' },
+  { key: 'ontology', label: 'Ontology', Icon: Share2,   blurb: 'typed relationships a machine can reason over' },
+] as const;
+
+type RungKey = (typeof RUNGS)[number]['key'];
+// Per-path production: 'yes' = this path builds that rung, 'file' = depends on the
+// uploaded file (Import), undefined = not produced by this path.
+type BuildsMap = Partial<Record<RungKey, 'yes' | 'file'>>;
+
+// The reused "Builds:" row inside each path card. Lights the rungs this path
+// produces; dims the rest. Same three icons, same order, in every card — so the
+// user reads them as the shared vocabulary from the legend above.
+function BuildsRow({ builds, note }: { builds: BuildsMap; note?: string }) {
+  return (
+    <div className="mt-3 pt-2.5 border-t">
+      <div className="text-[11px] font-medium text-muted-foreground mb-1.5">Builds</div>
+      <div className="flex items-center gap-2.5">
+        {RUNGS.map((r) => {
+          const state = builds[r.key];
+          const active = state === 'yes';
+          const fileDep = state === 'file';
+          return (
+            <Tooltip key={r.key}>
+              <TooltipTrigger asChild>
+                <span
+                  className={
+                    'flex items-center gap-1 text-xs whitespace-nowrap ' +
+                    (active
+                      ? 'text-foreground'
+                      : fileDep
+                      ? 'text-muted-foreground'
+                      : 'text-muted-foreground/30')
+                  }
+                >
+                  <r.Icon className="h-4 w-4" />
+                  <span>{r.label}</span>
+                  {fileDep && <span className="text-[10px]">*</span>}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[220px] text-xs">
+                <span className="font-medium">{r.label}</span> — {r.blurb}.{' '}
+                {active
+                  ? 'This path builds it.'
+                  : fileDep
+                  ? 'Produced if the uploaded file contains it.'
+                  : 'Not produced by this path.'}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+      {note && <p className="text-[11px] text-muted-foreground/80 mt-1.5">{note}</p>}
+    </div>
+  );
 }
 
 export default function DefineView() {
@@ -159,53 +220,23 @@ export default function DefineView() {
         </p>
       </div>
 
-      {/* What you can build — output/capability clarity (not persona). Two output
-          kinds, and which of them each path below produces. Keeps the choice
-          honest at the fork: Concepts are lighter; Classes & properties are more
-          powerful but carry more to understand and manage. */}
-      <div className="mb-6 rounded-lg border bg-muted/30 p-3.5">
-        <div className="grid gap-3 sm:grid-cols-2 mb-3">
-          <div className="flex items-start gap-2">
-            <span className="mt-0.5 shrink-0 rounded-md bg-secondary p-1"><PencilLine className="h-3.5 w-3.5" /></span>
-            <div>
-              <div className="text-sm font-medium">Concepts</div>
-              <div className="text-xs text-muted-foreground">Agreed business terms with definitions and synonyms. Simple to manage; the shared vocabulary.</div>
-            </div>
+      {/* Slim education legend: the three output rungs, each with a reused icon +
+          one-line "what it is". The SAME three icons reappear inside every path
+          card below (the "Builds" row), lit for what that path produces. Teach the
+          vocabulary once here, then show it per card. Glossary -> taxonomy ->
+          ontology is a maturity progression: start simple, harden where needed. */}
+      <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border bg-muted/30 px-3.5 py-2.5 text-xs">
+        <span className="font-medium text-foreground">What you can build:</span>
+        {RUNGS.map((r, i) => (
+          <div key={r.key} className="flex items-center gap-2">
+            {i > 0 && <span className="text-muted-foreground/40 -ml-3 mr-1">→</span>}
+            <r.Icon className="h-4 w-4 text-foreground shrink-0" />
+            <span>
+              <span className="font-medium text-foreground">{r.label}</span>
+              <span className="text-muted-foreground"> — {r.blurb}</span>
+            </span>
           </div>
-          <div className="flex items-start gap-2">
-            <span className="mt-0.5 shrink-0 rounded-md bg-secondary p-1"><Zap className="h-3.5 w-3.5" /></span>
-            <div>
-              <div className="text-sm font-medium">Classes &amp; properties</div>
-              <div className="text-xs text-muted-foreground">Formal types a machine can reason over, with typed relationships. More capable, more depth to manage.</div>
-            </div>
-          </div>
-        </div>
-        {/* What each path produces */}
-        <div className="border-t pt-2.5 space-y-1.5">
-          {[
-            { label: 'Author', concepts: 'yes', classes: 'opt' },
-            { label: 'Generate', concepts: 'no', classes: 'yes' },
-            { label: 'Import', concepts: 'file', classes: 'file' },
-          ].map((row) => {
-            const cell = (v: string) =>
-              v === 'yes' ? <Check className="h-3.5 w-3.5 text-emerald-600" />
-              : v === 'opt' ? <CircleDashed className="h-3.5 w-3.5 text-muted-foreground" />
-              : v === 'file' ? <Check className="h-3.5 w-3.5 text-muted-foreground/70" />
-              : <Minus className="h-3.5 w-3.5 text-muted-foreground/40" />;
-            return (
-              <div key={row.label} className="grid grid-cols-[110px_1fr_1fr] items-center gap-2 text-xs">
-                <span className="font-medium">{row.label}</span>
-                <span className="flex items-center gap-1.5 text-muted-foreground">{cell(row.concepts)} Concepts</span>
-                <span className="flex items-center gap-1.5 text-muted-foreground">{cell(row.classes)} Classes &amp; properties</span>
-              </div>
-            );
-          })}
-          <p className="text-[11px] text-muted-foreground/80 pt-1">
-            <Check className="h-3 w-3 inline text-emerald-600" /> produces &nbsp;·&nbsp;
-            <CircleDashed className="h-3 w-3 inline" /> optional &nbsp;·&nbsp;
-            <Minus className="h-3 w-3 inline" /> no &nbsp;·&nbsp; Import brings in whatever the file contains (read-only).
-          </p>
-        </div>
+        ))}
       </div>
 
       {/* Path cards */}
@@ -241,6 +272,10 @@ export default function DefineView() {
             <Button className="w-full" onClick={() => setAuthorOpen(true)}>
               {t('semantic-models:define.author.cta', 'New concept scheme')}
             </Button>
+            <BuildsRow
+              builds={{ glossary: 'yes', taxonomy: 'yes', ontology: 'yes' }}
+              note="You choose the depth — start as a glossary, harden into an ontology over time."
+            />
             <p className="adv-only mt-3 pt-2 border-t border-dashed text-xs text-muted-foreground leading-relaxed">
               {t(
                 'semantic-models:define.author.adv',
@@ -278,6 +313,10 @@ export default function DefineView() {
             <Button className="w-full" onClick={() => setGuidedOpen(true)}>
               {t('semantic-models:define.generate.cta', 'Start guided build')}
             </Button>
+            <BuildsRow
+              builds={{ ontology: 'yes' }}
+              note="Drafts a formal ontology (classes + properties) from your tables. Saved as Draft for review."
+            />
             <p className="adv-only mt-3 pt-2 border-t border-dashed text-xs text-muted-foreground leading-relaxed">
               {t(
                 'semantic-models:define.generate.adv',
@@ -316,6 +355,10 @@ export default function DefineView() {
               <Upload className="h-4 w-4 mr-2" />
               {t('semantic-models:define.import.cta', 'Upload files')}
             </Button>
+            <BuildsRow
+              builds={{ glossary: 'file', taxonomy: 'file', ontology: 'file' }}
+              note="* Whatever the uploaded file contains. Imported terms stay read-only."
+            />
             <p className="adv-only mt-3 pt-2 border-t border-dashed text-xs text-muted-foreground leading-relaxed">
               {t(
                 'semantic-models:define.import.adv',

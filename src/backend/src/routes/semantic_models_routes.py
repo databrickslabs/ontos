@@ -4,7 +4,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Query, UploadFile, File
 
-from src.controller.semantic_models_manager import SemanticModelsManager
+from src.controller.semantic_models_manager import SemanticModelsManager, ReferenceCountError
 from src.models.ontology import (
     OntologyConcept,
     ConceptHierarchy,
@@ -24,12 +24,71 @@ from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 from src.owl.owl_parser import clean_truncated_turtle
 from rdflib import ConjunctiveGraph, RDF
+from pydantic import BaseModel, Field
 
 # Configure logging
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Semantic Models"])
+
+
+# --- Concept-versioning request/response models (API contract §4, signed off) ---
+class PublishVersionRequest(BaseModel):
+    """Body for POST /semantic-models/concepts/version/publish."""
+    iri: str = Field(..., min_length=1, description="Stable concept IRI (never changes across versions)")
+    changes: dict = Field(default_factory=dict, description="Concept fields to overwrite in the new version")
+    change_note: Optional[str] = Field(None, description="Human note describing what changed")
+
+
+class PublishVersionResponse(BaseModel):
+    """Response for the publish action. NO graph_refreshed field: a 200 means the
+    graph was patched synchronously and the new version is already live."""
+    iri: str
+    label: Optional[str] = None
+    new_version: int
+    is_current: bool
+
+
+# --- Safe-transition models (API contract §5, signed off) ---
+class ReferenceCountResponse(BaseModel):
+    """GET /semantic-models/concepts/reference-count → the retire gate."""
+    iri: str
+    count: int
+
+
+class DeprecateConceptRequest(BaseModel):
+    """POST /semantic-models/concepts/deprecate."""
+    iri: str = Field(..., min_length=1)
+    replaced_by: Optional[List[str]] = Field(None, description="Successor IRIs for a 2B split")
+
+
+class DeprecateConceptResponse(BaseModel):
+    iri: str
+    label: Optional[str] = None
+    status: str
+    replaced_by: List[str] = Field(default_factory=list)
+
+
+class RetireConceptRequest(BaseModel):
+    """POST /semantic-models/concepts/retire."""
+    iri: str = Field(..., min_length=1)
+
+
+class RetireConceptResponse(BaseModel):
+    iri: str
+    label: Optional[str] = None
+    status: str
+
+
+# --- Graph freshness (API contract §6, signed off) ---
+class GraphFreshnessResponse(BaseModel):
+    """Served in-memory graph freshness. UI shows 'last refreshed HH:MM, N
+    concepts' + a SEPARATE 'synced to UC' line (uc_* fields)."""
+    last_refreshed: str
+    concept_count: int
+    uc_synced_at: Optional[str] = None
+    uc_next_sync_est: Optional[str] = None
 
 # Internal named-graph contexts that must never surface as user-facing RDF
 # Sources. These are computed/managed graphs (app entities, semantic links,
@@ -691,6 +750,159 @@ async def get_concept_details_by_iri(
     except Exception:
         logger.error("Error retrieving concept details for %s", concept_iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve concept details")
+
+
+@router.post(
+    '/semantic-models/concepts/version/publish',
+    response_model=PublishVersionResponse,
+)
+async def publish_concept_version(
+    body: PublishVersionRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> PublishVersionResponse:
+    """Publish a new version of a concept (P0-3, API contract §4).
+
+    DB-first atomic swap (demote old -> history, insert new current, reassign the
+    concept's triples) in ONE Postgres transaction, THEN patch the served graph.
+    On the rare DB-committed-but-graph-patch-failed case the manager force-rebuilds
+    and re-raises; we surface that as a 500 (the DB is correct, the served graph
+    is being reconciled) rather than pretending success.
+    """
+    try:
+        result = manager.publish_concept_version(
+            concept_iri=body.iri,
+            changes=body.changes,
+            change_note=body.change_note,
+            published_by=current_user.email,
+        )
+        return PublishVersionResponse(**result)
+    except ValueError as e:
+        # Not editable / not found / bad input.
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        # Includes the recovery-contract re-raise: DB committed, graph patch
+        # failed and a rebuild was forced. Do NOT report success.
+        logger.error("Error publishing concept version for %s", body.iri, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="New version committed to the database but the served graph "
+                   "could not be patched; a rebuild was triggered. Retry the read "
+                   "shortly or use the graph reload control.",
+        )
+
+
+@router.get(
+    '/semantic-models/concepts/reference-count',
+    response_model=ReferenceCountResponse,
+)
+async def get_concept_reference_count(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> ReferenceCountResponse:
+    """Reference count for a concept (P0-6): entity_semantic_links rows + concept->concept refs.
+
+    This is the retire gate — retirement is refused while count > 0.
+    """
+    try:
+        return ReferenceCountResponse(iri=concept_iri, count=manager.reference_count(concept_iri))
+    except Exception:
+        logger.error("Error computing reference count for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute reference count")
+
+
+@router.post(
+    '/semantic-models/concepts/deprecate',
+    response_model=DeprecateConceptResponse,
+)
+async def deprecate_concept(
+    body: DeprecateConceptRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> DeprecateConceptResponse:
+    """Deprecate a concept (stays resolvable); on a 2B split write isReplacedBy /
+    replaces / wasRevisionOf lineage links (P0-6, API contract §5)."""
+    try:
+        result = manager.deprecate_concept(
+            concept_iri=body.iri,
+            replaced_by=body.replaced_by,
+            deprecated_by=current_user.email,
+        )
+        return DeprecateConceptResponse(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.error("Error deprecating concept %s", body.iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to deprecate concept")
+
+
+@router.post(
+    '/semantic-models/concepts/retire',
+    response_model=RetireConceptResponse,
+)
+async def retire_concept(
+    body: RetireConceptRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> RetireConceptResponse:
+    """Retire a concept to a tombstone, gated on reference_count == 0 (P0-6, §5).
+
+    Returns 409 if the concept is still referenced (retirement refused); otherwise
+    tombstones it (status=retired, still resolvable, never hard-deleted).
+    """
+    try:
+        result = manager.retire_concept(concept_iri=body.iri, retired_by=current_user.email)
+        return RetireConceptResponse(**result)
+    except ReferenceCountError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error retiring concept %s", body.iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retire concept")
+
+
+@router.get(
+    '/semantic-models/graph/freshness',
+    response_model=GraphFreshnessResponse,
+)
+async def get_graph_freshness(
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> GraphFreshnessResponse:
+    """Served-graph freshness (P0-8, API contract §6): last_refreshed +
+    concept_count + separate UC sync timing."""
+    try:
+        return GraphFreshnessResponse(**manager.graph_freshness())
+    except Exception:
+        logger.error("Error computing graph freshness", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute graph freshness")
+
+
+@router.post(
+    '/semantic-models/graph/reload',
+    response_model=GraphFreshnessResponse,
+)
+async def reload_graph(
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> GraphFreshnessResponse:
+    """Force a full rebuild of the served graph and return the updated freshness
+    (P0-8, API contract §6). The user-facing recovery/backstop control."""
+    try:
+        return GraphFreshnessResponse(**manager.reload_graph())
+    except Exception:
+        logger.error("Error reloading graph", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to reload graph")
 
 
 @router.get(

@@ -16,6 +16,15 @@ class EntitySemanticLinksRepository(CRUDBase[EntitySemanticLinkDb, EntitySemanti
     def list_for_iri(self, db: Session, iri: str) -> List[EntitySemanticLinkDb]:
         return db.query(self.model).filter(self.model.iri == iri).all()
 
+    def count_for_iri(self, db: Session, iri: str) -> int:
+        """Count entity_semantic_links rows referencing an iri (P0-6 retire gate).
+
+        This is the physical UC/asset reference count: each row maps a UC FQN or
+        Ontos entity to this concept iri. Concept->concept references are counted
+        separately in the manager (via the in-memory graph).
+        """
+        return db.query(self.model).filter(self.model.iri == iri).count()
+
     def get_by_entity_and_iri(self, db: Session, entity_id: str, entity_type: str, iri: str) -> EntitySemanticLinkDb | None:
         return db.query(self.model).filter(
             self.model.entity_id == entity_id,

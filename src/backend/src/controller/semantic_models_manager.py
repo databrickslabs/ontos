@@ -154,6 +154,16 @@ class CachedResult:
         return datetime.now() < self.expires_at
 
 
+class ReferenceCountError(Exception):
+    """Raised when a concept cannot be retired because it is still referenced (P0-6).
+
+    Carries the live reference ``count`` so the route can surface it in the 409.
+    """
+    def __init__(self, message: str, count: int = 0):
+        super().__init__(message)
+        self.count = count
+
+
 @searchable_asset
 class SemanticModelsManager(SearchableAsset):
     def __init__(self, db: Session, data_dir: Optional[Path] = None):
@@ -3949,6 +3959,169 @@ class SemanticModelsManager(SearchableAsset):
             else:
                 obj = Literal(triple.object_value)
             coll_context.add((concept_uri, pred, obj))
+
+    # -- P0-6: reference-count / safe-transition primitives -------------------
+    def reference_count(self, concept_iri: str) -> int:
+        """How many things reference this concept — the retire gate (P0-6).
+
+        Counts:
+          - rows in ``entity_semantic_links`` for this iri (physical UC/asset
+            references — the IRI is the join key baked into UC tags), PLUS
+          - concept->concept references: any OTHER concept pointing at this iri
+            via skos:broader / skos:narrower / skos:related / rdfs:subClassOf in
+            the served graph.
+
+        Retirement is gated on this being 0 (tombstone, never hard-delete).
+        """
+        from src.repositories.semantic_links_repository import entity_semantic_links_repo
+
+        link_count = entity_semantic_links_repo.count_for_iri(self._db, concept_iri)
+
+        # Concept->concept references in the hot graph. The iri appears as the
+        # OBJECT of a relationship predicate from some other subject.
+        concept_uri = URIRef(concept_iri)
+        ref_predicates = (SKOS.broader, SKOS.narrower, SKOS.related, RDFS.subClassOf)
+        concept_refs = 0
+        for pred in ref_predicates:
+            for subj in self._graph.subjects(pred, concept_uri):
+                if str(subj) != concept_iri:  # a concept referencing itself doesn't count
+                    concept_refs += 1
+
+        return link_count + concept_refs
+
+    def deprecate_concept(
+        self,
+        concept_iri: str,
+        replaced_by: Optional[List[str]] = None,
+        deprecated_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Deprecate a concept (stop-using) — stays fully resolvable (P0-6).
+
+        Sets concept status to ``deprecated`` (this is the CONCEPT-level
+        stop-using signal, NOT the version-level ``superseded``). If ``replaced_by``
+        IRIs are given (a 2B meaning-split), writes the lineage links so the old
+        IRI still resolves and points forward, and each successor points back:
+          - old  --dct:isReplacedBy-->  new   (forward pointer)
+          - new  --prov:wasRevisionOf--> old  (provenance back-pointer)
+          - new  --dct:replaces-->       old  (Dublin Core back-pointer)
+
+        DB-first then graph patch, matching the create/update dual-write pattern.
+        """
+        from datetime import datetime
+
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            raise ValueError("Cannot determine collection for concept")
+        collection = self.get_collection(collection_iri)
+        if collection and not collection.get("is_editable"):
+            raise ValueError(f"Collection is not editable: {collection_iri}")
+
+        replaced_by = replaced_by or []
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        now = datetime.utcnow().isoformat() + "Z"
+
+        # 1. status -> deprecated (overwrite existing status).
+        rdf_triples_repo.remove_by_subject_predicate(self._db, concept_iri, str(ONTOS.status), collection_iri)
+        rdf_triples_repo.add_triple(
+            self._db, subject_uri=concept_iri, predicate_uri=str(ONTOS.status),
+            object_value="deprecated", object_is_uri=False, context_name=collection_iri,
+            source_type="concept", source_identifier=concept_iri, created_by=deprecated_by,
+        )
+        coll_context.remove((concept_uri, ONTOS.status, None))
+        coll_context.add((concept_uri, ONTOS.status, Literal("deprecated")))
+
+        # 2. 2B split lineage links (idempotent add — ON CONFLICT DO NOTHING).
+        for successor in replaced_by:
+            succ_uri = URIRef(successor)
+            # old --isReplacedBy--> new
+            rdf_triples_repo.add_triple(
+                self._db, subject_uri=concept_iri, predicate_uri=str(DCT.isReplacedBy),
+                object_value=successor, object_is_uri=True, context_name=collection_iri,
+                source_type="concept", source_identifier=concept_iri, created_by=deprecated_by,
+            )
+            coll_context.add((concept_uri, DCT.isReplacedBy, succ_uri))
+            # new --wasRevisionOf--> old
+            rdf_triples_repo.add_triple(
+                self._db, subject_uri=successor, predicate_uri=str(PROV.wasRevisionOf),
+                object_value=concept_iri, object_is_uri=True, context_name=collection_iri,
+                source_type="concept", source_identifier=successor, created_by=deprecated_by,
+            )
+            coll_context.add((succ_uri, PROV.wasRevisionOf, concept_uri))
+            # new --replaces--> old
+            rdf_triples_repo.add_triple(
+                self._db, subject_uri=successor, predicate_uri=str(DCT.replaces),
+                object_value=concept_iri, object_is_uri=True, context_name=collection_iri,
+                source_type="concept", source_identifier=successor, created_by=deprecated_by,
+            )
+            coll_context.add((succ_uri, DCT.replaces, concept_uri))
+
+        self._db.commit()
+        self._invalidate_cache()
+
+        refreshed = self.get_concept(concept_iri) or {}
+        return {
+            "iri": concept_iri,
+            "label": refreshed.get("label") or existing.get("label"),
+            "status": "deprecated",
+            "replaced_by": replaced_by,
+        }
+
+    def retire_concept(self, concept_iri: str, retired_by: Optional[str] = None) -> Dict[str, Any]:
+        """Retire a concept to a tombstone — gated on reference_count == 0 (P0-6).
+
+        If anything still references the concept, raises ``ReferenceCountError``
+        (the route maps it to 409) — retirement is REFUSED. If nothing references
+        it, sets status ``retired``; the concept row and triples STAY (tombstone,
+        still resolvable). NEVER a hard delete.
+        """
+        from datetime import datetime
+
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            raise ValueError("Cannot determine collection for concept")
+        collection = self.get_collection(collection_iri)
+        if collection and not collection.get("is_editable"):
+            raise ValueError(f"Collection is not editable: {collection_iri}")
+
+        # Retire gate: refuse while still referenced.
+        count = self.reference_count(concept_iri)
+        if count > 0:
+            raise ReferenceCountError(
+                f"Cannot retire concept referenced by {count} place(s). "
+                f"Remap references first.",
+                count=count,
+            )
+
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+
+        rdf_triples_repo.remove_by_subject_predicate(self._db, concept_iri, str(ONTOS.status), collection_iri)
+        rdf_triples_repo.add_triple(
+            self._db, subject_uri=concept_iri, predicate_uri=str(ONTOS.status),
+            object_value="retired", object_is_uri=False, context_name=collection_iri,
+            source_type="concept", source_identifier=concept_iri, created_by=retired_by,
+        )
+        coll_context.remove((concept_uri, ONTOS.status, None))
+        coll_context.add((concept_uri, ONTOS.status, Literal("retired")))
+
+        self._db.commit()
+        self._invalidate_cache()
+
+        refreshed = self.get_concept(concept_iri) or {}
+        return {
+            "iri": concept_iri,
+            "label": refreshed.get("label") or existing.get("label"),
+            "status": "retired",
+        }
 
     def delete_concept(self, concept_iri: str, deleted_by: Optional[str] = None) -> bool:
         """Delete a concept.

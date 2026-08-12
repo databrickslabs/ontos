@@ -4114,18 +4114,27 @@ class SemanticModelsManager(SearchableAsset):
         content: str,
         format: str = "turtle",
         imported_by: Optional[str] = None,
+        default_status: Optional[str] = None,
     ) -> int:
         """Import RDF content into an existing collection.
-        
+
         Parses the RDF and adds triples to the collection's context.
         Returns the number of triples imported.
+
+        default_status: when set (e.g. "draft"), every typed subject (a
+            skos:Concept / owl:Class / rdfs:Class) that does NOT already carry an
+            ontos:status is stamped with that status before import. Used by the
+            LLM generator save path so machine-drafted concepts land as Draft and
+            flow through review, mirroring manual authoring (create_concept). Left
+            None for verbatim imports (e.g. uploading a curated ontology file),
+            which keep whatever status the source declares.
         """
         collection = self.get_collection(collection_iri)
         if not collection:
             raise ValueError(f"Collection not found: {collection_iri}")
         if not collection.get("is_editable"):
             raise ValueError(f"Collection is not editable: {collection_iri}")
-        
+
         # Parse the content. LLM-generated Turtle is often truncated mid-statement,
         # which crashes rdflib's notation3 parser with an IndexError. Apply the
         # shared cleanup heuristic before parsing and translate parse failures
@@ -4138,7 +4147,20 @@ class SemanticModelsManager(SearchableAsset):
             temp_graph.parse(data=content, format=rdf_format)
         except Exception as e:
             raise ValueError(f"Invalid {rdf_format} content: {e}")
-        
+
+        # Stamp a governance status on typed subjects that lack one (opt-in).
+        # A subject is a concept/class if it has an rdf:type in the concept types;
+        # only those get a status, and only if the source did not already set one.
+        if default_status:
+            _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+            typed_subjects = {
+                s for s, _, o in temp_graph.triples((None, RDF.type, None))
+                if o in _concept_types
+            }
+            for subj in typed_subjects:
+                if (subj, ONTOS.status, None) not in temp_graph:
+                    temp_graph.add((subj, ONTOS.status, Literal(default_status)))
+
         # Import to database
         count = self._import_graph_to_db(
             graph=temp_graph,

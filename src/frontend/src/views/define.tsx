@@ -8,6 +8,9 @@ import {
   Zap,
   ArrowUpFromLine,
   Loader2,
+  Check,
+  Minus,
+  CircleDashed,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -154,6 +157,55 @@ export default function DefineView() {
         <p className="text-sm text-muted-foreground">
           {t('concepts:define.description', 'Author, generate, or import your business concept schemes.')}
         </p>
+      </div>
+
+      {/* What you can build — output/capability clarity (not persona). Two output
+          kinds, and which of them each path below produces. Keeps the choice
+          honest at the fork: Concepts are lighter; Classes & properties are more
+          powerful but carry more to understand and manage. */}
+      <div className="mb-6 rounded-lg border bg-muted/30 p-3.5">
+        <div className="grid gap-3 sm:grid-cols-2 mb-3">
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 rounded-md bg-secondary p-1"><PencilLine className="h-3.5 w-3.5" /></span>
+            <div>
+              <div className="text-sm font-medium">Concepts</div>
+              <div className="text-xs text-muted-foreground">Agreed business terms with definitions and synonyms. Simple to manage; the shared vocabulary.</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 shrink-0 rounded-md bg-secondary p-1"><Zap className="h-3.5 w-3.5" /></span>
+            <div>
+              <div className="text-sm font-medium">Classes &amp; properties</div>
+              <div className="text-xs text-muted-foreground">Formal types a machine can reason over, with typed relationships. More capable, more depth to manage.</div>
+            </div>
+          </div>
+        </div>
+        {/* What each path produces */}
+        <div className="border-t pt-2.5 space-y-1.5">
+          {[
+            { label: 'Author', concepts: 'yes', classes: 'opt' },
+            { label: 'Generate', concepts: 'no', classes: 'yes' },
+            { label: 'Import', concepts: 'file', classes: 'file' },
+          ].map((row) => {
+            const cell = (v: string) =>
+              v === 'yes' ? <Check className="h-3.5 w-3.5 text-emerald-600" />
+              : v === 'opt' ? <CircleDashed className="h-3.5 w-3.5 text-muted-foreground" />
+              : v === 'file' ? <Check className="h-3.5 w-3.5 text-muted-foreground/70" />
+              : <Minus className="h-3.5 w-3.5 text-muted-foreground/40" />;
+            return (
+              <div key={row.label} className="grid grid-cols-[110px_1fr_1fr] items-center gap-2 text-xs">
+                <span className="font-medium">{row.label}</span>
+                <span className="flex items-center gap-1.5 text-muted-foreground">{cell(row.concepts)} Concepts</span>
+                <span className="flex items-center gap-1.5 text-muted-foreground">{cell(row.classes)} Classes &amp; properties</span>
+              </div>
+            );
+          })}
+          <p className="text-[11px] text-muted-foreground/80 pt-1">
+            <Check className="h-3 w-3 inline text-emerald-600" /> produces &nbsp;·&nbsp;
+            <CircleDashed className="h-3 w-3 inline" /> optional &nbsp;·&nbsp;
+            <Minus className="h-3 w-3 inline" /> no &nbsp;·&nbsp; Import brings in whatever the file contains (read-only).
+          </p>
+        </div>
       </div>
 
       {/* Path cards */}

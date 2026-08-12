@@ -273,26 +273,28 @@ export default function OntologyGeneratorView() {
   const canGenerate = selectedPaths.size > 0 && !isRunning && !isStarting;
 
   // Backend processes at most this many tables per run (see MAX_TABLES_IN_METADATA
-  // in ontology_generator_manager.py). Warn proactively so users aren't surprised
-  // when tables are silently skipped. A path with 3+ dot-segments is a table
-  // (catalog.schema.table); 1-2 segments is a catalog/schema container that expands
-  // into an unknown number of tables, so we can't give an exact count for those.
+  // in ontology_generator_manager.py). We surface the limit as a quiet always-on
+  // caption, and only escalate to an amber skip-count warning when the user has
+  // selected more than the cap in INDIVIDUAL tables (a count we can trust). We do
+  // NOT try to guess a container's table count client-side: selecting a schema or
+  // catalog resolves to an unknown number of tables server-side, so any pre-run
+  // "this expands into many tables" guess is just as likely to cry wolf on a small
+  // schema (e.g. a 3-table schema) as to catch a real overflow. The accurate
+  // post-run banner (result.caps_note) reports the REAL resolved count instead.
+  // A path with 3+ dot-segments (catalog.schema.table) is an individual table.
   const MAX_TABLES_PER_RUN = 50;
-  const capWarning = (() => {
-    let tableCount = 0;
-    let hasContainer = false;
+  const selectedTableCount = (() => {
+    let n = 0;
     for (const path of selectedPaths) {
-      if (path.split('.').length >= 3) tableCount += 1;
-      else hasContainer = true;
+      if (path.split('.').length >= 3) n += 1;
     }
-    if (hasContainer) {
-      return `Selected schemas or catalogs expand into many tables. This generator processes up to ${MAX_TABLES_PER_RUN} tables per run; narrow your selection or split it into multiple runs.`;
-    }
-    if (tableCount > MAX_TABLES_PER_RUN) {
-      return `${tableCount} tables selected. This generator processes up to ${MAX_TABLES_PER_RUN} per run, so ${tableCount - MAX_TABLES_PER_RUN} will be skipped. Narrow your selection or split it into multiple runs.`;
-    }
-    return null;
+    return n;
   })();
+  // Only an honest, countable overflow triggers the amber warning.
+  const capWarning =
+    selectedTableCount > MAX_TABLES_PER_RUN
+      ? `${selectedTableCount} tables selected. This generator processes up to ${MAX_TABLES_PER_RUN} per run, so ${selectedTableCount - MAX_TABLES_PER_RUN} will be skipped. Narrow your selection or split it into multiple runs.`
+      : null;
 
   const handleGenerate = async () => {
     if (!selectedConnectionId || selectedPaths.size === 0) return;
@@ -571,6 +573,9 @@ export default function OntologyGeneratorView() {
                     <><Wand2 className="h-4 w-4 mr-2" /> Generate Ontology ({selectedPaths.size} selected)</>
                   )}
                 </Button>
+                <p className="text-xs text-muted-foreground text-center px-1">
+                  Processes up to {MAX_TABLES_PER_RUN} tables per run. For large schemas, split your selection into multiple runs.
+                </p>
               </>
             )}
           </div>
@@ -716,10 +721,10 @@ export default function OntologyGeneratorView() {
                 <div className="flex items-center justify-between gap-3 mb-3 rounded-md border bg-muted/40 px-3 py-2">
                   <p className="text-sm text-muted-foreground">
                     Generated <span className="font-medium text-foreground">{result.classes.length}</span> classes and{' '}
-                    <span className="font-medium text-foreground">{result.properties.length}</span> properties. Save them to a collection to keep and use them.
+                    <span className="font-medium text-foreground">{result.properties.length}</span> properties. Save them to a concept scheme to keep and use them.
                   </p>
                   <Button size="sm" className="shrink-0" onClick={() => setIsSaveDialogOpen(true)}>
-                    <Save className="h-3.5 w-3.5 mr-1" /> Save to Collection
+                    <Save className="h-3.5 w-3.5 mr-1" /> Save to scheme
                   </Button>
                 </div>
               )}
@@ -877,21 +882,21 @@ export default function OntologyGeneratorView() {
         </div>
       </div>
 
-      {/* Save to Collection dialog */}
+      {/* Save to scheme dialog */}
       <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Save to Concept Collection</DialogTitle>
-            <DialogDescription>Create a new ontology collection and import the generated triples into the knowledge graph.</DialogDescription>
+            <DialogTitle>Save to concept scheme</DialogTitle>
+            <DialogDescription>Create a new ontology-type concept scheme and import the generated triples into the knowledge graph. Generated items are saved as Draft for review.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label htmlFor="collName">Collection Name</Label>
+              <Label htmlFor="collName">Scheme name</Label>
               <Input id="collName" placeholder="e.g., Customer Domain Ontology" value={collectionName} onChange={(e) => setCollectionName(e.target.value)} className="mt-1" />
             </div>
             <div>
               <Label htmlFor="collDesc">Description (optional)</Label>
-              <Textarea id="collDesc" placeholder="Describe the purpose of this ontology collection..." value={collectionDescription} onChange={(e) => setCollectionDescription(e.target.value)} rows={3} className="mt-1" />
+              <Textarea id="collDesc" placeholder="Describe the purpose of this concept scheme..." value={collectionDescription} onChange={(e) => setCollectionDescription(e.target.value)} rows={3} className="mt-1" />
             </div>
             {result && (
               <p className="text-xs text-muted-foreground">

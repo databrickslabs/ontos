@@ -3408,9 +3408,29 @@ class SemanticModelsManager(SearchableAsset):
         if created_by:
             user_uri = f"urn:user:{created_by}" if not created_by.startswith("urn:") else created_by
             coll_context.add((concept_uri, ONTOS.createdBy, URIRef(user_uri)))
-        
+
+        # Mint the v1 concept_version row so a freshly-created concept is
+        # versioned like a backfilled one (P0-1 backfill only versioned
+        # PRE-EXISTING concepts). Without this, a later publish computes
+        # max_version=0 -> new_version=1 and history is empty. version=1,
+        # is_current=true, status=draft (matching the ONTOS.status triple
+        # above). Assign every triple owned by this subject IRI (subject-IRI
+        # ownership, same rule as the backfill + publish) in the SAME commit.
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        v1 = concept_versions_repo.create_version(  # flushes -> v1.id available
+            self._db,
+            iri=concept_iri,
+            version=1,
+            is_current=True,
+            status="draft",
+            created_by=created_by,
+        )
+        rdf_triples_repo.reassign_subject_to_concept_version(
+            self._db, concept_iri, v1.id, context_name=collection_iri
+        )
+
         self._db.commit()
-        
+
         # Add owners if provided
         for owner in owners:
             owner_user = owner.get("user_uri", "")

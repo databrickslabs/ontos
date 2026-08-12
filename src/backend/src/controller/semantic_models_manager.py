@@ -3416,9 +3416,29 @@ class SemanticModelsManager(SearchableAsset):
         if created_by:
             user_uri = f"urn:user:{created_by}" if not created_by.startswith("urn:") else created_by
             coll_context.add((concept_uri, ONTOS.createdBy, URIRef(user_uri)))
-        
+
+        # Mint the v1 concept_version row so a freshly-created concept is
+        # versioned like a backfilled one (P0-1 backfill only versioned
+        # PRE-EXISTING concepts). Without this, a later publish computes
+        # max_version=0 -> new_version=1 and history is empty. version=1,
+        # is_current=true, status=draft (matching the ONTOS.status triple
+        # above). Assign every triple owned by this subject IRI (subject-IRI
+        # ownership, same rule as the backfill + publish) in the SAME commit.
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        v1 = concept_versions_repo.create_version(  # flushes -> v1.id available
+            self._db,
+            iri=concept_iri,
+            version=1,
+            is_current=True,
+            status="draft",
+            created_by=created_by,
+        )
+        rdf_triples_repo.reassign_subject_to_concept_version(
+            self._db, concept_iri, v1.id, context_name=collection_iri
+        )
+
         self._db.commit()
-        
+
         # Add owners if provided
         for owner in owners:
             owner_user = owner.get("user_uri", "")
@@ -3889,10 +3909,20 @@ class SemanticModelsManager(SearchableAsset):
         if collection and not collection.get("is_editable"):
             raise ValueError(f"Collection is not editable: {collection_iri}")
 
-        # ---- 1-4: build the swap inside one transaction (no commit yet) -------
+        # ---- snapshot-per-version swap inside ONE transaction (no commit yet) --
+        # PRD "snapshots over deltas": the PRIOR version keeps its OWN frozen
+        # triple set (its old field values) so "what was the previous definition?"
+        # stays answerable and P0-4's diff engine has something to diff. We COPY
+        # the concept's current triples into a new set owned by v2, then mutate
+        # ONLY v2's copy. v1's rows are never touched.
         from src.repositories.concept_versions_repository import concept_versions_repo
 
+        # 1. Demote current version row -> history metadata (is_current=false,
+        #    status=superseded). Its triples STAY owned by this (demoted) id =
+        #    v1's frozen snapshot.
         demoted = concept_versions_repo.demote_current(self._db, concept_iri)  # flushes
+
+        # 2. Create the new current version row.
         new_version_num = concept_versions_repo.max_version(self._db, concept_iri) + 1
         new_cv = concept_versions_repo.create_version(  # flushes -> new_cv.id available
             self._db,
@@ -3904,11 +3934,28 @@ class SemanticModelsManager(SearchableAsset):
             created_by=published_by,
         )
 
-        # 3. Apply the human-field changes as triple overwrites (DB only here;
-        #    the graph is patched AFTER commit, per the recovery contract).
-        self._apply_publish_changes_to_db(concept_iri, collection_iri, changes, published_by)
+        # 3. COPY the concept's current triples into a NEW set owned by v2. The
+        #    source is the demoted version's rows (the live set before this
+        #    publish); if there is no demoted row (edge case), fall back to the
+        #    subject's currently-owned rows. v1's rows are left untouched.
+        source_version_id = demoted.id if demoted else None
+        rdf_triples_repo.copy_triples_to_version(
+            self._db,
+            subject_uri=concept_iri,
+            source_concept_version_id=source_version_id,
+            target_concept_version_id=new_cv.id,
+            context_name=collection_iri,
+            created_by=published_by,
+        )
 
-        # Optional change note as provenance on the concept.
+        # 4. Apply the human-field changes to v2's SET ONLY (remove/add the
+        #    changed predicates among rows owned by new_cv.id). DB-only here; the
+        #    graph is patched AFTER commit per the recovery contract.
+        self._apply_publish_changes_to_db(
+            concept_iri, collection_iri, changes, published_by, target_version_id=new_cv.id
+        )
+
+        # Optional change note as provenance on the NEW version's set.
         if change_note:
             rdf_triples_repo.add_triple(
                 self._db,
@@ -3920,12 +3967,8 @@ class SemanticModelsManager(SearchableAsset):
                 source_type="concept",
                 source_identifier=concept_iri,
                 created_by=published_by,
+                concept_version_id=new_cv.id,
             )
-
-        # 4. Move every triple owned by this subject IRI to the new version.
-        rdf_triples_repo.reassign_subject_to_concept_version(
-            self._db, concept_iri, new_cv.id, context_name=collection_iri
-        )
 
         # 5. ONE commit -> the whole swap is atomic. A concurrent reader sees
         #    all-old or all-new, never a torn mix.
@@ -3966,29 +4009,34 @@ class SemanticModelsManager(SearchableAsset):
         collection_iri: str,
         changes: Dict[str, Any],
         published_by: Optional[str],
+        target_version_id=None,
     ) -> None:
-        """Overwrite the concept's human SKOS fields in rdf_triples for a publish.
+        """Overwrite the human SKOS fields on the NEW version's triple set only.
 
         DB-only (no graph patch here — the graph is swapped after the commit).
-        Only fields present in ``changes`` are touched, matching update_concept's
-        remove-by-predicate-then-add pattern.
+        Only fields present in ``changes`` are touched. All removes/adds are
+        SCOPED to rows owned by ``target_version_id`` (v2's copied set), so the
+        prior version's frozen snapshot is never mutated.
         """
         for field, predicate in self._PUBLISH_LITERAL_FIELDS.items():
             if field in changes and changes[field] is not None:
                 rdf_triples_repo.remove_by_subject_predicate(
-                    self._db, concept_iri, str(predicate), collection_iri
+                    self._db, concept_iri, str(predicate), collection_iri,
+                    concept_version_id=target_version_id,
                 )
                 rdf_triples_repo.add_triple(
                     self._db, subject_uri=concept_iri, predicate_uri=str(predicate),
                     object_value=str(changes[field]), object_is_uri=False,
                     context_name=collection_iri, source_type="concept",
                     source_identifier=concept_iri, created_by=published_by,
+                    concept_version_id=target_version_id,
                 )
 
         for field, predicate in self._PUBLISH_LIST_LITERAL_FIELDS.items():
             if field in changes and changes[field] is not None:
                 rdf_triples_repo.remove_by_subject_predicate(
-                    self._db, concept_iri, str(predicate), collection_iri
+                    self._db, concept_iri, str(predicate), collection_iri,
+                    concept_version_id=target_version_id,
                 )
                 for val in changes[field]:
                     rdf_triples_repo.add_triple(
@@ -3996,12 +4044,14 @@ class SemanticModelsManager(SearchableAsset):
                         object_value=str(val), object_is_uri=False,
                         context_name=collection_iri, source_type="concept",
                         source_identifier=concept_iri, created_by=published_by,
+                        concept_version_id=target_version_id,
                     )
 
         for field, predicate in self._PUBLISH_LIST_URI_FIELDS.items():
             if field in changes and changes[field] is not None:
                 rdf_triples_repo.remove_by_subject_predicate(
-                    self._db, concept_iri, str(predicate), collection_iri
+                    self._db, concept_iri, str(predicate), collection_iri,
+                    concept_version_id=target_version_id,
                 )
                 for val in changes[field]:
                     rdf_triples_repo.add_triple(
@@ -4009,22 +4059,26 @@ class SemanticModelsManager(SearchableAsset):
                         object_value=str(val), object_is_uri=True,
                         context_name=collection_iri, source_type="concept",
                         source_identifier=concept_iri, created_by=published_by,
+                        concept_version_id=target_version_id,
                     )
 
     def _swap_concept_in_graph(self, concept_iri: str, collection_iri: str) -> None:
         """Swap one concept's triples in the served in-memory graph (P0-3).
 
         Remove every triple with this subject from the collection context, then
-        re-add the concept's CURRENT triples from the DB. Called AFTER the DB
-        commit; a failure here triggers the recovery-contract rebuild in the
-        caller.
+        re-add ONLY the concept's CURRENT-version triples from the DB. Since
+        publish now snapshots the prior version (its old rows remain in the DB
+        owned by the demoted version), we must re-add the current set only —
+        list_by_subject would leak the frozen v1 rows back into the served graph.
+        Called AFTER the DB commit; a failure here triggers the recovery-contract
+        rebuild in the caller.
         """
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))
         # Remove the old view of this concept.
         coll_context.remove((concept_uri, None, None))
-        # Re-add from the DB (current rows for this subject in this context).
-        for triple in rdf_triples_repo.list_by_subject(self._db, concept_iri):
+        # Re-add the CURRENT-version (+ unowned) rows for this subject only.
+        for triple in rdf_triples_repo.list_current_by_subject(self._db, concept_iri):
             if triple.context_name != collection_iri:
                 continue
             pred = URIRef(triple.predicate_uri)
@@ -4037,6 +4091,106 @@ class SemanticModelsManager(SearchableAsset):
             else:
                 obj = Literal(triple.object_value)
             coll_context.add((concept_uri, pred, obj))
+
+    # -- P0-2/§1-§2: version-info + historical-detail reads --------------------
+    def get_concept_version_info(self, concept_iri: str) -> Optional[Dict[str, Any]]:
+        """Current version + version history for one concept (API contract §1).
+
+        Returns None if the concept isn't found. ``label`` is always populated
+        (Simple view requirement). Lineage pointers come from the graph:
+        ``replaces_iri`` from dct:replaces / prov:wasRevisionOf on this concept,
+        ``replaced_by_iris`` from dct:isReplacedBy on this concept.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        concept = self.get_concept(concept_iri)
+        if not concept:
+            return None
+
+        label = concept.get("label") or concept_iri
+        rows = concept_versions_repo.list_versions(self._db, concept_iri)  # newest-first
+        versions = [
+            {
+                "version": r.version,
+                "is_current": r.is_current,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_by": r.created_by,
+            }
+            for r in rows
+        ]
+        current = next((r for r in rows if r.is_current), rows[0] if rows else None)
+
+        # Lineage from the served graph (current-only triples).
+        concept_uri = URIRef(concept_iri)
+        replaced_by_iris = [str(o) for o in self._graph.objects(concept_uri, DCT.isReplacedBy)]
+        replaces = [str(o) for o in self._graph.objects(concept_uri, DCT.replaces)]
+        replaces_iri = replaces[0] if replaces else None
+
+        return {
+            "iri": concept_iri,
+            "label": label,
+            "current_version": current.version if current else None,
+            "status": (current.status if current else None) or concept.get("status"),
+            "versions": versions,
+            "replaces_iri": replaces_iri,
+            "replaced_by_iris": replaced_by_iris,
+        }
+
+    def get_concept_version_detail(
+        self, concept_iri: str, version: int
+    ) -> Optional[Dict[str, Any]]:
+        """Concept detail AS OF a specific version, by (iri, version) key (§2).
+
+        Cold-path fetch: does NOT touch the hot graph. Reads the triples OWNED by
+        that version's concept_version_id (its frozen snapshot), so an old version
+        returns its OLD field values (e.g. the previous definition text). Returns
+        None if that (iri, version) does not exist.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        cv = concept_versions_repo.get_by_iri_version(self._db, concept_iri, version)
+        if cv is None:
+            return None
+
+        # Read this version's OWN triples into a throwaway graph, then extract the
+        # human fields exactly as get_concept would — but from the frozen snapshot.
+        snap = Graph()
+        concept_uri = URIRef(concept_iri)
+        for t in rdf_triples_repo.list_by_concept_version(self._db, cv.id):
+            pred = URIRef(t.predicate_uri)
+            if t.object_is_uri:
+                obj = URIRef(t.object_value)
+            elif t.object_language:
+                obj = Literal(t.object_value, lang=t.object_language)
+            elif t.object_datatype:
+                obj = Literal(t.object_value, datatype=URIRef(t.object_datatype))
+            else:
+                obj = Literal(t.object_value)
+            snap.add((concept_uri, pred, obj))
+
+        def _lit(pred):
+            v = snap.value(concept_uri, pred)
+            return str(v) if v is not None else None
+
+        label = _lit(SKOS.prefLabel) or _lit(RDFS.label) or concept_iri
+        definition = _lit(SKOS.definition) or _lit(RDFS.comment)
+        detail = {
+            "iri": concept_iri,
+            "label": label,
+            "definition": definition,
+            "synonyms": [str(o) for o in snap.objects(concept_uri, SKOS.altLabel)],
+            "examples": [str(o) for o in snap.objects(concept_uri, SKOS.example)],
+            "broader": [str(o) for o in snap.objects(concept_uri, SKOS.broader)],
+            "narrower": [str(o) for o in snap.objects(concept_uri, SKOS.narrower)],
+            "related": [str(o) for o in snap.objects(concept_uri, SKOS.related)],
+            "version": cv.version,
+            "is_current": cv.is_current,
+            "status": cv.status,
+            "created_at": cv.created_at.isoformat() if cv.created_at else None,
+            "created_by": cv.created_by,
+        }
+        return detail
 
     # -- P0-6: reference-count / safe-transition primitives -------------------
     def reference_count(self, concept_iri: str) -> int:

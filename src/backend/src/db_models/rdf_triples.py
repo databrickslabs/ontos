@@ -4,7 +4,7 @@ This table stores all RDF triples from ontologies, taxonomies, and semantic link
 making the database the source of truth for the knowledge graph.
 """
 import uuid
-from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, Index, UniqueConstraint
+from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, Index, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 
@@ -41,6 +41,18 @@ class RdfTripleDb(Base):
     # Source tracking
     source_type = Column(String(20), nullable=True)  # file, upload, demo, link
     source_identifier = Column(Text, nullable=True)  # filename, model_id, entity info
+
+    # Concept-versioning ownership (P0-1). Which concept-version owns this triple.
+    # Ownership is determined by the SUBJECT IRI; blank-node closures follow the
+    # IRI subject they hang off. NULL for triples whose subject is not a concept
+    # IRI (e.g. scheme headers, semantic-link edges). FK added by migration
+    # m1_concept_versioning.
+    concept_version_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("concept_version.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     
     # Audit fields
     created_by = Column(String, nullable=True)

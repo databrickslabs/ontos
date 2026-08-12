@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
+import { useApi } from '@/hooks/use-api';
 import {
   Search,
   ChevronRight,
@@ -21,6 +22,7 @@ import {
   User,
   FolderTree,
   Pencil,
+  ArrowRight,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -81,6 +83,14 @@ const typeColors: Record<string, string> = {
   individual: 'bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30',
   term: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
 };
+
+// Statuses that mean a concept is no longer active clutter — dim them and,
+// when they name successors, offer a "Replaced by" link. Kept broad so both
+// `deprecated` and any `superseded`/`retired`/`archived` values are covered.
+const INACTIVE_STATUSES = new Set(['deprecated', 'superseded', 'retired', 'archived']);
+function isInactiveStatus(status?: string | null): boolean {
+  return !!status && INACTIVE_STATUSES.has(status);
+}
 
 const STATUS_VARIANTS: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground border-muted-foreground/20',
@@ -217,6 +227,14 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   // Degrades gracefully: if the endpoint is unavailable (e.g. not yet deployed),
   // the map stays empty and the Mapping column shows a muted dash.
   const [mappingStatus, setMappingStatus] = useState<Record<string, MappingStatus>>({});
+
+  // Successor IRIs per concept, from the versioning contract §1
+  // (GET .../version → replaced_by_iris). Only fetched for concepts whose
+  // status is inactive (deprecated/superseded/retired), so we can render a
+  // "Replaced by {successor}" link. Degrades silently if the endpoint is
+  // unavailable. Keyed by concept IRI; [] means "checked, no successor".
+  const { get } = useApi();
+  const [successorsByIri, setSuccessorsByIri] = useState<Record<string, string[]>>({});
 
   // Restore scroll position once after mount, then again whenever the data
   // size changes substantially. Saving happens on scroll.
@@ -407,6 +425,82 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, flatConcepts]);
 
+  // Fetch successor IRIs for the visible inactive concepts (deprecated /
+  // superseded / retired). One §1 read per such concept; results are cached, so
+  // scrolling/filtering only queries the newly-seen ones. Runs in both list and
+  // tree modes (both surface status badges).
+  useEffect(() => {
+    const targets = filteredConcepts.filter(
+      (c) => isInactiveStatus(c.status) && !(c.iri in successorsByIri),
+    );
+    if (targets.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const updates: Record<string, string[]> = {};
+      for (const c of targets) {
+        try {
+          const res = await get<{ replaced_by_iris?: string[] }>(
+            `/api/semantic-models/concepts/version?iri=${encodeURIComponent(c.iri)}`,
+          );
+          if (cancelled) return;
+          updates[c.iri] = res.data?.replaced_by_iris ?? [];
+        } catch {
+          if (cancelled) return;
+          updates[c.iri] = [];
+        }
+      }
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setSuccessorsByIri((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredConcepts]);
+
+  // Resolve an IRI to a human label from the concepts we already have. Simple
+  // view must never show a raw IRI, so fall back to the last path segment (a
+  // readable-ish token) rather than the full IRI when the concept isn't loaded.
+  const labelForIri = useCallback(
+    (iri: string): string => {
+      const match = treeData.conceptMap.get(iri) || filteredConcepts.find((c) => c.iri === iri);
+      if (match) return conceptLabel(match);
+      return iri.split(/[/#]/).pop() || iri;
+    },
+    [treeData, filteredConcepts, conceptLabel],
+  );
+
+  // The "Replaced by {successor}" link shown on inactive concepts that name a
+  // successor. Navigates to the successor's detail page. Rendered in both the
+  // tree row and the list row.
+  const renderReplacedBy = (concept: OntologyConcept): React.ReactNode => {
+    if (!isInactiveStatus(concept.status)) return null;
+    const successors = successorsByIri[concept.iri];
+    if (!successors || successors.length === 0) return null;
+    const primary = successors[0];
+    return (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline shrink-0"
+        title={t('semantic-models:versionHistory.replacedBy', 'Replaced by {{label}}', {
+          label: labelForIri(primary),
+        })}
+        onClick={(e) => {
+          e.stopPropagation();
+          const target = treeData.conceptMap.get(primary) || filteredConcepts.find((c) => c.iri === primary);
+          if (target) onSelectConcept(target);
+        }}
+      >
+        <ArrowRight className="h-3 w-3" />
+        {t('semantic-models:versionHistory.replacedBy', 'Replaced by {{label}}', {
+          label: labelForIri(primary),
+        })}
+      </button>
+    );
+  };
+
   // Render a single tree row with rich content (icon + label + type + collection
   // + status pill + property hints).
   //
@@ -488,6 +582,9 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
             "hover:bg-accent hover:text-accent-foreground transition-colors",
             isSelected && !isSourceGroup && "bg-primary/10 text-primary",
             isSourceGroup && "font-semibold bg-muted/40",
+            // Dim inactive concepts (deprecated/superseded/retired) so they
+            // don't read as active clutter. Hover restores full opacity.
+            !isSourceGroup && isInactiveStatus(concept?.status) && "opacity-60 hover:opacity-100",
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
           onClick={() => {
@@ -573,6 +670,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                   {t(`semantic-models:status.${concept.status}`, concept.status)}
                 </Badge>
               )}
+              {renderReplacedBy(concept)}
               {onEditConcept && (
                 <Button
                   variant="ghost"
@@ -634,6 +732,8 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           LIST_GRID,
           'px-3 py-2 border-b last:border-b-0 cursor-pointer transition-colors',
           checked ? 'bg-sky-500/[0.08]' : 'hover:bg-accent',
+          // Dim inactive concepts (deprecated/superseded/retired); hover restores.
+          isInactiveStatus(concept.status) && !checked && 'opacity-60 hover:opacity-100',
         )}
         onClick={() => handleSelect(concept)}
       >
@@ -676,7 +776,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           {map ? map.text : <span className="text-muted-foreground">—</span>}
         </span>
 
-        <span className="min-w-0">
+        <span className="min-w-0 flex flex-col items-start gap-0.5">
           {concept.status && (
             <Badge
               variant="outline"
@@ -685,6 +785,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
               {t(`semantic-models:status.${concept.status}`, concept.status)}
             </Badge>
           )}
+          {renderReplacedBy(concept)}
         </span>
 
         <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>

@@ -10,6 +10,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+
+// Strip known URN prefixes so an incoming ?source= (which may be a full IRI
+// like urn:glossary:test) matches availableSources (which are already stripped).
+function stripSourcePrefix(iri: string): string {
+  const prefixes = ['urn:glossary:', 'urn:taxonomy:', 'urn:ontology:', 'urn:semantic-model:', 'urn:schema:'];
+  for (const prefix of prefixes) {
+    if (iri.startsWith(prefix)) {
+      return iri.slice(prefix.length);
+    }
+  }
+  return iri;
+}
 import {
   FolderTree,
   Plus,
@@ -157,18 +169,26 @@ export default function ExploreView() {
     return () => { setStaticSegments([]); };
   }, [setStaticSegments, t]);
 
-  // Handle ?source= URL parameter for filtering (from home breakdown links).
+  // Handle ?source= URL parameter for filtering (from home breakdown / Author).
+  // Normalize the incoming param by stripping known URN prefixes (it may be a
+  // full IRI) before comparing against availableSources (already stripped). If
+  // the normalized target is not found, do NOT hide everything (keep the filter
+  // as-is) to avoid a blank page.
   useEffect(() => {
     const sourceParam = searchParams.get('source');
     if (sourceParam && availableSources.length > 0) {
-      const sourcesToHide = availableSources.filter(s => s !== sourceParam);
+      const normalizedTarget = stripSourcePrefix(sourceParam);
+      if (!availableSources.includes(normalizedTarget)) {
+        return;
+      }
+      const sourcesToHide = availableSources.filter(s => s !== normalizedTarget);
       sourcesToHide.forEach(source => {
         if (!hiddenSources.includes(source)) {
           toggleSource(source);
         }
       });
-      if (hiddenSources.includes(sourceParam)) {
-        toggleSource(sourceParam);
+      if (hiddenSources.includes(normalizedTarget)) {
+        toggleSource(normalizedTarget);
       }
     }
   }, [searchParams, availableSources, hiddenSources, toggleSource]);

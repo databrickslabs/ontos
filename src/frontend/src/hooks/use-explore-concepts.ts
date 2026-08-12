@@ -8,6 +8,34 @@ import type {
 import { useGlossaryPreferencesStore } from '@/stores/glossary-preferences-store';
 import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 
+// Extract the stripped source name from a collection IRI by removing known URN
+// prefixes. Mirrors backend _extract_source_context prefix list.
+function stripSourcePrefix(iri: string): string {
+  const prefixes = ['urn:glossary:', 'urn:taxonomy:', 'urn:ontology:', 'urn:semantic-model:', 'urn:schema:'];
+  for (const prefix of prefixes) {
+    if (iri.startsWith(prefix)) {
+      return iri.slice(prefix.length);
+    }
+  }
+  return iri;
+}
+
+// Walk the collections tree (the API returns nested child_collections when
+// hierarchical=true, so a child scheme with a parent is NOT at top level).
+// Flatten it so every scheme — including nested children — contributes its
+// source to the filter panel, even with 0 concepts.
+function flattenCollectionsTree(colls: KnowledgeCollection[]): KnowledgeCollection[] {
+  const out: KnowledgeCollection[] = [];
+  const visit = (c: KnowledgeCollection) => {
+    out.push(c);
+    if (c.child_collections && c.child_collections.length > 0) {
+      c.child_collections.forEach(visit);
+    }
+  };
+  colls.forEach(visit);
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // use-explore-concepts — the SINGLE source of concept data for the unified
 // Explore surface. Previously the fetch + filter/dedup memo was duplicated,
@@ -45,14 +73,28 @@ export function useExploreConcepts(): UseExploreConceptsResult {
   const hiddenSources = useGlossaryPreferencesStore((s) => s.hiddenSources);
 
   // Extract unique source contexts (unaffected by filter — for the panel).
+  // Include both concept-derived sources AND all editable collection sources
+  // (flattened across the hierarchy), so empty schemes — including nested
+  // child schemes — still appear as filter chips.
   const availableSources = useMemo(() => {
+    const sources = new Set<string>();
+
     const allConcepts = Object.values(groupedConcepts).flat();
     const allProperties = Object.values(groupedProperties).flat();
-    const sources = new Set<string>();
     allConcepts.forEach((c) => { if (c.source_context) sources.add(c.source_context); });
     allProperties.forEach((p) => { if (p.source_context) sources.add(p.source_context); });
+
+    // Add stripped sources from all editable collections (even if 0 concepts).
+    // Flatten the hierarchy first so nested child schemes (which the API nests
+    // under their parent, not at top level) also appear.
+    flattenCollectionsTree(collections).forEach((collection) => {
+      if (collection.is_editable) {
+        sources.add(stripSourcePrefix(collection.iri));
+      }
+    });
+
     return Array.from(sources).sort();
-  }, [groupedConcepts, groupedProperties]);
+  }, [groupedConcepts, groupedProperties, collections]);
 
   // Per-source concept counts (unaffected by filter/dedup — shows what each
   // source contains).

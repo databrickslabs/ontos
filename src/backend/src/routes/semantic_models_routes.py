@@ -50,6 +50,28 @@ class PublishVersionResponse(BaseModel):
     is_current: bool
 
 
+# --- Version read models (API contract §1, §2, signed off) ---
+class ConceptVersionEntry(BaseModel):
+    version: int
+    is_current: bool
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    created_by: Optional[str] = None
+
+
+class ConceptVersionInfo(BaseModel):
+    """GET /semantic-models/concepts/version — current version + history (§1).
+
+    label is REQUIRED so the Simple view renders a name, never the IRI."""
+    iri: str
+    label: str
+    current_version: Optional[int] = None
+    status: Optional[str] = None
+    versions: List[ConceptVersionEntry] = Field(default_factory=list)
+    replaces_iri: Optional[str] = None
+    replaced_by_iris: List[str] = Field(default_factory=list)
+
+
 # --- Safe-transition models (API contract §5, signed off) ---
 class ReferenceCountResponse(BaseModel):
     """GET /semantic-models/concepts/reference-count → the retire gate."""
@@ -750,6 +772,54 @@ async def get_concept_details_by_iri(
     except Exception:
         logger.error("Error retrieving concept details for %s", concept_iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve concept details")
+
+
+# NOTE: these version READ routes MUST be registered ABOVE the catch-all
+# `@router.get('/semantic-models/concepts/{concept_iri:path}')` (below) or the
+# path-param route swallows `/version` and `/version/detail`.
+@router.get(
+    '/semantic-models/concepts/version',
+    response_model=ConceptVersionInfo,
+)
+async def get_concept_version_info(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> ConceptVersionInfo:
+    """Current version + version history for a concept (P0-2, API contract §1)."""
+    try:
+        info = manager.get_concept_version_info(concept_iri)
+        if info is None:
+            raise HTTPException(status_code=404, detail="Concept not found")
+        return ConceptVersionInfo(**info)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error retrieving version info for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve version info")
+
+
+@router.get('/semantic-models/concepts/version/detail')
+async def get_concept_version_detail(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    version: int = Query(..., ge=1, description="Version number to fetch"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> dict:
+    """Concept detail as of a specific version, by (iri, version) key (§2).
+
+    Cold fetch; does not touch the hot graph. Same shape as concepts/by-iri
+    detail plus version / is_current."""
+    try:
+        detail = manager.get_concept_version_detail(concept_iri, version)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="Concept version not found")
+        return detail
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error retrieving version detail for %s v%s", concept_iri, version, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve version detail")
 
 
 @router.post(

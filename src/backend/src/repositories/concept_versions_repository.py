@@ -57,7 +57,7 @@ class ConceptVersionsRepository(CRUDBase[ConceptVersionDb, dict, dict]):
         )
         return int(result) if result is not None else 0
 
-    def demote_current(self, db: Session, iri: str, status: str = "deprecated") -> Optional[ConceptVersionDb]:
+    def demote_current(self, db: Session, iri: str, status: str = "superseded") -> Optional[ConceptVersionDb]:
         """Flip the current version to history (``is_current=false``).
 
         MUST be flushed before inserting the new current row so the partial

@@ -3767,7 +3767,9 @@ class SemanticModelsManager(SearchableAsset):
 
         Transaction (ONE Postgres commit):
           1. Demote the current ``concept_version`` -> history (is_current=false,
-             status='deprecated') and FLUSH, so the partial unique index
+             status='superseded' — replaced by a newer version; the concept stays
+             active, distinct from 'deprecated'=stop using the concept) and FLUSH,
+             so the partial unique index
              ``uq_concept_version_current_per_iri`` never sees two current rows.
           2. Insert the new ``concept_version`` (version = max+1 for this iri,
              is_current=true, parent_version_id = the demoted row's id).

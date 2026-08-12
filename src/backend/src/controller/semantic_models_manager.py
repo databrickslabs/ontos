@@ -3728,8 +3728,220 @@ class SemanticModelsManager(SearchableAsset):
         
         self._db.commit()
         self._invalidate_cache()
-        
+
         return self.get_concept(concept_iri)
+
+    # -- P0-3: atomic publish (single-concept version swap) --------------------
+    # Human-field -> SKOS predicate map for applying `changes` on publish. Mirrors
+    # update_concept's predicate choices so the two write paths cannot drift.
+    _PUBLISH_LITERAL_FIELDS = {
+        "label": SKOS.prefLabel,
+        "definition": SKOS.definition,
+    }
+    _PUBLISH_LIST_LITERAL_FIELDS = {
+        "synonyms": SKOS.altLabel,
+        "examples": SKOS.example,
+    }
+    _PUBLISH_LIST_URI_FIELDS = {
+        "broader_iris": SKOS.broader,
+        "narrower_iris": SKOS.narrower,
+        "related_iris": SKOS.related,
+    }
+
+    def publish_concept_version(
+        self,
+        concept_iri: str,
+        changes: Optional[Dict[str, Any]] = None,
+        change_note: Optional[str] = None,
+        published_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Publish a new version of a concept — DB-first atomic swap (P0-3).
+
+        Transaction (ONE Postgres commit):
+          1. Demote the current ``concept_version`` -> history (is_current=false,
+             status='deprecated') and FLUSH, so the partial unique index
+             ``uq_concept_version_current_per_iri`` never sees two current rows.
+          2. Insert the new ``concept_version`` (version = max+1 for this iri,
+             is_current=true, parent_version_id = the demoted row's id).
+          3. Apply ``changes`` to the concept's rdf_triples (overwrite the human
+             SKOS fields, matching update_concept's predicate choices).
+          4. Reassign every triple owned by this subject IRI (triple-ownership
+             rule) to the new concept_version_id.
+          5. commit() — everything above lands atomically. The stable ``iri``
+             never changes.
+
+        Cross-store ordering (RECOVERY CONTRACT): the DB and the in-memory rdflib
+        graph are two separate stores; there is NO XA between them. We commit the
+        Postgres transaction FIRST, THEN patch the served graph (swap this
+        concept's triples). If the graph patch throws, the DB is the source of
+        truth and the served copy is merely stale for this one concept: we force
+        a full rebuild (``rebuild_graph_from_enabled``) to reconcile, and
+        re-raise so the endpoint surfaces a non-200 instead of pretending
+        success. No DB rollback — this is a STALENESS failure, not data loss.
+        """
+        changes = changes or {}
+
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            raise ValueError("Cannot determine collection for concept")
+
+        # Gate on editable scheme/collection (same guard as create/update).
+        collection = self.get_collection(collection_iri)
+        if collection and not collection.get("is_editable"):
+            raise ValueError(f"Collection is not editable: {collection_iri}")
+
+        # ---- 1-4: build the swap inside one transaction (no commit yet) -------
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        demoted = concept_versions_repo.demote_current(self._db, concept_iri)  # flushes
+        new_version_num = concept_versions_repo.max_version(self._db, concept_iri) + 1
+        new_cv = concept_versions_repo.create_version(  # flushes -> new_cv.id available
+            self._db,
+            iri=concept_iri,
+            version=new_version_num,
+            is_current=True,
+            status="active",
+            parent_version_id=(demoted.id if demoted else None),
+            created_by=published_by,
+        )
+
+        # 3. Apply the human-field changes as triple overwrites (DB only here;
+        #    the graph is patched AFTER commit, per the recovery contract).
+        self._apply_publish_changes_to_db(concept_iri, collection_iri, changes, published_by)
+
+        # Optional change note as provenance on the concept.
+        if change_note:
+            rdf_triples_repo.add_triple(
+                self._db,
+                subject_uri=concept_iri,
+                predicate_uri=str(ONTOS.changeNote),
+                object_value=change_note,
+                object_is_uri=False,
+                context_name=collection_iri,
+                source_type="concept",
+                source_identifier=concept_iri,
+                created_by=published_by,
+            )
+
+        # 4. Move every triple owned by this subject IRI to the new version.
+        rdf_triples_repo.reassign_subject_to_concept_version(
+            self._db, concept_iri, new_cv.id, context_name=collection_iri
+        )
+
+        # 5. ONE commit -> the whole swap is atomic. A concurrent reader sees
+        #    all-old or all-new, never a torn mix.
+        self._db.commit()
+
+        # ---- Cross-store step: patch the served graph AFTER the DB commit -----
+        try:
+            self._swap_concept_in_graph(concept_iri, collection_iri)
+        except Exception:
+            # RECOVERY CONTRACT (P0-3): DB is already correct and committed; the
+            # served graph patch failed, so the served copy is stale for this one
+            # concept. Force a full rebuild to reconcile, then re-raise so the
+            # endpoint returns a non-200/warning rather than silently claiming
+            # success.
+            logger.error(
+                "Graph patch failed after DB commit for %s; forcing rebuild (recovery contract)",
+                concept_iri, exc_info=True,
+            )
+            try:
+                self.rebuild_graph_from_enabled()
+            except Exception:
+                logger.error("Recovery rebuild_graph_from_enabled also failed", exc_info=True)
+            raise
+
+        self._invalidate_cache()
+
+        refreshed = self.get_concept(concept_iri) or {}
+        return {
+            "iri": concept_iri,
+            "label": refreshed.get("label") or existing.get("label"),
+            "new_version": new_version_num,
+            "is_current": True,
+        }
+
+    def _apply_publish_changes_to_db(
+        self,
+        concept_iri: str,
+        collection_iri: str,
+        changes: Dict[str, Any],
+        published_by: Optional[str],
+    ) -> None:
+        """Overwrite the concept's human SKOS fields in rdf_triples for a publish.
+
+        DB-only (no graph patch here — the graph is swapped after the commit).
+        Only fields present in ``changes`` are touched, matching update_concept's
+        remove-by-predicate-then-add pattern.
+        """
+        for field, predicate in self._PUBLISH_LITERAL_FIELDS.items():
+            if field in changes and changes[field] is not None:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(predicate), collection_iri
+                )
+                rdf_triples_repo.add_triple(
+                    self._db, subject_uri=concept_iri, predicate_uri=str(predicate),
+                    object_value=str(changes[field]), object_is_uri=False,
+                    context_name=collection_iri, source_type="concept",
+                    source_identifier=concept_iri, created_by=published_by,
+                )
+
+        for field, predicate in self._PUBLISH_LIST_LITERAL_FIELDS.items():
+            if field in changes and changes[field] is not None:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(predicate), collection_iri
+                )
+                for val in changes[field]:
+                    rdf_triples_repo.add_triple(
+                        self._db, subject_uri=concept_iri, predicate_uri=str(predicate),
+                        object_value=str(val), object_is_uri=False,
+                        context_name=collection_iri, source_type="concept",
+                        source_identifier=concept_iri, created_by=published_by,
+                    )
+
+        for field, predicate in self._PUBLISH_LIST_URI_FIELDS.items():
+            if field in changes and changes[field] is not None:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(predicate), collection_iri
+                )
+                for val in changes[field]:
+                    rdf_triples_repo.add_triple(
+                        self._db, subject_uri=concept_iri, predicate_uri=str(predicate),
+                        object_value=str(val), object_is_uri=True,
+                        context_name=collection_iri, source_type="concept",
+                        source_identifier=concept_iri, created_by=published_by,
+                    )
+
+    def _swap_concept_in_graph(self, concept_iri: str, collection_iri: str) -> None:
+        """Swap one concept's triples in the served in-memory graph (P0-3).
+
+        Remove every triple with this subject from the collection context, then
+        re-add the concept's CURRENT triples from the DB. Called AFTER the DB
+        commit; a failure here triggers the recovery-contract rebuild in the
+        caller.
+        """
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        # Remove the old view of this concept.
+        coll_context.remove((concept_uri, None, None))
+        # Re-add from the DB (current rows for this subject in this context).
+        for triple in rdf_triples_repo.list_by_subject(self._db, concept_iri):
+            if triple.context_name != collection_iri:
+                continue
+            pred = URIRef(triple.predicate_uri)
+            if triple.object_is_uri:
+                obj = URIRef(triple.object_value)
+            elif triple.object_language:
+                obj = Literal(triple.object_value, lang=triple.object_language)
+            elif triple.object_datatype:
+                obj = Literal(triple.object_value, datatype=URIRef(triple.object_datatype))
+            else:
+                obj = Literal(triple.object_value)
+            coll_context.add((concept_uri, pred, obj))
 
     def delete_concept(self, concept_iri: str, deleted_by: Optional[str] = None) -> bool:
         """Delete a concept.

@@ -8,6 +8,11 @@ from rdflib import URIRef, Literal, Namespace, BNode
 # Ontos application ontology namespace
 ONTOS = Namespace("http://ontos.app/ontology#")
 
+# Dublin Core Terms + PROV — used for 2B split lineage links (P0-6 safe transition):
+# dct:isReplacedBy (old->new), dct:replaces (new->old), prov:wasRevisionOf (new->old).
+DCT = Namespace("http://purl.org/dc/terms/")
+PROV = Namespace("http://www.w3.org/ns/prov#")
+
 # XSD namespace for datatype handling
 from rdflib.namespace import XSD
 from sqlalchemy.orm import Session

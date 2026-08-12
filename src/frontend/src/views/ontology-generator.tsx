@@ -272,6 +272,28 @@ export default function OntologyGeneratorView() {
   const isRunning = !!activeRunId;
   const canGenerate = selectedPaths.size > 0 && !isRunning && !isStarting;
 
+  // Backend processes at most this many tables per run (see MAX_TABLES_IN_METADATA
+  // in ontology_generator_manager.py). Warn proactively so users aren't surprised
+  // when tables are silently skipped. A path with 3+ dot-segments is a table
+  // (catalog.schema.table); 1-2 segments is a catalog/schema container that expands
+  // into an unknown number of tables, so we can't give an exact count for those.
+  const MAX_TABLES_PER_RUN = 50;
+  const capWarning = (() => {
+    let tableCount = 0;
+    let hasContainer = false;
+    for (const path of selectedPaths) {
+      if (path.split('.').length >= 3) tableCount += 1;
+      else hasContainer = true;
+    }
+    if (hasContainer) {
+      return `Selected schemas or catalogs expand into many tables. This generator processes up to ${MAX_TABLES_PER_RUN} tables per run; narrow your selection or split it into multiple runs.`;
+    }
+    if (tableCount > MAX_TABLES_PER_RUN) {
+      return `${tableCount} tables selected. This generator processes up to ${MAX_TABLES_PER_RUN} per run, so ${tableCount - MAX_TABLES_PER_RUN} will be skipped. Narrow your selection or split it into multiple runs.`;
+    }
+    return null;
+  })();
+
   const handleGenerate = async () => {
     if (!selectedConnectionId || selectedPaths.size === 0) return;
 
@@ -535,13 +557,21 @@ export default function OntologyGeneratorView() {
                 </Button>
               </div>
             ) : (
-              <Button onClick={handleGenerate} disabled={!canGenerate} className="w-full">
-                {isStarting ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Starting...</>
-                ) : (
-                  <><Wand2 className="h-4 w-4 mr-2" /> Generate Ontology ({selectedPaths.size} selected)</>
+              <>
+                {capWarning && (
+                  <Alert className="border-amber-200 bg-amber-50 py-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-xs text-amber-800">{capWarning}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
+                <Button onClick={handleGenerate} disabled={!canGenerate} className="w-full">
+                  {isStarting ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Starting...</>
+                  ) : (
+                    <><Wand2 className="h-4 w-4 mr-2" /> Generate Ontology ({selectedPaths.size} selected)</>
+                  )}
+                </Button>
+              </>
             )}
           </div>
 
@@ -682,6 +712,17 @@ export default function OntologyGeneratorView() {
           {/* Results tabs */}
           {result && (
             <Tabs defaultValue="classes">
+              {result.success && (result.classes.length > 0 || result.properties.length > 0) && (
+                <div className="flex items-center justify-between gap-3 mb-3 rounded-md border bg-muted/40 px-3 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    Generated <span className="font-medium text-foreground">{result.classes.length}</span> classes and{' '}
+                    <span className="font-medium text-foreground">{result.properties.length}</span> properties. Save them to a collection to keep and use them.
+                  </p>
+                  <Button size="sm" className="shrink-0" onClick={() => setIsSaveDialogOpen(true)}>
+                    <Save className="h-3.5 w-3.5 mr-1" /> Save to Collection
+                  </Button>
+                </div>
+              )}
               <TabsList className="w-full">
                 <TabsTrigger value="classes">Classes ({result.classes.length})</TabsTrigger>
                 <TabsTrigger value="properties">Properties ({result.properties.length})</TabsTrigger>
@@ -775,7 +816,6 @@ export default function OntologyGeneratorView() {
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={copyTurtle}><Copy className="h-3.5 w-3.5 mr-1" /> Copy</Button>
                         <Button variant="outline" size="sm" onClick={downloadTurtle}><Download className="h-3.5 w-3.5 mr-1" /> Download</Button>
-                        <Button size="sm" onClick={() => setIsSaveDialogOpen(true)}><Save className="h-3.5 w-3.5 mr-1" /> Save to Collection</Button>
                       </div>
                     </div>
                   </CardHeader>

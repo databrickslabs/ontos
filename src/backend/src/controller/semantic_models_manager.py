@@ -4058,6 +4058,82 @@ class SemanticModelsManager(SearchableAsset):
                 obj = Literal(triple.object_value)
             coll_context.add((concept_uri, pred, obj))
 
+    # -- P0-2/§1-§2: version-info + historical-detail reads --------------------
+    def get_concept_version_info(self, concept_iri: str) -> Optional[Dict[str, Any]]:
+        """Current version + version history for one concept (API contract §1).
+
+        Returns None if the concept isn't found. ``label`` is always populated
+        (Simple view requirement). Lineage pointers come from the graph:
+        ``replaces_iri`` from dct:replaces / prov:wasRevisionOf on this concept,
+        ``replaced_by_iris`` from dct:isReplacedBy on this concept.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        concept = self.get_concept(concept_iri)
+        if not concept:
+            return None
+
+        label = concept.get("label") or concept_iri
+        rows = concept_versions_repo.list_versions(self._db, concept_iri)  # newest-first
+        versions = [
+            {
+                "version": r.version,
+                "is_current": r.is_current,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_by": r.created_by,
+            }
+            for r in rows
+        ]
+        current = next((r for r in rows if r.is_current), rows[0] if rows else None)
+
+        # Lineage from the served graph (current-only triples).
+        concept_uri = URIRef(concept_iri)
+        replaced_by_iris = [str(o) for o in self._graph.objects(concept_uri, DCT.isReplacedBy)]
+        replaces = [str(o) for o in self._graph.objects(concept_uri, DCT.replaces)]
+        replaces_iri = replaces[0] if replaces else None
+
+        return {
+            "iri": concept_iri,
+            "label": label,
+            "current_version": current.version if current else None,
+            "status": (current.status if current else None) or concept.get("status"),
+            "versions": versions,
+            "replaces_iri": replaces_iri,
+            "replaced_by_iris": replaced_by_iris,
+        }
+
+    def get_concept_version_detail(
+        self, concept_iri: str, version: int
+    ) -> Optional[Dict[str, Any]]:
+        """Concept detail AS OF a specific version, by (iri, version) key (§2).
+
+        Cold-path fetch: does NOT touch the hot graph. Returns the same concept
+        detail shape as concepts/by-iri (via get_concept), plus ``version`` and
+        ``is_current``. Returns None if that (iri, version) does not exist.
+
+        NOTE: full point-in-time reconstruction of every historical field lands
+        with the P0-4 diff engine (per-version triple snapshots). Today the
+        current triples are the source; this returns the concept detail annotated
+        with the requested version's metadata (version number, is_current,
+        status, created_at/by) so the compare/history UI can bind to real
+        version rows.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        cv = concept_versions_repo.get_by_iri_version(self._db, concept_iri, version)
+        if cv is None:
+            return None
+
+        detail = self.get_concept(concept_iri) or {"iri": concept_iri}
+        detail = dict(detail)
+        detail["version"] = cv.version
+        detail["is_current"] = cv.is_current
+        detail["status"] = cv.status
+        detail["created_at"] = cv.created_at.isoformat() if cv.created_at else None
+        detail["created_by"] = cv.created_by
+        return detail
+
     # -- P0-6: reference-count / safe-transition primitives -------------------
     def reference_count(self, concept_iri: str) -> int:
         """How many things reference this concept — the retire gate (P0-6).

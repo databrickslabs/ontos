@@ -24,12 +24,30 @@ from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 from src.owl.owl_parser import clean_truncated_turtle
 from rdflib import ConjunctiveGraph, RDF
+from pydantic import BaseModel, Field
 
 # Configure logging
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Semantic Models"])
+
+
+# --- Concept-versioning request/response models (API contract §4, signed off) ---
+class PublishVersionRequest(BaseModel):
+    """Body for POST /semantic-models/concepts/version/publish."""
+    iri: str = Field(..., min_length=1, description="Stable concept IRI (never changes across versions)")
+    changes: dict = Field(default_factory=dict, description="Concept fields to overwrite in the new version")
+    change_note: Optional[str] = Field(None, description="Human note describing what changed")
+
+
+class PublishVersionResponse(BaseModel):
+    """Response for the publish action. NO graph_refreshed field: a 200 means the
+    graph was patched synchronously and the new version is already live."""
+    iri: str
+    label: Optional[str] = None
+    new_version: int
+    is_current: bool
 
 # Internal named-graph contexts that must never surface as user-facing RDF
 # Sources. These are computed/managed graphs (app entities, semantic links,
@@ -691,6 +709,49 @@ async def get_concept_details_by_iri(
     except Exception:
         logger.error("Error retrieving concept details for %s", concept_iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve concept details")
+
+
+@router.post(
+    '/semantic-models/concepts/version/publish',
+    response_model=PublishVersionResponse,
+)
+async def publish_concept_version(
+    body: PublishVersionRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> PublishVersionResponse:
+    """Publish a new version of a concept (P0-3, API contract §4).
+
+    DB-first atomic swap (demote old -> history, insert new current, reassign the
+    concept's triples) in ONE Postgres transaction, THEN patch the served graph.
+    On the rare DB-committed-but-graph-patch-failed case the manager force-rebuilds
+    and re-raises; we surface that as a 500 (the DB is correct, the served graph
+    is being reconciled) rather than pretending success.
+    """
+    try:
+        result = manager.publish_concept_version(
+            concept_iri=body.iri,
+            changes=body.changes,
+            change_note=body.change_note,
+            published_by=current_user.email,
+        )
+        return PublishVersionResponse(**result)
+    except ValueError as e:
+        # Not editable / not found / bad input.
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        # Includes the recovery-contract re-raise: DB committed, graph patch
+        # failed and a rebuild was forced. Do NOT report success.
+        logger.error("Error publishing concept version for %s", body.iri, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="New version committed to the database but the served graph "
+                   "could not be patched; a rebuild was triggered. Retry the read "
+                   "shortly or use the graph reload control.",
+        )
 
 
 @router.get(

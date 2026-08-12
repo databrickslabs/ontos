@@ -226,6 +226,32 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
             RdfTripleDb.subject_uri == subject_uri
         ).all()
 
+    def reassign_subject_to_concept_version(
+        self, db: Session, subject_uri: str, concept_version_id, context_name: Optional[str] = None
+    ) -> int:
+        """Point every triple owned by ``subject_uri`` at a concept-version (P0-3).
+
+        Triple ownership is determined by the SUBJECT IRI (the P0-1 ownership
+        rule). On an atomic publish, the affected concept's triples are moved to
+        the newly-minted current version by setting their ``concept_version_id``.
+        Optionally scoped to a single ``context_name``.
+
+        Returns the number of triples reassigned. Flushes but does not commit —
+        the caller owns the transaction so the swap is one Postgres commit.
+        """
+        query = db.query(RdfTripleDb).filter(RdfTripleDb.subject_uri == subject_uri)
+        if context_name:
+            query = query.filter(RdfTripleDb.context_name == context_name)
+        updated = query.update(
+            {RdfTripleDb.concept_version_id: concept_version_id},
+            synchronize_session=False,
+        )
+        db.flush()
+        logger.debug(
+            f"Reassigned {updated} triples of '{subject_uri}' to concept_version {concept_version_id}"
+        )
+        return updated
+
     def remove_by_subject(
         self, db: Session, subject_uri: str, context_name: Optional[str] = None
     ) -> int:

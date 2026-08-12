@@ -740,7 +740,12 @@ class SemanticModelsManager(SearchableAsset):
         if disabled_contexts:
             logger.info(f"Skipping {len(disabled_contexts)} disabled contexts: {disabled_contexts}")
 
-        all_triples = rdf_triples_repo.list_all(self._db)
+        # P0-2 write-time current/history split: the served hot graph is built
+        # from CURRENT-ONLY triples. The is_current filter runs HERE, once, at
+        # build time — downstream SPARQL/MCP reads carry NO version predicate.
+        # list_current keeps unowned (scheme/collection/metadata) triples and
+        # drops only history triples owned by a non-current concept-version.
+        all_triples = rdf_triples_repo.list_current(self._db)
         loaded = 0
         skipped = 0
 

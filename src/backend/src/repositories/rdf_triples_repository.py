@@ -6,11 +6,12 @@ and context-based queries.
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 import uuid
 
 from src.common.repository import CRUDBase
 from src.db_models.rdf_triples import RdfTripleDb
+from src.db_models.concept_versions import ConceptVersionDb
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -180,8 +181,44 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         ).all()
 
     def list_all(self, db: Session) -> List[RdfTripleDb]:
-        """Get all triples from the database."""
+        """Get all triples from the database (current + history).
+
+        NOTE: for building the served in-memory graph use ``list_current`` — the
+        hot graph must contain current-only triples (P0-2). This method returns
+        every row including historical versions.
+        """
         return db.query(RdfTripleDb).all()
+
+    def list_current(self, db: Session) -> List[RdfTripleDb]:
+        """Get the current-only triples for building the served hot graph (P0-2).
+
+        A triple is current when EITHER:
+          - it has no ``concept_version_id`` (scheme / collection / metadata and
+            other P0-1-unowned triples — these MUST still load), OR
+          - its owning concept-version has ``is_current = true``.
+
+        History triples (owned by a non-current concept-version) are excluded so
+        they never enter the materialized graph. The ``is_current`` filter runs
+        HERE, once at build time; downstream reads carry no version predicate.
+
+        Mirrors the ``rdf_triples_current`` DB view (migration
+        ``m2_rdf_triples_current``) so the two stay in lockstep.
+        """
+        # Outer join to concept_version; keep rows that are unowned OR current.
+        return (
+            db.query(RdfTripleDb)
+            .outerjoin(
+                ConceptVersionDb,
+                ConceptVersionDb.id == RdfTripleDb.concept_version_id,
+            )
+            .filter(
+                or_(
+                    RdfTripleDb.concept_version_id.is_(None),
+                    ConceptVersionDb.is_current.is_(True),
+                )
+            )
+            .all()
+        )
 
     def list_by_subject(self, db: Session, subject_uri: str) -> List[RdfTripleDb]:
         """Get all triples with a given subject."""

@@ -16,6 +16,10 @@ from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Sentinel so remove_by_subject_predicate can distinguish "not scoped by version"
+# (delete across all versions) from "scoped to concept_version_id = None".
+_UNSET = object()
+
 
 class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
     """Repository for RDF triple operations.
@@ -239,6 +243,90 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
             RdfTripleDb.subject_uri == subject_uri
         ).all()
 
+    def list_current_by_subject(self, db: Session, subject_uri: str) -> List[RdfTripleDb]:
+        """Triples for a subject that belong in the SERVED (current) graph.
+
+        A row is current when it has no owning version (unowned/metadata) OR its
+        owning concept-version is current. Used to re-add a concept to the hot
+        graph after publish WITHOUT leaking the prior version's frozen snapshot.
+        Mirrors the rdf_triples_current view rule, scoped to one subject.
+        """
+        return (
+            db.query(RdfTripleDb)
+            .outerjoin(
+                ConceptVersionDb,
+                ConceptVersionDb.id == RdfTripleDb.concept_version_id,
+            )
+            .filter(
+                RdfTripleDb.subject_uri == subject_uri,
+                or_(
+                    RdfTripleDb.concept_version_id.is_(None),
+                    ConceptVersionDb.is_current.is_(True),
+                ),
+            )
+            .all()
+        )
+
+    def list_by_concept_version(self, db: Session, concept_version_id) -> List[RdfTripleDb]:
+        """All triples owned by a specific concept-version id (its frozen snapshot)."""
+        return (
+            db.query(RdfTripleDb)
+            .filter(RdfTripleDb.concept_version_id == concept_version_id)
+            .all()
+        )
+
+    def copy_triples_to_version(
+        self,
+        db: Session,
+        subject_uri: str,
+        source_concept_version_id,
+        target_concept_version_id,
+        context_name: Optional[str] = None,
+        created_by: Optional[str] = None,
+    ) -> int:
+        """Duplicate a concept's triples into a NEW set owned by the target version.
+
+        The prior (source) version's rows are LEFT UNTOUCHED — they are its frozen
+        snapshot. Each source row is re-inserted with concept_version_id =
+        target. Uniqueness now includes concept_version_id (migration m4), so the
+        copy does not collide with the source rows. Returns rows copied.
+
+        Source selection: rows owned by ``source_concept_version_id`` (the demoted
+        version). If that is None (edge case: publishing an unversioned concept),
+        falls back to the subject's currently-unowned rows so v2 still gets a set.
+        """
+        q = db.query(RdfTripleDb).filter(RdfTripleDb.subject_uri == subject_uri)
+        if context_name:
+            q = q.filter(RdfTripleDb.context_name == context_name)
+        if source_concept_version_id is not None:
+            q = q.filter(RdfTripleDb.concept_version_id == source_concept_version_id)
+        else:
+            q = q.filter(RdfTripleDb.concept_version_id.is_(None))
+        source_rows = q.all()
+
+        copied = 0
+        for r in source_rows:
+            db.add(RdfTripleDb(
+                subject_uri=r.subject_uri,
+                predicate_uri=r.predicate_uri,
+                object_value=r.object_value,
+                object_is_uri=r.object_is_uri,
+                object_language=r.object_language,
+                object_datatype=r.object_datatype,
+                context_name=r.context_name,
+                source_type=r.source_type,
+                source_identifier=r.source_identifier,
+                created_by=created_by or r.created_by,
+                concept_version_id=target_concept_version_id,
+            ))
+            copied += 1
+        db.flush()
+        logger.debug(
+            f"Copied {copied} triples of '{subject_uri}' from version "
+            f"{source_concept_version_id} to {target_concept_version_id}"
+        )
+        return copied
+
     def reassign_subject_to_concept_version(
         self, db: Session, subject_uri: str, concept_version_id, context_name: Optional[str] = None
     ) -> int:
@@ -290,11 +378,18 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         subject_uri: str,
         predicate_uri: str,
         context_name: Optional[str] = None,
+        concept_version_id: object = _UNSET,
     ) -> int:
         """Remove all triples matching subject and predicate.
-        
+
         Useful for updating properties where you don't know the old value.
         Returns the number of triples deleted.
+
+        ``concept_version_id``: when provided (including None), scopes the delete
+        to rows owned by exactly that version — so a publish can overwrite v2's
+        copied set WITHOUT touching the prior version's frozen snapshot. Left at
+        the sentinel default = not scoped (delete across all versions, legacy
+        behaviour for the plain update path).
         """
         query = db.query(RdfTripleDb).filter(
             and_(
@@ -304,10 +399,15 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         )
         if context_name:
             query = query.filter(RdfTripleDb.context_name == context_name)
-        
+        if concept_version_id is not _UNSET:
+            if concept_version_id is None:
+                query = query.filter(RdfTripleDb.concept_version_id.is_(None))
+            else:
+                query = query.filter(RdfTripleDb.concept_version_id == concept_version_id)
+
         deleted = query.delete(synchronize_session=False)
         db.flush()
-        
+
         logger.debug(f"Removed {deleted} triples for {subject_uri} -> {predicate_uri}")
         return deleted
 

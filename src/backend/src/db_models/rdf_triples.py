@@ -59,11 +59,15 @@ class RdfTripleDb(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
     # Unique constraint required for ON CONFLICT DO NOTHING in rdf_triples_repository.
+    # Includes concept_version_id (migration m4_rdf_triple_version_uq) so per-version
+    # snapshot rows (same triple owned by different versions) coexist, while
+    # NULLS NOT DISTINCT keeps NULL-owned (unversioned/metadata) triples deduped.
     __table_args__ = (
         UniqueConstraint(
             'subject_uri', 'predicate_uri', 'object_value',
-            'object_language', 'object_datatype', 'context_name',
+            'object_language', 'object_datatype', 'context_name', 'concept_version_id',
             name='uq_rdf_triple',
+            postgresql_nulls_not_distinct=True,
         ),
         # Composite index for SPO lookups
         Index('ix_rdf_triples_spo', 'subject_uri', 'predicate_uri', 'object_value'),

@@ -26,6 +26,15 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
     - Context-based operations for managing ontology sources
     """
 
+    # Uniqueness key columns for ON CONFLICT DO NOTHING. Includes
+    # concept_version_id (migration m4_rdf_triple_version_uq) so per-version
+    # snapshot rows (same triple, different owning version) do not collide, while
+    # NULL-owned duplicates are still deduped (UNIQUE NULLS NOT DISTINCT).
+    _CONFLICT_COLS = [
+        'subject_uri', 'predicate_uri', 'object_value',
+        'object_language', 'object_datatype', 'context_name', 'concept_version_id',
+    ]
+
     def add_triple(
         self,
         db: Session,
@@ -39,10 +48,15 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         source_type: Optional[str] = None,
         source_identifier: Optional[str] = None,
         created_by: Optional[str] = None,
+        concept_version_id=None,
     ) -> Optional[RdfTripleDb]:
         """Add a single triple with ON CONFLICT DO NOTHING.
 
         Returns the triple if inserted, None if it already existed.
+
+        ``concept_version_id`` optionally stamps the owning concept-version at
+        insert time (used by the publish snapshot-copy path so the new row is
+        born owned by v2 rather than reassigned afterward).
         """
         # Coerce None to '' — the DB columns are NOT NULL with default ''
         if object_language is None:
@@ -61,9 +75,9 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
             source_type=source_type,
             source_identifier=source_identifier,
             created_by=created_by,
+            concept_version_id=concept_version_id,
         ).on_conflict_do_nothing(
-            index_elements=['subject_uri', 'predicate_uri', 'object_value', 
-                           'object_language', 'object_datatype', 'context_name']
+            index_elements=self._CONFLICT_COLS
         ).returning(RdfTripleDb.id)
         
         result = db.execute(stmt)
@@ -114,8 +128,7 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
                     triple['object_datatype'] = ''
             
             stmt = insert(RdfTripleDb).values(batch).on_conflict_do_nothing(
-                index_elements=['subject_uri', 'predicate_uri', 'object_value', 
-                               'object_language', 'object_datatype', 'context_name']
+                index_elements=self._CONFLICT_COLS
             )
             
             result = db.execute(stmt)

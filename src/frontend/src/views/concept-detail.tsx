@@ -15,6 +15,7 @@ import {
   User,
   Network,
   GitCompare,
+  Save,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +54,8 @@ import ConceptNeighborhoodGraph from '@/components/semantic/concept-neighborhood
 import { ConceptEditorDialog } from '@/components/knowledge/concept-editor-dialog';
 import { OwnershipPanel } from '@/components/common/ownership-panel';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import { PublishVersionDialog } from '@/components/semantic/publish-version-dialog';
+import { VersionHistoryPanel } from '@/components/semantic/version-history-panel';
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-5 w-5 text-emerald-500 shrink-0" />,
@@ -126,6 +129,10 @@ export default function ConceptDetailView() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  // "Save new version" dialog (versioning contract §4) + a nonce that forces the
+  // version-history panel to refetch after a successful publish.
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [versionRefreshNonce, setVersionRefreshNonce] = useState(0);
   const [neighbourhoodOpen, setNeighbourhoodOpen] = useState(true);
   // Relations and the neighbourhood graph are the same /neighbors data rendered
   // two ways, so they share ONE block with a List (relations) / Graph switch.
@@ -428,6 +435,10 @@ export default function ConceptDetailView() {
           )}
           {isEditable && (
             <>
+              <Button variant="outline" size="sm" onClick={() => setPublishOpen(true)}>
+                <Save className="mr-2 h-4 w-4" />
+                {t('semantic-models:versionHistory.saveNewVersion', 'Save new version')}
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setEditorOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 {t('common:actions.edit')}
@@ -726,33 +737,11 @@ export default function ConceptDetailView() {
         {/* Row 4: Metadata */}
         <EntityMetadataPanel entityType="concept" entityId={concept.iri} />
 
-        {/* Row 4: Change history (Preview placeholder) */}
-        <div className="rounded-lg border bg-card p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-sm font-medium">Change history</h3>
-            <Badge variant="secondary" className="text-[10px] uppercase">
-              {t('semantic-models:versionDiff.mock', 'Preview')}
-            </Badge>
-          </div>
-          <ul className="space-y-1 text-xs">
-            <li className="flex gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
-              <span><span className="font-medium">@anna</span> certified <span className="text-muted-foreground">Jun 16</span></span>
-            </li>
-            <li className="flex gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
-              <span><span className="font-medium">@anna</span> approved <span className="text-muted-foreground">Jun 15</span></span>
-            </li>
-            <li className="flex gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
-              <span><span className="font-medium">@marco</span> submitted for review <span className="text-muted-foreground">Jun 14</span></span>
-            </li>
-            <li className="flex gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-600 flex-shrink-0 mt-1" />
-              <span><span className="font-medium">@marco</span> created <span className="text-muted-foreground">Jun 12</span></span>
-            </li>
-          </ul>
-        </div>
+        {/* Row 4: Version history — live, drives versioning contract §1 + §2. */}
+        <VersionHistoryPanel
+          conceptIri={concept.iri}
+          refreshNonce={versionRefreshNonce}
+        />
 
         {/* Row 5: Relations + neighbourhood graph — ONE block, two views over
             the same /neighbors data. List = relations; Graph = node-link. */}
@@ -937,6 +926,18 @@ export default function ConceptDetailView() {
         collection={collection ?? undefined}
         collections={collections.filter((c) => c.is_editable)}
         onSave={handleSaveConcept}
+      />
+
+      <PublishVersionDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        iri={concept.iri}
+        currentDefinition={conceptDefinition || ''}
+        onPublished={async () => {
+          bumpKnowledgeGraphRefresh('concept-version');
+          setVersionRefreshNonce((n) => n + 1);
+          await fetchConcept();
+        }}
       />
     </div>
   );

@@ -217,5 +217,23 @@
       "appEntities": "App Entities",
       "demoGraph": "Demo business concepts"
     }
+  },
+  "versionHistory": {
+    "title": "Version history",
+    "saveNewVersion": "Save new version",
+    "saveDescription": "Edit the definition and save it as a new version. The previous definition is kept in the history.",
+    "willCreate": "This will create v{{next}}.",
+    "whatChanged": "What changed?",
+    "notePlaceholder": "e.g. tightened the wording for clarity",
+    "saved": "New version saved",
+    "current": "Current",
+    "previous": "Previous version",
+    "previousDefinition": "Previous definition:",
+    "noDefinition": "No definition recorded for this version.",
+    "editedBy": "Edited by {{who}} on {{when}}",
+    "unknownEditor": "someone",
+    "none": "No previous versions yet.",
+    "unavailable": "Version history is unavailable.",
+    "replacedBy": "Replaced by {{label}}"
   }
 }

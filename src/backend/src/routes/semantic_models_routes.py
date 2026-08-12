@@ -80,6 +80,16 @@ class RetireConceptResponse(BaseModel):
     label: Optional[str] = None
     status: str
 
+
+# --- Graph freshness (API contract §6, signed off) ---
+class GraphFreshnessResponse(BaseModel):
+    """Served in-memory graph freshness. UI shows 'last refreshed HH:MM, N
+    concepts' + a SEPARATE 'synced to UC' line (uc_* fields)."""
+    last_refreshed: str
+    concept_count: int
+    uc_synced_at: Optional[str] = None
+    uc_next_sync_est: Optional[str] = None
+
 # Internal named-graph contexts that must never surface as user-facing RDF
 # Sources. These are computed/managed graphs (app entities, semantic links,
 # source-registry metadata, the rdflib default graph), not uploaded or bundled
@@ -858,6 +868,41 @@ async def retire_concept(
     except Exception:
         logger.error("Error retiring concept %s", body.iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retire concept")
+
+
+@router.get(
+    '/semantic-models/graph/freshness',
+    response_model=GraphFreshnessResponse,
+)
+async def get_graph_freshness(
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> GraphFreshnessResponse:
+    """Served-graph freshness (P0-8, API contract §6): last_refreshed +
+    concept_count + separate UC sync timing."""
+    try:
+        return GraphFreshnessResponse(**manager.graph_freshness())
+    except Exception:
+        logger.error("Error computing graph freshness", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute graph freshness")
+
+
+@router.post(
+    '/semantic-models/graph/reload',
+    response_model=GraphFreshnessResponse,
+)
+async def reload_graph(
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> GraphFreshnessResponse:
+    """Force a full rebuild of the served graph and return the updated freshness
+    (P0-8, API contract §6). The user-facing recovery/backstop control."""
+    try:
+        return GraphFreshnessResponse(**manager.reload_graph())
+    except Exception:
+        logger.error("Error reloading graph", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to reload graph")
 
 
 @router.get(

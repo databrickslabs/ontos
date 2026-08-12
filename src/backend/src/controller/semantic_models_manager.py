@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from rdflib import Graph, ConjunctiveGraph, Dataset
 from rdflib.namespace import RDF, RDFS, SKOS, OWL
 from rdflib import URIRef, Literal, Namespace, BNode
@@ -180,6 +180,11 @@ class SemanticModelsManager(SearchableAsset):
         self._cached_concepts: Optional[List[OntologyConcept]] = None
         self._cached_taxonomies: Optional[List] = None
         self._cached_stats: Optional[TaxonomyStats] = None
+        # P0-8 graph freshness: when the served in-memory graph was last (re)built
+        # or targeted-patched. Advanced on every rebuild AND every targeted write
+        # (create/update/publish/deprecate/retire all route through
+        # _invalidate_cache). Surfaced via graph_freshness() / the /graph endpoints.
+        self._graph_last_refreshed: datetime = datetime.now(timezone.utc)
         logger.info(f"SemanticModelsManager initialized with data_dir: {self._data_dir}")
         # Load file-based taxonomies immediately
         try:
@@ -1140,6 +1145,9 @@ class SemanticModelsManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to build persistent caches: {e}", exc_info=True)
 
+        # P0-8: the served graph is now fresh — advance the freshness timestamp.
+        self._graph_last_refreshed = datetime.now(timezone.utc)
+
     def _build_persistent_caches_atomic(self) -> None:
         """Build and save persistent caches atomically to disk.
 
@@ -1386,6 +1394,11 @@ class SemanticModelsManager(SearchableAsset):
         self._cached_taxonomies = None
         self._cached_stats = None
 
+        # P0-8: every targeted write (create/update/publish/deprecate/retire)
+        # calls this AFTER patching the served graph, so treat it as a freshness
+        # bump — the graph now reflects the just-committed change.
+        self._graph_last_refreshed = datetime.now(timezone.utc)
+
         cache_dir = self._data_dir / "cache"
         if cache_dir.exists():
             for cache_file in ["concepts_all.json", "taxonomies.json", "stats.json"]:
@@ -1398,6 +1411,63 @@ class SemanticModelsManager(SearchableAsset):
                         logger.warning(f"Failed to delete cache file {cache_file}: {e}")
 
         logger.info("Semantic models cache invalidated (in-memory and persistent)")
+
+    def graph_freshness(self) -> Dict[str, Any]:
+        """Explicit graph-freshness surface for the UI (P0-8, API contract §6).
+
+        Returns:
+          - last_refreshed: ISO ts of the last rebuild OR targeted patch of the
+            served in-memory graph (so users SEE that their edit is live).
+          - concept_count: current concepts in the served graph.
+          - uc_synced_at / uc_next_sync_est: last successful uc_tag_sync run end
+            and a rough next-run estimate — surfaced SEPARATELY so "not yet synced
+            to UC" (eventual, ~4h) is not confused with "not saved". Reuses the
+            same job-run source as get_tag_delivery_stats; null when unavailable.
+        """
+        # concept_count from taxonomy stats (cached, always fresh post-rebuild).
+        try:
+            concept_count = self.get_taxonomy_stats().total_concepts
+        except Exception:
+            logger.warning("graph_freshness: could not compute concept_count", exc_info=True)
+            concept_count = 0
+
+        uc_synced_at, uc_next_sync_est = self._uc_sync_timing()
+
+        return {
+            "last_refreshed": self._graph_last_refreshed.isoformat(),
+            "concept_count": concept_count,
+            "uc_synced_at": uc_synced_at,
+            "uc_next_sync_est": uc_next_sync_est,
+        }
+
+    def _uc_sync_timing(self):
+        """(last_successful_uc_tag_sync_end_iso, next_run_estimate_iso) or (None, None).
+
+        Reuses the existing uc_tag_sync job-run history (same source as
+        get_tag_delivery_stats). Does NOT invent a new job. The uc_tag_sync job
+        runs on roughly a 4h cadence (PRD §2); estimate = last success + 4h.
+        Returns (None, None) if the job never ran or timing isn't readable.
+        """
+        try:
+            from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
+            runs = workflow_job_run_repo.get_recent_runs(self._db, workflow_id='uc_tag_sync', limit=20)
+            for r in runs:
+                if r.result_state == 'SUCCESS' and r.end_time:
+                    synced = datetime.fromtimestamp(r.end_time / 1000, tz=timezone.utc)
+                    nxt = synced + timedelta(hours=4)
+                    return synced.isoformat(), nxt.isoformat()
+        except Exception as e:
+            logger.warning(f"graph_freshness: could not read uc_tag_sync timing: {e}")
+        return None, None
+
+    def reload_graph(self) -> Dict[str, Any]:
+        """Force a full rebuild of the served graph and return freshness (P0-8).
+
+        The user-facing 'Reload graph' backstop. rebuild_graph_from_enabled
+        advances last_refreshed; we then return the freshness object.
+        """
+        self.rebuild_graph_from_enabled()
+        return self.graph_freshness()
 
     @staticmethod
     def _extract_source_context(context_name: str) -> Optional[str]:

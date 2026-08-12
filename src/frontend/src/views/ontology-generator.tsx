@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -56,6 +57,10 @@ interface GenerateResponse {
   iterations: number;
   error: string;
   usage: { prompt_tokens: number; completion_tokens: number };
+  tables_resolved?: number;
+  tables_used?: number;
+  caps_hit?: boolean;
+  caps_note?: string;
 }
 
 interface RunParams {
@@ -812,6 +817,14 @@ export default function OntologyGeneratorView() {
                 </Card>
               </TabsContent>
             </Tabs>
+          )}
+
+          {result && result.caps_hit && result.caps_note && (
+            <Alert className="border-amber-200 bg-amber-50">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-900">Capacity Limit</AlertTitle>
+              <AlertDescription className="text-amber-800">{result.caps_note}</AlertDescription>
+            </Alert>
           )}
 
           {result && !result.success && result.error && (

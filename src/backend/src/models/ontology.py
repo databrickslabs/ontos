@@ -34,6 +34,10 @@ class ConceptStatus(str, Enum):
     UNDER_REVIEW = "under_review"
     APPROVED = "approved"
     ACTIVE = "active"
+    # A prior concept-version that a newer version replaced (P0-3 atomic publish).
+    # The concept itself stays active; only this historical version is superseded.
+    # Distinct from DEPRECATED (stop using the concept) and RETIRED (tombstoned).
+    SUPERSEDED = "superseded"
     DEPRECATED = "deprecated"
     RETIRED = "retired"
 

@@ -55,14 +55,17 @@ class ConceptVersionDb(Base):
 
     __table_args__ = (
         UniqueConstraint("iri", "version", name="uq_concept_version_iri_version"),
-        # Documents the DB-level partial unique index (created via raw DDL in the
-        # migration because SQLAlchemy Core cannot express a partial index in a
-        # portable way here). Reflected for awareness; the migration owns it.
+        # Partial unique index: at most one is_current=true row per iri. Declared
+        # with BOTH dialect WHERE clauses so metadata.create_all reproduces the
+        # SAME partial index on SQLite — otherwise the test harness builds a plain
+        # full-unique index on iri and rejects legitimate multi-version rows.
+        # Postgres/Lakebase owns the authoritative copy via migration DDL.
         Index(
             "uq_concept_version_current_per_iri",
             "iri",
             unique=True,
             postgresql_where=Column("is_current"),
+            sqlite_where=Column("is_current"),
         ),
     )
 

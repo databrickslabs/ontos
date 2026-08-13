@@ -342,21 +342,36 @@ class SemanticModelsManager(SearchableAsset):
         self._db.flush()
         self._db.refresh(db_obj)
         
-        # Update rdf_triples: remove old triples, import new ones
-        # Use sanitized name for human-readable context identifiers
+        # Update rdf_triples. Re-upload is a BULK VERSIONING EVENT (P0-4), not a
+        # blind delete-replace: when this model already has stored triples we
+        # diff the incoming graph against them and mint versions per concept
+        # (unchanged=no-op, modified=v2, new=v1, removed=deprecate). A byte-
+        # identical re-upload mints ZERO new versions (URDNA2015 canonicalization
+        # in the diff engine). A FIRST-EVER upload (no prior context) has nothing
+        # to diff, so it stays on the plain import path.
         sanitized_name = _sanitize_context_name(db_obj.name)
         context_name = f"urn:semantic-model:{sanitized_name}"
+
+        # Parse the incoming content once.
+        temp_graph = Graph()
+        fmt = 'turtle' if db_obj.format == 'skos' else 'xml'
+        content_for_parse = (
+            clean_truncated_turtle(content_text) if fmt == 'turtle' else content_text
+        )
+        temp_graph.parse(data=content_for_parse, format=fmt)
+
+        has_prior_context = rdf_triples_repo.context_exists(self._db, context_name)
+        if has_prior_context:
+            # Diff-driven bulk versioning event. This method owns its own atomic
+            # commit + graph refresh, so we commit the semantic-model row edits
+            # (content_text etc.) first so they are not left uncommitted.
+            self._db.commit()
+            self.apply_upload_as_versioning_event(context_name, temp_graph, actor=updated_by)
+            self._db.refresh(db_obj)
+            return self._to_api(db_obj)
+
+        # First-ever upload for this model: nothing to diff, plain import.
         try:
-            # Remove existing triples for this model
-            rdf_triples_repo.remove_by_context(self._db, context_name)
-            
-            # Import new triples
-            temp_graph = Graph()
-            fmt = 'turtle' if db_obj.format == 'skos' else 'xml'
-            content_for_parse = (
-                clean_truncated_turtle(content_text) if fmt == 'turtle' else content_text
-            )
-            temp_graph.parse(data=content_for_parse, format=fmt)
             self._import_graph_to_db(
                 graph=temp_graph,
                 context_name=context_name,
@@ -366,7 +381,7 @@ class SemanticModelsManager(SearchableAsset):
             )
         except Exception as e:
             logger.warning(f"Failed to update semantic model triples in database: {e}")
-        
+
         self._db.commit()  # Persist changes immediately since manager uses singleton session
         return self._to_api(db_obj)
 

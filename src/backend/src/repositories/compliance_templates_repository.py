@@ -213,6 +213,33 @@ class ComplianceTemplatesRepository:
 
     # ----- Values (polymorphic, per-entity) -------------------------------
 
+    def add_value(
+        self,
+        db: Session,
+        *,
+        field_id: UUID,
+        entity_type: str,
+        entity_id: str,
+        value: object,
+        filled_by: str | None,
+    ) -> ComplianceTemplateValueDb:
+        """Insert a new value row for a field/entity. Does NOT upsert; assumes row doesn't exist.
+
+        Used by the reconciler to materialize defaults. Caller is responsible for
+        verifying the row doesn't already exist.
+        """
+        row = ComplianceTemplateValueDb(
+            field_id=field_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            value=value,
+            filled_by=filled_by,
+        )
+        db.add(row)
+        db.flush()
+        db.refresh(row)
+        return row
+
     def list_values(self, db: Session, *, entity_type: str, entity_id: str, field_ids: list[UUID]) -> list[ComplianceTemplateValueDb]:
         if not field_ids:
             return []

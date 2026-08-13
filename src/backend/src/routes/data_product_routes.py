@@ -387,6 +387,20 @@ async def set_publication_scope(
                 detail=f"Product must be active to publish. Current status: {product_db.status}"
             )
 
+        # Compliance Templates (#712): block publishing to any non-none scope
+        # when mandatory compliance fields are incomplete. Advisory on edit,
+        # blocking here at publish. No-op when no template is active.
+        if scope != "none":
+            completeness = compliance_templates_manager.check_completeness(
+                db, entity_type="data_product", entity_id=product_id
+            )
+            if not completeness.passed:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cannot publish: required compliance fields are incomplete. "
+                    + " ".join(completeness.messages),
+                )
+
         product_db.publication_scope = scope
         if scope != "none":
             product_db.published_at = datetime.now(timezone.utc)

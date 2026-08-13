@@ -19,6 +19,9 @@ from src.controller.compliance_templates_manager import (
 )
 from src.models.compliance_templates import (
     ComplianceCompletenessRead,
+    ComplianceFieldCreate,
+    ComplianceFieldRead,
+    ComplianceFieldsReorder,
     ComplianceTemplateCreate,
     ComplianceTemplateRead,
     ComplianceTemplateUpdate,
@@ -123,6 +126,86 @@ async def delete_template(
     except ComplianceTemplateError as e:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ----- Admin: field management (safe & destructive) -------------------------
+
+@router.post("/{template_id}/fields", response_model=ComplianceFieldRead, status_code=status.HTTP_201_CREATED)
+async def add_template_field(
+    template_id: UUID,
+    body: ComplianceFieldCreate,
+    db: DBSessionDep,
+    _: None = Depends(PermissionChecker(ADMIN_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Add a field to a template. Safe to call on active template."""
+    try:
+        return compliance_templates_manager.add_field(db, template_id=template_id, payload=body)
+    except ComplianceTemplateError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error adding compliance field: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to add field")
+
+
+@router.put("/{template_id}/fields/reorder", response_model=list[ComplianceFieldRead])
+async def reorder_template_fields(
+    template_id: UUID,
+    body: ComplianceFieldsReorder,
+    db: DBSessionDep,
+    _: None = Depends(PermissionChecker(ADMIN_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Reorder fields and reassign groups. Admin only."""
+    try:
+        order_map = [{"id": f.id, "group_title": f.group_title, "group_order": f.group_order, "field_order": f.field_order} for f in body.fields]
+        return compliance_templates_manager.reorder_fields(db, template_id=template_id, order_map=order_map)
+    except ComplianceTemplateError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error reordering fields: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to reorder fields")
+
+
+@router.put("/{template_id}/fields/{field_id}", response_model=ComplianceFieldRead)
+async def update_template_field(
+    template_id: UUID,
+    field_id: UUID,
+    body: dict,
+    db: DBSessionDep,
+    _: None = Depends(PermissionChecker(ADMIN_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Update a field's safe attributes or add an enum value. Guards against destructive edits."""
+    try:
+        return compliance_templates_manager.update_field(db, field_id=field_id, payload=body)
+    except ComplianceTemplateError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating field: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update field")
+
+
+@router.delete("/{template_id}/fields/{field_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_template_field(
+    template_id: UUID,
+    field_id: UUID,
+    db: DBSessionDep,
+    _: None = Depends(PermissionChecker(ADMIN_FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Delete a field. Guarded: cannot delete if stored values exist."""
+    try:
+        compliance_templates_manager.delete_field(db, field_id=field_id)
+    except ComplianceTemplateError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting field: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete field")
 
 
 # ----- Per-entity: composed read + replace-all write -----------------------

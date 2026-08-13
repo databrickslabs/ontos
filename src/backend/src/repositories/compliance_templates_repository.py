@@ -135,6 +135,82 @@ class ComplianceTemplatesRepository:
             .all()
         )
 
+    def update_field(self, db: Session, *, field_id: UUID, update_data: dict) -> ComplianceTemplateFieldDb | None:
+        """Update a field's safe attributes (label, hint_text, default_value, is_mandatory, group metadata).
+
+        Does NOT support value_type or possible_values changes — those are destructive
+        edits guarded by the manager.
+        """
+        field = self.get_field(db, field_id)
+        if not field:
+            return None
+        # Whitelist safe fields: label, hint_text, default_value, is_mandatory, group_title, group_order, field_order
+        safe_fields = {"label", "hint_text", "default_value", "is_mandatory", "group_title", "group_order", "field_order"}
+        for key, value in update_data.items():
+            if key in safe_fields and hasattr(field, key):
+                setattr(field, key, value)
+        db.add(field)
+        db.flush()
+        db.refresh(field)
+        return field
+
+    def delete_field(self, db: Session, *, field_id: UUID) -> None:
+        """Delete a field and its values."""
+        field = self.get_field(db, field_id)
+        if field:
+            db.delete(field)
+            db.flush()
+            logger.info(f"Deleted compliance field '{field.label}' (id={field_id})")
+
+    def count_field_values(self, db: Session, *, field_id: UUID) -> int:
+        """Count how many entities have stored values for this field."""
+        return db.query(ComplianceTemplateValueDb).filter(ComplianceTemplateValueDb.field_id == field_id).count()
+
+    def reorder_fields(self, db: Session, *, template_id: UUID, order_map: list[dict]) -> list[ComplianceTemplateFieldDb]:
+        """Bulk reorder fields and groups: order_map = [{id, group_title, group_order, field_order}, ...].
+
+        Uses two-pass approach to avoid unique constraint violations on field_order:
+        first sets all changing rows to negative temp values, then to final values.
+        """
+        fields = self.list_fields(db, template_id=template_id)
+        field_by_id = {f.id: f for f in fields}
+        changed = []
+
+        for item in order_map:
+            field_id = item["id"]
+            field = field_by_id.get(field_id)
+            if not field:
+                continue
+            # Check if any field is actually changing
+            new_group_title = item.get("group_title", field.group_title)
+            new_group_order = item.get("group_order", field.group_order)
+            new_field_order = item.get("field_order", field.field_order)
+            if (
+                new_group_title != field.group_title
+                or new_group_order != field.group_order
+                or new_field_order != field.field_order
+            ):
+                changed.append((field, item))
+
+        if not changed:
+            return fields
+
+        # Pass 1: set to temp negative values
+        for i, (field, _) in enumerate(changed):
+            field.field_order = -(i + 1)
+            db.add(field)
+        db.flush()
+
+        # Pass 2: set to final values
+        for field, item in changed:
+            field.group_title = item.get("group_title", field.group_title)
+            field.group_order = item.get("group_order", field.group_order)
+            field.field_order = item.get("field_order", field.field_order)
+            db.add(field)
+        db.flush()
+
+        return self.list_fields(db, template_id=template_id)
+
     # ----- Values (polymorphic, per-entity) -------------------------------
 
     def list_values(self, db: Session, *, entity_type: str, entity_id: str, field_ids: list[UUID]) -> list[ComplianceTemplateValueDb]:

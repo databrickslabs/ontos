@@ -66,6 +66,19 @@ class ComplianceFieldRead(ComplianceFieldBase):
     model_config = {"from_attributes": True}
 
 
+class ComplianceFieldReorderItem(BaseModel):
+    """A field's reorder instruction: new ordinal and group assignment."""
+    id: UUID
+    group_title: str = Field("", max_length=255)
+    group_order: int = Field(0, ge=0)
+    field_order: int = Field(0, ge=0)
+
+
+class ComplianceFieldsReorder(BaseModel):
+    """Bulk field reorder payload."""
+    fields: list[ComplianceFieldReorderItem] = Field(default_factory=list)
+
+
 # ----- Templates ----------------------------------------------------------
 
 class ComplianceTemplateBase(BaseModel):

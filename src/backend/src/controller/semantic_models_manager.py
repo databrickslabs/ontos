@@ -4483,6 +4483,16 @@ class SemanticModelsManager(SearchableAsset):
                 "to_label": (to_concept.get("label") if to_concept else None) or to_iri,
             }
 
+        # Editable-scheme gate: the target concept's collection must be editable.
+        to_concept_pre = self.get_concept(to_iri)
+        if not to_concept_pre:
+            raise ValueError(f"Target concept not found: {to_iri}")
+        to_collection_iri = to_concept_pre.get("source_context")
+        if to_collection_iri:
+            to_collection = self.get_collection(to_collection_iri)
+            if to_collection and not to_collection.get("is_editable"):
+                raise ValueError(f"Target collection is not editable: {to_collection_iri}")
+
         entity_id, entity_type = row.entity_id, row.entity_type
 
         links_manager = SemanticLinksManager(self._db, semantic_models_manager=self)

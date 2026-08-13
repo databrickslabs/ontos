@@ -1006,6 +1006,98 @@ async def retire_concept(
         raise HTTPException(status_code=500, detail="Failed to retire concept")
 
 
+# --- Reference-reconciliation worklist routes (API contract §5b) ---
+@router.get(
+    '/semantic-models/concepts/references',
+    response_model=ConceptReferencesResponse,
+)
+async def list_concept_references(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> ConceptReferencesResponse:
+    """Itemized references to a concept — the split/merge worklist source (§5b).
+
+    Same set the retire gate counts (asset_refs + concept_refs), plus the
+    recorded successors. ``count`` equals reference-count.
+    """
+    try:
+        return ConceptReferencesResponse(**manager.list_references(concept_iri))
+    except Exception:
+        logger.error("Error listing references for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list concept references")
+
+
+@router.post(
+    '/semantic-models/concepts/references/repoint',
+    response_model=RepointReferenceResponse,
+)
+async def repoint_concept_reference(
+    body: RepointReferenceRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> RepointReferenceResponse:
+    """Move one entity_semantic_links row from from_iri to to_iri (§5b).
+
+    Remove old + add new via the links manager so graph side-effects fire; no ref
+    silently dropped. Idempotent if from_iri == to_iri. 404 if the link is missing
+    or does not point at from_iri. Gated on to_iri's collection being editable.
+    """
+    try:
+        result = manager.repoint_reference(
+            link_id=body.link_id,
+            from_iri=body.from_iri,
+            to_iri=body.to_iri,
+            actor=current_user.email,
+        )
+        return RepointReferenceResponse(**result)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower() or "does not point" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error repointing reference %s", body.link_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to repoint reference")
+
+
+@router.post(
+    '/semantic-models/concepts/merge',
+    response_model=MergeConceptsResponse,
+)
+async def merge_concepts(
+    body: MergeConceptsRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> MergeConceptsResponse:
+    """Merge N sources into one target (§5b): repoint each source's refs to target
+    (if repoint_refs), then deprecate the source with replaced_by=[target].
+
+    Convenience composing the repoint + deprecate primitives; no new lineage
+    semantics. Editable gate enforced per-repoint (target collection) and by
+    deprecate (source collection).
+    """
+    try:
+        result = manager.merge_concepts(
+            source_iris=body.source_iris,
+            target_iri=body.target_iri,
+            repoint_refs=body.repoint_refs,
+            actor=current_user.email,
+        )
+        return MergeConceptsResponse(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error merging concepts into %s", body.target_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to merge concepts")
+
+
 @router.get(
     '/semantic-models/graph/freshness',
     response_model=GraphFreshnessResponse,

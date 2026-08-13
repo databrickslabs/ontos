@@ -325,7 +325,19 @@ class SemanticModelsManager(SearchableAsset):
             })
         return candidates
 
-    def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str]) -> Optional[SemanticModelApi]:
+    def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str], auto_apply: bool = False) -> Any:
+        """Handle a file (re-)upload for an existing semantic model.
+
+        P1-0 change: a re-upload of a model that ALREADY has stored triples no
+        longer auto-applies the diff. It now returns a PREVIEW (via
+        ``preview_upload``) and applies NOTHING until the steward confirms with
+        the returned ``preview_token``. Pass ``auto_apply=True`` to preserve the
+        old non-interactive behaviour (diff applied inline, returns the model
+        API) for any programmatic caller that needs it.
+
+        Returns a preview dict (interactive re-upload), or a ``SemanticModelApi``
+        (first-ever upload, or ``auto_apply=True``).
+        """
         db_obj = semantic_models_repo.get(self._db, id=model_id)
         if not db_obj:
             return None
@@ -362,13 +374,17 @@ class SemanticModelsManager(SearchableAsset):
 
         has_prior_context = rdf_triples_repo.context_exists(self._db, context_name)
         if has_prior_context:
-            # Diff-driven bulk versioning event. This method owns its own atomic
-            # commit + graph refresh, so we commit the semantic-model row edits
-            # (content_text etc.) first so they are not left uncommitted.
+            # Commit the semantic-model row edits (content_text etc.) first so
+            # they are not left uncommitted.
             self._db.commit()
-            self.apply_upload_as_versioning_event(context_name, temp_graph, actor=updated_by)
-            self._db.refresh(db_obj)
-            return self._to_api(db_obj)
+            if auto_apply:
+                # Legacy non-interactive path: diff + apply inline.
+                self.apply_upload_as_versioning_event(context_name, temp_graph, actor=updated_by)
+                self._db.refresh(db_obj)
+                return self._to_api(db_obj)
+            # P1-0 interactive path: build a PREVIEW and apply NOTHING. The
+            # steward confirms via confirm_upload(preview_token) to apply.
+            return self.preview_upload(context_name, temp_graph)
 
         # First-ever upload for this model: nothing to diff, plain import.
         try:
@@ -564,6 +580,118 @@ class SemanticModelsManager(SearchableAsset):
         self._invalidate_cache()
 
         return diff.summary()
+
+    # ------------------------------------------------------------------
+    # P1-0: steward preview + confirm on re-upload (dry-run then apply-by-token)
+    # ------------------------------------------------------------------
+    def _preview_label(self, iri: str, incoming_graph) -> str:
+        """Best-effort human label for a concept in a preview payload.
+
+        Prefers the label carried by the INCOMING graph (new/modified concepts);
+        falls back to the served graph (removed concepts, which are absent from
+        the incoming file); finally to the bare IRI so the row is never blank.
+        """
+        subj = URIRef(iri)
+        for g in (incoming_graph, getattr(self, "_graph", None)):
+            if g is None:
+                continue
+            for pred in (SKOS.prefLabel, RDFS.label):
+                val = g.value(subj, pred)
+                if val is not None:
+                    return str(val)
+        return iri
+
+    def preview_upload(self, context_name: str, incoming_graph) -> Dict[str, Any]:
+        """Dry-run a re-upload: compute the diff, stash the content, apply NOTHING.
+
+        Runs the EXISTING ``compute_concept_diff`` against the currently stored
+        triples for ``context_name`` and returns a preview the steward can review
+        BEFORE anything is applied. The incoming content is stashed (keyed by an
+        opaque ``preview_token``) so ``confirm_upload`` can apply it later without
+        the user re-uploading. reference_count reuses the P0-6 primitive so the
+        steward sees "removing X, referenced by N".
+
+        Returns::
+
+            {preview_token, context_name,
+             summary: {unchanged, modified, new, removed},
+             modified: [{iri, label, reference_count}],
+             new:      [{iri, label}],
+             removed:  [{iri, label, reference_count}]}
+        """
+        from src.controller.concept_diff import compute_concept_diff
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        diff = compute_concept_diff(incoming_graph, current_triples)
+
+        # Serialize the incoming graph back to turtle for the stash so confirm can
+        # re-parse it deterministically regardless of the original wire format.
+        content_text = incoming_graph.serialize(format="turtle")
+        stash = upload_preview_repo.create(
+            self._db,
+            context_name=context_name,
+            content_text=content_text,
+            format="skos",  # stashed as turtle; confirm parses accordingly
+            created_by=None,
+        )
+        self._db.commit()
+
+        return {
+            "preview_token": str(stash.token),
+            "context_name": context_name,
+            "summary": diff.summary(),
+            "modified": [
+                {
+                    "iri": iri,
+                    "label": self._preview_label(iri, incoming_graph),
+                    "reference_count": self.reference_count(iri),
+                }
+                for iri in diff.modified
+            ],
+            "new": [
+                {"iri": iri, "label": self._preview_label(iri, incoming_graph)}
+                for iri in diff.new
+            ],
+            "removed": [
+                {
+                    "iri": iri,
+                    "label": self._preview_label(iri, incoming_graph),
+                    "reference_count": self.reference_count(iri),
+                }
+                for iri in diff.removed
+            ],
+        }
+
+    def confirm_upload(self, preview_token: str, actor: Optional[str] = None) -> Dict[str, Any]:
+        """Apply a previously previewed re-upload by token, then consume the stash.
+
+        Loads the stashed content, re-parses it to a graph and runs the EXISTING
+        ``apply_upload_as_versioning_event`` (never reimplements apply), then
+        deletes the stash row so a token is single-use. Unknown/already-consumed
+        tokens raise ``ValueError`` (the route maps this to 404).
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        stash = upload_preview_repo.get(self._db, preview_token)
+        if stash is None:
+            raise ValueError(f"Unknown or already-applied preview token: {preview_token}")
+
+        context_name = stash.context_name
+        graph = Graph()
+        fmt = "turtle" if stash.format == "skos" else "xml"
+        content_for_parse = (
+            clean_truncated_turtle(stash.content_text) if fmt == "turtle" else stash.content_text
+        )
+        graph.parse(data=content_for_parse, format=fmt)
+
+        summary = self.apply_upload_as_versioning_event(context_name, graph, actor=actor)
+
+        # Consume the stash (single-use). apply_* already committed the changeset.
+        upload_preview_repo.delete(self._db, preview_token)
+        self._db.commit()
+
+        return summary
 
     def delete(self, model_id: str) -> bool:
         # Get the model before deleting to check if we need to delete the physical file

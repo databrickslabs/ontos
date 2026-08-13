@@ -4497,7 +4497,9 @@ class SemanticModelsManager(SearchableAsset):
 
         links_manager = SemanticLinksManager(self._db, semantic_models_manager=self)
         # remove old (graph side-effect + cache invalidation), then add new.
-        links_manager.remove(link_id, removed_by=actor)
+        # Pass the UUID object (not the str) so the GUID column's SQLite emulation
+        # can bind it — the delete route's string path only works on Postgres.
+        links_manager.remove(link_uuid, removed_by=actor)
         created = links_manager.add(
             EntitySemanticLinkCreate(entity_id=entity_id, entity_type=entity_type, iri=to_iri),
             created_by=actor,

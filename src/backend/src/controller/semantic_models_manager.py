@@ -1418,9 +1418,10 @@ class SemanticModelsManager(SearchableAsset):
             served in-memory graph (so users SEE that their edit is live).
           - concept_count: current concepts in the served graph.
           - uc_synced_at / uc_next_sync_est: last successful uc_tag_sync run end
-            and a rough next-run estimate — surfaced SEPARATELY so "not yet synced
-            to UC" (eventual, ~4h) is not confused with "not saved". Reuses the
-            same job-run source as get_tag_delivery_stats; null when unavailable.
+            and a next-run estimate derived from the observed run cadence —
+            surfaced SEPARATELY so "not yet synced to UC" (eventual) is not
+            confused with "not saved". Reuses the same job-run source as
+            get_tag_delivery_stats; est is null when cadence can't be inferred.
         """
         # concept_count from taxonomy stats (cached, always fresh post-rebuild).
         try:
@@ -1442,18 +1443,34 @@ class SemanticModelsManager(SearchableAsset):
         """(last_successful_uc_tag_sync_end_iso, next_run_estimate_iso) or (None, None).
 
         Reuses the existing uc_tag_sync job-run history (same source as
-        get_tag_delivery_stats). Does NOT invent a new job. The uc_tag_sync job
-        runs on roughly a 4h cadence (PRD §2); estimate = last success + 4h.
-        Returns (None, None) if the job never ran or timing isn't readable.
+        get_tag_delivery_stats). Does NOT invent a new job.
+
+        The next-run estimate is derived EMPIRICALLY from the observed cadence
+        (gap between the two most recent successful runs), not a hardcoded
+        assumption about the schedule: reading the actual quartz cron would need
+        a live Jobs API call + cron parsing on this hot freshness poll, and the
+        interval is user-configurable, so a fixed constant would just be wrong.
+        With only one successful run we cannot infer a cadence, so we return the
+        last-synced time and leave the estimate None rather than assert a guess.
         """
         try:
             from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
             runs = workflow_job_run_repo.get_recent_runs(self._db, workflow_id='uc_tag_sync', limit=20)
-            for r in runs:
-                if r.result_state == 'SUCCESS' and r.end_time:
-                    synced = datetime.fromtimestamp(r.end_time / 1000, tz=timezone.utc)
-                    nxt = synced + timedelta(hours=4)
-                    return synced.isoformat(), nxt.isoformat()
+            successes = [
+                datetime.fromtimestamp(r.end_time / 1000, tz=timezone.utc)
+                for r in runs
+                if r.result_state == 'SUCCESS' and r.end_time
+            ]
+            if not successes:
+                return None, None
+            # get_recent_runs is newest-first; the first success is the latest.
+            synced = successes[0]
+            if len(successes) >= 2:
+                # Observed cadence = gap between the two most recent successes.
+                cadence = synced - successes[1]
+                if cadence.total_seconds() > 0:
+                    return synced.isoformat(), (synced + cadence).isoformat()
+            return synced.isoformat(), None
         except Exception as e:
             logger.warning(f"graph_freshness: could not read uc_tag_sync timing: {e}")
         return None, None

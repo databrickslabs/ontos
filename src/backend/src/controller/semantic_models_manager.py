@@ -507,16 +507,17 @@ class SemanticModelsManager(SearchableAsset):
         failure leaves the DB correct and only the served copy stale).
         """
         from src.controller.concept_diff import compute_concept_diff
+        from src.repositories.upload_event_repository import upload_event_repo
 
         current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
         diff = compute_concept_diff(incoming_graph, current_triples)
 
-        original_commit = self._db.commit
-        try:
-            # Neutralize the inner commits of the composed primitives so the whole
-            # changeset lands in ONE transaction (atomicity contract).
-            self._db.commit = self._db.flush  # type: ignore[assignment]
+        # Capture each affected concept's BEFORE-state (version + status) so the
+        # upload can be rolled back FORWARD later. Read from the pre-upload DB /
+        # graph BEFORE we start mutating.
+        prev_state = self._capture_prev_state(diff)
 
+        def _work():
             for iri in diff.modified:
                 self._ensure_concept_version_v1(iri, context_name, actor)
                 self.publish_concept_version(
@@ -529,11 +530,44 @@ class SemanticModelsManager(SearchableAsset):
 
             for iri in diff.removed:
                 self.deprecate_concept(iri, deprecated_by=actor, bypass_editable_gate=True)
+
+            # Record the event INSIDE the same transaction: it commits iff the
+            # bulk apply commits (a rolled-back apply writes NO event row).
+            upload_event_repo.record(
+                self._db,
+                context_name=context_name,
+                summary=diff.summary(),
+                concept_prev_state=prev_state,
+                created_by=actor,
+            )
+
+        self._run_atomic_bulk_event(context_name, _work)
+        return diff.summary()
+
+    def _run_atomic_bulk_event(self, context_name: str, work_fn) -> None:
+        """Run ``work_fn`` as ONE atomic Postgres transaction (P0-4 contract).
+
+        Shared atomicity wrapper for every bulk versioning event (re-upload AND
+        rollback). The composed primitives each ``commit()`` internally; to make
+        the whole changeset one transaction we redirect ``commit`` -> ``flush``
+        for the duration, then issue ONE real commit at the end. On ANY exception
+        we restore ``commit`` and ``rollback()`` so the store is NEVER left
+        half-applied (mid-apply failure => store unchanged). AFTER the commit we
+        refresh the served graph ONCE via ``rebuild_graph_from_enabled`` (DB-first
+        recovery contract: the DB is the source of truth; a graph-rebuild failure
+        leaves the DB correct and only the served copy stale).
+        """
+        original_commit = self._db.commit
+        try:
+            # Neutralize the inner commits so the whole changeset lands in ONE
+            # transaction (atomicity contract).
+            self._db.commit = self._db.flush  # type: ignore[assignment]
+            work_fn()
         except Exception:
             self._db.commit = original_commit  # type: ignore[assignment]
             self._db.rollback()
             logger.error(
-                "Upload versioning event failed for context '%s'; rolled back "
+                "Bulk versioning event failed for context '%s'; rolled back "
                 "(store unchanged, no half-replace)", context_name, exc_info=True,
             )
             # A partial modified-bucket publish may have patched the in-memory
@@ -556,12 +590,213 @@ class SemanticModelsManager(SearchableAsset):
             self.rebuild_graph_from_enabled()
         except Exception:
             logger.error(
-                "Graph rebuild after upload versioning event failed; DB is "
+                "Graph rebuild after bulk versioning event failed; DB is "
                 "correct, served graph is stale until next reload", exc_info=True,
             )
         self._invalidate_cache()
 
-        return diff.summary()
+    def _capture_prev_state(self, diff) -> List[Dict[str, Any]]:
+        """Snapshot the BEFORE-state (version + status) of every concept a diff
+        touches, so the upload can be rolled back forward.
+
+        Each entry is ``{iri, prev_version|null, prev_status|null, bucket}``.
+        ``prev_version`` is the concept_version that was current before the event
+        (null = concept was new/absent). ``bucket`` records which diff bucket the
+        concept fell into (modified / new / removed).
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        entries: List[Dict[str, Any]] = []
+
+        def _entry(iri: str, bucket: str) -> Dict[str, Any]:
+            cur = concept_versions_repo.get_current(self._db, iri)
+            concept = self.get_concept(iri)
+            return {
+                "iri": iri,
+                "prev_version": cur.version if cur else None,
+                "prev_status": (concept or {}).get("status"),
+                "bucket": bucket,
+            }
+
+        for iri in diff.modified:
+            entries.append(_entry(iri, "modified"))
+        for iri in diff.new:
+            entries.append(_entry(iri, "new"))
+        for iri in diff.removed:
+            entries.append(_entry(iri, "removed"))
+        return entries
+
+    @staticmethod
+    def _version_detail_to_changes(detail: Dict[str, Any]) -> Dict[str, Any]:
+        """Map a ``get_concept_version_detail`` payload to ``publish_concept_version``
+        ``changes`` kwargs (field-name -> value), so re-publishing a frozen prior
+        version overwrites the current field values with that version's values."""
+        changes: Dict[str, Any] = {}
+        if detail.get("label") is not None:
+            changes["label"] = detail["label"]
+        if detail.get("definition") is not None:
+            changes["definition"] = detail["definition"]
+        if detail.get("synonyms"):
+            changes["synonyms"] = detail["synonyms"]
+        if detail.get("examples"):
+            changes["examples"] = detail["examples"]
+        if detail.get("broader"):
+            changes["broader_iris"] = detail["broader"]
+        if detail.get("narrower"):
+            changes["narrower_iris"] = detail["narrower"]
+        if detail.get("related"):
+            changes["related_iris"] = detail["related"]
+        return changes
+
+    def _set_concept_status(
+        self, concept_iri: str, status: str, actor: Optional[str] = None
+    ) -> None:
+        """Overwrite a concept's status triple (DB + served graph), no commit.
+
+        Used by rollback to un-deprecate a concept that a rolled-back upload had
+        removed (restore it to its prior status, e.g. ``active``). Mirrors the
+        status-write half of ``deprecate_concept`` but with an arbitrary status
+        and without its own commit (the atomic wrapper owns the commit).
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            raise ValueError("Cannot determine collection for concept")
+
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        rdf_triples_repo.remove_by_subject_predicate(
+            self._db, concept_iri, str(ONTOS.status), collection_iri
+        )
+        rdf_triples_repo.add_triple(
+            self._db, subject_uri=concept_iri, predicate_uri=str(ONTOS.status),
+            object_value=status, object_is_uri=False, context_name=collection_iri,
+            source_type="concept", source_identifier=concept_iri, created_by=actor,
+        )
+        coll_context.remove((concept_uri, ONTOS.status, None))
+        coll_context.add((concept_uri, ONTOS.status, Literal(status)))
+
+    def list_upload_events(self, context_name: str) -> List[Dict[str, Any]]:
+        """Upload events for a context, newest-first (upload history, P2-1)."""
+        from src.repositories.upload_event_repository import upload_event_repo
+
+        rows = upload_event_repo.list_by_context(self._db, context_name)
+        return [
+            {
+                "id": str(r.id),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_by": r.created_by,
+                "summary": r.summary or {},
+            }
+            for r in rows
+        ]
+
+    def rollback_upload_event(
+        self, event_id, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Roll back a recorded upload event — FORWARD, never a delete (P2-1).
+
+        Re-applies each concept's captured BEFORE-state as ONE atomic bulk
+        versioning event (reusing ``_run_atomic_bulk_event``, the SAME wrapper the
+        re-upload path uses). Inverse mapping per recorded bucket:
+          - MODIFIED (prev_version V) -> ``publish_concept_version`` re-publishing
+            version V's frozen triples as a NEW current version (forward re-mint).
+          - NEW (prev_version null)   -> ``deprecate_concept`` (tombstone; it did
+            not exist before, so remove it from current — never hard-delete).
+          - REMOVED (was deprecated)  -> restore it to its prior status
+            (un-deprecate, e.g. back to ``active``).
+        The rollback is itself recorded as a NEW ``upload_event`` (auditable and
+        re-roll-back-able). All-or-nothing + the same graph-refresh recovery
+        contract as the diff engine.
+        """
+        import uuid as _uuid
+
+        from src.repositories.upload_event_repository import upload_event_repo
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        try:
+            key = event_id if isinstance(event_id, _uuid.UUID) else _uuid.UUID(str(event_id))
+        except (ValueError, AttributeError, TypeError):
+            key = event_id
+        event = upload_event_repo.get(self._db, key)
+        if event is None:
+            raise ValueError(f"Upload event not found: {event_id}")
+
+        context_name = event.context_name
+        prev_state = event.concept_prev_state or []
+
+        # Capture the rollback's OWN before-state so the rollback is itself
+        # roll-back-able with the SAME inverse mapping. Bucket remap describes
+        # what would undo the rollback:
+        #   modified -> modified (re-publish the pre-rollback current version)
+        #   new      -> removed  (the rollback deprecates it; undo = restore)
+        #   removed  -> new      (the rollback restores it; undo = deprecate)
+        _undo_bucket = {"modified": "modified", "new": "removed", "removed": "new"}
+        rollback_prev_state: List[Dict[str, Any]] = []
+        counts = {"unchanged": 0, "modified": 0, "new": 0, "removed": 0}
+        for entry in prev_state:
+            iri = entry.get("iri")
+            bucket = entry.get("bucket")
+            cur = concept_versions_repo.get_current(self._db, iri)
+            concept = self.get_concept(iri)
+            rollback_prev_state.append({
+                "iri": iri,
+                "prev_version": cur.version if cur else None,
+                "prev_status": (concept or {}).get("status"),
+                "bucket": _undo_bucket.get(bucket, bucket),
+            })
+            if bucket in counts:
+                counts[bucket] += 1
+        rollback_summary = counts
+
+        def _work():
+            for entry in prev_state:
+                iri = entry.get("iri")
+                bucket = entry.get("bucket")
+                prev_version = entry.get("prev_version")
+                prev_status = entry.get("prev_status")
+
+                if bucket == "modified":
+                    # Re-publish the prior version's frozen field values as a new
+                    # current version (forward re-mint, not a delete).
+                    if prev_version is None:
+                        continue
+                    detail = self.get_concept_version_detail(iri, prev_version)
+                    if detail is None:
+                        continue
+                    self._ensure_concept_version_v1(iri, context_name, actor)
+                    self.publish_concept_version(
+                        iri,
+                        changes=self._version_detail_to_changes(detail),
+                        published_by=actor,
+                        bypass_editable_gate=True,
+                    )
+                elif bucket == "new":
+                    # Was absent before the rolled-back upload -> tombstone it.
+                    self.deprecate_concept(
+                        iri, deprecated_by=actor, bypass_editable_gate=True
+                    )
+                elif bucket == "removed":
+                    # Was deprecated by the rolled-back upload -> restore status.
+                    self._set_concept_status(iri, prev_status or "active", actor)
+
+            # Record the rollback itself as a new (roll-back-able) event.
+            upload_event_repo.record(
+                self._db,
+                context_name=context_name,
+                summary=rollback_summary,
+                concept_prev_state=rollback_prev_state,
+                created_by=actor,
+            )
+
+        self._run_atomic_bulk_event(context_name, _work)
+        return {
+            "event_id": str(event.id),
+            "rolled_back": True,
+            "summary": rollback_summary,
+        }
 
     def delete(self, model_id: str) -> bool:
         # Get the model before deleting to check if we need to delete the physical file

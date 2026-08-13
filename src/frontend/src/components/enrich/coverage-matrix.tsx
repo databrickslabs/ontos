@@ -1,8 +1,10 @@
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info } from 'lucide-react';
+import { Info, Search } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { usePagination, PaginationControls } from '@/components/common/paginated-list';
 import {
   Tooltip,
@@ -110,18 +112,36 @@ export default function CoverageMatrix({
   const gridCols =
     'grid grid-cols-[1.4fr_0.7fr_1.4fr_0.8fr_0.8fr_0.8fr_0.9fr_90px] gap-3 items-center';
 
-  // Paginate the per-scheme rows (10 per page) so a large scheme count doesn't
-  // bloat the page. The totals ("All selected") row below is a rollup over ALL
-  // rows, so it stays accurate and visible on every page — never paginated.
+  // Search by scheme name, then paginate the filtered set (5 per page by
+  // default, size-selectable). The totals row below is a rollup over ALL rows
+  // (not the filtered/paged subset), so it stays accurate on every page.
+  const [search, setSearch] = useState('');
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => r.name.toLowerCase().includes(q));
+  }, [rows, search]);
   const {
     pageItems: pageRows,
     page,
     setPage,
     pageCount,
-  } = usePagination(rows, 10);
+    pageSize,
+    setPageSize,
+  } = usePagination(filteredRows, 5);
 
   return (
     <div className="space-y-3">
+      {/* Search the concept schemes by name. */}
+      <div className="relative max-w-xs">
+        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t('enrich.map.searchSchemes', 'Search concept schemes…')}
+          className="h-8 pl-8 text-sm"
+        />
+      </div>
       <div className="overflow-hidden rounded-lg border bg-card">
         {/* header */}
         <div
@@ -142,6 +162,13 @@ export default function CoverageMatrix({
           <span className="text-right">{t('enrich.map.col.suggested', 'Suggested')}</span>
           <span />
         </div>
+
+        {/* empty state when a search matches nothing */}
+        {filteredRows.length === 0 && (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+            {t('enrich.map.noSchemes', 'No concept schemes match your search.')}
+          </div>
+        )}
 
         {/* rows (paginated — the totals row below is not) */}
         {pageRows.map((row) => (
@@ -221,7 +248,14 @@ export default function CoverageMatrix({
         )}
       </div>
 
-      <PaginationControls page={page} pageCount={pageCount} onPageChange={setPage} />
+      <PaginationControls
+        page={page}
+        pageCount={pageCount}
+        onPageChange={setPage}
+        pageSize={pageSize}
+        onPageSizeChange={setPageSize}
+        pageSizeOptions={[5, 10, 25, 50]}
+      />
 
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />

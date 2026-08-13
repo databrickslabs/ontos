@@ -85,7 +85,6 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // Pending diff previews from re-uploads (one per file that hit an existing
   // scheme). Rendered for steward review; applied on Confirm.
   const [previews, setPreviews] = useState<UploadPreview[]>([]);
-  const [confirming, setConfirming] = useState<string | null>(null);
 
   const editableCollections = collections.filter((c) => c.is_editable);
 
@@ -119,7 +118,6 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     setError(null);
     setOutcomes(null);
     setPreviews([]);
-    setConfirming(null);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -187,26 +185,17 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     return response.json();
   };
 
-  // Apply a pending preview (the steward confirmed the diff).
-  const handleConfirmPreview = async (preview: UploadPreview) => {
-    setConfirming(preview.preview_token);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/semantic-models/uploads/preview/${encodeURIComponent(preview.preview_token)}/confirm`,
-        { method: 'POST' },
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Apply failed (${res.status})`);
-      }
-      // Drop the applied preview; if none remain, the import is done.
-      setPreviews((prev) => prev.filter((p) => p.preview_token !== preview.preview_token));
-      onImported();
-    } catch (err: any) {
-      setError(err.message || 'Failed to apply the changes');
-    } finally {
-      setConfirming(null);
+  // Apply a staged preview by its token (the server holds the parsed content;
+  // confirm applies it). Used internally by the single Import action — there is
+  // no separate "Apply changes" button; the changelog is shown as FYI only.
+  const confirmPreviewToken = async (token: string): Promise<void> => {
+    const res = await fetch(
+      `/api/semantic-models/uploads/preview/${encodeURIComponent(token)}/confirm`,
+      { method: 'POST' },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Import failed (${res.status})`);
     }
   };
 
@@ -238,15 +227,19 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       }
     }
 
-    // Each file either imports directly (empty scheme) or returns a diff preview
-    // (scheme already has content) that the steward applies via Confirm.
+    // One action: each file either imports directly (empty scheme) or, when the
+    // scheme already has content, the server stages a diff and returns a preview
+    // which we IMMEDIATELY confirm (apply). The changelog is shown afterwards as
+    // FYI — there is no second "Apply" step for the user to get stuck on.
     const results: FileImportOutcome[] = [];
-    const pending: UploadPreview[] = [];
+    const applied: UploadPreview[] = [];
     for (const file of selectedFiles) {
       try {
         const data = await importOneFile(file, targetIri);
         if (data?.mode === 'preview') {
-          pending.push({ ...data, fileName: file.name });
+          // Apply the staged diff straight away, then record it as FYI.
+          await confirmPreviewToken(data.preview_token);
+          applied.push({ ...data, fileName: file.name });
         } else {
           results.push({ name: file.name, ok: true, triplesImported: data.triples_imported ?? 0 });
         }
@@ -256,12 +249,12 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     }
 
     setOutcomes(results.length ? results : null);
-    setPreviews(pending);
+    setPreviews(applied);  // rendered as an applied-changes FYI changelog
     setIsUploading(false);
-    if (results.some((r) => r.ok)) {
+    if (results.some((r) => r.ok) || applied.length) {
       onImported();
     }
-    if (results.length && !pending.length && results.every((r) => !r.ok)) {
+    if (results.length && !applied.length && results.every((r) => !r.ok)) {
       setError(
         t(
           'semantic-models:import.allFailed',
@@ -519,24 +512,24 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
               </div>
             )}
 
-            {/* Diff previews from re-uploads — review, then apply on Confirm.
-                Applies NOTHING until the steward clicks Apply changes. */}
+            {/* Changelog of what the import applied on a re-upload (FYI only —
+                already applied; there is no separate confirm step). */}
             {previews.map((pv) => (
               <div key={pv.preview_token} className="grid gap-2 rounded-md border bg-muted/30 p-3">
                 <div className="flex items-center gap-2">
                   <Info className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="text-sm font-medium">
-                    {t('semantic-models:import.previewTitle', 'Review changes from {{file}}', { file: pv.fileName })}
+                    {t('semantic-models:import.changelogTitle', 'Changes applied from {{file}}', { file: pv.fileName })}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t('semantic-models:import.previewSummary', {
+                  {t('semantic-models:import.changelogSummary', {
                     modified: pv.summary.modified,
                     added: pv.summary.new,
                     removed: pv.summary.removed,
                     unchanged: pv.summary.unchanged,
                     defaultValue:
-                      'Modifies {{modified}}, adds {{added}}, removes {{removed}} ({{unchanged}} unchanged). Nothing is applied until you confirm.',
+                      'Modified {{modified}}, added {{added}}, removed {{removed}} ({{unchanged}} unchanged).',
                   })}
                 </p>
                 {(['modified', 'new', 'removed'] as const).map((bucket) => {
@@ -569,44 +562,41 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                     </div>
                   );
                 })}
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    onClick={() => handleConfirmPreview(pv)}
-                    disabled={confirming === pv.preview_token}
-                  >
-                    {confirming === pv.preview_token ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('common:actions.applying', 'Applying…')}</>
-                    ) : (
-                      t('semantic-models:import.applyChanges', 'Apply changes')
-                    )}
-                  </Button>
-                </div>
               </div>
             ))}
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-              disabled={isUploading}
-            >
-              {outcomes
-                ? t('common:actions.close', 'Close')
-                : t('common:actions.cancel', 'Cancel')}
-            </Button>
-            {!outcomes && (
-              <Button type="submit" disabled={!canSubmit}>
-                {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Upload className="h-4 w-4 mr-2" />
-                {t('semantic-models:import.submitMulti', {
-                  count: selectedFiles.length,
-                  defaultValue: 'Import {{count}} file(s)',
-                })}
-              </Button>
-            )}
+            {/* Single action: one Import button that imports (and, on re-upload,
+                applies the diff in the same step). Once done, it becomes Close;
+                the changelog above is FYI only — no separate Apply step. */}
+            {(() => {
+              const done = !!outcomes || previews.length > 0;
+              return (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleOpenChange(false)}
+                    disabled={isUploading}
+                  >
+                    {done
+                      ? t('common:actions.close', 'Close')
+                      : t('common:actions.cancel', 'Cancel')}
+                  </Button>
+                  {!done && (
+                    <Button type="submit" disabled={!canSubmit}>
+                      {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <Upload className="h-4 w-4 mr-2" />
+                      {t('semantic-models:import.submitMulti', {
+                        count: selectedFiles.length,
+                        defaultValue: 'Import {{count}} file(s)',
+                      })}
+                    </Button>
+                  )}
+                </>
+              );
+            })()}
           </DialogFooter>
         </form>
       </DialogContent>

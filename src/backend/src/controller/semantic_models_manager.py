@@ -601,6 +601,11 @@ class SemanticModelsManager(SearchableAsset):
                     return str(val)
         return iri
 
+    def list_triples_by_context(self, context_name: str) -> list:
+        """Triples currently stored for a context (collection/file). Used by the
+        import route to detect a re-upload (non-empty) vs a first import (empty)."""
+        return rdf_triples_repo.list_by_context(self._db, context_name)
+
     def preview_upload(self, context_name: str, incoming_graph) -> Dict[str, Any]:
         """Dry-run a re-upload: compute the diff, stash the content, apply NOTHING.
 

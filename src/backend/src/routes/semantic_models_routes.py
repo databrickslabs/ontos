@@ -1355,14 +1355,40 @@ async def import_to_knowledge_collection(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Import RDF content into an existing collection."""
+    """Import RDF content into a collection.
+
+    Re-upload semantics (P0-4 diff engine + P1-0 steward preview): if the target
+    collection ALREADY has triples, this returns a DIFF PREVIEW (applies nothing)
+    so the steward can review 'modifies N / adds M / removes K' and apply via the
+    confirm endpoint. A FIRST import into an empty collection is a plain add
+    (concepts stamped Draft), since there is nothing to diff against.
+
+    Response is one of:
+      - first import:  {mode:'imported', success, triples_imported}
+      - re-upload:     {mode:'preview', preview_token, summary, modified, new, removed}
+    """
     try:
         content = await file.read()
         content_str = content.decode('utf-8')
-        
+
         # Determine format from filename
         format = "turtle" if file.filename and file.filename.endswith('.ttl') else "xml"
-        
+
+        # Does the collection already have content? If so, this is a re-upload and
+        # goes through the diff-preview path instead of a blind append.
+        existing = manager.list_triples_by_context(collection_iri)
+        if existing:
+            from rdflib import Graph
+            temp_graph = Graph()
+            rdf_format = "turtle" if format in ("ttl", "turtle") else "xml"
+            parse_input = clean_truncated_turtle(content_str) if rdf_format == "turtle" else content_str
+            try:
+                temp_graph.parse(data=parse_input, format=rdf_format)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid {rdf_format} content: {e}")
+            preview = manager.preview_upload(collection_iri, temp_graph)
+            return {'mode': 'preview', **preview}
+
         count = manager.import_rdf_to_collection(
             collection_iri=collection_iri,
             content=content_str,
@@ -1373,7 +1399,9 @@ async def import_to_knowledge_collection(
             # this, imported classes/properties showed no status at all.
             default_status="draft",
         )
-        return {'success': True, 'triples_imported': count}
+        return {'mode': 'imported', 'success': True, 'triples_imported': count}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

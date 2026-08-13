@@ -47,6 +47,23 @@ interface FileImportOutcome {
   error?: string;
 }
 
+// A diff preview returned when re-uploading into a scheme that already has
+// content (P0-4 + P1-0). The steward reviews it and applies via confirm.
+interface UploadPreviewConcept {
+  iri: string;
+  label?: string | null;
+  reference_count?: number | null;
+}
+interface UploadPreview {
+  preview_token: string;
+  context_name: string;
+  summary: { unchanged: number; modified: number; new: number; removed: number };
+  modified: UploadPreviewConcept[];
+  new: UploadPreviewConcept[];
+  removed: UploadPreviewConcept[];
+  fileName: string;
+}
+
 export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   open,
   onOpenChange,
@@ -65,6 +82,10 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcomes, setOutcomes] = useState<FileImportOutcome[] | null>(null);
+  // Pending diff previews from re-uploads (one per file that hit an existing
+  // scheme). Rendered for steward review; applied on Confirm.
+  const [previews, setPreviews] = useState<UploadPreview[]>([]);
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   const editableCollections = collections.filter((c) => c.is_editable);
 
@@ -97,6 +118,8 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     setNewSchemeName('');
     setError(null);
     setOutcomes(null);
+    setPreviews([]);
+    setConfirming(null);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -147,7 +170,10 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     setSelectedFiles((prev) => prev.filter((f) => f.name !== name));
   };
 
-  const importOneFile = async (file: File, targetIri: string): Promise<number> => {
+  // Returns the raw response. First import into an empty scheme →
+  // {mode:'imported', triples_imported}. Re-upload into a scheme with content →
+  // {mode:'preview', preview_token, summary, ...} (nothing applied yet).
+  const importOneFile = async (file: File, targetIri: string): Promise<any> => {
     const formData = new FormData();
     formData.append('file', file);
     const response = await fetch(
@@ -158,11 +184,30 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Import failed (${response.status})`);
     }
-    const data = await response.json();
-    // TODO(cb-v2): needs structural summary from import endpoint.
-    // The endpoint returns { success, triples_imported } only — no per-type
-    // concept counts, top-level vs child breakdown, or dangling-ref detection.
-    return data.triples_imported ?? 0;
+    return response.json();
+  };
+
+  // Apply a pending preview (the steward confirmed the diff).
+  const handleConfirmPreview = async (preview: UploadPreview) => {
+    setConfirming(preview.preview_token);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/semantic-models/uploads/preview/${encodeURIComponent(preview.preview_token)}/confirm`,
+        { method: 'POST' },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Apply failed (${res.status})`);
+      }
+      // Drop the applied preview; if none remain, the import is done.
+      setPreviews((prev) => prev.filter((p) => p.preview_token !== preview.preview_token));
+      onImported();
+    } catch (err: any) {
+      setError(err.message || 'Failed to apply the changes');
+    } finally {
+      setConfirming(null);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -178,8 +223,10 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     setIsUploading(true);
     setError(null);
     setOutcomes(null);
+    setPreviews([]);
 
     // If the user chose "create new scheme", make it first and import into it.
+    // A brand-new scheme is empty, so its files always take the plain-import path.
     let targetIri = selectedCollectionIri;
     if (creatingNew) {
       try {
@@ -191,29 +238,30 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       }
     }
 
-    // CB-6 (atomic save): the backend has no batch/transaction endpoint, so we
-    // cannot make a multi-file import truly atomic here. We validate/parse each
-    // file server-side before it commits (the endpoint 400s on invalid RDF), and
-    // we surface per-file results so a partial failure is visible for manual
-    // rollback in the Review Board.
-    // TODO(cb-v2): true atomic multi-file import (validate-all-then-commit +
-    // server-side rollback) requires a batch import endpoint.
+    // Each file either imports directly (empty scheme) or returns a diff preview
+    // (scheme already has content) that the steward applies via Confirm.
     const results: FileImportOutcome[] = [];
+    const pending: UploadPreview[] = [];
     for (const file of selectedFiles) {
       try {
-        const triples = await importOneFile(file, targetIri);
-        results.push({ name: file.name, ok: true, triplesImported: triples });
+        const data = await importOneFile(file, targetIri);
+        if (data?.mode === 'preview') {
+          pending.push({ ...data, fileName: file.name });
+        } else {
+          results.push({ name: file.name, ok: true, triplesImported: data.triples_imported ?? 0 });
+        }
       } catch (err: any) {
         results.push({ name: file.name, ok: false, error: err.message });
       }
     }
 
-    setOutcomes(results);
+    setOutcomes(results.length ? results : null);
+    setPreviews(pending);
     setIsUploading(false);
     if (results.some((r) => r.ok)) {
       onImported();
     }
-    if (results.every((r) => !r.ok)) {
+    if (results.length && !pending.length && results.every((r) => !r.ok)) {
       setError(
         t(
           'semantic-models:import.allFailed',
@@ -470,6 +518,72 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Diff previews from re-uploads — review, then apply on Confirm.
+                Applies NOTHING until the steward clicks Apply changes. */}
+            {previews.map((pv) => (
+              <div key={pv.preview_token} className="grid gap-2 rounded-md border bg-muted/30 p-3">
+                <div className="flex items-center gap-2">
+                  <Info className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium">
+                    {t('semantic-models:import.previewTitle', 'Review changes from {{file}}', { file: pv.fileName })}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t('semantic-models:import.previewSummary', {
+                    modified: pv.summary.modified,
+                    added: pv.summary.new,
+                    removed: pv.summary.removed,
+                    unchanged: pv.summary.unchanged,
+                    defaultValue:
+                      'Modifies {{modified}}, adds {{added}}, removes {{removed}} ({{unchanged}} unchanged). Nothing is applied until you confirm.',
+                  })}
+                </p>
+                {(['modified', 'new', 'removed'] as const).map((bucket) => {
+                  const items = pv[bucket];
+                  if (!items.length) return null;
+                  const labelForBucket =
+                    bucket === 'modified'
+                      ? t('semantic-models:import.bucketModified', 'Modified (new version)')
+                      : bucket === 'new'
+                      ? t('semantic-models:import.bucketNew', 'New')
+                      : t('semantic-models:import.bucketRemoved', 'Removed (deprecated, not deleted)');
+                  return (
+                    <div key={bucket} className="text-xs">
+                      <div className="font-medium text-muted-foreground mb-0.5">{labelForBucket}</div>
+                      <ul className="space-y-0.5">
+                        {items.map((c) => (
+                          <li key={c.iri} className="flex items-center gap-2">
+                            <span className="truncate">{c.label || c.iri}</span>
+                            {bucket === 'removed' && (c.reference_count ?? 0) > 0 && (
+                              <span className="text-amber-600 shrink-0">
+                                {t('semantic-models:import.stillReferenced', {
+                                  count: c.reference_count ?? 0,
+                                  defaultValue: 'used by {{count}}',
+                                })}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => handleConfirmPreview(pv)}
+                    disabled={confirming === pv.preview_token}
+                  >
+                    {confirming === pv.preview_token ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('common:actions.applying', 'Applying…')}</>
+                    ) : (
+                      t('semantic-models:import.applyChanges', 'Apply changes')
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
 
           <DialogFooter>

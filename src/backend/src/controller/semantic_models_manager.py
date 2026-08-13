@@ -520,14 +520,15 @@ class SemanticModelsManager(SearchableAsset):
             for iri in diff.modified:
                 self._ensure_concept_version_v1(iri, context_name, actor)
                 self.publish_concept_version(
-                    iri, changes=diff.changes.get(iri), published_by=actor
+                    iri, changes=diff.changes.get(iri), published_by=actor,
+                    bypass_editable_gate=True,
                 )
 
             for iri in diff.new:
                 self._import_new_concept_from_graph(iri, incoming_graph, context_name, actor)
 
             for iri in diff.removed:
-                self.deprecate_concept(iri, deprecated_by=actor)
+                self.deprecate_concept(iri, deprecated_by=actor, bypass_editable_gate=True)
         except Exception:
             self._db.commit = original_commit  # type: ignore[assignment]
             self._db.rollback()
@@ -535,6 +536,14 @@ class SemanticModelsManager(SearchableAsset):
                 "Upload versioning event failed for context '%s'; rolled back "
                 "(store unchanged, no half-replace)", context_name, exc_info=True,
             )
+            # A partial modified-bucket publish may have patched the in-memory
+            # graph before the failure. The DB is now reverted, so reconcile the
+            # served graph with the correct (reverted) DB — best effort, then
+            # re-raise so the caller surfaces the failure.
+            try:
+                self.rebuild_graph_from_enabled()
+            except Exception:
+                logger.error("Recovery rebuild after rollback also failed", exc_info=True)
             raise
         finally:
             self._db.commit = original_commit  # type: ignore[assignment]
@@ -4062,6 +4071,7 @@ class SemanticModelsManager(SearchableAsset):
         changes: Optional[Dict[str, Any]] = None,
         change_note: Optional[str] = None,
         published_by: Optional[str] = None,
+        bypass_editable_gate: bool = False,
     ) -> Dict[str, Any]:
         """Publish a new version of a concept — DB-first atomic swap (P0-3).
 
@@ -4100,9 +4110,14 @@ class SemanticModelsManager(SearchableAsset):
             raise ValueError("Cannot determine collection for concept")
 
         # Gate on editable scheme/collection (same guard as create/update).
-        collection = self.get_collection(collection_iri)
-        if collection and not collection.get("is_editable"):
-            raise ValueError(f"Collection is not editable: {collection_iri}")
+        # The re-upload diff engine (P0-4) passes bypass_editable_gate=True:
+        # for file-sourced collections (auto-registered as non-editable because
+        # they are not hand-edited via the concept UI) re-upload IS the sanctioned
+        # write channel, so the UI-editability gate must not block it.
+        if not bypass_editable_gate:
+            collection = self.get_collection(collection_iri)
+            if collection and not collection.get("is_editable"):
+                raise ValueError(f"Collection is not editable: {collection_iri}")
 
         # ---- snapshot-per-version swap inside ONE transaction (no commit yet) --
         # PRD "snapshots over deltas": the PRIOR version keeps its OWN frozen
@@ -4421,6 +4436,7 @@ class SemanticModelsManager(SearchableAsset):
         concept_iri: str,
         replaced_by: Optional[List[str]] = None,
         deprecated_by: Optional[str] = None,
+        bypass_editable_gate: bool = False,
     ) -> Dict[str, Any]:
         """Deprecate a concept (stop-using) — stays fully resolvable (P0-6).
 
@@ -4443,9 +4459,13 @@ class SemanticModelsManager(SearchableAsset):
         collection_iri = existing.get("source_context")
         if not collection_iri:
             raise ValueError("Cannot determine collection for concept")
-        collection = self.get_collection(collection_iri)
-        if collection and not collection.get("is_editable"):
-            raise ValueError(f"Collection is not editable: {collection_iri}")
+        # See publish_concept_version: the re-upload diff engine (P0-4) bypasses
+        # the UI-editability gate because re-upload is the sanctioned write
+        # channel for file-sourced (non-editable) collections.
+        if not bypass_editable_gate:
+            collection = self.get_collection(collection_iri)
+            if collection and not collection.get("is_editable"):
+                raise ValueError(f"Collection is not editable: {collection_iri}")
 
         replaced_by = replaced_by or []
         concept_uri = URIRef(concept_iri)

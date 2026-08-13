@@ -231,6 +231,43 @@ class TestRepoint:
         assert r.json()["link_id"] == link_id
         assert _reference_count(client, a) == 1
 
+    def test_repoint_restores_original_link_if_add_fails(
+        self, client: TestClient, make_collection, monkeypatch
+    ):
+        """Safety: repoint is remove-then-add across two ops. If the add fails
+        after the remove, the original reference (at from_iri) must be restored,
+        never left orphaned — the whole promise of this feature."""
+        from src.controller.semantic_links_manager import SemanticLinksManager
+
+        coll = make_collection("Recon RepointRollback")
+        old = _make_concept(client, coll["iri"], "OldC", "a buyer")
+        new = _make_concept(client, coll["iri"], "NewC", "a current buyer")
+        link_id = _add_link(client, old)
+        assert _reference_count(client, old) == 1
+
+        # Force the FIRST add (the move to `new`) to blow up; the restore add
+        # (back to `old`) must still run.
+        real_add = SemanticLinksManager.add
+        calls = {"n": 0}
+
+        def flaky_add(self, payload, created_by=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("simulated add failure mid-repoint")
+            return real_add(self, payload, created_by=created_by)
+
+        monkeypatch.setattr(SemanticLinksManager, "add", flaky_add)
+
+        r = client.post("/api/semantic-models/concepts/references/repoint", json={
+            "link_id": link_id, "from_iri": old, "to_iri": new,
+        })
+        assert r.status_code == 500, r.text  # the failure surfaces, not a silent success
+
+        monkeypatch.undo()
+        # The reference was NOT dropped: it is back on `old`, and `new` has none.
+        assert _reference_count(client, old) == 1, "original reference must be restored"
+        assert _reference_count(client, new) == 0
+
 
 class TestMerge:
     def test_merge_two_sources_into_one(self, client: TestClient, make_collection):

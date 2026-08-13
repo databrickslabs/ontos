@@ -4499,11 +4499,31 @@ class SemanticModelsManager(SearchableAsset):
         # remove old (graph side-effect + cache invalidation), then add new.
         # Pass the UUID object (not the str) so the GUID column's SQLite emulation
         # can bind it — the delete route's string path only works on Postgres.
+        #
+        # Safety: this is remove-then-add across two operations (no single txn).
+        # The whole point of this feature is "never silently drop a reference",
+        # so if the add fails after the remove we restore the original link
+        # (pointing back at from_iri) and re-raise, rather than leave the ref
+        # orphaned. A repoint either fully moves or fully rolls back.
         links_manager.remove(link_uuid, removed_by=actor)
-        created = links_manager.add(
-            EntitySemanticLinkCreate(entity_id=entity_id, entity_type=entity_type, iri=to_iri),
-            created_by=actor,
-        )
+        try:
+            created = links_manager.add(
+                EntitySemanticLinkCreate(entity_id=entity_id, entity_type=entity_type, iri=to_iri),
+                created_by=actor,
+            )
+        except Exception:
+            logger.error(
+                "repoint_reference: add to %s failed after removing link from %s; "
+                "restoring the original reference", to_iri, from_iri, exc_info=True,
+            )
+            try:
+                links_manager.add(
+                    EntitySemanticLinkCreate(entity_id=entity_id, entity_type=entity_type, iri=from_iri),
+                    created_by=actor,
+                )
+            except Exception:
+                logger.error("repoint_reference: restore of original link ALSO failed", exc_info=True)
+            raise
 
         to_concept = self.get_concept(to_iri)
         return {

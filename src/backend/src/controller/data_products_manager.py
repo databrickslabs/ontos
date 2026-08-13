@@ -227,6 +227,7 @@ from src.repositories.data_product_types_repository import (
     normalize_type_key,
     type_label_for,
 )
+from src.controller.compliance_templates_manager import compliance_templates_manager
 
 logger = get_logger(__name__)
 
@@ -1890,6 +1891,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             self._validate_output_port_contracts(product_db)
             # A product deprecated while published keeps its scope (e.g. domain)
             was_published = (product_db.publication_scope or 'none').lower() != 'none'
+
+            # Check compliance template completeness (blocks publish if mandatory fields are missing)
+            completeness_result = compliance_templates_manager.check_completeness(
+                self._db, entity_type="data_product", entity_id=product_id
+            )
+            if not completeness_result.passed:
+                error_message = "Cannot publish product: Missing mandatory compliance fields:\n" + "\n".join(
+                    completeness_result.messages
+                )
+                logger.error(f"Compliance check failed for product {product_id}: {error_message}")
+                raise ValueError(error_message)
+
+            logger.info(f"Compliance check passed for product {product_id}")
 
             # Use transition_status for validation and update
             result = self._apply_action(product_id, 'publish', current_user)

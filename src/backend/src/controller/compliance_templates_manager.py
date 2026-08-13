@@ -123,6 +123,125 @@ class ComplianceTemplatesManager:
         db.refresh(t)
         return ComplianceTemplateRead.model_validate(t)
 
+    # ----- Field CRUD (safe & destructive) -----------------------------------
+
+    def add_field(self, db: Session, *, template_id: UUID, payload: ComplianceFieldCreate) -> ComplianceFieldRead:
+        """Add a field to a template. Safe to call on active template."""
+        t = compliance_templates_repo.get_template(db, template_id)
+        if not t:
+            raise ComplianceTemplateError("Template not found")
+        _validate_reference_id(payload.reference_id)
+
+        # Ensure unique reference_id and key within template
+        existing_fields = compliance_templates_repo.list_fields(db, template_id=template_id)
+        for f in existing_fields:
+            if f.reference_id == payload.reference_id:
+                raise ComplianceTemplateError(f"Duplicate reference id '{payload.reference_id}' within template.")
+            if f.key == payload.key:
+                raise ComplianceTemplateError(f"Duplicate field key '{payload.key}' within template.")
+
+        # Coerce default against type + vocabulary
+        try:
+            default_value = coerce_value(payload.value_type, payload.default_value, payload.possible_values)
+        except ValueTypeError as e:
+            raise ComplianceTemplateError(f"{payload.label} default: {e}")
+
+        field = compliance_templates_repo.add_field(
+            db,
+            template_id=template_id,
+            group_title=payload.group_title,
+            group_order=payload.group_order,
+            key=payload.key,
+            label=payload.label,
+            reference_id=payload.reference_id,
+            value_type=payload.value_type.value,
+            possible_values=payload.possible_values,
+            default_value=default_value,
+            hint_text=payload.hint_text,
+            is_mandatory=payload.is_mandatory,
+            field_order=payload.field_order,
+        )
+        db.commit()
+        return ComplianceFieldRead.model_validate(field)
+
+    def update_field(self, db: Session, *, field_id: UUID, payload: dict) -> ComplianceFieldRead:
+        """Update a field's safe attributes (label, hint, default, mandatory, group order).
+
+        Cannot change value_type or narrow possible_values if stored values exist.
+        """
+        field = compliance_templates_repo.get_field(db, field_id)
+        if not field:
+            raise ComplianceTemplateError("Field not found")
+
+        # Detect destructive changes: value_type change or possible_values narrowing
+        has_stored_values = compliance_templates_repo.count_field_values(db, field_id=field_id) > 0
+
+        if has_stored_values:
+            # Check if value_type is changing
+            new_value_type = payload.get("value_type")
+            if new_value_type is not None and new_value_type.value != field.value_type:
+                raise ComplianceTemplateError(
+                    f"Cannot change field value type when stored values exist. "
+                    f"Either delete stored values or use a new field."
+                )
+            # Check if enum values are being removed (narrowing possible_values)
+            new_possible_values = payload.get("possible_values")
+            if new_possible_values is not None and field.possible_values is not None:
+                old_set = set(field.possible_values)
+                new_set = set(new_possible_values)
+                removed = old_set - new_set
+                if removed:
+                    raise ComplianceTemplateError(
+                        f"Cannot remove enum values {removed} when stored values exist. "
+                        f"Edit the stored values first."
+                    )
+                # Safe: adding new values to an enum (payload only contains new_value_type and new_possible_values)
+                payload["possible_values"] = new_possible_values
+
+        # Re-coerce default if value_type or possible_values changed
+        if "value_type" in payload or "possible_values" in payload or "default_value" in payload:
+            new_value_type = payload.get("value_type", field.value_type)
+            new_possible_values = payload.get("possible_values", field.possible_values)
+            new_default = payload.get("default_value", field.default_value)
+            try:
+                coerced = coerce_value(new_value_type, new_default, new_possible_values)
+                payload["default_value"] = coerced
+            except ValueTypeError as e:
+                raise ComplianceTemplateError(f"Default value error: {e}")
+
+        # Apply safe update
+        safe_update = {k: v for k, v in payload.items() if k in {"label", "hint_text", "default_value", "is_mandatory", "group_title", "group_order", "field_order"}}
+        updated = compliance_templates_repo.update_field(db, field_id=field_id, update_data=safe_update)
+        db.commit()
+        return ComplianceFieldRead.model_validate(updated)
+
+    def delete_field(self, db: Session, *, field_id: UUID) -> None:
+        """Delete a field. Guarded: cannot delete if stored values exist."""
+        field = compliance_templates_repo.get_field(db, field_id)
+        if not field:
+            raise ComplianceTemplateError("Field not found")
+
+        # Guard: check for stored values
+        has_stored_values = compliance_templates_repo.count_field_values(db, field_id=field_id) > 0
+        if has_stored_values:
+            raise ComplianceTemplateError(
+                f"Cannot delete field '{field.label}': stored values exist. "
+                f"Delete the values first."
+            )
+
+        compliance_templates_repo.delete_field(db, field_id=field_id)
+        db.commit()
+
+    def reorder_fields(self, db: Session, *, template_id: UUID, order_map: list[dict]) -> list[ComplianceFieldRead]:
+        """Reorder fields and groups. Safe: produces new ordinals without side effects."""
+        t = compliance_templates_repo.get_template(db, template_id)
+        if not t:
+            raise ComplianceTemplateError("Template not found")
+
+        fields = compliance_templates_repo.reorder_fields(db, template_id=template_id, order_map=order_map)
+        db.commit()
+        return [ComplianceFieldRead.model_validate(f) for f in fields]
+
     # ----- Composed read + replace-all write ------------------------------
 
     def read_for_entity(self, db: Session, *, entity_type: str, entity_id: str) -> EntityComplianceRead:

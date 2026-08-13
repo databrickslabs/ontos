@@ -4364,9 +4364,190 @@ class SemanticModelsManager(SearchableAsset):
             "status": "retired",
         }
 
+    # -- P1-6: reference-reconciliation worklist (split 1->N / merge N->1) -----
+
+    def list_references(self, concept_iri: str) -> Dict[str, Any]:
+        """Itemized form of the retire gate (API contract §5b).
+
+        Returns the SAME set ``reference_count`` counts, broken out:
+          - ``asset_refs``: entity_semantic_links rows (physical UC/asset refs);
+          - ``concept_refs``: OTHER concepts pointing at this iri via
+            skos:broader/narrower/related or rdfs:subClassOf in the served graph;
+          - ``successors``: the dct:isReplacedBy targets already recorded by
+            ``deprecate_concept`` (lineage, NOT part of the count).
+
+        ``count`` == len(asset_refs) + len(concept_refs) == reference_count(iri),
+        so the itemized worklist and the retire gate never disagree. Every entry
+        carries a human ``label`` so the Simple view never renders a raw IRI.
+        """
+        from src.repositories.semantic_links_repository import entity_semantic_links_repo
+
+        concept = self.get_concept(concept_iri)
+        label = (concept.get("label") if concept else None) or concept_iri
+
+        # Asset refs: one row per entity_semantic_links row for this iri.
+        asset_refs = []
+        for row in entity_semantic_links_repo.list_for_iri(self._db, concept_iri):
+            entity_label = row.label
+            if not entity_label:
+                tail = (row.entity_id or "").split("#")[-1].split("/")[-1]
+                entity_label = tail.split(".")[-1] if tail else row.entity_id
+            asset_refs.append({
+                "link_id": str(row.id),
+                "entity_type": row.entity_type,
+                "entity_id": row.entity_id,
+                "entity_label": entity_label,
+            })
+
+        # Concept->concept refs: this iri appears as the OBJECT of a relationship
+        # predicate from some OTHER subject (mirrors reference_count exactly).
+        concept_uri = URIRef(concept_iri)
+        ref_predicates = (
+            (SKOS.broader, "broader"),
+            (SKOS.narrower, "narrower"),
+            (SKOS.related, "related"),
+            (RDFS.subClassOf, "subClassOf"),
+        )
+        concept_refs = []
+        for pred, pred_name in ref_predicates:
+            for subj in self._graph.subjects(pred, concept_uri):
+                if str(subj) == concept_iri:  # self-reference doesn't count
+                    continue
+                other = self.get_concept(str(subj))
+                concept_refs.append({
+                    "iri": str(subj),
+                    "label": (other.get("label") if other else None) or str(subj),
+                    "predicate": pred_name,
+                })
+
+        # Successors: recorded isReplacedBy targets (lineage, not part of count).
+        successors = []
+        for o in self._graph.objects(concept_uri, DCT.isReplacedBy):
+            succ = self.get_concept(str(o))
+            successors.append({
+                "iri": str(o),
+                "label": (succ.get("label") if succ else None) or str(o),
+            })
+
+        return {
+            "iri": concept_iri,
+            "label": label,
+            "count": len(asset_refs) + len(concept_refs),
+            "asset_refs": asset_refs,
+            "concept_refs": concept_refs,
+            "successors": successors,
+        }
+
+    def repoint_reference(
+        self,
+        link_id: str,
+        from_iri: str,
+        to_iri: str,
+        actor: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Move ONE entity_semantic_links row from ``from_iri`` to ``to_iri`` (§5b).
+
+        The unit action that composes for both split and merge. Reuses the
+        SemanticLinksManager remove+add path so the graph side-effects fire
+        (``remove_entity_semantic_link_from_graph`` / ``add_...`` + cache
+        invalidation) — the served graph stays fresh, no ref is silently dropped.
+
+        - No-op if ``from_iri == to_iri`` (idempotent-safe).
+        - Raises ValueError (→404) if the link is missing or does not currently
+          point at ``from_iri``.
+        """
+        from uuid import UUID
+        from src.repositories.semantic_links_repository import entity_semantic_links_repo
+        from src.controller.semantic_links_manager import SemanticLinksManager
+        from src.models.semantic_links import EntitySemanticLinkCreate
+
+        try:
+            link_uuid = UUID(str(link_id))
+        except (ValueError, AttributeError):
+            raise ValueError(f"Link not found: {link_id}")
+
+        row = entity_semantic_links_repo.get(self._db, id=link_uuid)
+        if row is None:
+            raise ValueError(f"Link not found: {link_id}")
+        if row.iri != from_iri:
+            raise ValueError(
+                f"Link {link_id} does not point at {from_iri} (points at {row.iri})"
+            )
+
+        # Idempotent no-op: already at the target.
+        if from_iri == to_iri:
+            to_concept = self.get_concept(to_iri)
+            return {
+                "link_id": str(link_id),
+                "to_iri": to_iri,
+                "to_label": (to_concept.get("label") if to_concept else None) or to_iri,
+            }
+
+        entity_id, entity_type = row.entity_id, row.entity_type
+
+        links_manager = SemanticLinksManager(self._db, semantic_models_manager=self)
+        # remove old (graph side-effect + cache invalidation), then add new.
+        links_manager.remove(link_id, removed_by=actor)
+        created = links_manager.add(
+            EntitySemanticLinkCreate(entity_id=entity_id, entity_type=entity_type, iri=to_iri),
+            created_by=actor,
+        )
+
+        to_concept = self.get_concept(to_iri)
+        return {
+            "link_id": created.id,
+            "to_iri": to_iri,
+            "to_label": (to_concept.get("label") if to_concept else None) or to_iri,
+        }
+
+    def merge_concepts(
+        self,
+        source_iris: List[str],
+        target_iri: str,
+        repoint_refs: bool = True,
+        actor: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Merge N sources into one target (API contract §5b, N->1 convenience).
+
+        For each source: if ``repoint_refs``, repoint ALL its asset refs to the
+        target; then ``deprecate_concept(source, replaced_by=[target])``. This is
+        purely a composition of the repoint + deprecate primitives — it invents NO
+        new lineage predicates. Sources become resolvable deprecated tombstones-in-
+        waiting (retire still gated on 0 refs).
+        """
+        from src.repositories.semantic_links_repository import entity_semantic_links_repo
+
+        merged = []
+        for source_iri in source_iris:
+            if source_iri == target_iri:
+                continue  # a concept can't merge into itself
+            refs_repointed = 0
+            if repoint_refs:
+                # Snapshot the link ids first; repoint mutates the row set.
+                link_ids = [
+                    str(r.id)
+                    for r in entity_semantic_links_repo.list_for_iri(self._db, source_iri)
+                ]
+                for lid in link_ids:
+                    self.repoint_reference(lid, source_iri, target_iri, actor=actor)
+                    refs_repointed += 1
+            self.deprecate_concept(
+                concept_iri=source_iri,
+                replaced_by=[target_iri],
+                deprecated_by=actor,
+            )
+            merged.append({"source_iri": source_iri, "refs_repointed": refs_repointed})
+
+        target = self.get_concept(target_iri)
+        return {
+            "target_iri": target_iri,
+            "target_label": (target.get("label") if target else None) or target_iri,
+            "merged": merged,
+        }
+
     def delete_concept(self, concept_iri: str, deleted_by: Optional[str] = None) -> bool:
         """Delete a concept.
-        
+
         Only concepts with status 'draft' can be deleted.
         Published concepts should be deprecated instead.
         """

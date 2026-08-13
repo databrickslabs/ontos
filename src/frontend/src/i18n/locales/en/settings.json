@@ -110,7 +110,8 @@
     "workflows": "Workflows",
     "uiCustomization": "UI Customization",
     "connectors": "Connectors",
-    "schemaImporter": "Schema Importer"
+    "schemaImporter": "Schema Importer",
+    "complianceTemplates": "Compliance Templates"
   },
   "accessDenied": {
     "title": "Access Denied",

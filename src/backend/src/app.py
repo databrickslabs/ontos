@@ -75,6 +75,7 @@ from src.routes import (
     readiness_routes,
     suggestion_routes,
     certification_levels_routes,
+    compliance_templates_routes,
     maturity_routes,
     directory_routes,
     term_mapping_routes,
@@ -378,6 +379,7 @@ business_lineage_routes.register_routes(app)
 readiness_routes.register_routes(app)
 suggestion_routes.register_routes(app)
 certification_levels_routes.register_routes(app)
+compliance_templates_routes.register_routes(app)
 maturity_routes.register_routes(app)
 data_asset_reviews_routes.register_routes(app)
 data_catalog_routes.register_routes(app)

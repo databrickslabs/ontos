@@ -103,6 +103,22 @@ class RetireConceptResponse(BaseModel):
     status: str
 
 
+# --- Upload history + rollback models (P2-1) ---
+class UploadEventEntry(BaseModel):
+    """One recorded re-upload / rollback event (newest-first in the list)."""
+    id: str
+    created_at: Optional[str] = None
+    created_by: Optional[str] = None
+    summary: dict = Field(default_factory=dict)
+
+
+class RollbackUploadResponse(BaseModel):
+    """Response for POST /semantic-models/uploads/{event_id}/rollback."""
+    event_id: str
+    rolled_back: bool
+    summary: dict = Field(default_factory=dict)
+
+
 # --- Graph freshness (API contract §6, signed off) ---
 class GraphFreshnessResponse(BaseModel):
     """Served in-memory graph freshness. UI shows 'last refreshed HH:MM, N
@@ -973,6 +989,58 @@ async def reload_graph(
     except Exception:
         logger.error("Error reloading graph", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to reload graph")
+
+
+@router.get(
+    '/semantic-models/uploads',
+    response_model=List[UploadEventEntry],
+)
+async def list_upload_events(
+    context: str = Query(..., min_length=1, description="Semantic-model context name"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> List[UploadEventEntry]:
+    """Upload history for a semantic-model context, newest-first (P2-1).
+
+    Each entry is a recorded re-upload / rollback event: {id, created_at,
+    created_by, summary}.
+    """
+    try:
+        return [UploadEventEntry(**e) for e in manager.list_upload_events(context)]
+    except Exception:
+        logger.error("Error listing upload events for context %s", context, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list upload events")
+
+
+@router.post(
+    '/semantic-models/uploads/{event_id}/rollback',
+    response_model=RollbackUploadResponse,
+)
+async def rollback_upload_event(
+    event_id: str,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> RollbackUploadResponse:
+    """Roll back a recorded upload event — FORWARD, never a delete (P2-1).
+
+    Re-applies each concept's captured before-state as ONE atomic bulk versioning
+    event (the same machinery a re-upload uses), and records the rollback itself
+    as a new (roll-back-able) upload_event. The editable-scheme gate is enforced
+    by the reused publish/deprecate primitives (bypass_editable_gate=True marks
+    re-upload/rollback as the sanctioned write channel for file-sourced
+    collections)."""
+    try:
+        result = manager.rollback_upload_event(event_id, actor=current_user.email)
+        return RollbackUploadResponse(**result)
+    except ValueError as e:
+        # Event not found / concept not found / not editable.
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error rolling back upload event %s", event_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to roll back upload event")
 
 
 @router.get(

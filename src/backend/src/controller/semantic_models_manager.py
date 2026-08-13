@@ -370,6 +370,177 @@ class SemanticModelsManager(SearchableAsset):
         self._db.commit()  # Persist changes immediately since manager uses singleton session
         return self._to_api(db_obj)
 
+    # ------------------------------------------------------------------
+    # P0-4: file re-upload as a bulk versioning event (diff + orchestrate)
+    # ------------------------------------------------------------------
+    def _ensure_concept_version_v1(self, concept_iri: str, context_name: str, actor: Optional[str]) -> None:
+        """Lazily mint a v1 concept_version for a concept that has none.
+
+        Concepts that arrived via a raw file import (``_import_graph_to_db``)
+        never got a ``concept_version`` row — only ``create_concept`` mints one.
+        Before a diff-driven publish can bump such a concept to v2 we must give
+        it its v1, owning the subject's currently-unowned triples (subject-IRI
+        ownership rule, P0-1). Idempotent: no-op if a current version exists.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        if concept_versions_repo.get_current(self._db, concept_iri) is not None:
+            return
+        v1 = concept_versions_repo.create_version(
+            self._db,
+            iri=concept_iri,
+            version=1,
+            is_current=True,
+            status="active",
+            created_by=actor,
+        )
+        rdf_triples_repo.reassign_subject_to_concept_version(
+            self._db, concept_iri, v1.id, context_name=context_name
+        )
+
+    def _import_new_concept_from_graph(
+        self, concept_iri: str, incoming_graph, context_name: str, actor: Optional[str]
+    ) -> None:
+        """Insert a brand-new concept's triples (v1) from the incoming graph.
+
+        Preserves the concept's FILE-NATIVE IRI (unlike ``create_concept`` which
+        fabricates ``collection/slug`` IRIs) so a re-upload keeps the ontology's
+        own identifiers stable. Mints a v1 concept_version (same mechanic as
+        ``create_concept``) and stamps every inserted triple with it. The
+        subject's blank-node closure (owl:Restriction subgraphs etc.) is walked
+        and skolemized so OWL class expressions survive.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        subj = URIRef(concept_iri)
+        # Collect the subject's outgoing triples + its blank-node closure.
+        to_visit = [subj]
+        seen_bnodes: set = set()
+        rows: List[tuple] = []  # (subject_term, pred, obj)
+        while to_visit:
+            s = to_visit.pop()
+            for p, o in incoming_graph.predicate_objects(s):
+                rows.append((s, p, o))
+                if isinstance(o, BNode) and str(o) not in seen_bnodes:
+                    seen_bnodes.add(str(o))
+                    to_visit.append(o)
+
+        v1 = concept_versions_repo.create_version(
+            self._db,
+            iri=concept_iri,
+            version=1,
+            is_current=True,
+            status="active",
+            created_by=actor,
+        )
+
+        for s, p, o in rows:
+            subject_uri = (
+                self._skolemize_bnode(s, context_name) if isinstance(s, BNode) else str(s)
+            )
+            if isinstance(o, BNode):
+                object_value, object_is_uri, object_language, object_datatype = (
+                    self._skolemize_bnode(o, context_name), True, "", "",
+                )
+            elif isinstance(o, Literal):
+                object_value = str(o)
+                object_is_uri = False
+                object_language = o.language or ""
+                object_datatype = str(o.datatype) if o.datatype else ""
+            else:
+                object_value, object_is_uri, object_language, object_datatype = (
+                    str(o), True, "", "",
+                )
+            rdf_triples_repo.add_triple(
+                self._db,
+                subject_uri=subject_uri,
+                predicate_uri=str(p),
+                object_value=object_value,
+                object_is_uri=object_is_uri,
+                object_language=object_language,
+                object_datatype=object_datatype,
+                context_name=context_name,
+                source_type="upload",
+                source_identifier=concept_iri,
+                created_by=actor,
+                concept_version_id=v1.id,
+            )
+
+    def apply_upload_as_versioning_event(
+        self, context_name: str, incoming_graph, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Apply a re-upload as ONE atomic bulk versioning event (P0-4).
+
+        Diffs the incoming graph against the current stored triples for
+        ``context_name`` (canonicalized with URDNA2015 inside
+        ``compute_concept_diff``), then maps each bucket to the EXISTING
+        versioning primitives:
+
+          - MODIFIED -> ``publish_concept_version`` (demote+snapshot+swap = v2)
+          - NEW      -> import file-native triples + mint v1
+          - REMOVED  -> ``deprecate_concept`` ONLY (tombstone, never retire /
+                        hard-delete, regardless of reference count)
+          - UNCHANGED -> nothing (this is what makes a byte-identical re-upload
+                        a no-op: ZERO new versions).
+
+        ATOMICITY: the composed primitives each ``commit()`` internally. To make
+        the whole changeset one Postgres transaction we neutralize the inner
+        commits (redirect ``commit`` -> ``flush``) for the duration of the apply,
+        then issue ONE real commit at the end. On ANY exception we restore
+        ``commit`` and ``rollback()`` so the file's triples are NEVER left
+        half-replaced (mid-apply failure => store unchanged). AFTER the commit we
+        refresh the served graph ONCE via ``rebuild_graph_from_enabled`` (DB-first
+        recovery contract: the DB is the source of truth; a graph-patch/rebuild
+        failure leaves the DB correct and only the served copy stale).
+        """
+        from src.controller.concept_diff import compute_concept_diff
+
+        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        diff = compute_concept_diff(incoming_graph, current_triples)
+
+        original_commit = self._db.commit
+        try:
+            # Neutralize the inner commits of the composed primitives so the whole
+            # changeset lands in ONE transaction (atomicity contract).
+            self._db.commit = self._db.flush  # type: ignore[assignment]
+
+            for iri in diff.modified:
+                self._ensure_concept_version_v1(iri, context_name, actor)
+                self.publish_concept_version(
+                    iri, changes=diff.changes.get(iri), published_by=actor
+                )
+
+            for iri in diff.new:
+                self._import_new_concept_from_graph(iri, incoming_graph, context_name, actor)
+
+            for iri in diff.removed:
+                self.deprecate_concept(iri, deprecated_by=actor)
+        except Exception:
+            self._db.commit = original_commit  # type: ignore[assignment]
+            self._db.rollback()
+            logger.error(
+                "Upload versioning event failed for context '%s'; rolled back "
+                "(store unchanged, no half-replace)", context_name, exc_info=True,
+            )
+            raise
+        finally:
+            self._db.commit = original_commit  # type: ignore[assignment]
+
+        # ONE real commit -> the whole bulk changeset is atomic.
+        self._db.commit()
+
+        # Refresh the served graph ONCE (DB-first recovery contract).
+        try:
+            self.rebuild_graph_from_enabled()
+        except Exception:
+            logger.error(
+                "Graph rebuild after upload versioning event failed; DB is "
+                "correct, served graph is stale until next reload", exc_info=True,
+            )
+        self._invalidate_cache()
+
+        return diff.summary()
+
     def delete(self, model_id: str) -> bool:
         # Get the model before deleting to check if we need to delete the physical file
         model = semantic_models_repo.get(self._db, id=model_id)

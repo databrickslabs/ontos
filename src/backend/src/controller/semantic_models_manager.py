@@ -611,9 +611,21 @@ class SemanticModelsManager(SearchableAsset):
         def _entry(iri: str, bucket: str) -> Dict[str, Any]:
             cur = concept_versions_repo.get_current(self._db, iri)
             concept = self.get_concept(iri)
+            if bucket == "new":
+                # Absent before the upload — nothing to restore to.
+                prev_version = None
+            elif cur is not None:
+                # Already versioned: publish demotes this version and keeps its
+                # frozen triples, so it is the pre-upload snapshot to restore.
+                prev_version = cur.version
+            else:
+                # File-imported concept with no version row yet: the modified
+                # path mints v1 (owning the pre-upload triples) BEFORE bumping to
+                # v2, so v1 holds the pre-upload snapshot.
+                prev_version = 1
             return {
                 "iri": iri,
-                "prev_version": cur.version if cur else None,
+                "prev_version": prev_version,
                 "prev_status": (concept or {}).get("status"),
                 "bucket": bucket,
             }

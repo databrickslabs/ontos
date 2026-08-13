@@ -79,6 +79,36 @@ class ReferenceCountResponse(BaseModel):
     count: int
 
 
+class UploadPreviewConceptEntry(BaseModel):
+    """One concept row in an upload preview."""
+    iri: str
+    label: Optional[str] = None
+    reference_count: Optional[int] = None
+
+
+class UploadPreviewSummary(BaseModel):
+    unchanged: int = 0
+    modified: int = 0
+    new: int = 0
+    removed: int = 0
+
+
+class UploadPreviewResponse(BaseModel):
+    """Dry-run preview of a file re-upload (P1-0). Applies NOTHING until confirm."""
+    preview_token: str
+    context_name: str
+    summary: UploadPreviewSummary
+    modified: List[UploadPreviewConceptEntry] = Field(default_factory=list)
+    new: List[UploadPreviewConceptEntry] = Field(default_factory=list)
+    removed: List[UploadPreviewConceptEntry] = Field(default_factory=list)
+
+
+class UploadConfirmResponse(BaseModel):
+    """Result of confirming (applying) a previously previewed upload."""
+    preview_token: str
+    summary: UploadPreviewSummary
+
+
 class DeprecateConceptRequest(BaseModel):
     """POST /semantic-models/concepts/deprecate."""
     iri: str = Field(..., min_length=1)
@@ -862,6 +892,88 @@ async def publish_concept_version(
             detail="New version committed to the database but the served graph "
                    "could not be patched; a rebuild was triggered. Retry the read "
                    "shortly or use the graph reload control.",
+        )
+
+
+# --------------------------------------------------------------------------
+# P1-0: steward preview + confirm on file re-upload. Declared here (well ABOVE
+# the ``/concepts/{concept_iri:path}`` catch-all) so the literal ``uploads/...``
+# segments are not swallowed by the path-param route.
+# --------------------------------------------------------------------------
+@router.get(
+    '/semantic-models/uploads/preview/{preview_token}',
+    response_model=UploadPreviewResponse,
+)
+async def get_upload_preview(
+    preview_token: str,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> UploadPreviewResponse:
+    """Re-fetch a pending (not-yet-applied) upload preview by token."""
+    from src.repositories.upload_preview_repository import upload_preview_repo
+    from src.controller.concept_diff import compute_concept_diff
+    from src.repositories.rdf_triples_repository import rdf_triples_repo
+    from rdflib import Graph as _Graph
+
+    stash = upload_preview_repo.get(manager._db, preview_token)
+    if stash is None:
+        raise HTTPException(status_code=404, detail="Unknown or already-applied preview token")
+    try:
+        graph = _Graph()
+        fmt = 'turtle' if stash.format == 'skos' else 'xml'
+        content = clean_truncated_turtle(stash.content_text) if fmt == 'turtle' else stash.content_text
+        graph.parse(data=content, format=fmt)
+        current_triples = rdf_triples_repo.list_by_context(manager._db, stash.context_name)
+        diff = compute_concept_diff(graph, current_triples)
+        return UploadPreviewResponse(
+            preview_token=str(stash.token),
+            context_name=stash.context_name,
+            summary=UploadPreviewSummary(**diff.summary()),
+            modified=[
+                UploadPreviewConceptEntry(iri=i, label=manager._preview_label(i, graph), reference_count=manager.reference_count(i))
+                for i in diff.modified
+            ],
+            new=[UploadPreviewConceptEntry(iri=i, label=manager._preview_label(i, graph)) for i in diff.new],
+            removed=[
+                UploadPreviewConceptEntry(iri=i, label=manager._preview_label(i, graph), reference_count=manager.reference_count(i))
+                for i in diff.removed
+            ],
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error re-fetching upload preview %s", preview_token, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load upload preview")
+
+
+@router.post(
+    '/semantic-models/uploads/preview/{preview_token}/confirm',
+    response_model=UploadConfirmResponse,
+)
+async def confirm_upload_preview(
+    preview_token: str,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> UploadConfirmResponse:
+    """Apply a previously previewed re-upload (P1-0). Single-use: the token is
+    consumed on success. Unknown/already-applied tokens → 404.
+
+    The apply itself is the EXISTING bulk-versioning-event primitive
+    (modified→v2, new→v1, removed→deprecated), run atomically by the manager.
+    """
+    try:
+        summary = manager.confirm_upload(preview_token, actor=current_user.email)
+        return UploadConfirmResponse(preview_token=preview_token, summary=UploadPreviewSummary(**summary))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error confirming upload preview %s", preview_token, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Upload apply failed; the store is unchanged (atomic rollback). Retry the confirm.",
         )
 
 

@@ -1397,6 +1397,17 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     f"Product must be active to publish. Current status: {product_db.status}"
                 )
             self._validate_output_port_contracts(product_db, db)
+            # Compliance Templates (#712): block publishing to any non-none scope
+            # when mandatory compliance fields are incomplete. Advisory on edit,
+            # blocking here at publish. No-op when no template is active.
+            completeness = compliance_templates_manager.check_completeness(
+                db, entity_type="data_product", entity_id=product_id
+            )
+            if not completeness.passed:
+                raise ValueError(
+                    "Cannot publish: required compliance fields are incomplete. "
+                    + " ".join(completeness.messages)
+                )
             product_db.publication_scope = scope
             if not was_published:
                 # A scope change keeps who published it and when

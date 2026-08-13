@@ -113,7 +113,8 @@
     "schemaImporter": "Schema Importer",
     "dataProductTypes": "Data Product Types",
     "certificationLevels": "Certification Levels",
-    "maturityLevels": "Maturity Levels"
+    "maturityLevels": "Maturity Levels",
+    "complianceTemplates": "Compliance Templates"
   },
   "accessDenied": {
     "title": "Access Denied",

@@ -16,7 +16,7 @@ import { useApi } from '@/hooks/use-api';
 import { useApprovalWizardTrigger } from '@/hooks/use-approval-wizard-trigger';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound, Plus, FileText, Download, Bell, BellOff, Users, ShieldCheck, Globe } from 'lucide-react';
+import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound, Plus, FileText, Download, Bell, BellOff, Users, ShieldCheck, Globe, ClipboardCheck } from 'lucide-react';
 import {
   DetailHeaderSkeleton,
   PanelSkeleton,
@@ -67,6 +67,14 @@ import { DirectCertifyDialog, DirectPublishDialog } from '@/components/common/di
 import type { CertificationLevel, PublicationScope } from '@/types/lifecycle';
 import { userHasApprovalPrivilege } from '@/lib/permissions';
 import { ApprovalEntity } from '@/types/settings';
+import ComplianceModal from '@/components/compliance/compliance-modal';
+
+interface ComplianceCompleteness {
+  applicable: boolean;
+  passed: boolean;
+  missing: string[];
+  messages: string[];
+}
 
 /**
  * ODPS v1.0.0 Data Product Details View
@@ -528,11 +536,20 @@ export default function DataProductDetails() {
   const [isCloning, setIsCloning] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
 
+  // Compliance template (button shown only when a template is active for products)
+  const [complianceModalOpen, setComplianceModalOpen] = useState(false);
+  const [hasActiveComplianceTemplate, setHasActiveComplianceTemplate] = useState(false);
+  const [complianceMissingCount, setComplianceMissingCount] = useState(0);
+
   // Permissions
   const featureId = 'data-products';
   const canRead = !permissionsLoading && hasPermission(featureId, Settings.FeatureAccessLevel.READ_ONLY);
   const canWrite = !permissionsLoading && hasPermission(featureId, Settings.FeatureAccessLevel.READ_WRITE);
   const canAdmin = !permissionsLoading && hasPermission(featureId, Settings.FeatureAccessLevel.ADMIN);
+  // Per-entity compliance value write is gated by its own feature; read-only
+  // users can open the modal but cannot edit.
+  const canWriteCompliance =
+    !permissionsLoading && hasPermission('compliance-template-values', Settings.FeatureAccessLevel.READ_WRITE);
 
   const canApproveProductLifecycle = userHasApprovalPrivilege(
     ApprovalEntity.PRODUCTS,
@@ -648,6 +665,22 @@ export default function DataProductDetails() {
         } catch (subErr) {
           console.warn('Failed to fetch subscribers:', subErr);
         }
+      }
+
+      // Detect whether a compliance template is active for data products so
+      // the fill button is only shown when there's a form to open, and load
+      // the advisory completeness status (missing mandatory fields count).
+      try {
+        const completenessResp = await get<ComplianceCompleteness>(
+          `/api/compliance-templates/entities/data_product/${productId}/completeness`,
+        );
+        const c = completenessResp.data;
+        setHasActiveComplianceTemplate(!!c?.applicable);
+        setComplianceMissingCount(c?.applicable && !c.passed ? (c.missing?.length ?? 0) : 0);
+      } catch (compErr) {
+        console.warn('Failed to fetch compliance status:', compErr);
+        setHasActiveComplianceTemplate(false);
+        setComplianceMissingCount(0);
       }
 
       // ODPS v1.0.0: name is at root level
@@ -1504,6 +1537,17 @@ export default function DataProductDetails() {
           <Button variant="outline" onClick={() => setIsImportExportDialogOpen(true)} size="sm">
             <Download className="mr-2 h-4 w-4" /> {t('data-products:details.actions.exportODPS')}
           </Button>
+          {/* Compliance - only when a template is active for data products */}
+          {hasActiveComplianceTemplate && (
+            <Button variant="outline" onClick={() => setComplianceModalOpen(true)} size="sm">
+              <ClipboardCheck className="mr-2 h-4 w-4" /> Compliance
+              {complianceMissingCount > 0 && (
+                <Badge variant="destructive" className="ml-2 px-1.5 py-0 text-[10px]">
+                  {complianceMissingCount}
+                </Badge>
+              )}
+            </Button>
+          )}
           {/* Subscribe/Unsubscribe Button */}
           {isSubscribable && (
             subscriptionStatus?.subscribed ? (
@@ -2563,6 +2607,27 @@ export default function DataProductDetails() {
         isSubmitting={lifecycleActionSubmitting}
         onConfirm={handleDirectPublish}
       />
+
+      {productId && (
+        <ComplianceModal
+          open={complianceModalOpen}
+          onOpenChange={setComplianceModalOpen}
+          entityType="data_product"
+          entityId={productId}
+          canWrite={canWriteCompliance}
+          onSaved={async () => {
+            try {
+              const resp = await get<ComplianceCompleteness>(
+                `/api/compliance-templates/entities/data_product/${productId}/completeness`,
+              );
+              const c = resp.data;
+              setComplianceMissingCount(c?.applicable && !c.passed ? (c.missing?.length ?? 0) : 0);
+            } catch {
+              /* advisory only; ignore */
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

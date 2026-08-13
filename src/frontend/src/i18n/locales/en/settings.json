@@ -112,7 +112,8 @@
     "connectors": "Connectors",
     "schemaImporter": "Schema Importer",
     "certificationLevels": "Certification Levels",
-    "maturityLevels": "Maturity Levels"
+    "maturityLevels": "Maturity Levels",
+    "complianceTemplates": "Compliance Templates"
   },
   "accessDenied": {
     "title": "Access Denied",

@@ -72,6 +72,7 @@ from src.common import genie_client
 from src.common.delivery_mixin import DeliveryMixin
 from src.repositories.entity_relationships_repository import entity_relationship_repo
 from src.repositories.assets_repository import asset_repo
+from src.controller.compliance_templates_manager import compliance_templates_manager
 
 logger = get_logger(__name__)
 
@@ -1038,10 +1039,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
                 # Validate that all linked contracts are in an approved status
                 from src.repositories.data_contracts_repository import data_contract_repo
-                
+
                 valid_contract_statuses = ['approved', 'active']
                 contracts_not_approved = []
-                
+
                 for port in product_db.output_ports:
                     if port.contract_id:
                         contract = data_contract_repo.get(db=self._db, id=port.contract_id)
@@ -1051,12 +1052,25 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                                 contracts_not_approved.append(
                                     f"{port.name} -> {contract.name} (status: {contract.status})"
                                 )
-                
+
                 if contracts_not_approved:
                     raise ValueError(
                         f"Cannot publish product: These output ports have unapproved contracts: "
                         f"{', '.join(contracts_not_approved)}. Contracts must be approved first."
                     )
+
+            # Check compliance template completeness (blocks publish if mandatory fields are missing)
+            completeness_result = compliance_templates_manager.check_completeness(
+                self._db, entity_type="data_product", entity_id=product_id
+            )
+            if not completeness_result.passed:
+                error_message = "Cannot publish product: Missing mandatory compliance fields:\n" + "\n".join(
+                    completeness_result.messages
+                )
+                logger.error(f"Compliance check failed for product {product_id}: {error_message}")
+                raise ValueError(error_message)
+
+            logger.info(f"Compliance check passed for product {product_id}")
 
             # Use transition_status for validation and update
             result = self.transition_status(product_id, 'active', current_user)

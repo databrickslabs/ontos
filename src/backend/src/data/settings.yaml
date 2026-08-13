@@ -50,6 +50,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows; admins manage definitions
       access-grants: Admin  # DGO approves access grants
+      compliance-template-values: Read/Write  # Fill product compliance fields
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY
@@ -87,6 +88,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows; admins manage definitions
       access-grants: Read/Write  # Can request grants on behalf of stewarded data
+      compliance-template-values: Read/Write  # Fill product compliance fields
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY
@@ -122,6 +124,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows that affect own requests
       access-grants: Read-only  # See own grants
+      compliance-template-values: Read-only  # View product compliance (read-only)
     home_sections:
       - DISCOVERY
 
@@ -142,6 +145,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows triggered by own products
       access-grants: Read/Write  # Can request grants for own products
+      compliance-template-values: Read/Write  # Fill product compliance fields
     home_sections:
       - DATA_CURATION
       - DISCOVERY
@@ -169,6 +173,7 @@ roles:
       comments: Read/Write
       process-workflows: Read-only  # View workflows; admins manage definitions
       access-grants: Admin  # Security Officer approves access grants
+      compliance-template-values: Read-only  # View product compliance (read-only)
     home_sections:
       - REQUIRED_ACTIONS
       - DISCOVERY

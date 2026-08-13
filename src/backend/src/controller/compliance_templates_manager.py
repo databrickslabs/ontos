@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from src.common.compliance_completeness import CompletenessResult, FieldSpec, check_completeness
+from src.common.compliance_reconcile import FieldDesc, reconcile
 from src.common.compliance_value_types import ValueTypeError, coerce_value
 from src.common.logging import get_logger
 from src.models.compliance_templates import (
@@ -349,6 +350,94 @@ class ComplianceTemplatesManager:
             for f in fields
         ]
         return check_completeness(specs, stored)
+
+    def reconcile_entity(
+        self,
+        db: Session,
+        *,
+        entity_type: str,
+        entity_id: str,
+        user_email: str | None,
+    ) -> None:
+        """Reconcile an entity's compliance values: materialize defaults for fields without rows.
+
+        Gets the active template; if none, no-op. Lists fields and existing value rows;
+        calls the pure reconciler to decide which defaults to insert. Inserts ONLY the
+        proposed default rows (coerced via coerce_value), never modifying existing rows.
+
+        Designed to be called on every entity update (e.g., Data Product save). Failures
+        are logged as warnings and never break the entity update.
+
+        Args:
+            db: Database session.
+            entity_type: Entity type (e.g., "data_product").
+            entity_id: Entity id.
+            user_email: Email of the user performing the reconciliation (for filled_by).
+        """
+        try:
+            active = compliance_templates_repo.get_active_template(db, entity_type=entity_type)
+            if not active:
+                return  # No template, nothing to reconcile
+
+            fields = compliance_templates_repo.list_fields(db, template_id=active.id)
+            if not fields:
+                return  # No fields, nothing to reconcile
+
+            field_ids = [f.id for f in fields]
+            existing_rows = compliance_templates_repo.list_values(
+                db, entity_type=entity_type, entity_id=entity_id, field_ids=field_ids
+            )
+            existing_field_ids = {v.field_id for v in existing_rows}
+
+            # Convert to pure reconciler input
+            field_descs = [
+                FieldDesc(
+                    field_id=f.id,
+                    value_type=f.value_type,
+                    default_value=f.default_value,
+                )
+                for f in fields
+            ]
+
+            # Get reconcile actions
+            actions = reconcile(field_descs, existing_field_ids)
+            if not actions:
+                return  # No defaults to materialize
+
+            # Insert proposed default rows
+            fields_by_id = {f.id: f for f in fields}
+            for action in actions:
+                field = fields_by_id.get(action.field_id)
+                if not field:
+                    continue
+                # Coerce the default value (should already be canonical, but re-coerce for safety)
+                try:
+                    coerced_value = coerce_value(
+                        field.value_type, action.value, field.possible_values
+                    )
+                except ValueTypeError as e:
+                    logger.warning(
+                        f"Failed to coerce default for field {action.field_id} during reconcile: {e}"
+                    )
+                    continue
+                # Insert the row
+                compliance_templates_repo.add_value(
+                    db,
+                    field_id=action.field_id,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    value=coerced_value,
+                    filled_by=user_email,
+                )
+            db.flush()  # Flush but don't commit — caller commits
+            logger.info(
+                f"Reconciled {len(actions)} default value(s) for {entity_type} {entity_id}"
+            )
+        except Exception as e:
+            # Non-fatal: log warning but never break the entity update
+            logger.warning(
+                f"Compliance reconcile failed for {entity_type} {entity_id}: {e}"
+            )
 
     def has_active_template(self, db: Session, *, entity_type: str) -> bool:
         return compliance_templates_repo.get_active_template(db, entity_type=entity_type) is not None

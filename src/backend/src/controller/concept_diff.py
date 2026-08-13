@@ -31,11 +31,27 @@ from typing import Dict, List, Optional, Tuple
 
 from rdflib import Graph, URIRef, Literal, BNode
 from rdflib.compare import to_canonical_graph
-from rdflib.namespace import RDFS, SKOS
+from rdflib.namespace import RDF, RDFS, SKOS, OWL
 
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+# rdf:type values that mark a subject as a CONCEPT we version. A ConceptScheme
+# / owl:Ontology header is deliberately NOT here — scheme/metadata subjects are
+# not versioned units and must not be pushed through the concept primitives.
+_CONCEPT_TYPES = frozenset(
+    str(t)
+    for t in (
+        SKOS.Concept,
+        RDFS.Class,
+        OWL.Class,
+        OWL.ObjectProperty,
+        OWL.DatatypeProperty,
+        OWL.AnnotationProperty,
+        RDF.Property,
+    )
+)
 
 
 # Human/SKOS fields we surface as ``changes`` for a MODIFIED concept so the
@@ -145,8 +161,14 @@ def compute_concept_diff(incoming_graph: Graph, current_triples) -> ConceptDiff:
     current_graph = _rebuild_current_graph(current_triples)
     current_by_subj = _canonical_triples_by_subject(current_graph)
 
-    incoming_subjects = set(incoming_by_subj.keys())
-    current_subjects = set(current_by_subj.keys())
+    # Only bucket CONCEPT subjects. Scheme / ontology-header / bnode subjects
+    # are not versioned units and must not be pushed through the concept
+    # primitives (publish/deprecate call get_concept and would fail on them).
+    incoming_concepts = _concept_subjects(incoming_graph)
+    current_concepts = _concept_subjects(current_graph)
+
+    incoming_subjects = incoming_concepts & set(incoming_by_subj.keys())
+    current_subjects = current_concepts & set(current_by_subj.keys())
 
     diff = ConceptDiff()
 
@@ -166,6 +188,25 @@ def compute_concept_diff(incoming_graph: Graph, current_triples) -> ConceptDiff:
 
     logger.info("Concept diff: %s", diff.summary())
     return diff
+
+
+def _concept_subjects(graph: Graph) -> set:
+    """Named subject IRIs that are CONCEPTS (have a versionable rdf:type).
+
+    A subject counts as a concept if it carries at least one rdf:type in
+    ``_CONCEPT_TYPES``. This deliberately excludes skos:ConceptScheme and
+    owl:Ontology header subjects so they are never routed through the concept
+    versioning primitives.
+    """
+    concepts: set = set()
+    for subj in graph.subjects(RDF.type, None):
+        if not isinstance(subj, URIRef):
+            continue
+        for t in graph.objects(subj, RDF.type):
+            if str(t) in _CONCEPT_TYPES:
+                concepts.add(str(subj))
+                break
+    return concepts
 
 
 def _rebuild_current_graph(current_triples) -> Graph:

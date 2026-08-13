@@ -226,7 +226,9 @@ export default function DefineView() {
     page: inProgressPageNum,
     setPage: setInProgressPage,
     pageCount: inProgressPageCount,
-  } = usePagination(inProgress, 5);
+    pageSize: inProgressPageSize,
+    setPageSize: setInProgressPageSize,
+  } = usePagination(inProgress, 10);
 
   const statusBadge = (status: GenerationRunSummary['status']) => {
     switch (status) {
@@ -472,6 +474,8 @@ export default function DefineView() {
             page={inProgressPageNum}
             pageCount={inProgressPageCount}
             onPageChange={setInProgressPage}
+            pageSize={inProgressPageSize}
+            onPageSizeChange={setInProgressPageSize}
           />
         </div>
       )}

@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -58,6 +59,9 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   const [schemeStrategy, setSchemeStrategy] = useState<SchemeStrategy>('merge');
   // Merge mode: single target collection for all files.
   const [selectedCollectionIri, setSelectedCollectionIri] = useState<string>('');
+  // "Create new scheme" inline path: when the target selector picks this
+  // sentinel, we show a name field and create the scheme before importing.
+  const [newSchemeName, setNewSchemeName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcomes, setOutcomes] = useState<FileImportOutcome[] | null>(null);
@@ -82,14 +86,41 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
 
   const flatOptions = flattenCollections(collections);
 
+  // Sentinel value for the "create a new scheme" option in the target selector.
+  const CREATE_NEW = '__create_new_scheme__';
+  const creatingNew = selectedCollectionIri === CREATE_NEW;
+
   const resetState = () => {
     setSelectedFiles([]);
     setSchemeStrategy('merge');
     setSelectedCollectionIri('');
+    setNewSchemeName('');
     setError(null);
     setOutcomes(null);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Create a new (ontology-type) scheme and return its IRI. Used by the inline
+  // "create new scheme" path so a user can import into a fresh scheme without
+  // leaving the dialog. Ontology type matches imported RDF (classes/properties).
+  const createScheme = async (label: string): Promise<string> => {
+    const res = await fetch('/api/knowledge/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label,
+        collection_type: 'ontology',
+        scope_level: 'enterprise',
+        description: `Imported scheme: ${label}`,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.detail || 'Failed to create the new scheme');
+    }
+    const created = await res.json();
+    return created.iri as string;
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -142,10 +173,23 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     // into an EXISTING collection only (no create-per-file), so we still require
     // a target and TODO the true per-file behavior.
     if (!selectedCollectionIri) return;
+    if (creatingNew && !newSchemeName.trim()) return;
 
     setIsUploading(true);
     setError(null);
     setOutcomes(null);
+
+    // If the user chose "create new scheme", make it first and import into it.
+    let targetIri = selectedCollectionIri;
+    if (creatingNew) {
+      try {
+        targetIri = await createScheme(newSchemeName.trim());
+      } catch (err: any) {
+        setError(err.message || 'Failed to create the new scheme');
+        setIsUploading(false);
+        return;
+      }
+    }
 
     // CB-6 (atomic save): the backend has no batch/transaction endpoint, so we
     // cannot make a multi-file import truly atomic here. We validate/parse each
@@ -157,7 +201,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     const results: FileImportOutcome[] = [];
     for (const file of selectedFiles) {
       try {
-        const triples = await importOneFile(file, selectedCollectionIri);
+        const triples = await importOneFile(file, targetIri);
         results.push({ name: file.name, ok: true, triplesImported: triples });
       } catch (err: any) {
         results.push({ name: file.name, ok: false, error: err.message });
@@ -180,7 +224,10 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   };
 
   const canSubmit =
-    selectedFiles.length > 0 && !!selectedCollectionIri && !isUploading;
+    selectedFiles.length > 0 &&
+    !!selectedCollectionIri &&
+    (!creatingNew || !!newSchemeName.trim()) &&
+    !isUploading;
   const totalTriples = (outcomes ?? [])
     .filter((r) => r.ok)
     .reduce((sum, r) => sum + (r.triplesImported ?? 0), 0);
@@ -331,6 +378,10 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                   />
                 </SelectTrigger>
                 <SelectContent>
+                  {/* Create-new-scheme path: no need to leave the dialog. */}
+                  <SelectItem value={CREATE_NEW}>
+                    {t('semantic-models:import.createNewScheme', '＋ Create a new scheme…')}
+                  </SelectItem>
                   {flatOptions.map((opt) => (
                     <SelectItem key={opt.iri} value={opt.iri}>
                       {'—'.repeat(opt.level)}
@@ -340,6 +391,15 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                   ))}
                 </SelectContent>
               </Select>
+              {creatingNew && (
+                <Input
+                  autoFocus
+                  value={newSchemeName}
+                  onChange={(e) => setNewSchemeName(e.target.value)}
+                  placeholder={t('semantic-models:import.newSchemeName', 'New scheme name (e.g. Finance Ontology)')}
+                  className="mt-1"
+                />
+              )}
               {editableCollections.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   {t(

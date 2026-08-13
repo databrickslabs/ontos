@@ -133,6 +133,10 @@ export default function ConceptDetailView() {
   // version-history panel to refetch after a successful publish.
   const [publishOpen, setPublishOpen] = useState(false);
   const [versionRefreshNonce, setVersionRefreshNonce] = useState(0);
+  // Real current version from the engine (contract §1). Single integer (v2),
+  // NOT semver — replaces the old hardcoded "v1.0.0" badge. Null while loading
+  // or if the concept has no version rows yet.
+  const [currentVersion, setCurrentVersion] = useState<number | null>(null);
   const [neighbourhoodOpen, setNeighbourhoodOpen] = useState(true);
   // Relations and the neighbourhood graph are the same /neighbors data rendered
   // two ways, so they share ONE block with a List (relations) / Graph switch.
@@ -188,6 +192,24 @@ export default function ConceptDetailView() {
     fetchConcept();
   }, [fetchConcept]);
 
+  // Fetch the real current version from the engine (contract §1) so the badge
+  // shows the actual integer, not a hardcoded string. Refetches after a publish
+  // (versionRefreshNonce bumps). Degrades silently: if the endpoint is absent or
+  // the concept has no version rows, the badge falls back to hiding itself.
+  useEffect(() => {
+    if (!conceptIri) return;
+    let cancelled = false;
+    (async () => {
+      const res = await get<{ current_version?: number | null }>(
+        `/api/semantic-models/concepts/version?iri=${encodeURIComponent(conceptIri)}`,
+      );
+      if (cancelled) return;
+      const cv = res.data?.current_version;
+      setCurrentVersion(typeof cv === 'number' ? cv : null);
+    })();
+    return () => { cancelled = true; };
+  }, [conceptIri, versionRefreshNonce, get]);
+
   useEffect(() => {
     fetchSupporting();
   }, [fetchSupporting]);
@@ -225,6 +247,17 @@ export default function ConceptDetailView() {
     if (!concept) return false;
     const isDraftStatus = !concept.status || concept.status === 'draft';
     return !!(canWrite && collection?.is_editable && isDraftStatus);
+  }, [canWrite, collection, concept]);
+
+  // Publishing a NEW version is NOT restricted to draft: it is precisely what
+  // you do to an already-published/certified concept when its definition needs
+  // to change (mint v2, keep the IRI, keep history). It only requires write
+  // permission on an editable collection. Retired concepts are the exception
+  // (a tombstone should not sprout new versions).
+  const canPublishVersion = useMemo(() => {
+    if (!concept) return false;
+    const isRetired = concept.status === 'retired';
+    return !!(canWrite && collection?.is_editable && !isRetired);
   }, [canWrite, collection, concept]);
 
   // Linking Ontos entities to a concept and assigning ownership are stored
@@ -433,12 +466,17 @@ export default function ConceptDetailView() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {/* "Save new version" is available for any non-retired editable concept,
+              NOT just drafts — publishing v2 is exactly how a certified concept's
+              definition changes. Edit/Delete stay draft-only (isEditable). */}
+          {canPublishVersion && (
+            <Button variant="outline" size="sm" onClick={() => setPublishOpen(true)}>
+              <Save className="mr-2 h-4 w-4" />
+              {t('semantic-models:versionHistory.saveNewVersion', 'Save new version')}
+            </Button>
+          )}
           {isEditable && (
             <>
-              <Button variant="outline" size="sm" onClick={() => setPublishOpen(true)}>
-                <Save className="mr-2 h-4 w-4" />
-                {t('semantic-models:versionHistory.saveNewVersion', 'Save new version')}
-              </Button>
               <Button variant="outline" size="sm" onClick={() => setEditorOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 {t('common:actions.edit')}
@@ -468,9 +506,12 @@ export default function ConceptDetailView() {
           </h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Version badge first (leftmost). Real concept versioning is a
-              separate backend track; TODO(cb-v2): wire version + diff. */}
-          <Badge variant="secondary" className="font-mono text-xs">v1.0.0</Badge>
+          {/* Version badge first (leftmost). Wired to the engine's real current
+              version (single integer, e.g. v2). Hidden until a version row
+              exists (freshly-created concepts before their first version load). */}
+          {currentVersion != null && (
+            <Badge variant="secondary" className="font-mono text-xs">v{currentVersion}</Badge>
+          )}
           {isDraft && (
             <button
               type="button"
@@ -815,97 +856,6 @@ export default function ConceptDetailView() {
           </div>
         </Collapsible>
       </div>
-
-      {/* Version-diff panel — MOCK / PLACEHOLDER. Draft concepts are forked
-          from a certified baseline; this shows the field-level delta from that
-          baseline. The rows below are illustrative sample content, not live
-          data.
-          TODO(cb-v2): wire to real version-diff endpoint (Track 3, pending
-          granularity decision). */}
-      {isDraft && (
-        <section
-          id="concept-version-diff"
-          className="rounded-lg border bg-card p-3 space-y-2"
-        >
-          <div className="flex items-center gap-2">
-            <GitCompare className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-medium">
-              {t('semantic-models:versionDiff.title', 'Changes from v1.0.0')}
-            </h2>
-            <Badge variant="secondary" className="text-[10px] uppercase">
-              {t('semantic-models:versionDiff.mock', 'Preview')}
-            </Badge>
-            <span className="ml-auto text-xs text-muted-foreground">
-              {t('semantic-models:versionDiff.baseline', 'certified baseline')}
-            </span>
-          </div>
-          <div className="divide-y text-sm">
-            {[
-              {
-                field: t('semantic-models:fields.definition', 'Definition'),
-                kind: 'changed' as const,
-                detail: t(
-                  'semantic-models:versionDiff.sample.definition',
-                  'wording tightened',
-                ),
-              },
-              {
-                field: t('semantic-models:fields.synonyms', 'Synonyms'),
-                kind: 'added' as const,
-                detail: t(
-                  'semantic-models:versionDiff.sample.synonyms',
-                  'added 1',
-                ),
-              },
-              {
-                field: t('semantic-models:versionDiff.parent', 'Parent'),
-                kind: 'unchanged' as const,
-                detail: t(
-                  'semantic-models:versionDiff.sample.parent',
-                  'unchanged',
-                ),
-              },
-              {
-                field: t(
-                  'semantic-models:linkedObjects.title',
-                  'Linked Entities',
-                ),
-                kind: 'unchanged' as const,
-                detail: t(
-                  'semantic-models:versionDiff.sample.links',
-                  'unchanged',
-                ),
-              },
-            ].map((row) => (
-              <div
-                key={row.field}
-                className="flex items-center gap-3 py-1.5"
-              >
-                <span className="w-28 shrink-0 font-medium">{row.field}</span>
-                <Badge
-                  variant="outline"
-                  className={
-                    row.kind === 'changed'
-                      ? 'text-xs border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                      : row.kind === 'added'
-                        ? 'text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                        : 'text-xs'
-                  }
-                >
-                  {row.kind === 'changed'
-                    ? t('semantic-models:versionDiff.changed', 'changed')
-                    : row.kind === 'added'
-                      ? t('semantic-models:versionDiff.added', 'added')
-                      : t('semantic-models:versionDiff.unchanged', 'unchanged')}
-                </Badge>
-                <span className="text-muted-foreground text-xs">
-                  {row.detail}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {concept.created_at && (
         <p className="text-xs text-muted-foreground">

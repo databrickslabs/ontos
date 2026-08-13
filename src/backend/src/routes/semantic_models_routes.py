@@ -1256,6 +1256,10 @@ async def import_to_knowledge_collection(
             content=content_str,
             format=format,
             imported_by=current_user.email if current_user else None,
+            # File-imported concepts land as Draft so they flow through review
+            # before certification, matching the generator save path. Without
+            # this, imported classes/properties showed no status at all.
+            default_status="draft",
         )
         return {'success': True, 'triples_imported': count}
     except ValueError as e:

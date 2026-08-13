@@ -446,7 +446,9 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     page: listPage,
     setPage: setListPage,
     pageCount: listPageCount,
-  } = usePagination(visibleFlatConcepts, 25);
+    pageSize: listPageSize,
+    setPageSize: setListPageSize,
+  } = usePagination(visibleFlatConcepts, 10);
 
   // Batch-fetch mapping status for the concepts currently on screen (list view).
   // One request for the whole visible set, not per-row. Only IRIs we don't
@@ -1036,6 +1038,8 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                     page={listPage}
                     pageCount={listPageCount}
                     onPageChange={setListPage}
+                    pageSize={listPageSize}
+                    onPageSizeChange={setListPageSize}
                   />
                 </div>
               )}

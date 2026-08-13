@@ -6,8 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +27,9 @@ import {
   Pencil,
   ArrowRight,
   X,
+  ListFilter,
 } from 'lucide-react';
+import { usePagination, PaginationControls } from '@/components/common/paginated-list';
 import { cn } from '@/lib/utils';
 import type {
   OntologyConcept,
@@ -165,6 +170,11 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   // Bulk-select state (list view only). Tracks selected concept IRIs; a light
   // bulk-action bar appears when any are selected. Selection is component-local
   // and resets when the view mode changes.
+  //
+  // Pagination note: rows are selected per-row, and any bulk "select all" acts
+  // on the CURRENT PAGE only (the rows actually rendered). We keep this simple —
+  // selections persist across page changes if the user pages back, but a "select
+  // all" gesture never silently selects off-page rows the user can't see.
   const [selectedIris, setSelectedIris] = useState<Set<string>>(new Set());
   useEffect(() => {
     setSelectedIris(new Set());
@@ -180,6 +190,24 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   }, []);
 
   const [bulkBusy, setBulkBusy] = useState(false);
+
+  // List-scoped Status filter (Item 4). Retired + archived concepts are pure
+  // clutter, so they are HIDDEN by default; deprecated/superseded stay visible
+  // (they read as active-ish and their "Replaced by" link is useful). State is
+  // component-local so it persists across re-render within the view but resets
+  // on remount. List-only — the tree view is never status-filtered here.
+  const DEFAULT_HIDDEN_STATUSES = ['retired', 'archived'];
+  const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(
+    () => new Set(DEFAULT_HIDDEN_STATUSES),
+  );
+  const toggleStatusHidden = useCallback((status: string) => {
+    setHiddenStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }, []);
 
   // Bulk "Set status": POST the chosen lifecycle transition for every selected
   // concept. The backend enforces VALID_TRANSITIONS, so concepts in a state
@@ -393,12 +421,40 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       );
   }, [treeData, groupByDomain, conceptLabel]);
 
+  // Distinct statuses present in the flat set, for the Status filter dropdown.
+  // Only statuses that actually occur are offered, so the control doesn't list
+  // dead options.
+  const presentStatuses = useMemo(() => {
+    const s = new Set<string>();
+    flatConcepts.forEach((c) => {
+      if (c.status) s.add(c.status);
+    });
+    return Array.from(s).sort();
+  }, [flatConcepts]);
+
+  // Apply the list-scoped Status filter. A concept is shown unless its status is
+  // currently hidden. Concepts without a status are always shown.
+  const visibleFlatConcepts = useMemo(() => {
+    if (hiddenStatuses.size === 0) return flatConcepts;
+    return flatConcepts.filter((c) => !(c.status && hiddenStatuses.has(c.status)));
+  }, [flatConcepts, hiddenStatuses]);
+
+  // Paginate the flat LIST view (25 per page). The TREE view is never
+  // paginated — paginating a hierarchy would orphan parent/child rows.
+  const {
+    pageItems: pagedFlatConcepts,
+    page: listPage,
+    setPage: setListPage,
+    pageCount: listPageCount,
+  } = usePagination(visibleFlatConcepts, 25);
+
   // Batch-fetch mapping status for the concepts currently on screen (list view).
   // One request for the whole visible set, not per-row. Only IRIs we don't
   // already have are requested, so paging/filtering top-ups stay cheap.
   useEffect(() => {
     if (viewMode !== 'list') return;
-    const iris = flatConcepts
+    // Only the current page is on screen, so only fetch mapping status for it.
+    const iris = pagedFlatConcepts
       .map((c) => c.iri)
       .filter((iri) => !(iri in mappingStatus));
     if (iris.length === 0) return;
@@ -423,7 +479,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, flatConcepts]);
+  }, [viewMode, pagedFlatConcepts]);
 
   // Fetch successor IRIs for the visible inactive concepts (deprecated /
   // superseded / retired). One §1 read per such concept; results are cached, so
@@ -864,6 +920,53 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     </div>
   );
 
+  // List-scoped Status filter (list view only). A checkbox menu over the
+  // statuses actually present; unchecked = hidden. Retired + archived are
+  // hidden by default (see hiddenStatuses init). Shows a small count badge when
+  // any status is hidden so the filtered-down state is legible.
+  const hiddenPresentCount = presentStatuses.filter((s) => hiddenStatuses.has(s)).length;
+  const statusFilterBar = presentStatuses.length > 0 && (
+    <div className="flex items-center gap-2 px-3 py-2 mb-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="h-7">
+            <ListFilter className="h-3.5 w-3.5 mr-1.5" />
+            {t('semantic-models:filters.status', 'Status')}
+            {hiddenPresentCount > 0 && (
+              <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+                {presentStatuses.length - hiddenPresentCount}/{presentStatuses.length}
+              </Badge>
+            )}
+            <ChevronDown className="h-3.5 w-3.5 ml-1" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuLabel>
+            {t('semantic-models:filters.showStatuses', 'Show statuses')}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {presentStatuses.map((status) => (
+            <DropdownMenuCheckboxItem
+              key={status}
+              checked={!hiddenStatuses.has(status)}
+              onSelect={(e) => e.preventDefault()}
+              onCheckedChange={() => toggleStatusHidden(status)}
+            >
+              {t(`semantic-models:status.${status}`, status)}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {hiddenPresentCount > 0 && (
+        <span className="text-[11px] text-muted-foreground">
+          {t('semantic-models:filters.statusHiddenNote', '{{count}} hidden', {
+            count: hiddenPresentCount,
+          })}
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <div className="border rounded-lg flex flex-col bg-card overflow-hidden max-h-[calc(100vh-260px)]">
       <div className="p-2 border-b flex items-center gap-2">
@@ -895,10 +998,13 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
           {viewMode === 'list' ? (
             <>
               {bulkBar}
-              {flatConcepts.length > 0 && listHeader}
+              {statusFilterBar}
+              {visibleFlatConcepts.length > 0 && listHeader}
               {groupBySource
                 ? treeData.sourceContexts.map(source => {
-                    const rows = flatConcepts.filter(c => c.source_context === source);
+                    // Group only the CURRENT PAGE's rows so headers reflect what
+                    // is actually on screen; pagination is over the flat set.
+                    const rows = pagedFlatConcepts.filter(c => c.source_context === source);
                     if (rows.length === 0) return null;
                     return (
                       <div key={`flat-group-${source}`}>
@@ -915,12 +1021,22 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                       </div>
                     );
                   })
-                : flatConcepts.map(c => renderListRow(c))}
+                : pagedFlatConcepts.map(c => renderListRow(c))}
 
-              {flatConcepts.length === 0 && (
+              {visibleFlatConcepts.length === 0 && (
                 <div className="text-center text-muted-foreground py-12">
                   <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>{t('semantic-models:messages.noConceptsFound')}</p>
+                </div>
+              )}
+
+              {visibleFlatConcepts.length > 0 && (
+                <div className="px-3 py-2">
+                  <PaginationControls
+                    page={listPage}
+                    pageCount={listPageCount}
+                    onPageChange={setListPage}
+                  />
                 </div>
               )}
             </>

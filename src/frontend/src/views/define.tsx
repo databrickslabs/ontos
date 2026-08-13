@@ -11,7 +11,9 @@ import {
   List,
   ListTree,
   Share2,
+  Layers,
 } from 'lucide-react';
+import { usePagination, PaginationControls } from '@/components/common/paginated-list';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +49,25 @@ function formatDate(iso?: string | null): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// Compact relative time ("just now", "3 min ago", "2 h ago", "5 d ago"),
+// falling back to an absolute date for anything older than a week. Small local
+// helper — the shared RelativeDate component is date-only and localized
+// differently; these in-progress rows want minute/hour granularity.
+function relativeTime(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const secs = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (secs < 45) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} d ago`;
+  return formatDate(iso);
 }
 
 // The three output "rungs" — a glossary -> taxonomy -> ontology maturity ladder.
@@ -197,6 +218,15 @@ export default function DefineView() {
   const inProgress = runs.filter(
     (r) => r.status === 'pending' || r.status === 'running' || r.status === 'completed'
   );
+
+  // Paginate the in-progress list (5 per page) so a long run history doesn't
+  // push the whole landing page down.
+  const {
+    pageItems: inProgressPage,
+    page: inProgressPageNum,
+    setPage: setInProgressPage,
+    pageCount: inProgressPageCount,
+  } = usePagination(inProgress, 5);
 
   const statusBadge = (status: GenerationRunSummary['status']) => {
     switch (status) {
@@ -393,7 +423,7 @@ export default function DefineView() {
         </p>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {inProgress.map((run) => (
+          {inProgressPage.map((run) => (
             <Card key={run.run_id}>
               <CardContent className="flex items-center gap-3.5 p-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary shrink-0">
@@ -410,10 +440,24 @@ export default function DefineView() {
                     {run.progress_message ||
                       t('semantic-models:define.draftPending', 'Draft not yet assigned to a concept scheme.')}
                   </div>
+                  {/* Distinguishing metadata sourced from the run summary
+                      (relative time + step count) — no backend change. */}
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1">
+                    {run.created_at && (
+                      <span title={new Date(run.created_at).toLocaleString()}>
+                        {relativeTime(run.created_at)}
+                      </span>
+                    )}
+                    {typeof run.step_count === 'number' && run.step_count > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        <Layers className="h-3 w-3" />
+                        {t('semantic-models:define.stepCount', '{{count}} steps', {
+                          count: run.step_count,
+                        })}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span className="text-xs text-muted-foreground font-mono shrink-0">
-                  {formatDate(run.created_at)}
-                </span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -424,6 +468,11 @@ export default function DefineView() {
               </CardContent>
             </Card>
           ))}
+          <PaginationControls
+            page={inProgressPageNum}
+            pageCount={inProgressPageCount}
+            onPageChange={setInProgressPage}
+          />
         </div>
       )}
 

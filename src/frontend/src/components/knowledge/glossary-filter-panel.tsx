@@ -128,8 +128,10 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
       </div>
       <CollapsibleContent>
         <div className="px-4 pb-3 space-y-3">
-          {/* Source checkboxes */}
-          <div className="flex flex-wrap gap-2">
+          {/* Source checkboxes. Height-bounded scroll area so a large source
+              count doesn't explode the panel vertically; multi-select behavior
+              is unchanged (each chip is still an independent checkbox). */}
+          <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
             {availableSources.map((source) => {
               const isVisible = !hiddenSources.includes(source);
               const conceptCount = sourceConceptCounts[source] || 0;

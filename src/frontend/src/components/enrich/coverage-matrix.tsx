@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { usePagination, PaginationControls } from '@/components/common/paginated-list';
 import {
   Tooltip,
   TooltipContent,
@@ -109,6 +110,16 @@ export default function CoverageMatrix({
   const gridCols =
     'grid grid-cols-[1.4fr_0.7fr_1.4fr_0.8fr_0.8fr_0.8fr_0.9fr_90px] gap-3 items-center';
 
+  // Paginate the per-scheme rows (10 per page) so a large scheme count doesn't
+  // bloat the page. The totals ("All selected") row below is a rollup over ALL
+  // rows, so it stays accurate and visible on every page — never paginated.
+  const {
+    pageItems: pageRows,
+    page,
+    setPage,
+    pageCount,
+  } = usePagination(rows, 10);
+
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-lg border bg-card">
@@ -132,8 +143,8 @@ export default function CoverageMatrix({
           <span />
         </div>
 
-        {/* rows */}
-        {rows.map((row) => (
+        {/* rows (paginated — the totals row below is not) */}
+        {pageRows.map((row) => (
           <div key={row.id} className={`${gridCols} border-b px-4 py-2.5 text-sm last:border-b-0`}>
             <span className="font-semibold">{row.name}</span>
             <span className="text-right tabular-nums">{row.concepts}</span>
@@ -209,6 +220,8 @@ export default function CoverageMatrix({
           </div>
         )}
       </div>
+
+      <PaginationControls page={page} pageCount={pageCount} onPageChange={setPage} />
 
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />

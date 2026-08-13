@@ -4,6 +4,7 @@ import { History, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
+import { usePagination, PaginationControls } from '@/components/common/paginated-list';
 
 // ---------------------------------------------------------------------------
 // VersionHistoryPanel — drives the signed-off versioning contract §1 (version
@@ -140,6 +141,20 @@ export function VersionHistoryPanel({
 
   const title = t('semantic-models:versionHistory.title', 'Version history');
 
+  // Newest-first. is_current entry sorts to the top regardless of ordering.
+  // Computed unconditionally (empty when not loaded) so the pagination hook
+  // below is always called in the same order — Rules of Hooks.
+  const versions = info ? [...info.versions].sort((a, b) => b.version - a.version) : [];
+  const onlyOne = versions.length <= 1;
+
+  // Cap long histories at 10 per page rather than rendering an unbounded list.
+  const {
+    pageItems: pagedVersions,
+    page: versionPage,
+    setPage: setVersionPage,
+    pageCount: versionPageCount,
+  } = usePagination(versions, 10);
+
   if (loading) {
     return (
       <div className="rounded-lg border bg-card p-3">
@@ -172,10 +187,6 @@ export function VersionHistoryPanel({
     );
   }
 
-  // Newest-first. is_current entry sorts to the top regardless of ordering.
-  const versions = [...info.versions].sort((a, b) => b.version - a.version);
-  const onlyOne = versions.length <= 1;
-
   return (
     <div className="rounded-lg border bg-card p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -189,7 +200,7 @@ export function VersionHistoryPanel({
         </p>
       ) : (
         <ul className="space-y-1 text-xs">
-          {versions.map((entry) => {
+          {pagedVersions.map((entry) => {
             const who =
               entry.created_by ||
               t('semantic-models:versionHistory.unknownEditor', 'someone');
@@ -277,6 +288,14 @@ export function VersionHistoryPanel({
             );
           })}
         </ul>
+      )}
+
+      {!onlyOne && (
+        <PaginationControls
+          page={versionPage}
+          pageCount={versionPageCount}
+          onPageChange={setVersionPage}
+        />
       )}
     </div>
   );

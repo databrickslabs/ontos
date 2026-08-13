@@ -33,6 +33,7 @@ from . import rdf_triples
 from . import semantic_links
 from . import semantic_models
 from . import settings
+from . import upload_preview
 from . import tags
 from . import teams
 from . import assets

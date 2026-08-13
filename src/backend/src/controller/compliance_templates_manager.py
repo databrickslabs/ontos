@@ -178,9 +178,11 @@ class ComplianceTemplatesManager:
         has_stored_values = compliance_templates_repo.count_field_values(db, field_id=field_id) > 0
 
         if has_stored_values:
-            # Check if value_type is changing
+            # Check if value_type is changing. The route passes a raw JSON dict,
+            # so value_type may be a plain string OR a ComplianceValueType enum.
             new_value_type = payload.get("value_type")
-            if new_value_type is not None and new_value_type.value != field.value_type:
+            new_value_type_str = getattr(new_value_type, "value", new_value_type)
+            if new_value_type is not None and new_value_type_str != field.value_type:
                 raise ComplianceTemplateError(
                     f"Cannot change field value type when stored values exist. "
                     f"Either delete stored values or use a new field."

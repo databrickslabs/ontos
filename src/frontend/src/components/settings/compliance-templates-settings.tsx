@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Plus, Trash2, Power, PowerOff, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, Power, PowerOff, Loader2, X, Pencil } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,8 @@ interface ComplianceField {
   label: string;
   reference_id: string;
   value_type: string;
+  possible_values: string[] | null;
+  default_value: unknown | null;
   hint_text: string | null;
   is_mandatory: boolean;
   field_order: number;
@@ -64,6 +66,7 @@ const ENTITY_TYPE_OPTIONS = [
 ];
 
 interface DraftField {
+  id?: string; // present when editing an existing field
   label: string;
   reference_id: string;
   group_title: string;
@@ -111,9 +114,21 @@ function parseDefaultValue(valueType: string, raw: string): unknown {
   }
 }
 
+/** Stringify a stored default value back into the editor's text field. */
+function stringifyDefault(valueType: string, value: unknown): string {
+  if (value == null) return '';
+  if (valueType === 'multi_enum' && Array.isArray(value)) return value.join(', ');
+  if (valueType === 'range' && typeof value === 'object') {
+    const r = value as { low?: unknown; high?: unknown };
+    return `${r.low ?? ''}-${r.high ?? ''}`;
+  }
+  if (valueType === 'boolean') return value ? 'true' : 'false';
+  return String(value);
+}
+
 export default function ComplianceTemplatesSettings() {
   const { toast } = useToast();
-  const { get, post, delete: apiDelete } = useApi();
+  const { get, post, put, delete: apiDelete } = useApi();
 
   const [templates, setTemplates] = useState<ComplianceTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,6 +138,10 @@ export default function ComplianceTemplatesSettings() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '', entity_type: 'data_product' });
   const [draftFields, setDraftFields] = useState<DraftField[]>([]);
+  // Edit mode: the template being edited (null = create mode) + its original
+  // fields, so save can diff (add / update / delete) against the server state.
+  const [editingTemplate, setEditingTemplate] = useState<ComplianceTemplate | null>(null);
+  const [originalFields, setOriginalFields] = useState<ComplianceField[]>([]);
   const hasFetched = useRef(false);
 
   const fetchTemplates = useCallback(async () => {
@@ -146,8 +165,37 @@ export default function ComplianceTemplatesSettings() {
   }, [fetchTemplates]);
 
   const handleOpenCreate = () => {
+    setEditingTemplate(null);
+    setOriginalFields([]);
     setFormData({ name: '', description: '', entity_type: 'data_product' });
     setDraftFields([]);
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (template: ComplianceTemplate) => {
+    setEditingTemplate(template);
+    const sorted = [...(template.fields || [])].sort(
+      (a, b) => a.group_order - b.group_order || a.field_order - b.field_order,
+    );
+    setOriginalFields(sorted);
+    setFormData({
+      name: template.name,
+      description: template.description || '',
+      entity_type: template.entity_type,
+    });
+    setDraftFields(
+      sorted.map((f) => ({
+        id: f.id,
+        label: f.label,
+        reference_id: f.reference_id,
+        group_title: f.group_title || '',
+        value_type: f.value_type,
+        possible_values: Array.isArray(f.possible_values) ? f.possible_values.join(', ') : '',
+        hint_text: f.hint_text || '',
+        default_value: stringifyDefault(f.value_type, f.default_value),
+        is_mandatory: f.is_mandatory,
+      })),
+    );
     setDialogOpen(true);
   };
 
@@ -161,38 +209,40 @@ export default function ComplianceTemplatesSettings() {
     ]);
   };
 
+  /** Map an editor draft field to the API field payload. */
+  const draftToPayload = (f: DraftField, idx: number) => ({
+    group_title: f.group_title.trim(),
+    group_order: 0,
+    key: toSlug(f.label) || `field-${idx + 1}`,
+    label: f.label.trim(),
+    reference_id: (f.reference_id.trim() && toSlug(f.reference_id)) || toSlug(f.label) || `field-${idx + 1}`,
+    value_type: f.value_type,
+    possible_values: VOCAB_TYPES.has(f.value_type)
+      ? f.possible_values.split(',').map((s) => s.trim()).filter(Boolean)
+      : null,
+    default_value: parseDefaultValue(f.value_type, f.default_value),
+    hint_text: f.hint_text.trim() || null,
+    is_mandatory: f.is_mandatory,
+    field_order: idx,
+  });
+
   const handleSave = async () => {
     if (!formData.name.trim()) return;
     setSaving(true);
     try {
-      const fields = draftFields
-        .filter((f) => f.label.trim())
-        .map((f, idx) => {
-          const possibleValues = VOCAB_TYPES.has(f.value_type)
-            ? f.possible_values.split(',').map((s) => s.trim()).filter(Boolean)
-            : null;
-          return {
-            group_title: f.group_title.trim(),
-            group_order: 0,
-            key: toSlug(f.label) || `field-${idx + 1}`,
-            label: f.label.trim(),
-            reference_id: (f.reference_id.trim() && toSlug(f.reference_id)) || toSlug(f.label) || `field-${idx + 1}`,
-            value_type: f.value_type,
-            possible_values: possibleValues,
-            default_value: parseDefaultValue(f.value_type, f.default_value),
-            hint_text: f.hint_text.trim() || null,
-            is_mandatory: f.is_mandatory,
-            field_order: idx,
-          };
+      if (editingTemplate) {
+        await saveEdits(editingTemplate);
+      } else {
+        const fields = draftFields.filter((f) => f.label.trim()).map(draftToPayload);
+        const { error } = await post('/api/compliance-templates', {
+          name: formData.name,
+          description: formData.description || null,
+          entity_type: formData.entity_type,
+          fields,
         });
-      const { error } = await post('/api/compliance-templates', {
-        name: formData.name,
-        description: formData.description || null,
-        entity_type: formData.entity_type,
-        fields,
-      });
-      if (error) throw new Error(error);
-      toast({ title: 'Created', description: `Template "${formData.name}" created.` });
+        if (error) throw new Error(error);
+        toast({ title: 'Created', description: `Template "${formData.name}" created.` });
+      }
       setDialogOpen(false);
       fetchTemplates();
     } catch (err: any) {
@@ -200,6 +250,56 @@ export default function ComplianceTemplatesSettings() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Persist edits by diffing the editor against the template's original fields:
+   *  update template attrs, add new fields, update changed ones, delete removed. */
+  const saveEdits = async (template: ComplianceTemplate) => {
+    const base = `/api/compliance-templates/${template.id}`;
+
+    // 1. Template name/description (entity_type is immutable server-side).
+    if (formData.name !== template.name || (formData.description || '') !== (template.description || '')) {
+      const { error } = await put(base, {
+        name: formData.name,
+        description: formData.description || null,
+      });
+      if (error) throw new Error(error);
+    }
+
+    const kept = draftFields.filter((f) => f.label.trim());
+    const keptIds = new Set(kept.filter((f) => f.id).map((f) => f.id));
+
+    // 2. Deletes: original fields no longer present. Surfaces a 409 if the
+    //    field has stored values (guarded server-side) — reported to the user.
+    for (const orig of originalFields) {
+      if (orig.id && !keptIds.has(orig.id)) {
+        const { error } = await apiDelete(`${base}/fields/${orig.id}`);
+        if (error) throw new Error(`Cannot remove "${orig.label}": ${error}`);
+      }
+    }
+
+    // 3. Adds + updates.
+    for (let idx = 0; idx < kept.length; idx++) {
+      const f = kept[idx];
+      const payload = draftToPayload(f, idx);
+      if (!f.id) {
+        const { error } = await post(`${base}/fields`, payload);
+        if (error) throw new Error(`Cannot add "${f.label}": ${error}`);
+      } else {
+        const { error } = await put(`${base}/fields/${f.id}`, payload);
+        if (error) throw new Error(`Cannot update "${f.label}": ${error}`);
+      }
+    }
+
+    // 4. Persist ordering (group + field order) in one reorder call.
+    const reorder = kept
+      .filter((f) => f.id)
+      .map((f, idx) => ({ id: f.id, group_title: f.group_title.trim(), group_order: 0, field_order: idx }));
+    if (reorder.length > 0) {
+      await put(`${base}/fields/reorder`, { fields: reorder });
+    }
+
+    toast({ title: 'Saved', description: `Template "${formData.name}" updated.` });
   };
 
   const handleToggleActive = async (template: ComplianceTemplate) => {
@@ -288,6 +388,15 @@ export default function ComplianceTemplatesSettings() {
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
+                    title="Edit"
+                    onClick={() => handleOpenEdit(template)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
                     title={template.is_active ? 'Deactivate' : 'Activate'}
                     onClick={() => handleToggleActive(template)}
                   >
@@ -317,15 +426,16 @@ export default function ComplianceTemplatesSettings() {
 
       {/* Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Add Compliance Template</DialogTitle>
+            <DialogTitle>{editingTemplate ? 'Edit Compliance Template' : 'Add Compliance Template'}</DialogTitle>
             <DialogDescription>
-              Create a template and optionally add text fields. Activate it to make it available on
-              the bound entity type.
+              {editingTemplate
+                ? 'Edit fields, defaults, hints and mandatory flags. Changing a field’s type or removing a field/enum value is blocked when products have already stored values.'
+                : 'Create a template and optionally add fields. Activate it to make it available on the bound entity type.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex-1 space-y-4 overflow-y-auto py-2 pr-1">
             <div className="space-y-2">
               <Label htmlFor="ct-name">Name</Label>
               <Input
@@ -349,8 +459,9 @@ export default function ComplianceTemplatesSettings() {
               <Label htmlFor="ct-entity">Entity Type</Label>
               <select
                 id="ct-entity"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
                 value={formData.entity_type}
+                disabled={!!editingTemplate}
                 onChange={(e) => setFormData((prev) => ({ ...prev, entity_type: e.target.value }))}
               >
                 {ENTITY_TYPE_OPTIONS.map((o) => (
@@ -361,14 +472,14 @@ export default function ComplianceTemplatesSettings() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Text Fields</Label>
+                <Label>Fields</Label>
                 <Button variant="outline" size="sm" onClick={handleAddDraftField}>
                   <Plus className="mr-1 h-3.5 w-3.5" /> Add Field
                 </Button>
               </div>
               {draftFields.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  No fields yet. Additional value types are added in later releases.
+                  No fields yet. Click "Add Field" to define one.
                 </p>
               )}
               {draftFields.map((field, idx) => (
@@ -466,7 +577,7 @@ export default function ComplianceTemplatesSettings() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !formData.name.trim()}>
               {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              Create
+              {editingTemplate ? 'Save changes' : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>

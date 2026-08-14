@@ -14,29 +14,13 @@ from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
 
-# Put the backend ``src`` package root on sys.path so the workflow's lazy
-# ``from src.*`` imports resolve at runtime. Those imports live *inside* the
-# functions below (see ``load_policies`` / ``run_policy`` / ``main``), never at
-# module top level, so importing this module never itself needs ``src`` on the
-# path -- this entry only matters when those functions run on a normal cluster
-# or locally.
-#
-# Referencing ``__file__`` directly is unsafe on Databricks *serverless*: the
-# entry script is executed via ``exec(compile(...))`` in a namespace where
-# ``__file__`` is NOT bound, so evaluating ``Path(__file__)`` raises ``NameError``
-# before ``main()`` is ever reached (issue #685).
-#
-#   * ``__file__`` present (local / normal cluster): behaviour is unchanged --
-#     the source root is three levels up from this file.
-#   * ``__file__`` absent (serverless): do NOT fabricate a path. There is no
-#     reliable signal to derive the real source root here -- the deployer uploads
-#     only this workflow folder (not the ``src`` tree), and serverless job
-#     environments cannot carry env vars (see jobs_manager: "compute.Environment
-#     doesn't support env_vars directly"). Guessing from the cwd could prepend an
-#     unrelated directory and mask similarly named packages, so we insert nothing
-#     and let the runtime environment (installed package / PYTHONPATH) resolve the
-#     lazy imports. If that is insufficient the import fails later with a clear
-#     ImportError instead of a cryptic NameError at module load.
+# Bootstrap the backend ``src`` root onto sys.path for the workflow's lazy
+# ``from src.*`` imports (they run inside the functions below, so importing this
+# module never needs it). On Databricks serverless the script runs via
+# exec(compile(...)) with ``__file__`` unbound, so ``Path(__file__)`` raised
+# NameError at import (issue #685). With ``__file__`` present, behaviour is
+# unchanged; on serverless we insert nothing rather than guess a path from cwd
+# (which could mask packages) and rely on the runtime env / PYTHONPATH.
 _entry_file = globals().get("__file__")
 if _entry_file is not None:
     try:

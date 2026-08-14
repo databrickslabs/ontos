@@ -14,29 +14,38 @@ from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
 
-# Add the backend ``src`` package root to sys.path to enable ``from src.*`` imports.
+# Put the backend ``src`` package root on sys.path so the workflow's lazy
+# ``from src.*`` imports resolve at runtime. Those imports live *inside* the
+# functions below (see ``load_policies`` / ``run_policy`` / ``main``), never at
+# module top level, so importing this module never itself needs ``src`` on the
+# path -- this entry only matters when those functions run on a normal cluster
+# or locally.
 #
-# This runs at module import time. Normally ``__file__`` points at this script and
-# the source root is three levels up. On Databricks *serverless*, however, the
+# Referencing ``__file__`` directly is unsafe on Databricks *serverless*: the
 # entry script is executed via ``exec(compile(...))`` in a namespace where
 # ``__file__`` is NOT bound, so evaluating ``Path(__file__)`` raises ``NameError``
-# before ``main()`` is ever reached (issue #685). Guard against a missing
-# ``__file__`` and fall back to the current working directory: for a serverless
-# ``spark_python_task`` the working directory is the deployed workflow folder
-# (the equivalent of ``.../workflows/compliance_checks``), so its grandparent is
-# the same source root the ``__file__`` branch computes. Wrapped in try/except so
-# path bootstrapping can never abort module load.
-try:
-    _entry_file = globals().get("__file__")
-    if _entry_file is not None:
-        _src_root = Path(_entry_file).parent.parent.parent
-    else:
-        _src_root = Path.cwd().parent.parent
-    sys.path.insert(0, str(_src_root))
-except Exception:
-    # Never let path bootstrapping crash module import; imports resolved by the
-    # runtime environment (e.g. installed package / PYTHONPATH) still work.
-    pass
+# before ``main()`` is ever reached (issue #685).
+#
+#   * ``__file__`` present (local / normal cluster): behaviour is unchanged --
+#     the source root is three levels up from this file.
+#   * ``__file__`` absent (serverless): do NOT fabricate a path. There is no
+#     reliable signal to derive the real source root here -- the deployer uploads
+#     only this workflow folder (not the ``src`` tree), and serverless job
+#     environments cannot carry env vars (see jobs_manager: "compute.Environment
+#     doesn't support env_vars directly"). Guessing from the cwd could prepend an
+#     unrelated directory and mask similarly named packages, so we insert nothing
+#     and let the runtime environment (installed package / PYTHONPATH) resolve the
+#     lazy imports. If that is insufficient the import fails later with a clear
+#     ImportError instead of a cryptic NameError at module load.
+_entry_file = globals().get("__file__")
+if _entry_file is not None:
+    try:
+        sys.path.insert(0, str(Path(_entry_file).parent.parent.parent))
+    except Exception as _exc:  # pragma: no cover - defensive; must never abort import
+        # Narrowly guarded so a surprising failure is diagnosable but never
+        # crashes module load. Use print because the logging stack isn't wired
+        # up at this point (matches the rest of this script's stdout logging).
+        print(f"WARNING: compliance_checks sys.path bootstrap failed: {_exc}", file=sys.stderr)
 
 from sqlalchemy import text, create_engine
 from sqlalchemy.engine import Engine

@@ -52,9 +52,22 @@
     "groupBySource": "Group by Source",
     "showProperties": "Show Properties",
     "groupByDomain": "Group by Domain",
+    "groupByNone": "None",
+    "groupByScheme": "Scheme",
+    "groupByDimSource": "Source",
+    "groupByDimDomain": "Domain",
     "allTypes": "All Types",
     "allScopes": "All Scopes",
-    "allCollections": "All Collections"
+    "allCollections": "All Collections",
+    "searchSchemes": "Search schemes...",
+    "sortBy": "Sort by",
+    "sortName": "Name",
+    "sortSize": "Size",
+    "groupTypeGlossary": "GLOSSARIES",
+    "groupTypeTaxonomy": "TAXONOMIES",
+    "groupTypeOntology": "ONTOLOGIES",
+    "groupTypeOther": "OTHER",
+    "importedDisable": "Imported — cannot delete"
   },
   "groupBy": {
     "collection": "By Collection",
@@ -184,6 +197,10 @@
     "deleteConcept": {
       "title": "Delete Concept",
       "description": "Are you sure you want to delete \"{{label}}\"? This action cannot be undone. Only draft concepts can be deleted."
+    },
+    "deleteScheme": {
+      "title": "Delete Scheme",
+      "description": "Are you sure you want to delete \"{{label}}\"? This will delete all concepts in this scheme and cannot be undone."
     },
     "linkEditor": {
       "title": "Create Link",

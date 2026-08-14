@@ -424,45 +424,45 @@ export default function DefineView() {
           {t('semantic-models:define.noInProgress', 'No creation work in progress. Start with one of the paths above.')}
         </p>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-1.5">
           {inProgressPage.map((run) => (
             <Card key={run.run_id}>
-              <CardContent className="flex items-center gap-3.5 p-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary shrink-0">
-                  <Zap className="h-4 w-4" />
+              {/* Thin, single-line row: icon · name+status · message · metadata
+                  (time, steps) all on ONE line, then the Review action. The
+                  message truncates so the metadata never wraps to a new row. */}
+              <CardContent className="flex items-center gap-3 py-2 px-3">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary shrink-0">
+                  <Zap className="h-3.5 w-3.5" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <span className="truncate">
-                      {t('semantic-models:define.generatorRun', 'Generator run')}
+                <span className="text-sm font-semibold whitespace-nowrap shrink-0">
+                  {t('semantic-models:define.generatorRun', 'Generator run')}
+                </span>
+                {statusBadge(run.status)}
+                <span className="text-sm text-muted-foreground truncate min-w-0 flex-1">
+                  {run.progress_message ||
+                    t('semantic-models:define.draftPending', 'Draft not yet assigned to a concept scheme.')}
+                </span>
+                {/* Metadata (relative time + step count) lined up in the same
+                    row, right-aligned before the action. */}
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground shrink-0">
+                  {run.created_at && (
+                    <span title={new Date(run.created_at).toLocaleString()} className="whitespace-nowrap">
+                      {relativeTime(run.created_at)}
                     </span>
-                    {statusBadge(run.status)}
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-0.5 truncate">
-                    {run.progress_message ||
-                      t('semantic-models:define.draftPending', 'Draft not yet assigned to a concept scheme.')}
-                  </div>
-                  {/* Distinguishing metadata sourced from the run summary
-                      (relative time + step count) — no backend change. */}
-                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1">
-                    {run.created_at && (
-                      <span title={new Date(run.created_at).toLocaleString()}>
-                        {relativeTime(run.created_at)}
-                      </span>
-                    )}
-                    {typeof run.step_count === 'number' && run.step_count > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <Layers className="h-3 w-3" />
-                        {t('semantic-models:define.stepCount', '{{count}} steps', {
-                          count: run.step_count,
-                        })}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  {typeof run.step_count === 'number' && run.step_count > 0 && (
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <Layers className="h-3 w-3" />
+                      {t('semantic-models:define.stepCount', '{{count}} steps', {
+                        count: run.step_count,
+                      })}
+                    </span>
+                  )}
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="shrink-0"
                   onClick={() => navigate(`/concepts/generator?run=${encodeURIComponent(run.run_id)}`)}
                 >
                   {t('semantic-models:define.review', 'Review')}

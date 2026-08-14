@@ -285,6 +285,34 @@ export default function ExploreView() {
     }
   };
 
+  // Handle rename scheme from filter panel — open the collection editor in edit mode
+  const handleRenameScheme = useCallback((collection: KnowledgeCollection) => {
+    setEditingCollection(collection);
+    setCollectionEditorOpen(true);
+  }, []);
+
+  // Handle delete scheme from filter panel
+  const handleDeleteScheme = useCallback(async (collection: KnowledgeCollection) => {
+    try {
+      const response = await fetch(`/api/knowledge/collections/${encodeURIComponent(collection.iri)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to delete collection');
+      }
+      toast({
+        title: t('common:toast.success'),
+        description: t('semantic-models:messages.collectionDeleted'),
+      });
+      await refetch();
+      bumpKnowledgeGraphRefresh('collection-delete');
+    } catch (error: any) {
+      toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
+    }
+  }, [t, toast, refetch, bumpKnowledgeGraphRefresh]);
+
   const editableCollections = useMemo(() => collections.filter((c) => c.is_editable), [collections]);
   const defaultCollection = editableCollections[0];
 
@@ -363,6 +391,9 @@ export default function ExploreView() {
             onSetSelectedLanguage={setSelectedLanguage}
             isFilterExpanded={isFilterExpanded}
             onSetFilterExpanded={setFilterExpanded}
+            collections={collections}
+            onRenameScheme={handleRenameScheme}
+            onDeleteScheme={handleDeleteScheme}
           />
 
           {/* View-mode switch: List | Tree | Graph */}

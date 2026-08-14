@@ -9,6 +9,7 @@
     "delete": "Delete",
     "deleteSelected": "Delete Selected ({{count}})",
     "edit": "Edit",
+    "rename": "Rename",
     "add": "Add",
     "create": "Create",
     "update": "Update",

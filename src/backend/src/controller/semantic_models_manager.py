@@ -404,6 +404,33 @@ class SemanticModelsManager(SearchableAsset):
     # ------------------------------------------------------------------
     # P0-4: file re-upload as a bulk versioning event (diff + orchestrate)
     # ------------------------------------------------------------------
+    def _selfheal_orphaned_concept_versions(self, concept_iri: str, context_name: str) -> None:
+        """Delete leftover concept_version rows for an IRI when the concept has
+        ZERO rdf_triples in this context (an orphan).
+
+        Same guard ``create_concept`` uses: version rows can be left behind by a
+        deleted scheme, a prior failed upload, or the same file-native IRI reused
+        in another context. Left in place they collide with
+        ``uq_concept_version_iri_version`` / ``uq_concept_version_current_per_iri``
+        on the next ``create_version`` and 500 the diff-apply. NEVER delete when
+        the subject genuinely has triples in this context — that would destroy a
+        real concept's history.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        if not concept_versions_repo.list_versions(self._db, concept_iri):
+            return
+        subject_triples = [
+            t for t in rdf_triples_repo.list_by_subject(self._db, concept_iri)
+            if t.context_name == context_name
+        ]
+        if not subject_triples:
+            logger.warning(
+                f"Self-healing orphaned concept_version rows for {concept_iri} "
+                f"(no rdf_triples in context {context_name})"
+            )
+            concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
     def _ensure_concept_version_v1(self, concept_iri: str, context_name: str, actor: Optional[str]) -> None:
         """Lazily mint a v1 concept_version for a concept that has none.
 
@@ -417,10 +444,17 @@ class SemanticModelsManager(SearchableAsset):
 
         if concept_versions_repo.get_current(self._db, concept_iri) is not None:
             return
+        # A CURRENT version is absent but NON-current leftover rows (e.g. a
+        # superseded (iri, version=1) row) would still collide when we mint a
+        # hardcoded version=1 below. Self-heal true orphans (zero triples in this
+        # context); otherwise mint the next FREE version so we never collide and
+        # never destroy real (dangling) history.
+        self._selfheal_orphaned_concept_versions(concept_iri, context_name)
+        next_version = concept_versions_repo.max_version(self._db, concept_iri) + 1
         v1 = concept_versions_repo.create_version(
             self._db,
             iri=concept_iri,
-            version=1,
+            version=next_version,
             is_current=True,
             status="active",
             created_by=actor,
@@ -456,14 +490,32 @@ class SemanticModelsManager(SearchableAsset):
                     seen_bnodes.add(str(o))
                     to_visit.append(o)
 
-        v1 = concept_versions_repo.create_version(
-            self._db,
-            iri=concept_iri,
-            version=1,
-            is_current=True,
-            status="active",
-            created_by=actor,
-        )
+        # Self-heal orphaned version rows BEFORE minting v1. The diff put this
+        # file-native IRI in the NEW bucket, but leftover concept_version rows
+        # can still exist for it (deleted scheme sharing the IRI, a prior failed
+        # upload, or the same IRI used in another context). Left in place they
+        # collide with uq_concept_version_iri_version /
+        # uq_concept_version_current_per_iri and 500 the whole atomic apply. Only
+        # delete true orphans (zero rdf_triples for the subject in THIS context) —
+        # deleting live rows would destroy a real concept's history.
+        self._selfheal_orphaned_concept_versions(concept_iri, context_name)
+
+        # If a current version already survives (real concept, not an orphan),
+        # do NOT collide on a fresh v1: reuse the existing current row and just
+        # own this subject's triples with it (mirrors _ensure_concept_version_v1
+        # idempotency). This only happens for the defensive not-actually-new case.
+        existing_current = concept_versions_repo.get_current(self._db, concept_iri)
+        if existing_current is not None:
+            v1 = existing_current
+        else:
+            v1 = concept_versions_repo.create_version(
+                self._db,
+                iri=concept_iri,
+                version=concept_versions_repo.max_version(self._db, concept_iri) + 1,
+                is_current=True,
+                status="active",
+                created_by=actor,
+            )
 
         for s, p, o in rows:
             subject_uri = (

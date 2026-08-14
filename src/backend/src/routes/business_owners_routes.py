@@ -104,7 +104,12 @@ def get_all_owners(
 
 
 @router.get(
-    "/by-object/{object_type}/{object_id}",
+    # object_id MUST be a :path converter — object ids are frequently IRIs that
+    # contain '/' (e.g. urn:glossary:my_scheme/customer). Without :path FastAPI
+    # truncates object_id at the first slash, so the owner lookup queries the
+    # wrong id and returns [] even though the owner is stored — the owners panel
+    # then shows nothing after a successful assign.
+    "/by-object/{object_type}/{object_id:path}",
     response_model=List[BusinessOwnerRead],
 )
 def get_owners_for_object(
@@ -134,7 +139,8 @@ def get_owners_for_object(
 
 
 @router.get(
-    "/history/{object_type}/{object_id}",
+    # :path — see get_owners_for_object; object ids may be slash-bearing IRIs.
+    "/history/{object_type}/{object_id:path}",
     response_model=BusinessOwnerHistory,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )

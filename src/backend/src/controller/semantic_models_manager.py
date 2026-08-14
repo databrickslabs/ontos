@@ -2436,92 +2436,58 @@ class SemanticModelsManager(SearchableAsset):
                                 for context in self._graph.contexts()
                                 if hasattr(context, 'identifier')]
 
+        # rdf:type objects that mark a subject as an enumerable "concept" (class /
+        # SKOS concept / property / individual). Collected via plain triple-pattern
+        # lookups below.
+        _CONCEPT_TYPE_OBJECTS = (
+            RDFS.Class, OWL.Class, SKOS.Concept, SKOS.ConceptScheme,
+            RDF.Property, OWL.ObjectProperty, OWL.DatatypeProperty,
+            OWL.AnnotationProperty, OWL.NamedIndividual,
+        )
+        # Vocabulary namespaces whose own terms must never be listed as concepts.
+        _VOCAB_PREFIXES = (
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "http://www.w3.org/2000/01/rdf-schema#",
+            "http://www.w3.org/2004/02/skos/core#",
+            "http://www.w3.org/2002/07/owl#",
+            "urn:ontos:bnode:",
+        )
+
         for context_name, context in contexts_to_search:
-            # Find all classes and concepts in this context
-            # NOTE: Removed expensive UNION clauses that scanned all rdf:type triples
-            # which caused server to hang with large triple counts (50k+)
-            class_query = """
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            PREFIX dcat: <http://www.w3.org/ns/dcat#>
-            SELECT DISTINCT ?concept ?label ?comment WHERE {
-                # Classes
-                {
-                    ?concept a rdfs:Class .
-                } UNION {
-                    ?concept a owl:Class .
-                } UNION {
-                    ?concept rdfs:subClassOf ?parent .
-                }
-                # SKOS Concepts
-                UNION {
-                    ?concept a skos:Concept .
-                } UNION {
-                    ?concept a skos:ConceptScheme .
-                }
-                # Properties (all types)
-                UNION {
-                    ?concept a rdf:Property .
-                } UNION {
-                    ?concept a owl:ObjectProperty .
-                } UNION {
-                    ?concept a owl:DatatypeProperty .
-                } UNION {
-                    ?concept a owl:AnnotationProperty .
-                } UNION {
-                    ?concept rdfs:subPropertyOf ?parentProp .
-                }
-                # Individuals (named instances)
-                UNION {
-                    ?concept a owl:NamedIndividual .
-                }
-                # Extract labels with priority: skos:prefLabel > rdfs:label
-                OPTIONAL { ?concept skos:prefLabel ?skos_pref_label }
-                OPTIONAL { ?concept rdfs:label ?rdfs_label }
-                BIND(COALESCE(STR(?skos_pref_label), STR(?rdfs_label)) AS ?label)
-
-                # Extract comments/definitions with priority: skos:definition > rdfs:comment
-                OPTIONAL { ?concept skos:definition ?skos_definition }
-                OPTIONAL { ?concept rdfs:comment ?rdfs_comment }
-                BIND(COALESCE(STR(?skos_definition), STR(?rdfs_comment)) AS ?comment)
-
-                # Filter out blank nodes (anonymous classes, restrictions, etc.)
-                # Note: isBlank() + also filter urn:ontos:bnode: URIs (converted blank nodes)
-                FILTER(!isBlank(?concept))
-                FILTER(!STRSTARTS(STR(?concept), "urn:ontos:bnode:"))
-                
-                # Filter out basic RDF/RDFS/SKOS/OWL vocabulary terms
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/1999/02/22-rdf-syntax-ns#"))
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2000/01/rdf-schema#"))
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2004/02/skos/core#"))
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2002/07/owl#"))
-            }
-            ORDER BY ?concept
-            """
-
+            # Enumerate concept subjects via TRIPLE-PATTERN lookups, NOT SPARQL.
+            # A per-context ``context.query(...)`` over a ConjunctiveGraph member
+            # graph evaluates the UNION/OPTIONAL/BIND pattern inconsistently and
+            # silently drops rows (observed live: 2 of 4 e2e-author concepts
+            # returned, though every one is present in the store and the SAME
+            # pattern over the UNION graph returns all 4). ``context.subjects()``
+            # is a direct index scan and returns every match deterministically.
             try:
-                results = context.query(class_query)
-                results_list = list(results)
-                logger.debug(f"SPARQL query returned {len(results_list)} results for context {context_name}")
-
-                # First pass: collect unique concept IRIs to avoid duplicates from multi-label results
                 seen_iris = set()
                 unique_concept_iris = []
-                for row in results_list:
-                    try:
-                        if hasattr(row, 'concept'):
-                            concept_iri = str(row.concept)
-                        else:
-                            concept_iri = str(row[0]) if len(row) > 0 else None
-                    except Exception:
-                        continue
-                    if concept_iri and concept_iri not in seen_iris:
-                        seen_iris.add(concept_iri)
-                        unique_concept_iris.append(concept_iri)
-                
-                logger.debug(f"Processing {len(unique_concept_iris)} unique concepts (from {len(results_list)} SPARQL rows)")
+
+                def _add_subject(subj):
+                    if isinstance(subj, BNode):
+                        return
+                    s = str(subj)
+                    if s in seen_iris:
+                        return
+                    if any(s.startswith(p) for p in _VOCAB_PREFIXES):
+                        return
+                    seen_iris.add(s)
+                    unique_concept_iris.append(s)
+
+                # Typed subjects (class / concept / property / individual).
+                for type_obj in _CONCEPT_TYPE_OBJECTS:
+                    for subj in context.subjects(RDF.type, type_obj):
+                        _add_subject(subj)
+                # Untyped-but-structural: subjects with subClassOf / subPropertyOf
+                # (inherited class/property that may lack an explicit rdf:type).
+                for subj in context.subjects(RDFS.subClassOf, None):
+                    _add_subject(subj)
+                for subj in context.subjects(RDFS.subPropertyOf, None):
+                    _add_subject(subj)
+
+                logger.debug(f"Processing {len(unique_concept_iris)} unique concepts in context {context_name}")
 
                 # Second pass: process each unique concept
                 for concept_iri in unique_concept_iris:

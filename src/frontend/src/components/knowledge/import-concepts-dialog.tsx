@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -82,11 +82,30 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcomes, setOutcomes] = useState<FileImportOutcome[] | null>(null);
-  // Pending diff previews from re-uploads (one per file that hit an existing
-  // scheme). Rendered for steward review; applied on Confirm.
+  // STAGED diff previews for a re-upload, computed when files are selected
+  // against a scheme that already has content — shown BEFORE the Import button
+  // so the user sees the diff and decides whether to import. Applied (confirmed)
+  // only when Import is clicked. Empty/new schemes have nothing to diff.
   const [previews, setPreviews] = useState<UploadPreview[]>([]);
+  const [previewing, setPreviewing] = useState(false);
 
   const editableCollections = collections.filter((c) => c.is_editable);
+
+  // Find a collection anywhere in the (possibly nested) tree by IRI, so we can
+  // read its concept_count and decide whether a diff preview is meaningful.
+  const findCollection = (
+    colls: KnowledgeCollection[],
+    iri: string,
+  ): KnowledgeCollection | undefined => {
+    for (const c of colls) {
+      if (c.iri === iri) return c;
+      const nested = c.child_collections?.length
+        ? findCollection(c.child_collections, iri)
+        : undefined;
+      if (nested) return nested;
+    }
+    return undefined;
+  };
 
   const flattenCollections = (
     colls: KnowledgeCollection[],
@@ -109,6 +128,46 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // Sentinel value for the "create a new scheme" option in the target selector.
   const CREATE_NEW = '__create_new_scheme__';
   const creatingNew = selectedCollectionIri === CREATE_NEW;
+
+  // A re-upload only produces a meaningful diff when the target scheme already
+  // has concepts. Creating a new scheme (or an empty one) has nothing to diff.
+  const targetCollection = creatingNew
+    ? undefined
+    : findCollection(collections, selectedCollectionIri);
+  const targetHasContent = (targetCollection?.concept_count ?? 0) > 0;
+
+  // Preview-on-select: whenever files + a non-empty target are chosen, ask the
+  // backend for the diff WITHOUT applying it, so the user sees "modifies N /
+  // adds M / removes K" and decides before clicking Import. Runs against the
+  // /import route, which returns {mode:'preview', ...} for non-empty schemes.
+  useEffect(() => {
+    if (!open) return;
+    // Nothing to diff: no files, no chosen target, creating-new, or empty scheme.
+    if (selectedFiles.length === 0 || !selectedCollectionIri || creatingNew || !targetHasContent) {
+      setPreviews([]);
+      return;
+    }
+    let cancelled = false;
+    setPreviewing(true);
+    setError(null);
+    (async () => {
+      const staged: UploadPreview[] = [];
+      for (const file of selectedFiles) {
+        try {
+          const data = await importOneFile(file, selectedCollectionIri);
+          if (data?.mode === 'preview') staged.push({ ...data, fileName: file.name });
+        } catch {
+          // A parse/preview error surfaces on submit; don't block the panel here.
+        }
+      }
+      if (!cancelled) {
+        setPreviews(staged);
+        setPreviewing(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, selectedFiles, selectedCollectionIri, creatingNew, targetHasContent]);
 
   const resetState = () => {
     setSelectedFiles([]);
@@ -202,20 +261,37 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedFiles.length === 0) return;
-    // Merge strategy needs a target collection. Per-file strategy relies on the
-    // backend deriving one scheme per file — but the current endpoint imports
-    // into an EXISTING collection only (no create-per-file), so we still require
-    // a target and TODO the true per-file behavior.
     if (!selectedCollectionIri) return;
     if (creatingNew && !newSchemeName.trim()) return;
 
     setIsUploading(true);
     setError(null);
     setOutcomes(null);
-    setPreviews([]);
 
-    // If the user chose "create new scheme", make it first and import into it.
-    // A brand-new scheme is empty, so its files always take the plain-import path.
+    // Re-upload into a scheme with content: the diff is ALREADY staged and shown
+    // (previews). Import just confirms those tokens — the user reviewed the diff
+    // before clicking, so there is no second step.
+    if (previews.length > 0) {
+      const results: FileImportOutcome[] = [];
+      for (const pv of previews) {
+        try {
+          await confirmPreviewToken(pv.preview_token);
+          results.push({ name: pv.fileName, ok: true });
+        } catch (err: any) {
+          results.push({ name: pv.fileName, ok: false, error: err.message });
+        }
+      }
+      setOutcomes(results);
+      setIsUploading(false);
+      if (results.some((r) => r.ok)) onImported();
+      if (results.every((r) => !r.ok)) {
+        setError(t('semantic-models:import.allFailed',
+          'No files could be imported. See per-file errors below.'));
+      }
+      return;
+    }
+
+    // Empty / new scheme: nothing to diff — plain import (concepts stamped Draft).
     let targetIri = selectedCollectionIri;
     if (creatingNew) {
       try {
@@ -227,19 +303,15 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       }
     }
 
-    // One action: each file either imports directly (empty scheme) or, when the
-    // scheme already has content, the server stages a diff and returns a preview
-    // which we IMMEDIATELY confirm (apply). The changelog is shown afterwards as
-    // FYI — there is no second "Apply" step for the user to get stuck on.
     const results: FileImportOutcome[] = [];
-    const applied: UploadPreview[] = [];
     for (const file of selectedFiles) {
       try {
         const data = await importOneFile(file, targetIri);
+        // A brand-new/empty scheme should return {mode:'imported'}. If the target
+        // turned out non-empty and returned a preview, confirm it (edge case).
         if (data?.mode === 'preview') {
-          // Apply the staged diff straight away, then record it as FYI.
           await confirmPreviewToken(data.preview_token);
-          applied.push({ ...data, fileName: file.name });
+          results.push({ name: file.name, ok: true });
         } else {
           results.push({ name: file.name, ok: true, triplesImported: data.triples_imported ?? 0 });
         }
@@ -248,19 +320,12 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       }
     }
 
-    setOutcomes(results.length ? results : null);
-    setPreviews(applied);  // rendered as an applied-changes FYI changelog
+    setOutcomes(results);
     setIsUploading(false);
-    if (results.some((r) => r.ok) || applied.length) {
-      onImported();
-    }
-    if (results.length && !applied.length && results.every((r) => !r.ok)) {
-      setError(
-        t(
-          'semantic-models:import.allFailed',
-          'No files could be imported. See per-file errors below.'
-        )
-      );
+    if (results.some((r) => r.ok)) onImported();
+    if (results.every((r) => !r.ok)) {
+      setError(t('semantic-models:import.allFailed',
+        'No files could be imported. See per-file errors below.'));
     }
   };
 
@@ -268,6 +333,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     selectedFiles.length > 0 &&
     !!selectedCollectionIri &&
     (!creatingNew || !!newSchemeName.trim()) &&
+    !previewing &&
     !isUploading;
   const totalTriples = (outcomes ?? [])
     .filter((r) => r.ok)
@@ -512,14 +578,26 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
               </div>
             )}
 
-            {/* Changelog of what the import applied on a re-upload (FYI only —
-                already applied; there is no separate confirm step). */}
+            {/* Computing the diff while files are being staged against a
+                non-empty scheme. */}
+            {previewing && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border bg-muted/30 px-3 py-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t('semantic-models:import.computingDiff', 'Computing changes…')}
+              </div>
+            )}
+
+            {/* Diff panel. Shown BEFORE Import (review the changes, then decide);
+                once imported (outcomes set), the same panel reads as a summary of
+                what was applied. Import applies exactly what is shown here. */}
             {previews.map((pv) => (
               <div key={pv.preview_token} className="grid gap-2 rounded-md border bg-muted/30 p-3">
                 <div className="flex items-center gap-2">
                   <Info className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="text-sm font-medium">
-                    {t('semantic-models:import.changelogTitle', 'Changes applied from {{file}}', { file: pv.fileName })}
+                    {outcomes
+                      ? t('semantic-models:import.changelogTitle', 'Changes applied from {{file}}', { file: pv.fileName })
+                      : t('semantic-models:import.previewTitle', 'Changes from {{file}}', { file: pv.fileName })}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -529,7 +607,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                     removed: pv.summary.removed,
                     unchanged: pv.summary.unchanged,
                     defaultValue:
-                      'Modified {{modified}}, added {{added}}, removed {{removed}} ({{unchanged}} unchanged).',
+                      'Modifies {{modified}}, adds {{added}}, removes {{removed}} ({{unchanged}} unchanged).',
                   })}
                 </p>
                 {(['modified', 'new', 'removed'] as const).map((bucket) => {
@@ -567,11 +645,11 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
           </div>
 
           <DialogFooter>
-            {/* Single action: one Import button that imports (and, on re-upload,
-                applies the diff in the same step). Once done, it becomes Close;
-                the changelog above is FYI only — no separate Apply step. */}
+            {/* Single action: one Import button. On a re-upload the diff is shown
+                ABOVE (review, then decide) and Import applies exactly that; on a
+                first import there is nothing to diff. Once done → Close. */}
             {(() => {
-              const done = !!outcomes || previews.length > 0;
+              const done = !!outcomes;
               return (
                 <>
                   <Button

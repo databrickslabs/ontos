@@ -104,11 +104,37 @@ def get_all_owners(
 
 
 @router.get(
-    # object_id MUST be a :path converter — object ids are frequently IRIs that
-    # contain '/' (e.g. urn:glossary:my_scheme/customer). Without :path FastAPI
-    # truncates object_id at the first slash, so the owner lookup queries the
-    # wrong id and returns [] even though the owner is stored — the owners panel
-    # then shows nothing after a successful assign.
+    # QUERY-PARAM variant — the canonical read for object ids that are IRIs.
+    # A path segment (even with the :path converter) is unsafe for full IRIs:
+    # 'https://x/y#z' url-encodes to 'https%3A%2F%2Fx...' and Starlette collapses
+    # the encoded double-slash after the scheme, issuing a 301 to a normalized
+    # path ('https:/x') that the SPA fetch does not follow -> the owners panel
+    # reads nothing though the owner IS stored. Query params are never path-
+    # normalized, so this route handles IRIs (with '/' and '#') reliably.
+    "/for-object",
+    response_model=List[BusinessOwnerRead],
+)
+def get_owners_for_object_q(
+    db: DBSessionDep,
+    object_type: str = Query(...),
+    object_id: str = Query(...),
+    manager=Depends(get_business_owners_manager),
+    active_only: bool = Query(True),
+):
+    """Gets all owners for a specific object (object_id passed as a query param).
+
+    Same auth rationale as the legacy path-based variant below.
+    """
+    return manager.get_owners_for_object(
+        db=db, object_type=object_type, object_id=object_id, active_only=active_only
+    )
+
+
+@router.get(
+    # LEGACY path form — kept for non-IRI object ids (e.g. numeric data_product
+    # ids) and existing callers. IRIs should use /for-object above; a full IRI
+    # here 301-redirects due to double-slash normalization. object_id is :path so
+    # slash-bearing (non-scheme) ids at least don't truncate at the first slash.
     "/by-object/{object_type}/{object_id:path}",
     response_model=List[BusinessOwnerRead],
 )

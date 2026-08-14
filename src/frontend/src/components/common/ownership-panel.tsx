@@ -96,8 +96,12 @@ export function OwnershipPanel({
   const fetchOwners = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Query-param route (NOT the /by-object/{id} path form): object ids can be
+      // IRIs with '/' and '#' (e.g. https://ontos.example.org/finance#Customer),
+      // which the path form 301-redirects due to double-slash normalization ->
+      // the panel would read nothing though the owner is stored.
       const response = await apiGet<BusinessOwnerRead[]>(
-        `/api/business-owners/by-object/${objectType}/${objectId}?active_only=false`
+        `/api/business-owners/for-object?object_type=${encodeURIComponent(objectType)}&object_id=${encodeURIComponent(objectId)}&active_only=false`
       );
       if (response.error) throw new Error(response.error);
       const all = Array.isArray(response.data) ? response.data : [];

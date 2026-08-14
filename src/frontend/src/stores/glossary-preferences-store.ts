@@ -110,12 +110,13 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
       setGroupByDimension: (dimension: GroupByDimension) => {
         // The lens is canonical; derive the legacy booleans so consumers that
         // still read groupBySource/groupByDomain (ConceptsTab tree builder)
-        // stay consistent. 'scheme' has no dedicated tree renderer yet, so it
-        // currently falls back to a flat (ungrouped) list.
-        // TODO: add a dedicated scheme grouping renderer in ConceptsTab.
+        // stay consistent. In this data model a concept's source_context IS its
+        // scheme, so 'scheme' and 'source' group identically — both map to the
+        // source-context tree renderer (previously 'scheme' produced NO grouping
+        // because it had no dedicated renderer).
         set({
           groupByDimension: dimension,
-          groupBySource: dimension === 'source',
+          groupBySource: dimension === 'source' || dimension === 'scheme',
           groupByDomain: dimension === 'domain',
         });
       },

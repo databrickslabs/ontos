@@ -328,14 +328,28 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         return copied
 
     def reassign_subject_to_concept_version(
-        self, db: Session, subject_uri: str, concept_version_id, context_name: Optional[str] = None
+        self,
+        db: Session,
+        subject_uri: str,
+        concept_version_id,
+        context_name: Optional[str] = None,
+        only_null_owned: bool = False,
     ) -> int:
-        """Point every triple owned by ``subject_uri`` at a concept-version (P0-3).
+        """Point triples owned by ``subject_uri`` at a concept-version (P0-3).
 
         Triple ownership is determined by the SUBJECT IRI (the P0-1 ownership
         rule). On an atomic publish, the affected concept's triples are moved to
         the newly-minted current version by setting their ``concept_version_id``.
         Optionally scoped to a single ``context_name``.
+
+        ``only_null_owned``: when True, re-stamp ONLY rows that are currently
+        NULL-owned (``concept_version_id IS NULL``). This is the safe variant for
+        the write paths (update_concept / update_concept_status) that add new
+        rows NULL-owned and need to adopt them into the CURRENT version WITHOUT
+        touching a PRIOR version's frozen snapshot rows — moving those onto the
+        current version would both destroy the snapshot AND collide with the
+        current version's identical copies (unique key includes
+        concept_version_id), raising an IntegrityError.
 
         Returns the number of triples reassigned. Flushes but does not commit —
         the caller owns the transaction so the swap is one Postgres commit.
@@ -343,13 +357,16 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         query = db.query(RdfTripleDb).filter(RdfTripleDb.subject_uri == subject_uri)
         if context_name:
             query = query.filter(RdfTripleDb.context_name == context_name)
+        if only_null_owned:
+            query = query.filter(RdfTripleDb.concept_version_id.is_(None))
         updated = query.update(
             {RdfTripleDb.concept_version_id: concept_version_id},
             synchronize_session=False,
         )
         db.flush()
         logger.debug(
-            f"Reassigned {updated} triples of '{subject_uri}' to concept_version {concept_version_id}"
+            f"Reassigned {updated} triples of '{subject_uri}' to concept_version "
+            f"{concept_version_id} (only_null_owned={only_null_owned})"
         )
         return updated
 

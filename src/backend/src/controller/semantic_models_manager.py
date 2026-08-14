@@ -3943,6 +3943,15 @@ class SemanticModelsManager(SearchableAsset):
                     if parent_iri not in broader:
                         broader.append(parent_iri)
                 
+                # The concept's reported version must reflect the REAL current
+                # concept_version number, not the frozen ``ONTOS.version`` literal
+                # (hardcoded "1.0.0" at create, stale after any publish). When a
+                # concept_version row exists, it is the source of truth. The
+                # ONTOS.version triple is left intact for other readers.
+                from src.repositories.concept_versions_repository import concept_versions_repo
+                cv = concept_versions_repo.get_current(self._db, concept_iri)
+                reported_version = str(cv.version) if cv is not None else meta["version"]
+
                 return {
                     "iri": concept_iri,
                     "label": label,
@@ -3958,7 +3967,7 @@ class SemanticModelsManager(SearchableAsset):
                     "synonyms": meta["synonyms"],
                     "examples": meta["examples"],
                     "status": meta["status"],
-                    "version": meta["version"],
+                    "version": reported_version,
                     "owners": meta["owners"],
                     "created_at": meta["created_at"],
                     "created_by": meta["created_by"],
@@ -4183,7 +4192,26 @@ class SemanticModelsManager(SearchableAsset):
                 source_identifier=concept_iri,
                 created_by=updated_by,
             )
-        
+
+        # Ownership invariant: draft edits above re-add rows via add_triple
+        # WITHOUT a concept_version_id, so the rewritten rows are born
+        # NULL-owned. A versioned concept's live triples must all be owned by
+        # its CURRENT concept_version or they drop out of list_current (the
+        # served graph builder) and the concept vanishes. Re-stamp the subject's
+        # rows to the current version before the commit, mirroring
+        # create_concept. Un-versioned legacy concepts (no current row) are left
+        # as-is. only_null_owned=True so we ONLY adopt the freshly-added rows and
+        # never touch a prior version's frozen snapshot (moving those onto the
+        # current version would destroy the snapshot AND collide with the current
+        # version's identical rows -> IntegrityError).
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        current_cv = concept_versions_repo.get_current(self._db, concept_iri)
+        if current_cv is not None:
+            rdf_triples_repo.reassign_subject_to_concept_version(
+                self._db, concept_iri, current_cv.id, context_name=collection_iri,
+                only_null_owned=True,
+            )
+
         self._db.commit()
         self._invalidate_cache()
 
@@ -4290,7 +4318,7 @@ class SemanticModelsManager(SearchableAsset):
         #    publish); if there is no demoted row (edge case), fall back to the
         #    subject's currently-owned rows. v1's rows are left untouched.
         source_version_id = demoted.id if demoted else None
-        rdf_triples_repo.copy_triples_to_version(
+        copied = rdf_triples_repo.copy_triples_to_version(
             self._db,
             subject_uri=concept_iri,
             source_concept_version_id=source_version_id,
@@ -4298,6 +4326,32 @@ class SemanticModelsManager(SearchableAsset):
             context_name=collection_iri,
             created_by=published_by,
         )
+
+        # SAFETY NET (no-vanish invariant): if the scoped copy captured nothing
+        # (legacy/edge data where the demoted version owned no rows, or the live
+        # rows were NULL-owned), v2 would be born EMPTY and the concept would
+        # drop out of list_current. Fall back to copying the subject's COMPLETE
+        # current view into v2, stamped with the new version id, so v2 is never
+        # empty. Skip the new version's own rows (there are none yet) and skip
+        # any row already owned by new_cv.id.
+        if copied == 0:
+            for r in rdf_triples_repo.list_current_by_subject(self._db, concept_iri):
+                if r.concept_version_id == new_cv.id:
+                    continue
+                rdf_triples_repo.add_triple(
+                    self._db,
+                    subject_uri=r.subject_uri,
+                    predicate_uri=r.predicate_uri,
+                    object_value=r.object_value,
+                    object_is_uri=r.object_is_uri,
+                    object_language=r.object_language,
+                    object_datatype=r.object_datatype,
+                    context_name=r.context_name,
+                    source_type=r.source_type,
+                    source_identifier=r.source_identifier,
+                    created_by=published_by or r.created_by,
+                    concept_version_id=new_cv.id,
+                )
 
         # 4. Apply the human-field changes to v2's SET ONLY (remove/add the
         #    changed predicates among rows owned by new_cv.id). DB-only here; the
@@ -5001,10 +5055,29 @@ class SemanticModelsManager(SearchableAsset):
             coll_context.add((concept_uri, ONTOS.certifiedAt, Literal(now, datatype=XSD.dateTime)))
             coll_context.add((concept_uri, ONTOS.certifiedBy, URIRef(user_uri)))
             coll_context.add((concept_uri, ONTOS.certificationExpiresAt, Literal(expires, datatype=XSD.dateTime)))
-        
+
+        # Ownership invariant: the status/timestamp/publishedAt rows added above
+        # go through add_triple WITHOUT a concept_version_id, so they are born
+        # NULL-owned. Re-stamp ONLY those freshly-added NULL-owned rows to the
+        # current version before the commit (mirrors create_concept /
+        # update_concept) so a versioned concept never leaks NULL-owned payload
+        # rows out of list_current. only_null_owned=True is CRITICAL here: after
+        # a version publish the PRIOR version's frozen rows also live in this
+        # context; re-stamping them onto the current version would destroy the
+        # snapshot AND collide with the current version's identical rows
+        # (IntegrityError -> the 500 the user hit when moving a concept to
+        # Publish after it had already been versioned).
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        current_cv = concept_versions_repo.get_current(self._db, concept_iri)
+        if current_cv is not None:
+            rdf_triples_repo.reassign_subject_to_concept_version(
+                self._db, concept_iri, current_cv.id, context_name=collection_iri,
+                only_null_owned=True,
+            )
+
         self._db.commit()
         self._invalidate_cache()
-        
+
         return self.get_concept(concept_iri)
 
     def submit_concept_for_review(

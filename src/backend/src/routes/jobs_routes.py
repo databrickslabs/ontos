@@ -1,14 +1,23 @@
+import uuid
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from src.common.authorization import PermissionChecker
-from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
+from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep, CurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.manager_dependencies import get_jobs_manager
+from src.common.manager_dependencies import (
+    get_jobs_manager,
+    get_notifications_manager,
+    get_settings_manager,
+)
 from src.common.database import get_db
 from src.controller.jobs_manager import JobsManager
+from src.controller.notifications_manager import NotificationsManager
+from src.controller.settings_manager import SettingsManager
+from src.models.notifications import Notification, NotificationType
 from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
 from src.models.workflow_job_runs import WorkflowJobRun
 from src.repositories.workflow_installations_repository import workflow_installation_repo
@@ -688,4 +697,134 @@ async def update_workflow_configuration(
             action="UPDATE",
             success=success,
             details=details
+        )
+
+
+# Workflows whose install state gates a user-facing feature. Features backed by these
+# jobs need to know whether the job is installed so they can disable their entry point
+# instead of failing on click. Deliberately an allowlist: the capabilities endpoint is
+# readable by every authenticated user, so it must not become a full job inventory.
+FEATURE_GATING_WORKFLOW_IDS = (
+    'dqx_profile_datasets',
+    'mdm_match_detect',
+)
+
+
+@router.get('/jobs/capabilities')
+async def get_job_capabilities(
+    db: DBSessionDep,
+    _current_user: CurrentUserDep,
+    settings_manager: SettingsManager = Depends(get_settings_manager),
+) -> Dict[str, Any]:
+    """Report install state of feature-gating workflows to any authenticated user.
+
+    The regular job endpoints require the 'jobs' feature permission, which non-admin
+    roles do not have. Features like DQX profiling still need to know whether their
+    backing job exists so the UI can disable the button and explain why, so this
+    endpoint exposes only booleans for an allowlist of workflow IDs — no job IDs,
+    cluster IDs or run history.
+    """
+    installed_ids = {inst.workflow_id for inst in workflow_installation_repo.get_all_installed(db)}
+
+    return {
+        'workflows': {
+            workflow_id: {'installed': workflow_id in installed_ids}
+            for workflow_id in FEATURE_GATING_WORKFLOW_IDS
+        },
+        # Whether users may ask an admin to enable a disabled job.
+        'enablement_requests_allowed': settings_manager.get_settings().get(
+            'allow_job_enablement_requests', False
+        ),
+    }
+
+
+@router.post('/jobs/workflows/{workflow_id}/request-enablement')
+async def request_workflow_enablement(
+    workflow_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    settings_manager: SettingsManager = Depends(get_settings_manager),
+    notifications_manager: NotificationsManager = Depends(get_notifications_manager),
+) -> Dict[str, Any]:
+    """Notify admins that a user needs a disabled background job enabled.
+
+    Intentionally not gated by the 'jobs' permission: the point is to let ordinary
+    users who cannot manage jobs ask someone who can. Guarded instead by the
+    ALLOW_JOB_ENABLEMENT_REQUESTS setting and the workflow allowlist, and deduplicated
+    so repeated clicks do not flood the admin bell.
+    """
+    success = False
+    details: Dict[str, Any] = {'workflow_id': workflow_id}
+
+    try:
+        if workflow_id not in FEATURE_GATING_WORKFLOW_IDS:
+            raise HTTPException(status_code=404, detail="Unknown workflow")
+
+        if not settings_manager.get_settings().get('allow_job_enablement_requests', False):
+            raise HTTPException(
+                status_code=403,
+                detail="Background job enablement requests are disabled for this deployment.",
+            )
+
+        # Nothing to request if it is already installed.
+        if workflow_installation_repo.get_by_workflow_id(db=db, workflow_id=workflow_id):
+            details['already_installed'] = True
+            success = True
+            return {'requested': False, 'reason': 'already_installed'}
+
+        requester_email = current_user.email or current_user.username if current_user else 'unknown'
+        action_payload = {'workflow_id': workflow_id}
+
+        # Dedupe on workflow only (not requester) so one pending ask per job reaches admins.
+        if notifications_manager.has_unhandled_actionable_notification(
+            db=db,
+            action_type='handle_job_enable_request',
+            action_payload=action_payload,
+        ):
+            details['deduplicated'] = True
+            success = True
+            return {'requested': False, 'reason': 'already_requested'}
+
+        display_name = next(
+            (w['name'] for w in settings_manager.list_available_workflows() if w.get('id') == workflow_id),
+            workflow_id,
+        )
+
+        notification = Notification(
+            id=str(uuid.uuid4()),
+            created_at=datetime.utcnow(),
+            type=NotificationType.ACTION_REQUIRED,
+            title="Background job enablement requested",
+            subtitle=f"Job: {display_name}",
+            description=(
+                f"User '{requester_email}' tried to use a feature that needs the "
+                f"'{display_name}' background job, which is not enabled. "
+                f"Enable it under Settings > Jobs."
+            ),
+            link='/settings/jobs',
+            recipient="Admin",
+            action_type='handle_job_enable_request',
+            action_payload={**action_payload, 'requester_email': requester_email},
+            can_delete=False,
+        )
+        notifications_manager.create_notification(notification=notification, db=db)
+
+        success = True
+        return {'requested': True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to request enablement for workflow %s: %s", workflow_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to submit enablement request")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="jobs",
+            action="REQUEST_ENABLEMENT",
+            success=success,
+            details=details,
         )

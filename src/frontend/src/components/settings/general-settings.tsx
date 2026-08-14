@@ -21,6 +21,7 @@ interface AppSettings {
   llmEndpoint: string;
   llmSystemPrompt: string;
   llmDisclaimerText: string;
+  allowJobEnablementRequests: boolean;
 }
 
 export default function GeneralSettings() {
@@ -39,6 +40,7 @@ export default function GeneralSettings() {
     llmEndpoint: '',
     llmSystemPrompt: '',
     llmDisclaimerText: '',
+    allowJobEnablementRequests: false,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -59,6 +61,7 @@ export default function GeneralSettings() {
             llmEndpoint: data.llm_endpoint || '',
             llmSystemPrompt: data.llm_system_prompt || '',
             llmDisclaimerText: data.llm_disclaimer_text || '',
+            allowJobEnablementRequests: data.allow_job_enablement_requests || false,
           });
         }
       } catch (error) {
@@ -85,6 +88,7 @@ export default function GeneralSettings() {
           llm_endpoint: settings.llmEndpoint,
           llm_system_prompt: settings.llmSystemPrompt,
           llm_disclaimer_text: settings.llmDisclaimerText,
+          allow_job_enablement_requests: settings.allowJobEnablementRequests,
         }),
       });
       if (response.ok) {
@@ -202,6 +206,35 @@ export default function GeneralSettings() {
           <p className="text-sm text-muted-foreground">
             {t('settings:general.auditLog.help', 'Directory where audit log files are stored.')}
           </p>
+        </div>
+
+        <Separator />
+
+        {/* Background Job Settings */}
+        <div>
+          <h3 className="text-lg font-medium mb-3">
+            {t('settings:general.backgroundJobs.title', 'Background Jobs')}
+          </h3>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="allowJobEnablementRequests"
+                checked={settings.allowJobEnablementRequests}
+                onCheckedChange={(checked) => setSettings(prev => ({ ...prev, allowJobEnablementRequests: checked }))}
+                disabled={!hasWriteAccess || isLoading}
+              />
+              <Label htmlFor="allowJobEnablementRequests">
+                {t('settings:general.backgroundJobs.allowEnablementRequests.label', 'Allow users to request background job enablement')}
+              </Label>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'settings:general.backgroundJobs.allowEnablementRequests.help',
+                'When a user hits a feature whose background job is not enabled, they can send a notification asking an administrator to enable it.'
+              )}
+            </p>
+          </div>
         </div>
 
         <Separator />

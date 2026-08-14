@@ -21,8 +21,8 @@
 
 **Package Managers:**
 - Python: `pip` with `hatch` build system
-- Node.js: `yarn` (not npm - project uses Yarn exclusively)
-- Lockfile: `yarn.lock` for frontend, `requirements.txt` pinned for backend
+- Node.js: `npm` (project uses npm exclusively)
+- Lockfile: `package-lock.json` for frontend, `requirements.txt` pinned for backend
 
 ## Frameworks
 
@@ -187,7 +187,7 @@
 
 **Development:**
 - Python 3.11.x (macOS/Linux/Windows)
-- Node.js 18+ with Yarn package manager
+- Node.js 18+ with npm package manager
 - Git (for repository operations and optional Git sync feature)
 - PostgreSQL 9.6+ or compatible (for metadata storage)
 - Databricks workspace account with Unity Catalog enabled
@@ -208,7 +208,7 @@
 **Development Build:**
 ```bash
 # Frontend: Vite dev server on port 3000
-yarn dev:frontend
+npm run dev:frontend
 
 # Backend: Uvicorn with auto-reload on port 8000
 hatch -e dev run dev-backend
@@ -220,7 +220,7 @@ npm run build  # Builds frontend static + copies to backend
 **Production Build:**
 ```bash
 # Frontend production build (outputs to src/frontend/static/)
-yarn build
+npm run build
 
 # Python package build via Hatch
 hatch build

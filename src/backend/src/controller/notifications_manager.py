@@ -309,6 +309,36 @@ class NotificationsManager:
             db.rollback()
             raise
 
+    def has_unhandled_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:
+        """Return True if an unread notification already matches this action type/payload.
+
+        Used to deduplicate user-triggered requests (e.g. asking an admin to enable a
+        background job) so repeated clicks don't flood the admin notification bell.
+        Matching mirrors handle_actionable_notification: the provided payload must be a
+        subset of the stored payload.
+        """
+        try:
+            for notification_db in self._repo.get_multi(db, limit=5000):
+                if notification_db.action_type != action_type or notification_db.read:
+                    continue
+
+                payload_db = {}
+                if notification_db.action_payload:
+                    try:
+                        payload_db = json.loads(notification_db.action_payload)
+                    except json.JSONDecodeError:
+                        logger.warning("Could not parse action_payload for notification %s", notification_db.id)
+                        continue
+
+                if all(item in payload_db.items() for item in action_payload.items()):
+                    return True
+
+            return False
+        except Exception as e:
+            logger.error("Error checking for existing actionable notification: %s", e, exc_info=True)
+            # Fail open: a duplicate notification is preferable to silently dropping a request.
+            return False
+
     def handle_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:
         """Finds notifications by action type/payload and marks them as read using the repository."""
         logger.debug(f"Attempting to handle notification: type={action_type}, payload={action_payload}")

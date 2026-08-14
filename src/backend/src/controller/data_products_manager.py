@@ -1028,7 +1028,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if product_db.output_ports:
                 ports_without_contracts = [
                     port.name for port in product_db.output_ports
-                    if not port.data_contract_id
+                    if not port.contract_id
                 ]
                 if ports_without_contracts:
                     raise ValueError(
@@ -1043,8 +1043,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 contracts_not_approved = []
                 
                 for port in product_db.output_ports:
-                    if port.data_contract_id:
-                        contract = data_contract_repo.get(db=self._db, id=port.data_contract_id)
+                    if port.contract_id:
+                        contract = data_contract_repo.get(db=self._db, id=port.contract_id)
                         if contract:
                             contract_status = (contract.status or '').lower()
                             if contract_status not in valid_contract_statuses:

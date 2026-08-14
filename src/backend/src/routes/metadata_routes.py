@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Request, Query
 from fastapi.responses import StreamingResponse
@@ -32,10 +32,10 @@ FEATURE_ID = "data-domains"  # Use domain feature for now; can widen later
 
 
 # --- Rich Text ---
-@router.post("/entities/{entity_type}/{entity_id}/rich-texts", response_model=RichText, status_code=status.HTTP_201_CREATED)
+@router.post("/entities/{entity_type}/rich-texts", response_model=RichText, status_code=status.HTTP_201_CREATED)
 async def create_rich_text(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     request: Request,
     payload: RichTextCreate,
     db: DBSessionDep,
@@ -67,10 +67,10 @@ async def create_rich_text(
         raise HTTPException(status_code=500, detail="Failed to create rich text")
 
 
-@router.get("/entities/{entity_type}/{entity_id}/rich-texts", response_model=List[RichText])
+@router.get("/entities/{entity_type}/rich-texts", response_model=List[RichText])
 async def list_rich_texts(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
@@ -134,10 +134,10 @@ async def delete_rich_text(
 
 
 # --- Links ---
-@router.post("/entities/{entity_type}/{entity_id}/links", response_model=Link, status_code=status.HTTP_201_CREATED)
+@router.post("/entities/{entity_type}/links", response_model=Link, status_code=status.HTTP_201_CREATED)
 async def create_link(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     request: Request,
     payload: LinkCreate,
     db: DBSessionDep,
@@ -169,10 +169,10 @@ async def create_link(
         raise HTTPException(status_code=500, detail="Failed to create link")
 
 
-@router.get("/entities/{entity_type}/{entity_id}/links", response_model=List[Link])
+@router.get("/entities/{entity_type}/links", response_model=List[Link])
 async def list_links(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
@@ -236,10 +236,10 @@ async def delete_link(
 
 
 # --- Documents ---
-@router.post("/entities/{entity_type}/{entity_id}/documents", response_model=Document, status_code=status.HTTP_201_CREATED)
+@router.post("/entities/{entity_type}/documents", response_model=Document, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
@@ -317,10 +317,10 @@ async def upload_document(
         raise HTTPException(status_code=500, detail="Failed to upload document")
 
 
-@router.get("/entities/{entity_type}/{entity_id}/documents", response_model=List[Document])
+@router.get("/entities/{entity_type}/documents", response_model=List[Document])
 async def list_documents(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
@@ -521,10 +521,10 @@ async def upload_shared_document(
 # Metadata Attachments Endpoints
 # =========================================================================
 
-@router.post("/entities/{entity_type}/{entity_id}/attachments", response_model=MetadataAttachment, status_code=status.HTTP_201_CREATED)
+@router.post("/entities/{entity_type}/attachments", response_model=MetadataAttachment, status_code=status.HTTP_201_CREATED)
 async def attach_shared_asset(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     request: Request,
     payload: MetadataAttachmentCreate,
     db: DBSessionDep,
@@ -556,10 +556,10 @@ async def attach_shared_asset(
         raise HTTPException(status_code=500, detail="Failed to attach shared asset")
 
 
-@router.get("/entities/{entity_type}/{entity_id}/attachments", response_model=List[MetadataAttachment])
+@router.get("/entities/{entity_type}/attachments", response_model=List[MetadataAttachment])
 async def list_attachments(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     manager: MetadataManager = Depends(get_metadata_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
@@ -568,13 +568,13 @@ async def list_attachments(
     return manager.list_attachments(db, entity_type=entity_type, entity_id=entity_id)
 
 
-@router.delete("/entities/{entity_type}/{entity_id}/attachments/{asset_type}/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/entities/{entity_type}/attachments/{asset_type}/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def detach_shared_asset(
     entity_type: str,
-    entity_id: str,
     asset_type: str,
     asset_id: str,
     request: Request,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
@@ -606,10 +606,10 @@ async def detach_shared_asset(
 # Merged Metadata Endpoint (with inheritance)
 # =========================================================================
 
-@router.get("/entities/{entity_type}/{entity_id}/metadata/merged", response_model=MergedMetadataResponse)
+@router.get("/entities/{entity_type}/metadata/merged", response_model=MergedMetadataResponse)
 async def get_merged_metadata(
     entity_type: str,
-    entity_id: str,
+    entity_id: Annotated[str, Query(min_length=1, description='Entity id (may be an IRI)')],
     contract_ids: Optional[str] = Query(None, description="Comma-separated contract IDs for inheritance"),
     max_level: int = Query(99, ge=0, le=999, description="Maximum inheritance level"),
     db: DBSessionDep = None,

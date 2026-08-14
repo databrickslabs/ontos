@@ -2,11 +2,11 @@
 name: Package Management
 priority: 60
 scope:
-  globs: ["src/**", "package.json", "yarn.lock"]
+  globs: ["src/**", "package.json", "package-lock.json"]
   languages: ["typescript"]
 ---
 
 ### Package Management
 
-- This project uses **Yarn** for frontend package management. Use `yarn add`, `yarn install`, `yarn remove`, etc., instead of `npm`.
+- This project uses **npm** for frontend package management. Use `npm install`, `npm ci`, `npm install <pkg>`, `npm uninstall <pkg>`, and `npm run <script>`. Do not use yarn or pnpm.
 - Upon deploying, Databricks Apps detects if `package.json` is present and calls `npm install`, `npm install -r requirements.txt` (if present), and `npm run build` in that case. This should build the static JavaScript content dynamically and there is no need to ship that explicitly.

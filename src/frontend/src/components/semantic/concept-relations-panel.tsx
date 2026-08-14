@@ -55,6 +55,16 @@ const PREDICATES_TO_HIDE = new Set<string>([
   'http://www.w3.org/2004/02/skos/core#notation',
 ])
 
+// Predicate NAMESPACES to hide wholesale. The ontos:* namespace is internal
+// GOVERNANCE / PROVENANCE metadata (status, version, createdAt/By, publishedAt,
+// ownership, conceptType, …) — none of it is a semantic relationship between
+// concepts, and surfacing it here confused stewards (e.g. a raw "version →
+// 1.0.0" or "status → draft" row that duplicates — and can contradict — the
+// header badge + version-history panel). Status/version/ownership each have
+// their own dedicated surface; the Relations panel stays focused on real
+// broader/narrower/related/domain/range/lineage links.
+const PREDICATE_NAMESPACES_TO_HIDE = ['http://ontos.app/ontology#']
+
 // Friendly colour scheme by relationship family. Falls back to neutral.
 const PREDICATE_COLORS: Array<[RegExp, string]> = [
   [/subClassOf$|broader$|broaderTransitive$|subPropertyOf$|broadMatch$/i,
@@ -157,6 +167,7 @@ export default function ConceptRelationsPanel({
       // other side, so we ignore them here to avoid double-counting.
       if (n.direction === 'predicate') continue
       if (PREDICATES_TO_HIDE.has(n.predicate)) continue
+      if (PREDICATE_NAMESPACES_TO_HIDE.some((ns) => n.predicate.startsWith(ns))) continue
       // A literal whose predicate we hid still shouldn't appear; literals
       // we keep are domain-specific annotations (e.g. dc:identifier).
 

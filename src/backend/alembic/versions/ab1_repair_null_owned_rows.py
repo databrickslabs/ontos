@@ -47,11 +47,42 @@ def upgrade() -> None:
 
     Guarded to Postgres; the correlated UPDATE ... FROM syntax is Postgres-native
     and the SQLite test harness never runs migrations anyway.
+
+    Two steps, because ``uq_rdf_triple`` is a 7-column unique constraint
+    ``(subject, predicate, object, lang, datatype, context, concept_version_id)``:
+
+      STEP 1 — DELETE the NULL-owned orphans that are pure DUPLICATES of a row the
+      concept's current version ALREADY owns (same 6-tuple). These arise from the
+      draft-edit + publish path (e.g. an orphan prefLabel/status/createdAt whose
+      value the current version's snapshot already carries). Re-stamping them
+      would violate uq_rdf_triple, so they are redundant and must be dropped.
+
+      STEP 2 — RE-OWN the remaining NULL-owned rows (genuinely missing from the
+      current version's set, e.g. an edited definition that never got folded in)
+      by setting concept_version_id to the current version. After step 1 these no
+      longer collide.
     """
     bind = op.get_bind()
     if bind.dialect.name != 'postgresql':
         return
 
+    # STEP 1: drop NULL-owned duplicates the current version already owns.
+    op.execute("""
+        DELETE FROM rdf_triples t
+         USING concept_version cv, rdf_triples existing
+         WHERE t.concept_version_id IS NULL
+           AND cv.is_current = true
+           AND cv.iri = t.subject_uri
+           AND existing.concept_version_id = cv.id
+           AND existing.subject_uri    = t.subject_uri
+           AND existing.predicate_uri  = t.predicate_uri
+           AND existing.object_value   = t.object_value
+           AND existing.object_language = t.object_language
+           AND existing.object_datatype = t.object_datatype
+           AND existing.context_name   = t.context_name
+    """)
+
+    # STEP 2: re-own the survivors (no longer collide with current-version rows).
     op.execute("""
         UPDATE rdf_triples t
            SET concept_version_id = cv.id

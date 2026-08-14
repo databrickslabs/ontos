@@ -41,6 +41,8 @@ vi.mock('@/stores/knowledge-graph-store', () => ({
     selector({ refreshNonce: 0, lastReason: null, bumpRefreshNonce: vi.fn() }),
 }));
 
+// Spy so the ?source= deep-link test can assert a single idempotent set.
+const setHiddenSourcesSpy = vi.fn();
 vi.mock('@/stores/glossary-preferences-store', () => ({
   useGlossaryPreferencesStore: () => ({
     hiddenSources: [],
@@ -50,6 +52,7 @@ vi.mock('@/stores/glossary-preferences-store', () => ({
     groupByDomain: false,
     isFilterExpanded: false,
     toggleSource: vi.fn(),
+    setHiddenSources: setHiddenSourcesSpy,
     selectAllSources: vi.fn(),
     selectNoneSources: vi.fn(),
     setGroupByDimension: vi.fn(),
@@ -57,6 +60,9 @@ vi.mock('@/stores/glossary-preferences-store', () => ({
     setFilterExpanded: vi.fn(),
   }),
 }));
+
+// availableSources is overridable per-test so the ?source= path has real sources.
+let availableSourcesMock: string[] = [];
 
 // A stable filtered selection returned by the single source-of-truth hook.
 const FILTERED: OntologyConcept[] = [
@@ -71,7 +77,7 @@ vi.mock('@/hooks/use-explore-concepts', () => ({
     groupedConcepts: {},
     groupedProperties: {},
     stats: null,
-    availableSources: [],
+    availableSources: availableSourcesMock,
     sourceConceptCounts: {},
     filteredConcepts: FILTERED,
     totalConcepts: FILTERED.length,
@@ -107,6 +113,8 @@ beforeEach(() => {
   conceptsTabConcepts = null;
   conceptsTabViewMode = null;
   graphTabConcepts = null;
+  availableSourcesMock = [];
+  setHiddenSourcesSpy.mockClear();
   global.fetch = vi.fn(async () => ({
     ok: true, status: 200, json: async () => ({}), text: async () => '',
   })) as unknown as typeof fetch;
@@ -171,6 +179,25 @@ describe('Explore unified surface', () => {
     await waitFor(() => expect(screen.getByTestId('concepts-tab')).toBeInTheDocument());
     expect(conceptsTabConcepts).toEqual(FILTERED);
     expect(conceptsTabViewMode).toBe('tree');
+  });
+
+  it('applies ?source= as ONE hidden-set and consumes the param (no toggle loop)', async () => {
+    // Regression: the ?source= effect used to toggle sources one-by-one and
+    // depend on hiddenSources, so each toggle re-fired it — an infinite loop
+    // that froze the page. It must now hide-all-but-target in a single set and
+    // consume the param so it can't re-fire.
+    availableSourcesMock = ['e2e-author', 'finance', 'logistics'];
+    const observe = renderExplore('/concepts/browser?source=urn%3Aglossary%3Ae2e-author');
+    await waitFor(() => {
+      // Target shown, the other two hidden — in exactly one call.
+      expect(setHiddenSourcesSpy).toHaveBeenCalledWith(
+        expect.arrayContaining(['finance', 'logistics']),
+      );
+    });
+    expect(setHiddenSourcesSpy).toHaveBeenCalledTimes(1);
+    expect(setHiddenSourcesSpy.mock.calls[0][0]).not.toContain('e2e-author');
+    // The param is consumed so the effect cannot re-fire on it.
+    await waitFor(() => expect(observe().search).not.toContain('source='));
   });
 
   it('redirects legacy ?concept=IRI to /concepts/browser/:iri', async () => {

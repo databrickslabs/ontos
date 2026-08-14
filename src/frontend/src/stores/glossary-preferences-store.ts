@@ -36,6 +36,10 @@ interface GlossaryPreferencesState {
   
   // Actions
   toggleSource: (source: string) => void;
+  /** Set the hidden-sources set in one shot (idempotent — no per-source churn).
+   *  Used by the ?source= deep-link so it doesn't loop by reacting to its own
+   *  per-toggle mutations. */
+  setHiddenSources: (sources: string[]) => void;
   selectAllSources: () => void;
   selectNoneSources: (allSources: string[]) => void;
   setGroupByDimension: (dimension: GroupByDimension) => void;
@@ -77,6 +81,19 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
               hiddenSources: [...state.hiddenSources, source],
             };
           }
+        });
+      },
+
+      setHiddenSources: (sources: string[]) => {
+        // Idempotent single set — guard against a no-op write so subscribers
+        // (and any effect keyed on hiddenSources) don't churn.
+        set((state) => {
+          const next = Array.from(new Set(sources)).sort();
+          const cur = [...state.hiddenSources].sort();
+          if (next.length === cur.length && next.every((s, i) => s === cur[i])) {
+            return state; // unchanged — no re-render/loop
+          }
+          return { hiddenSources: sources };
         });
       },
 

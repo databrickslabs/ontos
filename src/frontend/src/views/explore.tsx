@@ -140,6 +140,7 @@ export default function ExploreView() {
     groupByDomain,
     isFilterExpanded,
     toggleSource,
+    setHiddenSources,
     selectAllSources,
     selectNoneSources,
     setGroupByDimension,
@@ -171,27 +172,34 @@ export default function ExploreView() {
 
   // Handle ?source= URL parameter for filtering (from home breakdown / Author).
   // Normalize the incoming param by stripping known URN prefixes (it may be a
-  // full IRI) before comparing against availableSources (already stripped). If
-  // the normalized target is not found, do NOT hide everything (keep the filter
-  // as-is) to avoid a blank page.
+  // full IRI) before comparing against availableSources (already stripped).
+  //
+  // Apply the filter in ONE idempotent set (hide every source except the target)
+  // and then consume the ?source= param, so this runs once per deep-link. It must
+  // NOT depend on or react to hiddenSources: an earlier version toggled sources
+  // one-by-one and depended on hiddenSources, so each toggle re-fired the effect
+  // — an infinite loop that froze the page. If the target isn't found, leave the
+  // filter as-is (no blank page) but still consume the param.
   useEffect(() => {
     const sourceParam = searchParams.get('source');
-    if (sourceParam && availableSources.length > 0) {
-      const normalizedTarget = stripSourcePrefix(sourceParam);
-      if (!availableSources.includes(normalizedTarget)) {
-        return;
-      }
-      const sourcesToHide = availableSources.filter(s => s !== normalizedTarget);
-      sourcesToHide.forEach(source => {
-        if (!hiddenSources.includes(source)) {
-          toggleSource(source);
-        }
-      });
-      if (hiddenSources.includes(normalizedTarget)) {
-        toggleSource(normalizedTarget);
-      }
+    if (!sourceParam || availableSources.length === 0) return;
+
+    const normalizedTarget = stripSourcePrefix(sourceParam);
+    if (availableSources.includes(normalizedTarget)) {
+      // Show only the target: hide everything else, in a single set.
+      setHiddenSources(availableSources.filter((s) => s !== normalizedTarget));
     }
-  }, [searchParams, availableSources, hiddenSources, toggleSource]);
+    // Consume the param either way so the effect can't re-fire on it.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('source');
+        return next;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, availableSources]);
 
   // Concept selection (List/Tree row click) — navigate to dedicated detail page.
   const handleSelectConcept = useCallback((concept: OntologyConcept) => {

@@ -14,8 +14,29 @@ from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
 
-# Add parent directory to path to enable imports from src.*
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Add the backend ``src`` package root to sys.path to enable ``from src.*`` imports.
+#
+# This runs at module import time. Normally ``__file__`` points at this script and
+# the source root is three levels up. On Databricks *serverless*, however, the
+# entry script is executed via ``exec(compile(...))`` in a namespace where
+# ``__file__`` is NOT bound, so evaluating ``Path(__file__)`` raises ``NameError``
+# before ``main()`` is ever reached (issue #685). Guard against a missing
+# ``__file__`` and fall back to the current working directory: for a serverless
+# ``spark_python_task`` the working directory is the deployed workflow folder
+# (the equivalent of ``.../workflows/compliance_checks``), so its grandparent is
+# the same source root the ``__file__`` branch computes. Wrapped in try/except so
+# path bootstrapping can never abort module load.
+try:
+    _entry_file = globals().get("__file__")
+    if _entry_file is not None:
+        _src_root = Path(_entry_file).parent.parent.parent
+    else:
+        _src_root = Path.cwd().parent.parent
+    sys.path.insert(0, str(_src_root))
+except Exception:
+    # Never let path bootstrapping crash module import; imports resolved by the
+    # runtime environment (e.g. installed package / PYTHONPATH) still work.
+    pass
 
 from sqlalchemy import text, create_engine
 from sqlalchemy.engine import Engine

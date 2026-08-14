@@ -98,7 +98,6 @@ export default function ExploreView() {
     sourceConceptCounts,
     filteredConcepts,
     refetch,
-    quietRefetch,
   } = useExploreConcepts();
 
   // View-mode: List | Tree | Graph. Kept in the URL (?view=) so links are
@@ -243,7 +242,9 @@ export default function ExploreView() {
           : t('semantic-models:messages.conceptUpdated'),
       });
       setConceptEditorOpen(false);
-      await refetch();
+      // Bump the shared nonce ONLY — useExploreConcepts subscribes to it and does
+      // a single quiet reload. Calling refetch() here too would reload everything
+      // twice (the post-action "freeze").
       bumpKnowledgeGraphRefresh(isNew ? 'concept-create' : 'concept-update');
     } catch (error: any) {
       toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
@@ -278,12 +279,8 @@ export default function ExploreView() {
           : t('semantic-models:messages.collectionUpdated'),
       });
       setCollectionEditorOpen(false);
-      // Use quietRefetch for renames/updates to avoid skeleton flash; use loud refetch for new collections
-      if (isNew) {
-        await refetch();
-      } else {
-        await quietRefetch();
-      }
+      // Bump the shared nonce ONLY (single quiet reload via the hook's subscriber);
+      // calling refetch()/quietRefetch() here too would reload twice.
       bumpKnowledgeGraphRefresh(isNew ? 'collection-create' : 'collection-update');
     } catch (error: any) {
       toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
@@ -312,12 +309,12 @@ export default function ExploreView() {
         title: t('common:toast.success'),
         description: t('semantic-models:messages.collectionDeleted'),
       });
-      await quietRefetch();
+      // Bump the shared nonce ONLY (single quiet reload via the hook's subscriber).
       bumpKnowledgeGraphRefresh('collection-delete');
     } catch (error: any) {
       toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
     }
-  }, [t, toast, quietRefetch, bumpKnowledgeGraphRefresh]);
+  }, [t, toast, bumpKnowledgeGraphRefresh]);
 
   const editableCollections = useMemo(() => collections.filter((c) => c.is_editable), [collections]);
   const defaultCollection = editableCollections[0];

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type {
   OntologyConcept,
   KnowledgeCollection,
@@ -223,14 +223,24 @@ export function useExploreConcepts(): UseExploreConceptsResult {
     fetchData();
   }, [fetchData]);
 
-  // Refetch when any other view (Settings/RDF Sources rebuild, ontology
-  // generator save, concept/collection edits) bumps the global nonce.
+  // Refetch when any view (this one or another — Settings/RDF Sources rebuild,
+  // ontology generator save, concept/collection edits) bumps the global nonce.
+  //
+  // IMPORTANT (perf): this uses the QUIET refetch, and mutation handlers in this
+  // view must bump the nonce INSTEAD OF calling refetch() directly — otherwise a
+  // single create/edit/delete reloads everything TWICE (once from the direct
+  // call, once from this effect), which back-to-back re-runs the expensive
+  // concepts-grouped enumeration + two full list re-renders = the "freeze" after
+  // an action. One bump = one quiet reload. The ref skips the initial mount so we
+  // don't double-fetch on first load (fetchData already runs above).
   const knowledgeGraphRefreshNonce = useKnowledgeGraphStore((s) => s.refreshNonce);
+  const lastHandledNonce = useRef(0);
   useEffect(() => {
-    if (knowledgeGraphRefreshNonce > 0) {
-      fetchData();
+    if (knowledgeGraphRefreshNonce > 0 && knowledgeGraphRefreshNonce !== lastHandledNonce.current) {
+      lastHandledNonce.current = knowledgeGraphRefreshNonce;
+      quietRefetch();
     }
-  }, [knowledgeGraphRefreshNonce, fetchData]);
+  }, [knowledgeGraphRefreshNonce, quietRefetch]);
 
   const totalConcepts = stats?.total_concepts ?? Object.values(groupedConcepts).flat().length;
   const totalProperties = stats?.total_properties ?? Object.values(groupedProperties).flat().length;

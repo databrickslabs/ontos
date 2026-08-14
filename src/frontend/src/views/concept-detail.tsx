@@ -101,7 +101,8 @@ const STATUS_TRANSITIONS: Record<string, { action: string; to: string; labelKey:
 };
 
 export default function ConceptDetailView() {
-  const { iri: rawIri } = useParams<{ iri: string }>();
+  const params = useParams();
+  const rawIri = params['*'] ?? '';
   const navigate = useNavigate();
   const { t } = useTranslation(['semantic-models', 'common']);
   const { get } = useApi();
@@ -422,10 +423,6 @@ export default function ConceptDetailView() {
     (concept.synonyms?.length ?? 0) > 0 || (concept.examples?.length ?? 0) > 0;
   const isProperty = concept.concept_type === 'property';
   const hasDomainRange = isProperty && (concept.domain || concept.range);
-  // A draft concept is one forked off a certified baseline; only in this state
-  // does the "Changes from <baseline>" comparison make sense. Certified /
-  // imported concepts have no in-flight diff to show.
-  const isDraft = !concept.status || concept.status === 'draft';
 
   // Lifecycle transitions available from the current status. Offered to writers
   // on concepts whose collection is editable (imported/read-only ontologies have
@@ -448,7 +445,7 @@ export default function ConceptDetailView() {
           {t('semantic-models:details.backToList', 'Back to Concepts')}
         </Button>
         <div className="flex items-center gap-2">
-          {availableTransitions.length > 0 && (
+          {availableTransitions.length > 0 && !isProperty && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={statusBusy}>
@@ -476,8 +473,9 @@ export default function ConceptDetailView() {
           )}
           {/* "Save new version" is available for any non-retired editable concept,
               NOT just drafts — publishing v2 is exactly how a certified concept's
-              definition changes. Edit/Delete stay draft-only (isEditable). */}
-          {canPublishVersion && (
+              definition changes. Edit/Delete stay draft-only (isEditable).
+              Properties do not support versioning. */}
+          {canPublishVersion && !isProperty && (
             <Button variant="outline" size="sm" onClick={() => setPublishOpen(true)}>
               <Save className="mr-2 h-4 w-4" />
               {t('semantic-models:versionHistory.saveNewVersion', 'Save new version')}
@@ -517,16 +515,16 @@ export default function ConceptDetailView() {
           {/* Version badge first (leftmost). Wired to the engine's real current
               version (single integer, e.g. v2). Hidden until a version row
               exists (freshly-created concepts before their first version load). */}
-          {currentVersion != null && (
+          {currentVersion != null && !isProperty && (
             <Badge variant="secondary" className="font-mono text-xs">v{currentVersion}</Badge>
           )}
-          {isDraft && (
+          {currentVersion != null && currentVersion > 1 && !isProperty && (
             <button
               type="button"
               className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
               onClick={() =>
                 document
-                  .getElementById('concept-version-diff')
+                  .getElementById('concept-version-history')
                   ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
               }
             >
@@ -540,7 +538,7 @@ export default function ConceptDetailView() {
           >
             {t(`semantic-models:types.${concept.concept_type}`)}
           </Badge>
-          {concept.status && (
+          {concept.status && !isProperty && (
             <Badge variant="outline">
               {t(`semantic-models:status.${concept.status}`, concept.status)}
             </Badge>
@@ -797,10 +795,14 @@ export default function ConceptDetailView() {
         <EntityMetadataPanel entityType="concept" entityId={concept.iri} />
 
         {/* Row 4: Version history — live, drives versioning contract §1 + §2. */}
-        <VersionHistoryPanel
-          conceptIri={concept.iri}
-          refreshNonce={versionRefreshNonce}
-        />
+        {!isProperty && (
+          <div id="concept-version-history">
+            <VersionHistoryPanel
+              conceptIri={concept.iri}
+              refreshNonce={versionRefreshNonce}
+            />
+          </div>
+        )}
 
         {/* Row 5: Relations + neighbourhood graph — ONE block, two views over
             the same /neighbors data. List = relations; Graph = node-link. */}

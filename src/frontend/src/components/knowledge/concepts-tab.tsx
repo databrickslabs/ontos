@@ -835,15 +835,21 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
         </span>
 
         <span className="min-w-0 flex flex-col items-start gap-0.5">
-          {concept.status && (
-            <Badge
-              variant="outline"
-              className={cn('text-[10px] font-medium', STATUS_VARIANTS[concept.status] || '')}
-            >
-              {t(`semantic-models:status.${concept.status}`, concept.status)}
-            </Badge>
+          {concept.concept_type === 'property' ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <>
+              {concept.status && (
+                <Badge
+                  variant="outline"
+                  className={cn('text-[10px] font-medium', STATUS_VARIANTS[concept.status] || '')}
+                >
+                  {t(`semantic-models:status.${concept.status}`, concept.status)}
+                </Badge>
+              )}
+              {renderReplacedBy(concept)}
+            </>
           )}
-          {renderReplacedBy(concept)}
         </span>
 
         <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
@@ -864,6 +870,9 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     );
   };
 
+  // Select-all checkbox for the current page (list view only).
+  const allVisibleSelected = pagedFlatConcepts.length > 0 && pagedFlatConcepts.every((c) => selectedIris.has(c.iri));
+
   // Column header row for the list. Labels live here so cells stay quiet text.
   const listHeader = (
     <div
@@ -872,7 +881,25 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
         'px-3 py-2 border-b bg-muted/40 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sticky top-0 z-10',
       )}
     >
-      <span />
+      <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-center">
+        <Checkbox
+          checked={allVisibleSelected}
+          onCheckedChange={(checked) => {
+            if (checked) {
+              // Select all visible rows on the current page
+              const newSelected = new Set(selectedIris);
+              pagedFlatConcepts.forEach((c) => newSelected.add(c.iri));
+              setSelectedIris(newSelected);
+            } else {
+              // Deselect all visible rows on the current page
+              const newSelected = new Set(selectedIris);
+              pagedFlatConcepts.forEach((c) => newSelected.delete(c.iri));
+              setSelectedIris(newSelected);
+            }
+          }}
+          aria-label={t('semantic-models:bulk.selectAll', 'Select all')}
+        />
+      </div>
       <span>{t('semantic-models:columns.name', 'Name')}</span>
       <span>{t('semantic-models:columns.kind', 'Kind')}</span>
       <span>{t('semantic-models:columns.scheme', 'Scheme')}</span>

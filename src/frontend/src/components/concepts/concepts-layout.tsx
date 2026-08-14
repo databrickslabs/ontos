@@ -1,12 +1,14 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
   Sparkles,
   PenLine,
   Compass,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 
 // ---------------------------------------------------------------------------
@@ -134,9 +136,25 @@ export default function ConceptsLayout() {
           })}
         </div>
 
-          {/* Simple/Advanced switch, aligned with the section tabs. Shared
-              across all Concepts views; per-view copies are removed. */}
-          <ConceptModeSwitch tipLeft />
+          <div className="flex items-center gap-2">
+            {/* Power-user SPARQL/Query link — rendered separately out of the
+                toggle strip per the design intent. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              title={t('concepts:links.sparqlTitle', 'Query concepts with SPARQL')}
+            >
+              <Link to="/concepts/search" className="inline-flex items-center gap-2">
+                <Terminal className="h-4 w-4" />
+                <span className="text-xs">{t('concepts:links.sparql', 'SPARQL')}</span>
+              </Link>
+            </Button>
+
+            {/* Simple/Advanced switch, aligned with the section tabs. Shared
+                across all Concepts views; per-view copies are removed. */}
+            <ConceptModeSwitch tipLeft />
+          </div>
         </div>
 
         {/* Sub-navigation for the active section.

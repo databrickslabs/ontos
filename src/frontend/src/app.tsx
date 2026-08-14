@@ -213,7 +213,7 @@ export default function App() {
                 <Route path="collections" element={<CollectionsView />} />
                 {/* Unified Explore surface: List | Tree | Graph over one fetch. */}
                 <Route path="browser" element={<ExploreView />} />
-                <Route path="browser/:iri" element={<ConceptDetailView />} />
+                <Route path="browser/*" element={<ConceptDetailView />} />
                 {/* Search (SPARQL/console) — reachable as its own route, NOT an
                     Explore view-mode. */}
                 <Route path="search" element={<OntologySearchView />} />

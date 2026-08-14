@@ -131,7 +131,7 @@ function renderExplore(initialEntry = '/concepts/browser') {
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="/concepts/browser" element={<><ExploreView /><Probe /></>} />
-        <Route path="/concepts/browser/:iri" element={<><div data-testid="detail-route" /><Probe /></>} />
+        <Route path="/concepts/browser/*" element={<><div data-testid="detail-route" /><Probe /></>} />
       </Routes>
     </MemoryRouter>,
   );

@@ -56,6 +56,7 @@ import { OwnershipPanel } from '@/components/common/ownership-panel';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { PublishVersionDialog } from '@/components/semantic/publish-version-dialog';
 import { VersionHistoryPanel } from '@/components/semantic/version-history-panel';
+import { DeprecateConceptDialog } from '@/components/semantic/deprecate-concept-dialog';
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-5 w-5 text-emerald-500 shrink-0" />,
@@ -142,6 +143,7 @@ export default function ConceptDetailView() {
   // two ways, so they share ONE block with a List (relations) / Graph switch.
   // Defaults to the relations list (per wireframe); graph is opt-in.
   const [relationsView, setRelationsView] = useState<'list' | 'graph'>('list');
+  const [deprecateOpen, setDeprecateOpen] = useState(false);
   const selectedLanguage = i18n.language?.split('-')[0] || 'en';
 
   // Fetch the focused concept by IRI. This is intentionally separated from
@@ -458,7 +460,13 @@ export default function ConceptDetailView() {
                 {availableTransitions.map((tr) => (
                   <DropdownMenuItem
                     key={tr.action + tr.to}
-                    onClick={() => handleStatusTransition(tr.action)}
+                    onClick={() => {
+                      if (tr.action === 'deprecate') {
+                        setDeprecateOpen(true);
+                      } else {
+                        handleStatusTransition(tr.action);
+                      }
+                    }}
                   >
                     {t(tr.labelKey, tr.defaultLabel)}
                   </DropdownMenuItem>
@@ -896,6 +904,20 @@ export default function ConceptDetailView() {
         onPublished={async () => {
           bumpKnowledgeGraphRefresh('concept-version');
           setVersionRefreshNonce((n) => n + 1);
+          await fetchConcept();
+        }}
+      />
+
+      <DeprecateConceptDialog
+        isOpen={deprecateOpen}
+        onOpenChange={setDeprecateOpen}
+        conceptIri={concept.iri}
+        onSuccess={async () => {
+          toast({
+            title: t('common:toast.success'),
+            description: t('semantic-models:messages.statusChanged', 'Status updated'),
+          });
+          bumpKnowledgeGraphRefresh('concept-status');
           await fetchConcept();
         }}
       />

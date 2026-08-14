@@ -279,7 +279,10 @@ export default function ConceptRelationsPanel({
         </div>
       ) : relations.length === 0 ? (
         <p className="text-sm text-muted-foreground py-2 px-2">
-          {t('semantic-models:relations.empty', { defaultValue: 'No relations found.' })}
+          {t('semantic-models:relations.empty', {
+            defaultValue:
+              'No concept-to-concept relations yet. Add broader / narrower / related links, or see the Linked Objects panel for assets and products linked to this concept.',
+          })}
         </p>
       ) : (
         relations.map(renderRow)

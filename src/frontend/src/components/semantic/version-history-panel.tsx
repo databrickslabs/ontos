@@ -37,6 +37,9 @@ interface VersionInfo {
 }
 
 interface VersionDetail {
+  // The /version/detail endpoint returns the frozen text as `definition`.
+  // (Older reads used comment/comments; keep them as fallbacks.)
+  definition?: string;
   comment?: string;
   comments?: Record<string, string>;
   [key: string]: unknown;
@@ -112,6 +115,7 @@ export function VersionHistoryPanel({
         );
         const detail = res.data;
         const text =
+          detail?.definition ||
           detail?.comment ||
           (detail?.comments && Object.values(detail.comments)[0]) ||
           '';

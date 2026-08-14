@@ -39,7 +39,7 @@
   "relations": {
     "title": "Relations",
     "loading": "Loading relations...",
-    "empty": "No relations found.",
+    "empty": "No concept-to-concept relations yet. Add broader / narrower / related links, or see the Linked Objects panel for assets and products linked to this concept.",
     "outgoingTooltip": "This concept → target",
     "incomingTooltip": "Source → this concept"
   },
@@ -206,7 +206,35 @@
     "linkEditor": {
       "title": "Create Link",
       "description": "Define a relationship between two concepts"
+    },
+    "deprecate": {
+      "title": "Deprecate concept",
+      "description": "Optionally specify one or more successor concepts to indicate what this concept was replaced by.",
+      "successors": "Successor concepts",
+      "noSuccessors": "None selected",
+      "addSuccessor": "+ Add successor"
     }
+  },
+  "lifecycle": {
+    "changeStatus": "Change status",
+    "submitReview": "Submit for review",
+    "approve": "Approve",
+    "publish": "Publish",
+    "certify": "Certify",
+    "deprecate": "Deprecate",
+    "archive": "Archive"
+  },
+  "hierarchy": {
+    "title": "Hierarchy",
+    "parent": "Parent",
+    "children": "Children",
+    "none": "No broader or narrower concepts.",
+    "viewLabel": "Hierarchy view",
+    "list": "List",
+    "graph": "Graph"
+  },
+  "versionDiff": {
+    "compare": "Compare"
   },
   "rdfSources": {
     "syntaxColumn": "Syntax",

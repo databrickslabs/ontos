@@ -170,7 +170,7 @@ describe('ConceptRelationsPanel', () => {
     mockGet.mockResolvedValue({ data: [] })
     renderPanel()
     await waitFor(() => {
-      expect(screen.getByText(/No relations found\./i)).toBeInTheDocument()
+      expect(screen.getByText(/No concept-to-concept relations yet/i)).toBeInTheDocument()
     })
   })
 })

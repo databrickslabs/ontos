@@ -2416,25 +2416,35 @@ class SemanticModelsManager(SearchableAsset):
         """Compute all concepts without caching - used for building persistent cache"""
         concepts = []
 
-        # Determine which contexts to search
-        contexts_to_search = []
+        # Determine which context NAMES to search. We derive the name set from
+        # the UNION graph's quads (self._graph.quads) rather than iterating
+        # self._graph.contexts(): the latter has been observed to omit / return
+        # empty member graphs for some contexts (a whole scheme's concepts then
+        # vanished from Explore though quads over the union clearly contain them).
+        # get_context(name) below always returns a working handle onto the store.
         if taxonomy_name:
-            # Find the specific context
-            target_contexts = [
+            target_contexts = {
                 f"urn:taxonomy:{taxonomy_name}",
                 f"urn:semantic-model:{taxonomy_name}",
                 f"urn:schema:{taxonomy_name}",
                 f"urn:glossary:{taxonomy_name}",
                 f"urn:ontology:{taxonomy_name}",
-            ]
-            for context in self._graph.contexts():
-                if hasattr(context, 'identifier') and str(context.identifier) in target_contexts:
-                    contexts_to_search.append((str(context.identifier), context))
+            }
+            context_names = sorted(target_contexts)
         else:
-            # Search all contexts
-            contexts_to_search = [(str(context.identifier), context)
-                                for context in self._graph.contexts()
-                                if hasattr(context, 'identifier')]
+            names = set()
+            for _s, _p, _o, ctx in self._graph.quads((None, None, None, None)):
+                if ctx is None:
+                    continue
+                cid = getattr(ctx, 'identifier', ctx)
+                cid = str(cid)
+                if cid and cid != "urn:x-rdflib:default":
+                    names.add(cid)
+            context_names = sorted(names)
+
+        contexts_to_search = [
+            (name, self._graph.get_context(URIRef(name))) for name in context_names
+        ]
 
         # rdf:type objects that mark a subject as an enumerable "concept" (class /
         # SKOS concept / property / individual). Collected via plain triple-pattern

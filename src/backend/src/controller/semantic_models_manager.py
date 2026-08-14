@@ -94,6 +94,23 @@ def _normalise_property_type(property_type: Optional[str]) -> str:
     return pt if pt in _VALID_PROPERTY_TYPES else "object"
 
 
+# RDF/RDFS/OWL/SKOS vocabulary namespaces. Terms under these (owl:Class,
+# owl:Thing, rdfs:Resource, skos:Concept, ...) are meta/vocabulary IRIs and are
+# NEVER valid parent concepts. Bad data can attach e.g. `skos:broader owl:Class`
+# to a concept; every parent-list read path must filter these out.
+_VOCAB_PARENT_PREFIXES = (
+    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "http://www.w3.org/2000/01/rdf-schema#",
+    "http://www.w3.org/2004/02/skos/core#",
+    "http://www.w3.org/2002/07/owl#",
+)
+
+
+def _is_vocab_iri(iri) -> bool:
+    """True if ``iri`` is an RDF/RDFS/OWL/SKOS vocabulary term (never a parent)."""
+    return any(str(iri).startswith(p) for p in _VOCAB_PARENT_PREFIXES)
+
+
 def _sanitize_context_name(name: str) -> str:
     """Sanitize a name for use in URN context identifiers.
     
@@ -2660,35 +2677,34 @@ class SemanticModelsManager(SearchableAsset):
                     else:
                         concept_type = "individual"
 
-                    # Get parent concepts/properties
+                    # Get parent concepts/properties. RDF/RDFS/OWL/SKOS
+                    # vocabulary IRIs (owl:Class, owl:Thing, ...) are never valid
+                    # parents and are filtered out of every source below.
                     parent_concepts = []
                     # Handle rdfs:subClassOf relationships (class-to-class)
                     for parent in context.objects(concept_uri, RDFS.subClassOf):
                         parent_str = str(parent)
-                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
+                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
                             parent_concepts.append(parent_str)
                     # Handle owl:equivalentClass + owl:intersectionOf (A ≡ B ∩ C implies A ⊑ B)
                     for parent_iri in self._extract_parents_from_owl_equivalent_class(context, concept_uri):
-                        if parent_iri not in parent_concepts:
+                        if not _is_vocab_iri(parent_iri) and parent_iri not in parent_concepts:
                             parent_concepts.append(parent_iri)
                     # Handle rdfs:subPropertyOf relationships (property-to-property)
                     for parent in context.objects(concept_uri, RDFS.subPropertyOf):
                         parent_str = str(parent)
-                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
+                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
                             parent_concepts.append(parent_str)
                     # Handle SKOS broader relationships
                     for parent in context.objects(concept_uri, SKOS.broader):
-                        parent_concepts.append(str(parent))
+                        parent_str = str(parent)
+                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
+                            parent_concepts.append(parent_str)
                     # Handle rdf:type relationships (instance-to-class)
                     for parent_type in context.objects(concept_uri, RDF.type):
                         # Only include custom types, not basic RDF/RDFS/SKOS/OWL types
                         parent_type_str = str(parent_type)
-                        if not any(parent_type_str.startswith(prefix) for prefix in [
-                            "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                            "http://www.w3.org/2000/01/rdf-schema#",
-                            "http://www.w3.org/2004/02/skos/core#",
-                            "http://www.w3.org/2002/07/owl#"
-                        ]):
+                        if not _is_vocab_iri(parent_type_str):
                             parent_concepts.append(parent_type_str)
 
                     source_context = self._extract_source_context(context_name)
@@ -2805,29 +2821,29 @@ class SemanticModelsManager(SearchableAsset):
             # "individual" default and the UI badge was wrong.
             concept_type, _ = self._detect_concept_type(context, concept_uri)
 
-            # Get parent concepts
+            # Get parent concepts. RDF/RDFS/OWL/SKOS vocabulary IRIs
+            # (owl:Class, owl:Thing, ...) are never valid parents and are
+            # filtered out of every source below.
             parent_concepts = []
             # Handle rdfs:subClassOf relationships (class-to-class)
             for parent in context.objects(concept_uri, RDFS.subClassOf):
                 parent_str = str(parent)
-                if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
+                if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
                     parent_concepts.append(parent_str)
             # Handle owl:equivalentClass + owl:intersectionOf (A ≡ B ∩ C implies A ⊑ B)
             for parent_iri in self._extract_parents_from_owl_equivalent_class(context, concept_uri):
-                if parent_iri not in parent_concepts:
+                if not _is_vocab_iri(parent_iri) and parent_iri not in parent_concepts:
                     parent_concepts.append(parent_iri)
             # Handle SKOS broader relationships
             for parent in context.objects(concept_uri, SKOS.broader):
-                parent_concepts.append(str(parent))
+                parent_str = str(parent)
+                if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
+                    parent_concepts.append(parent_str)
             # Handle rdf:type relationships (instance-to-class)
             for parent_type in context.objects(concept_uri, RDF.type):
-                # Only include custom types, not basic RDF/RDFS/SKOS types
+                # Only include custom types, not basic RDF/RDFS/SKOS/OWL types
                 parent_type_str = str(parent_type)
-                if not any(parent_type_str.startswith(prefix) for prefix in [
-                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                    "http://www.w3.org/2000/01/rdf-schema#", 
-                    "http://www.w3.org/2004/02/skos/core#"
-                ]):
+                if not _is_vocab_iri(parent_type_str):
                     parent_concepts.append(parent_type_str)
             
             # Get child concepts
@@ -3997,18 +4013,26 @@ class SemanticModelsManager(SearchableAsset):
                 # restore form state.
                 meta = self._extract_concept_metadata(context, concept_uri)
                 
-                # Get hierarchy
-                broader = [str(b) for b in context.objects(concept_uri, SKOS.broader)]
+                # Get hierarchy. Exclude RDF/RDFS/OWL/SKOS vocabulary IRIs from
+                # the parent list: bad data can attach `skos:broader owl:Class`
+                # (or subClassOf owl:Thing), and those meta IRIs are never valid
+                # parents and render as dead links in the UI.
+                broader = [
+                    str(b) for b in context.objects(concept_uri, SKOS.broader)
+                    if not isinstance(b, BNode)
+                    and not self._is_skolemized_bnode(str(b))
+                    and not _is_vocab_iri(b)
+                ]
                 narrower = [str(n) for n in context.objects(concept_uri, SKOS.narrower)]
-                
+
                 # Also check rdfs:subClassOf for classes
                 for parent in context.objects(concept_uri, RDFS.subClassOf):
                     parent_str = str(parent)
-                    if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and parent_str not in broader:
+                    if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str) and parent_str not in broader:
                         broader.append(parent_str)
                 # Also check owl:equivalentClass + owl:intersectionOf
                 for parent_iri in self._extract_parents_from_owl_equivalent_class(context, concept_uri):
-                    if parent_iri not in broader:
+                    if not _is_vocab_iri(parent_iri) and parent_iri not in broader:
                         broader.append(parent_iri)
                 
                 # The concept's reported version must reflect the REAL current
@@ -4604,7 +4628,12 @@ class SemanticModelsManager(SearchableAsset):
             "iri": concept_iri,
             "label": label,
             "current_version": current.version if current else None,
-            "status": (current.status if current else None) or concept.get("status"),
+            # Governance/workflow status (ONTOS.status from the graph, e.g.
+            # "under_review") is what the Status column shows. Prefer it over the
+            # concept_version ROW's lifecycle status ("active"/"superseded"),
+            # which is a VERSIONING state, not the governance status. Fall back
+            # to the version row only when the graph carries no status.
+            "status": concept.get("status") or (current.status if current else None),
             "versions": versions,
             "replaces_iri": replaces_iri,
             "replaced_by_iris": replaced_by_iris,

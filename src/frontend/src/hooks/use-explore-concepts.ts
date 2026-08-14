@@ -60,6 +60,7 @@ export interface UseExploreConceptsResult {
   totalConcepts: number;
   totalProperties: number;
   refetch: () => Promise<void>;
+  quietRefetch: () => Promise<void>;
 }
 
 export function useExploreConcepts(): UseExploreConceptsResult {
@@ -161,6 +162,34 @@ export function useExploreConcepts(): UseExploreConceptsResult {
     }
   }, []);
 
+  // Quiet refetch: refreshes data without showing the skeleton loader. Used for
+  // mutations (rename, delete) where the list should stay visible and just update
+  // in place. Does the same three fetches as fetchData but skips setIsLoading calls.
+  const quietRefetch = useCallback(async () => {
+    try {
+      const [collectionsRes, conceptsRes, statsRes] = await Promise.all([
+        fetch('/api/knowledge/collections?hierarchical=true'),
+        fetch('/api/semantic-models/concepts-grouped'),
+        fetch('/api/semantic-models/stats'),
+      ]);
+
+      if (collectionsRes.ok) {
+        const data = await collectionsRes.json();
+        setCollections(data.collections || []);
+      }
+      if (conceptsRes.ok) {
+        const data = await conceptsRes.json();
+        setGroupedConcepts(data.grouped_concepts || {});
+      }
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Failed to quietly refetch explore concepts:', error);
+    }
+  }, []);
+
   const fetchProperties = useCallback(async () => {
     try {
       const response = await fetch('/api/semantic-models/properties-grouped');
@@ -218,5 +247,6 @@ export function useExploreConcepts(): UseExploreConceptsResult {
     totalConcepts,
     totalProperties,
     refetch: fetchData,
+    quietRefetch,
   };
 }

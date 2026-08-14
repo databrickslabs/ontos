@@ -98,6 +98,7 @@ export default function ExploreView() {
     sourceConceptCounts,
     filteredConcepts,
     refetch,
+    quietRefetch,
   } = useExploreConcepts();
 
   // View-mode: List | Tree | Graph. Kept in the URL (?view=) so links are
@@ -277,7 +278,12 @@ export default function ExploreView() {
           : t('semantic-models:messages.collectionUpdated'),
       });
       setCollectionEditorOpen(false);
-      await refetch();
+      // Use quietRefetch for renames/updates to avoid skeleton flash; use loud refetch for new collections
+      if (isNew) {
+        await refetch();
+      } else {
+        await quietRefetch();
+      }
       bumpKnowledgeGraphRefresh(isNew ? 'collection-create' : 'collection-update');
     } catch (error: any) {
       toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
@@ -306,12 +312,12 @@ export default function ExploreView() {
         title: t('common:toast.success'),
         description: t('semantic-models:messages.collectionDeleted'),
       });
-      await refetch();
+      await quietRefetch();
       bumpKnowledgeGraphRefresh('collection-delete');
     } catch (error: any) {
       toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
     }
-  }, [t, toast, refetch, bumpKnowledgeGraphRefresh]);
+  }, [t, toast, quietRefetch, bumpKnowledgeGraphRefresh]);
 
   const editableCollections = useMemo(() => collections.filter((c) => c.is_editable), [collections]);
   const defaultCollection = editableCollections[0];

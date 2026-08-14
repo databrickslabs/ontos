@@ -47,7 +47,9 @@ import {
   Zap,
   Languages,
   MoreHorizontal,
-  ArrowUpDown,
+  List,
+  ListTree,
+  Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { systemRdfNamespaceDisplayLabel } from '@/lib/system-rdf-namespace-labels';
@@ -238,7 +240,7 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
             )}
           </button>
         </CollapsibleTrigger>
-        <div className="flex gap-1">
+        <div className="flex gap-1 items-center">
           <Button
             variant="ghost"
             size="sm"
@@ -255,30 +257,13 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
           >
             {t('semantic-models:filters.none')}
           </Button>
-        </div>
-      </div>
-      <CollapsibleContent>
-        <div className="px-4 pb-3 space-y-3">
-          {/* Search input */}
-          <Input
-            type="text"
-            placeholder={t('semantic-models:filters.searchSchemes', 'Search schemes...')}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            className="h-8 text-xs"
-          />
-
-          {/* Sort control */}
-          <div className="flex items-center gap-2">
-            <Label className="text-xs text-muted-foreground flex items-center gap-1">
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              {t('semantic-models:filters.sortBy', 'Sort by')}
-            </Label>
+          <div className="flex items-center gap-1 ml-2 pl-2 border-l">
             <Button
               variant={sortMode === 'name' ? 'default' : 'outline'}
               size="sm"
               className="h-6 text-xs px-2"
               onClick={() => setSortMode('name')}
+              title={t('semantic-models:filters.sortName', 'Name')}
             >
               {t('semantic-models:filters.sortName', 'Name')}
             </Button>
@@ -287,15 +272,29 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
               size="sm"
               className="h-6 text-xs px-2"
               onClick={() => setSortMode('size')}
+              title={t('semantic-models:filters.sortSize', 'Size')}
             >
               {t('semantic-models:filters.sortSize', 'Size')}
             </Button>
           </div>
+        </div>
+      </div>
+      <CollapsibleContent>
+        <div className="px-4 pb-3 space-y-2">
+          {/* Search input — narrow, not full width */}
+          <Input
+            type="text"
+            placeholder={t('semantic-models:filters.searchSchemes', 'Search schemes...')}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="h-8 text-xs w-48"
+          />
 
           {/* Source chips grouped by type. Height-bounded scroll area so a large source
               count doesn't explode the panel vertically; multi-select behavior
-              is unchanged (each chip is still an independent checkbox). */}
-          <div className="max-h-56 overflow-y-auto pr-1 space-y-2">
+              is unchanged (each chip is still an independent checkbox).
+              Type headers replaced with icons + tooltips (left of each type row). */}
+          <div className="max-h-56 overflow-y-auto pr-1 space-y-1.5">
             {(['glossary', 'taxonomy', 'ontology', 'other'] as const).map((type) => {
               const sources = sortedSourcesByType[type] || [];
               if (sources.length === 0) return null;
@@ -304,17 +303,33 @@ export const GlossaryFilterPanel: React.FC<GlossaryFilterPanelProps> = ({
                 type === 'glossary' ? 'GLOSSARIES' : type === 'taxonomy' ? 'TAXONOMIES' : type === 'ontology' ? 'ONTOLOGIES' : 'OTHER'
               );
 
+              // Type icon mapping — reuse the same icons as Define for consistency
+              const typeIconMap: Record<string, React.FC<any>> = {
+                glossary: List,
+                taxonomy: ListTree,
+                ontology: Share2,
+                other: Filter,
+              };
+              const TypeIcon = typeIconMap[type] || Filter;
+
               return (
-                <div key={type}>
-                  <div className="flex items-center gap-2 px-1 py-1">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {typeLabel}
-                    </span>
-                    <Badge variant="secondary" className="h-4 text-[10px] px-1">
-                      {sources.length}
-                    </Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                <div key={type} className="flex items-start gap-2">
+                  {/* Type icon with tooltip + count */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-0.5 text-muted-foreground pt-0.5 flex-shrink-0">
+                          <TypeIcon className="h-3.5 w-3.5" />
+                          <Badge variant="secondary" className="h-4 text-[10px] px-1">
+                            {sources.length}
+                          </Badge>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>{typeLabel}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  {/* Chips wrapping to the right */}
+                  <div className="flex flex-wrap gap-2 flex-1">
                     {sources.map((source) => {
                       const isVisible = !hiddenSources.includes(source);
                       const conceptCount = sourceConceptCounts[source] || 0;

@@ -242,10 +242,13 @@ export default function ExploreView() {
           : t('semantic-models:messages.conceptUpdated'),
       });
       setConceptEditorOpen(false);
-      // Bump the shared nonce ONLY — useExploreConcepts subscribes to it and does
-      // a single quiet reload. Calling refetch() here too would reload everything
-      // twice (the post-action "freeze").
-      bumpKnowledgeGraphRefresh(isNew ? 'concept-create' : 'concept-update');
+      // Bump the shared nonce ONLY (useExploreConcepts does a single quiet
+      // reload) — AND defer it a tick past the dialog close. Firing the list
+      // re-render in the same tick as the Radix dialog close raced its
+      // focus-restore + aria-hidden/scroll-lock cleanup, which could leave
+      // <#root aria-hidden> / body pointer-events:none stuck = "can't click
+      // anything" until the next render. Deferring lets the dialog fully settle.
+      setTimeout(() => bumpKnowledgeGraphRefresh(isNew ? 'concept-create' : 'concept-update'), 0);
     } catch (error: any) {
       toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
       throw error;
@@ -279,9 +282,10 @@ export default function ExploreView() {
           : t('semantic-models:messages.collectionUpdated'),
       });
       setCollectionEditorOpen(false);
-      // Bump the shared nonce ONLY (single quiet reload via the hook's subscriber);
-      // calling refetch()/quietRefetch() here too would reload twice.
-      bumpKnowledgeGraphRefresh(isNew ? 'collection-create' : 'collection-update');
+      // Bump the shared nonce ONLY (single quiet reload), deferred a tick past
+      // the dialog close so the list re-render doesn't race the Radix dialog's
+      // focus-restore + aria-hidden/scroll-lock cleanup (see handleSaveConcept).
+      setTimeout(() => bumpKnowledgeGraphRefresh(isNew ? 'collection-create' : 'collection-update'), 0);
     } catch (error: any) {
       toast({ title: t('common:toast.error'), description: error.message, variant: 'destructive' });
       throw error;

@@ -2644,21 +2644,34 @@ class SemanticModelsManager(SearchableAsset):
                     # showed a blank status. Falls back to the created default.
                     status_val = self._get_literal(context, concept_uri, ONTOS.status)
 
-                    concepts.append(OntologyConcept(
-                        iri=concept_iri,
-                        label=primary_label,
-                        labels=labels,
-                        comment=comment,
-                        comments=comments,
-                        concept_type=concept_type,
-                        property_type=property_type_val,
-                        source_context=source_context,
-                        parent_concepts=parent_concepts,
-                        domain=domain_val,
-                        range=range_val,
-                        related_concepts=related_concepts,
-                        status=status_val,
-                    ))
+                    # Per-concept guard: constructing a single OntologyConcept must
+                    # NEVER be able to blank the whole context. A bad value in one
+                    # concept (historically an ONTOS.status literal the enum didn't
+                    # yet know about, e.g. 'published') raised a Pydantic
+                    # ValidationError that the OUTER except swallowed, dropping every
+                    # concept in the scheme from Explore. Now one bad concept is
+                    # skipped and the rest still enumerate.
+                    try:
+                        concepts.append(OntologyConcept(
+                            iri=concept_iri,
+                            label=primary_label,
+                            labels=labels,
+                            comment=comment,
+                            comments=comments,
+                            concept_type=concept_type,
+                            property_type=property_type_val,
+                            source_context=source_context,
+                            parent_concepts=parent_concepts,
+                            domain=domain_val,
+                            range=range_val,
+                            related_concepts=related_concepts,
+                            status=status_val,
+                        ))
+                    except Exception as concept_err:
+                        logger.warning(
+                            f"Skipping concept {concept_iri} in context {context_name}: {concept_err}"
+                        )
+                        continue
             except Exception as e:
                 logger.warning(f"Failed to query concepts in context {context_name}: {e}")
 
@@ -3475,7 +3488,17 @@ class SemanticModelsManager(SearchableAsset):
         
         # Remove all concepts in the collection's context
         rdf_triples_repo.remove_by_context(self._db, collection_iri)
-        
+
+        # Also delete the concept_version rows for every concept in this
+        # collection, in the SAME transaction as the rdf_triples deletion above.
+        # Concept IRIs are always <collection_iri>/<slug>, so a prefix match is
+        # exact and safe. Leaving these rows behind orphaned them: recreating a
+        # same-named scheme + same-named concept then collided with the unique
+        # constraints on (iri, version) / (iri WHERE is_current) -> IntegrityError
+        # ("Failed to create concept") and the concept never appeared.
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        concept_versions_repo.delete_for_collection(self._db, collection_iri)
+
         # Remove from in-memory graph
         meta_context = self._graph.get_context(URIRef(META_CONTEXT))
         coll_uri = URIRef(collection_iri)
@@ -3634,6 +3657,29 @@ class SemanticModelsManager(SearchableAsset):
         if existing:
             raise ValueError(f"Concept already exists: {concept_iri}")
 
+        # Self-heal orphaned version rows BEFORE writing any triples. If
+        # concept_version rows already exist for this exact IRI but the concept is
+        # NOT actually present in the store (zero rdf_triples for this subject in
+        # this collection context), they are leftovers from a deleted scheme that
+        # shared the same sanitized IRI. Left in place they collide with the unique
+        # constraints on the create_version call below
+        # (uq_concept_version_iri_version / uq_concept_version_current_per_iri) and
+        # break the recreate with an IntegrityError. Only delete when the concept
+        # genuinely does not exist — deleting live version rows would destroy real
+        # history.
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        if concept_versions_repo.list_versions(self._db, concept_iri):
+            subject_triples = [
+                t for t in rdf_triples_repo.list_by_subject(self._db, concept_iri)
+                if t.context_name == collection_iri
+            ]
+            if not subject_triples:
+                logger.warning(
+                    f"Self-healing orphaned concept_version rows for {concept_iri} "
+                    f"(no rdf_triples in context {collection_iri})"
+                )
+                concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
         now = datetime.utcnow().isoformat() + "Z"
         synonyms = synonyms or []
         examples = examples or []
@@ -3742,7 +3788,7 @@ class SemanticModelsManager(SearchableAsset):
         # is_current=true, status=draft (matching the ONTOS.status triple
         # above). Assign every triple owned by this subject IRI (subject-IRI
         # ownership, same rule as the backfill + publish) in the SAME commit.
-        from src.repositories.concept_versions_repository import concept_versions_repo
+        # (concept_versions_repo imported above for the orphan self-heal.)
         v1 = concept_versions_repo.create_version(  # flushes -> v1.id available
             self._db,
             iri=concept_iri,

@@ -29,10 +29,24 @@ class SourceType(str, Enum):
 
 
 class ConceptStatus(str, Enum):
-    """Ontology concept status. Aligned with EntityStatus; CERTIFIED removed (separate dimension)."""
+    """Ontology concept lifecycle status.
+
+    Must stay in sync with the state machine that ``update_concept_status`` actually
+    writes into the graph (VALID_TRANSITIONS):
+        draft -> under_review -> approved -> published -> certified -> deprecated -> archived
+    All of those literal values MUST be members here — otherwise constructing an
+    OntologyConcept with a status the state machine legitimately wrote raises a
+    Pydantic ValidationError (this once blanked an entire scheme in Explore).
+
+    ACTIVE / SUPERSEDED / RETIRED are used by the concept-versioning engine and are
+    retained alongside the curation-workflow states above.
+    """
     DRAFT = "draft"
     UNDER_REVIEW = "under_review"
     APPROVED = "approved"
+    PUBLISHED = "published"
+    CERTIFIED = "certified"
+    ARCHIVED = "archived"
     ACTIVE = "active"
     # A prior concept-version that a newer version replaced (P0-3 atomic publish).
     # The concept itself stays active; only this historical version is superseded.

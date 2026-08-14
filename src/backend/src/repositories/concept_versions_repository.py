@@ -71,6 +71,47 @@ class ConceptVersionsRepository(CRUDBase[ConceptVersionDb, dict, dict]):
         db.flush()
         return current
 
+    def delete_by_iri(self, db: Session, iri: str) -> int:
+        """Delete ALL concept_version rows for an exact iri; returns row count.
+
+        Used to self-heal orphaned version rows (rows whose concept was removed
+        from the graph by a collection delete but whose concept_version rows were
+        left behind, colliding with the unique constraints on a same-named
+        recreate). Flushes so subsequent inserts in the same transaction see the
+        deletion.
+        """
+        count = (
+            db.query(ConceptVersionDb)
+            .filter(ConceptVersionDb.iri == iri)
+            .delete(synchronize_session=False)
+        )
+        db.flush()
+        return count
+
+    def delete_for_collection(self, db: Session, collection_iri: str) -> int:
+        """Delete every concept_version row for concepts in a collection.
+
+        Concept IRIs are always ``<collection_iri>/<slug>``, so a prefix match on
+        ``collection_iri + '/'`` selects exactly this collection's concepts (and
+        never the collection IRI itself). Must run in the SAME transaction as the
+        rdf_triples deletion in ``delete_collection`` so recreating a same-named
+        scheme+concept does not collide with leftover version rows. Flushes.
+
+        The prefix is LIKE-escaped: collection IRIs routinely contain ``_`` (a
+        LIKE single-char wildcard), e.g. ``urn:glossary:new_test_author_mk`` — an
+        unescaped pattern would over-match a different collection and delete its
+        version rows. ``\\`` is the escape char (both Postgres and SQLite honour
+        ``ESCAPE``).
+        """
+        escaped = collection_iri.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        count = (
+            db.query(ConceptVersionDb)
+            .filter(ConceptVersionDb.iri.like(f"{escaped}/%", escape="\\"))
+            .delete(synchronize_session=False)
+        )
+        db.flush()
+        return count
+
     def create_version(
         self,
         db: Session,

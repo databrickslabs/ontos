@@ -123,7 +123,17 @@ class ConceptVersionsRepository(CRUDBase[ConceptVersionDb, dict, dict]):
         replaces_iri: Optional[str] = None,
         created_by: Optional[str] = None,
     ) -> ConceptVersionDb:
-        """Insert a new concept_version row and flush it (so its id is available)."""
+        """Insert a new concept_version row and flush it (so its id is available).
+
+        RAW insert with NO orphan/collision protection. New-concept v1 minting
+        MUST go through ``SemanticModelsManager._mint_new_concept_version``, which
+        self-heals orphaned leftover version rows and picks the next free version
+        so a same-named recreate never hits the unique constraints
+        (uq_concept_version_iri_version / uq_concept_version_current_per_iri).
+        Calling this directly for a fresh v1 is a bug. The ONLY sanctioned direct
+        caller is ``publish_concept_version``, which depends on the rawness: it
+        demotes the current row first, then inserts version=max+1.
+        """
         cv = ConceptVersionDb(
             iri=iri,
             version=version,

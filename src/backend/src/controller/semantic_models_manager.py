@@ -24,6 +24,7 @@ import urllib.parse
 from filelock import FileLock
 
 from src.db_models.semantic_models import SemanticModelDb
+from src.db_models.concept_versions import ConceptVersionDb
 from src.models.semantic_models import (
     SemanticModel as SemanticModelApi,
     SemanticModelCreate,
@@ -431,6 +432,43 @@ class SemanticModelsManager(SearchableAsset):
             )
             concept_versions_repo.delete_by_iri(self._db, concept_iri)
 
+    def _mint_new_concept_version(
+        self,
+        concept_iri: str,
+        context_name: str,
+        *,
+        actor: Optional[str] = None,
+        status: str = "active",
+    ) -> ConceptVersionDb:
+        """The ONLY sanctioned way to create the FIRST concept_version for a
+        (possibly-recreated) concept. Self-heals orphaned leftover version rows for
+        the IRI (guarded: only when zero rdf_triples for the subject in context),
+        then mints the next free version (max_version+1) as is_current=True. Callers
+        never compute a version number or worry about collisions.
+
+        NOT for publishing a further version (v2+): ``publish_concept_version``
+        demotes the current row first and must reuse ``create_version`` directly —
+        it deliberately does NOT go through here (this helper would reuse an
+        existing current row, which publish has already demoted).
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        self._selfheal_orphaned_concept_versions(concept_iri, context_name)
+        existing_current = concept_versions_repo.get_current(self._db, concept_iri)
+        if existing_current is not None:
+            # A real concept is already versioned (not an orphan) -> reuse its
+            # current row instead of colliding on a fresh v1.
+            return existing_current
+        next_version = concept_versions_repo.max_version(self._db, concept_iri) + 1
+        return concept_versions_repo.create_version(
+            self._db,
+            iri=concept_iri,
+            version=next_version,
+            is_current=True,
+            status=status,
+            created_by=actor,
+        )
+
     def _ensure_concept_version_v1(self, concept_iri: str, context_name: str, actor: Optional[str]) -> None:
         """Lazily mint a v1 concept_version for a concept that has none.
 
@@ -440,24 +478,11 @@ class SemanticModelsManager(SearchableAsset):
         it its v1, owning the subject's currently-unowned triples (subject-IRI
         ownership rule, P0-1). Idempotent: no-op if a current version exists.
         """
-        from src.repositories.concept_versions_repository import concept_versions_repo
-
-        if concept_versions_repo.get_current(self._db, concept_iri) is not None:
-            return
-        # A CURRENT version is absent but NON-current leftover rows (e.g. a
-        # superseded (iri, version=1) row) would still collide when we mint a
-        # hardcoded version=1 below. Self-heal true orphans (zero triples in this
-        # context); otherwise mint the next FREE version so we never collide and
-        # never destroy real (dangling) history.
-        self._selfheal_orphaned_concept_versions(concept_iri, context_name)
-        next_version = concept_versions_repo.max_version(self._db, concept_iri) + 1
-        v1 = concept_versions_repo.create_version(
-            self._db,
-            iri=concept_iri,
-            version=next_version,
-            is_current=True,
-            status="active",
-            created_by=actor,
+        # Route through the single new-concept mint chokepoint: it is idempotent
+        # (reuses the current row when one already exists), self-heals true
+        # orphans, and never collides on the version number.
+        v1 = self._mint_new_concept_version(
+            concept_iri, context_name, actor=actor, status="active"
         )
         rdf_triples_repo.reassign_subject_to_concept_version(
             self._db, concept_iri, v1.id, context_name=context_name
@@ -475,8 +500,6 @@ class SemanticModelsManager(SearchableAsset):
         subject's blank-node closure (owl:Restriction subgraphs etc.) is walked
         and skolemized so OWL class expressions survive.
         """
-        from src.repositories.concept_versions_repository import concept_versions_repo
-
         subj = URIRef(concept_iri)
         # Collect the subject's outgoing triples + its blank-node closure.
         to_visit = [subj]
@@ -490,32 +513,17 @@ class SemanticModelsManager(SearchableAsset):
                     seen_bnodes.add(str(o))
                     to_visit.append(o)
 
-        # Self-heal orphaned version rows BEFORE minting v1. The diff put this
-        # file-native IRI in the NEW bucket, but leftover concept_version rows
-        # can still exist for it (deleted scheme sharing the IRI, a prior failed
-        # upload, or the same IRI used in another context). Left in place they
-        # collide with uq_concept_version_iri_version /
-        # uq_concept_version_current_per_iri and 500 the whole atomic apply. Only
-        # delete true orphans (zero rdf_triples for the subject in THIS context) —
-        # deleting live rows would destroy a real concept's history.
-        self._selfheal_orphaned_concept_versions(concept_iri, context_name)
-
-        # If a current version already survives (real concept, not an orphan),
-        # do NOT collide on a fresh v1: reuse the existing current row and just
-        # own this subject's triples with it (mirrors _ensure_concept_version_v1
-        # idempotency). This only happens for the defensive not-actually-new case.
-        existing_current = concept_versions_repo.get_current(self._db, concept_iri)
-        if existing_current is not None:
-            v1 = existing_current
-        else:
-            v1 = concept_versions_repo.create_version(
-                self._db,
-                iri=concept_iri,
-                version=concept_versions_repo.max_version(self._db, concept_iri) + 1,
-                is_current=True,
-                status="active",
-                created_by=actor,
-            )
+        # Mint v1 through the single new-concept chokepoint. The diff put this
+        # file-native IRI in the NEW bucket, but leftover concept_version rows can
+        # still exist for it (deleted scheme sharing the IRI, a prior failed
+        # upload, or the same IRI used in another context). The helper self-heals
+        # true orphans (zero rdf_triples for the subject in THIS context), reuses
+        # an existing current row for a defensively not-actually-new concept, and
+        # never collides on uq_concept_version_iri_version /
+        # uq_concept_version_current_per_iri. Uploaded concepts are active.
+        v1 = self._mint_new_concept_version(
+            concept_iri, context_name, actor=actor, status="active"
+        )
 
         for s, p, o in rows:
             subject_uri = (
@@ -789,7 +797,19 @@ class SemanticModelsManager(SearchableAsset):
                 logger.info(f"Deleted {deleted_count} triples for semantic model '{model.name}' (context: {context_name})")
         except Exception as e:
             logger.warning(f"Failed to delete triples for semantic model '{model.name}': {e}")
-        
+
+        # Also delete the concept_version rows for concepts in this uploaded
+        # semantic model, in the SAME transaction as the triple removal above.
+        # Concept IRIs in an uploaded model are always ``<context_name>/...`` so
+        # the prefix delete (LIKE-escaped in the repo) is exact and safe. Leaving
+        # these rows behind orphaned them: a same-named re-upload then collided
+        # with the unique constraints on (iri, version) / (iri WHERE is_current).
+        try:
+            from src.repositories.concept_versions_repository import concept_versions_repo
+            concept_versions_repo.delete_for_collection(self._db, context_name)
+        except Exception as e:
+            logger.warning(f"Failed to delete concept_version rows for semantic model '{model.name}': {e}")
+
         # Delete from database
         obj = semantic_models_repo.remove(self._db, id=model_id)
         self._db.commit()  # Persist changes immediately since manager uses singleton session
@@ -3709,29 +3729,6 @@ class SemanticModelsManager(SearchableAsset):
         if existing:
             raise ValueError(f"Concept already exists: {concept_iri}")
 
-        # Self-heal orphaned version rows BEFORE writing any triples. If
-        # concept_version rows already exist for this exact IRI but the concept is
-        # NOT actually present in the store (zero rdf_triples for this subject in
-        # this collection context), they are leftovers from a deleted scheme that
-        # shared the same sanitized IRI. Left in place they collide with the unique
-        # constraints on the create_version call below
-        # (uq_concept_version_iri_version / uq_concept_version_current_per_iri) and
-        # break the recreate with an IntegrityError. Only delete when the concept
-        # genuinely does not exist — deleting live version rows would destroy real
-        # history.
-        from src.repositories.concept_versions_repository import concept_versions_repo
-        if concept_versions_repo.list_versions(self._db, concept_iri):
-            subject_triples = [
-                t for t in rdf_triples_repo.list_by_subject(self._db, concept_iri)
-                if t.context_name == collection_iri
-            ]
-            if not subject_triples:
-                logger.warning(
-                    f"Self-healing orphaned concept_version rows for {concept_iri} "
-                    f"(no rdf_triples in context {collection_iri})"
-                )
-                concept_versions_repo.delete_by_iri(self._db, concept_iri)
-
         now = datetime.utcnow().isoformat() + "Z"
         synonyms = synonyms or []
         examples = examples or []
@@ -3836,18 +3833,15 @@ class SemanticModelsManager(SearchableAsset):
         # Mint the v1 concept_version row so a freshly-created concept is
         # versioned like a backfilled one (P0-1 backfill only versioned
         # PRE-EXISTING concepts). Without this, a later publish computes
-        # max_version=0 -> new_version=1 and history is empty. version=1,
-        # is_current=true, status=draft (matching the ONTOS.status triple
-        # above). Assign every triple owned by this subject IRI (subject-IRI
-        # ownership, same rule as the backfill + publish) in the SAME commit.
-        # (concept_versions_repo imported above for the orphan self-heal.)
-        v1 = concept_versions_repo.create_version(  # flushes -> v1.id available
-            self._db,
-            iri=concept_iri,
-            version=1,
-            is_current=True,
-            status="draft",
-            created_by=created_by,
+        # max_version=0 -> new_version=1 and history is empty. Routed through the
+        # single new-concept chokepoint, which self-heals orphaned leftover rows
+        # (e.g. a deleted scheme that shared this sanitized IRI) and mints the
+        # next free version so a same-named recreate never hits an IntegrityError.
+        # A new concept starts as a draft. Assign every triple owned by this
+        # subject IRI (subject-IRI ownership, same rule as the backfill + publish)
+        # in the SAME commit.
+        v1 = self._mint_new_concept_version(
+            concept_iri, collection_iri, actor=created_by, status="draft"
         )
         rdf_triples_repo.reassign_subject_to_concept_version(
             self._db, concept_iri, v1.id, context_name=collection_iri
@@ -4865,12 +4859,21 @@ class SemanticModelsManager(SearchableAsset):
         
         # Remove all triples for this concept
         rdf_triples_repo.remove_by_subject(self._db, concept_iri, collection_iri)
-        
+
+        # Also delete this concept's concept_version rows, in the SAME transaction
+        # as the triple removal above. A deleted draft must not leave version rows
+        # behind: orphaned rows (keyed by concept IRI) collide with the unique
+        # constraints when a same-named concept is later recreated with the
+        # identical IRI ("Failed to create concept"). Mirrors delete_collection,
+        # which already calls delete_for_collection for the same reason.
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
         # Also remove any ownership records
         for owner in existing.get("owners", []):
             owner_iri = f"{concept_iri}/owner/{owner.get('user_uri', '').split(':')[-1]}"
             rdf_triples_repo.remove_by_subject(self._db, owner_iri, collection_iri)
-        
+
         # Remove from in-memory graph
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))

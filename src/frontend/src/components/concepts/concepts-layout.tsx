@@ -137,12 +137,14 @@ export default function ConceptsLayout() {
         </div>
 
           <div className="flex items-center gap-2">
-            {/* Power-user SPARQL/Query link — rendered separately out of the
-                toggle strip per the design intent. */}
+            {/* Power-user SPARQL/Query link — Advanced view only (it exposes the
+                raw ontology query layer, which the Simple persona should not
+                see). adv-only = hidden unless html[data-mode="advanced"]. */}
             <Button
               variant="ghost"
               size="sm"
               asChild
+              className="adv-only"
               title={t('concepts:links.sparqlTitle', 'Query concepts with SPARQL')}
             >
               <Link to="/concepts/search" className="inline-flex items-center gap-2">

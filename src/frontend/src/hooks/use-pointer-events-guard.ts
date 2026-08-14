@@ -100,7 +100,18 @@ export function usePointerEventsGuard(): void {
     // Run once on mount in case we landed on the page already stuck.
     window.requestAnimationFrame(clearIfStuck);
 
-    return () => { observer.disconnect(); hiddenObserver.disconnect(); };
+    // Interval watchdog — the guarantee. A MutationObserver only fires on the
+    // attribute CHANGE; but Radix's aria-hidden module can set aria-hidden on
+    // #root while a focus-guard is momentarily present (so our handler skips),
+    // then remove the guard WITHOUT re-touching aria-hidden — so the observer
+    // never re-fires and #root stays inert for many seconds (observed: 8s+ after
+    // creating a concept = the "can't click anything" freeze). A cheap periodic
+    // re-check recovers within one tick no matter how the leak happened. The
+    // body-writes MutationObserver above still gives the instant path; this is
+    // the floor.
+    const watchdog = window.setInterval(clearIfStuck, 250);
+
+    return () => { observer.disconnect(); hiddenObserver.disconnect(); window.clearInterval(watchdog); };
   }, []);
 
   useEffect(() => {

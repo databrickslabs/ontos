@@ -147,7 +147,7 @@ export default function ConceptsLayout() {
               className="adv-only"
               title={t('concepts:links.sparqlTitle', 'Query concepts with SPARQL')}
             >
-              <Link to="/concepts/search" className="inline-flex items-center gap-2">
+              <Link to="/concepts/search?tab=kg" className="inline-flex items-center gap-2">
                 <Terminal className="h-4 w-4" />
                 <span className="text-xs">{t('concepts:links.sparql', 'SPARQL')}</span>
               </Link>

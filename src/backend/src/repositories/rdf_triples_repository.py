@@ -4,7 +4,7 @@ Provides CRUD operations for RDF triples with support for bulk inserts
 and context-based queries.
 """
 from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import and_, or_
 import uuid
@@ -354,6 +354,45 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         Returns the number of triples reassigned. Flushes but does not commit —
         the caller owns the transaction so the swap is one Postgres commit.
         """
+        if only_null_owned:
+            # A NULL-owned row can be a DUPLICATE of a row the target version
+            # already owns (same s,p,o,lang,datatype,context) — e.g. an
+            # ontos:sourceFile provenance triple written both NULL-owned and
+            # version-owned. Re-stamping it to concept_version_id would then
+            # violate uq_rdf_triple (7-col unique incl. concept_version_id) and
+            # 500 the whole transition (observed live on publish). DELETE those
+            # colliding NULL-owned duplicates first; the surviving NULL-owned
+            # rows are then safe to re-stamp. Deleting the NULL copy loses
+            # nothing — the identical version-owned row remains.
+            dup = aliased(RdfTripleDb)
+            collide_q = (
+                db.query(RdfTripleDb.id)
+                .join(
+                    dup,
+                    and_(
+                        dup.subject_uri == RdfTripleDb.subject_uri,
+                        dup.predicate_uri == RdfTripleDb.predicate_uri,
+                        dup.object_value == RdfTripleDb.object_value,
+                        dup.object_language == RdfTripleDb.object_language,
+                        dup.object_datatype == RdfTripleDb.object_datatype,
+                        dup.context_name == RdfTripleDb.context_name,
+                        dup.concept_version_id == concept_version_id,
+                    ),
+                )
+                .filter(
+                    RdfTripleDb.subject_uri == subject_uri,
+                    RdfTripleDb.concept_version_id.is_(None),
+                )
+            )
+            if context_name:
+                collide_q = collide_q.filter(RdfTripleDb.context_name == context_name)
+            collide_ids = [row[0] for row in collide_q.all()]
+            if collide_ids:
+                db.query(RdfTripleDb).filter(RdfTripleDb.id.in_(collide_ids)).delete(
+                    synchronize_session=False
+                )
+                db.flush()
+
         query = db.query(RdfTripleDb).filter(RdfTripleDb.subject_uri == subject_uri)
         if context_name:
             query = query.filter(RdfTripleDb.context_name == context_name)

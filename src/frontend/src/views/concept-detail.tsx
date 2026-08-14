@@ -14,7 +14,6 @@ import {
   Zap,
   User,
   Network,
-  GitCompare,
   Save,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -367,6 +366,12 @@ export default function ConceptDetailView() {
         description: err?.message,
         variant: 'destructive',
       });
+      // Re-sync to the TRUE backend status even on failure. A transition can
+      // error precisely because the concept already moved (e.g. a prior partial
+      // request advanced it), so the dropdown must reflect reality — otherwise
+      // it keeps offering the stale action and every retry throws a different
+      // error (the "different error every time" the user hit).
+      await fetchConcept();
     } finally {
       setStatusBusy(false);
     }
@@ -518,20 +523,11 @@ export default function ConceptDetailView() {
           {currentVersion != null && !isProperty && (
             <Badge variant="secondary" className="font-mono text-xs">v{currentVersion}</Badge>
           )}
-          {currentVersion != null && currentVersion > 1 && !isProperty && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              onClick={() =>
-                document
-                  .getElementById('concept-version-history')
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-              }
-            >
-              <GitCompare className="h-3 w-3" />
-              {t('semantic-models:versionDiff.compare', 'Compare')}
-            </button>
-          )}
+          {/* "Compare" removed: today only the definition changes across
+              versions, and that diff is already shown in the version-history
+              panel below. A dedicated compare view adds nothing until we version
+              more fields, so it was just a scroll-to-history shortcut that
+              confused users. Re-add when there's a real side-by-side diff. */}
           <Badge
             variant="outline"
             className={typeColors[concept.concept_type] || ''}

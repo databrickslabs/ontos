@@ -680,6 +680,16 @@ export default function ConceptDetailView() {
                 </dd>
               </div>
             )}
+            {concept.source_file && (
+              <div className="flex justify-between gap-3 py-1.5">
+                <dt className="text-muted-foreground">
+                  {t('semantic-models:fields.sourceFile', 'Imported from')}
+                </dt>
+                <dd className="font-medium text-right truncate">
+                  {concept.source_file}
+                </dd>
+              </div>
+            )}
             {concept.created_at && (
               <div className="flex justify-between gap-3 py-1.5">
                 <dt className="text-muted-foreground">

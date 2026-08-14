@@ -146,6 +146,7 @@ class OntologyConcept(BaseModel):
     source_concept_iri: Optional[str] = None
     source_collection_iri: Optional[str] = None
     promotion_type: Optional[PromotionType] = None
+    source_file: Optional[str] = None  # Origin filename this concept was imported from
     
     # Review integration
     review_request_id: Optional[str] = None

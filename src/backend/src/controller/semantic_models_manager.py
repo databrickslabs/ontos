@@ -606,7 +606,7 @@ class SemanticModelsManager(SearchableAsset):
         import route to detect a re-upload (non-empty) vs a first import (empty)."""
         return rdf_triples_repo.list_by_context(self._db, context_name)
 
-    def preview_upload(self, context_name: str, incoming_graph) -> Dict[str, Any]:
+    def preview_upload(self, context_name: str, incoming_graph, source_filename: Optional[str] = None) -> Dict[str, Any]:
         """Dry-run a re-upload: compute the diff, stash the content, apply NOTHING.
 
         Runs the EXISTING ``compute_concept_diff`` against the currently stored
@@ -629,6 +629,19 @@ class SemanticModelsManager(SearchableAsset):
 
         current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
         diff = compute_concept_diff(incoming_graph, current_triples)
+
+        # Stamp the origin filename into the incoming graph (per typed subject)
+        # BEFORE serialization so it round-trips through the stashed content_text
+        # and confirm_upload re-parses it for free (no schema migration needed).
+        if source_filename:
+            _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+            typed_subjects = {
+                s for s, _, o in incoming_graph.triples((None, RDF.type, None))
+                if o in _concept_types
+            }
+            for subj in typed_subjects:
+                if (subj, ONTOS.sourceFile, None) not in incoming_graph:
+                    incoming_graph.add((subj, ONTOS.sourceFile, Literal(source_filename)))
 
         # Serialize the incoming graph back to turtle for the stash so confirm can
         # re-parse it deterministically regardless of the original wire format.
@@ -2810,6 +2823,7 @@ class SemanticModelsManager(SearchableAsset):
                 source_collection_iri=meta["source_collection_iri"],
                 promotion_type=meta["promotion_type"],
                 review_request_id=meta["review_request_id"],
+                source_file=meta.get("source_file"),
             )
             break  # Found in first matching context
         
@@ -3839,6 +3853,7 @@ class SemanticModelsManager(SearchableAsset):
         source_concept = self._get_uri(context, concept_uri, ONTOS.sourceConceptIri)
         source_coll = self._get_uri(context, concept_uri, ONTOS.sourceCollectionIri)
         promotion_type = self._get_literal(context, concept_uri, ONTOS.promotionType)
+        source_file = self._get_literal(context, concept_uri, ONTOS.sourceFile)
 
         # Owners
         owners = []
@@ -3877,6 +3892,7 @@ class SemanticModelsManager(SearchableAsset):
             "source_collection_iri": source_coll,
             "promotion_type": promotion_type,
             "review_request_id": review_id,
+            "source_file": source_file,
             "owners": owners,
         }
 
@@ -3957,6 +3973,7 @@ class SemanticModelsManager(SearchableAsset):
                     "source_collection_iri": meta["source_collection_iri"],
                     "promotion_type": meta["promotion_type"],
                     "review_request_id": meta["review_request_id"],
+                    "source_file": meta.get("source_file"),
                     "tagged_assets": [],
                     "properties": [],
                 }
@@ -5075,6 +5092,7 @@ class SemanticModelsManager(SearchableAsset):
         format: str = "turtle",
         imported_by: Optional[str] = None,
         default_status: Optional[str] = None,
+        source_filename: Optional[str] = None,
     ) -> int:
         """Import RDF content into an existing collection.
 
@@ -5120,6 +5138,19 @@ class SemanticModelsManager(SearchableAsset):
             for subj in typed_subjects:
                 if (subj, ONTOS.status, None) not in temp_graph:
                     temp_graph.add((subj, ONTOS.status, Literal(default_status)))
+
+        # Stamp the origin filename as a per-subject provenance triple so each
+        # imported concept records the file it came from (rather than only the
+        # scheme label). Applies to typed subjects lacking an ontos:sourceFile.
+        if source_filename:
+            _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+            typed_subjects = {
+                s for s, _, o in temp_graph.triples((None, RDF.type, None))
+                if o in _concept_types
+            }
+            for subj in typed_subjects:
+                if (subj, ONTOS.sourceFile, None) not in temp_graph:
+                    temp_graph.add((subj, ONTOS.sourceFile, Literal(source_filename)))
 
         # Import to database
         count = self._import_graph_to_db(

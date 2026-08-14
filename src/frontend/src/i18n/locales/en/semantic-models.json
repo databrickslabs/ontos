@@ -147,7 +147,8 @@
     "childConcepts": "Child Concepts",
     "scope": "Scope",
     "concepts": "Concepts",
-    "source": "Source"
+    "source": "Source",
+    "sourceFile": "Imported from"
   },
   "form": {
     "createTitle": "Create Term",

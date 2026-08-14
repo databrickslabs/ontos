@@ -1386,7 +1386,7 @@ async def import_to_knowledge_collection(
                 temp_graph.parse(data=parse_input, format=rdf_format)
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Invalid {rdf_format} content: {e}")
-            preview = manager.preview_upload(collection_iri, temp_graph)
+            preview = manager.preview_upload(collection_iri, temp_graph, source_filename=file.filename)
             return {'mode': 'preview', **preview}
 
         count = manager.import_rdf_to_collection(
@@ -1398,6 +1398,7 @@ async def import_to_knowledge_collection(
             # before certification, matching the generator save path. Without
             # this, imported classes/properties showed no status at all.
             default_status="draft",
+            source_filename=file.filename,
         )
         return {'mode': 'imported', 'success': True, 'triples_imported': count}
     except HTTPException:

@@ -763,6 +763,22 @@ class SemanticModelsManager(SearchableAsset):
             ],
         }
 
+    @staticmethod
+    def _load_stash_graph(stash) -> "Graph":
+        """Re-parse a stashed upload preview back into an rdflib Graph.
+
+        Shared by ``confirm_upload`` (apply-by-token) and ``gate_or_apply_upload``
+        (the P3 governance gate) so the parse logic lives in exactly one place.
+        Stashes are serialized as turtle (``format == 'skos'``) or xml.
+        """
+        graph = Graph()
+        fmt = "turtle" if stash.format == "skos" else "xml"
+        content_for_parse = (
+            clean_truncated_turtle(stash.content_text) if fmt == "turtle" else stash.content_text
+        )
+        graph.parse(data=content_for_parse, format=fmt)
+        return graph
+
     def confirm_upload(self, preview_token: str, actor: Optional[str] = None) -> Dict[str, Any]:
         """Apply a previously previewed re-upload by token, then consume the stash.
 
@@ -778,12 +794,7 @@ class SemanticModelsManager(SearchableAsset):
             raise ValueError(f"Unknown or already-applied preview token: {preview_token}")
 
         context_name = stash.context_name
-        graph = Graph()
-        fmt = "turtle" if stash.format == "skos" else "xml"
-        content_for_parse = (
-            clean_truncated_turtle(stash.content_text) if fmt == "turtle" else stash.content_text
-        )
-        graph.parse(data=content_for_parse, format=fmt)
+        graph = self._load_stash_graph(stash)
 
         summary = self.apply_upload_as_versioning_event(context_name, graph, actor=actor)
 
@@ -792,6 +803,203 @@ class SemanticModelsManager(SearchableAsset):
         self._db.commit()
 
         return summary
+
+    # ------------------------------------------------------------------ #
+    # P3: gate a BULK RDF upload behind ONE aggregate changeset approval  #
+    # ------------------------------------------------------------------ #
+    # A held changeset is carried on a DataAssetReview (AssetType
+    # CONCEPT_CHANGESET) whose reviewed-asset FQN wraps the UploadPreviewDb
+    # token: ``concept-changeset://<preview_token>``. The token stays ALIVE
+    # (the stash is NOT consumed) until the approval resolves, so persistence
+    # is migration-free — apply-on-approval just re-runs confirm_upload(token).
+    CHANGESET_REVIEW_FQN_PREFIX = "concept-changeset://"
+
+    @classmethod
+    def changeset_review_fqn(cls, preview_token: str) -> str:
+        """Wrap a preview token as the reviewed-asset FQN stored on the review."""
+        return f"{cls.CHANGESET_REVIEW_FQN_PREFIX}{preview_token}"
+
+    @classmethod
+    def preview_token_from_changeset_fqn(cls, asset_fqn: str) -> Optional[str]:
+        """Recover the preview token from a changeset reviewed-asset FQN (or None)."""
+        if asset_fqn and asset_fqn.startswith(cls.CHANGESET_REVIEW_FQN_PREFIX):
+            return asset_fqn[len(cls.CHANGESET_REVIEW_FQN_PREFIX):]
+        return None
+
+    def gate_or_apply_upload(
+        self, context_name: str, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Confirm entrypoint for a re-upload: gate it iff the scheme is governed.
+
+        Loads the held stash for ``preview_token``, computes the AGGREGATE diff
+        (compute_concept_diff vs the current stored triples) and fires ONE
+        ``on_request_status_change`` trigger for ``EntityType.CONCEPT_CHANGESET``
+        scoped to the collection. Governed iff a workflow executed.
+
+          * GOVERNED  -> apply NOTHING. Open ONE DataAssetReview
+            (AssetType CONCEPT_CHANGESET) whose reviewed-asset FQN carries the
+            token; KEEP the stash token ALIVE (do NOT consume). Returns
+            ``{status:'held', review_request_id, summary, governed:True}``.
+          * UNGOVERNED-> confirm_upload(token) exactly as today (apply + consume).
+            Returns ``{status:'applied', summary, governed:False}``.
+
+        Exactly ONE trigger and at most ONE review per upload — the 40-wizards
+        failure mode is structurally impossible because the aggregate changeset,
+        not the individual concepts, is the gated unit.
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+        from src.controller.concept_diff import compute_concept_diff
+
+        stash = upload_preview_repo.get(self._db, preview_token)
+        if stash is None:
+            raise ValueError(f"Unknown or already-applied preview token: {preview_token}")
+
+        # Aggregate diff for the WHOLE upload (never per-concept).
+        incoming_graph = self._load_stash_graph(stash)
+        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        diff = compute_concept_diff(incoming_graph, current_triples)
+        summary = diff.summary()
+
+        # Human label for the collection (falls back to the context name).
+        collection = self.get_collection(context_name)
+        collection_label = (collection or {}).get("label") or context_name
+
+        # Aggregate reference_count over the concepts this changeset touches
+        # (modified + removed — new concepts have none). One number for the
+        # whole changeset, matching the "one upload = one approval" contract.
+        touched = list(diff.modified) + list(diff.removed)
+        aggregate_reference_count = sum(self.reference_count(iri) for iri in touched)
+
+        entity_data: Dict[str, Any] = {
+            **summary,
+            "modified_iris": list(diff.modified),
+            "new_iris": list(diff.new),
+            "removed_iris": list(diff.removed),
+            "reference_count": aggregate_reference_count,
+            "collection_iri": context_name,
+            "collection_label": collection_label,
+            "preview_token": preview_token,
+        }
+
+        # Fire the ONE aggregate governance trigger. Governed iff a workflow ran.
+        governed = False
+        executions: List[Any] = []
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+
+            registry = get_trigger_registry(self._db)
+            executions = registry.on_request_status_change(
+                entity_type=EntityType.CONCEPT_CHANGESET,
+                entity_id=preview_token,
+                from_status="proposed",
+                to_status="applied",
+                entity_name=collection_label,
+                entity_data=entity_data,
+                user_email=actor,
+                blocking=True,
+            )
+            governed = bool(executions)
+        except Exception as e:
+            # A trigger-registry failure must not sink an otherwise valid upload
+            # (ungoverned/direct path stays zero-friction).
+            logger.warning(
+                f"CONCEPT_CHANGESET trigger failed for token {preview_token}: {e}"
+            )
+
+        if not governed:
+            # UNGOVERNED: apply directly + consume the token (today's behavior).
+            applied = self.confirm_upload(preview_token, actor=actor)
+            return {"status": "applied", "summary": applied, "governed": False}
+
+        # GOVERNED: hold. Open ONE review; keep the stash token ALIVE.
+        review_request_id: Optional[str] = None
+        review_mgr = get_app_state_manager("data_asset_review_manager")
+        reviewer_email = self._changeset_reviewer_from_executions(executions, actor)
+        if review_mgr is not None and reviewer_email:
+            try:
+                from src.models.data_asset_reviews import DataAssetReviewRequestCreate
+
+                notes = (
+                    f"Bulk RDF changeset for '{collection_label}': "
+                    f"{summary['modified']} modified, {summary['new']} new, "
+                    f"{summary['removed']} removed "
+                    f"(aggregate reference_count {aggregate_reference_count}). "
+                    f"Approve to apply all-or-nothing; deny to discard."
+                )
+                req = DataAssetReviewRequestCreate(
+                    requester_email=actor or "system@ontos",
+                    reviewer_email=reviewer_email,
+                    asset_fqns=[self.changeset_review_fqn(preview_token)],
+                    title=f"Changeset review: {collection_label}",
+                    notes=notes,
+                )
+                created = review_mgr.create_review_request(req, db=self._db)
+                review_request_id = created.id
+            except Exception as e:
+                logger.error(
+                    f"Failed to create CONCEPT_CHANGESET review for token "
+                    f"{preview_token}: {e}", exc_info=True,
+                )
+
+        return {
+            "status": "held",
+            "review_request_id": review_request_id,
+            "summary": summary,
+            "governed": True,
+        }
+
+    @staticmethod
+    def _changeset_reviewer_from_executions(executions, actor) -> Optional[str]:
+        """Best-effort reviewer email for a held changeset.
+
+        Prefers a reviewer/approver surfaced by an executed workflow; falls back
+        to the actor so the review is never orphaned without an assignee.
+        """
+        for ex in (executions or []):
+            for attr in ("reviewer_email", "assigned_to", "approver_email"):
+                val = getattr(ex, attr, None)
+                if val:
+                    return val
+            data = getattr(ex, "entity_data", None) or getattr(ex, "context", None)
+            if isinstance(data, dict):
+                for key in ("reviewer_email", "assigned_to", "approver_email"):
+                    if data.get(key):
+                        return data[key]
+        return actor
+
+    def apply_changeset_by_token(
+        self, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Apply a held changeset on APPROVAL — apply + consume the token.
+
+        The approval callback for a CONCEPT_CHANGESET review. Delegates to the
+        UNCHANGED ``confirm_upload`` (single-transaction bulk apply, then
+        single-use consume of the stash), so the apply happens exactly once.
+        """
+        summary = self.confirm_upload(preview_token, actor=actor)
+        logger.info(
+            f"Concept changeset {preview_token} applied on approval by {actor}"
+        )
+        return {"status": "applied", "summary": summary}
+
+    def reject_changeset_by_token(
+        self, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Drop a held changeset on DENY/CANCEL — delete the stash, apply nothing.
+
+        The reject callback for a CONCEPT_CHANGESET review. Deletes the held
+        UploadPreviewDb token so nothing is ever applied; the uploader re-uploads
+        a corrected file (a changeset is not edited in place).
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        deleted = upload_preview_repo.delete(self._db, preview_token)
+        self._db.commit()
+        logger.info(
+            f"Concept changeset {preview_token} dropped (deleted={deleted}) by {actor}"
+        )
+        return {"status": "rejected", "deleted": bool(deleted)}
 
     def delete(self, model_id: str) -> bool:
         # Get the model before deleting to check if we need to delete the physical file

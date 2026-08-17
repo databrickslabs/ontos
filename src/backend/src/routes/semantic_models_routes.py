@@ -104,9 +104,18 @@ class UploadPreviewResponse(BaseModel):
 
 
 class UploadConfirmResponse(BaseModel):
-    """Result of confirming (applying) a previously previewed upload."""
+    """Result of confirming a previously previewed upload (P1-0 + P3 gate).
+
+    ``status`` distinguishes a direct apply (ungoverned scheme — today's
+    behavior) from a held changeset awaiting one aggregate approval (governed
+    scheme). When held, ``review_request_id`` points at the backing review and
+    nothing has been applied yet.
+    """
     preview_token: str
     summary: UploadPreviewSummary
+    status: str = "applied"  # 'applied' (direct) | 'held' (awaiting approval)
+    governed: bool = False
+    review_request_id: Optional[str] = None
 
 
 class DeprecateConceptRequest(BaseModel):
@@ -956,15 +965,39 @@ async def confirm_upload_preview(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
 ) -> UploadConfirmResponse:
-    """Apply a previously previewed re-upload (P1-0). Single-use: the token is
-    consumed on success. Unknown/already-applied tokens → 404.
+    """Confirm a previously previewed re-upload (P1-0 + P3 governance gate).
 
-    The apply itself is the EXISTING bulk-versioning-event primitive
-    (modified→v2, new→v1, removed→deprecated), run atomically by the manager.
+    Routes through ``gate_or_apply_upload``: if a ``concept_changeset`` workflow
+    is scoped to the target collection the whole upload is HELD behind ONE
+    aggregate approval (nothing applied, the stash token stays alive, a backing
+    DataAssetReview is opened) — the response carries ``status:'held'`` and a
+    ``review_request_id``. Otherwise it applies directly (today's behavior) via
+    the EXISTING bulk-versioning-event primitive (modified→v2, new→v1,
+    removed→deprecated), run atomically, and the token is consumed.
+
+    Single-use: unknown/already-applied tokens → 404.
     """
     try:
-        summary = manager.confirm_upload(preview_token, actor=current_user.email)
-        return UploadConfirmResponse(preview_token=preview_token, summary=UploadPreviewSummary(**summary))
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        # The context/collection is resolved from the stash (the confirm route
+        # only has the token). Missing stash -> 404 (single-use / unknown).
+        stash = upload_preview_repo.get(manager._db, preview_token)
+        if stash is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Unknown or already-applied preview token: {preview_token}",
+            )
+        result = manager.gate_or_apply_upload(
+            stash.context_name, preview_token, actor=current_user.email
+        )
+        return UploadConfirmResponse(
+            preview_token=preview_token,
+            summary=UploadPreviewSummary(**result["summary"]),
+            status=result.get("status", "applied"),
+            governed=result.get("governed", False),
+            review_request_id=result.get("review_request_id"),
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except HTTPException:

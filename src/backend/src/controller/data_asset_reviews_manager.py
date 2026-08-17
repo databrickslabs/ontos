@@ -118,6 +118,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.CONCEPT_MAPPING_SUGGESTION
         if fqn.startswith('knowledge-concept://'):
             return AssetType.KNOWLEDGE_CONCEPT
+        if fqn.startswith('concept-changeset://'):
+            return AssetType.CONCEPT_CHANGESET
 
         if not self._ws_client:
             logger.warning(f"Cannot determine asset type for {fqn}: WorkspaceClient not available.")
@@ -431,6 +433,12 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
           NEEDS_REVIEW -> apply_review_decision('changes_requested', comments=...)
           DENIED       -> apply_review_decision('denied')
 
+        A CONCEPT_CHANGESET reviewed asset (FQN ``concept-changeset://<token>``,
+        P3) is handled ahead of the single-concept branch: the whole held bulk
+        upload is applied on APPROVED and dropped on DENIED. NEEDS_REVIEW /
+        CANCELLED also drop the held upload — a changeset is re-uploaded, not
+        edited in place.
+
         CANCELLED / non-terminal statuses do not touch the concept. Reaches the
         SMM via the global app_state registry; if it is unavailable the decision
         is logged and skipped rather than crashing the review update.
@@ -438,6 +446,53 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         try:
             status = updated_db_obj.status
             status_val = status.value if hasattr(status, 'value') else str(status)
+
+            from src.controller.semantic_models_manager import SemanticModelsManager
+            from src.common.app_state import get_app_state_manager
+
+            # --- P3: CONCEPT_CHANGESET (bulk RDF upload held behind approval) --- #
+            changeset_token = None
+            for asset in (updated_db_obj.assets or []):
+                tok = SemanticModelsManager.preview_token_from_changeset_fqn(asset.asset_fqn)
+                if tok:
+                    changeset_token = tok
+                    break
+            if changeset_token is not None:
+                # Only terminal decisions act on a held changeset.
+                changeset_terminal = {
+                    ReviewRequestStatus.APPROVED.value,
+                    ReviewRequestStatus.DENIED.value,
+                    ReviewRequestStatus.NEEDS_REVIEW.value,
+                    ReviewRequestStatus.CANCELLED.value,
+                }
+                if status_val not in changeset_terminal:
+                    return  # QUEUED / IN_REVIEW: leave the held changeset alone.
+                smm = get_app_state_manager("semantic_models_manager")
+                if smm is None:
+                    logger.warning(
+                        "CONCEPT_CHANGESET review %s reached %s but no "
+                        "semantic_models_manager is registered; skipping "
+                        "changeset reflection.", updated_db_obj.id, status_val,
+                    )
+                    return
+                if status_val == ReviewRequestStatus.APPROVED.value:
+                    smm.apply_changeset_by_token(
+                        changeset_token, actor=updated_db_obj.reviewer_email
+                    )
+                else:
+                    # DENIED, NEEDS_REVIEW and CANCELLED all discard the held
+                    # upload: the uploader re-uploads a corrected file rather than
+                    # editing an in-flight changeset in place.
+                    logger.info(
+                        "CONCEPT_CHANGESET review %s reached %s; dropping the "
+                        "held upload (token %s). Re-upload a corrected file to "
+                        "propose again.", updated_db_obj.id, status_val,
+                        changeset_token,
+                    )
+                    smm.reject_changeset_by_token(
+                        changeset_token, actor=updated_db_obj.reviewer_email
+                    )
+                return
 
             decision_map = {
                 ReviewRequestStatus.APPROVED.value: "approved",
@@ -449,7 +504,6 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 return  # QUEUED / IN_REVIEW / CANCELLED: nothing to reflect.
 
             # Find the concept IRI among the reviewed assets.
-            from src.controller.semantic_models_manager import SemanticModelsManager
             concept_iri = None
             for asset in (updated_db_obj.assets or []):
                 iri = SemanticModelsManager.concept_iri_from_review_fqn(asset.asset_fqn)
@@ -459,7 +513,6 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             if concept_iri is None:
                 return  # Not a concept review.
 
-            from src.common.app_state import get_app_state_manager
             smm = get_app_state_manager("semantic_models_manager")
             if smm is None:
                 logger.warning(

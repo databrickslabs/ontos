@@ -103,6 +103,72 @@ class RetireConceptResponse(BaseModel):
     status: str
 
 
+# --- Reference-reconciliation worklist models (API contract §5b, split + merge) ---
+class AssetRefEntry(BaseModel):
+    """One entity_semantic_links row referencing a concept."""
+    link_id: str
+    entity_type: str
+    entity_id: str
+    entity_label: Optional[str] = None
+
+
+class ConceptRefEntry(BaseModel):
+    """Another concept pointing at this concept in the served graph."""
+    iri: str
+    label: str
+    predicate: str
+
+
+class SuccessorEntry(BaseModel):
+    """A recorded isReplacedBy target (successor) of this concept."""
+    iri: str
+    label: str
+
+
+class ConceptReferencesResponse(BaseModel):
+    """GET /semantic-models/concepts/references — itemized retire-gate set (§5b).
+
+    ``count`` equals reference_count(iri): the same asset + concept->concept set
+    the retire gate counts. label present so Simple never shows a raw IRI."""
+    iri: str
+    label: str
+    count: int
+    asset_refs: List[AssetRefEntry] = Field(default_factory=list)
+    concept_refs: List[ConceptRefEntry] = Field(default_factory=list)
+    successors: List[SuccessorEntry] = Field(default_factory=list)
+
+
+class RepointReferenceRequest(BaseModel):
+    """POST /semantic-models/concepts/references/repoint."""
+    link_id: str = Field(..., min_length=1)
+    from_iri: str = Field(..., min_length=1)
+    to_iri: str = Field(..., min_length=1)
+
+
+class RepointReferenceResponse(BaseModel):
+    link_id: str
+    to_iri: str
+    to_label: Optional[str] = None
+
+
+class MergeConceptsRequest(BaseModel):
+    """POST /semantic-models/concepts/merge (N->1 convenience: repoint + deprecate)."""
+    source_iris: List[str] = Field(..., min_length=1)
+    target_iri: str = Field(..., min_length=1)
+    repoint_refs: bool = Field(True, description="Repoint each source's asset refs to target before deprecating")
+
+
+class MergedSourceEntry(BaseModel):
+    source_iri: str
+    refs_repointed: int
+
+
+class MergeConceptsResponse(BaseModel):
+    target_iri: str
+    target_label: Optional[str] = None
+    merged: List[MergedSourceEntry] = Field(default_factory=list)
+
+
 # --- Graph freshness (API contract §6, signed off) ---
 class GraphFreshnessResponse(BaseModel):
     """Served in-memory graph freshness. UI shows 'last refreshed HH:MM, N
@@ -938,6 +1004,98 @@ async def retire_concept(
     except Exception:
         logger.error("Error retiring concept %s", body.iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retire concept")
+
+
+# --- Reference-reconciliation worklist routes (API contract §5b) ---
+@router.get(
+    '/semantic-models/concepts/references',
+    response_model=ConceptReferencesResponse,
+)
+async def list_concept_references(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> ConceptReferencesResponse:
+    """Itemized references to a concept — the split/merge worklist source (§5b).
+
+    Same set the retire gate counts (asset_refs + concept_refs), plus the
+    recorded successors. ``count`` equals reference-count.
+    """
+    try:
+        return ConceptReferencesResponse(**manager.list_references(concept_iri))
+    except Exception:
+        logger.error("Error listing references for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list concept references")
+
+
+@router.post(
+    '/semantic-models/concepts/references/repoint',
+    response_model=RepointReferenceResponse,
+)
+async def repoint_concept_reference(
+    body: RepointReferenceRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> RepointReferenceResponse:
+    """Move one entity_semantic_links row from from_iri to to_iri (§5b).
+
+    Remove old + add new via the links manager so graph side-effects fire; no ref
+    silently dropped. Idempotent if from_iri == to_iri. 404 if the link is missing
+    or does not point at from_iri. Gated on to_iri's collection being editable.
+    """
+    try:
+        result = manager.repoint_reference(
+            link_id=body.link_id,
+            from_iri=body.from_iri,
+            to_iri=body.to_iri,
+            actor=current_user.email,
+        )
+        return RepointReferenceResponse(**result)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower() or "does not point" in msg.lower():
+            raise HTTPException(status_code=404, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error repointing reference %s", body.link_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to repoint reference")
+
+
+@router.post(
+    '/semantic-models/concepts/merge',
+    response_model=MergeConceptsResponse,
+)
+async def merge_concepts(
+    body: MergeConceptsRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> MergeConceptsResponse:
+    """Merge N sources into one target (§5b): repoint each source's refs to target
+    (if repoint_refs), then deprecate the source with replaced_by=[target].
+
+    Convenience composing the repoint + deprecate primitives; no new lineage
+    semantics. Editable gate enforced per-repoint (target collection) and by
+    deprecate (source collection).
+    """
+    try:
+        result = manager.merge_concepts(
+            source_iris=body.source_iris,
+            target_iri=body.target_iri,
+            repoint_refs=body.repoint_refs,
+            actor=current_user.email,
+        )
+        return MergeConceptsResponse(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error merging concepts into %s", body.target_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to merge concepts")
 
 
 @router.get(

@@ -238,11 +238,19 @@ export default function DataProducts() {
     // 404 on /data-products/<slug>.
     const qFilter = searchParams.get('q');
     if (qFilter) {
-      const q = qFilter.toLowerCase();
+      // Normalize separators so a slug deep-link ("customer-360") matches a
+      // titled product ("Customer 360"): treat -, _, and space as equivalent.
+      const norm = (s: string) => s.toLowerCase().replace(/[-_\s]+/g, ' ').trim();
+      const q = norm(qFilter);
       filtered = filtered.filter(p => {
-        const title = (p.info?.title || '').toLowerCase();
-        const id = (p.id || '').toLowerCase();
-        return title.includes(q) || id.includes(q);
+        const title = norm(p.info?.title || p.name || '');
+        const id = norm(p.id || '');
+        // Also match any sourceId custom property (preserved slug).
+        const props = (p as any).customProperties || (p as any).custom_properties || [];
+        const sourceId = norm(
+          (props.find((c: any) => c.key === 'sourceId' || c.key === 'source_id') || {}).value || '',
+        );
+        return title.includes(q) || id.includes(q) || (!!sourceId && sourceId.includes(q));
       });
     }
 

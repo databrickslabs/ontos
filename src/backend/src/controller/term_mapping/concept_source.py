@@ -236,6 +236,64 @@ def resolve_default_customer_contexts(
     return sorted(contexts)
 
 
+def list_selectable_contexts(
+    semantic_models_manager: "SemanticModelsManager",
+) -> List[dict]:
+    """Every selectable concept-scheme context present in the graph, with a
+    friendly label and concept count — for the run-config dialog's picker.
+
+    This is the SAME set the bulk-run engine defaults to
+    (``resolve_default_customer_contexts`` / ``is_customer_context``): authored
+    or imported schemes (urn:glossary / urn:taxonomy / urn:ontology) AND uploaded
+    RDF sources (urn:semantic-model). It is provenance-agnostic on purpose — a
+    scheme built on the Explore/Define page is just as valid a mapping source as
+    an uploaded file. Internal indexes stay blocked; shipped opt-in taxonomies
+    are surfaced via the separate include_shipped list, not here.
+
+    Returns ``[{context, label, concept_count}]`` sorted by label. Labels come
+    from the KnowledgeCollection registry (RDFS.label / display_name) when the
+    context maps to a registered collection, else the sanitized suffix.
+    """
+    smm = semantic_models_manager
+    graph = smm._graph
+
+    # Map context IRI -> friendly label from the collection registry.
+    label_by_ctx: dict = {}
+    try:
+        for coll in smm.get_collections():
+            iri = coll.get("iri")
+            if iri:
+                label_by_ctx[iri] = coll.get("label") or _context_suffix(iri)
+    except Exception:  # registry is best-effort; fall back to suffixes
+        pass
+
+    out: List[dict] = []
+    for ctx in graph.contexts():
+        name = str(ctx.identifier)
+        if not is_customer_context(name):
+            continue
+        concept_count = sum(1 for _ in _classes_in_context(ctx)) + sum(
+            1 for _ in _properties_in_context(ctx)
+        )
+        out.append(
+            {
+                "context": name,
+                "label": label_by_ctx.get(name) or _context_suffix(name),
+                "concept_count": concept_count,
+            }
+        )
+    out.sort(key=lambda r: (r["label"] or "").lower())
+    return out
+
+
+def _context_suffix(ctx: str) -> str:
+    """Human-ish fallback label: the part after the urn:<kind>: prefix."""
+    for prefix in CONCEPT_SCHEME_PREFIXES:
+        if ctx.startswith(prefix):
+            return ctx[len(prefix):]
+    return ctx
+
+
 def resolve_inline_default_contexts(
     semantic_models_manager: "SemanticModelsManager",
 ) -> List[str]:

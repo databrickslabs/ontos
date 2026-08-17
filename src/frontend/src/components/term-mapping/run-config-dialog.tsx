@@ -30,26 +30,20 @@ import {
   TARGET_ENTITY_TYPE_LABELS,
 } from '@/types/term-mapping';
 
-interface SemanticModelLite {
-  id: string;
-  name: string;
-  display_name?: string | null;
-  enabled?: boolean;
-}
-
-interface SemanticModelsResponse {
-  semantic_models: SemanticModelLite[];
-}
-
 /**
- * The /api/semantic-models endpoint returns DB-backed customer models AND
- * file/schema taxonomies in one list. File/schema rows use synthetic IDs
- * prefixed with `file-` (see backend route); only the un-prefixed ones are
- * persisted in the `semantic_models` table and therefore valid as
- * `urn:semantic-model:*` mapping contexts.
+ * A selectable concept-scheme mapping source, as returned by
+ * GET /api/term-mappings/contexts. This is provenance-agnostic: it includes
+ * schemes authored/imported on the Explore/Define page (urn:glossary /
+ * urn:ontology / urn:taxonomy) AND uploaded RDF sources (urn:semantic-model) —
+ * exactly the set the engine runs against. (Previously the dialog read the
+ * semantic_models table, so Explore-authored ontologies were invisible and it
+ * wrongly reported 'no customer ontologies loaded'.)
  */
-const isCustomerModel = (m: SemanticModelLite): boolean =>
-  typeof m.id === 'string' && !m.id.startsWith('file-');
+interface SelectableContext {
+  context: string;
+  label: string;
+  concept_count: number;
+}
 
 interface RunConfigDialogProps {
   isOpen: boolean;
@@ -72,7 +66,7 @@ export default function RunConfigDialog({
   const { toast } = useToast();
   const { get, post } = useApi();
 
-  const [models, setModels] = useState<SemanticModelLite[]>([]);
+  const [models, setModels] = useState<SelectableContext[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
 
@@ -108,20 +102,17 @@ export default function RunConfigDialog({
     setModelsLoading(true);
     setModelsError(null);
     try {
-      const res = await get<SemanticModelsResponse>('/api/semantic-models');
+      // Provenance-agnostic: every selectable concept scheme in the graph
+      // (authored/imported on Explore/Define AND uploaded RDF sources), i.e.
+      // exactly what the engine will run against. NOT the semantic_models table.
+      const res = await get<SelectableContext[]>('/api/term-mappings/contexts');
       if (res.error) throw new Error(res.error);
-      // Endpoint returns BOTH DB-backed customer models and file/schema
-      // taxonomies under `semantic_models`. Only customer models are valid as
-      // `ontology_contexts`; shipped taxonomies use the opt-in checkboxes.
-      const all = res.data?.semantic_models ?? [];
-      const customer = all.filter((m) => isCustomerModel(m) && m.enabled !== false);
-      setModels(customer);
-      // Out-of-the-box ergonomics: when the user has zero customer ontologies
-      // loaded, pre-check the Databricks shipped taxonomy so "Create run" is
-      // immediately useful for demos / first-time exploration. They can still
-      // uncheck it. When customer ontologies exist, leave shipped opt-ins off
-      // — those are the authoritative source.
-      if (customer.length === 0) {
+      const contexts = Array.isArray(res.data) ? res.data : [];
+      setModels(contexts);
+      // Out-of-the-box ergonomics: when the user has zero customer schemes,
+      // pre-check the Databricks shipped taxonomy so "Create run" is immediately
+      // useful for demos / first-time exploration. They can still uncheck it.
+      if (contexts.length === 0) {
         setShippedSelected((prev) =>
           prev.size === 0 ? new Set(['urn:taxonomy:databricks_ontology']) : prev,
         );
@@ -138,10 +129,10 @@ export default function RunConfigDialog({
   const enabledCustomerCount = models.length;
 
   const previewContextNames = useMemo(() => {
-    if (allContexts) return models.map((m) => m.display_name || m.name);
+    if (allContexts) return models.map((m) => m.label);
     return models
-      .filter((m) => selectedContexts.has(modelToContextUrn(m)))
-      .map((m) => m.display_name || m.name);
+      .filter((m) => selectedContexts.has(m.context))
+      .map((m) => m.label);
   }, [models, selectedContexts, allContexts]);
 
   const handleToggleContext = (urn: string) => {
@@ -297,16 +288,19 @@ export default function RunConfigDialog({
                 </label>
                 <div className="pl-6 space-y-1.5 border-l">
                   {models.map((m) => {
-                    const urn = modelToContextUrn(m);
+                    const urn = m.context;
                     const checked = allContexts || selectedContexts.has(urn);
                     return (
-                      <label key={m.id} className="flex items-center gap-2 text-sm">
+                      <label key={urn} className="flex items-center gap-2 text-sm">
                         <Checkbox
                           checked={checked}
                           disabled={allContexts}
                           onCheckedChange={() => handleToggleContext(urn)}
                         />
-                        <span>{m.display_name || m.name}</span>
+                        <span>{m.label}</span>
+                        <Badge variant="secondary" className="h-4 text-[10px] px-1">
+                          {m.concept_count}
+                        </Badge>
                         <span className="text-xs text-muted-foreground font-mono ml-auto">
                           {urn}
                         </span>
@@ -460,17 +454,4 @@ export default function RunConfigDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-// ---------- helpers ----------
-
-/**
- * Convert a SemanticModelLite into the context URN the backend expects.
- * Mirrors src/backend/src/controller/semantic_models_manager._sanitize_context_name.
- */
-function modelToContextUrn(model: SemanticModelLite): string {
-  const sanitized = (model.name || '')
-    .replace(/ /g, '_')
-    .replace(/[^\w\-._~]/g, '_');
-  return `urn:semantic-model:${sanitized}`;
 }

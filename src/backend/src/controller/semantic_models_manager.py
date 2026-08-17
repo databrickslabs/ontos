@@ -6535,6 +6535,20 @@ class SemanticModelsManager(SearchableAsset):
         # Get all concepts grouped by source_context
         grouped_concepts = self.get_grouped_concepts()
 
+        # Pending term-mapping suggestions per concept IRI. Drives the per-scheme
+        # "suggested" count (and hence whether the Enrich matrix Review button is
+        # enabled). Best-effort: a term-mapping subsystem hiccup must not sink the
+        # whole coverage response, so fall back to an empty map (suggested=0).
+        pending_by_iri: Dict[str, int] = {}
+        try:
+            from src.repositories.term_mapping_repository import mapping_suggestion_repo
+            pending_by_iri = mapping_suggestion_repo.count_pending_by_target_concept(
+                semantic_links_manager._db
+            )
+        except Exception as e:
+            logger.warning(f"coverage: could not load pending suggestions: {e}")
+            pending_by_iri = {}
+
         # Entity types that belong to each layer
         product_layer_types = {'data_product'}
         contract_layer_types = {'data_contract', 'data_contract_schema', 'data_contract_property'}
@@ -6543,6 +6557,7 @@ class SemanticModelsManager(SearchableAsset):
         scheme_rows: List[CoverageSchemeRow] = []
         total_concepts = 0
         total_with_links = 0
+        total_suggested = 0
         total_products_set = set()
         total_contracts_set = set()
         total_assets_set = set()
@@ -6587,6 +6602,10 @@ class SemanticModelsManager(SearchableAsset):
             total_with_links += concepts_with_links
             coverage_pct = int(100 * concepts_with_links / len(concepts)) if concepts else 0
 
+            # Pending suggestions awaiting review for this scheme's concepts.
+            scheme_suggested = sum(pending_by_iri.get(iri, 0) for iri in iris)
+            total_suggested += scheme_suggested
+
             # Deduplicate entity_ids by layer within this scheme
             scheme_products = set()
             scheme_contracts = set()
@@ -6611,7 +6630,7 @@ class SemanticModelsManager(SearchableAsset):
                 products=len(scheme_products),
                 contracts=len(scheme_contracts),
                 assets=len(scheme_assets),
-                suggested=0,
+                suggested=scheme_suggested,
             ))
 
         # Compute totals
@@ -6624,7 +6643,7 @@ class SemanticModelsManager(SearchableAsset):
             products=len(total_products_set),
             contracts=len(total_contracts_set),
             assets=len(total_assets_set),
-            suggested=0,
+            suggested=total_suggested,
         )
 
         return CoverageResponse(schemes=scheme_rows, totals=totals)

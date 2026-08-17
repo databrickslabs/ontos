@@ -58,7 +58,7 @@ class CoverageSchemeRow(BaseModel):
     products: int  # distinct data_product links across the scheme
     contracts: int  # distinct data_contract* links across the scheme
     assets: int  # distinct physical layer (uc_*/asset) links across the scheme
-    suggested: int = 0  # suggested matches (not yet implemented; placeholder)
+    suggested: int = 0  # pending term-mapping suggestions awaiting review, this scheme
 
 
 class CoverageResponse(BaseModel):

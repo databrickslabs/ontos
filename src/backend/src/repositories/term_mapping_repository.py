@@ -117,6 +117,30 @@ class MappingSuggestionRepository(CRUDBase[MappingSuggestionDb, MappingSuggestio
             db.rollback()
             raise
 
+    def count_pending_by_target_concept(self, db: Session) -> dict[str, int]:
+        """Return {target_concept_iri: pending_suggestion_count} across all runs.
+
+        Powers the per-scheme "suggested" count on the Enrich coverage matrix:
+        the caller maps each concept IRI to its scheme and sums. Only PENDING
+        suggestions count (accepted/rejected/applied are done, not awaiting
+        review).
+        """
+        try:
+            rows = (
+                db.query(
+                    self.model.target_concept_iri,
+                    func.count(self.model.id),
+                )
+                .filter(self.model.status == SUG_STATUS_PENDING)
+                .group_by(self.model.target_concept_iri)
+                .all()
+            )
+            return {iri: int(count) for iri, count in rows if iri}
+        except SQLAlchemyError as e:
+            logger.error(f"count_pending_by_target_concept failed: {e}", exc_info=True)
+            db.rollback()
+            raise
+
     def count_auto_apply_for_entity(
         self,
         db: Session,

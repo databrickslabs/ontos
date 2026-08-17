@@ -89,6 +89,9 @@ class EntityType(str, Enum):
     JOB = "job"  # For background job lifecycle workflows
     SUBSCRIPTION = "subscription"  # For subscription events
     USER = "user"  # The user themselves — for on_first_access disclaimer/ToU workflows
+    ONTOLOGY_CONCEPT = "ontology_concept"  # A SKOS concept (RDF triples keyed by IRI)
+    ONTOLOGY_COLLECTION = "ontology_collection"  # A concept scheme / collection
+    CONCEPT_CHANGESET = "concept_changeset"  # A bulk RDF-upload changeset awaiting approval
 
 
 class ScopeType(str, Enum):

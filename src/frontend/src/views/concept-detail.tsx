@@ -56,6 +56,7 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { PublishVersionDialog } from '@/components/semantic/publish-version-dialog';
 import { VersionHistoryPanel } from '@/components/semantic/version-history-panel';
 import { DeprecateConceptDialog } from '@/components/semantic/deprecate-concept-dialog';
+import { TurtleSerializationPanel } from '@/components/semantic/turtle-serialization-panel';
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-5 w-5 text-emerald-500 shrink-0" />,
@@ -98,6 +99,61 @@ const STATUS_TRANSITIONS: Record<string, { action: string; to: string; labelKey:
   deprecated: [{ action: 'archive', to: 'archived', labelKey: 'semantic-models:lifecycle.archive', defaultLabel: 'Archive' }],
   archived: [],
 };
+
+// Ordered lifecycle chain (forward direction only)
+const LIFECYCLE_CHAIN = ['draft', 'under_review', 'approved', 'published', 'certified', 'deprecated', 'archived'];
+
+/**
+ * Compute all forward-reachable statuses from a given current status.
+ * Returns them as an ordered list with metadata about the next step vs downstream.
+ */
+function reachableStatuses(currentStatus: string): Array<{
+  status: string;
+  action: string;
+  labelKey: string;
+  defaultLabel: string;
+  isNextStep: boolean;
+}> {
+  const chain = LIFECYCLE_CHAIN;
+  const idx = chain.indexOf(currentStatus);
+  if (idx < 0 || idx === chain.length - 1) return []; // no transitions from archived or unknown status
+
+  const result: Array<{
+    status: string;
+    action: string;
+    labelKey: string;
+    defaultLabel: string;
+    isNextStep: boolean;
+  }> = [];
+  const directTransitions = STATUS_TRANSITIONS[currentStatus] ?? [];
+
+  // Iterate from the next status onwards; for each, check if it's reachable
+  for (let i = idx + 1; i < chain.length; i++) {
+    const targetStatus = chain[i];
+    // A status is reachable if there's a path to it via the forward chain
+    // (all intermediate steps exist in STATUS_TRANSITIONS)
+    let isReachable = true;
+    for (let j = idx; j < i; j++) {
+      const transitions = STATUS_TRANSITIONS[chain[j]] ?? [];
+      if (!transitions.some((tr) => tr.to === chain[j + 1])) {
+        isReachable = false;
+        break;
+      }
+    }
+    if (isReachable) {
+      // Find the transition data from directTransitions if it's the immediate next
+      const directTr = directTransitions.find((tr) => tr.to === targetStatus);
+      result.push({
+        status: targetStatus,
+        action: directTr?.action ?? '', // will be computed on walk if empty
+        labelKey: directTr?.labelKey ?? `semantic-models:status.${targetStatus}`,
+        defaultLabel: directTr?.defaultLabel ?? targetStatus,
+        isNextStep: i === idx + 1,
+      });
+    }
+  }
+  return result;
+}
 
 export default function ConceptDetailView() {
   const params = useParams();
@@ -342,18 +398,58 @@ export default function ConceptDetailView() {
   // Run a lifecycle status transition via its by-iri action endpoint, then
   // refresh so the status badge + available transitions update.
   const [statusBusy, setStatusBusy] = useState(false);
-  const handleStatusTransition = async (action: string) => {
+
+  // Walk the status chain one step at a time from current to target.
+  // If 'deprecate' is encountered along the way, stop and open the deprecate dialog.
+  const handleStatusTransition = async (targetStatus: string) => {
     if (!concept) return;
+
+    // Special case: if target is 'deprecated', open the dialog instead of walking blindly
+    if (targetStatus === 'deprecated') {
+      setDeprecateOpen(true);
+      return;
+    }
+
     setStatusBusy(true);
     try {
-      const response = await fetch(
-        `/api/knowledge/concepts/by-iri/${action}?iri=${encodeURIComponent(concept.iri)}`,
-        { method: 'POST' },
-      );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({} as any));
-        throw new Error(err?.detail || 'Failed to change status');
+      const chain = LIFECYCLE_CHAIN;
+      const currentIdx = chain.indexOf(concept.status || 'draft');
+      const targetIdx = chain.indexOf(targetStatus);
+
+      if (currentIdx < 0 || targetIdx < 0 || targetIdx <= currentIdx) {
+        throw new Error('Invalid target status');
       }
+
+      // Walk from current to target, one step at a time
+      let currentStatus: string = concept.status || 'draft';
+      for (let i = currentIdx; i < targetIdx; i++) {
+        const nextStatus = chain[i + 1];
+        const transitions = STATUS_TRANSITIONS[currentStatus] ?? [];
+        const transition = transitions.find((tr) => tr.to === nextStatus);
+
+        if (!transition) {
+          throw new Error(`No transition available from ${currentStatus} to ${nextStatus}`);
+        }
+
+        // If we encounter deprecate along the way, stop and open the dialog
+        if (transition.action === 'deprecate' && targetStatus !== 'deprecated') {
+          setDeprecateOpen(true);
+          setStatusBusy(false);
+          return;
+        }
+
+        // Execute the transition
+        const response = await fetch(
+          `/api/knowledge/concepts/by-iri/${transition.action}?iri=${encodeURIComponent(concept.iri)}`,
+          { method: 'POST' },
+        );
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({} as any));
+          throw new Error(err?.detail || `Failed to transition to ${nextStatus}`);
+        }
+        currentStatus = nextStatus;
+      }
+
       toast({
         title: t('common:toast.success'),
         description: t('semantic-models:messages.statusChanged', 'Status updated'),
@@ -366,11 +462,7 @@ export default function ConceptDetailView() {
         description: err?.message,
         variant: 'destructive',
       });
-      // Re-sync to the TRUE backend status even on failure. A transition can
-      // error precisely because the concept already moved (e.g. a prior partial
-      // request advanced it), so the dropdown must reflect reality — otherwise
-      // it keeps offering the stale action and every retry throws a different
-      // error (the "different error every time" the user hit).
+      // Re-sync to the TRUE backend status even on failure
       await fetchConcept();
     } finally {
       setStatusBusy(false);
@@ -429,13 +521,13 @@ export default function ConceptDetailView() {
   const isProperty = concept.concept_type === 'property';
   const hasDomainRange = isProperty && (concept.domain || concept.range);
 
-  // Lifecycle transitions available from the current status. Offered to writers
+  // All forward-reachable statuses from the current status. Offered to writers
   // on concepts whose collection is editable (imported/read-only ontologies have
   // no lifecycle). Certify is admin-gated server-side; a non-admin gets a clear
   // 403 toast rather than the option being hidden.
   const currentStatus = concept.status || 'draft';
-  const availableTransitions =
-    canWrite && collection?.is_editable ? STATUS_TRANSITIONS[currentStatus] ?? [] : [];
+  const allReachableStatuses =
+    canWrite && collection?.is_editable ? reachableStatuses(currentStatus) : [];
 
   return (
     <div className="py-4 space-y-3">
@@ -450,7 +542,7 @@ export default function ConceptDetailView() {
           {t('semantic-models:details.backToList', 'Back to Concepts')}
         </Button>
         <div className="flex items-center gap-2">
-          {availableTransitions.length > 0 && !isProperty && (
+          {allReachableStatuses.length > 0 && !isProperty && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={statusBusy}>
@@ -459,18 +551,14 @@ export default function ConceptDetailView() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {availableTransitions.map((tr) => (
+                {allReachableStatuses.map((item) => (
                   <DropdownMenuItem
-                    key={tr.action + tr.to}
-                    onClick={() => {
-                      if (tr.action === 'deprecate') {
-                        setDeprecateOpen(true);
-                      } else {
-                        handleStatusTransition(tr.action);
-                      }
-                    }}
+                    key={item.status}
+                    onClick={() => handleStatusTransition(item.status)}
+                    className={item.isNextStep ? 'font-semibold' : 'text-muted-foreground'}
                   >
-                    {t(tr.labelKey, tr.defaultLabel)}
+                    {t(item.labelKey, item.defaultLabel)}
+                    {!item.isNextStep && <span className="ml-2 text-xs">(via {currentStatus})</span>}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -789,6 +877,11 @@ export default function ConceptDetailView() {
 
         {/* Row 4: Metadata */}
         <EntityMetadataPanel entityType="concept" entityId={concept.iri} />
+
+        {/* Advanced-only: RDF (Turtle) serialization */}
+        <div className="adv-only md:col-span-2">
+          <TurtleSerializationPanel conceptIri={concept.iri} />
+        </div>
 
         {/* Row 4: Version history — live, drives versioning contract §1 + §2. */}
         {!isProperty && (

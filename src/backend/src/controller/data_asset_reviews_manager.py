@@ -116,6 +116,8 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             return AssetType.MDM_MATCH
         if fqn.startswith('term-mapping://'):
             return AssetType.CONCEPT_MAPPING_SUGGESTION
+        if fqn.startswith('knowledge-concept://'):
+            return AssetType.KNOWLEDGE_CONCEPT
 
         if not self._ws_client:
             logger.warning(f"Cannot determine asset type for {fqn}: WorkspaceClient not available.")
@@ -346,7 +348,14 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             from_status = db_obj.status.value if hasattr(db_obj.status, 'value') else str(db_obj.status)
             updated_db_obj = self._repo.update_request_status(db=self._db, db_obj=db_obj, status=update_data.status, notes=update_data.notes)
             to_status = updated_db_obj.status.value if hasattr(updated_db_obj.status, 'value') else str(updated_db_obj.status)
-            
+
+            # --- Reflect the reviewer decision onto a KNOWLEDGE_CONCEPT --- #
+            # When the reviewed asset is a concept, drive the concept lifecycle
+            # (the send-back ping-pong loop) via the SemanticModelsManager. This
+            # is best-effort: a missing SMM or a failed reflection must never sink
+            # the review-status update itself.
+            self._reflect_concept_review_decision(updated_db_obj, update_data)
+
             # --- Trigger workflow for status change --- #
             final_statuses = [ReviewRequestStatus.APPROVED, ReviewRequestStatus.NEEDS_REVIEW, ReviewRequestStatus.DENIED]
             if updated_db_obj.status in final_statuses:
@@ -410,6 +419,76 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         except Exception as e:
             logger.error(f"Unexpected error updating status for request {request_id}: {e}")
             raise
+
+    def _reflect_concept_review_decision(self, updated_db_obj, update_data) -> None:
+        """Drive the concept lifecycle from a KNOWLEDGE_CONCEPT review decision.
+
+        Resolves the concept IRI from the reviewed asset's FQN (stored as
+        ``knowledge-concept://<iri>`` at review-create time) and calls the
+        SemanticModelsManager send-back hook:
+
+          APPROVED     -> apply_review_decision('approved')
+          NEEDS_REVIEW -> apply_review_decision('changes_requested', comments=...)
+          DENIED       -> apply_review_decision('denied')
+
+        CANCELLED / non-terminal statuses do not touch the concept. Reaches the
+        SMM via the global app_state registry; if it is unavailable the decision
+        is logged and skipped rather than crashing the review update.
+        """
+        try:
+            status = updated_db_obj.status
+            status_val = status.value if hasattr(status, 'value') else str(status)
+
+            decision_map = {
+                ReviewRequestStatus.APPROVED.value: "approved",
+                ReviewRequestStatus.NEEDS_REVIEW.value: "changes_requested",
+                ReviewRequestStatus.DENIED.value: "denied",
+            }
+            decision = decision_map.get(status_val)
+            if decision is None:
+                return  # QUEUED / IN_REVIEW / CANCELLED: nothing to reflect.
+
+            # Find the concept IRI among the reviewed assets.
+            from src.controller.semantic_models_manager import SemanticModelsManager
+            concept_iri = None
+            for asset in (updated_db_obj.assets or []):
+                iri = SemanticModelsManager.concept_iri_from_review_fqn(asset.asset_fqn)
+                if iri:
+                    concept_iri = iri
+                    break
+            if concept_iri is None:
+                return  # Not a concept review.
+
+            from src.common.app_state import get_app_state_manager
+            smm = get_app_state_manager("semantic_models_manager")
+            if smm is None:
+                logger.warning(
+                    "KNOWLEDGE_CONCEPT review %s reached %s but no "
+                    "semantic_models_manager is registered; skipping concept "
+                    "reflection.", updated_db_obj.id, status_val,
+                )
+                return
+
+            # Prefer per-asset comments; fall back to the request notes.
+            comments = None
+            for asset in (updated_db_obj.assets or []):
+                if getattr(asset, 'comments', None):
+                    comments = asset.comments
+                    break
+            if not comments:
+                comments = update_data.notes
+
+            smm.apply_review_decision(
+                concept_iri=concept_iri,
+                decision=decision,
+                decided_by=updated_db_obj.reviewer_email,
+                comments=comments,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to reflect review decision onto concept for review "
+                f"{getattr(updated_db_obj, 'id', '?')}: {e}", exc_info=True,
+            )
 
     def update_review_request(
         self, request_id: str, update_data: DataAssetReviewRequestUpdate

@@ -1653,20 +1653,21 @@ async def _submit_concept_for_review_payload(
             data = await request.json()
         except Exception:
             data = {}
-        review_data = manager.submit_concept_for_review(
+        # Real submission: computes the diff, fires the governance trigger,
+        # opens a backing DataAssetReview (when a reviewer is supplied and the
+        # review manager is reachable) and transitions draft -> under_review.
+        result = manager.submit_concept_for_review(
             concept_iri=concept_iri,
             reviewer_email=data.get('reviewer_email'),
             submitted_by=submitted_by,
             notes=data.get('notes'),
+            reset_mode=data.get('reset_approvals_on_resubmit', 'reset_all'),
         )
-        # TODO: Integrate with DataAssetReviewManager to create actual review request
-        # For now, update status directly
-        updated = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="under_review",
-            updated_by=submitted_by,
-        )
-        return {'review_data': review_data, 'concept': updated}
+        return {
+            'concept': result.get('concept'),
+            'review_request_id': result.get('review_request_id'),
+            'governed': result.get('governed', False),
+        }
     except HTTPException:
         raise
     except ValueError as e:
@@ -1674,6 +1675,27 @@ async def _submit_concept_for_review_payload(
     except Exception as e:
         logger.error(f"Error submitting for review: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to submit for review")
+
+
+async def _withdraw_concept_review_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    withdrawn_by: str,
+) -> dict:
+    """Owner-initiated withdraw: under_review -> draft, cancel the open review."""
+    try:
+        result = manager.withdraw_concept_review(
+            concept_iri=concept_iri,
+            withdrawn_by=withdrawn_by,
+        )
+        return result
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error withdrawing review: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to withdraw review")
 
 
 def _set_concept_status_payload(
@@ -1930,6 +1952,19 @@ async def submit_concept_for_review_by_iri(
     """Submit a concept for review."""
     return await _submit_concept_for_review_payload(
         manager, concept_iri, request, current_user.email
+    )
+
+
+@router.post('/knowledge/concepts/by-iri/withdraw-review')
+async def withdraw_concept_review_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Owner withdraws a concept from review (under_review -> draft)."""
+    return await _withdraw_concept_review_payload(
+        manager, concept_iri, current_user.email
     )
 
 

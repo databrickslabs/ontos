@@ -704,6 +704,10 @@ class SemanticModelsManager(SearchableAsset):
         from src.controller.concept_diff import compute_concept_diff
         from src.repositories.upload_preview_repository import upload_preview_repo
 
+        # Re-uploading INTO THE SAME context is versioning (allowed). Only refuse
+        # when an incoming subject IRI already lives in a DIFFERENT scheme.
+        self._raise_on_cross_scheme_conflict(incoming_graph, context_name)
+
         current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
         diff = compute_concept_diff(incoming_graph, current_triples)
 
@@ -5264,6 +5268,64 @@ class SemanticModelsManager(SearchableAsset):
             logger.error(f"Failed to export collection: {e}")
             raise ValueError(f"Failed to export collection: {e}")
 
+    def _detect_cross_scheme_iri_conflicts(
+        self, incoming_graph, target_context: str
+    ) -> List[tuple]:
+        """Find incoming concept IRIs that already live in a DIFFERENT scheme.
+
+        An IRI denotes ONE concept globally (the concept_version table keys
+        is_current per IRI across all schemes). So the same subject IRI asserted
+        into two different collections is not two concepts — it is one identity
+        forked into two contexts with potentially divergent status. We refuse it
+        at import time. Re-importing an IRI that already lives in THIS target
+        context is legitimate (that is versioning) and is NOT a conflict.
+
+        Returns a list of ``(iri, other_context)`` pairs, one per conflicting
+        typed subject found in another non-empty context.
+        """
+        # Concept-identity types: only typed subjects carry a governed concept
+        # identity, so only they can collide across schemes.
+        _conflict_types = {
+            SKOS.Concept, OWL.Class, RDFS.Class,
+            OWL.ObjectProperty, OWL.DatatypeProperty, OWL.AnnotationProperty,
+        }
+        typed_subjects = {
+            s for s, _, o in incoming_graph.triples((None, RDF.type, None))
+            if o in _conflict_types and isinstance(s, URIRef)
+        }
+
+        conflicts: List[tuple] = []
+        for subj in typed_subjects:
+            subject_uri = str(subj)
+            existing_rows = rdf_triples_repo.list_by_subject(self._db, subject_uri)
+            other_contexts = {
+                row.context_name
+                for row in existing_rows
+                if row.context_name and row.context_name != target_context
+            }
+            for other in sorted(other_contexts):
+                conflicts.append((subject_uri, other))
+        return conflicts
+
+    def _raise_on_cross_scheme_conflict(
+        self, incoming_graph, target_context: str
+    ) -> None:
+        """Raise ValueError (-> HTTP 400) if the import forks an IRI into a new scheme."""
+        conflicts = self._detect_cross_scheme_iri_conflicts(incoming_graph, target_context)
+        if not conflicts:
+            return
+        shown = conflicts[:5]
+        detail = "; ".join(f"{iri} (already in {ctx})" for iri, ctx in shown)
+        remaining = len(conflicts) - len(shown)
+        if remaining > 0:
+            detail += f"; and {remaining} more"
+        raise ValueError(
+            f"Import blocked: {len(conflicts)} concept IRI(s) already exist in "
+            f"another scheme and an IRI identifies one concept globally. Give the "
+            f"new concept a distinct IRI (e.g. a different namespace) or remove it, "
+            f"then re-import. Conflicts: {detail}"
+        )
+
     def import_rdf_to_collection(
         self,
         collection_iri: str,
@@ -5304,6 +5366,10 @@ class SemanticModelsManager(SearchableAsset):
             temp_graph.parse(data=content, format=rdf_format)
         except Exception as e:
             raise ValueError(f"Invalid {rdf_format} content: {e}")
+
+        # Refuse to fork an IRI that already lives in another scheme (one IRI ==
+        # one concept globally). Re-importing into THIS collection is allowed.
+        self._raise_on_cross_scheme_conflict(temp_graph, collection_iri)
 
         # Stamp a governance status on typed subjects that lack one (opt-in).
         # A subject is a concept/class if it has an rdf:type in the concept types;

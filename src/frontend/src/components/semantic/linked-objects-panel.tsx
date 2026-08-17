@@ -306,9 +306,18 @@ export default function LinkedObjectsPanel({
 
   const navigateToEntity = (link: EnrichedSemanticLink) => {
     switch (link.entity_type) {
-      case 'data_product':
-        navigate(`/data-products/${link.entity_id}`)
+      case 'data_product': {
+        // entity_id may be a UUID or a slug/name. Attempt direct navigation first;
+        // if it looks like a slug (not a UUID pattern), route to products list with search.
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(link.entity_id)
+        if (isUuid) {
+          navigate(`/data-products/${link.entity_id}`)
+        } else {
+          // Slug or name: navigate to list with search filter for graceful fallback
+          navigate(`/data-products?q=${encodeURIComponent(link.entity_id)}`)
+        }
         return
+      }
       case 'data_contract':
         navigate(`/data-contracts/${link.entity_id}`)
         return
@@ -330,7 +339,26 @@ export default function LinkedObjectsPanel({
       case 'uc_schema':
       case 'uc_table':
       case 'uc_column': {
-        navigate('/catalog-commander')
+        // Deep-link into catalog-commander. The route accepts a ?table=<fqn>
+        // param (see navigateToTable in catalog-commander.tsx) that expands the
+        // catalog/schema and pre-selects the table. It needs a full
+        // catalog.schema.table FQN (>=3 parts); for a column FQN
+        // (catalog.schema.table.column) we pass just the table portion so the
+        // parent table is selected. Catalog/schema-level links have no table to
+        // pre-select, so they open the browser root.
+        const fqn = String(link.entity_id)
+        const parts = fqn.split('.')
+        let tableParam: string | null = null
+        if (link.entity_type === 'uc_table' && parts.length >= 3) {
+          tableParam = fqn
+        } else if (link.entity_type === 'uc_column' && parts.length >= 4) {
+          tableParam = parts.slice(0, 3).join('.')
+        }
+        navigate(
+          tableParam
+            ? `/catalog-commander?table=${encodeURIComponent(tableParam)}`
+            : '/catalog-commander',
+        )
         const ucLabel =
           link.entity_type === 'uc_catalog'
             ? t('search:concepts.linkedUCCatalog')

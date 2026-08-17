@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Info } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import {
@@ -17,8 +17,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { useConceptMode } from '@/components/concepts/mode-switch';
 
 import type {
   Run,
@@ -65,6 +72,8 @@ export default function RunConfigDialog({
   const { t } = useTranslation(['term-mapping', 'common']);
   const { toast } = useToast();
   const { get, post } = useApi();
+  const [mode] = useConceptMode();
+  const advanced = mode === 'advanced';
 
   const [models, setModels] = useState<SelectableContext[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -149,7 +158,7 @@ export default function RunConfigDialog({
   };
 
   const handleToggleAll = () => {
-    setAllContexts(true);
+    setAllContexts((prev) => !prev);
     setSelectedContexts(new Set());
   };
 
@@ -259,7 +268,21 @@ export default function RunConfigDialog({
           {/* Customer ontologies ---------------------------------------- */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">{t('runConfig.customerOntologies')}</Label>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">{t('runConfig.customerOntologies')}</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" aria-label="Info" className="text-muted-foreground hover:text-foreground">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px]">
+                      {t('runConfig.customerOntologiesTooltip', 'Select which ontologies to use for matching. Choose all or pick specific ones.')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <Badge variant="outline" className="text-xs">
                 {t('runConfig.enabledCount', { count: enabledCustomerCount })}
               </Badge>
@@ -301,7 +324,7 @@ export default function RunConfigDialog({
                         <Badge variant="secondary" className="h-4 text-[10px] px-1">
                           {m.concept_count}
                         </Badge>
-                        <span className="text-xs text-muted-foreground font-mono ml-auto">
+                        <span className={`text-xs text-muted-foreground font-mono ml-auto ${!advanced ? 'hidden' : ''}`}>
                           {urn}
                         </span>
                       </label>
@@ -312,43 +335,80 @@ export default function RunConfigDialog({
             )}
           </section>
 
-          {/* Shipped opt-in --------------------------------------------- */}
-          <section className="space-y-2">
-            <Label className="text-sm font-medium">{t('runConfig.shippedTitle')}</Label>
-            <div className="rounded-md border p-3 space-y-2">
-              {SHIPPED_OPT_IN_CONTEXTS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={shippedSelected.has(opt.value)}
-                    onCheckedChange={() => handleToggleShipped(opt.value)}
-                  />
-                  <span>{opt.label}</span>
-                  <span className="text-xs text-muted-foreground font-mono ml-auto">
-                    {opt.value}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              <Trans i18nKey="term-mapping:runConfig.shippedHelp" components={{ code: <code /> }} />
-            </p>
-          </section>
+          {/* Shipped opt-in (advanced-only) ----------------------------- */}
+          {advanced && (
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">{t('runConfig.shippedTitle')}</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" aria-label="Info" className="text-muted-foreground hover:text-foreground">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px]">
+                      {t('runConfig.shippedTooltip', 'Databricks-provided reference taxonomies you can also match against, in addition to your own.')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="rounded-md border p-3 space-y-2">
+                {SHIPPED_OPT_IN_CONTEXTS.map((opt) => (
+                  <label key={opt.value} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={shippedSelected.has(opt.value)}
+                      onCheckedChange={() => handleToggleShipped(opt.value)}
+                    />
+                    <span>{opt.label}</span>
+                    <span className="text-xs text-muted-foreground font-mono ml-auto">
+                      {opt.value}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                <Trans i18nKey="term-mapping:runConfig.shippedHelp" components={{ code: <code /> }} />
+              </p>
+            </section>
+          )}
 
           {/* Target selection ------------------------------------------- */}
           <section className="space-y-2">
-            <Label className="text-sm font-medium">{t('runConfig.targetTypes')}</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-medium">{t('runConfig.targetTypes')}</Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" aria-label="Info" className="text-muted-foreground hover:text-foreground">
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[240px]">
+                    {t('runConfig.targetTypesTooltip', 'Entity types to match concepts against. Select which platforms to include.')}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <div className="rounded-md border p-3 grid grid-cols-2 gap-2">
               {(Object.keys(TARGET_ENTITY_TYPE_LABELS) as TermMappingTargetEntityType[])
                 .filter((et) => et !== 'dataset')
-                .map((et) => (
-                  <label key={et} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={entityTypes.has(et)}
-                      onCheckedChange={() => handleToggleEntityType(et)}
-                    />
-                    <span>{TARGET_ENTITY_TYPE_LABELS[et]}</span>
-                  </label>
-                ))}
+                .map((et) => {
+                  // In Simple mode, hide non-core entity types
+                  const isCore = ['asset', 'data_product', 'data_contract'].includes(et);
+                  const hidden = !advanced && !isCore;
+                  return (
+                    <div key={et} className={hidden ? 'hidden' : ''}>
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={entityTypes.has(et)}
+                          onCheckedChange={() => handleToggleEntityType(et)}
+                        />
+                        <span>{TARGET_ENTITY_TYPE_LABELS[et]}</span>
+                      </label>
+                    </div>
+                  );
+                })}
             </div>
             {entityTypes.has('asset') && (
               <div className="space-y-1.5 pl-1">

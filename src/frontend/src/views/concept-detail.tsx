@@ -15,6 +15,7 @@ import {
   User,
   Network,
   Save,
+  Code2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +69,7 @@ import { PublishVersionDialog } from '@/components/semantic/publish-version-dial
 import { VersionHistoryPanel } from '@/components/semantic/version-history-panel';
 import { DeprecateConceptDialog } from '@/components/semantic/deprecate-concept-dialog';
 import { TurtleSerializationPanel } from '@/components/semantic/turtle-serialization-panel';
+import KGSearch from '@/components/search/kg-search';
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-5 w-5 text-emerald-500 shrink-0" />,
@@ -211,6 +213,7 @@ export default function ConceptDetailView() {
   // Defaults to the relations list (per wireframe); graph is opt-in.
   const [relationsView, setRelationsView] = useState<'list' | 'graph'>('list');
   const [deprecateOpen, setDeprecateOpen] = useState(false);
+  const [sparqlDialogOpen, setSparqlDialogOpen] = useState(false);
   const [submitReviewOpen, setSubmitReviewOpen] = useState(false);
   const [reviewerEmail, setReviewerEmail] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
@@ -691,6 +694,18 @@ export default function ConceptDetailView() {
               </Button>
             </>
           )}
+          {/* Power-user SPARQL — Advanced view only. Opens the query surface in
+              a modal on this page instead of navigating to the legacy Search
+              Concepts page. Seeded with a query scoped to this concept. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="adv-only"
+            onClick={() => setSparqlDialogOpen(true)}
+          >
+            <Code2 className="mr-2 h-4 w-4" />
+            {t('semantic-models:concept.sparql', 'SPARQL')}
+          </Button>
         </div>
       </div>
 
@@ -733,17 +748,18 @@ export default function ConceptDetailView() {
             </span>
           )}
         </div>
-        {/* In-review callout with reviewComment if present */}
-        {concept.status === 'under_review' && (
+        {/* Reviewer-comment callout — only when a reviewer actually left a
+            comment (changes requested). The status chip already says "Under
+            Review", so we no longer show a redundant bar for the plain
+            under_review state. */}
+        {concept.status === 'under_review' && (concept as any)?.review_comment && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-2.5 space-y-1.5">
             <div className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
-              {t('semantic-models:concept.inReview', 'In Review')}
+              {t('semantic-models:concept.reviewerComment', 'Reviewer comment')}
             </div>
-            {(concept as any)?.review_comment && (
-              <div className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">
-                {(concept as any).review_comment}
-              </div>
-            )}
+            <div className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">
+              {(concept as any).review_comment}
+            </div>
           </div>
         )}
         {/* Raw IRI + external link — ontology layer, advanced only, own row. */}
@@ -991,11 +1007,6 @@ export default function ConceptDetailView() {
         {/* Row 4: Metadata */}
         <EntityMetadataPanel entityType="concept" entityId={concept.iri} />
 
-        {/* Advanced-only: RDF (Turtle) serialization */}
-        <div className="adv-only md:col-span-2">
-          <TurtleSerializationPanel conceptIri={concept.iri} />
-        </div>
-
         {/* Row 4: Version history — live, drives versioning contract §1 + §2. */}
         {!isProperty && (
           <div id="concept-version-history">
@@ -1077,6 +1088,13 @@ export default function ConceptDetailView() {
             </CollapsibleContent>
           </div>
         </Collapsible>
+
+        {/* Advanced-only: RDF (Turtle) serialization — kept as the LAST grid
+            block so toggling Advanced only APPENDS it at the bottom and never
+            reshuffles Version history / Relations above it. */}
+        <div className="adv-only md:col-span-2">
+          <TurtleSerializationPanel conceptIri={concept.iri} />
+        </div>
       </div>
 
       {concept.created_at && (
@@ -1125,6 +1143,25 @@ export default function ConceptDetailView() {
           await fetchConcept();
         }}
       />
+
+      <Dialog open={sparqlDialogOpen} onOpenChange={setSparqlDialogOpen}>
+        <DialogContent className="sm:max-w-[900px] max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {t('semantic-models:concept.sparqlTitle', 'SPARQL query')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'semantic-models:concept.sparqlDescription',
+                'Query the knowledge graph. Pre-seeded with this concept.',
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <KGSearch
+            initialSparql={`SELECT ?p ?o WHERE { <${concept.iri}> ?p ?o } LIMIT 100`}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={submitReviewOpen} onOpenChange={setSubmitReviewOpen}>
         <DialogContent className="sm:max-w-md">

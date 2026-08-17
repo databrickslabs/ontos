@@ -91,6 +91,14 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // only when Import is clicked. Empty/new schemes have nothing to diff.
   const [previews, setPreviews] = useState<UploadPreview[]>([]);
   const [previewing, setPreviewing] = useState(false);
+  // Conflict resolution UI state
+  interface ConflictItem {
+    iri: string;
+    existing_label: string;
+    existing_context: string;
+  }
+  const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
+  const [conflictMode, setConflictMode] = useState<'skip' | 'update'>('update');
 
   const editableCollections = collections.filter((c) => c.is_editable);
 
@@ -233,13 +241,15 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // Returns the raw response. First import into an empty scheme →
   // {mode:'imported', triples_imported}. Re-upload into a scheme with content →
   // {mode:'preview', preview_token, summary, ...} (nothing applied yet).
-  const importOneFile = async (file: File, targetIri: string): Promise<any> => {
+  const importOneFile = async (file: File, targetIri: string, conflictModeParam?: 'skip' | 'update' | 'block'): Promise<any> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await fetch(
-      `/api/knowledge/collections/${encodeURIComponent(targetIri)}/import`,
-      { method: 'POST', body: formData }
-    );
+    const params = new URLSearchParams();
+    if (conflictModeParam) {
+      params.append('conflict_mode', conflictModeParam);
+    }
+    const url = `/api/knowledge/collections/${encodeURIComponent(targetIri)}/import${params.size > 0 ? '?' + params : ''}`;
+    const response = await fetch(url, { method: 'POST', body: formData });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Import failed (${response.status})`);
@@ -250,11 +260,13 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // Apply a staged preview by its token (the server holds the parsed content;
   // confirm applies it). Returns the response payload which may include status ('applied' | 'held')
   // and review_request_id if governed. Used internally by the single Import action.
-  const confirmPreviewToken = async (token: string): Promise<any> => {
-    const res = await fetch(
-      `/api/semantic-models/uploads/preview/${encodeURIComponent(token)}/confirm`,
-      { method: 'POST' },
-    );
+  const confirmPreviewToken = async (token: string, conflictModeParam?: 'skip' | 'update'): Promise<any> => {
+    const params = new URLSearchParams();
+    if (conflictModeParam) {
+      params.append('conflict_mode', conflictModeParam);
+    }
+    const url = `/api/semantic-models/uploads/preview/${encodeURIComponent(token)}/confirm${params.size > 0 ? '?' + params : ''}`;
+    const res = await fetch(url, { method: 'POST' });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Import failed (${res.status})`);
@@ -268,6 +280,12 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     if (!selectedCollectionIri) return;
     if (creatingNew && !newSchemeName.trim()) return;
 
+    // If conflicts are shown, require a resolution choice before proceeding.
+    if (conflicts.length > 0 && !conflictMode) {
+      setError(t('semantic-models:import.conflict.mustChoose', 'Select how to handle conflicts.'));
+      return;
+    }
+
     setIsUploading(true);
     setError(null);
     setOutcomes(null);
@@ -279,7 +297,11 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       const results: FileImportOutcome[] = [];
       for (const pv of previews) {
         try {
-          const confirmResponse = await confirmPreviewToken(pv.preview_token);
+          // Thread the conflict mode into confirm if conflicts exist
+          const confirmResponse = await confirmPreviewToken(
+            pv.preview_token,
+            conflicts.length > 0 ? conflictMode : undefined
+          );
           results.push({
             name: pv.fileName,
             ok: true,
@@ -315,11 +337,23 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     const results: FileImportOutcome[] = [];
     for (const file of selectedFiles) {
       try {
-        const data = await importOneFile(file, targetIri);
+        // Thread conflict mode if conflicts were detected
+        const data = await importOneFile(
+          file,
+          targetIri,
+          conflicts.length > 0 ? conflictMode : 'block'
+        );
+        // If import returns conflicts, show resolution UI and halt.
+        if (data?.conflicts && data.conflicts.length > 0) {
+          setConflicts(data.conflicts);
+          setIsUploading(false);
+          setError(null);
+          return;
+        }
         // A brand-new/empty scheme should return {mode:'imported'}. If the target
         // turned out non-empty and returned a preview, confirm it (edge case).
         if (data?.mode === 'preview') {
-          const confirmResponse = await confirmPreviewToken(data.preview_token);
+          const confirmResponse = await confirmPreviewToken(data.preview_token, conflictMode);
           results.push({
             name: file.name,
             ok: true,
@@ -552,6 +586,74 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
+            )}
+
+            {/* Conflict resolution UI */}
+            {conflicts.length > 0 && (
+              <div className="grid gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                <div className="flex items-center gap-2">
+                  <Info className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                    {t('semantic-models:import.conflict.title', 'Concept IRI conflicts detected')}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'semantic-models:import.conflict.description',
+                    'The following concepts already exist in this scheme. Choose how to handle them:'
+                  )}
+                </p>
+                <ul className="space-y-1 text-xs">
+                  {conflicts.slice(0, 5).map((c) => (
+                    <li key={c.iri} className="flex items-start gap-2 pl-2">
+                      <span className="shrink-0 mt-0.5">•</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{c.existing_label || c.iri}</div>
+                        <div className="text-muted-foreground truncate">{c.existing_context}</div>
+                      </div>
+                    </li>
+                  ))}
+                  {conflicts.length > 5 && (
+                    <li className="text-muted-foreground pl-2">
+                      {t('semantic-models:import.conflict.more', { count: conflicts.length - 5, defaultValue: 'and {{count}} more' })}
+                    </li>
+                  )}
+                </ul>
+                <div className="space-y-2 pt-2 border-t">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="conflict-mode"
+                      value="update"
+                      checked={conflictMode === 'update'}
+                      onChange={() => setConflictMode('update')}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="text-xs font-medium">{t('semantic-models:import.conflict.update', 'Update existing')}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {t('semantic-models:import.conflict.updateDesc', 'Overwrite existing concepts with new definitions')}
+                      </div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="conflict-mode"
+                      value="skip"
+                      checked={conflictMode === 'skip'}
+                      onChange={() => setConflictMode('skip')}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="text-xs font-medium">{t('semantic-models:import.conflict.skip', 'Import only new')}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {t('semantic-models:import.conflict.skipDesc', 'Skip conflicting IRIs, import the rest')}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
             )}
 
             {/* Per-file outcomes + structural summary (CB-10, partial) */}

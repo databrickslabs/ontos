@@ -239,7 +239,11 @@
     "submit": "Submit"
   },
   "concept": {
-    "inReview": "In Review"
+    "inReview": "In Review",
+    "reviewerComment": "Reviewer comment",
+    "sparql": "SPARQL",
+    "sparqlTitle": "SPARQL query",
+    "sparqlDescription": "Query the knowledge graph. Pre-seeded with this concept."
   },
   "hierarchy": {
     "title": "Hierarchy",

@@ -232,6 +232,20 @@ export default function DataProducts() {
       });
     }
 
+    // Apply free-text filter from URL parameter (?q=). Used by deep-links that
+    // hold a product slug/name rather than a UUID (e.g. the concept
+    // linked-objects panel), so the user lands on a filtered list instead of a
+    // 404 on /data-products/<slug>.
+    const qFilter = searchParams.get('q');
+    if (qFilter) {
+      const q = qFilter.toLowerCase();
+      filtered = filtered.filter(p => {
+        const title = (p.info?.title || '').toLowerCase();
+        const id = (p.id || '').toLowerCase();
+        return title.includes(q) || id.includes(q);
+      });
+    }
+
     // Apply subscription filter
     if (showMySubscriptions) {
       filtered = filtered.filter(p => mySubscribedProductIds.has(p.id));

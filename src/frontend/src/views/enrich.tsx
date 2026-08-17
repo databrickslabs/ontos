@@ -154,6 +154,15 @@ function InfoDot({ text }: { text: string }) {
   );
 }
 
+function readableName(s: string): string {
+  // Extract the last segment after /, #, or .
+  const lastSlash = s.lastIndexOf('/');
+  const lastHash = s.lastIndexOf('#');
+  const lastDot = s.lastIndexOf('.');
+  const lastIdx = Math.max(lastSlash, lastHash, lastDot);
+  return lastIdx >= 0 ? s.substring(lastIdx + 1) : s;
+}
+
 export default function EnrichView() {
   const { t } = useTranslation(['concepts', 'term-mapping', 'common']);
   const { hasPermission } = usePermissions();
@@ -256,7 +265,7 @@ export default function EnrichView() {
         via: t('enrich.deliver.tags.via', 'via uc_tag_sync'),
         // Real coverage from /api/knowledge/tag-delivery-stats: eligible links,
         // pending = created since last successful sync. Omitted until loaded.
-        coverage: tagStats
+        coverage: tagStats && tagStats.job_installed
           ? {
               synced: tagStats.synced,
               total: tagStats.eligible,
@@ -266,16 +275,21 @@ export default function EnrichView() {
                 : undefined,
             }
           : undefined,
-        note: t(
-          'enrich.deliver.tags.note',
-          'Tag delivery runs through the shared uc_tag_sync job, which also covers other aspects beyond semantic assignment. Configure its scope and schedule in Settings > Jobs.',
-        ),
-        actionable: platform === 'uc',
+        note: tagStats && !tagStats.job_installed
+          ? t(
+              'enrich.deliver.tags.notConfigured',
+              'Tag delivery is not configured. The uc_tag_sync job needs to be installed in Settings > Jobs to activate this.',
+            )
+          : t(
+              'enrich.deliver.tags.note',
+              'Tag delivery runs through the shared uc_tag_sync job, which also covers other aspects beyond semantic assignment. Configure its scope and schedule in Settings > Jobs.',
+            ),
+        actionable: platform === 'uc' && (!tagStats || tagStats.job_installed),
         // Shared job — manage scope/schedule in Settings, not from here.
         manageHref: '/settings/jobs',
         // Make the pending count clickable to list the actual pending changes.
         onShowPending:
-          tagStats && tagStats.pending > 0 ? () => setPendingOpen(true) : undefined,
+          tagStats && tagStats.pending > 0 && tagStats.job_installed ? () => setPendingOpen(true) : undefined,
       },
       {
         id: 'descriptions',
@@ -303,7 +317,7 @@ export default function EnrichView() {
         actionable: false,
       },
     ],
-    [t, platform, tagStats],
+    [t, platform, tagStats?.job_installed, tagStats?.synced, tagStats?.eligible, tagStats?.pending, tagStats?.last_run_at],
   );
 
   return (
@@ -463,9 +477,9 @@ export default function EnrichView() {
               (tagStats?.pending_items ?? []).map((it) => (
                 <div key={`${it.entity_type}:${it.entity_id}:${it.iri}`} className="flex items-center gap-3 py-2 text-sm">
                   <div className="min-w-0 flex-1">
-                    <div className="font-mono text-xs truncate" title={it.entity_id}>{it.entity_id}</div>
-                    <div className="text-xs text-muted-foreground truncate" title={it.iri}>
-                      {t('enrich.deliver.pendingLinkedTo', 'linked to')} {it.label || it.iri}
+                    <div className="truncate" title={it.iri}>{it.label || readableName(it.iri)}</div>
+                    <div className="text-xs text-muted-foreground truncate" title={it.entity_id}>
+                      {t('enrich.deliver.pendingLinkedTo', 'linked to')} {readableName(it.entity_id)}
                     </div>
                   </div>
                   <Badge variant="outline" className="shrink-0 text-[10px]">{it.entity_type}</Badge>

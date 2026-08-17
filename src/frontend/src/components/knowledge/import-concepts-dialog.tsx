@@ -21,6 +21,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import type { KnowledgeCollection } from '@/types/ontology';
 import { Loader2, Upload, FileUp, X, Info } from 'lucide-react';
 
@@ -74,6 +75,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   onImported,
 }) => {
   const { t } = useTranslation(['semantic-models', 'common']);
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [schemeStrategy, setSchemeStrategy] = useState<SchemeStrategy>('merge');
@@ -99,6 +101,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   }
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
   const [conflictMode, setConflictMode] = useState<'skip' | 'update'>('update');
+  const [showAllConflicts, setShowAllConflicts] = useState(false);
 
   const editableCollections = collections.filter((c) => c.is_editable);
 
@@ -205,6 +208,9 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     setError(null);
     setOutcomes(null);
     setPreviews([]);
+    setConflicts([]);
+    setConflictMode('update');
+    setShowAllConflicts(false);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -494,10 +500,36 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       await deleteScheme(createdIri);
       setSelectedCollectionIri(CREATE_NEW);
     }
-    setOutcomes(results);
     setIsUploading(false);
-    if (anyOk) onImported();
-    if (!anyOk) {
+    if (anyOk) {
+      onImported();
+      // Import succeeded: clear the conflict-resolution UI so we don't leave
+      // lingering radio choices behind.
+      setConflicts([]);
+      setShowAllConflicts(false);
+
+      const okCount = results.filter((r) => r.ok).length;
+      const held = results.some((r) => r.ok && r.status === 'held');
+      const allOk = results.every((r) => r.ok);
+      // Clean full success (nothing failed, nothing held for approval): show a
+      // success toast and return to the main view instead of parking on a
+      // summary panel with a Close button.
+      if (allOk && !held) {
+        toast({
+          title: t('common:toast.success'),
+          description: t('semantic-models:import.summaryToast', {
+            files: okCount,
+            defaultValue: 'Imported {{files}} file(s).',
+          }),
+        });
+        handleOpenChange(false);
+        return;
+      }
+      // Partial success or held-for-approval: keep the dialog open with the
+      // outcome summary so the user sees per-file results / the review link.
+      setOutcomes(results);
+    } else {
+      setOutcomes(results);
       setError(t('semantic-models:import.allFailed',
         'No files could be imported. See per-file errors below.'));
     }
@@ -516,7 +548,10 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      {/* Cap the dialog height and let the BODY scroll — a long conflict list
+          (many IRIs) previously overflowed the viewport with no way to scroll
+          to the action buttons. Header + footer stay pinned; middle scrolls. */}
+      <DialogContent className="sm:max-w-[520px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{t('semantic-models:import.title', 'Import files')}</DialogTitle>
           <DialogDescription>
@@ -527,8 +562,8 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <div className="grid gap-4 py-4 overflow-y-auto min-h-0 flex-1 pr-1">
             {/* File picker (multiple) */}
             <div className="grid gap-2">
               <Label>{t('semantic-models:import.sourceFiles', 'Source files')}</Label>
@@ -728,8 +763,8 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                     'The following concepts already exist in this scheme. Choose how to handle them:'
                   )}
                 </p>
-                <ul className="space-y-1 text-xs">
-                  {conflicts.slice(0, 5).map((c) => (
+                <ul className="space-y-1 text-xs max-h-48 overflow-y-auto pr-1">
+                  {(showAllConflicts ? conflicts : conflicts.slice(0, 5)).map((c) => (
                     <li key={c.iri} className="flex items-start gap-2 pl-2">
                       <span className="shrink-0 mt-0.5">•</span>
                       <div className="min-w-0 flex-1">
@@ -738,12 +773,21 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                       </div>
                     </li>
                   ))}
-                  {conflicts.length > 5 && (
-                    <li className="text-muted-foreground pl-2">
-                      {t('semantic-models:import.conflict.more', { count: conflicts.length - 5, defaultValue: 'and {{count}} more' })}
-                    </li>
-                  )}
                 </ul>
+                {conflicts.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllConflicts((v) => !v)}
+                    className="self-start text-xs font-medium text-primary hover:underline"
+                  >
+                    {showAllConflicts
+                      ? t('semantic-models:import.conflict.showLess', 'Show fewer')
+                      : t('semantic-models:import.conflict.showAll', {
+                          count: conflicts.length,
+                          defaultValue: 'Check detailed list ({{count}})',
+                        })}
+                  </button>
+                )}
                 <div className="space-y-2 pt-2 border-t">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input

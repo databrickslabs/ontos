@@ -190,7 +190,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_create": ["catalog", "schema", "table", "data_contract", "data_product", "domain"],
     "on_update": ["data_contract", "data_product", "domain"],
     "on_delete": ["data_contract", "data_product", "domain"],
-    "on_status_change": ["data_contract", "data_product", "data_asset_review"],
+    "on_status_change": ["data_contract", "data_product", "data_asset_review", "ontology_concept"],
     "on_publish": ["data_contract", "data_product"],
     "on_unpublish": ["data_contract", "data_product"],
     "on_certify": ["data_contract", "data_product"],
@@ -204,7 +204,9 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_request_access": ["access_grant", "project", "role"],
     "on_request_publish": ["data_contract", "data_product"],
     "on_request_certify": ["data_contract", "data_product"],
-    "on_request_status_change": ["data_product"],
+    # Concept curation: ontology_concept = single-concept Request Revision / review
+    # ping-pong (P2); concept_changeset = one-approval bulk RDF upload gate (P3).
+    "on_request_status_change": ["data_product", "ontology_concept", "concept_changeset"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
     "on_unsubscribe": ["subscription", "data_product", "data_contract"],
     "on_revoke": ["access_grant"],
@@ -217,7 +219,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "for_request_review": ["data_contract", "data_product", "data_asset_review"],
     "for_request_publish": ["data_contract", "data_product"],
     "for_request_certify": ["data_contract", "data_product"],
-    "for_request_status_change": ["data_product"],
+    "for_request_status_change": ["data_product", "ontology_concept", "concept_changeset"],
     "for_approval_response": [],  # system trigger — any entity
     # Background jobs
     "on_job_success": ["job"],

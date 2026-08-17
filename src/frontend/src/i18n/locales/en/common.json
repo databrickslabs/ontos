@@ -346,7 +346,10 @@
       "data_asset_review": "Asset Review",
       "job": "Job",
       "subscription": "Subscription",
-      "user": "User"
+      "user": "User",
+      "ontology_concept": "Concept",
+      "ontology_collection": "Collection",
+      "concept_changeset": "Concept Changeset"
     },
     "stepTypes": {
       "validation": "Validation",

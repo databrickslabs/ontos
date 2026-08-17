@@ -376,7 +376,7 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   before_update: ['data_contract'],
   // Status & lifecycle
   before_status_change: ['data_contract', 'data_product'],
-  on_status_change: ['data_contract', 'data_product', 'data_asset_review'],
+  on_status_change: ['data_contract', 'data_product', 'data_asset_review', 'ontology_concept'],
   on_publish: ['data_contract', 'data_product'],
   on_unpublish: ['data_contract', 'data_product'],
   // Certification
@@ -387,7 +387,8 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   on_request_review: ['data_contract', 'data_product', 'data_asset_review'],
   on_request_access: ['access_grant', 'role', 'project'],
   on_request_publish: ['data_contract', 'data_product'],
-  on_request_status_change: ['data_product'],
+  // Concept curation: single-concept review ping-pong + bulk-upload changeset gate.
+  on_request_status_change: ['data_product', 'ontology_concept', 'concept_changeset'],
   // Job triggers
   on_job_success: ['job'],
   on_job_failure: ['job'],

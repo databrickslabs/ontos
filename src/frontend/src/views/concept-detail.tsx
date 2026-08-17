@@ -15,6 +15,7 @@ import {
   User,
   Network,
   Save,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { PrincipalPicker } from '@/components/common/principal-picker';
 import {
   SkeletonLine,
   PanelSkeleton,
@@ -200,6 +212,9 @@ export default function ConceptDetailView() {
   // Defaults to the relations list (per wireframe); graph is opt-in.
   const [relationsView, setRelationsView] = useState<'list' | 'graph'>('list');
   const [deprecateOpen, setDeprecateOpen] = useState(false);
+  const [submitReviewOpen, setSubmitReviewOpen] = useState(false);
+  const [reviewerEmail, setReviewerEmail] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
   const selectedLanguage = i18n.language?.split('-')[0] || 'en';
 
   // Fetch the focused concept by IRI. This is intentionally separated from
@@ -401,8 +416,17 @@ export default function ConceptDetailView() {
 
   // Walk the status chain one step at a time from current to target.
   // If 'deprecate' is encountered along the way, stop and open the deprecate dialog.
+  // If 'submit-review' is target, open the reviewer dialog instead.
   const handleStatusTransition = async (targetStatus: string) => {
     if (!concept) return;
+
+    // Special case: if target is 'under_review', open the submit-review dialog
+    if (targetStatus === 'under_review') {
+      setReviewerEmail(null);
+      setReviewNotes('');
+      setSubmitReviewOpen(true);
+      return;
+    }
 
     // Special case: if target is 'deprecated', open the dialog instead of walking blindly
     if (targetStatus === 'deprecated') {
@@ -464,6 +488,73 @@ export default function ConceptDetailView() {
       });
       // Re-sync to the TRUE backend status even on failure
       await fetchConcept();
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!concept) return;
+    setStatusBusy(true);
+    try {
+      const body: any = {};
+      if (reviewerEmail) body.reviewer_email = reviewerEmail;
+      if (reviewNotes.trim()) body.notes = reviewNotes;
+
+      const response = await fetch(
+        `/api/knowledge/concepts/by-iri/submit-review?iri=${encodeURIComponent(concept.iri)}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({} as any));
+        throw new Error(err?.detail || 'Failed to submit for review');
+      }
+      const result = await response.json();
+      const governed = result?.governed;
+      toast({
+        title: t('common:toast.success'),
+        description: governed
+          ? t('semantic-models:messages.submitReviewGoverned', 'Submitted for review — awaiting approval.')
+          : t('semantic-models:messages.submitReview', 'Submitted for review'),
+      });
+      setSubmitReviewOpen(false);
+      bumpKnowledgeGraphRefresh('concept-status');
+      await fetchConcept();
+    } catch (err: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const handleWithdrawReview = async () => {
+    if (!concept) return;
+    setStatusBusy(true);
+    try {
+      const response = await fetch(
+        `/api/knowledge/concepts/by-iri/withdraw-review?iri=${encodeURIComponent(concept.iri)}`,
+        { method: 'POST' },
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({} as any));
+        throw new Error(err?.detail || 'Failed to withdraw review');
+      }
+      toast({
+        title: t('common:toast.success'),
+        description: t('semantic-models:messages.withdrawReview', 'Review withdrawn'),
+      });
+      bumpKnowledgeGraphRefresh('concept-status');
+      await fetchConcept();
+    } catch (err: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: err?.message,
+        variant: 'destructive',
+      });
     } finally {
       setStatusBusy(false);
     }
@@ -564,6 +655,16 @@ export default function ConceptDetailView() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {currentStatus === 'under_review' && canWrite && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={statusBusy}
+              onClick={handleWithdrawReview}
+            >
+              {t('semantic-models:lifecycle.withdrawReview', 'Withdraw Review')}
+            </Button>
+          )}
           {/* "Save new version" is available for any non-retired editable concept,
               NOT just drafts — publishing v2 is exactly how a certified concept's
               definition changes. Edit/Delete stay draft-only (isEditable).
@@ -633,6 +734,19 @@ export default function ConceptDetailView() {
             </span>
           )}
         </div>
+        {/* In-review callout with reviewComment if present */}
+        {concept.status === 'under_review' && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-2.5 space-y-1.5">
+            <div className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
+              {t('semantic-models:concept.inReview', 'In Review')}
+            </div>
+            {(concept as any)?.review_comment && (
+              <div className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">
+                {(concept as any).review_comment}
+              </div>
+            )}
+          </div>
+        )}
         {/* Raw IRI + external link — ontology layer, advanced only, own row. */}
         <div className="adv-only flex items-center gap-2 text-xs text-muted-foreground min-w-0">
           <code
@@ -1012,6 +1126,63 @@ export default function ConceptDetailView() {
           await fetchConcept();
         }}
       />
+
+      <Dialog open={submitReviewOpen} onOpenChange={setSubmitReviewOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t('semantic-models:submitReview.title', 'Submit for Review')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('semantic-models:submitReview.description', 'Assign an optional reviewer and add notes.')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reviewer-email">
+                {t('semantic-models:submitReview.reviewer', 'Reviewer (optional)')}
+              </Label>
+              <PrincipalPicker
+                id="reviewer-email"
+                accepts={['user', 'group']}
+                value={reviewerEmail}
+                onChange={(next) => setReviewerEmail(next ?? null)}
+                placeholder={t('semantic-models:submitReview.reviewerPlaceholder', 'Select a reviewer...')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="review-notes">
+                {t('semantic-models:submitReview.notes', 'Notes (optional)')}
+              </Label>
+              <Textarea
+                id="review-notes"
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder={t('semantic-models:submitReview.notesPlaceholder', 'Add context or instructions...')}
+                className="min-h-24 resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSubmitReviewOpen(false)}
+              disabled={statusBusy}
+            >
+              {t('common:actions.cancel', 'Cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmitReview}
+              disabled={statusBusy}
+            >
+              {statusBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('semantic-models:submitReview.submit', 'Submit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

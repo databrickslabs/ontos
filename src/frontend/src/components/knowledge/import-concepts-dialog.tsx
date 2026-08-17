@@ -40,10 +40,13 @@ interface ImportConceptsDialogProps {
 // Per-file structural summary once imported. `triples_imported` is what the
 // backend actually returns today; the richer breakdown (concepts by type,
 // top-level vs child, dangling refs) is a TODO (see CB-10 note below).
+// NEW: `status` tracks 'applied' | 'held' for governed uploads; review_request_id if present.
 interface FileImportOutcome {
   name: string;
   ok: boolean;
   triplesImported?: number;
+  status?: 'applied' | 'held';
+  review_request_id?: string;
   error?: string;
 }
 
@@ -245,9 +248,9 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   };
 
   // Apply a staged preview by its token (the server holds the parsed content;
-  // confirm applies it). Used internally by the single Import action — there is
-  // no separate "Apply changes" button; the changelog is shown as FYI only.
-  const confirmPreviewToken = async (token: string): Promise<void> => {
+  // confirm applies it). Returns the response payload which may include status ('applied' | 'held')
+  // and review_request_id if governed. Used internally by the single Import action.
+  const confirmPreviewToken = async (token: string): Promise<any> => {
     const res = await fetch(
       `/api/semantic-models/uploads/preview/${encodeURIComponent(token)}/confirm`,
       { method: 'POST' },
@@ -256,6 +259,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Import failed (${res.status})`);
     }
+    return res.json();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -275,8 +279,13 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       const results: FileImportOutcome[] = [];
       for (const pv of previews) {
         try {
-          await confirmPreviewToken(pv.preview_token);
-          results.push({ name: pv.fileName, ok: true });
+          const confirmResponse = await confirmPreviewToken(pv.preview_token);
+          results.push({
+            name: pv.fileName,
+            ok: true,
+            status: confirmResponse?.status || 'applied',
+            review_request_id: confirmResponse?.review_request_id,
+          });
         } catch (err: any) {
           results.push({ name: pv.fileName, ok: false, error: err.message });
         }
@@ -310,10 +319,20 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
         // A brand-new/empty scheme should return {mode:'imported'}. If the target
         // turned out non-empty and returned a preview, confirm it (edge case).
         if (data?.mode === 'preview') {
-          await confirmPreviewToken(data.preview_token);
-          results.push({ name: file.name, ok: true });
+          const confirmResponse = await confirmPreviewToken(data.preview_token);
+          results.push({
+            name: file.name,
+            ok: true,
+            status: confirmResponse?.status || 'applied',
+            review_request_id: confirmResponse?.review_request_id,
+          });
         } else {
-          results.push({ name: file.name, ok: true, triplesImported: data.triples_imported ?? 0 });
+          results.push({
+            name: file.name,
+            ok: true,
+            triplesImported: data.triples_imported ?? 0,
+            status: data?.status || 'applied',
+          });
         }
       } catch (err: any) {
         results.push({ name: file.name, ok: false, error: err.message });
@@ -541,12 +560,17 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                 {outcomes.some((r) => r.ok) && (
                   <Alert>
                     <AlertDescription>
-                      {t('semantic-models:import.summary', {
-                        files: outcomes.filter((r) => r.ok).length,
-                        count: totalTriples,
-                        defaultValue:
-                          'Imported {{files}} file(s), {{count}} triples total.',
-                      })}
+                      {outcomes.some((r) => r.ok && r.status === 'held')
+                        ? t('semantic-models:import.summaryPending', {
+                            files: outcomes.filter((r) => r.ok).length,
+                            defaultValue: 'Upload submitted for approval ({{files}} file(s))',
+                          })
+                        : t('semantic-models:import.summary', {
+                            files: outcomes.filter((r) => r.ok).length,
+                            count: totalTriples,
+                            defaultValue:
+                              'Imported {{files}} file(s), {{count}} triples total.',
+                          })}
                       {/* TODO(cb-v2): needs structural summary from import
                           endpoint — # concepts by type, top-level vs child,
                           dangling refs. Endpoint returns triples_imported only. */}
@@ -561,12 +585,25 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                     >
                       <span className="font-mono truncate flex-1">{r.name}</span>
                       {r.ok ? (
-                        <span className="text-muted-foreground shrink-0">
-                          {t('semantic-models:import.fileOk', {
-                            count: r.triplesImported ?? 0,
-                            defaultValue: '{{count}} triples',
-                          })}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {r.status === 'held' ? (
+                            <span className="text-amber-600 dark:text-amber-400">
+                              {t('semantic-models:import.filePending', 'Pending approval')}
+                              {r.review_request_id && (
+                                <span className="text-muted-foreground ml-1 font-mono text-[10px]">
+                                  ({r.review_request_id.substring(0, 8)})
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {t('semantic-models:import.fileOk', {
+                                count: r.triplesImported ?? 0,
+                                defaultValue: '{{count}} triples',
+                              })}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-destructive shrink-0 truncate max-w-[220px]">
                           {r.error}

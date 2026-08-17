@@ -18,8 +18,14 @@ from src.utils.semantic_model_title_candidates import (
     pick_auto_display_name,
 )
 from src.utils.rdf_serialization_display import serialization_label_for_graph_taxonomy
-from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep, AuditCurrentUserDep
+from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep, AuditCurrentUserDep, AuthorizationManagerDep
 from src.common.authorization import PermissionChecker
+# Module-level so the review-bypass guard can reference them (and tests can
+# monkeypatch them). WorkflowsManager gives a NON-firing existence check for a
+# governing concept workflow; AuthorizationManager gates the admin override.
+from src.controller.workflows_manager import WorkflowsManager
+from src.controller.authorization_manager import AuthorizationManager
+from src.models.process_workflows import TriggerType, EntityType
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 from src.owl.owl_parser import clean_truncated_turtle
@@ -1772,6 +1778,64 @@ async def _withdraw_concept_review_payload(
         raise HTTPException(status_code=500, detail="Failed to withdraw review")
 
 
+def _guard_review_bypass(
+    manager: "SemanticModelsManager",
+    db,
+    concept_iri: str,
+    target_status: str,
+    current_user,
+    auth_manager: AuthorizationManager,
+) -> None:
+    """Raise 403 if a non-admin tries to advance a governed concept past review
+    (under_review -> approved/published) via a direct status flip instead of the
+    review decision. Admins may override.
+
+    Only guards when the concept's CURRENT status is ``under_review`` and the
+    ``target_status`` advances it past review. Ungoverned concepts stay
+    zero-friction. On any unexpected error probing the workflow subsystem we log
+    and treat the concept as ungoverned (allow), matching the codebase's
+    zero-friction-on-error posture.
+    """
+    if target_status not in ("approved", "published"):
+        return
+
+    try:
+        concept = manager.get_concept(concept_iri)
+    except Exception:
+        concept = None
+    if not concept or concept.get("status") != "under_review":
+        return
+
+    # Admins may always override the workflow.
+    if auth_manager.is_user_ontos_admin(getattr(current_user, "groups", None)):
+        return
+
+    # Non-firing existence check: is there a governing workflow for concepts?
+    try:
+        wfs = WorkflowsManager(db).get_workflows_for_trigger(
+            trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE,
+            entity_type=EntityType.ONTOLOGY_CONCEPT,
+        )
+        governed = bool(wfs)
+    except Exception as e:
+        logger.warning(
+            "Review-bypass guard could not check governing workflows for %s; "
+            "treating as ungoverned (allow). Error: %s",
+            concept_iri, e,
+        )
+        governed = False
+
+    if governed:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This concept is under review and governed by an approval "
+                "workflow. Advance it through the review decision "
+                "(approve / request changes), not a direct status change."
+            ),
+        )
+
+
 def _set_concept_status_payload(
     manager: SemanticModelsManager,
     concept_iri: str,
@@ -2045,11 +2109,14 @@ async def withdraw_concept_review_by_iri(
 @router.post('/knowledge/concepts/by-iri/approve')
 async def approve_concept_by_iri(
     current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
     concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
     """Approve a concept that is under review."""
+    _guard_review_bypass(manager, db, concept_iri, "approved", current_user, auth_manager)
     return _set_concept_status_payload(
         manager, concept_iri, "approved", current_user.email, error_verb="approve"
     )
@@ -2058,11 +2125,14 @@ async def approve_concept_by_iri(
 @router.post('/knowledge/concepts/by-iri/publish')
 async def publish_concept_by_iri(
     current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
     concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
     """Publish an approved concept (auto-approves if under_review)."""
+    _guard_review_bypass(manager, db, concept_iri, "published", current_user, auth_manager)
     return _publish_concept_payload(manager, concept_iri, current_user.email)
 
 
@@ -2208,10 +2278,13 @@ async def submit_concept_for_review(
 async def approve_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
     """DEPRECATED: use ``POST /knowledge/concepts/by-iri/approve?iri=<urlencoded-iri>``."""
+    _guard_review_bypass(manager, db, concept_iri, "approved", current_user, auth_manager)
     return _set_concept_status_payload(
         manager, concept_iri, "approved", current_user.email, error_verb="approve"
     )
@@ -2221,10 +2294,13 @@ async def approve_concept(
 async def publish_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
     """DEPRECATED: use ``POST /knowledge/concepts/by-iri/publish?iri=<urlencoded-iri>``."""
+    _guard_review_bypass(manager, db, concept_iri, "published", current_user, auth_manager)
     return _publish_concept_payload(manager, concept_iri, current_user.email)
 
 

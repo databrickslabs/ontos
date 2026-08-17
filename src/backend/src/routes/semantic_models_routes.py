@@ -962,6 +962,7 @@ async def get_upload_preview(
 async def confirm_upload_preview(
     preview_token: str,
     current_user: CurrentUserDep,
+    conflict_mode: Optional[str] = Query(None, description="Override cross-scheme conflict handling: block | skip | update (defaults to the mode chosen at preview time)"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
 ) -> UploadConfirmResponse:
@@ -989,7 +990,8 @@ async def confirm_upload_preview(
                 detail=f"Unknown or already-applied preview token: {preview_token}",
             )
         result = manager.gate_or_apply_upload(
-            stash.context_name, preview_token, actor=current_user.email
+            stash.context_name, preview_token, actor=current_user.email,
+            conflict_mode=conflict_mode,
         )
         return UploadConfirmResponse(
             preview_token=preview_token,
@@ -1380,10 +1382,40 @@ async def export_knowledge_collection(
         raise HTTPException(status_code=500, detail="Failed to export collection")
 
 
+@router.post('/knowledge/collections/{collection_iri:path}/import/conflicts')
+async def detect_import_conflicts_for_collection(
+    collection_iri: str,
+    file: UploadFile = File(...),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Pre-check an upload for cross-scheme IRI conflicts BEFORE importing.
+
+    Parses the uploaded file (same read as /import) and returns the typed subject
+    IRIs that already live in ANOTHER scheme, so the UI can render the
+    block/skip/update choice up front rather than discovering conflicts via a
+    failed import. Empty list = the import is safe in any mode.
+
+    Response: {conflicts: [{iri, existing_context, existing_label}], count}
+    """
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8')
+        format = "turtle" if file.filename and file.filename.endswith('.ttl') else "xml"
+        conflicts = manager.detect_import_conflicts(collection_iri, content_str, format=format)
+        return {'conflicts': conflicts, 'count': len(conflicts)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error detecting import conflicts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to detect import conflicts")
+
+
 @router.post('/knowledge/collections/{collection_iri:path}/import')
 async def import_to_knowledge_collection(
     collection_iri: str,
     file: UploadFile = File(...),
+    conflict_mode: str = Query("block", description="Cross-scheme conflict handling: block | skip | update"),
     current_user: CurrentUserDep = None,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
@@ -1396,9 +1428,14 @@ async def import_to_knowledge_collection(
     confirm endpoint. A FIRST import into an empty collection is a plain add
     (concepts stamped Draft), since there is nothing to diff against.
 
+    conflict_mode governs cross-scheme IRI conflicts (an incoming IRI already
+    owned by ANOTHER scheme): 'block' (default) refuses as before; 'skip' imports
+    only the non-conflicting subjects; 'update' applies the file's values to the
+    conflicting concept in its EXISTING scheme as a versioned update.
+
     Response is one of:
       - first import:  {mode:'imported', success, triples_imported}
-      - re-upload:     {mode:'preview', preview_token, summary, modified, new, removed}
+      - re-upload:     {mode:'preview', preview_token, conflict_mode, conflicts, summary, ...}
     """
     try:
         content = await file.read()
@@ -1419,7 +1456,10 @@ async def import_to_knowledge_collection(
                 temp_graph.parse(data=parse_input, format=rdf_format)
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Invalid {rdf_format} content: {e}")
-            preview = manager.preview_upload(collection_iri, temp_graph, source_filename=file.filename)
+            preview = manager.preview_upload(
+                collection_iri, temp_graph, source_filename=file.filename,
+                conflict_mode=conflict_mode,
+            )
             return {'mode': 'preview', **preview}
 
         count = manager.import_rdf_to_collection(
@@ -1432,6 +1472,7 @@ async def import_to_knowledge_collection(
             # this, imported classes/properties showed no status at all.
             default_status="draft",
             source_filename=file.filename,
+            conflict_mode=conflict_mode,
         )
         return {'mode': 'imported', 'success': True, 'triples_imported': count}
     except HTTPException:

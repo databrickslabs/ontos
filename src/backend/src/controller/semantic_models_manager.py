@@ -576,7 +576,8 @@ class SemanticModelsManager(SearchableAsset):
             )
 
     def apply_upload_as_versioning_event(
-        self, context_name: str, incoming_graph, actor: Optional[str] = None
+        self, context_name: str, incoming_graph, actor: Optional[str] = None,
+        conflict_mode: str = "block",
     ) -> Dict[str, Any]:
         """Apply a re-upload as ONE atomic bulk versioning event (P0-4).
 
@@ -592,6 +593,16 @@ class SemanticModelsManager(SearchableAsset):
           - UNCHANGED -> nothing (this is what makes a byte-identical re-upload
                         a no-op: ZERO new versions).
 
+        conflict_mode governs cross-scheme IRI conflicts (subjects that already
+        live in a DIFFERENT scheme) in the SAME atomic transaction:
+          - 'block'  -> raise (conflicts here mean the preview should not have
+                        been created; fail closed).
+          - 'skip'   -> drop conflicting subjects before bucketing (they never
+                        touch ``context_name`` or their home scheme).
+          - 'update' -> apply the file's values to each conflicting concept in
+                        its EXISTING (home) scheme (publish_concept_version),
+                        and drop them from the target bucketing.
+
         ATOMICITY: the composed primitives each ``commit()`` internally. To make
         the whole changeset one Postgres transaction we neutralize the inner
         commits (redirect ``commit`` -> ``flush``) for the duration of the apply,
@@ -604,14 +615,34 @@ class SemanticModelsManager(SearchableAsset):
         """
         from src.controller.concept_diff import compute_concept_diff
 
+        mode = self._normalize_conflict_mode(conflict_mode)
+        raw_conflicts = self._detect_cross_scheme_iri_conflicts(incoming_graph, context_name)
+        if raw_conflicts and mode == "block":
+            self._raise_on_cross_scheme_conflict(incoming_graph, context_name)
+
+        conflict_iris = sorted({iri for iri, _ in raw_conflicts})
+        # Bucket only the TARGET-scheme portion. Keep the full graph around for
+        # the 'update' path (it extracts the conflicting subjects' field values).
+        full_graph = incoming_graph
+        target_graph = incoming_graph
+        if raw_conflicts and mode in ("skip", "update"):
+            target_graph = Graph()
+            for t in incoming_graph:
+                target_graph.add(t)
+            self._strip_subjects_from_graph(target_graph, conflict_iris)
+
         current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
-        diff = compute_concept_diff(incoming_graph, current_triples)
+        diff = compute_concept_diff(target_graph, current_triples)
 
         original_commit = self._db.commit
         try:
             # Neutralize the inner commits of the composed primitives so the whole
             # changeset lands in ONE transaction (atomicity contract).
             self._db.commit = self._db.flush  # type: ignore[assignment]
+
+            if raw_conflicts and mode == "update":
+                # Apply conflicting IRIs to their HOME scheme first (same txn).
+                self._apply_cross_scheme_updates(full_graph, conflict_iris, actor)
 
             for iri in diff.modified:
                 self._ensure_concept_version_v1(iri, context_name, actor)
@@ -621,7 +652,7 @@ class SemanticModelsManager(SearchableAsset):
                 )
 
             for iri in diff.new:
-                self._import_new_concept_from_graph(iri, incoming_graph, context_name, actor)
+                self._import_new_concept_from_graph(iri, target_graph, context_name, actor)
 
             for iri in diff.removed:
                 self.deprecate_concept(iri, deprecated_by=actor, bypass_editable_gate=True)
@@ -684,7 +715,13 @@ class SemanticModelsManager(SearchableAsset):
         import route to detect a re-upload (non-empty) vs a first import (empty)."""
         return rdf_triples_repo.list_by_context(self._db, context_name)
 
-    def preview_upload(self, context_name: str, incoming_graph, source_filename: Optional[str] = None) -> Dict[str, Any]:
+    def preview_upload(
+        self,
+        context_name: str,
+        incoming_graph,
+        source_filename: Optional[str] = None,
+        conflict_mode: str = "block",
+    ) -> Dict[str, Any]:
         """Dry-run a re-upload: compute the diff, stash the content, apply NOTHING.
 
         Runs the EXISTING ``compute_concept_diff`` against the currently stored
@@ -694,10 +731,17 @@ class SemanticModelsManager(SearchableAsset):
         the user re-uploading. reference_count reuses the P0-6 primitive so the
         steward sees "removing X, referenced by N".
 
+        conflict_mode governs cross-scheme IRI conflicts exactly as in
+        ``import_rdf_to_collection``: 'block' raises (default); 'skip'/'update'
+        fold the conflicts into the preview (returned under ``conflicts``) so the
+        confirm step can apply the chosen mode. The mode is stashed as a marker
+        triple so ``confirm``/apply recovers it migration-free.
+
         Returns::
 
-            {preview_token, context_name,
+            {preview_token, context_name, conflict_mode,
              summary: {unchanged, modified, new, removed},
+             conflicts: [{iri, existing_context, existing_label}],
              modified: [{iri, label, reference_count}],
              new:      [{iri, label}],
              removed:  [{iri, label, reference_count}]}
@@ -705,12 +749,28 @@ class SemanticModelsManager(SearchableAsset):
         from src.controller.concept_diff import compute_concept_diff
         from src.repositories.upload_preview_repository import upload_preview_repo
 
+        mode = self._normalize_conflict_mode(conflict_mode)
+
         # Re-uploading INTO THE SAME context is versioning (allowed). Only refuse
-        # when an incoming subject IRI already lives in a DIFFERENT scheme.
-        self._raise_on_cross_scheme_conflict(incoming_graph, context_name)
+        # when an incoming subject IRI already lives in a DIFFERENT scheme AND the
+        # mode is 'block'. skip/update fold the conflicts into the preview.
+        raw_conflicts = self._detect_cross_scheme_iri_conflicts(incoming_graph, context_name)
+        if raw_conflicts and mode == "block":
+            self._raise_on_cross_scheme_conflict(incoming_graph, context_name)
+
+        conflict_iris = sorted({iri for iri, _ in raw_conflicts})
+        # Diff the TARGET-scheme portion only (conflicts don't land here in
+        # skip/update), but STASH the full graph so 'update' apply can still
+        # extract the conflicting subjects' field values for the home scheme.
+        diff_graph = incoming_graph
+        if raw_conflicts and mode in ("skip", "update"):
+            diff_graph = Graph()
+            for t in incoming_graph:
+                diff_graph.add(t)
+            self._strip_subjects_from_graph(diff_graph, conflict_iris)
 
         current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
-        diff = compute_concept_diff(incoming_graph, current_triples)
+        diff = compute_concept_diff(diff_graph, current_triples)
 
         # Stamp the origin filename into the incoming graph (per typed subject)
         # BEFORE serialization so it round-trips through the stashed content_text
@@ -724,6 +784,16 @@ class SemanticModelsManager(SearchableAsset):
             for subj in typed_subjects:
                 if (subj, ONTOS.sourceFile, None) not in incoming_graph:
                     incoming_graph.add((subj, ONTOS.sourceFile, Literal(source_filename)))
+
+        # Persist the chosen mode as a marker triple so confirm/apply recovers it
+        # (migration-free — no column on the stash).
+        self._stamp_conflict_mode_marker(incoming_graph, mode)
+
+        # Friendly labels for the conflicts surfaced in the preview payload.
+        try:
+            _coll_labels = {c["iri"]: c.get("label") for c in self.get_collections()}
+        except Exception:
+            _coll_labels = {}
 
         # Serialize the incoming graph back to turtle for the stash so confirm can
         # re-parse it deterministically regardless of the original wire format.
@@ -740,6 +810,15 @@ class SemanticModelsManager(SearchableAsset):
         return {
             "preview_token": str(stash.token),
             "context_name": context_name,
+            "conflict_mode": mode,
+            "conflicts": [
+                {
+                    "iri": iri,
+                    "existing_context": ctx,
+                    "existing_label": _coll_labels.get(ctx),
+                }
+                for iri, ctx in raw_conflicts
+            ],
             "summary": diff.summary(),
             "modified": [
                 {
@@ -779,13 +858,21 @@ class SemanticModelsManager(SearchableAsset):
         graph.parse(data=content_for_parse, format=fmt)
         return graph
 
-    def confirm_upload(self, preview_token: str, actor: Optional[str] = None) -> Dict[str, Any]:
+    def confirm_upload(
+        self, preview_token: str, actor: Optional[str] = None,
+        conflict_mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Apply a previously previewed re-upload by token, then consume the stash.
 
         Loads the stashed content, re-parses it to a graph and runs the EXISTING
         ``apply_upload_as_versioning_event`` (never reimplements apply), then
         deletes the stash row so a token is single-use. Unknown/already-consumed
         tokens raise ``ValueError`` (the route maps this to 404).
+
+        conflict_mode: when None (the common case), recovered from the marker
+            triple ``preview_upload`` stamped on the stashed graph, so the mode
+            chosen at preview time survives to apply without a schema migration.
+            An explicit value (e.g. from the confirm route body) overrides it.
         """
         from src.repositories.upload_preview_repository import upload_preview_repo
 
@@ -796,7 +883,11 @@ class SemanticModelsManager(SearchableAsset):
         context_name = stash.context_name
         graph = self._load_stash_graph(stash)
 
-        summary = self.apply_upload_as_versioning_event(context_name, graph, actor=actor)
+        mode = conflict_mode or self._read_conflict_mode_marker(graph) or "block"
+
+        summary = self.apply_upload_as_versioning_event(
+            context_name, graph, actor=actor, conflict_mode=mode
+        )
 
         # Consume the stash (single-use). apply_* already committed the changeset.
         upload_preview_repo.delete(self._db, preview_token)
@@ -827,7 +918,8 @@ class SemanticModelsManager(SearchableAsset):
         return None
 
     def gate_or_apply_upload(
-        self, context_name: str, preview_token: str, actor: Optional[str] = None
+        self, context_name: str, preview_token: str, actor: Optional[str] = None,
+        conflict_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Confirm entrypoint for a re-upload: gate it iff the scheme is governed.
 
@@ -909,7 +1001,11 @@ class SemanticModelsManager(SearchableAsset):
 
         if not governed:
             # UNGOVERNED: apply directly + consume the token (today's behavior).
-            applied = self.confirm_upload(preview_token, actor=actor)
+            # conflict_mode (None) is recovered from the stash marker inside
+            # confirm_upload; an explicit value here overrides it.
+            applied = self.confirm_upload(
+                preview_token, actor=actor, conflict_mode=conflict_mode
+            )
             return {"status": "applied", "summary": applied, "governed": False}
 
         # GOVERNED: hold. Open ONE review; keep the stash token ALIVE.
@@ -5867,6 +5963,136 @@ class SemanticModelsManager(SearchableAsset):
             f"then re-import. Conflicts: {detail}"
         )
 
+    # A cross-scheme conflict is not always a dead-end: the same IRI + a new
+    # definition can be a legitimate versioned UPDATE of the concept where it
+    # already lives (an IRI denotes one concept globally). ``conflict_mode``
+    # turns the block into a CHOICE:
+    #   'block'  -> raise (default; preserves today's behavior).
+    #   'skip'   -> import only the non-conflicting subjects into the target;
+    #               leave conflicting IRIs owned by their existing scheme.
+    #   'update' -> do NOT create conflicting IRIs in the target; instead apply
+    #               the file's field values to each concept IN ITS EXISTING
+    #               (home) scheme as a normal versioned update.
+    _CONFLICT_MODES = ("block", "skip", "update")
+
+    # Marker triple stashed on a preview so ``confirm``/apply can recover the
+    # chosen mode without a schema migration (survives round-trip through the
+    # serialized stash content).
+    _CONFLICT_MODE_MARKER_SUBJECT = "urn:ontos:import#conflict-mode"
+
+    def _normalize_conflict_mode(self, conflict_mode: Optional[str]) -> str:
+        mode = (conflict_mode or "block").strip().lower()
+        if mode not in self._CONFLICT_MODES:
+            raise ValueError(
+                f"Invalid conflict_mode '{conflict_mode}'. "
+                f"Expected one of {self._CONFLICT_MODES}."
+            )
+        return mode
+
+    @staticmethod
+    def _strip_subjects_from_graph(graph, subject_iris) -> None:
+        """Remove every triple whose subject is one of ``subject_iris`` (in-place)."""
+        for iri in subject_iris:
+            subj = URIRef(iri)
+            for triple in list(graph.triples((subj, None, None))):
+                graph.remove(triple)
+
+    def _apply_cross_scheme_updates(
+        self, full_graph, conflict_iris, actor: Optional[str]
+    ) -> None:
+        """Apply the incoming file's field values to each conflicting concept IN
+        ITS EXISTING (home) scheme as a versioned update (the 'update' mode).
+
+        Reuses the SAME field extraction the re-upload diff engine uses
+        (``_extract_changes``) and the SAME versioning primitive
+        (``publish_concept_version``), so 'update' produces the same field set as
+        a normal MODIFIED bucket. Never forks the IRI into the target scheme.
+
+        NO transaction management here — the CALLER wraps this in an atomic block
+        (neutralized inner commits + one real commit) so a failure never
+        half-applies. ``full_graph`` must still contain the conflicting subjects'
+        triples (i.e. call this BEFORE stripping them from the target import).
+        """
+        from src.controller.concept_diff import _extract_changes
+
+        for iri in conflict_iris:
+            existing = self.get_concept(iri)
+            if not existing:
+                # No resolvable home concept (shouldn't happen — it was a
+                # conflict); skip rather than fork it into the target.
+                continue
+            home_context = existing.get("source_context")
+            self._ensure_concept_version_v1(iri, home_context, actor)
+            self.publish_concept_version(
+                iri,
+                changes=_extract_changes(full_graph, iri),
+                published_by=actor,
+                bypass_editable_gate=True,
+            )
+
+    def _stamp_conflict_mode_marker(self, graph, conflict_mode: str) -> None:
+        """Embed the chosen conflict_mode as a marker triple in a preview graph.
+
+        The marker subject carries no concept rdf:type, so ``compute_concept_diff``
+        ignores it and it is never imported as a concept. It only survives the
+        stash round-trip so ``confirm``/apply can recover the mode migration-free.
+        """
+        graph.set((
+            URIRef(self._CONFLICT_MODE_MARKER_SUBJECT),
+            ONTOS.conflictMode,
+            Literal(conflict_mode),
+        ))
+
+    def _read_conflict_mode_marker(self, graph) -> Optional[str]:
+        val = graph.value(
+            URIRef(self._CONFLICT_MODE_MARKER_SUBJECT), ONTOS.conflictMode
+        )
+        return str(val) if val is not None else None
+
+    def detect_import_conflicts(
+        self, collection_iri: str, content: str, format: str = "turtle"
+    ) -> List[Dict[str, Any]]:
+        """Detect cross-scheme IRI conflicts for a would-be import (a PRE-CHECK).
+
+        Parses ``content`` and returns the list of typed subject IRIs that already
+        live in ANOTHER scheme, so the UI can render the block/skip/update choice
+        BEFORE importing rather than discovering the conflict via a failed import.
+
+        Returns one dict per conflict::
+
+            {"iri": <conflicting IRI>,
+             "existing_context": <the OTHER scheme's context>,
+             "existing_label": <friendly scheme label, or None if unresolved>}
+
+        Empty list = no conflicts (import is safe in any mode).
+        """
+        graph = Graph()
+        rdf_format = "turtle" if format.lower() in ("ttl", "turtle") else "xml"
+        parse_input = clean_truncated_turtle(content) if rdf_format == "turtle" else content
+        try:
+            graph.parse(data=parse_input, format=rdf_format)
+        except Exception as e:
+            raise ValueError(f"Invalid {rdf_format} content: {e}")
+
+        conflicts = self._detect_cross_scheme_iri_conflicts(graph, collection_iri)
+        if not conflicts:
+            return []
+
+        # Resolve friendly scheme labels once (best-effort; None if unresolvable).
+        try:
+            labels = {c["iri"]: c.get("label") for c in self.get_collections()}
+        except Exception:
+            labels = {}
+
+        return [
+            {
+                "iri": iri,
+                "existing_context": ctx,
+                "existing_label": labels.get(ctx),
+            }
+            for iri, ctx in conflicts
+        ]
+
     def import_rdf_to_collection(
         self,
         collection_iri: str,
@@ -5875,11 +6101,21 @@ class SemanticModelsManager(SearchableAsset):
         imported_by: Optional[str] = None,
         default_status: Optional[str] = None,
         source_filename: Optional[str] = None,
+        conflict_mode: str = "block",
     ) -> int:
         """Import RDF content into an existing collection.
 
         Parses the RDF and adds triples to the collection's context.
         Returns the number of triples imported.
+
+        conflict_mode: how to handle incoming subject IRIs that already live in
+            ANOTHER scheme (one IRI == one concept globally):
+              - 'block'  (default): raise ValueError as today (dead-end preserved).
+              - 'skip'   : strip the conflicting subjects; import only the rest.
+              - 'update' : strip the conflicting subjects from the target import,
+                           then apply the file's field values to each conflicting
+                           concept IN ITS EXISTING scheme as a versioned update
+                           (publish_concept_version), never forking it here.
 
         default_status: when set (e.g. "draft"), every typed subject (a
             skos:Concept / owl:Class / rdfs:Class) that does NOT already carry an
@@ -5908,9 +6144,62 @@ class SemanticModelsManager(SearchableAsset):
         except Exception as e:
             raise ValueError(f"Invalid {rdf_format} content: {e}")
 
-        # Refuse to fork an IRI that already lives in another scheme (one IRI ==
-        # one concept globally). Re-importing into THIS collection is allowed.
-        self._raise_on_cross_scheme_conflict(temp_graph, collection_iri)
+        # Handle IRIs that already live in another scheme (one IRI == one concept
+        # globally). Re-importing into THIS collection is allowed. The mode turns
+        # the old hard-block into a choice.
+        mode = self._normalize_conflict_mode(conflict_mode)
+        conflicts = self._detect_cross_scheme_iri_conflicts(temp_graph, collection_iri)
+        if conflicts and mode == "block":
+            self._raise_on_cross_scheme_conflict(temp_graph, collection_iri)
+
+        conflict_iris = sorted({iri for iri, _ in conflicts})
+        if conflicts and mode in ("skip", "update"):
+            # In BOTH skip and update the conflicting subjects must NOT be created
+            # in the target scheme: strip them from the incoming graph so only the
+            # non-conflicting subjects import here.
+            self._strip_subjects_from_graph(temp_graph, conflict_iris)
+
+        if conflicts and mode == "update":
+            # Apply the file's field values to each conflicting concept IN ITS
+            # EXISTING (home) scheme as a versioned update, atomically. Neutralize
+            # inner commits so a failure cannot half-apply (mirror
+            # apply_upload_as_versioning_event's atomic pattern). Re-parse the FULL
+            # content because temp_graph has already had the conflicts stripped.
+            incoming_full = Graph()
+            incoming_full.parse(data=content, format=rdf_format)
+
+            original_commit = self._db.commit
+            try:
+                self._db.commit = self._db.flush  # type: ignore[assignment]
+                self._apply_cross_scheme_updates(incoming_full, conflict_iris, imported_by)
+            except Exception:
+                self._db.commit = original_commit  # type: ignore[assignment]
+                self._db.rollback()
+                logger.error(
+                    "Cross-scheme 'update' import failed for '%s'; rolled back",
+                    collection_iri, exc_info=True,
+                )
+                try:
+                    self.rebuild_graph_from_enabled()
+                except Exception:
+                    logger.error("Recovery rebuild after rollback also failed", exc_info=True)
+                raise
+            finally:
+                self._db.commit = original_commit  # type: ignore[assignment]
+
+            # Persist the home-scheme updates now. _import_graph_to_db below only
+            # commits when it has target triples to insert (which is false when
+            # every incoming subject conflicted), so commit here to guarantee the
+            # versioned updates land regardless.
+            self._db.commit()
+            try:
+                self.rebuild_graph_from_enabled()
+            except Exception:
+                logger.error(
+                    "Graph rebuild after cross-scheme 'update' import failed; DB "
+                    "is correct, served graph stale until next reload", exc_info=True,
+                )
+            self._invalidate_cache()
 
         # Stamp a governance status on typed subjects that lack one (opt-in).
         # A subject is a concept/class if it has an rdf:type in the concept types;

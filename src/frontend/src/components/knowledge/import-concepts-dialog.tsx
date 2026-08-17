@@ -153,9 +153,11 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // /import route, which returns {mode:'preview', ...} for non-empty schemes.
   useEffect(() => {
     if (!open) return;
-    // Nothing to diff: no files, no chosen target, creating-new, or empty scheme.
-    if (selectedFiles.length === 0 || !selectedCollectionIri || creatingNew || !targetHasContent) {
+    // Nothing to check against a target: no files, no chosen target, or
+    // creating-new (the scheme does not exist yet — conflicts surface on submit).
+    if (selectedFiles.length === 0 || !selectedCollectionIri || creatingNew) {
       setPreviews([]);
+      setConflicts([]);
       return;
     }
     let cancelled = false;
@@ -163,16 +165,27 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     setError(null);
     (async () => {
       const staged: UploadPreview[] = [];
+      const foundConflicts: ConflictItem[] = [];
       for (const file of selectedFiles) {
-        try {
-          const data = await importOneFile(file, selectedCollectionIri);
-          if (data?.mode === 'preview') staged.push({ ...data, fileName: file.name });
-        } catch {
-          // A parse/preview error surfaces on submit; don't block the panel here.
+        // Cross-scheme IRI conflicts (block/skip/update) — check for ANY target,
+        // empty or not, since the collision is against OTHER schemes.
+        const c = await detectConflicts(file, selectedCollectionIri);
+        for (const item of c) {
+          if (!foundConflicts.some((f) => f.iri === item.iri)) foundConflicts.push(item);
+        }
+        // Same-scheme re-upload diff preview (only meaningful for a non-empty target).
+        if (targetHasContent) {
+          try {
+            const data = await importOneFile(file, selectedCollectionIri);
+            if (data?.mode === 'preview') staged.push({ ...data, fileName: file.name });
+          } catch {
+            // A parse/preview error surfaces on submit; don't block the panel here.
+          }
         }
       }
       if (!cancelled) {
         setPreviews(staged);
+        setConflicts(foundConflicts);
         setPreviewing(false);
       }
     })();
@@ -255,6 +268,28 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       throw new Error(err.detail || `Import failed (${response.status})`);
     }
     return response.json();
+  };
+
+  // Pre-check a file for cross-scheme IRI conflicts (subjects that already live
+  // in ANOTHER scheme). The /import route RAISES on such conflicts in block mode
+  // (so they never come back in the response body); this dedicated endpoint
+  // returns them so we can surface the block/skip/update choice up front rather
+  // than dead-ending on "No files could be imported". Returns [] on any error
+  // (parse issues surface on the real import).
+  const detectConflicts = async (file: File, targetIri: string): Promise<ConflictItem[]> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(
+        `/api/knowledge/collections/${encodeURIComponent(targetIri)}/import/conflicts`,
+        { method: 'POST', body: formData },
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data?.conflicts) ? data.conflicts : [];
+    } catch {
+      return [];
+    }
   };
 
   // Apply a staged preview by its token (the server holds the parsed content;
@@ -369,6 +404,19 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
           });
         }
       } catch (err: any) {
+        // A block-mode cross-scheme conflict raises here (the /import route does
+        // not return the conflicts in its body). If we haven't already surfaced
+        // the resolution choice, pre-check and show it instead of dead-ending.
+        const isConflict = /already exist in another scheme|Import blocked/i.test(err?.message || '');
+        if (isConflict && conflicts.length === 0) {
+          const detected = await detectConflicts(file, targetIri);
+          if (detected.length > 0) {
+            setConflicts(detected);
+            setIsUploading(false);
+            setError(null);
+            return;
+          }
+        }
         results.push({ name: file.name, ok: false, error: err.message });
       }
     }
@@ -570,16 +618,20 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
               )}
             </div>
 
-            {/* Conflicts-reconciled-later note */}
-            <div className="flex items-start gap-2 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed">
-              <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <span>
-                {t(
-                  'semantic-models:import.reconcileNote',
-                  'Overlapping or duplicate terms across schemes are reconciled later in the Review Board. Import just brings the graph in.'
-                )}
-              </span>
-            </div>
+            {/* Conflicts-reconciled-later note — hidden when a hard IRI conflict
+                needs resolving HERE (the resolution UI below takes over), since
+                that note implies "handled later" which would be contradictory. */}
+            {conflicts.length === 0 && (
+              <div className="flex items-start gap-2 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed">
+                <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <span>
+                  {t(
+                    'semantic-models:import.reconcileNote',
+                    'Overlapping or duplicate terms across schemes are reconciled later in the Review Board. Import just brings the graph in.'
+                  )}
+                </span>
+              </div>
+            )}
 
             {/* Error */}
             {error && (

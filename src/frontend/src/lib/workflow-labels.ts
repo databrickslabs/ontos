@@ -305,6 +305,9 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
   'job',
   'subscription',
   'user',
+  'ontology_concept',
+  'ontology_collection',
+  'concept_changeset',
 ];
 
 /**

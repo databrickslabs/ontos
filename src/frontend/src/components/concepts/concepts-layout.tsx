@@ -1,14 +1,12 @@
-import { NavLink, Outlet, useLocation, Link } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
   Sparkles,
   PenLine,
   Compass,
-  Terminal,
   type LucideIcon,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { ConceptModeSwitch } from '@/components/concepts/mode-switch';
 
 // ---------------------------------------------------------------------------
@@ -137,22 +135,9 @@ export default function ConceptsLayout() {
         </div>
 
           <div className="flex items-center gap-2">
-            {/* Power-user SPARQL/Query link — Advanced view only (it exposes the
-                raw ontology query layer, which the Simple persona should not
-                see). adv-only = hidden unless html[data-mode="advanced"]. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="adv-only"
-              title={t('concepts:links.sparqlTitle', 'Query concepts with SPARQL')}
-            >
-              <Link to="/concepts/search?tab=kg" className="inline-flex items-center gap-2">
-                <Terminal className="h-4 w-4" />
-                <span className="text-xs">{t('concepts:links.sparql', 'SPARQL')}</span>
-              </Link>
-            </Button>
-
+            {/* The global SPARQL link was removed: the concept detail page now
+                hosts an in-page SPARQL modal (scoped to the concept), so the
+                layout-level shortcut to the legacy Search page is redundant. */}
             {/* Simple/Advanced switch, aligned with the section tabs. Shared
                 across all Concepts views; per-view copies are removed. */}
             <ConceptModeSwitch tipLeft />

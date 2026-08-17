@@ -69,6 +69,7 @@ import { PublishVersionDialog } from '@/components/semantic/publish-version-dial
 import { VersionHistoryPanel } from '@/components/semantic/version-history-panel';
 import { DeprecateConceptDialog } from '@/components/semantic/deprecate-concept-dialog';
 import { TurtleSerializationPanel } from '@/components/semantic/turtle-serialization-panel';
+import { StatusProgressBar } from '@/components/semantic/status-progress-bar';
 import KGSearch from '@/components/search/kg-search';
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -619,8 +620,14 @@ export default function ConceptDetailView() {
   // no lifecycle). Certify is admin-gated server-side; a non-admin gets a clear
   // 403 toast rather than the option being hidden.
   const currentStatus = concept.status || 'draft';
-  const allReachableStatuses =
-    canWrite && collection?.is_editable ? reachableStatuses(currentStatus) : [];
+  // Only offer the DIRECT next-step transitions (single hop). Multi-hop
+  // shortcuts were removed: they let users skip the review decision (and now
+  // hit the approval-bypass gate anyway). Full lifecycle visibility is provided
+  // by the StatusProgressBar below instead.
+  const nextStepStatuses =
+    canWrite && collection?.is_editable
+      ? reachableStatuses(currentStatus).filter((s) => s.isNextStep)
+      : [];
 
   return (
     <div className="py-4 space-y-3">
@@ -635,7 +642,7 @@ export default function ConceptDetailView() {
           {t('semantic-models:details.backToList', 'Back to Concepts')}
         </Button>
         <div className="flex items-center gap-2">
-          {allReachableStatuses.length > 0 && !isProperty && (
+          {nextStepStatuses.length > 0 && !isProperty && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={statusBusy}>
@@ -644,14 +651,13 @@ export default function ConceptDetailView() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {allReachableStatuses.map((item) => (
+                {nextStepStatuses.map((item) => (
                   <DropdownMenuItem
                     key={item.status}
                     onClick={() => handleStatusTransition(item.status)}
-                    className={item.isNextStep ? 'font-semibold' : 'text-muted-foreground'}
+                    className="font-medium"
                   >
                     {t(item.labelKey, item.defaultLabel)}
-                    {!item.isNextStep && <span className="ml-2 text-xs">(via {currentStatus})</span>}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -748,6 +754,12 @@ export default function ConceptDetailView() {
             </span>
           )}
         </div>
+        {/* Full-lifecycle visibility: the compact stepper shows the whole chain
+            and where this concept sits, complementing the single-hop
+            "Change status" dropdown. */}
+        {concept.status && !isProperty && (
+          <StatusProgressBar status={concept.status} className="mt-0.5" />
+        )}
         {/* Reviewer-comment callout — only when a reviewer actually left a
             comment (changes requested). The status chip already says "Under
             Review", so we no longer show a redundant bar for the plain

@@ -949,7 +949,6 @@ class SettingsManager:
                     name='Admin Team',
                     title='Default Administrator Team',
                     description='Auto-created team for system administrators',
-                    domain_id=None,
                     extra_metadata='{}',
                     created_by='system@startup.ucapp',
                     updated_by='system@startup.ucapp'

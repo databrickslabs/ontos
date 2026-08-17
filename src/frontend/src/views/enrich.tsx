@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Info } from 'lucide-react';
 
@@ -36,6 +36,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import RunConfigDialog from '@/components/term-mapping/run-config-dialog';
 import GenerateReviewDialog from '@/components/term-mapping/generate-review-dialog';
+import RunResultDialog from '@/components/enrich/run-result-dialog';
 import { useUserStore } from '@/stores/user-store';
 import type { Run } from '@/types/term-mapping';
 
@@ -174,41 +175,83 @@ export default function EnrichView() {
   const [mode] = useConceptMode();
   const advanced = mode === 'advanced';
   const [reviewScheme, setReviewScheme] = useState<CoverageRow | null>(null);
-  // Suggest matches reuses the full term-mapping run dialog, then the shared
-  // review dialog (which spawns the Review Board request and navigates there).
+  // Suggest matches reuses the full term-mapping run dialog. On a completed run
+  // we land on a RESULT SUMMARY (not the delegate form): from there the primary
+  // action reviews the matches in place; requesting a Review-Board handoff is a
+  // secondary, opt-in action. reviewRun drives that opt-in delegate dialog.
   const [runConfigOpen, setRunConfigOpen] = useState(false);
   const [reviewRun, setReviewRun] = useState<Run | null>(null);
+  // Result of the just-completed run: the run + its live suggestion refs for the
+  // in-place reviewer. Null when no run summary is showing.
+  const [runResult, setRunResult] = useState<
+    { run: Run; refs: { fqn: string }[] } | null
+  >(null);
+  const [runResultLoading, setRunResultLoading] = useState(false);
 
   // Real per-scheme coverage from GET /api/knowledge/coverage. Falls back to the
   // placeholder rows only if the endpoint is unavailable, so the frame is never
   // empty during review.
   const [coverageRows, setCoverageRows] = useState<CoverageRow[] | null>(null);
+  const fetchCoverage = useCallback(async () => {
+    try {
+      const res = await fetch('/api/knowledge/coverage');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!Array.isArray(data?.schemes)) return;
+      const rows: CoverageRow[] = data.schemes.map((s: any) => ({
+        id: s.scheme,
+        name: s.label || s.scheme,
+        concepts: s.concepts ?? 0,
+        coveragePct: s.coverage_pct ?? 0,
+        products: s.products ?? 0,
+        contracts: s.contracts ?? 0,
+        assets: s.assets ?? 0,
+        suggested: s.suggested ?? 0,
+      }));
+      setCoverageRows(rows);
+    } catch {
+      /* endpoint unavailable — keep placeholder rows */
+    }
+  }, []);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/knowledge/coverage');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled || !Array.isArray(data?.schemes)) return;
-        const rows: CoverageRow[] = data.schemes.map((s: any) => ({
-          id: s.scheme,
-          name: s.label || s.scheme,
-          concepts: s.concepts ?? 0,
-          coveragePct: s.coverage_pct ?? 0,
-          products: s.products ?? 0,
-          contracts: s.contracts ?? 0,
-          assets: s.assets ?? 0,
-          suggested: s.suggested ?? 0,
-        }));
-        setCoverageRows(rows);
-      } catch {
-        /* endpoint unavailable — keep placeholder rows */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void fetchCoverage();
+  }, [fetchCoverage]);
+
+  // Recent term-mapping runs — restores the legacy Map's "Recent runs" list.
+  // Clicking a run re-opens the result summary (view its suggestions again).
+  const [recentRuns, setRecentRuns] = useState<Run[]>([]);
+  const fetchRecentRuns = useCallback(async () => {
+    try {
+      const res = await fetch('/api/term-mappings/runs?limit=10');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setRecentRuns(data as Run[]);
+    } catch {
+      /* endpoint unavailable — hide the list */
+    }
+  }, []);
+  useEffect(() => {
+    void fetchRecentRuns();
+  }, [fetchRecentRuns]);
+
+  // Open the result summary for an existing run (from the recent-runs list).
+  const openRunResult = useCallback(async (run: Run) => {
+    setRunResultLoading(true);
+    setRunResult({ run, refs: [] });
+    try {
+      const res = await fetch(
+        `/api/term-mappings/runs/${run.id}/suggestions?status=pending`,
+      );
+      const data = res.ok ? await res.json() : [];
+      const refs = (Array.isArray(data) ? data : []).map((s: { id: string }) => ({
+        fqn: `term-mapping://${run.id}/${s.id}`,
+      }));
+      setRunResult({ run, refs });
+    } catch {
+      setRunResult({ run, refs: [] });
+    } finally {
+      setRunResultLoading(false);
+    }
   }, []);
 
   const rows = coverageRows ?? PLACEHOLDER_ROWS;
@@ -394,6 +437,43 @@ export default function EnrichView() {
             onReview={(row) => setReviewScheme(row)}
           />
         </div>
+
+        {/* Recent runs — restored from the legacy Map view. Click to reopen a
+            run's result summary and review its suggestions again. */}
+        {recentRuns.length > 0 && (
+          <div className="ml-8 mt-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">
+              {t('enrich.map.recentRuns', 'Recent runs')}
+            </p>
+            <div className="space-y-1">
+              {recentRuns.map((run) => {
+                const stats = (run.stats ?? {}) as Record<string, number | undefined>;
+                const total = stats.suggestions_total;
+                return (
+                  <button
+                    key={run.id}
+                    type="button"
+                    onClick={() => void openRunResult(run)}
+                    className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-xs hover:bg-accent/50"
+                  >
+                    <span className="font-mono text-muted-foreground">{run.id.slice(0, 8)}</span>
+                    <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
+                      {run.status}
+                    </Badge>
+                    <span className="truncate text-muted-foreground" title={run.comment ?? undefined}>
+                      {run.comment || t('enrich.map.runNoComment', 'No comment')}
+                    </span>
+                    {typeof total === 'number' && (
+                      <span className="ml-auto shrink-0 text-muted-foreground">
+                        {t('enrich.map.runSuggestions', '{{count}} suggested', { count: total })}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* LANE 2 — DELIVER */}
@@ -437,16 +517,53 @@ export default function EnrichView() {
       />
 
       {/* Suggest matches — reuse the full term-mapping run dialog. On a
-          completed run, open the shared review dialog which spawns the Review
-          Board request and navigates there. */}
+          completed run we land on a RESULT SUMMARY (RunResultDialog): the user
+          sees what was found and chooses to review the matches in place. The
+          Review-Board handoff (GenerateReviewDialog) is a secondary opt-in from
+          there, not the forced next step. */}
       <RunConfigDialog
         isOpen={runConfigOpen}
         onOpenChange={setRunConfigOpen}
-        onCreated={(run) => {
+        onCreated={async (run) => {
           setRunConfigOpen(false);
-          setReviewRun(run);
+          // Refresh the coverage matrix so the per-scheme suggested count (and
+          // the Review button) reflect the new run, plus the recent-runs list.
+          void fetchCoverage();
+          void fetchRecentRuns();
+          // Fetch the run's suggestions so the in-place reviewer has live refs.
+          setRunResultLoading(true);
+          setRunResult({ run, refs: [] });
+          try {
+            const res = await fetch(
+              `/api/term-mappings/runs/${run.id}/suggestions?status=pending`,
+            );
+            const data = res.ok ? await res.json() : [];
+            const refs = (Array.isArray(data) ? data : []).map((s: { id: string }) => ({
+              fqn: `term-mapping://${run.id}/${s.id}`,
+            }));
+            setRunResult({ run, refs });
+          } catch {
+            setRunResult({ run, refs: [] });
+          } finally {
+            setRunResultLoading(false);
+          }
         }}
       />
+      <RunResultDialog
+        open={runResult !== null}
+        onOpenChange={(open) => {
+          if (!open) setRunResult(null);
+        }}
+        run={runResult?.run ?? null}
+        suggestionRefs={runResult?.refs ?? []}
+        loading={runResultLoading}
+        onRequestReview={() => {
+          const r = runResult?.run ?? null;
+          setRunResult(null);
+          setReviewRun(r);
+        }}
+      />
+      {/* Delegate-to-reviewer handoff — opt-in, spawns a Review-Board request. */}
       <GenerateReviewDialog
         isOpen={reviewRun !== null}
         onOpenChange={(open) => {

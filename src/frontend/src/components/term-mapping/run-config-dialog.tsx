@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
-import { useConceptMode } from '@/components/concepts/mode-switch';
+import { useConceptMode, ConceptModeSwitch } from '@/components/concepts/mode-switch';
 
 import type {
   Run,
@@ -260,6 +260,12 @@ export default function RunConfigDialog({
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             {t('runConfig.title')}
+            {/* Simple/Advanced toggle lives in the dialog so users can switch
+                without leaving the run setup. Drives the same global mode as
+                the rest of the concepts UI (adv-only rows + {advanced} blocks). */}
+            <span className="ml-auto">
+              <ConceptModeSwitch tipLeft />
+            </span>
           </DialogTitle>
           <DialogDescription>{t('runConfig.description')}</DialogDescription>
         </DialogHeader>

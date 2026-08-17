@@ -231,6 +231,18 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     return created.iri as string;
   };
 
+  // Roll back a scheme we created in THIS submit when the import that followed
+  // brought in nothing — otherwise a failed import (e.g. a hard IRI conflict)
+  // leaves an orphaned empty scheme that then blocks re-creating the same name
+  // ("Collection already exists"). Best-effort; ignore delete errors.
+  const deleteScheme = async (iri: string): Promise<void> => {
+    try {
+      await fetch(`/api/knowledge/collections/${encodeURIComponent(iri)}`, { method: 'DELETE' });
+    } catch {
+      /* best-effort cleanup */
+    }
+  };
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) resetState();
     onOpenChange(nextOpen);
@@ -399,9 +411,17 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
 
     // Empty / new scheme: nothing to diff — plain import (concepts stamped Draft).
     let targetIri = selectedCollectionIri;
+    // Track a scheme created in THIS submit so we can (a) roll it back if the
+    // import brings in nothing, and (b) not try to re-create it on a re-submit
+    // (e.g. after resolving a conflict) — which would hit "already exists".
+    let createdIri: string | null = null;
     if (creatingNew) {
       try {
         targetIri = await createScheme(newSchemeName.trim());
+        createdIri = targetIri;
+        // Switch the dialog to point at the now-existing scheme so a re-submit
+        // imports into it instead of re-creating it.
+        setSelectedCollectionIri(targetIri);
       } catch (err: any) {
         setError(err.message || 'Failed to create the new scheme');
         setIsUploading(false);
@@ -418,9 +438,13 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
           targetIri,
           conflicts.length > 0 ? conflictMode : 'block'
         );
-        // If import returns conflicts, show resolution UI and halt.
+        // If import returns conflicts, show resolution UI and halt. Roll back a
+        // scheme we just created (nothing landed in it) and drop back to
+        // create-new so a re-submit recreates it cleanly after the user picks a
+        // conflict mode.
         if (data?.conflicts && data.conflicts.length > 0) {
           setConflicts(data.conflicts);
+          if (createdIri) { await deleteScheme(createdIri); setSelectedCollectionIri(CREATE_NEW); }
           setIsUploading(false);
           setError(null);
           return;
@@ -452,6 +476,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
           const detected = await detectConflicts(file, targetIri);
           if (detected.length > 0) {
             setConflicts(detected);
+            if (createdIri) { await deleteScheme(createdIri); setSelectedCollectionIri(CREATE_NEW); }
             setIsUploading(false);
             setError(null);
             return;
@@ -461,10 +486,18 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
       }
     }
 
+    const anyOk = results.some((r) => r.ok);
+    // Roll back a scheme created in this submit if the import brought in
+    // nothing — leaving it would orphan an empty scheme and block re-creating
+    // the same name. Reset back to create-new so a retry works.
+    if (createdIri && !anyOk) {
+      await deleteScheme(createdIri);
+      setSelectedCollectionIri(CREATE_NEW);
+    }
     setOutcomes(results);
     setIsUploading(false);
-    if (results.some((r) => r.ok)) onImported();
-    if (results.every((r) => !r.ok)) {
+    if (anyOk) onImported();
+    if (!anyOk) {
       setError(t('semantic-models:import.allFailed',
         'No files could be imported. See per-file errors below.'));
     }

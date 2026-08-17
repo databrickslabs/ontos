@@ -431,6 +431,57 @@ export function isTriggerEntitySupported(triggerType: string, entityType: string
 }
 
 /**
+ * Entity types that carry concept-curation semantics. A trigger whose
+ * entity_types include any of these can drive concept workflows (review
+ * ping-pong, changeset gate). Used to surface a subtle "supports concepts"
+ * hint in the trigger picker.
+ */
+export const CONCEPT_ENTITY_TYPES = ['ontology_concept', 'ontology_collection', 'concept_changeset'];
+
+export function triggerSupportsConcepts(entityTypes: string[] | undefined): boolean {
+  if (!entityTypes) return false;
+  return entityTypes.some((et) => CONCEPT_ENTITY_TYPES.includes(et));
+}
+
+/**
+ * Valid lifecycle statuses per entity type — powers the From/To Status
+ * dropdowns on status-change triggers so authors pick real statuses instead of
+ * typing free text. Ordered by lifecycle progression. An entity type absent
+ * here has no known status vocabulary; callers fall back to a free-text input.
+ */
+export const ENTITY_STATUS_VALUES: Record<string, string[]> = {
+  ontology_concept: [
+    'draft', 'under_review', 'approved', 'published', 'certified', 'deprecated', 'archived',
+  ],
+  ontology_collection: [
+    'draft', 'under_review', 'approved', 'published', 'certified', 'deprecated', 'archived',
+  ],
+  data_product: [
+    'draft', 'sandbox', 'proposed', 'under_review', 'approved', 'active', 'deprecated', 'retired',
+  ],
+  data_contract: ['draft', 'proposed', 'active', 'deprecated', 'retired'],
+};
+
+/**
+ * Union of valid statuses across the given entity types (deduped, first-seen
+ * order). Empty array = no known vocabulary (caller should allow free text).
+ */
+export function statusValuesForEntities(entityTypes: string[] | undefined): string[] {
+  if (!entityTypes || entityTypes.length === 0) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const et of entityTypes) {
+    for (const s of ENTITY_STATUS_VALUES[et] ?? []) {
+      if (!seen.has(s)) {
+        seen.add(s);
+        out.push(s);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Special recipient values that are not role UUIDs.
  */
 export const SPECIAL_RECIPIENTS: Record<string, string> = {

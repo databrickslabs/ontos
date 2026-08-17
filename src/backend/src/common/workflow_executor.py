@@ -375,6 +375,9 @@ _ENTITY_TYPE_LABELS: Dict[str, str] = {
     "data_asset_review": "Data Asset Review",
     "access_grant": "Access Grant",
     "asset": "Asset",
+    "ontology_concept": "Concept",
+    "ontology_collection": "Concept Scheme",
+    "concept_changeset": "Concept Changeset",
 }
 
 
@@ -1951,6 +1954,13 @@ class EntityActionStepHandler(StepHandler):
         entity_type = context.entity_type
         entity_id = context.entity_id
 
+        # Concepts are NOT repo rows: they are RDF triples keyed by IRI, mutated
+        # via the SemanticModelsManager singleton (holds the in-memory graph).
+        # Route concept actions here BEFORE the repo-based _get_db_entity path,
+        # since concepts have no repo row. entity_id IS the concept IRI.
+        if entity_type == 'ontology_concept':
+            return self._handle_concept_action(action, entity_id, context)
+
         try:
             if action in ('certify', 'decertify'):
                 return self._handle_certification(action, entity_type, entity_id, context)
@@ -2001,6 +2011,55 @@ class EntityActionStepHandler(StepHandler):
             from src.repositories.assets_repository import asset_repo
             return asset_repo.get(db=self._db, id=entity_id), 'asset'
         return None, entity_type
+
+    def _handle_concept_action(self, action: str, entity_id: str, context: StepContext) -> StepResult:
+        """Act on a SKOS concept. Concepts route through the SemanticModelsManager
+        SINGLETON (which owns the in-memory RDF graph), NOT a repository row;
+        entity_id IS the concept IRI."""
+        from src.common.app_state import get_app_state_manager
+
+        smm = get_app_state_manager('semantic_models_manager')
+        if smm is None:
+            return StepResult(passed=False, error="SemanticModelsManager unavailable")
+
+        entity = context.entity or {}
+
+        if action == 'publish_version':
+            try:
+                changes = entity.get('changes') or entity.get('proposed') or None
+                result = smm.publish_concept_version(
+                    concept_iri=entity_id,
+                    changes=changes,
+                    published_by=context.user_email,
+                    bypass_editable_gate=True,
+                )
+                new_version = result.get('new_version') if isinstance(result, dict) else None
+                return StepResult(passed=True, data={'new_version': new_version})
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        elif action == 'deprecate':
+            try:
+                smm.deprecate_concept(
+                    concept_iri=entity_id,
+                    deprecated_by=context.user_email,
+                    replaced_by=entity.get('replaced_by') or None,
+                    bypass_editable_gate=True,
+                )
+                return StepResult(passed=True)
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        elif action == 'set_status':
+            try:
+                new_status = self._config.get('target_status') or entity.get('to_status')
+                smm.update_concept_status(
+                    concept_iri=entity_id,
+                    new_status=new_status,
+                    updated_by=context.user_email,
+                )
+                return StepResult(passed=True, data={'status': new_status})
+            except Exception as e:
+                return StepResult(passed=False, error=str(e))
+        return StepResult(passed=False, error=f"Unknown concept entity_action: {action}")
 
     def _handle_certification(self, action: str, entity_type: str, entity_id: str, context: StepContext) -> StepResult:
         from datetime import datetime, timezone

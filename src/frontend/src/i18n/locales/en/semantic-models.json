@@ -104,6 +104,9 @@
     "conceptUpdated": "Concept updated successfully",
     "conceptDeleted": "Concept deleted successfully",
     "submittedForReview": "Concept submitted for review",
+    "submitReview": "Submitted for review",
+    "submitReviewGoverned": "Submitted for review — awaiting approval.",
+    "withdrawReview": "Review withdrawn",
     "enterReviewerEmail": "Enter reviewer email address:",
     "conceptPromoted": "Concept promoted successfully",
     "conceptMigrated": "Concept migrated successfully",
@@ -111,7 +114,8 @@
     "noConceptsFound": "No concepts found",
     "selectConcept": "Select a concept to view details",
     "linkAdded": "Link added successfully",
-    "linkRemoved": "Link removed successfully"
+    "linkRemoved": "Link removed successfully",
+    "statusChanged": "Status updated"
   },
   "status": {
     "draft": "Draft",
@@ -218,11 +222,24 @@
   "lifecycle": {
     "changeStatus": "Change status",
     "submitReview": "Submit for review",
+    "withdrawReview": "Withdraw Review",
     "approve": "Approve",
     "publish": "Publish",
     "certify": "Certify",
     "deprecate": "Deprecate",
     "archive": "Archive"
+  },
+  "submitReview": {
+    "title": "Submit for Review",
+    "description": "Assign an optional reviewer and add notes.",
+    "reviewer": "Reviewer (optional)",
+    "reviewerPlaceholder": "Select a reviewer...",
+    "notes": "Notes (optional)",
+    "notesPlaceholder": "Add context or instructions...",
+    "submit": "Submit"
+  },
+  "concept": {
+    "inReview": "In Review"
   },
   "hierarchy": {
     "title": "Hierarchy",
@@ -281,5 +298,39 @@
     "none": "No previous versions yet.",
     "unavailable": "Version history is unavailable.",
     "replacedBy": "Replaced by {{label}}"
+  },
+  "import": {
+    "title": "Import files",
+    "descriptionMulti": "Drop one or more ontology files, then choose how they land. The file is just a carrier.",
+    "sourceFiles": "Source files",
+    "addMoreFiles": "Add more files…",
+    "chooseFiles": "Choose files…",
+    "supportedFormats": "Supported: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "howLand": "How should these land?",
+    "oneScheme": "One scheme",
+    "oneSchemeDesc": "Merge every file into a single concept scheme.",
+    "oneSchemePerFile": "One scheme per file",
+    "oneSchemePerFileDesc": "Each file becomes its own concept scheme.",
+    "perFileTodo": "One-scheme-per-file needs a backend that creates a scheme per file; for now all files land in the collection below.",
+    "targetCollection": "Target concept scheme",
+    "selectCollection": "Select a collection…",
+    "createNewScheme": "＋ Create a new scheme…",
+    "newSchemeName": "New scheme name (e.g. Finance Ontology)",
+    "noEditableCollections": "No editable collections available. Create one first.",
+    "reconcileNote": "Overlapping or duplicate terms across schemes are reconciled later in the Review Board. Import just brings the graph in.",
+    "summary": "Imported {{files}} file(s), {{count}} triples total.",
+    "summaryPending": "Upload submitted for approval ({{files}} file(s))",
+    "fileOk": "{{count}} triples",
+    "filePending": "Pending approval",
+    "allFailed": "No files could be imported. See per-file errors below.",
+    "computingDiff": "Computing changes…",
+    "changelogTitle": "Changes applied from {{file}}",
+    "previewTitle": "Changes from {{file}}",
+    "changelogSummary": "Modifies {{modified}}, adds {{added}}, removes {{removed}} ({{unchanged}} unchanged).",
+    "bucketModified": "Modified (new version)",
+    "bucketNew": "New",
+    "bucketRemoved": "Removed (deprecated, not deleted)",
+    "stillReferenced": "used by {{count}}",
+    "submitMulti": "Import {{count}} file(s)"
   }
 }

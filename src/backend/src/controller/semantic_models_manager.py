@@ -43,6 +43,7 @@ from src.models.ontology import (
 )
 from src.repositories.semantic_models_repository import semantic_models_repo
 from src.repositories.rdf_triples_repository import rdf_triples_repo
+from src.common.app_state import get_app_state_manager
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
@@ -762,6 +763,22 @@ class SemanticModelsManager(SearchableAsset):
             ],
         }
 
+    @staticmethod
+    def _load_stash_graph(stash) -> "Graph":
+        """Re-parse a stashed upload preview back into an rdflib Graph.
+
+        Shared by ``confirm_upload`` (apply-by-token) and ``gate_or_apply_upload``
+        (the P3 governance gate) so the parse logic lives in exactly one place.
+        Stashes are serialized as turtle (``format == 'skos'``) or xml.
+        """
+        graph = Graph()
+        fmt = "turtle" if stash.format == "skos" else "xml"
+        content_for_parse = (
+            clean_truncated_turtle(stash.content_text) if fmt == "turtle" else stash.content_text
+        )
+        graph.parse(data=content_for_parse, format=fmt)
+        return graph
+
     def confirm_upload(self, preview_token: str, actor: Optional[str] = None) -> Dict[str, Any]:
         """Apply a previously previewed re-upload by token, then consume the stash.
 
@@ -777,12 +794,7 @@ class SemanticModelsManager(SearchableAsset):
             raise ValueError(f"Unknown or already-applied preview token: {preview_token}")
 
         context_name = stash.context_name
-        graph = Graph()
-        fmt = "turtle" if stash.format == "skos" else "xml"
-        content_for_parse = (
-            clean_truncated_turtle(stash.content_text) if fmt == "turtle" else stash.content_text
-        )
-        graph.parse(data=content_for_parse, format=fmt)
+        graph = self._load_stash_graph(stash)
 
         summary = self.apply_upload_as_versioning_event(context_name, graph, actor=actor)
 
@@ -791,6 +803,203 @@ class SemanticModelsManager(SearchableAsset):
         self._db.commit()
 
         return summary
+
+    # ------------------------------------------------------------------ #
+    # P3: gate a BULK RDF upload behind ONE aggregate changeset approval  #
+    # ------------------------------------------------------------------ #
+    # A held changeset is carried on a DataAssetReview (AssetType
+    # CONCEPT_CHANGESET) whose reviewed-asset FQN wraps the UploadPreviewDb
+    # token: ``concept-changeset://<preview_token>``. The token stays ALIVE
+    # (the stash is NOT consumed) until the approval resolves, so persistence
+    # is migration-free — apply-on-approval just re-runs confirm_upload(token).
+    CHANGESET_REVIEW_FQN_PREFIX = "concept-changeset://"
+
+    @classmethod
+    def changeset_review_fqn(cls, preview_token: str) -> str:
+        """Wrap a preview token as the reviewed-asset FQN stored on the review."""
+        return f"{cls.CHANGESET_REVIEW_FQN_PREFIX}{preview_token}"
+
+    @classmethod
+    def preview_token_from_changeset_fqn(cls, asset_fqn: str) -> Optional[str]:
+        """Recover the preview token from a changeset reviewed-asset FQN (or None)."""
+        if asset_fqn and asset_fqn.startswith(cls.CHANGESET_REVIEW_FQN_PREFIX):
+            return asset_fqn[len(cls.CHANGESET_REVIEW_FQN_PREFIX):]
+        return None
+
+    def gate_or_apply_upload(
+        self, context_name: str, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Confirm entrypoint for a re-upload: gate it iff the scheme is governed.
+
+        Loads the held stash for ``preview_token``, computes the AGGREGATE diff
+        (compute_concept_diff vs the current stored triples) and fires ONE
+        ``on_request_status_change`` trigger for ``EntityType.CONCEPT_CHANGESET``
+        scoped to the collection. Governed iff a workflow executed.
+
+          * GOVERNED  -> apply NOTHING. Open ONE DataAssetReview
+            (AssetType CONCEPT_CHANGESET) whose reviewed-asset FQN carries the
+            token; KEEP the stash token ALIVE (do NOT consume). Returns
+            ``{status:'held', review_request_id, summary, governed:True}``.
+          * UNGOVERNED-> confirm_upload(token) exactly as today (apply + consume).
+            Returns ``{status:'applied', summary, governed:False}``.
+
+        Exactly ONE trigger and at most ONE review per upload — the 40-wizards
+        failure mode is structurally impossible because the aggregate changeset,
+        not the individual concepts, is the gated unit.
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+        from src.controller.concept_diff import compute_concept_diff
+
+        stash = upload_preview_repo.get(self._db, preview_token)
+        if stash is None:
+            raise ValueError(f"Unknown or already-applied preview token: {preview_token}")
+
+        # Aggregate diff for the WHOLE upload (never per-concept).
+        incoming_graph = self._load_stash_graph(stash)
+        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        diff = compute_concept_diff(incoming_graph, current_triples)
+        summary = diff.summary()
+
+        # Human label for the collection (falls back to the context name).
+        collection = self.get_collection(context_name)
+        collection_label = (collection or {}).get("label") or context_name
+
+        # Aggregate reference_count over the concepts this changeset touches
+        # (modified + removed — new concepts have none). One number for the
+        # whole changeset, matching the "one upload = one approval" contract.
+        touched = list(diff.modified) + list(diff.removed)
+        aggregate_reference_count = sum(self.reference_count(iri) for iri in touched)
+
+        entity_data: Dict[str, Any] = {
+            **summary,
+            "modified_iris": list(diff.modified),
+            "new_iris": list(diff.new),
+            "removed_iris": list(diff.removed),
+            "reference_count": aggregate_reference_count,
+            "collection_iri": context_name,
+            "collection_label": collection_label,
+            "preview_token": preview_token,
+        }
+
+        # Fire the ONE aggregate governance trigger. Governed iff a workflow ran.
+        governed = False
+        executions: List[Any] = []
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+
+            registry = get_trigger_registry(self._db)
+            executions = registry.on_request_status_change(
+                entity_type=EntityType.CONCEPT_CHANGESET,
+                entity_id=preview_token,
+                from_status="proposed",
+                to_status="applied",
+                entity_name=collection_label,
+                entity_data=entity_data,
+                user_email=actor,
+                blocking=True,
+            )
+            governed = bool(executions)
+        except Exception as e:
+            # A trigger-registry failure must not sink an otherwise valid upload
+            # (ungoverned/direct path stays zero-friction).
+            logger.warning(
+                f"CONCEPT_CHANGESET trigger failed for token {preview_token}: {e}"
+            )
+
+        if not governed:
+            # UNGOVERNED: apply directly + consume the token (today's behavior).
+            applied = self.confirm_upload(preview_token, actor=actor)
+            return {"status": "applied", "summary": applied, "governed": False}
+
+        # GOVERNED: hold. Open ONE review; keep the stash token ALIVE.
+        review_request_id: Optional[str] = None
+        review_mgr = get_app_state_manager("data_asset_review_manager")
+        reviewer_email = self._changeset_reviewer_from_executions(executions, actor)
+        if review_mgr is not None and reviewer_email:
+            try:
+                from src.models.data_asset_reviews import DataAssetReviewRequestCreate
+
+                notes = (
+                    f"Bulk RDF changeset for '{collection_label}': "
+                    f"{summary['modified']} modified, {summary['new']} new, "
+                    f"{summary['removed']} removed "
+                    f"(aggregate reference_count {aggregate_reference_count}). "
+                    f"Approve to apply all-or-nothing; deny to discard."
+                )
+                req = DataAssetReviewRequestCreate(
+                    requester_email=actor or "system@ontos",
+                    reviewer_email=reviewer_email,
+                    asset_fqns=[self.changeset_review_fqn(preview_token)],
+                    title=f"Changeset review: {collection_label}",
+                    notes=notes,
+                )
+                created = review_mgr.create_review_request(req, db=self._db)
+                review_request_id = created.id
+            except Exception as e:
+                logger.error(
+                    f"Failed to create CONCEPT_CHANGESET review for token "
+                    f"{preview_token}: {e}", exc_info=True,
+                )
+
+        return {
+            "status": "held",
+            "review_request_id": review_request_id,
+            "summary": summary,
+            "governed": True,
+        }
+
+    @staticmethod
+    def _changeset_reviewer_from_executions(executions, actor) -> Optional[str]:
+        """Best-effort reviewer email for a held changeset.
+
+        Prefers a reviewer/approver surfaced by an executed workflow; falls back
+        to the actor so the review is never orphaned without an assignee.
+        """
+        for ex in (executions or []):
+            for attr in ("reviewer_email", "assigned_to", "approver_email"):
+                val = getattr(ex, attr, None)
+                if val:
+                    return val
+            data = getattr(ex, "entity_data", None) or getattr(ex, "context", None)
+            if isinstance(data, dict):
+                for key in ("reviewer_email", "assigned_to", "approver_email"):
+                    if data.get(key):
+                        return data[key]
+        return actor
+
+    def apply_changeset_by_token(
+        self, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Apply a held changeset on APPROVAL — apply + consume the token.
+
+        The approval callback for a CONCEPT_CHANGESET review. Delegates to the
+        UNCHANGED ``confirm_upload`` (single-transaction bulk apply, then
+        single-use consume of the stash), so the apply happens exactly once.
+        """
+        summary = self.confirm_upload(preview_token, actor=actor)
+        logger.info(
+            f"Concept changeset {preview_token} applied on approval by {actor}"
+        )
+        return {"status": "applied", "summary": summary}
+
+    def reject_changeset_by_token(
+        self, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Drop a held changeset on DENY/CANCEL — delete the stash, apply nothing.
+
+        The reject callback for a CONCEPT_CHANGESET review. Deletes the held
+        UploadPreviewDb token so nothing is ever applied; the uploader re-uploads
+        a corrected file (a changeset is not edited in place).
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        deleted = upload_preview_repo.delete(self._db, preview_token)
+        self._db.commit()
+        logger.info(
+            f"Concept changeset {preview_token} dropped (deleted={deleted}) by {actor}"
+        )
+        return {"status": "rejected", "deleted": bool(deleted)}
 
     def delete(self, model_id: str) -> bool:
         # Get the model before deleting to check if we need to delete the physical file
@@ -5190,46 +5399,378 @@ class SemanticModelsManager(SearchableAsset):
 
         return self.get_concept(concept_iri)
 
+    # ------------------------------------------------------------------ #
+    # Concept review PING-PONG loop (P2)                                  #
+    # ------------------------------------------------------------------ #
+    # The concept IRI is stored on a ``DataAssetReview`` (AssetType
+    # KNOWLEDGE_CONCEPT) using a scheme-prefixed FQN, mirroring the existing
+    # ``mdm://`` / ``term-mapping://`` conventions so ``_determine_asset_type``
+    # resolves the type deterministically and the reviewer-decision callback can
+    # read the concept IRI straight back off the reviewed asset.
+    CONCEPT_REVIEW_FQN_PREFIX = "knowledge-concept://"
+
+    @classmethod
+    def concept_review_fqn(cls, concept_iri: str) -> str:
+        """Wrap a concept IRI as the reviewed-asset FQN stored on the review."""
+        return f"{cls.CONCEPT_REVIEW_FQN_PREFIX}{concept_iri}"
+
+    @classmethod
+    def concept_iri_from_review_fqn(cls, asset_fqn: str) -> Optional[str]:
+        """Recover the concept IRI from a reviewed-asset FQN (or None)."""
+        if asset_fqn and asset_fqn.startswith(cls.CONCEPT_REVIEW_FQN_PREFIX):
+            return asset_fqn[len(cls.CONCEPT_REVIEW_FQN_PREFIX):]
+        return None
+
+    def _compute_review_diff(self, concept_iri: str, current: Dict[str, Any]) -> Dict[str, Any]:
+        """Field-level diff of the proposed concept vs its last frozen version.
+
+        Compares the live (proposed) label / skos:definition / skos:broader
+        against the highest non-current concept_version snapshot. When there is
+        no prior version the diff is reported as ``initial``. Best-effort: any
+        failure degrades to ``initial`` rather than blocking the submit.
+        """
+        try:
+            from src.repositories.concept_versions_repository import concept_versions_repo
+            versions = concept_versions_repo.list_versions(self._db, concept_iri)
+            prior = [v for v in versions if not v.is_current]
+            if not prior:
+                return {"kind": "initial"}
+            snap = max(prior, key=lambda v: v.version)
+            old = self._concept_fields_from_version(snap.id)
+            proposed = {
+                "label": current.get("label"),
+                "definition": current.get("comment"),
+                "broader": sorted(current.get("parent_concepts") or []),
+            }
+            changed: Dict[str, Any] = {}
+            for field in ("label", "definition", "broader"):
+                if old.get(field) != proposed.get(field):
+                    changed[field] = {"old": old.get(field), "new": proposed.get(field)}
+            return {"kind": "update", "from_version": snap.version, "changed": changed}
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"Review diff computation failed for {concept_iri}: {e}")
+            return {"kind": "initial"}
+
+    def _concept_fields_from_version(self, concept_version_id) -> Dict[str, Any]:
+        """Read label/definition/broader off a frozen concept-version snapshot."""
+        rows = rdf_triples_repo.list_by_concept_version(self._db, concept_version_id)
+        label = definition = None
+        broader: List[str] = []
+        for r in rows:
+            if r.predicate_uri == str(SKOS.prefLabel):
+                label = r.object_value
+            elif r.predicate_uri == str(RDFS.label) and label is None:
+                label = r.object_value
+            elif r.predicate_uri == str(SKOS.definition):
+                definition = r.object_value
+            elif r.predicate_uri == str(RDFS.comment) and definition is None:
+                definition = r.object_value
+            elif r.predicate_uri in (str(SKOS.broader), str(RDFS.subClassOf)):
+                broader.append(r.object_value)
+        return {"label": label, "definition": definition, "broader": sorted(broader)}
+
+    def _set_concept_annotation(
+        self, concept_iri: str, predicate, value: Optional[str], updated_by: Optional[str] = None
+    ) -> None:
+        """Replace (or clear when value is None) a literal annotation on a concept.
+
+        Used for the ping-pong bookkeeping annotations (``reviewComment`` /
+        ``reviewDecision``) that must be visible to the owner without minting a
+        new version. Commits its own change.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            return
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            return
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        rdf_triples_repo.remove_by_subject_predicate(
+            self._db, concept_iri, str(predicate), collection_iri
+        )
+        coll_context.remove((concept_uri, predicate, None))
+        if value is not None:
+            rdf_triples_repo.add_triple(
+                self._db, concept_iri, str(predicate), value,
+                False, None, None, collection_iri, "concept", concept_iri, updated_by,
+            )
+            coll_context.add((concept_uri, predicate, Literal(value)))
+        # Keep the ownership invariant: freshly-added NULL-owned rows get
+        # re-stamped onto the current version (mirrors update_concept_status).
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        current_cv = concept_versions_repo.get_current(self._db, concept_iri)
+        if current_cv is not None:
+            rdf_triples_repo.reassign_subject_to_concept_version(
+                self._db, concept_iri, current_cv.id, context_name=collection_iri,
+                only_null_owned=True,
+            )
+        self._db.commit()
+        self._invalidate_cache()
+
     def submit_concept_for_review(
         self,
         concept_iri: str,
-        reviewer_email: str,
+        reviewer_email: Optional[str],
         submitted_by: str,
         notes: Optional[str] = None,
+        reset_mode: str = "reset_all",
     ) -> Dict[str, Any]:
-        """Submit a concept for review via the DataAssetReviewManager.
-        
-        Creates a review request and updates concept status to 'under_review'.
-        Returns the updated concept with review_request_id set.
+        """Submit a draft concept for review (P2 ping-pong entry point).
+
+        Behaviour:
+          * Guards status == 'draft'.
+          * Computes a field-level diff vs the last frozen version plus the
+            concept's reference_count into a ``review_context`` dict.
+          * Fires ``on_request_status_change`` (draft -> under_review) for
+            ``EntityType.ONTOLOGY_CONCEPT``. If ANY workflow executes, the
+            submission is GOVERNED (an approval gates the exit); if none match,
+            it is UNGOVERNED (opt-in governance — plain status flip).
+          * When a ``DataAssetReviewManager`` is reachable AND a reviewer is
+            supplied, creates a ``DataAssetReview`` (AssetType KNOWLEDGE_CONCEPT)
+            carrying the concept IRI, and stashes ``review_request_id`` on the
+            concept. Ungoverned/no-reviewer submits stay zero-friction: they
+            still transition to under_review, just without a backing review.
+
+        Returns ``{concept, review_request_id, governed}``.
         """
-        from src.models.data_asset_reviews import (
-            DataAssetReviewRequestCreate,
-            AssetType,
-        )
-        
         existing = self.get_concept(concept_iri)
         if not existing:
             raise ValueError(f"Concept not found: {concept_iri}")
-        
+
         status = existing.get("status") or "draft"
         if status != "draft":
-            raise ValueError(f"Can only submit draft concepts for review. Current status: {status}")
-        
-        # Create the review request
-        # Note: This requires the DataAssetReviewManager to be available
-        # The actual integration happens in the route layer
-        review_request_data = {
+            raise ValueError(
+                f"Can only submit draft concepts for review. Current status: {status}"
+            )
+
+        label = existing.get("label") or concept_iri
+
+        # 1. Diff + reference-count context for the workflow/review payload.
+        review_context: Dict[str, Any] = {
             "concept_iri": concept_iri,
-            "concept_label": existing.get("label"),
+            "label": label,
+            "reference_count": self.reference_count(concept_iri),
+            "diff": self._compute_review_diff(concept_iri, existing),
             "reviewer_email": reviewer_email,
-            "requester_email": submitted_by,
-            "notes": notes,
-            "asset_type": "knowledge_concept",
+            "reset_approvals_on_resubmit": reset_mode or "reset_all",
         }
-        
-        # Return the data needed for review request creation
-        # The route layer will create the actual review request
-        return review_request_data
+
+        # 2. Fire the governance trigger. Governed iff a workflow executed.
+        governed = False
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+
+            registry = get_trigger_registry(self._db)
+            executions = registry.on_request_status_change(
+                entity_type=EntityType.ONTOLOGY_CONCEPT,
+                entity_id=concept_iri,
+                from_status="draft",
+                to_status="under_review",
+                entity_name=label,
+                entity_data=review_context,
+                user_email=submitted_by,
+                blocking=True,
+            )
+            governed = bool(executions)
+        except Exception as e:
+            # A trigger-registry failure must not sink an otherwise valid submit
+            # (ungoverned path stays zero-friction).
+            logger.warning(f"on_request_status_change trigger failed for {concept_iri}: {e}")
+
+        # 3. Create the backing DataAssetReview when a review manager + reviewer
+        #    are available. This is the sanctioned reuse of the review system.
+        review_request_id: Optional[str] = None
+        review_mgr = get_app_state_manager("data_asset_review_manager")
+        if review_mgr is not None and reviewer_email:
+            try:
+                from src.models.data_asset_reviews import DataAssetReviewRequestCreate
+
+                # reset_approvals_on_resubmit is stashed on the review notes as a
+                # machine-readable marker (no schema column exists — see the P2
+                # follow-up TODO). Default 'reset_all' is fully implemented;
+                # 'only_changer' is treated as reset_all until a column lands.
+                effective_mode = reset_mode if reset_mode in ("reset_all", "only_changer") else "reset_all"
+                stashed_notes = self._encode_reset_mode_in_notes(notes, effective_mode)
+                req = DataAssetReviewRequestCreate(
+                    requester_email=submitted_by,
+                    reviewer_email=reviewer_email,
+                    asset_fqns=[self.concept_review_fqn(concept_iri)],
+                    title=f"Concept review: {label}",
+                    notes=stashed_notes,
+                )
+                created = review_mgr.create_review_request(req, db=self._db)
+                review_request_id = created.id
+            except Exception as e:
+                # Failing to open the review must not block the transition; log
+                # and continue (the concept still moves to under_review).
+                logger.error(
+                    f"Failed to create DataAssetReview for concept {concept_iri}: {e}",
+                    exc_info=True,
+                )
+
+        # 4. Clear any stale review comment from a prior ping-pong iteration.
+        self._set_concept_annotation(concept_iri, ONTOS.reviewComment, None, submitted_by)
+
+        # 5. ALWAYS transition draft -> under_review (governed or not).
+        updated = self.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="under_review",
+            updated_by=submitted_by,
+            review_request_id=review_request_id,
+        )
+
+        return {
+            "concept": updated,
+            "review_request_id": review_request_id,
+            "governed": governed,
+        }
+
+    @staticmethod
+    def _encode_reset_mode_in_notes(notes: Optional[str], mode: str) -> Optional[str]:
+        """Append a machine-readable reset-mode marker to the review notes.
+
+        There is no dedicated column for ``reset_approvals_on_resubmit`` (no
+        migration in this task), so the mode is stashed as a trailing marker line
+        on the review's ``notes`` field. ``_decode_reset_mode_from_notes`` reads
+        it back.
+        """
+        marker = f"[reset_approvals_on_resubmit={mode}]"
+        base = (notes or "").rstrip()
+        return f"{base}\n{marker}".strip() if base else marker
+
+    @staticmethod
+    def _decode_reset_mode_from_notes(notes: Optional[str]) -> str:
+        """Recover the reset mode from stashed notes; unknown -> reset_all."""
+        import re
+        if not notes:
+            return "reset_all"
+        m = re.search(r"\[reset_approvals_on_resubmit=(reset_all|only_changer)\]", notes)
+        return m.group(1) if m else "reset_all"
+
+    def withdraw_concept_review(
+        self, concept_iri: str, withdrawn_by: str
+    ) -> Dict[str, Any]:
+        """Owner-initiated withdrawal: under_review -> draft, cancel the review.
+
+        Guards status == 'under_review'. Cancels the linked DataAssetReview
+        (ReviewRequestStatus.CANCELLED — which does NOT drive the concept
+        callback) and clears ``ONTOS.reviewRequestId``. Notifies nothing beyond
+        a log.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+        status = existing.get("status") or "draft"
+        if status != "under_review":
+            raise ValueError(
+                f"Can only withdraw a concept that is under review. Current status: {status}"
+            )
+
+        review_request_id = existing.get("review_request_id")
+
+        # Cancel the backing review first (CANCELLED is terminal + non-reflecting).
+        if review_request_id:
+            review_mgr = get_app_state_manager("data_asset_review_manager")
+            if review_mgr is not None:
+                try:
+                    from src.models.data_asset_reviews import (
+                        DataAssetReviewRequestUpdateStatus,
+                        ReviewRequestStatus,
+                    )
+                    review_mgr.update_review_request_status(
+                        review_request_id,
+                        DataAssetReviewRequestUpdateStatus(
+                            status=ReviewRequestStatus.CANCELLED,
+                            notes="Withdrawn by owner",
+                        ),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to cancel review {review_request_id} on withdraw: {e}"
+                    )
+
+        # under_review -> draft
+        updated = self.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="draft",
+            updated_by=withdrawn_by,
+        )
+
+        # Clear the review linkage + any pending comment.
+        self._set_concept_annotation(concept_iri, ONTOS.reviewRequestId, None, withdrawn_by)
+        self._set_concept_annotation(concept_iri, ONTOS.reviewComment, None, withdrawn_by)
+
+        logger.info(f"Concept {concept_iri} review withdrawn by {withdrawn_by}")
+        return {"concept": self.get_concept(concept_iri), "review_request_id": None}
+
+    def apply_review_decision(
+        self,
+        concept_iri: str,
+        decision: str,
+        decided_by: Optional[str] = None,
+        comments: Optional[str] = None,
+        reset_mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Reflect a reviewer decision onto the concept (send-back hook).
+
+        Called from ``DataAssetReviewManager.update_review_request_status`` when a
+        KNOWLEDGE_CONCEPT review reaches a terminal reviewer status.
+
+          * ``approved``          -> under_review -> approved.
+          * ``changes_requested`` -> under_review -> draft, carrying reviewer
+            comments onto ``ONTOS.reviewComment`` for the owner.
+          * ``denied``            -> under_review -> draft, flagged terminal-deny
+            via ``ONTOS.reviewDecision`` (no hard delete).
+
+        Idempotent-ish: if the concept is already in the decision's target state
+        the call is a no-op; an otherwise illegal current status raises
+        ``ValueError``.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+        current_status = existing.get("status") or "draft"
+
+        if decision == "approved":
+            if current_status == "approved":
+                return {"concept": existing, "decision": decision}
+            if current_status != "under_review":
+                raise ValueError(
+                    f"Cannot approve concept in status '{current_status}'"
+                )
+            updated = self.update_concept_status(
+                concept_iri=concept_iri, new_status="approved", updated_by=decided_by
+            )
+            logger.info(f"Concept {concept_iri} approved by {decided_by}")
+            return {"concept": updated, "decision": decision}
+
+        if decision in ("changes_requested", "denied"):
+            if current_status == "draft":
+                # Already sent back (idempotent) — still record the annotations.
+                updated = existing
+            elif current_status != "under_review":
+                raise ValueError(
+                    f"Cannot send back concept in status '{current_status}'"
+                )
+            else:
+                updated = self.update_concept_status(
+                    concept_iri=concept_iri, new_status="draft", updated_by=decided_by
+                )
+            if comments:
+                self._set_concept_annotation(
+                    concept_iri, ONTOS.reviewComment, comments, decided_by
+                )
+            self._set_concept_annotation(
+                concept_iri, ONTOS.reviewDecision, decision, decided_by
+            )
+            logger.info(
+                f"Concept {concept_iri} sent back to draft ({decision}) by {decided_by}"
+            )
+            return {"concept": self.get_concept(concept_iri), "decision": decision}
+
+        raise ValueError(f"Unknown review decision: {decision}")
 
     # ========================================================================
     # COLLECTION EXPORT

@@ -207,6 +207,7 @@ export default function EnrichView() {
         contracts: s.contracts ?? 0,
         assets: s.assets ?? 0,
         suggested: s.suggested ?? 0,
+        lastRun: s.last_run_at ?? null,
       }));
       setCoverageRows(rows);
     } catch {
@@ -217,42 +218,8 @@ export default function EnrichView() {
     void fetchCoverage();
   }, [fetchCoverage]);
 
-  // Recent term-mapping runs — restores the legacy Map's "Recent runs" list.
-  // Clicking a run re-opens the result summary (view its suggestions again).
-  const [recentRuns, setRecentRuns] = useState<Run[]>([]);
-  const fetchRecentRuns = useCallback(async () => {
-    try {
-      const res = await fetch('/api/term-mappings/runs?limit=10');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data)) setRecentRuns(data as Run[]);
-    } catch {
-      /* endpoint unavailable — hide the list */
-    }
-  }, []);
-  useEffect(() => {
-    void fetchRecentRuns();
-  }, [fetchRecentRuns]);
-
-  // Open the result summary for an existing run (from the recent-runs list).
-  const openRunResult = useCallback(async (run: Run) => {
-    setRunResultLoading(true);
-    setRunResult({ run, refs: [] });
-    try {
-      const res = await fetch(
-        `/api/term-mappings/runs/${run.id}/suggestions?status=pending`,
-      );
-      const data = res.ok ? await res.json() : [];
-      const refs = (Array.isArray(data) ? data : []).map((s: { id: string }) => ({
-        fqn: `term-mapping://${run.id}/${s.id}`,
-      }));
-      setRunResult({ run, refs });
-    } catch {
-      setRunResult({ run, refs: [] });
-    } finally {
-      setRunResultLoading(false);
-    }
-  }, []);
+  // Per-scheme "Last run" now lives as a column in the coverage matrix (driven
+  // by coverage.last_run_at), so the separate recent-runs list was removed.
 
   const rows = coverageRows ?? PLACEHOLDER_ROWS;
 
@@ -437,43 +404,6 @@ export default function EnrichView() {
             onReview={(row) => setReviewScheme(row)}
           />
         </div>
-
-        {/* Recent runs — restored from the legacy Map view. Click to reopen a
-            run's result summary and review its suggestions again. */}
-        {recentRuns.length > 0 && (
-          <div className="ml-8 mt-3">
-            <p className="text-xs font-medium text-muted-foreground mb-1.5">
-              {t('enrich.map.recentRuns', 'Recent runs')}
-            </p>
-            <div className="space-y-1">
-              {recentRuns.map((run) => {
-                const stats = (run.stats ?? {}) as Record<string, number | undefined>;
-                const total = stats.suggestions_total;
-                return (
-                  <button
-                    key={run.id}
-                    type="button"
-                    onClick={() => void openRunResult(run)}
-                    className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-xs hover:bg-accent/50"
-                  >
-                    <span className="font-mono text-muted-foreground">{run.id.slice(0, 8)}</span>
-                    <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
-                      {run.status}
-                    </Badge>
-                    <span className="truncate text-muted-foreground" title={run.comment ?? undefined}>
-                      {run.comment || t('enrich.map.runNoComment', 'No comment')}
-                    </span>
-                    {typeof total === 'number' && (
-                      <span className="ml-auto shrink-0 text-muted-foreground">
-                        {t('enrich.map.runSuggestions', '{{count}} suggested', { count: total })}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </section>
 
       {/* LANE 2 — DELIVER */}
@@ -526,10 +456,9 @@ export default function EnrichView() {
         onOpenChange={setRunConfigOpen}
         onCreated={async (run) => {
           setRunConfigOpen(false);
-          // Refresh the coverage matrix so the per-scheme suggested count (and
-          // the Review button) reflect the new run, plus the recent-runs list.
+          // Refresh the coverage matrix so the per-scheme suggested count, the
+          // Review button, and the Last run column reflect the new run.
           void fetchCoverage();
-          void fetchRecentRuns();
           // Fetch the run's suggestions so the in-place reviewer has live refs.
           setRunResultLoading(true);
           setRunResult({ run, refs: [] });

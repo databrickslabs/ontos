@@ -306,18 +306,11 @@ export default function LinkedObjectsPanel({
 
   const navigateToEntity = (link: EnrichedSemanticLink) => {
     switch (link.entity_type) {
-      case 'data_product': {
-        // entity_id may be a UUID or a slug/name. Attempt direct navigation first;
-        // if it looks like a slug (not a UUID pattern), route to products list with search.
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(link.entity_id)
-        if (isUuid) {
-          navigate(`/data-products/${link.entity_id}`)
-        } else {
-          // Slug or name: navigate to list with search filter for graceful fallback
-          navigate(`/data-products?q=${encodeURIComponent(link.entity_id)}`)
-        }
+      case 'data_product':
+        // A link's entity_id is the product's real id (the "Link asset" action
+        // stores the resolved id). Navigate straight to its detail page.
+        navigate(`/data-products/${link.entity_id}`)
         return
-      }
       case 'data_contract':
         navigate(`/data-contracts/${link.entity_id}`)
         return

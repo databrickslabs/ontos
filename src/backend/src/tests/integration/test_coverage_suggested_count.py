@@ -18,11 +18,14 @@ from src.db_models.term_mappings import (
     SUG_STATUS_ACCEPTED,
     SUG_STATUS_REJECTED,
 )
-from src.repositories.term_mapping_repository import mapping_suggestion_repo
+from src.repositories.term_mapping_repository import (
+    mapping_suggestion_repo,
+    mapping_run_repo,
+)
 
 
-def _mk_run(db: Session) -> MappingApplyRunDb:
-    run = MappingApplyRunDb(id=uuid.uuid4())
+def _mk_run(db: Session, contexts=None) -> MappingApplyRunDb:
+    run = MappingApplyRunDb(id=uuid.uuid4(), ontology_contexts=contexts or [])
     db.add(run)
     db.flush()
     return run
@@ -64,3 +67,17 @@ def test_count_pending_by_target_concept_empty(db_session: Session):
     counts = mapping_suggestion_repo.count_pending_by_target_concept(db_session)
     assert isinstance(counts, dict)
     # Any pre-existing rows are unrelated; just assert it does not raise and is a dict.
+
+
+def test_last_run_at_by_context_takes_latest_per_scheme(db_session: Session):
+    # Two runs on scheme A (newest wins) + one on scheme B.
+    _mk_run(db_session, contexts=["urn:glossary:A"])
+    db_session.flush()
+    _mk_run(db_session, contexts=["urn:glossary:A", "urn:glossary:B"])
+    db_session.flush()
+
+    latest = mapping_run_repo.last_run_at_by_context(db_session)
+    assert "urn:glossary:A" in latest
+    assert "urn:glossary:B" in latest
+    # A's latest must be >= B's (A appears in the later run too).
+    assert latest["urn:glossary:A"] >= latest["urn:glossary:B"]

@@ -59,6 +59,7 @@ class CoverageSchemeRow(BaseModel):
     contracts: int  # distinct data_contract* links across the scheme
     assets: int  # distinct physical layer (uc_*/asset) links across the scheme
     suggested: int = 0  # pending term-mapping suggestions awaiting review, this scheme
+    last_run_at: Optional[str] = None  # ISO ts of the latest term-mapping run targeting this scheme
 
 
 class CoverageResponse(BaseModel):

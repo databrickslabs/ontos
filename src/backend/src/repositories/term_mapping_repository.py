@@ -42,6 +42,36 @@ class MappingRunRepository(CRUDBase[MappingApplyRunDb, RunCreate, RunRead]):
             db.rollback()
             raise
 
+    def last_run_at_by_context(self, db: Session) -> dict[str, str]:
+        """Return {scheme_context: latest_run_created_at_iso} across all runs.
+
+        A run's ``ontology_contexts`` is a JSON list of the schemes it targeted;
+        we take the most recent ``created_at`` per scheme. Powers the Enrich
+        coverage matrix "Last run" column. Done in Python (JSON-array membership
+        is awkward + non-portable in SQL across SQLite/Postgres, and the run
+        count is small).
+        """
+        try:
+            runs = (
+                db.query(self.model.ontology_contexts, self.model.created_at)
+                .order_by(desc(self.model.created_at))
+                .all()
+            )
+            latest: dict[str, str] = {}
+            for contexts, created in runs:
+                if not contexts or created is None:
+                    continue
+                iso = created.isoformat()
+                for ctx in contexts:
+                    # runs are newest-first, so first write per ctx wins
+                    if ctx not in latest:
+                        latest[ctx] = iso
+            return latest
+        except SQLAlchemyError as e:
+            logger.error(f"last_run_at_by_context failed: {e}", exc_info=True)
+            db.rollback()
+            raise
+
 
 class MappingSuggestionRepository(CRUDBase[MappingSuggestionDb, MappingSuggestionDb, MappingSuggestionDb]):
     """Suggestion queue. Uses the model itself as the create/update schema —

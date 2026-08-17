@@ -6540,14 +6540,22 @@ class SemanticModelsManager(SearchableAsset):
         # enabled). Best-effort: a term-mapping subsystem hiccup must not sink the
         # whole coverage response, so fall back to an empty map (suggested=0).
         pending_by_iri: Dict[str, int] = {}
+        last_run_by_scheme: Dict[str, str] = {}
         try:
-            from src.repositories.term_mapping_repository import mapping_suggestion_repo
+            from src.repositories.term_mapping_repository import (
+                mapping_suggestion_repo,
+                mapping_run_repo,
+            )
             pending_by_iri = mapping_suggestion_repo.count_pending_by_target_concept(
                 semantic_links_manager._db
             )
+            last_run_by_scheme = mapping_run_repo.last_run_at_by_context(
+                semantic_links_manager._db
+            )
         except Exception as e:
-            logger.warning(f"coverage: could not load pending suggestions: {e}")
+            logger.warning(f"coverage: could not load term-mapping run data: {e}")
             pending_by_iri = {}
+            last_run_by_scheme = {}
 
         # Entity types that belong to each layer
         product_layer_types = {'data_product'}
@@ -6579,6 +6587,7 @@ class SemanticModelsManager(SearchableAsset):
                     contracts=0,
                     assets=0,
                     suggested=0,
+                    last_run_at=last_run_by_scheme.get(scheme),
                 ))
                 continue
 
@@ -6631,6 +6640,7 @@ class SemanticModelsManager(SearchableAsset):
                 contracts=len(scheme_contracts),
                 assets=len(scheme_assets),
                 suggested=scheme_suggested,
+                last_run_at=last_run_by_scheme.get(scheme),
             ))
 
         # Compute totals

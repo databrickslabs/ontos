@@ -5,6 +5,7 @@ import { Info, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { RelativeDate } from '@/components/common/relative-date';
 import { usePagination, PaginationControls } from '@/components/common/paginated-list';
 import {
   Tooltip,
@@ -50,6 +51,8 @@ export interface CoverageRow {
   assets: number;
   /** Pending suggested matches awaiting review. */
   suggested: number;
+  /** ISO timestamp of the latest term-mapping run targeting this scheme. */
+  lastRun?: string | null;
 }
 
 interface Props {
@@ -110,7 +113,7 @@ export default function CoverageMatrix({
   const unmapped = totals.concepts - totals.covered;
 
   const gridCols =
-    'grid grid-cols-[1.4fr_0.7fr_1.4fr_0.8fr_0.8fr_0.8fr_0.9fr_90px] gap-3 items-center';
+    'grid grid-cols-[1.4fr_0.7fr_1.4fr_0.8fr_0.8fr_0.8fr_0.9fr_0.9fr_90px] gap-3 items-center';
 
   // Search by scheme name, then paginate the filtered set (5 per page by
   // default, size-selectable). The totals row below is a rollup over ALL rows
@@ -156,10 +159,17 @@ export default function CoverageMatrix({
           <span className="text-right text-sky-700 dark:text-sky-400">
             {t('enrich.map.col.contracts', 'Contracts')}
           </span>
-          <span className="text-right text-amber-700 dark:text-amber-500">
+          <span className="flex items-center justify-end gap-1 text-amber-700 dark:text-amber-500">
             {t('enrich.map.col.assets', 'Assets')}
+            <InfoDot
+              text={t(
+                'enrich.map.assetNote',
+                'Asset links are what Deliver enriches in step 2. Asset-direct linking works even before any product or contract exists, so it solves the chicken-and-egg case.',
+              )}
+            />
           </span>
           <span className="text-right">{t('enrich.map.col.suggested', 'Suggested')}</span>
+          <span className="text-right">{t('enrich.map.col.lastRun', 'Last run')}</span>
           <span />
         </div>
 
@@ -205,6 +215,13 @@ export default function CoverageMatrix({
                 <span className="text-muted-foreground">0</span>
               )}
             </span>
+            <span className="text-right text-xs text-muted-foreground tabular-nums">
+              {row.lastRun ? (
+                <RelativeDate date={row.lastRun} />
+              ) : (
+                <span className="text-muted-foreground/50">{t('enrich.map.neverRun', '—')}</span>
+              )}
+            </span>
             <span className="text-right">
               <Button
                 variant="outline"
@@ -244,6 +261,7 @@ export default function CoverageMatrix({
             </span>
             <span className="text-right tabular-nums">{totals.suggested}</span>
             <span />
+            <span />
           </div>
         )}
       </div>
@@ -260,9 +278,9 @@ export default function CoverageMatrix({
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
         {t(
-          'enrich.map.assetNote',
-          'Asset links ({{count}}) are what Deliver enriches in step 2. Asset-direct linking works even before any product or contract exists, so it solves the chicken-and-egg case. The {{unmapped}} unmapped concepts have no link yet.',
-          { count: totals.assets, unmapped },
+          'enrich.map.unmappedNote',
+          '{{unmapped}} concepts have no link yet.',
+          { unmapped },
         )}
         <InfoDot
           text={t(

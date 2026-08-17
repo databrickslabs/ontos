@@ -232,28 +232,6 @@ export default function DataProducts() {
       });
     }
 
-    // Apply free-text filter from URL parameter (?q=). Used by deep-links that
-    // hold a product slug/name rather than a UUID (e.g. the concept
-    // linked-objects panel), so the user lands on a filtered list instead of a
-    // 404 on /data-products/<slug>.
-    const qFilter = searchParams.get('q');
-    if (qFilter) {
-      // Normalize separators so a slug deep-link ("customer-360") matches a
-      // titled product ("Customer 360"): treat -, _, and space as equivalent.
-      const norm = (s: string) => s.toLowerCase().replace(/[-_\s]+/g, ' ').trim();
-      const q = norm(qFilter);
-      filtered = filtered.filter(p => {
-        const title = norm(p.info?.title || p.name || '');
-        const id = norm(p.id || '');
-        // Also match any sourceId custom property (preserved slug).
-        const props = (p as any).customProperties || (p as any).custom_properties || [];
-        const sourceId = norm(
-          (props.find((c: any) => c.key === 'sourceId' || c.key === 'source_id') || {}).value || '',
-        );
-        return title.includes(q) || id.includes(q) || (!!sourceId && sourceId.includes(q));
-      });
-    }
-
     // Apply subscription filter
     if (showMySubscriptions) {
       filtered = filtered.filter(p => mySubscribedProductIds.has(p.id));

@@ -1856,6 +1856,10 @@ def _set_concept_status_payload(
         return concept
     except HTTPException:
         raise
+    except ReferenceCountError as e:
+        # Still-referenced concept can't be deprecated/archived via the raw
+        # status path — surface the same 409 the retire gate uses.
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

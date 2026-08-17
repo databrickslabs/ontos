@@ -5394,7 +5394,23 @@ class SemanticModelsManager(SearchableAsset):
         allowed = VALID_TRANSITIONS.get(current_status, [])
         if new_status not in allowed:
             raise ValueError(f"Invalid status transition: {current_status} -> {new_status}. Allowed: {allowed}")
-        
+
+        # Reference-count gate (P0-6): a still-referenced concept must NOT be
+        # retired to a terminal state via the raw status path — that bypasses
+        # the retire gate / deprecate-with-successors flow. Deprecating a
+        # referenced concept must go through deprecate_concept (which records
+        # successors); retiring must go through retire_concept (0 refs). So
+        # refuse deprecated/archived here while references remain.
+        if new_status in ("deprecated", "archived"):
+            count = self.reference_count(concept_iri)
+            if count > 0:
+                raise ReferenceCountError(
+                    f"Cannot move concept to '{new_status}' while referenced by "
+                    f"{count} place(s). Deprecate with successors, or remap the "
+                    f"references first.",
+                    count=count,
+                )
+
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))
         now = datetime.utcnow().isoformat() + "Z"

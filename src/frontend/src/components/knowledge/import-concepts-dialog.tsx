@@ -153,9 +153,13 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // /import route, which returns {mode:'preview', ...} for non-empty schemes.
   useEffect(() => {
     if (!open) return;
-    // Nothing to check against a target: no files, no chosen target, or
-    // creating-new (the scheme does not exist yet — conflicts surface on submit).
-    if (selectedFiles.length === 0 || !selectedCollectionIri || creatingNew) {
+    // Nothing to check against a target: no files, no chosen target,
+    // creating-new (scheme not yet created — conflicts surface on submit), or
+    // per-file (each file makes its own fresh scheme — no target to diff/conflict).
+    if (
+      selectedFiles.length === 0 || !selectedCollectionIri || creatingNew ||
+      schemeStrategy === 'perfile'
+    ) {
       setPreviews([]);
       setConflicts([]);
       return;
@@ -191,7 +195,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, selectedFiles, selectedCollectionIri, creatingNew, targetHasContent]);
+  }, [open, selectedFiles, selectedCollectionIri, creatingNew, targetHasContent, schemeStrategy]);
 
   const resetState = () => {
     setSelectedFiles([]);
@@ -309,10 +313,16 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     return res.json();
   };
 
+  // Derive a scheme label from a file name: drop the extension, turn
+  // separators into spaces (e.g. "sales_glossary.ttl" -> "sales glossary").
+  const schemeLabelFromFile = (fileName: string): string =>
+    fileName.replace(/\.[^./]+$/, '').replace(/[-_]+/g, ' ').trim() || fileName;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedFiles.length === 0) return;
-    if (!selectedCollectionIri) return;
+    // Per-file needs no pre-selected target — each file makes its own scheme.
+    if (schemeStrategy !== 'perfile' && !selectedCollectionIri) return;
     if (creatingNew && !newSchemeName.trim()) return;
 
     // If conflicts are shown, require a resolution choice before proceeding.
@@ -324,6 +334,36 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     setIsUploading(true);
     setError(null);
     setOutcomes(null);
+
+    // PER-FILE: each file becomes its own new scheme (named from the file), then
+    // imports into it. Composed client-side from create-scheme + import — no
+    // dedicated backend endpoint needed.
+    if (schemeStrategy === 'perfile') {
+      const results: FileImportOutcome[] = [];
+      for (const file of selectedFiles) {
+        try {
+          const label = schemeLabelFromFile(file.name);
+          const iri = await createScheme(label);
+          const data = await importOneFile(file, iri, 'skip');
+          results.push({
+            name: file.name,
+            ok: true,
+            triplesImported: data?.triples_imported ?? 0,
+            status: data?.status || 'applied',
+          });
+        } catch (err: any) {
+          results.push({ name: file.name, ok: false, error: err.message });
+        }
+      }
+      setOutcomes(results);
+      setIsUploading(false);
+      if (results.some((r) => r.ok)) onImported();
+      if (results.every((r) => !r.ok)) {
+        setError(t('semantic-models:import.allFailed',
+          'No files could be imported. See per-file errors below.'));
+      }
+      return;
+    }
 
     // Re-upload into a scheme with content: the diff is ALREADY staged and shown
     // (previews). Import just confirms those tokens — the user reviewed the diff
@@ -432,7 +472,8 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
 
   const canSubmit =
     selectedFiles.length > 0 &&
-    !!selectedCollectionIri &&
+    // Per-file derives a scheme from each file, so no target selection needed.
+    (schemeStrategy === 'perfile' || !!selectedCollectionIri) &&
     (!creatingNew || !!newSchemeName.trim()) &&
     !previewing &&
     !isUploading;
@@ -562,19 +603,17 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
               </RadioGroup>
               {schemeStrategy === 'perfile' && (
                 <p className="text-xs text-muted-foreground">
-                  {/* TODO(cb-v2): the import endpoint imports into an existing
-                      collection only; it does not create one scheme per file.
-                      Until a per-file/create endpoint exists, all files land in
-                      the target collection selected below. */}
                   {t(
-                    'semantic-models:import.perFileTodo',
-                    'One-scheme-per-file needs a backend that creates a scheme per file; for now all files land in the collection below.'
+                    'semantic-models:import.perFileNote',
+                    'Each file creates a new scheme named after the file. No target selection needed.'
                   )}
                 </p>
               )}
             </div>
 
-            {/* Target collection (merge strategy — and current fallback for per-file) */}
+            {/* Target collection — only for the merge strategy. Per-file derives
+                a scheme per file, so no target selection is shown. */}
+            {schemeStrategy !== 'perfile' && (
             <div className="grid gap-2">
               <Label>
                 {t('semantic-models:import.targetCollection', 'Target concept scheme')}
@@ -617,6 +656,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                 </p>
               )}
             </div>
+            )}
 
             {/* Conflicts-reconciled-later note — hidden when a hard IRI conflict
                 needs resolving HERE (the resolution UI below takes over), since

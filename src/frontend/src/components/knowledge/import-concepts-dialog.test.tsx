@@ -63,11 +63,16 @@ describe('ImportConceptsDialog (multi-file + scheme strategy)', () => {
     expect(screen.getByText('b.ttl')).toBeInTheDocument();
   });
 
-  it('surfaces a per-file TODO note when one-scheme-per-file is chosen', () => {
+  it('explains one-scheme-per-file and drops the target selector when chosen', () => {
     renderDialog();
+    // Target selector is visible for the default (merge) strategy.
+    expect(screen.getByText('Target concept scheme')).toBeInTheDocument();
     fireEvent.click(screen.getByText('One scheme per file'));
+    // Now shows the per-file note and hides the target selector (each file
+    // creates its own scheme, so no target selection is needed).
     expect(
-      screen.getByText(/needs a backend that creates a scheme per file/i)
+      screen.getByText(/each file creates a new scheme named after the file/i)
     ).toBeInTheDocument();
+    expect(screen.queryByText('Target concept scheme')).not.toBeInTheDocument();
   });
 });

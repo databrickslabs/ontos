@@ -514,6 +514,37 @@ def t_approval_workflow_model(base: str, base_iri: str) -> None:
         record("Process gate holds submitted concept", FAIL,
                f"expected under_review, got {st} (governed={governed})")
 
+    # (d) B1.3-#1: the approval notification payload must carry the concept's
+    # DEFINITION (+ label) so the approver sees what they're approving. Find the
+    # workflow_approval notification for this concept and inspect action_payload.
+    if st != "under_review" or not governed:
+        # No governed hold -> no approval notification to inspect.
+        return
+    ns, nd = call(base, "GET", "/api/notifications")
+    notifs = nd if isinstance(nd, list) else (nd.get("notifications") if isinstance(nd, dict) else [])
+    # Match the concept's approval notification: action_type workflow_approval
+    # AND a payload referencing this concept IRI.
+    match = None
+    for n in notifs or []:
+        ap = n.get("action_payload") or {}
+        fp = ap.get("full_payload") or {}
+        if (n.get("action_type") == "workflow_approval"
+                and (ap.get("entity_id") == cust_iri or fp.get("concept_iri") == cust_iri)):
+            match = ap
+            break
+    if match is None:
+        record("B1.3-#1 notification carries definition", SKIP,
+               "no workflow_approval notification found for the concept")
+        return
+    fp = match.get("full_payload") or {}
+    definition = fp.get("definition") or match.get("definition")
+    if definition:
+        record("B1.3-#1 notification carries definition", PASS,
+               f"definition present ({str(definition)[:40]}...)")
+    else:
+        record("B1.3-#1 notification carries definition", FAIL,
+               f"no definition in payload; keys={sorted(list(fp.keys()))[:10]}")
+
 
 def cleanup(base: str) -> None:
     for iri in list(_created_iris):

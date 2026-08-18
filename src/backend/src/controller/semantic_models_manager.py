@@ -5676,6 +5676,14 @@ class SemanticModelsManager(SearchableAsset):
             "reviewer_email": reviewer_email,
             "reset_approvals_on_resubmit": reset_mode or "reset_all",
         }
+        # surfaced in the approver notification payload (definition/type/scheme) so the reviewer sees what they're approving
+        _definition = existing.get("comment") or existing.get("definition")  # concept detail model uses `comment` for the definition; include both fallbacks
+        if _definition:
+            review_context["definition"] = _definition
+        if existing.get("concept_type"):
+            review_context["concept_type"] = existing.get("concept_type")
+        if existing.get("source_context"):
+            review_context["source_context"] = existing.get("source_context")
 
         # 2. Fire the governance trigger. Governed iff a workflow executed.
         governed = False

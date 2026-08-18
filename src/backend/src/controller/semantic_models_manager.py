@@ -4170,35 +4170,93 @@ class SemanticModelsManager(SearchableAsset):
     # COLLECTION EXPORT
     # ========================================================================
 
+    def _collection_exists_in_db(self, collection_iri: str) -> bool:
+        """Whether a collection is persisted, independent of in-memory hydration.
+
+        ``get_collection`` reads the in-memory meta context, which may not be
+        hydrated for a given collection (disabled model, fresh process). Existence
+        is authoritatively determined by the persisted triples: either the
+        collection's own concept context has rows, or a KnowledgeCollection
+        metadata triple exists for the IRI in the meta sources context.
+        """
+        if rdf_triples_repo.context_exists(self._db, collection_iri):
+            return True
+        for triple in rdf_triples_repo.list_by_subject(self._db, collection_iri):
+            if (
+                triple.predicate_uri == str(RDF.type)
+                and triple.object_value == str(ONTOS.KnowledgeCollection)
+            ):
+                return True
+        return False
+
+    def _build_collection_graph(self, collection_iri: str) -> Graph:
+        """Build a fresh rdflib Graph for a collection from its persisted triples.
+
+        The database (``rdf_triples``, keyed by ``context_name == collection_iri``)
+        is the source of truth. In-app created / modifiable collections (e.g.
+        business glossaries) are never uploaded as files, so serializing the
+        in-memory context can miss triples when the graph is not hydrated for that
+        context (disabled model, fresh process, edits since last rebuild). Rebuild
+        from the DB so the export always reflects the latest saved state.
+
+        Falls back to the in-memory context only when the DB has no triples for the
+        collection, preserving behavior for any context not backed by ``rdf_triples``.
+        """
+        graph = Graph()
+        # Keep serialized output tidy and consistent with the rest of the app.
+        graph.bind("skos", SKOS)
+        graph.bind("owl", OWL)
+        graph.bind("rdfs", RDFS)
+        graph.bind("ontos", ONTOS)
+
+        db_triples = rdf_triples_repo.list_by_context(self._db, collection_iri)
+        if db_triples:
+            for triple in db_triples:
+                subj = URIRef(triple.subject_uri)
+                pred = URIRef(triple.predicate_uri)
+                if triple.object_is_uri:
+                    obj = URIRef(triple.object_value)
+                elif triple.object_language:
+                    obj = Literal(triple.object_value, lang=triple.object_language)
+                elif triple.object_datatype:
+                    obj = Literal(triple.object_value, datatype=URIRef(triple.object_datatype))
+                else:
+                    obj = Literal(triple.object_value)
+                graph.add((subj, pred, obj))
+            return graph
+
+        # Fallback: copy whatever the in-memory context holds (legacy behavior).
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        for triple in coll_context:
+            graph.add(triple)
+        return graph
+
     def export_collection_as_turtle(self, collection_iri: str) -> str:
         """Export a collection's concepts as Turtle format.
-        
-        Returns the serialized RDF graph for the collection.
+
+        Returns the serialized RDF graph for the collection, generated from the
+        persisted triples so modifiable in-app collections export correctly.
         """
-        collection = self.get_collection(collection_iri)
-        if not collection:
+        if not self.get_collection(collection_iri) and not self._collection_exists_in_db(collection_iri):
             raise ValueError(f"Collection not found: {collection_iri}")
-        
-        # Get the context for this collection
+
         try:
-            coll_context = self._graph.get_context(URIRef(collection_iri))
-            return coll_context.serialize(format='turtle')
+            return self._build_collection_graph(collection_iri).serialize(format='turtle')
         except Exception as e:
             logger.error(f"Failed to export collection: {e}")
             raise ValueError(f"Failed to export collection: {e}")
 
     def export_collection_as_rdfxml(self, collection_iri: str) -> str:
         """Export a collection's concepts as RDF/XML format.
-        
-        Returns the serialized RDF graph for the collection.
+
+        Returns the serialized RDF graph for the collection, generated from the
+        persisted triples so modifiable in-app collections export correctly.
         """
-        collection = self.get_collection(collection_iri)
-        if not collection:
+        if not self.get_collection(collection_iri) and not self._collection_exists_in_db(collection_iri):
             raise ValueError(f"Collection not found: {collection_iri}")
-        
+
         try:
-            coll_context = self._graph.get_context(URIRef(collection_iri))
-            return coll_context.serialize(format='xml')
+            return self._build_collection_graph(collection_iri).serialize(format='xml')
         except Exception as e:
             logger.error(f"Failed to export collection: {e}")
             raise ValueError(f"Failed to export collection: {e}")

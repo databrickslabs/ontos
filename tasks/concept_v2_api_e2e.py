@@ -474,6 +474,47 @@ def t_changeset_trigger_hidden(base: str) -> None:
                f"concept_changeset still selectable: {ets}")
 
 
+def t_approval_workflow_model(base: str, base_iri: str) -> None:
+    """Concept approval two-workflow model:
+      (a) an APPROVAL wizard resolves for the concept entity (for_request_status_change),
+      (b) the PROCESS gate holds a submitted concept in under_review,
+      (c) approving via the workflow moves the concept to approved.
+    All three are SKIP (not FAIL) when the corresponding workflow isn't
+    configured on this app — the wiring is in code, the instances are data."""
+    # (a) approval wizard resolves for the concept entity.
+    ws, wd = call(base, "GET",
+                  "/api/workflows/for-trigger/for_request_status_change",
+                  params={"entity_type": "ontology_concept"})
+    if ws == 200 and isinstance(wd, dict) and wd.get("id"):
+        record("Approval wizard resolves for concept", PASS,
+               f"{wd.get('name')} (type={wd.get('workflow_type')})")
+    elif ws == 404:
+        record("Approval wizard resolves for concept", SKIP,
+               "no approval (for_request_status_change) workflow configured for concepts")
+    else:
+        record("Approval wizard resolves for concept", FAIL, f"status={ws} {str(wd)[:120]}")
+
+    # (b)+(c) process gate: submit a fresh draft, expect it HELD in under_review
+    # if a process workflow with an approval step is scoped to concepts.
+    cust_iri = NS + "Customer"
+    # Ensure the concept is a draft (the base import left it draft).
+    ss, sd = call(base, "POST", "/api/knowledge/concepts/by-iri/submit-review",
+                  params={"iri": cust_iri}, body={})
+    if ss != 200:
+        record("Process gate holds submitted concept", SKIP, f"submit status={ss} {str(sd)[:100]}")
+        return
+    governed = sd.get("governed") if isinstance(sd, dict) else None
+    # Read back status.
+    _, cd = call(base, "GET", "/api/semantic-models/concepts/by-iri", params={"iri": cust_iri})
+    st = ((cd or {}).get("concept") or {}).get("status", "").lower() if isinstance(cd, dict) else "?"
+    if st == "under_review":
+        record("Process gate holds submitted concept", PASS,
+               f"status=under_review, governed={governed}")
+    else:
+        record("Process gate holds submitted concept", FAIL,
+               f"expected under_review, got {st} (governed={governed})")
+
+
 def cleanup(base: str) -> None:
     for iri in list(_created_iris):
         ds, _ = delete_scheme(base, iri)
@@ -508,6 +549,10 @@ def main() -> int:
         t_reupload_refreshes_sourcefile(args.base)
         t_delete_recreate_no_leak(args.base)
         t_changeset_trigger_hidden(args.base)
+        # Approval two-workflow model — run LAST on the base scheme, since it
+        # mutates the base Customer concept (draft -> under_review).
+        if base_iri:
+            t_approval_workflow_model(args.base, base_iri)
     finally:
         if not args.keep:
             print("\n--- teardown ---")

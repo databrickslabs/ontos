@@ -30,12 +30,16 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-# role name -> {feature_id: level}. Only applied where the key is absent.
+# role name -> {feature_id: level}. Levels are the FeatureAccessLevel STRING
+# values ("Admin" / "Read/Write" / "Read-only" / "None"), matching how they are
+# stored in app_roles.feature_permissions. Applied only where the role currently
+# has NO effective access (key absent OR value 'None'), so a real grant is never
+# downgraded.
 _GRANTS = {
-    'Data Governance Officer': {'semantic-models': 'admin', 'term-mapping': 'admin'},
-    'Data Steward':            {'semantic-models': 'read_write', 'term-mapping': 'read_write'},
-    'Data Consumer':           {'semantic-models': 'read_only'},
-    'Data Producer':           {'semantic-models': 'read_only'},
+    'Data Governance Officer': {'semantic-models': 'Admin', 'term-mapping': 'Admin'},
+    'Data Steward':            {'semantic-models': 'Read/Write', 'term-mapping': 'Read/Write'},
+    'Data Consumer':           {'semantic-models': 'Read-only'},
+    'Data Producer':           {'semantic-models': 'Read-only'},
 }
 
 
@@ -51,9 +55,10 @@ def upgrade() -> None:
         return
     for role_name, grants in _GRANTS.items():
         for feat_id, level in grants.items():
-            # Only add the key if the role exists AND doesn't already have it —
-            # additive, never overwrites an existing (possibly stronger or
-            # deliberately weaker) grant.
+            # Grant only when the role currently has NO effective access to the
+            # feature: the key is absent, OR present but 'None' (the seeder
+            # writes every feature, defaulting unset ones to 'None'). Never
+            # overwrite a real grant (Read/Write, Admin, ...).
             conn.execute(
                 sa.text(f"""
                     UPDATE app_roles
@@ -64,7 +69,7 @@ def upgrade() -> None:
                         true
                     )::text
                     WHERE name = :role_name
-                      AND NOT (feature_permissions::jsonb ? cast(:feat_id as text))
+                      AND COALESCE(feature_permissions::jsonb ->> cast(:feat_id as text), 'None') = 'None'
                 """),
                 {"level": level, "role_name": role_name, "feat_id": feat_id},
             )

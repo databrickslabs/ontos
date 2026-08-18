@@ -97,7 +97,7 @@ export function OwnershipPanel({
     setIsLoading(true);
     try {
       const response = await apiGet<BusinessOwnerRead[]>(
-        `/api/business-owners/by-object/${objectType}/${objectId}?active_only=false`
+        `/api/business-owners/by-object/${objectType}?object_id=${encodeURIComponent(objectId)}&active_only=false`
       );
       if (response.error) throw new Error(response.error);
       const all = Array.isArray(response.data) ? response.data : [];

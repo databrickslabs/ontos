@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 import json # Import json
 
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload # Added joinedload,
 from sqlalchemy.exc import IntegrityError # Import IntegrityError
 
 from src.repositories.data_domain_repository import DataDomainRepository
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead, DataDomainBasicInfo # Added DataDomainBasicInfo
 from src.db_models.data_domains import DataDomain
 from src.common.errors import ConflictError, NotFoundError, AppError # Import custom errors, AppError for validation
@@ -286,6 +287,46 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
             logger.exception(f"Error updating data domain {domain_id}: {e}")
             raise
 
+    @staticmethod
+    def _collect_domain_and_descendant_ids(domain: DataDomain) -> List[str]:
+        """Return the domain's id plus every descendant id (children cascade-delete)."""
+        ids = [str(domain.id)]
+        for child in (domain.children or []):
+            ids.extend(DataDomainManager._collect_domain_and_descendant_ids(child))
+        return ids
+
+    def get_domain_deletion_impact(self, db: Session, domain_id: UUID) -> Dict[str, Any]:
+        """Report which entities would block deletion of a domain and the assignment counts.
+
+        Returns ``{"domain_id", "domain_name", "deletable" (bool), "primary_assignments":
+        [{entity_type, entity_id}], "assignment_counts": {entity_type: {primary, additional}}}``.
+        Lets the UI warn before attempting a delete (which 409s if primary anywhere)."""
+        db_domain = self.repository.get_with_details(db, domain_id)
+        if not db_domain:
+            raise NotFoundError(f"Data domain with id '{domain_id}' not found.")
+
+        affected_domain_ids = self._collect_domain_and_descendant_ids(db_domain)
+        primary_entities: List[Tuple[str, str]] = []
+        assignment_counts: Dict[str, Dict[str, int]] = {}
+        for did in affected_domain_ids:
+            primary_entities.extend(
+                entity_domain_repo.get_entities_with_primary_domain(db, domain_id=did)
+            )
+            for etype, bucket in entity_domain_repo.get_assignment_counts_for_domain(db, domain_id=did).items():
+                agg = assignment_counts.setdefault(etype, {"primary": 0, "additional": 0})
+                agg["primary"] += bucket.get("primary", 0)
+                agg["additional"] += bucket.get("additional", 0)
+
+        return {
+            "domain_id": str(domain_id),
+            "domain_name": db_domain.name,
+            "deletable": len(primary_entities) == 0,
+            "primary_assignments": [
+                {"entity_type": etype, "entity_id": eid} for etype, eid in primary_entities
+            ],
+            "assignment_counts": assignment_counts,
+        }
+
     def delete_domain(self, db: Session, domain_id: UUID, current_user_id: str) -> Optional[DataDomainRead]:
         """Deletes a data domain by its ID."""
         logger.debug(f"Attempting to delete data domain with id: {domain_id}")
@@ -301,13 +342,54 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         if db_domain_to_delete.children:
             # Current cascade rule will delete children. If this is not desired, raise error.
             # logger.warning(f"Attempt to delete domain {domain_id} which has {len(db_domain_to_delete.children)} children. Deletion allowed due to cascade rule.")
-            # To prevent deletion: 
+            # To prevent deletion:
             # raise ConflictError(f"Cannot delete domain '{db_domain_to_delete.name}' because it has child domains. Please delete or re-parent children first.")
             pass # Current setup allows cascade delete.
 
+        # Multi-domain assignment (#520): a domain (or any descendant that would be
+        # cascade-deleted with it) that is the PRIMARY domain for any entity cannot be
+        # deleted — the primary feeds single-value integrations (ODCS domain, UC tag).
+        # Domains that are only ever *additional* can be deleted; their association rows
+        # are cleaned up below (the junction FK has no ON DELETE CASCADE).
+        affected_domain_ids = self._collect_domain_and_descendant_ids(db_domain_to_delete)
+        primary_entities: List[Tuple[str, str]] = []
+        for did in affected_domain_ids:
+            primary_entities.extend(
+                entity_domain_repo.get_entities_with_primary_domain(db, domain_id=did)
+            )
+        if primary_entities:
+            assignment_counts: Dict[str, Dict[str, int]] = {}
+            for did in affected_domain_ids:
+                for etype, bucket in entity_domain_repo.get_assignment_counts_for_domain(db, domain_id=did).items():
+                    agg = assignment_counts.setdefault(etype, {"primary": 0, "additional": 0})
+                    agg["primary"] += bucket.get("primary", 0)
+                    agg["additional"] += bucket.get("additional", 0)
+            logger.warning(
+                "Blocking deletion of domain %s ('%s'): primary for %d entity assignment(s).",
+                domain_id, db_domain_to_delete.name, len(primary_entities),
+            )
+            raise ConflictError(detail={
+                "code": "domain_primary_in_use",
+                "message": (
+                    f"Cannot delete domain '{db_domain_to_delete.name}': it is the primary domain "
+                    f"for {len(primary_entities)} entity assignment(s). Reassign those entities to a "
+                    f"different primary domain (or remove the assignment) before deleting."
+                ),
+                "domain_id": str(domain_id),
+                "domain_name": db_domain_to_delete.name,
+                "primary_assignments": [
+                    {"entity_type": etype, "entity_id": eid} for etype, eid in primary_entities
+                ],
+                "assignment_counts": assignment_counts,
+            })
+
         read_model_of_deleted = self._convert_db_to_read_model(db_domain_to_delete, db)
-        
+
         try:
+            # Clean up any additional-only association rows first (FK to data_domains has
+            # no ON DELETE CASCADE), across the domain and its cascade-deleted descendants.
+            for did in affected_domain_ids:
+                entity_domain_repo.remove_all_for_domain(db, domain_id=did)
             # The repository.remove(db, id) should work.
             # The actual object `db_domain_to_delete` will become stale after deletion from session.
             self.repository.remove(db=db, id=domain_id)

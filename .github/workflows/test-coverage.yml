@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
@@ -102,7 +102,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-node-jfrog
         with:
@@ -110,11 +110,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./src/frontend
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: Run tests with coverage
         working-directory: ./src/frontend
-        run: yarn test:coverage
+        run: npm run test:coverage
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
@@ -166,7 +166,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-python-jfrog
         with:
@@ -185,7 +185,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: ./src/frontend
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
@@ -243,7 +243,7 @@ jobs:
         working-directory: ./src/frontend
         env:
           BASE_URL: http://localhost:3000
-        run: yarn test:e2e
+        run: npm run test:e2e
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -270,7 +270,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-node-jfrog
         with:
@@ -278,11 +278,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./src/frontend
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: Run type check
         working-directory: ./src/frontend
-        run: yarn type-check
+        run: npm run type-check
 
   check-lockfiles:
     name: Requirements Lockfile Check
@@ -293,7 +293,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Check out the PR head branch (not the merge commit) so we can push back.
           # Falls back to the default ref for push events.
@@ -312,7 +312,7 @@ jobs:
           cache: ''
 
       - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
 
       - name: Regenerate lockfiles
         run: ./scripts/lock-requirements.sh
@@ -383,7 +383,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Fetch enough history to diff against the PR base.
           fetch-depth: 0
@@ -418,7 +418,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-node-jfrog
         with:
@@ -426,11 +426,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./src/frontend
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: Build frontend
         working-directory: ./src/frontend
-        run: yarn build
+        run: npm run build
 
   coverage-report:
     name: Coverage Report
@@ -442,7 +442,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download backend coverage
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8

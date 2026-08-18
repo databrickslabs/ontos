@@ -27,6 +27,7 @@ import { useNotificationsStore } from '@/stores/notifications-store';
 import DataProductGraphView from '@/components/data-products/data-product-graph-view';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useDomains } from '@/hooks/use-domains';
+import DomainBadgeList from '@/components/ui/domain-badge-list';
 import { useProjectContext } from '@/stores/project-store';
 import CertificationBadge from '@/components/common/certification-badge';
 import PublicationBadge from '@/components/common/publication-badge';
@@ -538,22 +539,18 @@ export default function DataProducts() {
       ),
       cell: ({ row }) => {
         const product = row.original;
-        const domainName = product.domain;
-        const domainId = getDomainIdByName(domainName);
+        // Multi-domain (#520): render each assigned domain as a badge (primary starred).
+        const domainIds = product.domain_ids ?? [];
+        const primaryId = product.primary_domain_id || getDomainIdByName(product.domain) || domainIds[0] || null;
         return (
-          <div>
+          <div className="space-y-1">
             <div className="font-medium">{product.name || 'Unnamed Product'}</div>
-            {domainName && domainId && (
-              <div
-                className="text-xs text-muted-foreground cursor-pointer hover:underline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/settings/data-domains/${domainId}`);
-                }}
-              >
-                ↳ Domain: {domainName}
-              </div>
-            )}
+            <DomainBadgeList
+              domains={product.domains}
+              domainIds={domainIds}
+              primaryDomainId={primaryId}
+              onDomainClick={(id) => navigate(`/settings/data-domains/${id}`)}
+            />
           </div>
         );
       },

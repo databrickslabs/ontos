@@ -478,7 +478,17 @@ class OntologyGeneratorManager:
                     kwargs["tools"] = send_tools
                     kwargs["tool_choice"] = "auto"
 
-                response = client.chat.completions.create(**kwargs)
+                try:
+                    response = client.chat.completions.create(**kwargs)
+                except Exception as first_exc:
+                    # Claude endpoints on Databricks reject the temperature
+                    # parameter (400 BAD_REQUEST) — retry without it.
+                    if "temperature" in str(first_exc).lower() and "temperature" in kwargs:
+                        logger.warning("Endpoint rejected temperature — retrying without it")
+                        kwargs.pop("temperature")
+                        response = client.chat.completions.create(**kwargs)
+                    else:
+                        raise
             except Exception as exc:
                 exc_str = str(exc)
                 # If the endpoint rejected tools, fall back to direct mode
@@ -487,12 +497,14 @@ class OntologyGeneratorManager:
                     tools_supported = False
                     notify("Endpoint does not support tools — using direct generation…")
                     try:
-                        response = client.chat.completions.create(
-                            model=endpoint,
-                            messages=messages,
-                            max_tokens=4096,
-                            temperature=0.1,
-                        )
+                        fb_kwargs: Dict[str, Any] = {
+                            "model": endpoint,
+                            "messages": messages,
+                            "max_tokens": 4096,
+                        }
+                        if "temperature" in kwargs:
+                            fb_kwargs["temperature"] = 0.1
+                        response = client.chat.completions.create(**fb_kwargs)
                     except Exception as inner:
                         result.error = f"LLM request failed: {inner}"
                         logger.error("Agent: fallback also failed: %s", inner)

@@ -4,7 +4,7 @@ import { MoreHorizontal, PlusCircle, AlertCircle, BoxSelect, TableIcon, Workflow
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { DataDomain } from '@/types/data-domain';
+import { DataDomain, DomainDeletionImpact } from '@/types/data-domain';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import { DataDomainFormDialog } from '@/components/data-domains/data-domain-form-dialog';
@@ -55,6 +55,7 @@ export default function DataDomainsView() {
   const [editingDomain, setEditingDomain] = useState<DataDomain | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingDomainId, setDeletingDomainId] = useState<string | null>(null);
+  const [deletionImpact, setDeletionImpact] = useState<DomainDeletionImpact | null>(null);
   const [componentError, setComponentError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'graph'>('table');
   const [previewDomainId, setPreviewDomainId] = useState<string | null>(null);
@@ -134,7 +135,15 @@ export default function DataDomainsView() {
          return;
     }
     setDeletingDomainId(domainId);
+    setDeletionImpact(null);
     setIsDeleteDialogOpen(true);
+    // Pre-check whether the domain can be deleted (#520): blocked if it (or a
+    // descendant that cascade-deletes with it) is any entity's primary domain.
+    apiGet<DomainDeletionImpact>(`/api/data-domains/${domainId}/deletion-impact`)
+      .then((resp) => {
+        if (resp.data && !resp.error) setDeletionImpact(resp.data);
+      })
+      .catch((e) => console.error('Failed to load domain deletion impact:', e));
   };
 
   const handleDeleteConfirm = async () => {
@@ -143,8 +152,14 @@ export default function DataDomainsView() {
       const response = await apiDelete(`/api/data-domains/${deletingDomainId}`);
       if (response.error) {
         let errorMessage = response.error;
-        if (response.data && typeof response.data === 'object' && response.data !== null && 'detail' in response.data && typeof (response.data as { detail: string }).detail === 'string') {
-            errorMessage = (response.data as { detail: string }).detail;
+        // The delete-block 409 (#520) returns a structured `detail` object; surface its message.
+        if (response.data && typeof response.data === 'object' && response.data !== null && 'detail' in response.data) {
+            const detail = (response.data as { detail: unknown }).detail;
+            if (typeof detail === 'string') {
+                errorMessage = detail;
+            } else if (detail && typeof detail === 'object' && 'message' in detail && typeof (detail as { message: string }).message === 'string') {
+                errorMessage = (detail as { message: string }).message;
+            }
         }
         throw new Error(errorMessage || 'Failed to delete domain.');
       }
@@ -365,9 +380,31 @@ export default function DataDomainsView() {
               {t('deleteDialog.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deletionImpact && !deletionImpact.deletable && (
+            <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-300">
+              <p className="font-medium">This domain can't be deleted.</p>
+              <p className="mt-1">
+                It is the primary domain for {deletionImpact.primary_assignments.length} entity assignment(s):
+              </p>
+              <ul className="mt-1 list-disc list-inside">
+                {Object.entries(deletionImpact.assignment_counts)
+                  .filter(([, counts]) => counts.primary > 0)
+                  .map(([entityType, counts]) => (
+                    <li key={entityType}>
+                      {counts.primary} {entityType.replace(/_/g, ' ')}(s)
+                    </li>
+                  ))}
+              </ul>
+              <p className="mt-1">Reassign those to a different primary domain first.</p>
+            </div>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingDomainId(null)}>{t('deleteDialog.cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading || permissionsLoading}>
+            <AlertDialogCancel onClick={() => { setDeletingDomainId(null); setDeletionImpact(null); }}>{t('deleteDialog.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={apiIsLoading || permissionsLoading || (deletionImpact !== null && !deletionImpact.deletable)}
+            >
                {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>

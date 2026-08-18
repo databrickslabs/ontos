@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { DataContractListItem, DataContractCreate } from '@/types/data-contract';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
-import { useDomains } from '@/hooks/use-domains'
+import DomainBadgeList from '@/components/ui/domain-badge-list'
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,6 @@ import { FeatureAccessLevel } from '@/types/settings';
 export default function DataContracts() {
   const { t } = useTranslation(['data-contracts', 'common']);
   const { toast } = useToast();
-  const { getDomainName } = useDomains();
   const [contracts, setContracts] = useState<DataContractListItem[]>([]);
   const [loading, setLoading] = useState(true);
   // "Show all versions" toggle — flips the family-collapse on the backend.
@@ -330,23 +329,19 @@ export default function DataContracts() {
         );
       },
       cell: ({ row }) => {
-        const contract = row.original;
-        const domainId = (contract as any).domain_id || (contract as any).domainId;
-        const domainName = getDomainName(domainId);
+        const contract = row.original as any;
+        // Multi-domain (#520): render each assigned domain as a badge (primary starred).
+        const domainIds: string[] = contract.domainIds
+          ?? (contract.domainId ? [contract.domainId] : (contract.domain_id ? [contract.domain_id] : []));
+        const primaryId = contract.primaryDomainId || contract.domainId || contract.domain_id || domainIds[0] || null;
         return (
-          <div>
+          <div className="space-y-1">
             <div className="font-medium">{row.getValue("name")}</div>
-            {domainName && domainId && (
-              <div
-                className="text-xs text-muted-foreground cursor-pointer hover:underline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/settings/data-domains/${domainId}`);
-                }}
-              >
-                ↳ Domain: {domainName}
-              </div>
-            )}
+            <DomainBadgeList
+              domainIds={domainIds}
+              primaryDomainId={primaryId}
+              onDomainClick={(id) => navigate(`/settings/data-domains/${id}`)}
+            />
           </div>
         );
       },

@@ -6,6 +6,7 @@ from enum import Enum
 import json
 
 from .tags import AssignedTag, AssignedTagCreate
+from .domain_associations import AssignedDomain
 
 
 class MemberType(str, Enum):
@@ -79,7 +80,8 @@ class TeamBase(BaseModel):
     name: str = Field(..., min_length=1, description="Unique name of the team")
     title: Optional[str] = Field(None, description="Display title for the team")
     description: Optional[str] = Field(None, description="Optional description of the team")
-    domain_id: Optional[str] = Field(None, description="Optional parent data domain ID")
+    domain_ids: List[str] = Field(default_factory=list, description="Assigned data domain IDs (primary included)")
+    primary_domain_id: Optional[str] = Field(None, description="Which domain_id is the primary/canonical one")
     tags: Optional[List[AssignedTagCreate]] = Field(None, description="Optional list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Optional metadata (links, images, etc.)")
 
@@ -94,7 +96,8 @@ class TeamUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, description="Updated name of the team")
     title: Optional[str] = Field(None, description="Updated display title")
     description: Optional[str] = Field(None, description="Updated description")
-    domain_id: Optional[str] = Field(None, description="Updated parent data domain ID")
+    domain_ids: Optional[List[str]] = Field(None, description="Updated assigned data domain IDs (replace-all; omit to leave unchanged)")
+    primary_domain_id: Optional[str] = Field(None, description="Updated primary data domain ID")
     tags: Optional[List[AssignedTagCreate]] = Field(None, description="Updated list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Updated metadata")
 
@@ -102,7 +105,7 @@ class TeamUpdate(BaseModel):
 class TeamRead(TeamBase):
     """Model for reading teams"""
     id: str
-    domain_name: Optional[str] = Field(None, description="Domain name for display")
+    domains: List[AssignedDomain] = Field(default_factory=list, description="Assigned domains with names + primary flag")
     created_at: datetime
     updated_at: datetime
     created_by: str
@@ -162,7 +165,8 @@ class TeamSummary(BaseModel):
     id: str
     name: str
     title: Optional[str] = None
-    domain_id: Optional[str] = None
+    domain_ids: List[str] = Field(default_factory=list, description="Assigned data domain IDs")
+    primary_domain_id: Optional[str] = Field(None, description="Primary data domain ID")
     member_count: int = Field(0, description="Number of team members")
 
     model_config = {

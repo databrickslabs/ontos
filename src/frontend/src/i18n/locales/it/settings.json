@@ -50,6 +50,13 @@
       "placeholder": "audit_logs",
       "help": "Directory dove vengono archiviati i file di log di audit."
     },
+    "backgroundJobs": {
+      "title": "Processi in background",
+      "allowEnablementRequests": {
+        "label": "Consenti agli utenti di richiedere l'abilitazione dei processi in background",
+        "help": "Quando un utente utilizza una funzionalità il cui processo in background non è abilitato, può inviare una notifica per chiedere a un amministratore di abilitarlo."
+      }
+    },
     "llm": {
       "title": "Configurazione AI / LLM",
       "enabled": {

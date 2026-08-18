@@ -45,7 +45,13 @@ class AssetAdapter:
             q = q.filter(AssetTypeDb.name == "Column")
 
         if filters.domain_ids:
-            q = q.filter(AssetDb.domain_id.in_(filters.domain_ids))
+            # Domain moved to the entity_domain_associations junction (#520); resolve
+            # asset ids assigned to any of the requested domains (empty list -> no rows).
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+            matching_ids = entity_domain_repo.find_entity_ids_by_domains(
+                db, domain_ids=list(filters.domain_ids), entity_type="asset"
+            )
+            q = q.filter(AssetDb.id.in_(matching_ids))
 
         if filters.limit:
             q = q.limit(filters.limit)

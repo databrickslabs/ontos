@@ -31,7 +31,8 @@ class DataContractDb(Base):
     owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference
     tenant = Column(String, nullable=True)
     data_product = Column(String, nullable=True)
-    domain_id = Column(String, ForeignKey("data_domains.id"), nullable=True, index=True)
+    # Domain assignment is polymorphic via entity_domain_associations (entity_type='data_contract');
+    # the legacy domain_id column was removed in favour of multi-domain assignment.
 
     # Project relationship (nullable for backward compatibility)
     project_id = Column(String, ForeignKey('projects.id'), nullable=True, index=True)

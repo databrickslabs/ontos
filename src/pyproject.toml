@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ontos"
-version = "1.0.1"
+version = "1.0.2"
 description = "A Business Catalog for the Databricks Platform"
 readme = "../README.md"
 authors = [
@@ -47,7 +47,7 @@ include = [
 ]
 
 [tool.hatch.envs.dev.scripts]
-dev-frontend = "yarn dev:frontend"
+dev-frontend = "npm run dev:frontend"
 dev-backend = "uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8000"
 deploy-and-run = [
   'databricks bundle deploy --var="catalog=app_data" --var="schema=app_ontos"',
@@ -125,7 +125,7 @@ exclude_lines = [
 directory = "backend/htmlcov"
 
 [tool.ruff]
-target-version = "1.0.1"
+target-version = "py311"
 line-length = 100
 src = ["backend/src"]
 

@@ -235,6 +235,29 @@ class TestSemanticLinksManager:
         assert inferred[0].entity_id == "inferred-123"
 
     @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
+    def test_list_for_iri_dedups_explicit_and_inferred_same_entity(
+        self, mock_repo, manager, sample_link_db, mock_semantic_models_manager
+    ):
+        """An entity present as BOTH an explicit link and an inferred graph link
+        must appear only once (the reported 'assignment shown twice' bug)."""
+        mock_repo.list_for_iri.return_value = [sample_link_db]  # data_product / entity-123
+
+        # Inferred link describes the SAME (entity_type, entity_id) pair.
+        mock_semantic_models_manager.query.return_value = [
+            {
+                'subject': 'urn:ontos:data_product:entity-123',
+                'label': 'Product (inferred)'
+            }
+        ]
+
+        result = manager.list_for_iri("http://example.com/schema/Product")
+
+        assert len(result) == 1, "duplicate (type,id) must collapse to one row"
+        # The explicit stored link wins (real id, not the synthetic 'inferred:' one).
+        assert not result[0].id.startswith("inferred:")
+        assert result[0].entity_id == "entity-123"
+
+    @patch('src.controller.semantic_links_manager.entity_semantic_links_repo')
     def test_list_for_iri_without_semantic_models_manager(
         self, mock_repo, manager, sample_link_db
     ):

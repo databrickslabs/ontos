@@ -50,6 +50,13 @@
       "placeholder": "audit_logs",
       "help": "監査ログファイルが保存されるディレクトリ。"
     },
+    "backgroundJobs": {
+      "title": "バックグラウンドジョブ",
+      "allowEnablementRequests": {
+        "label": "ユーザーによるバックグラウンドジョブの有効化リクエストを許可する",
+        "help": "バックグラウンドジョブが有効になっていない機能をユーザーが使用しようとした場合、管理者に有効化を依頼する通知を送信できます。"
+      }
+    },
     "llm": {
       "title": "AI / LLM 設定",
       "enabled": {

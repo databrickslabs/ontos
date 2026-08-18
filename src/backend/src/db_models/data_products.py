@@ -32,7 +32,8 @@ class DataProductDb(Base):
     # ==================== ODPS v1.0.0 Optional Fields ====================
     name = Column(String, nullable=True, index=True)
     version = Column(String, nullable=True, index=True)
-    domain = Column(String, nullable=True, index=True)
+    # Domain assignment is polymorphic via entity_domain_associations (entity_type='data_product');
+    # the legacy free-text `domain` column was removed in favour of multi-domain assignment.
     tenant = Column(String, nullable=True, index=True)
     product_created_ts = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

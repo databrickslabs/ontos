@@ -11,6 +11,8 @@ from typing import Iterable, List, Optional, Any, Dict, Set, Union
 import json
 
 from src.common.repository import CRUDBase
+from src.db_models.domain_associations import EntityDomainAssociationDb
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.data_products import (
     DataProduct as DataProductApi,
     DataProductCreate,
@@ -78,7 +80,6 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 status=obj_in.status,
                 name=obj_in.name,
                 version=obj_in.version,
-                domain=obj_in.domain,
                 tenant=obj_in.tenant,
                 owner_team_id=obj_in.owner_team_id,
                 # Preserve project_id from the input schema. Historic
@@ -266,8 +267,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.name = update_data['name']
             if 'version' in update_data:
                 db_obj.version = update_data['version']
-            if 'domain' in update_data:
-                db_obj.domain = update_data['domain']
+            # domain assignment handled via entity_domain_associations (see manager)
             if 'tenant' in update_data:
                 db_obj.tenant = update_data['tenant']
             if 'owner_team_id' in update_data:
@@ -658,15 +658,17 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             return []
 
     def get_distinct_domains(self, db: Session) -> List[str]:
-        """Get distinct domain values from ODPS Data Products."""
-        logger.debug("Querying distinct ODPS domains...")
+        """Get distinct domain IDs assigned to Data Products (via the junction table)."""
+        logger.debug("Querying distinct data-product domain IDs...")
         try:
             result = db.execute(
-                select(distinct(self.model.domain)).where(self.model.domain.isnot(None))
+                select(distinct(EntityDomainAssociationDb.domain_id)).where(
+                    EntityDomainAssociationDb.entity_type == "data_product"
+                )
             ).scalars().all()
-            return sorted(list(result))
+            return sorted([r for r in result if r])
         except Exception as e:
-            logger.error(f"Error querying distinct ODPS domains: {e}", exc_info=True)
+            logger.error(f"Error querying distinct data-product domains: {e}", exc_info=True)
             return []
 
     def get_distinct_tenants(self, db: Session) -> List[str]:
@@ -743,17 +745,25 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             raise
 
     def get_by_domain(self, db: Session, domain: str, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
-        """Get ODPS Data Products filtered by domain."""
-        logger.debug(f"Fetching ODPS DataProducts for domain '{domain}' (skip: {skip}, limit: {limit})")
+        """Get Data Products assigned to a domain (primary OR additional; any-of via junction).
+
+        ``domain`` is a domain ID.
+        """
+        logger.debug(f"Fetching DataProducts for domain '{domain}' (skip: {skip}, limit: {limit})")
         try:
+            product_ids = entity_domain_repo.find_entity_ids_by_domain(
+                db, domain_id=domain, entity_type="data_product"
+            )
+            if not product_ids:
+                return []
             return db.query(self.model).options(
                 selectinload(self.model.description),
                 selectinload(self.model.input_ports),
                 selectinload(self.model.output_ports),
                 selectinload(self.model.team).selectinload(DataProductTeamDb.members)
-            ).filter(self.model.domain == domain).offset(skip).limit(limit).all()
+            ).filter(self.model.id.in_(product_ids)).offset(skip).limit(limit).all()
         except Exception as e:
-            logger.error(f"Database error fetching ODPS DataProducts by domain: {e}", exc_info=True)
+            logger.error(f"Database error fetching DataProducts by domain: {e}", exc_info=True)
             db.rollback()
             raise
 

@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.common.repository import CRUDBase
 from src.db_models.assets import AssetTypeDb, AssetDb, AssetRelationshipDb
+from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.models.assets import (
     AssetTypeCreate, AssetTypeUpdate,
     AssetCreate, AssetUpdate,
@@ -80,14 +81,17 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             db.rollback()
             raise
 
-    def _apply_filters(self, query, *, asset_type_id=None, asset_type_names=None,
-                        platform=None, domain_id=None, status=None, name=None,
+    def _apply_filters(self, query, *, db=None, asset_type_id=None, asset_type_names=None,
+                        platform=None, domain_id=None, domain_ids=None, status=None, name=None,
                         restrict_to_ids=None):
         """Apply common filter predicates to a query.
 
         ``restrict_to_ids`` is an optional iterable of asset UUIDs to scope
         results to (used for role-based DP-link scoping). An empty iterable
         intentionally yields zero results — pass None for "no restriction".
+
+        Domain filtering (``domain_id`` single and/or ``domain_ids`` list) is any-of
+        via the ``entity_domain_associations`` junction table.
         """
         if asset_type_id:
             query = query.filter(self.model.asset_type_id == asset_type_id)
@@ -97,8 +101,17 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             )
         if platform:
             query = query.filter(self.model.platform == platform)
-        if domain_id:
-            query = query.filter(self.model.domain_id == domain_id)
+        if domain_id or domain_ids:
+            wanted = list(domain_ids or [])
+            if domain_id:
+                wanted.append(domain_id)
+            session = db or query.session
+            asset_ids = entity_domain_repo.find_entity_ids_by_domains(
+                session, domain_ids=wanted, entity_type="asset"
+            )
+            # Empty list -> SQLAlchemy renders an always-false predicate (no rows). A
+            # string sentinel would crash here because AssetDb.id is a Postgres UUID.
+            query = query.filter(self.model.id.in_(asset_ids))
         if status:
             query = query.filter(self.model.status == status)
         if name:
@@ -117,6 +130,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
         self, db: Session, *, skip: int = 0, limit: int = 100,
         asset_type_id: Optional[UUID] = None, asset_type_names: Optional[list] = None,
         platform: Optional[str] = None, domain_id: Optional[str] = None,
+        domain_ids: Optional[list] = None,
         status: Optional[str] = None, name: Optional[str] = None,
         restrict_to_ids: Optional[list] = None,
     ) -> List[AssetDb]:
@@ -132,8 +146,8 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
                 .order_by(self.model.name)
             )
             query = self._apply_filters(
-                query, asset_type_id=asset_type_id, asset_type_names=asset_type_names,
-                platform=platform, domain_id=domain_id, status=status, name=name,
+                query, db=db, asset_type_id=asset_type_id, asset_type_names=asset_type_names,
+                platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
                 restrict_to_ids=restrict_to_ids,
             )
             return query.offset(skip).limit(limit).all()
@@ -146,6 +160,7 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
         self, db: Session, *,
         asset_type_id: Optional[UUID] = None, asset_type_names: Optional[list] = None,
         platform: Optional[str] = None, domain_id: Optional[str] = None,
+        domain_ids: Optional[list] = None,
         status: Optional[str] = None, name: Optional[str] = None,
         restrict_to_ids: Optional[list] = None,
     ) -> int:
@@ -154,8 +169,8 @@ class AssetRepository(CRUDBase[AssetDb, AssetCreate, AssetUpdate]):
             from sqlalchemy import func
             query = db.query(func.count(self.model.id))
             query = self._apply_filters(
-                query, asset_type_id=asset_type_id, asset_type_names=asset_type_names,
-                platform=platform, domain_id=domain_id, status=status, name=name,
+                query, db=db, asset_type_id=asset_type_id, asset_type_names=asset_type_names,
+                platform=platform, domain_id=domain_id, domain_ids=domain_ids, status=status, name=name,
                 restrict_to_ids=restrict_to_ids,
             )
             return query.scalar() or 0

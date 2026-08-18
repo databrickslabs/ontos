@@ -14,7 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import TagChip from '@/components/ui/tag-chip';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Edit3, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown, Plus } from 'lucide-react';
+import { ArrowLeft, Edit3, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown, Plus, Star } from 'lucide-react';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import type { EntitySemanticLink } from '@/types/semantic-link';
@@ -249,6 +249,10 @@ export default function DataDomainDetailsView() {
   const [hierarchyConceptIris, setHierarchyConceptIris] = useState<string[]>([]);
   const [linkedAssets, setLinkedAssets] = useState<any[]>([]);
   const [domainTeams, setDomainTeams] = useState<TeamSummary[]>([]);
+  // Entities (products/contracts/assets) assigned to this domain — primary OR additional (#520 story 9/29).
+  const [domainProducts, setDomainProducts] = useState<any[]>([]);
+  const [domainContracts, setDomainContracts] = useState<any[]>([]);
+  const [domainAssets, setDomainAssets] = useState<any[]>([]);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -482,6 +486,25 @@ export default function DataDomainDetailsView() {
     }
   }, [get]);
 
+  const fetchDomainEntities = useCallback(async (domainId: string) => {
+    // Any-of domain filter (primary OR additional) via the list endpoints (#520).
+    const load = async (url: string, set: (v: any[]) => void) => {
+      try {
+        const resp = await get<any>(url);
+        const data = resp.data;
+        const items = Array.isArray(data) ? data : (data?.items ?? []);
+        set(!resp.error && Array.isArray(items) ? items : []);
+      } catch {
+        set([]);
+      }
+    };
+    await Promise.all([
+      load(`/api/data-products?domain_id=${domainId}`, setDomainProducts),
+      load(`/api/data-contracts?domain_id=${domainId}`, setDomainContracts),
+      load(`/api/assets?domain_id=${domainId}&limit=1000`, setDomainAssets),
+    ]);
+  }, [get]);
+
   const handleTeamDialogSuccess = (_team: Team) => {
     // Refresh domain teams after successful team operation
     if (domainId) {
@@ -526,6 +549,7 @@ export default function DataDomainDetailsView() {
       fetchDomainDetails(domainId);
       fetchMetadata(domainId);
       fetchDomainTeams(domainId);
+      fetchDomainEntities(domainId);
     } else {
       setError("No Domain ID provided.");
       setDynamicTitle("Invalid Domain");
@@ -750,6 +774,52 @@ export default function DataDomainDetailsView() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Assigned entities (#520 story 9/29): products/contracts/assets in this domain,
+          primary OR additional, with the primary distinguished. */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-xl flex items-center">
+            <Tag className="mr-2 h-5 w-5 text-primary"/>
+            Assigned Entities
+          </CardTitle>
+          <CardDescription>
+            Data products, contracts, and assets assigned to this domain (primary or additional).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {([
+            { label: 'Data Products', items: domainProducts, path: (i: any) => `/data-products/${i.id}`, primaryKey: 'primary_domain_id' },
+            { label: 'Data Contracts', items: domainContracts, path: (i: any) => `/data-contracts/${i.id}`, primaryKey: 'primaryDomainId' },
+            { label: 'Assets', items: domainAssets, path: (i: any) => `/governance/assets/${i.id}`, primaryKey: 'primary_domain_id' },
+          ] as const).map(({ label, items, path, primaryKey }) => (
+            <div key={label}>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2">{label} ({items.length})</h4>
+              {items.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {items.map((it: any) => {
+                    const isPrimary = (it as any)[primaryKey] === domainId;
+                    return (
+                      <Badge
+                        key={it.id}
+                        variant={isPrimary ? 'default' : 'secondary'}
+                        className="cursor-pointer hover:opacity-80 gap-1"
+                        onClick={() => navigate(path(it))}
+                        title={isPrimary ? 'Primary domain' : 'Additional domain'}
+                      >
+                        {isPrimary && <Star className="h-3 w-3 fill-current" />}
+                        {it.name || it.id}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">None assigned.</p>
+              )}
+            </div>
+          ))}
         </CardContent>
       </Card>
 

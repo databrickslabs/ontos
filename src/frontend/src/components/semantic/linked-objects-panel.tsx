@@ -208,7 +208,7 @@ export default function LinkedObjectsPanel({
     setIsLoading(true)
     try {
       const res = await get<SemanticLink[]>(
-        `/api/semantic-links/iri/${encodeURIComponent(conceptIri)}`
+        `/api/semantic-links/by-iri?iri=${encodeURIComponent(conceptIri)}`
       )
       const raw = res.data || []
       const enriched = await enrichLinks(raw)

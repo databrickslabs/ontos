@@ -16,6 +16,7 @@ from . import data_asset_reviews
 from . import data_contract_validations
 from . import data_contracts
 from . import data_domains
+from . import domain_associations
 from . import data_products
 from . import data_quality_checks
 from . import genie_spaces

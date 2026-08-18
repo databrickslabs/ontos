@@ -5,12 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useDomains } from '@/hooks/use-domains';
+import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { Loader2 } from 'lucide-react';
 
 type PrefillData = {
   domain?: string;
   domainId?: string;
+  domainIds?: string[];
+  primaryDomainId?: string | null;
   tenant?: string;
   owner_team_id?: string;
 };
@@ -29,14 +31,14 @@ export default function CreateContractInlineDialog({
   prefillData
 }: CreateContractInlineDialogProps) {
   const { toast } = useToast();
-  const { domains } = useDomains();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [name, setName] = useState('');
   const [version, setVersion] = useState('1.0.0');
   const [status, setStatus] = useState('draft');
   const [ownerTeamId, setOwnerTeamId] = useState('');
-  const [domainId, setDomainId] = useState('');
+  const [domainIds, setDomainIds] = useState<string[]>([]);
+  const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
   const [tenant, setTenant] = useState('');
 
   useEffect(() => {
@@ -46,7 +48,8 @@ export default function CreateContractInlineDialog({
       setVersion('1.0.0');
       setStatus('draft');
       setOwnerTeamId(prefillData?.owner_team_id || '');
-      setDomainId(prefillData?.domainId || '');
+      setDomainIds(prefillData?.domainIds || (prefillData?.domainId ? [prefillData.domainId] : []));
+      setPrimaryDomainId(prefillData?.primaryDomainId ?? prefillData?.domainId ?? null);
       setTenant(prefillData?.tenant || '');
     }
   }, [isOpen, prefillData]);
@@ -82,7 +85,10 @@ export default function CreateContractInlineDialog({
 
       // Add optional fields if provided
       if (ownerTeamId.trim()) payload.owner_team_id = ownerTeamId.trim();
-      if (domainId) payload.domainId = domainId;
+      if (domainIds.length > 0) {
+        payload.domainIds = domainIds;
+        payload.primaryDomainId = primaryDomainId;
+      }
       if (tenant.trim()) payload.tenant = tenant.trim();
 
       const response = await fetch('/api/data-contracts', {
@@ -169,24 +175,18 @@ export default function CreateContractInlineDialog({
             </Select>
           </div>
 
-          {domains && domains.length > 0 && (
-            <div className="space-y-2">
-              <Label htmlFor="domain">Domain</Label>
-              <Select value={domainId || "_none"} onValueChange={(v) => setDomainId(v === "_none" ? "" : v)}>
-                <SelectTrigger id="domain">
-                  <SelectValue placeholder="Select domain (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">None</SelectItem>
-                  {domains.map((domain) => (
-                    <SelectItem key={domain.id} value={domain.id}>
-                      {domain.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="domain">Domains</Label>
+            <DomainMultiSelector
+              value={domainIds}
+              primaryDomainId={primaryDomainId}
+              onChange={(nextIds, nextPrimary) => {
+                setDomainIds(nextIds);
+                setPrimaryDomainId(nextPrimary);
+              }}
+              placeholder="Select domains (optional)"
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="tenant">Tenant</Label>

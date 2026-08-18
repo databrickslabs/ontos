@@ -9,6 +9,18 @@
 - **Main PR (`nebw-bugfixes` → `development`)** carries the small/medium issues, one commit per issue: #1 (custom UUID), #4 (FK/PK import), #5 (asset-type relationship CRUD), #6 (RDF download fix).
 - **Separate PRs off the same branch** for the two large features: #2 (contract change-tracking → review → semver adopt) and #3 (Domains ↔ UC governed tags, bidirectional).
 
+## Status (updated 2026-08-18)
+
+Main PR (`nebw-bugfixes` → `development`) — **all four small/medium issues done & committed**:
+- ✅ #1 custom UUID on create (`abc4fad0`) — 26 repo tests
+- ✅ #6 RDF export 404 fix (`d9612a97`) — 3 tests; also fixed a second root cause (in-memory existence check)
+- ✅ #5 asset-type relationship CRUD (`b9c06da8`) — 5 tests, 132 no-regression
+- ✅ #4 FK/PK import from UC (`b6546e82`) — 4 tests, 69 no-regression
+
+Separate PRs (off `nebw-bugfixes`) — **not started**:
+- ⬜ #2 contract change-tracking → review → semver adopt
+- ⬜ #3 Domains ↔ UC governed tags, bidirectional
+
 ## Architectural decisions
 
 Durable decisions agreed with the requester:

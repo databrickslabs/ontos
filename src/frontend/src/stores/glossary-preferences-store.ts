@@ -23,7 +23,15 @@ interface GlossaryPreferencesState {
 
   // Group properties by domain
   groupByDomain: boolean;
-  
+
+  // Backs the 'source' grouping dimension. Groups concepts by their originating
+  // FILE (source_file). A single scheme can be merged from multiple files, so
+  // 'source' (file) splits a merged scheme back into its per-file origins,
+  // whereas 'scheme' (groupBySource, keyed on source_context) keeps the scheme
+  // whole. Kept in sync with `groupByDimension`; mutually exclusive with
+  // groupBySource / groupByDomain.
+  groupByFile: boolean;
+
   // UI state
   isFilterExpanded: boolean;
 
@@ -62,6 +70,7 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
       groupBySource: false,
       showProperties: false,
       groupByDomain: false,
+      groupByFile: false,
       isFilterExpanded: true,
       expandedConceptGroups: ['root'],
       conceptListScrollTop: 0,
@@ -109,21 +118,30 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
 
       setGroupByDimension: (dimension: GroupByDimension) => {
         // The lens is canonical; derive the legacy booleans so consumers that
-        // still read groupBySource/groupByDomain (ConceptsTab tree builder)
-        // stay consistent. In this data model a concept's source_context IS its
-        // scheme, so 'scheme' and 'source' group identically — both map to the
-        // source-context tree renderer (previously 'scheme' produced NO grouping
-        // because it had no dedicated renderer).
+        // still read groupBySource/groupByFile/groupByDomain (ConceptsTab tree
+        // builder) stay consistent. The two source-ish dimensions now DIVERGE:
+        //   'scheme' -> groupBySource, keyed on source_context (the scheme IRI).
+        //   'source' -> groupByFile,   keyed on source_file (originating file).
+        // A merged scheme spans multiple files, so 'source' (file) splits it
+        // into per-file groups while 'scheme' keeps it whole. The three grouping
+        // booleans are mutually exclusive — exactly one (or none) is ever true.
         set({
           groupByDimension: dimension,
-          groupBySource: dimension === 'source' || dimension === 'scheme',
+          groupBySource: dimension === 'scheme',
+          groupByFile: dimension === 'source',
           groupByDomain: dimension === 'domain',
         });
       },
 
       setGroupBySource: (enabled: boolean) => {
-        // Keep the lens in sync when a legacy caller flips the boolean.
-        set({ groupBySource: enabled, groupByDimension: enabled ? 'source' : 'none' });
+        // Legacy scheme-grouping setter. Keeps the lens in sync; maps to the
+        // 'scheme' dimension (source_context grouping).
+        set({
+          groupBySource: enabled,
+          groupByFile: false,
+          groupByDomain: false,
+          groupByDimension: enabled ? 'scheme' : 'none',
+        });
       },
 
       setShowProperties: (enabled: boolean) => {
@@ -132,7 +150,12 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
 
       setGroupByDomain: (enabled: boolean) => {
         // Keep the lens in sync when a legacy caller flips the boolean.
-        set({ groupByDomain: enabled, groupByDimension: enabled ? 'domain' : 'none' });
+        set({
+          groupByDomain: enabled,
+          groupBySource: false,
+          groupByFile: false,
+          groupByDimension: enabled ? 'domain' : 'none',
+        });
       },
 
       isSourceVisible: (source: string) => {
@@ -173,17 +196,24 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
       name: 'glossary-preferences-storage',
       storage: createJSONStorage(() => localStorage),
       // v1 introduced the `groupByDimension` lens. Older persisted state only
-      // has the boolean flags, so derive the lens from them (source wins over
-      // domain, matching the old mutually-exclusive tree behavior).
+      // has the boolean flags, so derive the lens from them. Legacy
+      // `groupBySource` was source_context (scheme) grouping, so it maps to
+      // 'scheme' (NOT 'source' — 'source' now means the originating file).
       version: 1,
       migrate: (persisted: any, version: number) => {
         if (!persisted) return persisted;
         if (version < 1 && persisted.groupByDimension === undefined) {
           persisted.groupByDimension = persisted.groupBySource
-            ? 'source'
+            ? 'scheme'
             : persisted.groupByDomain
               ? 'domain'
               : 'none';
+        }
+        // Back-fill groupByFile for states persisted before the file lens
+        // existed so the boolean is always defined alongside the dimension.
+        // 'source' is the file-grouping dimension.
+        if (persisted.groupByFile === undefined) {
+          persisted.groupByFile = persisted.groupByDimension === 'source';
         }
         return persisted;
       },
@@ -193,6 +223,7 @@ export const useGlossaryPreferencesStore = create<GlossaryPreferencesState>()(
         groupBySource: state.groupBySource,
         showProperties: state.showProperties,
         groupByDomain: state.groupByDomain,
+        groupByFile: state.groupByFile,
         isFilterExpanded: state.isFilterExpanded,
         expandedConceptGroups: state.expandedConceptGroups,
         // Scroll position is intentionally NOT persisted across reloads --

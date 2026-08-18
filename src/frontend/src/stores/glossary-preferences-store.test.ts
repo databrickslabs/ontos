@@ -10,6 +10,7 @@ beforeEach(() => {
       hiddenSources: [],
       groupByDimension: 'none',
       groupBySource: false,
+      groupByFile: false,
       groupByDomain: false,
       showProperties: false,
     });
@@ -25,38 +26,61 @@ describe('glossary preferences store', () => {
       expect(result.current.groupByDimension).toBe('scheme');
     });
 
-    it('keeps legacy booleans in sync with the lens', () => {
+    it('keeps legacy booleans in sync with the lens (source = file, scheme = context)', () => {
       const { result } = renderHook(() => useGlossaryPreferencesStore());
 
+      // 'source' now means the originating FILE -> backs groupByFile.
       act(() => result.current.setGroupByDimension('source'));
+      expect(result.current.groupByFile).toBe(true);
+      expect(result.current.groupBySource).toBe(false);
+      expect(result.current.groupByDomain).toBe(false);
+
+      // 'scheme' means the concept scheme (source_context) -> backs groupBySource.
+      act(() => result.current.setGroupByDimension('scheme'));
       expect(result.current.groupBySource).toBe(true);
+      expect(result.current.groupByFile).toBe(false);
       expect(result.current.groupByDomain).toBe(false);
 
       act(() => result.current.setGroupByDimension('domain'));
       expect(result.current.groupBySource).toBe(false);
+      expect(result.current.groupByFile).toBe(false);
       expect(result.current.groupByDomain).toBe(true);
 
       act(() => result.current.setGroupByDimension('none'));
       expect(result.current.groupBySource).toBe(false);
+      expect(result.current.groupByFile).toBe(false);
       expect(result.current.groupByDomain).toBe(false);
     });
 
-    it("treats 'scheme' as flat (no legacy boolean has a scheme renderer yet)", () => {
+    it('the three grouping booleans are mutually exclusive', () => {
       const { result } = renderHook(() => useGlossaryPreferencesStore());
 
-      act(() => result.current.setGroupByDimension('scheme'));
-      expect(result.current.groupBySource).toBe(false);
-      expect(result.current.groupByDomain).toBe(false);
+      const exactlyOne = (a: boolean, b: boolean, c: boolean) =>
+        [a, b, c].filter(Boolean).length <= 1;
+
+      (['none', 'scheme', 'source', 'domain'] as const).forEach((dim) => {
+        act(() => result.current.setGroupByDimension(dim));
+        expect(
+          exactlyOne(
+            result.current.groupBySource,
+            result.current.groupByFile,
+            result.current.groupByDomain,
+          ),
+        ).toBe(true);
+      });
     });
 
     it('legacy setters keep the lens consistent', () => {
       const { result } = renderHook(() => useGlossaryPreferencesStore());
 
+      // setGroupBySource now backs the 'scheme' dimension (source_context).
       act(() => result.current.setGroupBySource(true));
-      expect(result.current.groupByDimension).toBe('source');
+      expect(result.current.groupByDimension).toBe('scheme');
+      expect(result.current.groupByFile).toBe(false);
 
       act(() => result.current.setGroupByDomain(true));
       expect(result.current.groupByDimension).toBe('domain');
+      expect(result.current.groupBySource).toBe(false);
 
       act(() => result.current.setGroupBySource(false));
       expect(result.current.groupByDimension).toBe('none');
@@ -109,18 +133,26 @@ describe('glossary preferences store', () => {
       const migrate = (persisted: any, version: number) => {
         if (!persisted) return persisted;
         if (version < 1 && persisted.groupByDimension === undefined) {
+          // Legacy groupBySource was source_context grouping -> maps to 'scheme'
+          // ('source' now means the originating file).
           persisted.groupByDimension = persisted.groupBySource
-            ? 'source'
+            ? 'scheme'
             : persisted.groupByDomain
               ? 'domain'
               : 'none';
         }
+        if (persisted.groupByFile === undefined) {
+          persisted.groupByFile = persisted.groupByDimension === 'source';
+        }
         return persisted;
       };
 
-      expect(migrate({ groupBySource: true, groupByDomain: false }, 0).groupByDimension).toBe('source');
+      expect(migrate({ groupBySource: true, groupByDomain: false }, 0).groupByDimension).toBe('scheme');
       expect(migrate({ groupBySource: false, groupByDomain: true }, 0).groupByDimension).toBe('domain');
       expect(migrate({ groupBySource: false, groupByDomain: false }, 0).groupByDimension).toBe('none');
+      // 'source' dimension back-fills groupByFile.
+      expect(migrate({ groupByDimension: 'source' }, 1).groupByFile).toBe(true);
+      expect(migrate({ groupByDimension: 'scheme' }, 1).groupByFile).toBe(false);
       // No persisted state and already-migrated state are both handled safely.
       expect(migrate(undefined, 0)).toBeUndefined();
       expect(migrate({ groupByDimension: 'scheme' }, 1).groupByDimension).toBe('scheme');

@@ -1422,6 +1422,7 @@ async def import_to_knowledge_collection(
     collection_iri: str,
     file: UploadFile = File(...),
     conflict_mode: str = Query("block", description="Cross-scheme conflict handling: block | skip | update"),
+    additive: bool = Query(False, description="Append the file's concepts as new Draft concepts even if the collection is non-empty (multi-file merge into one scheme), instead of the re-upload diff/version path."),
     current_user: CurrentUserDep = None,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
@@ -1434,14 +1435,22 @@ async def import_to_knowledge_collection(
     confirm endpoint. A FIRST import into an empty collection is a plain add
     (concepts stamped Draft), since there is nothing to diff against.
 
+    additive: when True, the re-upload diff/preview path is SKIPPED even if the
+    collection is non-empty — the file's concepts are appended as new Draft
+    concepts (import_rdf_to_collection mints v1-as-draft per typed subject,
+    idempotently). This is the multi-file "merge into one scheme" contract: every
+    file must land additively as Draft, nothing gets deprecated. It bypasses only
+    the SAME-scheme diff; cross-scheme IRI identity (conflict_mode) still applies.
+    Response is always {mode:'imported', ...} in additive mode.
+
     conflict_mode governs cross-scheme IRI conflicts (an incoming IRI already
     owned by ANOTHER scheme): 'block' (default) refuses as before; 'skip' imports
     only the non-conflicting subjects; 'update' applies the file's values to the
     conflicting concept in its EXISTING scheme as a versioned update.
 
     Response is one of:
-      - first import:  {mode:'imported', success, triples_imported}
-      - re-upload:     {mode:'preview', preview_token, conflict_mode, conflicts, summary, ...}
+      - first import / additive:  {mode:'imported', success, triples_imported}
+      - re-upload:                {mode:'preview', preview_token, conflict_mode, conflicts, summary, ...}
     """
     try:
         content = await file.read()
@@ -1451,9 +1460,11 @@ async def import_to_knowledge_collection(
         format = "turtle" if file.filename and file.filename.endswith('.ttl') else "xml"
 
         # Does the collection already have content? If so, this is a re-upload and
-        # goes through the diff-preview path instead of a blind append.
+        # goes through the diff-preview path instead of a blind append — UNLESS
+        # additive=True (multi-file merge into one scheme), where every file must
+        # append as Draft and nothing is deprecated, so we skip the diff branch.
         existing = manager.list_triples_by_context(collection_iri)
-        if existing:
+        if existing and not additive:
             from rdflib import Graph
             temp_graph = Graph()
             rdf_format = "turtle" if format in ("ttl", "turtle") else "xml"

@@ -136,6 +136,7 @@ export default function ExploreView() {
     hiddenSources,
     groupByDimension,
     groupBySource,
+    groupByFile,
     showProperties,
     groupByDomain,
     isFilterExpanded,
@@ -442,7 +443,7 @@ export default function ExploreView() {
               hiddenRoots={hiddenRoots}
               onToggleRoot={handleToggleRoot}
               onNodeClick={handleNodeClick}
-              showRootBadges={!groupBySource}
+              showRootBadges={!groupBySource && !groupByFile}
               selectedLanguage={selectedLanguage}
             />
           ) : (
@@ -453,6 +454,7 @@ export default function ExploreView() {
               selectedConcept={null}
               onSelectConcept={handleSelectConcept}
               groupBySource={groupBySource}
+              groupByFile={groupByFile}
               showProperties={showProperties}
               groupByDomain={groupByDomain}
               selectedLanguage={selectedLanguage}

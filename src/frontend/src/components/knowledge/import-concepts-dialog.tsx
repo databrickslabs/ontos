@@ -153,6 +153,17 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     : findCollection(collections, selectedCollectionIri);
   const targetHasContent = (targetCollection?.concept_count ?? 0) > 0;
 
+  // ADDITIVE MERGE gate. "One scheme" (merge) with MORE THAN ONE file is a pure
+  // ADD: every file's concepts must land as Draft in the single target scheme
+  // and NOTHING may be deprecated. Routing files 2..N through the re-upload
+  // diff/version path (as before) diffed each file against the whole scheme and
+  // deprecated every concept not in that file — dropping earlier files' concepts.
+  // So a multi-file merge appends additively (additive=true on /import) for ALL
+  // files, whether the target is a create-new (empty) scheme or an existing one.
+  // A SINGLE-file merge into an existing non-empty scheme is a genuine re-version
+  // and keeps the diff/preview path (length === 1 => not additive).
+  const isAdditiveMerge = schemeStrategy === 'merge' && selectedFiles.length > 1;
+
   // Preview-on-select: whenever files + a non-empty target are chosen, ask the
   // backend for the diff WITHOUT applying it, so the user sees "modifies N /
   // adds M / removes K" and decides before clicking Import. Runs against the
@@ -188,8 +199,10 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
             if (!foundConflicts.some((f) => f.iri === item.iri)) foundConflicts.push(item);
           }
           // Same-scheme re-upload diff preview (only for an EXISTING non-empty
-          // target — a create-new scheme has nothing to diff against).
-          if (!creatingNew && targetHasContent) {
+          // target — a create-new scheme has nothing to diff against). SKIP for an
+          // additive merge (multi-file "One scheme"): it is a pure add, there is
+          // no diff to preview and staging one would imply deprecation.
+          if (!creatingNew && targetHasContent && !isAdditiveMerge) {
             try {
               const data = await importOneFile(file, selectedCollectionIri);
               if (data?.mode === 'preview') staged.push({ ...data, fileName: file.name });
@@ -211,7 +224,7 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, selectedFiles, selectedCollectionIri, creatingNew, newSchemeName, targetHasContent, schemeStrategy]);
+  }, [open, selectedFiles, selectedCollectionIri, creatingNew, newSchemeName, targetHasContent, schemeStrategy, isAdditiveMerge]);
 
   const resetState = () => {
     setSelectedFiles([]);
@@ -289,12 +302,18 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // Returns the raw response. First import into an empty scheme →
   // {mode:'imported', triples_imported}. Re-upload into a scheme with content →
   // {mode:'preview', preview_token, summary, ...} (nothing applied yet).
-  const importOneFile = async (file: File, targetIri: string, conflictModeParam?: 'skip' | 'update' | 'block'): Promise<any> => {
+  const importOneFile = async (file: File, targetIri: string, conflictModeParam?: 'skip' | 'update' | 'block', additive?: boolean): Promise<any> => {
     const formData = new FormData();
     formData.append('file', file);
     const params = new URLSearchParams();
     if (conflictModeParam) {
       params.append('conflict_mode', conflictModeParam);
+    }
+    // Multi-file merge: append additively as Draft even into a non-empty scheme,
+    // bypassing the re-upload diff/version path (which would deprecate concepts
+    // not present in this file).
+    if (additive) {
+      params.append('additive', 'true');
     }
     const url = `/api/knowledge/collections/${encodeURIComponent(targetIri)}/import${params.size > 0 ? '?' + params : ''}`;
     const response = await fetch(url, { method: 'POST', body: formData });
@@ -451,11 +470,15 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
     const results: FileImportOutcome[] = [];
     for (const file of selectedFiles) {
       try {
-        // Thread conflict mode if conflicts were detected
+        // Thread conflict mode if conflicts were detected. For a multi-file merge
+        // pass additive=true so EVERY file appends as Draft (uniform: harmless on
+        // an empty/create-new scheme, and the fix for files 2..N into a non-empty
+        // scheme, which previously deprecated earlier files' concepts).
         const data = await importOneFile(
           file,
           targetIri,
-          conflicts.length > 0 ? conflictMode : 'block'
+          conflicts.length > 0 ? conflictMode : 'block',
+          isAdditiveMerge
         );
         // If import returns conflicts, show resolution UI and halt. Roll back a
         // scheme we just created (nothing landed in it) and drop back to

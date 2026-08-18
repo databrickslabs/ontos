@@ -50,6 +50,11 @@ interface ConceptsTabProps {
   groupBySource: boolean;
   showProperties: boolean;
   groupByDomain: boolean;
+  // Group concepts by their originating FILE (source_file) rather than by
+  // scheme (source_context). Mutually exclusive with groupBySource in practice
+  // (the store's lens enforces that). Additive: when false the tree behaves
+  // exactly as before.
+  groupByFile?: boolean;
   selectedLanguage: string;
   // Render mode. 'tree' (default) preserves the existing hierarchical engine;
   // 'list' renders a flat, alphabetically-sorted list of concepts with no
@@ -72,6 +77,11 @@ const BULK_STATUS_ACTIONS: { action: string; labelKey: string; defaultLabel: str
   { action: 'deprecate', labelKey: 'semantic-models:bulk.status.deprecate', defaultLabel: 'Deprecate' },
   { action: 'archive', labelKey: 'semantic-models:bulk.status.archive', defaultLabel: 'Archive' },
 ];
+
+// Sentinel group key for concepts that carry no source_file when grouping by
+// file (the 'source' dimension). Concepts without a file collect under one
+// "No source file" group rather than vanishing.
+const NO_FILE_KEY = '__no_file__';
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-4 w-4 text-emerald-500 shrink-0" />,
@@ -148,6 +158,7 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   selectedConcept,
   onSelectConcept,
   groupBySource,
+  groupByFile = false,
   showProperties: _showProperties,
   groupByDomain,
   selectedLanguage,
@@ -274,11 +285,31 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Whether the tree is in a "group by a flat dimension" mode. The two source-
+  // ish dimensions diverge: 'scheme' (groupBySource) keys on source_context,
+  // 'source' (groupByFile) keys on the originating source_file. Both render
+  // through the SAME group-row engine; only the key extractor and the group
+  // label differ.
+  const isGrouping = groupBySource || groupByFile;
+
+  // Group-key extractor. For file grouping, concepts with no source_file fall
+  // under a single sentinel group (NO_FILE_KEY -> "No source file"). For scheme
+  // grouping, a missing source_context yields undefined (never matches a real
+  // group key) — preserving the pre-existing behavior where such concepts are
+  // not placed under any scheme group.
+  const groupKeyOf = useCallback(
+    (concept: OntologyConcept): string | undefined => {
+      if (groupByFile) return concept.source_file?.trim() || NO_FILE_KEY;
+      return concept.source_context || undefined;
+    },
+    [groupByFile],
+  );
+
   // Build tree data structure from concepts
   const treeData = useMemo(() => {
     const conceptMap = new Map<string, OntologyConcept>();
     const hierarchy = new Map<string, string[]>();
-    const sourceContexts = new Set<string>();
+    const groupKeys = new Set<string>();
 
     const baseConcepts = filteredConcepts.filter(concept => {
       const conceptType = concept.concept_type;
@@ -288,8 +319,13 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     baseConcepts.forEach(concept => {
       conceptMap.set(concept.iri, concept);
 
-      if (concept.source_context) {
-        sourceContexts.add(concept.source_context);
+      // Collect the distinct group keys for the active grouping dimension.
+      // 'file' grouping keys on source_file (with a sentinel for none);
+      // 'scheme' grouping keys on source_context (unchanged behavior).
+      if (groupByFile) {
+        groupKeys.add(concept.source_file?.trim() || NO_FILE_KEY);
+      } else if (concept.source_context) {
+        groupKeys.add(concept.source_context);
       }
 
       concept.parent_concepts.forEach(parentIri => {
@@ -307,16 +343,19 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       }
     });
 
-    return { conceptMap, hierarchy, sourceContexts: Array.from(sourceContexts).sort() };
-  }, [filteredConcepts]);
+    return { conceptMap, hierarchy, groupKeys: Array.from(groupKeys).sort() };
+  }, [filteredConcepts, groupByFile]);
 
-  // For each source group, the file it was derived from — but ONLY when every
+  // For each SCHEME group, the file it was derived from — but ONLY when every
   // concept in the group that has a source_file shares the SAME one (i.e. the
   // group came from a single upload). Mixed or absent source_file → null, so
   // the row shows just the scheme name. Memoized so per-row renders stay cheap.
+  // Only relevant when grouping by scheme (source_context); when grouping by
+  // file the group title IS the filename, so this subtitle is never shown.
   const sourceGroupFile = useMemo(() => {
     const byContext = new Map<string, string | null>();
-    for (const context of treeData.sourceContexts) {
+    if (groupByFile) return byContext; // file groups don't use the "from <file>" subtitle
+    for (const context of treeData.groupKeys) {
       const files = new Set<string>();
       for (const concept of treeData.conceptMap.values()) {
         if (concept.source_context !== context) continue;
@@ -326,11 +365,11 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       byContext.set(context, files.size === 1 ? Array.from(files)[0] : null);
     }
     return byContext;
-  }, [treeData]);
+  }, [treeData, groupByFile]);
 
   const rootConcepts = useMemo(() => {
-    if (groupBySource) {
-      return treeData.sourceContexts;
+    if (isGrouping) {
+      return treeData.groupKeys;
     }
 
     return Array.from(treeData.conceptMap.values())
@@ -342,19 +381,19 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
                !concept.parent_concepts.some(parentIri => treeData.conceptMap.has(parentIri));
       })
       .map(concept => concept.iri);
-  }, [treeData, groupBySource, groupByDomain]);
+  }, [treeData, isGrouping, groupByDomain]);
 
   const getChildren = useCallback((itemId: string): string[] => {
-    if (groupBySource && treeData.sourceContexts.includes(itemId)) {
+    if (isGrouping && treeData.groupKeys.includes(itemId)) {
       return Array.from(treeData.conceptMap.values())
         .filter(concept => {
-          const matchesSource = concept.source_context === itemId;
+          const matchesGroup = groupKeyOf(concept) === itemId;
           if (groupByDomain && concept.concept_type === 'property' && concept.domain) {
             return false;
           }
           const isRootLevel = concept.parent_concepts.length === 0 ||
                  !concept.parent_concepts.some(parentIri => treeData.conceptMap.has(parentIri));
-          return matchesSource && isRootLevel;
+          return matchesGroup && isRootLevel;
         })
         .map(concept => concept.iri);
     }
@@ -368,10 +407,10 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     }
 
     return treeData.hierarchy.get(itemId) || [];
-  }, [treeData, groupBySource, groupByDomain]);
+  }, [treeData, isGrouping, groupKeyOf, groupByDomain]);
 
   const isFolder = useCallback((itemId: string): boolean => {
-    if (groupBySource && treeData.sourceContexts.includes(itemId)) {
+    if (isGrouping && treeData.groupKeys.includes(itemId)) {
       return true;
     }
 
@@ -387,20 +426,21 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
 
     const children = treeData.hierarchy.get(itemId) || [];
     return children.length > 0 || (concept.child_concepts && concept.child_concepts.length > 0);
-  }, [treeData, groupBySource, groupByDomain]);
+  }, [treeData, isGrouping, groupByDomain]);
 
   // When switching grouping modes, expand the new top-level groups so users
-  // see something meaningful instead of a collapsed flat list.
+  // see something meaningful instead of a collapsed flat list. Applies to both
+  // scheme (source_context) and file (source_file) grouping.
   useEffect(() => {
-    if (groupBySource && treeData.sourceContexts.length > 0) {
+    if (isGrouping && treeData.groupKeys.length > 0) {
       const next = new Set(expandedGroups);
-      treeData.sourceContexts.forEach((s) => next.add(s));
+      treeData.groupKeys.forEach((s) => next.add(s));
       if (next.size !== expandedGroups.length) {
         setExpandedConceptGroups(Array.from(next));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupBySource, treeData.sourceContexts.join('|')]);
+  }, [isGrouping, treeData.groupKeys.join('|')]);
 
   const getCollection = useCallback((context?: string) => {
     if (!context) return null;
@@ -585,7 +625,12 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
   // markup can be reused for a flat list without a divergent copy. The tree path
   // never passes `flat`, so its rendering output is unchanged.
   const renderTreeItem = (itemId: string, level: number = 0, flat: boolean = false): React.ReactNode => {
-    const isSourceGroup = groupBySource && treeData.sourceContexts.includes(itemId);
+    // A group header row — either a scheme group (groupBySource, keyed on
+    // source_context) or a file group (groupByFile, keyed on source_file).
+    // `isSourceGroup` keeps its name for minimal churn but now means "is any
+    // group header". `isFileGroup` narrows it to the file dimension.
+    const isSourceGroup = isGrouping && treeData.groupKeys.includes(itemId);
+    const isFileGroup = groupByFile && isSourceGroup;
     const concept = treeData.conceptMap.get(itemId);
     const isExpanded = !flat && (expandedGroups.includes(itemId) || (searchQuery.length > 0));
     const hasChildren = !flat && isFolder(itemId);
@@ -639,9 +684,16 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
       return typeIcons[concept?.concept_type || 'concept'] || <Layers className="h-4 w-4 shrink-0" />;
     };
 
-    const displayName = isSourceGroup
-      ? systemRdfNamespaceDisplayLabel(itemId, t)
-      : (concept ? conceptLabel(concept) : itemId);
+    const displayName = isFileGroup
+      // A file group's title IS the filename verbatim (no namespace
+      // prettifying — it's a literal file). The sentinel renders as a muted
+      // "No source file" label.
+      ? (itemId === NO_FILE_KEY
+          ? t('semantic-models:filters.noSourceFile', 'No source file')
+          : itemId)
+      : isSourceGroup
+        ? systemRdfNamespaceDisplayLabel(itemId, t)
+        : (concept ? conceptLabel(concept) : itemId);
 
     const collection = concept?.source_context ? getCollection(concept.source_context) : null;
     const collectionLabel = collection?.label
@@ -718,7 +770,15 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
               </span>
             </span>
           ) : (
-            <span className="truncate text-sm font-medium" title={displayName}>
+            <span
+              className={cn(
+                'truncate text-sm font-medium',
+                // The "No source file" sentinel group reads as an absence, so
+                // render it muted/italic to set it apart from real filenames.
+                isFileGroup && itemId === NO_FILE_KEY && 'italic text-muted-foreground',
+              )}
+              title={displayName}
+            >
               {displayName}
             </span>
           )}
@@ -1063,18 +1123,32 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
               {bulkBar}
               {statusFilterBar}
               {visibleFlatConcepts.length > 0 && listHeader}
-              {groupBySource
-                ? treeData.sourceContexts.map(source => {
+              {isGrouping
+                ? treeData.groupKeys.map(groupKey => {
                     // Group only the CURRENT PAGE's rows so headers reflect what
                     // is actually on screen; pagination is over the flat set.
-                    const rows = pagedFlatConcepts.filter(c => c.source_context === source);
+                    // The key extractor keys on source_context (scheme) or
+                    // source_file (file) depending on the active dimension.
+                    const rows = pagedFlatConcepts.filter(c => groupKeyOf(c) === groupKey);
                     if (rows.length === 0) return null;
+                    // File groups show the filename verbatim (sentinel → muted
+                    // "No source file"); scheme groups use the namespace label.
+                    const groupLabel = groupByFile
+                      ? (groupKey === NO_FILE_KEY
+                          ? t('semantic-models:filters.noSourceFile', 'No source file')
+                          : groupKey)
+                      : systemRdfNamespaceDisplayLabel(groupKey, t);
                     return (
-                      <div key={`flat-group-${source}`}>
+                      <div key={`flat-group-${groupKey}`}>
                         <div className="flex items-center gap-2 px-3 py-1.5 font-semibold bg-muted/40 border-b">
                           <FolderTree className="h-4 w-4 shrink-0 text-orange-500" />
-                          <span className="truncate text-sm">
-                            {systemRdfNamespaceDisplayLabel(source, t)}
+                          <span
+                            className={cn(
+                              'truncate text-sm',
+                              groupByFile && groupKey === NO_FILE_KEY && 'italic text-muted-foreground',
+                            )}
+                          >
+                            {groupLabel}
                           </span>
                           <Badge variant="secondary" className="text-xs ml-auto">
                             {rows.length}

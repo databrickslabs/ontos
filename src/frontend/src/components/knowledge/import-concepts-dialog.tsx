@@ -156,49 +156,59 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // /import route, which returns {mode:'preview', ...} for non-empty schemes.
   useEffect(() => {
     if (!open) return;
-    // Nothing to check against a target: no files, no chosen target,
-    // creating-new (scheme not yet created — conflicts surface on submit), or
-    // per-file (each file makes its own fresh scheme — no target to diff/conflict).
-    if (
-      selectedFiles.length === 0 || !selectedCollectionIri || creatingNew ||
-      schemeStrategy === 'perfile'
-    ) {
+    // Skip only when there is nothing to check yet or per-file (each file makes
+    // its own fresh scheme — no shared target to diff/conflict). Create-new IS
+    // checked: cross-scheme conflicts don't need the target to exist (they
+    // collide against OTHER schemes), so we pre-check with a placeholder IRI —
+    // this shows the resolution choice up front instead of creating the scheme,
+    // failing the import, and tearing it back down.
+    const hasTarget = creatingNew ? !!newSchemeName.trim() : !!selectedCollectionIri;
+    if (selectedFiles.length === 0 || !hasTarget || schemeStrategy === 'perfile') {
       setPreviews([]);
       setConflicts([]);
       return;
     }
+    // For a not-yet-created scheme, use a placeholder IRI for detection only.
+    const detectTarget = creatingNew ? 'urn:ontology:__pending_new_scheme__' : selectedCollectionIri;
     let cancelled = false;
     setPreviewing(true);
     setError(null);
     (async () => {
       const staged: UploadPreview[] = [];
       const foundConflicts: ConflictItem[] = [];
-      for (const file of selectedFiles) {
-        // Cross-scheme IRI conflicts (block/skip/update) — check for ANY target,
-        // empty or not, since the collision is against OTHER schemes.
-        const c = await detectConflicts(file, selectedCollectionIri);
-        for (const item of c) {
-          if (!foundConflicts.some((f) => f.iri === item.iri)) foundConflicts.push(item);
-        }
-        // Same-scheme re-upload diff preview (only meaningful for a non-empty target).
-        if (targetHasContent) {
-          try {
-            const data = await importOneFile(file, selectedCollectionIri);
-            if (data?.mode === 'preview') staged.push({ ...data, fileName: file.name });
-          } catch {
-            // A parse/preview error surfaces on submit; don't block the panel here.
+      try {
+        for (const file of selectedFiles) {
+          // Cross-scheme IRI conflicts (block/skip/update) — check for ANY target,
+          // empty or not, since the collision is against OTHER schemes.
+          const c = await detectConflicts(file, detectTarget);
+          for (const item of c) {
+            if (!foundConflicts.some((f) => f.iri === item.iri)) foundConflicts.push(item);
+          }
+          // Same-scheme re-upload diff preview (only for an EXISTING non-empty
+          // target — a create-new scheme has nothing to diff against).
+          if (!creatingNew && targetHasContent) {
+            try {
+              const data = await importOneFile(file, selectedCollectionIri);
+              if (data?.mode === 'preview') staged.push({ ...data, fileName: file.name });
+            } catch {
+              // A parse/preview error surfaces on submit; don't block the panel here.
+            }
           }
         }
-      }
-      if (!cancelled) {
-        setPreviews(staged);
-        setConflicts(foundConflicts);
+        if (!cancelled) {
+          setPreviews(staged);
+          setConflicts(foundConflicts);
+        }
+      } finally {
+        // ALWAYS clear the spinner — even if this run was superseded/cancelled
+        // (e.g. the target scheme changed mid-flight). Leaving it set left
+        // "Computing changes…" hanging forever.
         setPreviewing(false);
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, selectedFiles, selectedCollectionIri, creatingNew, targetHasContent, schemeStrategy]);
+  }, [open, selectedFiles, selectedCollectionIri, creatingNew, newSchemeName, targetHasContent, schemeStrategy]);
 
   const resetState = () => {
     setSelectedFiles([]);

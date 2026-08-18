@@ -245,7 +245,11 @@
     "reviewerPlaceholder": "Select a reviewer...",
     "notes": "Notes (optional)",
     "notesPlaceholder": "Add context or instructions...",
-    "submit": "Submit"
+    "submit": "Submit",
+    "checking": "Checking for approval workflow…",
+    "governedBanner": "This concept is governed by the '{{workflow}}' approval workflow. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.",
+    "governedBannerMulti": "This concept is governed by {{count}} approval workflows. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.",
+    "ungovernedBanner": "No approval workflow is attached. Submitting moves this concept straight to Under Review; any user with write access can then approve it."
   },
   "concept": {
     "inReview": "In Review",
@@ -310,7 +314,8 @@
     "unknownEditor": "someone",
     "none": "No previous versions yet.",
     "unavailable": "Version history is unavailable.",
-    "replacedBy": "Replaced by {{label}}"
+    "replacedBy": "Replaced by {{label}}",
+    "saveNewVersionDraftLocked": "Available after this concept is approved (v1 must be approved before a new version)."
   },
   "import": {
     "title": "Import files",
@@ -344,6 +349,12 @@
     "bucketNew": "New",
     "bucketRemoved": "Removed (deprecated, not deleted)",
     "stillReferenced": "used by {{count}}",
-    "submitMulti": "Import {{count}} file(s)"
+    "submitMulti": "Import {{count}} file(s)",
+    "conflict": {
+      "alreadyIn": "Already in {{scheme}}"
+    }
+  },
+  "columns": {
+    "fromFile": "from {{file}}"
   }
 }

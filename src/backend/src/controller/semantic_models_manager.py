@@ -487,7 +487,9 @@ class SemanticModelsManager(SearchableAsset):
             created_by=actor,
         )
 
-    def _ensure_concept_version_v1(self, concept_iri: str, context_name: str, actor: Optional[str]) -> None:
+    def _ensure_concept_version_v1(
+        self, concept_iri: str, context_name: str, actor: Optional[str], status: str = "active"
+    ) -> None:
         """Lazily mint a v1 concept_version for a concept that has none.
 
         Concepts that arrived via a raw file import (``_import_graph_to_db``)
@@ -495,12 +497,16 @@ class SemanticModelsManager(SearchableAsset):
         Before a diff-driven publish can bump such a concept to v2 we must give
         it its v1, owning the subject's currently-unowned triples (subject-IRI
         ownership rule, P0-1). Idempotent: no-op if a current version exists.
+
+        ``status`` defaults to "active" (the versioning-event path needs a
+        frozen/active v1). The file-import path passes status="draft" so
+        imported concepts get a v1 that matches their governance status.
         """
         # Route through the single new-concept mint chokepoint: it is idempotent
         # (reuses the current row when one already exists), self-heals true
         # orphans, and never collides on the version number.
         v1 = self._mint_new_concept_version(
-            concept_iri, context_name, actor=actor, status="active"
+            concept_iri, context_name, actor=actor, status=status
         )
         rdf_triples_repo.reassign_subject_to_concept_version(
             self._db, concept_iri, v1.id, context_name=context_name
@@ -538,9 +544,12 @@ class SemanticModelsManager(SearchableAsset):
         # true orphans (zero rdf_triples for the subject in THIS context), reuses
         # an existing current row for a defensively not-actually-new concept, and
         # never collides on uq_concept_version_iri_version /
-        # uq_concept_version_current_per_iri. Uploaded concepts are active.
+        # uq_concept_version_current_per_iri.
+        # Scenario D (2026-08-18): merge-uploaded NEW concepts land as draft (no
+        # changeset gate), matching first-into-empty uploads (default_status
+        # "draft") so all uploaded concepts follow per-concept review.
         v1 = self._mint_new_concept_version(
-            concept_iri, context_name, actor=actor, status="active"
+            concept_iri, context_name, actor=actor, status="draft"
         )
 
         for s, p, o in rows:
@@ -782,8 +791,10 @@ class SemanticModelsManager(SearchableAsset):
                 if o in _concept_types
             }
             for subj in typed_subjects:
-                if (subj, ONTOS.sourceFile, None) not in incoming_graph:
-                    incoming_graph.add((subj, ONTOS.sourceFile, Literal(source_filename)))
+                # OVERWRITE (graph.set) rather than add-if-absent: a v2 re-upload
+                # that already carries/inherits an old sourceFile must adopt the
+                # CURRENT filename, not keep the stale one.
+                incoming_graph.set((subj, ONTOS.sourceFile, Literal(source_filename)))
 
         # Persist the chosen mode as a marker triple so confirm/apply recovers it
         # (migration-free — no column on the stash).
@@ -962,88 +973,18 @@ class SemanticModelsManager(SearchableAsset):
         touched = list(diff.modified) + list(diff.removed)
         aggregate_reference_count = sum(self.reference_count(iri) for iri in touched)
 
-        entity_data: Dict[str, Any] = {
-            **summary,
-            "modified_iris": list(diff.modified),
-            "new_iris": list(diff.new),
-            "removed_iris": list(diff.removed),
-            "reference_count": aggregate_reference_count,
-            "collection_iri": context_name,
-            "collection_label": collection_label,
-            "preview_token": preview_token,
-        }
-
-        # Fire the ONE aggregate governance trigger. Governed iff a workflow ran.
-        governed = False
-        executions: List[Any] = []
-        try:
-            from src.common.workflow_triggers import get_trigger_registry
-            from src.models.process_workflows import EntityType
-
-            registry = get_trigger_registry(self._db)
-            executions = registry.on_request_status_change(
-                entity_type=EntityType.CONCEPT_CHANGESET,
-                entity_id=preview_token,
-                from_status="proposed",
-                to_status="applied",
-                entity_name=collection_label,
-                entity_data=entity_data,
-                user_email=actor,
-                blocking=True,
-            )
-            governed = bool(executions)
-        except Exception as e:
-            # A trigger-registry failure must not sink an otherwise valid upload
-            # (ungoverned/direct path stays zero-friction).
-            logger.warning(
-                f"CONCEPT_CHANGESET trigger failed for token {preview_token}: {e}"
-            )
-
-        if not governed:
-            # UNGOVERNED: apply directly + consume the token (today's behavior).
-            # conflict_mode (None) is recovered from the stash marker inside
-            # confirm_upload; an explicit value here overrides it.
-            applied = self.confirm_upload(
-                preview_token, actor=actor, conflict_mode=conflict_mode
-            )
-            return {"status": "applied", "summary": applied, "governed": False}
-
-        # GOVERNED: hold. Open ONE review; keep the stash token ALIVE.
-        review_request_id: Optional[str] = None
-        review_mgr = get_app_state_manager("data_asset_review_manager")
-        reviewer_email = self._changeset_reviewer_from_executions(executions, actor)
-        if review_mgr is not None and reviewer_email:
-            try:
-                from src.models.data_asset_reviews import DataAssetReviewRequestCreate
-
-                notes = (
-                    f"Bulk RDF changeset for '{collection_label}': "
-                    f"{summary['modified']} modified, {summary['new']} new, "
-                    f"{summary['removed']} removed "
-                    f"(aggregate reference_count {aggregate_reference_count}). "
-                    f"Approve to apply all-or-nothing; deny to discard."
-                )
-                req = DataAssetReviewRequestCreate(
-                    requester_email=actor or "system@ontos",
-                    reviewer_email=reviewer_email,
-                    asset_fqns=[self.changeset_review_fqn(preview_token)],
-                    title=f"Changeset review: {collection_label}",
-                    notes=notes,
-                )
-                created = review_mgr.create_review_request(req, db=self._db)
-                review_request_id = created.id
-            except Exception as e:
-                logger.error(
-                    f"Failed to create CONCEPT_CHANGESET review for token "
-                    f"{preview_token}: {e}", exc_info=True,
-                )
-
-        return {
-            "status": "held",
-            "review_request_id": review_request_id,
-            "summary": summary,
-            "governed": True,
-        }
+        # Scenario D (2026-08-18): file uploads always land directly as Draft and
+        # follow per-concept review; the bulk concept_changeset approval gate is
+        # intentionally disabled here. We keep the early stash-load / diff-summary
+        # logic above (cheap and harmless), but SKIP the on_request_status_change
+        # trigger and the GOVERNED hold branch — no new held changeset is ever
+        # created. apply_changeset_by_token / reject_changeset_by_token /
+        # changeset_review_fqn remain (existing held reviews may still reference
+        # them); we simply stop CREATING new holds.
+        applied = self.confirm_upload(
+            preview_token, actor=actor, conflict_mode=conflict_mode
+        )
+        return {"status": "applied", "summary": applied, "governed": False}
 
     @staticmethod
     def _changeset_reviewer_from_executions(executions, actor) -> Optional[str]:
@@ -2847,8 +2788,13 @@ class SemanticModelsManager(SearchableAsset):
         # rdf:type objects that mark a subject as an enumerable "concept" (class /
         # SKOS concept / property / individual). Collected via plain triple-pattern
         # lookups below.
+        # NOTE: skos:ConceptScheme is deliberately EXCLUDED. A ConceptScheme is the
+        # scheme's own top node (e.g. an uploaded file's <...#DefinitionApprovals>),
+        # not a browseable concept — enumerating it produced a phantom concept named
+        # after the file/scheme in Explore. The scheme header is surfaced separately
+        # (collection metadata), not as a concept row.
         _CONCEPT_TYPE_OBJECTS = (
-            RDFS.Class, OWL.Class, SKOS.Concept, SKOS.ConceptScheme,
+            RDFS.Class, OWL.Class, SKOS.Concept,
             RDF.Property, OWL.ObjectProperty, OWL.DatatypeProperty,
             OWL.AnnotationProperty, OWL.NamedIndividual,
         )
@@ -2957,10 +2903,10 @@ class SemanticModelsManager(SearchableAsset):
                         concept_type = "class"
                     elif (concept_uri, RDF.type, OWL.Class) in context:
                         concept_type = "class"
-                    # Check for SKOS concepts
+                    # Check for SKOS concepts. (skos:ConceptScheme is NOT a concept
+                    # type — the scheme header node is excluded from enumeration
+                    # above, so it never reaches here.)
                     elif (concept_uri, RDF.type, SKOS.Concept) in context:
-                        concept_type = "concept"
-                    elif (concept_uri, RDF.type, SKOS.ConceptScheme) in context:
                         concept_type = "concept"
                     # Check for all property types
                     elif (concept_uri, RDF.type, RDF.Property) in context:
@@ -3063,6 +3009,7 @@ class SemanticModelsManager(SearchableAsset):
                             range=range_val,
                             related_concepts=related_concepts,
                             status=status_val,
+                            source_file=self._get_literal(context, concept_uri, ONTOS.sourceFile),
                         ))
                     except Exception as concept_err:
                         logger.warning(
@@ -3882,19 +3829,33 @@ class SemanticModelsManager(SearchableAsset):
         
         # Remove collection metadata from meta context
         rdf_triples_repo.remove_by_subject(self._db, collection_iri, META_CONTEXT)
-        
+
+        # Collect the DISTINCT subject IRIs actually present in this context
+        # BEFORE removing the triples — this is the reliable set of concept IRIs
+        # in the scheme regardless of namespace. IMPORTED concepts keep their
+        # FILE's own namespace (e.g. https://ontos.example.org/sales#placesOrder),
+        # which is NOT under the scheme's <collection_iri>/... prefix, so the
+        # prefix match below misses them and their concept_version rows leak
+        # (version history survived across repeated deletes -> "v6").
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        context_rows = rdf_triples_repo.list_by_context(self._db, collection_iri)
+        subject_iris = list({row.subject_uri for row in context_rows})
+
         # Remove all concepts in the collection's context
         rdf_triples_repo.remove_by_context(self._db, collection_iri)
 
-        # Also delete the concept_version rows for every concept in this
-        # collection, in the SAME transaction as the rdf_triples deletion above.
-        # Concept IRIs are always <collection_iri>/<slug>, so a prefix match is
-        # exact and safe. Leaving these rows behind orphaned them: recreating a
-        # same-named scheme + same-named concept then collided with the unique
-        # constraints on (iri, version) / (iri WHERE is_current) -> IntegrityError
+        # Delete the concept_version rows for every concept in this collection,
+        # in the SAME transaction as the rdf_triples deletion above. Leaving
+        # these rows behind orphaned them: recreating a same-named scheme +
+        # same-named concept then collided with the unique constraints on
+        # (iri, version) / (iri WHERE is_current) -> IntegrityError
         # ("Failed to create concept") and the concept never appeared.
-        from src.repositories.concept_versions_repository import concept_versions_repo
+        #   1. Prefix match catches urn-prefixed <collection_iri>/<slug> concepts
+        #      (cheap safety net).
+        #   2. Explicit IRI match catches file-native IRIs (any namespace) that
+        #      actually lived in this context but sit outside the prefix.
         concept_versions_repo.delete_for_collection(self._db, collection_iri)
+        concept_versions_repo.delete_by_iris(self._db, subject_iris)
 
         # Remove from in-memory graph
         meta_context = self._graph.get_context(URIRef(META_CONTEXT))
@@ -5620,6 +5581,50 @@ class SemanticModelsManager(SearchableAsset):
         self._db.commit()
         self._invalidate_cache()
 
+    def preview_submit_for_review(self, concept_iri: str) -> Dict[str, Any]:
+        """Report whether submitting a draft for review would be GOVERNED.
+
+        Read-only counterpart to ``submit_concept_for_review``: it runs ONLY
+        the workflow MATCHING path (never fires/executes anything, opens no
+        review, changes no status) so the submit dialog can tell the user in
+        advance whether an approval workflow will gate the transition.
+
+        Mirrors the trigger args ``submit_concept_for_review`` uses:
+        ``on_request_status_change`` for ``EntityType.ONTOLOGY_CONCEPT``,
+        draft -> under_review, no scope. Any registry failure degrades to
+        ungoverned so the dialog never breaks.
+
+        Returns ``{governed, workflow_names, workflow_count}``.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import TriggerType, EntityType
+
+            registry = get_trigger_registry(self._db)
+            workflows_manager = registry._get_workflows_manager()
+            matching = workflows_manager.get_workflows_for_trigger(
+                trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE,
+                entity_type=EntityType.ONTOLOGY_CONCEPT,
+                scope_type=None,
+                scope_id=None,
+                from_status="draft",
+                to_status="under_review",
+            )
+            return {
+                "governed": bool(matching),
+                "workflow_names": [w.name for w in matching],
+                "workflow_count": len(matching),
+            }
+        except Exception as e:
+            logger.warning(
+                f"preview_submit_for_review lookup failed for {concept_iri}: {e}"
+            )
+            return {"governed": False, "workflow_names": [], "workflow_count": 0}
+
     def submit_concept_for_review(
         self,
         concept_iri: str,
@@ -6100,9 +6105,26 @@ class SemanticModelsManager(SearchableAsset):
         except Exception:
             labels = {}
 
+        def _concept_label(iri: str) -> str:
+            """The CONFLICTING CONCEPT's own human label (NOT the scheme).
+
+            Best-effort: try the concept's stored label; on any failure or empty
+            value fall back to the IRI's last path segment so a lookup failure
+            never breaks the conflict list.
+            """
+            try:
+                concept = self.get_concept(iri)
+                lbl = (concept or {}).get("label")
+                if lbl:
+                    return lbl
+            except Exception:
+                pass
+            return iri.split("#")[-1].split("/")[-1]
+
         return [
             {
                 "iri": iri,
+                "label": _concept_label(iri),
                 "existing_context": ctx,
                 "existing_label": labels.get(ctx),
             }
@@ -6240,8 +6262,10 @@ class SemanticModelsManager(SearchableAsset):
                 if o in _concept_types
             }
             for subj in typed_subjects:
-                if (subj, ONTOS.sourceFile, None) not in temp_graph:
-                    temp_graph.add((subj, ONTOS.sourceFile, Literal(source_filename)))
+                # OVERWRITE (graph.set) rather than add-if-absent: a v2 re-upload
+                # that already carries/inherits an old sourceFile must adopt the
+                # CURRENT filename, not keep the stale one.
+                temp_graph.set((subj, ONTOS.sourceFile, Literal(source_filename)))
 
         # Import to database
         count = self._import_graph_to_db(
@@ -6251,14 +6275,35 @@ class SemanticModelsManager(SearchableAsset):
             source_identifier=collection_iri,
             created_by=imported_by,
         )
-        
+
+        # Mint a v1 concept_version (as DRAFT) for each imported typed concept.
+        # A raw file import never went through create_concept, so without this the
+        # imported concepts would show "no version" while still offering "Save new
+        # version". Mirror the typed_subjects comprehension used by the
+        # default_status/source_filename blocks above (same _concept_types set).
+        # _ensure_concept_version_v1 is idempotent (no-op when a current version
+        # already exists), so re-uploads / cross-scheme cases are safe.
+        _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+        typed_subjects = {
+            s for s, _, o in temp_graph.triples((None, RDF.type, None))
+            if o in _concept_types
+        }
+        for subj in typed_subjects:
+            self._ensure_concept_version_v1(
+                str(subj), collection_iri, imported_by, status="draft"
+            )
+        # _import_graph_to_db committed the triples; _ensure_concept_version_v1
+        # only flushes, so commit the freshly-minted version rows with the import
+        # (mirrors create_concept committing after its mint).
+        self._db.commit()
+
         # Also add to in-memory graph
         coll_context = self._graph.get_context(URIRef(collection_iri))
         for triple in temp_graph:
             coll_context.add(triple)
-        
+
         self._invalidate_cache()
-        
+
         return count
 
     # ========================================================================

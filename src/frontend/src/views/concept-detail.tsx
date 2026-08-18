@@ -219,6 +219,16 @@ export default function ConceptDetailView() {
   const [submitReviewOpen, setSubmitReviewOpen] = useState(false);
   const [reviewerEmail, setReviewerEmail] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
+  // Informational preview: does an approval workflow gate this concept's
+  // draft->under_review transition? Fetched when the submit-review dialog
+  // opens. `null` = not yet loaded; `submitPreviewLoading` distinguishes
+  // "in flight" from "loaded but empty" so the banner never flashes a jump.
+  const [submitPreview, setSubmitPreview] = useState<{
+    governed: boolean;
+    workflow_names: string[];
+    workflow_count: number;
+  } | null>(null);
+  const [submitPreviewLoading, setSubmitPreviewLoading] = useState(false);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [requestChangesComment, setRequestChangesComment] = useState('');
   const selectedLanguage = i18n.language?.split('-')[0] || 'en';
@@ -293,6 +303,44 @@ export default function ConceptDetailView() {
     fetchSupporting();
   }, [fetchSupporting]);
 
+  // When the submit-review dialog opens, ask the backend whether an approval
+  // workflow is attached so the dialog can tell the user what will happen.
+  // Reset on close so a stale banner never shows on the next open. Guarded by
+  // a cancelled flag against races (rapid open/close or IRI change).
+  useEffect(() => {
+    if (!submitReviewOpen) {
+      setSubmitPreview(null);
+      setSubmitPreviewLoading(false);
+      return;
+    }
+    if (!conceptIri) return;
+    let cancelled = false;
+    setSubmitPreviewLoading(true);
+    (async () => {
+      const res = await get<{
+        governed: boolean;
+        workflow_names: string[];
+        workflow_count: number;
+      }>(
+        `/api/knowledge/concepts/by-iri/submit-review/preview?iri=${encodeURIComponent(conceptIri)}`,
+      );
+      if (cancelled) return;
+      if (res.data) {
+        setSubmitPreview({
+          governed: !!res.data.governed,
+          workflow_names: res.data.workflow_names ?? [],
+          workflow_count: res.data.workflow_count ?? 0,
+        });
+      } else {
+        setSubmitPreview(null);
+      }
+      setSubmitPreviewLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [submitReviewOpen, conceptIri, get]);
+
   // Keep breadcrumbs in sync with the concept the URL is pointing at.
   useEffect(() => {
     setStaticSegments([
@@ -338,6 +386,13 @@ export default function ConceptDetailView() {
     const isRetired = concept.status === 'retired';
     return !!(canWrite && collection?.is_editable && !isRetired);
   }, [canWrite, collection, concept]);
+
+  // "Save new version" stays VISIBLE but DISABLED while the concept is still a
+  // draft or under review: v1 must be approved before a v2 can be minted
+  // (drafts get v1 by default from the backend). Enabled once the concept is
+  // approved/published/certified/deprecated.
+  const versionLockedForDraft =
+    concept?.status === 'draft' || concept?.status === 'under_review';
 
   // Linking Ontos entities to a concept and assigning ownership are stored
   // *on our side* (semantic_links / ownership tables), not in the source
@@ -718,10 +773,28 @@ export default function ConceptDetailView() {
               definition changes. Edit/Delete stay draft-only (isEditable).
               Properties do not support versioning. */}
           {canPublishVersion && !isProperty && (
-            <Button variant="outline" size="sm" onClick={() => setPublishOpen(true)}>
-              <Save className="mr-2 h-4 w-4" />
-              {t('semantic-models:versionHistory.saveNewVersion', 'Save new version')}
-            </Button>
+            // Wrapping span carries the title so the tooltip still shows while
+            // the button is disabled (disabled buttons don't fire hover events).
+            <span
+              title={
+                versionLockedForDraft
+                  ? t(
+                      'semantic-models:versionHistory.saveNewVersionDraftLocked',
+                      'Available after this concept is approved (v1 must be approved before a new version).',
+                    )
+                  : undefined
+              }
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={versionLockedForDraft}
+                onClick={() => setPublishOpen(true)}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {t('semantic-models:versionHistory.saveNewVersion', 'Save new version')}
+              </Button>
+            </span>
           )}
           {isEditable && (
             <>
@@ -1226,6 +1299,39 @@ export default function ConceptDetailView() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Informational banner: does an approval workflow gate this
+                submission? Purely advisory — the fields/button are unchanged. */}
+            {submitPreview === null ? (
+              submitPreviewLoading ? (
+                <p className="text-xs text-muted-foreground">
+                  {t('semantic-models:submitReview.checking', 'Checking for approval workflow…')}
+                </p>
+              ) : null
+            ) : submitPreview.governed ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {submitPreview.workflow_count > 1
+                    ? t(
+                        'semantic-models:submitReview.governedBannerMulti',
+                        'This concept is governed by {{count}} approval workflows. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.',
+                        { count: submitPreview.workflow_count },
+                      )
+                    : t(
+                        'semantic-models:submitReview.governedBanner',
+                        "This concept is governed by the '{{workflow}}' approval workflow. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.",
+                        { workflow: submitPreview.workflow_names[0] ?? '' },
+                      )}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'semantic-models:submitReview.ungovernedBanner',
+                  'No approval workflow is attached. Submitting moves this concept straight to Under Review; any user with write access can then approve it.',
+                )}
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="reviewer-email">
                 {t('semantic-models:submitReview.reviewer', 'Reviewer (optional)')}

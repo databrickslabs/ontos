@@ -310,6 +310,24 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
     return { conceptMap, hierarchy, sourceContexts: Array.from(sourceContexts).sort() };
   }, [filteredConcepts]);
 
+  // For each source group, the file it was derived from — but ONLY when every
+  // concept in the group that has a source_file shares the SAME one (i.e. the
+  // group came from a single upload). Mixed or absent source_file → null, so
+  // the row shows just the scheme name. Memoized so per-row renders stay cheap.
+  const sourceGroupFile = useMemo(() => {
+    const byContext = new Map<string, string | null>();
+    for (const context of treeData.sourceContexts) {
+      const files = new Set<string>();
+      for (const concept of treeData.conceptMap.values()) {
+        if (concept.source_context !== context) continue;
+        const file = concept.source_file?.trim();
+        if (file) files.add(file);
+      }
+      byContext.set(context, files.size === 1 ? Array.from(files)[0] : null);
+    }
+    return byContext;
+  }, [treeData]);
+
   const rootConcepts = useMemo(() => {
     if (groupBySource) {
       return treeData.sourceContexts;
@@ -685,9 +703,25 @@ export const ConceptsTab: React.FC<ConceptsTabProps> = ({
 
           {getConceptIcon()}
 
-          <span className="truncate text-sm font-medium" title={displayName}>
-            {displayName}
-          </span>
+          {isSourceGroup && sourceGroupFile.get(itemId) ? (
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-sm font-medium" title={displayName}>
+                {displayName}
+              </span>
+              <span
+                className="truncate text-[10px] font-normal text-muted-foreground"
+                title={sourceGroupFile.get(itemId) as string}
+              >
+                {t('semantic-models:columns.fromFile', 'from {{file}}', {
+                  file: sourceGroupFile.get(itemId) as string,
+                })}
+              </span>
+            </span>
+          ) : (
+            <span className="truncate text-sm font-medium" title={displayName}>
+              {displayName}
+            </span>
+          )}
 
           {/* Right-side metadata: type, collection, status, property hints */}
           {!isSourceGroup && concept && (

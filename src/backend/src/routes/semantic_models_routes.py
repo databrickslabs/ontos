@@ -2083,6 +2083,30 @@ async def remove_concept_owner_by_iri(
     return _remove_concept_owner_payload(manager, concept_iri, user_email, current_user.email)
 
 
+@router.get('/knowledge/concepts/by-iri/submit-review/preview')
+async def preview_submit_concept_for_review_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+) -> dict:
+    """Preview whether submitting this draft for review would be governed.
+
+    Read-only: runs the workflow MATCHING path only (fires nothing, opens no
+    review, changes no status) so the submit dialog can tell the user in
+    advance whether an approval workflow will gate the transition. This literal
+    segment is registered ABOVE the ``/concepts/{concept_iri:path}`` catch-all
+    so it is not swallowed by it.
+    """
+    try:
+        return manager.preview_submit_for_review(concept_iri)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error previewing submit-for-review: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to preview submit for review")
+
+
 @router.post('/knowledge/concepts/by-iri/submit-review')
 async def submit_concept_for_review_by_iri(
     request: Request,

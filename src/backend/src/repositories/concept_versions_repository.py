@@ -88,6 +88,28 @@ class ConceptVersionsRepository(CRUDBase[ConceptVersionDb, dict, dict]):
         db.flush()
         return count
 
+    def delete_by_iris(self, db: Session, iris: list[str]) -> int:
+        """Delete ALL concept_version rows for a set of exact iris; returns count.
+
+        Companion to ``delete_for_collection`` for concepts whose IRI does NOT
+        sit under the collection's prefix — IMPORTED concepts keep their file's
+        own namespace (e.g. ``https://ontos.example.org/sales#placesOrder``),
+        which is not ``<collection_iri>/...`` and so is missed by the prefix
+        match. The caller collects the DISTINCT subject IRIs actually present in
+        the collection's context and passes them here so version rows for
+        file-native IRIs do not leak across a scheme delete. Flushes so
+        subsequent inserts in the same transaction see the deletion.
+        """
+        if not iris:
+            return 0
+        count = (
+            db.query(ConceptVersionDb)
+            .filter(ConceptVersionDb.iri.in_(iris))
+            .delete(synchronize_session=False)
+        )
+        db.flush()
+        return count
+
     def delete_for_collection(self, db: Session, collection_iri: str) -> int:
         """Delete every concept_version row for concepts in a collection.
 

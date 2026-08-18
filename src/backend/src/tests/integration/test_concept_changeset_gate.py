@@ -1,28 +1,31 @@
-"""ACCEPTANCE gate for P3 — gate a BULK RDF upload behind ONE changeset approval.
+"""Concept-changeset upload behavior.
 
-One upload == one approval (never one-per-concept). When a ``concept_changeset``
-workflow is scoped to the target collection the whole re-upload is HELD behind a
-single aggregate DataAssetReview (AssetType CONCEPT_CHANGESET): nothing is
-applied, the UploadPreviewDb token stays ALIVE, and the aggregate diff is carried
-into the review. Approval applies the whole changeset all-or-nothing (via the
-UNCHANGED confirm_upload) and consumes the token; deny/cancel drops the token and
-applies nothing. Ungoverned/no-workflow schemes apply directly (today's zero-
-friction behavior).
+SCENARIO D (2026-08-18) — the bulk-upload changeset APPROVAL GATE IS DISABLED.
+Per an explicit product decision, ALL file uploads land directly as Draft and
+follow the normal per-concept review; a re-upload is never HELD behind an
+aggregate changeset approval, even when a ``concept_changeset`` workflow is
+scoped to the target collection. ``gate_or_apply_upload`` always applies directly
+and returns ``{status:'applied', governed:False}``.
+
+The changeset primitives (``apply_changeset_by_token`` /
+``reject_changeset_by_token`` / ``changeset_review_fqn``) are LEFT IN PLACE (a
+legacy held review could still reference them), so the two acceptance tests that
+exercised the held APPROVE/DENY lifecycle are SKIPPED rather than deleted — un-
+skip them (and re-enable the gate in ``gate_or_apply_upload``) if bulk-upload
+gating is ever re-opened.
 
 Scenarios:
   1. UNGOVERNED upload applies directly (status 'applied', diff took effect,
      token consumed).
-  2. GOVERNED upload is HELD (nothing applied, token survives, EXACTLY ONE
-     CONCEPT_CHANGESET review exists — guards the 40-wizards failure).
-  3. APPROVE applies exactly once (concepts reflect the diff, token consumed).
-  4. REJECT (DENIED) drops it (token deleted, concepts unchanged).
+  2. A GOVERNED workflow NO LONGER holds — the upload still applies directly
+     (Scenario D: gate disabled).
+  3. (SKIPPED — parked) APPROVE applies the held changeset once.
+  4. (SKIPPED — parked) REJECT (DENIED) drops the held changeset.
 
 Governance is simulated by monkeypatching the trigger registry so
-``on_request_status_change`` returns one execution (governed=True). Installing a
-real workflow YAML in the harness is heavier and orthogonal to the gate logic
-under test; the monkeypatch exercises the exact ``governed = bool(executions)``
-branch. Both managers are registered on app.state + the app_state registry so the
-cross-manager reflection callback resolves.
+``on_request_status_change`` returns one execution (would have been
+governed=True). Both managers are registered on app.state + the app_state
+registry so the cross-manager reflection callback resolves.
 """
 import uuid
 from pathlib import Path
@@ -203,9 +206,15 @@ def test_ungoverned_upload_applies_directly(managers, db_session):
 
 
 # --------------------------------------------------------------------------- #
-# 2. GOVERNED upload is HELD — nothing applied, token survives, ONE review.   #
+# 2. Scenario D: a GOVERNED workflow NO LONGER holds — applies directly.      #
 # --------------------------------------------------------------------------- #
-def test_governed_upload_is_held(managers, db_session, monkeypatch):
+def test_governed_upload_applies_directly_scenario_d(managers, db_session, monkeypatch):
+    """Even with a changeset workflow scoped, the upload applies directly.
+
+    Scenario D (2026-08-18) disabled the hold: ``gate_or_apply_upload`` skips the
+    trigger + held-review branch and always applies. This test pins that the
+    presence of a (would-be) governing execution does NOT hold the upload.
+    """
     smm, dar = managers
     name = _unique_name()
     _seed(smm, name, GLOSSARY_V1)
@@ -217,30 +226,25 @@ def test_governed_upload_is_held(managers, db_session, monkeypatch):
     _force_governed(monkeypatch)
     result = smm.gate_or_apply_upload(ctx, token, actor="uploader@example.com")
 
-    assert result["status"] == "held"
-    assert result["governed"] is True
-    assert result["review_request_id"] is not None
+    # Gate disabled: applies directly, NOT held.
+    assert result["status"] == "applied"
+    assert result["governed"] is False
+    assert result.get("review_request_id") is None
 
-    # NOTHING applied: no version minted (seed leaves concepts unversioned),
-    # definition unchanged.
-    assert concept_versions_repo.max_version(db_session, REVENUE) == 0
+    # The diff took effect: Revenue advanced to v2 with the new definition.
+    assert concept_versions_repo.max_version(db_session, REVENUE) == 2
     current = smm.get_concept(REVENUE)
-    assert "net of returns" not in (current.get("comment") or current.get("definition") or "")
+    assert "net of returns" in (current.get("comment") or current.get("definition") or "")
 
-    # Token still ALIVE (held, not consumed).
-    assert upload_preview_repo.get(db_session, token) is not None
-
-    # EXACTLY ONE CONCEPT_CHANGESET review exists (guards the 40-wizards failure).
-    review = dar.get_review_request(result["review_request_id"])
-    assert review is not None
-    assert len(review.assets) == 1
-    assert review.assets[0].asset_type == AssetType.CONCEPT_CHANGESET
-    assert review.assets[0].asset_fqn == f"concept-changeset://{token}"
+    # Token consumed by the direct apply (no held changeset review left behind).
+    assert upload_preview_repo.get(db_session, token) is None
 
 
 # --------------------------------------------------------------------------- #
-# 3. APPROVE applies the held changeset exactly once.                         #
+# 3. APPROVE applies the held changeset exactly once. (PARKED — gate disabled) #
 # --------------------------------------------------------------------------- #
+@pytest.mark.skip(reason="Scenario D (2026-08-18): changeset approval gate disabled; "
+                         "un-skip if bulk-upload gating is re-opened in gate_or_apply_upload.")
 def test_approve_applies_changeset_once(managers, db_session, monkeypatch):
     smm, dar = managers
     name = _unique_name()
@@ -273,8 +277,10 @@ def test_approve_applies_changeset_once(managers, db_session, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# 4. REJECT (DENIED) drops the held changeset — nothing applied.              #
+# 4. REJECT (DENIED) drops the held changeset. (PARKED — gate disabled)       #
 # --------------------------------------------------------------------------- #
+@pytest.mark.skip(reason="Scenario D (2026-08-18): changeset approval gate disabled; "
+                         "un-skip if bulk-upload gating is re-opened in gate_or_apply_upload.")
 def test_deny_drops_changeset(managers, db_session, monkeypatch):
     smm, dar = managers
     name = _unique_name()

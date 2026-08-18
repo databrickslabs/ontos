@@ -57,6 +57,16 @@ _CONCEPT_TYPES = frozenset(
 # Human/SKOS fields we surface as ``changes`` for a MODIFIED concept so the
 # orchestrator can feed them straight into ``publish_concept_version``. Mirrors
 # the manager's _PUBLISH_* field maps so the two stay in lockstep.
+# NOTE (Scenario C2, 2026-08-18): sourceFile is deliberately NOT surfaced as a
+# "source_file" change key here. The publish pipeline
+# (SemanticModelsManager._apply_publish_changes_to_db) only honors a FIXED
+# allowlist of change keys drawn from _PUBLISH_LITERAL_FIELDS /
+# _PUBLISH_LIST_LITERAL_FIELDS / _PUBLISH_LIST_URI_FIELDS (label, definition,
+# synonyms, examples, broader/narrower/related). A "source_file" key would be
+# silently dropped rather than rewriting the ONTOS.sourceFile triple, so adding
+# it here would be dead weight. Stale-provenance-on-re-upload is instead fixed at
+# the source by the C1 graph.set() overwrite in import_rdf_to_collection /
+# preview_upload, which stamps the current filename before the diff/publish runs.
 _LITERAL_FIELDS: Dict[str, URIRef] = {
     "label": SKOS.prefLabel,
     "definition": SKOS.definition,

@@ -96,6 +96,9 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
   // Conflict resolution UI state
   interface ConflictItem {
     iri: string;
+    // The conflicting CONCEPT's own label (backend now supplies this).
+    label?: string;
+    // Where the concept ALREADY lives: the scheme label + its context IRI.
     existing_label: string;
     existing_context: string;
   }
@@ -774,15 +777,28 @@ export const ImportConceptsDialog: React.FC<ImportConceptsDialogProps> = ({
                   )}
                 </p>
                 <ul className="space-y-1 text-xs max-h-48 overflow-y-auto pr-1">
-                  {(showAllConflicts ? conflicts : conflicts.slice(0, 5)).map((c) => (
-                    <li key={c.iri} className="flex items-start gap-2 pl-2">
-                      <span className="shrink-0 mt-0.5">•</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{c.existing_label || c.iri}</div>
-                        <div className="text-muted-foreground truncate">{c.existing_context}</div>
-                      </div>
-                    </li>
-                  ))}
+                  {(showAllConflicts ? conflicts : conflicts.slice(0, 5)).map((c) => {
+                    // PRIMARY line = the conflicting CONCEPT itself. Fall back to
+                    // the last path segment of its IRI when no label is supplied.
+                    const lastSegment = c.iri
+                      .split('#').pop()!
+                      .split('/').filter(Boolean).pop() || c.iri;
+                    const conceptName = c.label || lastSegment;
+                    return (
+                      <li key={c.iri} className="flex items-start gap-2 pl-2">
+                        <span className="shrink-0 mt-0.5">•</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium font-mono" title={c.iri}>{conceptName}</div>
+                          <div className="text-muted-foreground truncate text-[11px]">
+                            {t('semantic-models:import.conflict.alreadyIn', {
+                              scheme: c.existing_label || c.existing_context,
+                              defaultValue: 'Already in {{scheme}}',
+                            })}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
                 {conflicts.length > 5 && (
                   <button

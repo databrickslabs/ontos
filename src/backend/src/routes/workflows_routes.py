@@ -205,8 +205,10 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_request_publish": ["data_contract", "data_product"],
     "on_request_certify": ["data_contract", "data_product"],
     # Concept curation: ontology_concept = single-concept Request Revision / review
-    # ping-pong (P2); concept_changeset = one-approval bulk RDF upload gate (P3).
-    "on_request_status_change": ["data_product", "ontology_concept", "concept_changeset"],
+    # ping-pong (P2). concept_changeset (bulk RDF upload gate, P3) is intentionally
+    # NOT selectable — Scenario D (2026-08-18) disabled the gate; all file uploads
+    # land as Draft and follow per-concept review. Re-add if gating is re-opened.
+    "on_request_status_change": ["data_product", "ontology_concept"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
     "on_unsubscribe": ["subscription", "data_product", "data_contract"],
     "on_revoke": ["access_grant"],
@@ -219,7 +221,8 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "for_request_review": ["data_contract", "data_product", "data_asset_review"],
     "for_request_publish": ["data_contract", "data_product"],
     "for_request_certify": ["data_contract", "data_product"],
-    "for_request_status_change": ["data_product", "ontology_concept", "concept_changeset"],
+    # concept_changeset dropped here too — Scenario D disabled the bulk-upload gate.
+    "for_request_status_change": ["data_product", "ontology_concept"],
     "for_approval_response": [],  # system trigger — any entity
     # Background jobs
     "on_job_success": ["job"],

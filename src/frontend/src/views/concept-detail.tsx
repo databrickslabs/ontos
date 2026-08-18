@@ -71,6 +71,7 @@ import { DeprecateConceptDialog } from '@/components/semantic/deprecate-concept-
 import { TurtleSerializationPanel } from '@/components/semantic/turtle-serialization-panel';
 import { StatusProgressBar } from '@/components/semantic/status-progress-bar';
 import KGSearch from '@/components/search/kg-search';
+import ApprovalWizardDialog from '@/components/workflows/approval-wizard-dialog';
 
 const typeIcons: Record<string, React.ReactNode> = {
   concept: <Layers className="h-5 w-5 text-emerald-500 shrink-0" />,
@@ -229,6 +230,13 @@ export default function ConceptDetailView() {
     workflow_count: number;
   } | null>(null);
   const [submitPreviewLoading, setSubmitPreviewLoading] = useState(false);
+  // Approval-wizard launch state. When a `for_request_status_change` approval
+  // workflow is configured for concepts, the wizard runs BEFORE the submit and
+  // its onComplete replays the real submit API. When none is configured we fall
+  // through to the plain submit-review dialog (with its S3 governance banner).
+  // Mirrors request-product-action-dialog.tsx.
+  const [wizardWorkflowId, setWizardWorkflowId] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [requestChangesOpen, setRequestChangesOpen] = useState(false);
   const [requestChangesComment, setRequestChangesComment] = useState('');
   const selectedLanguage = i18n.language?.split('-')[0] || 'en';
@@ -490,11 +498,35 @@ export default function ConceptDetailView() {
       return;
     }
 
-    // Special case: if target is 'under_review', open the submit-review dialog
+    // Special case: if target is 'under_review', check for a configured approval
+    // wizard first. A `for_request_status_change` workflow authored for the
+    // `ontology_concept` entity runs BEFORE the submit; its completion replays
+    // the real submit API. If none is configured we fall through to the plain
+    // submit-review dialog (which carries the S3 governance/process banner).
+    // The lookup is done inline (not via useApprovalWizardTrigger) so we can
+    // scope it to the concept entity via ?entity_type= without changing the
+    // shared hook's product behavior — the hook does not forward entity_type.
     if (targetStatus === 'under_review') {
       setReviewerEmail(null);
       setReviewNotes('');
-      setSubmitReviewOpen(true);
+      let workflowId: string | null = null;
+      try {
+        const res = await get<{ id?: string }>(
+          '/api/workflows/for-trigger/for_request_status_change?entity_type=ontology_concept',
+        );
+        // Mirror the hook's null-on-error contract: 404 (no workflow) and any
+        // other error both mean "no wizard, go direct".
+        workflowId = res.data?.id ?? null;
+      } catch {
+        workflowId = null;
+      }
+      if (workflowId) {
+        setWizardWorkflowId(workflowId);
+        setWizardOpen(true);
+      } else {
+        setWizardWorkflowId(null);
+        setSubmitReviewOpen(true);
+      }
       return;
     }
 
@@ -563,14 +595,13 @@ export default function ConceptDetailView() {
     }
   };
 
-  const handleSubmitReview = async () => {
-    if (!concept) return;
-    setStatusBusy(true);
-    try {
-      const body: any = {};
-      if (reviewerEmail) body.reviewer_email = reviewerEmail;
-      if (reviewNotes.trim()) body.notes = reviewNotes;
-
+  // Reusable submit-review POST. Extracted so BOTH the plain submit-review
+  // dialog and the approval-wizard onComplete can replay the exact same real
+  // submit API without duplicating the fetch. `body` carries the optional
+  // reviewer/notes fields; callers own their own busy-state + dialog closing.
+  const submitReviewRequest = useCallback(
+    async (body: Record<string, unknown>): Promise<void> => {
+      if (!concept) return;
       const response = await fetch(
         `/api/knowledge/concepts/by-iri/submit-review?iri=${encodeURIComponent(concept.iri)}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
@@ -587,9 +618,52 @@ export default function ConceptDetailView() {
           ? t('semantic-models:messages.submitReviewGoverned', 'Submitted for review — awaiting approval.')
           : t('semantic-models:messages.submitReview', 'Submitted for review'),
       });
-      setSubmitReviewOpen(false);
       bumpKnowledgeGraphRefresh('concept-status');
       await fetchConcept();
+    },
+    [concept, toast, t, bumpKnowledgeGraphRefresh, fetchConcept],
+  );
+
+  const handleSubmitReview = async () => {
+    if (!concept) return;
+    setStatusBusy(true);
+    try {
+      const body: Record<string, unknown> = {};
+      if (reviewerEmail) body.reviewer_email = reviewerEmail;
+      if (reviewNotes.trim()) body.notes = reviewNotes;
+      await submitReviewRequest(body);
+      setSubmitReviewOpen(false);
+    } catch (err: any) {
+      toast({
+        title: t('common:toast.error'),
+        description: err?.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  // Wizard onComplete: the approval workflow ran to completion, so replay the
+  // real concept submit. Wizard-collected fields are threaded into the submit
+  // body under `wizard_data` (parallels request-product-action-dialog.tsx) so
+  // downstream process workflows can reference them; reviewer/notes remain
+  // optional (the wizard, not the plain dialog, owned this path's input).
+  const handleWizardComplete = async (
+    _agreementId: string | null,
+    _pdfStoragePath: string | null,
+    wizardFields?: Record<string, unknown>,
+  ) => {
+    if (!concept) return;
+    setStatusBusy(true);
+    try {
+      const body: Record<string, unknown> = {};
+      if (wizardFields && Object.keys(wizardFields).length > 0) {
+        body.wizard_data = wizardFields;
+      }
+      await submitReviewRequest(body);
+      setWizardOpen(false);
+      setWizardWorkflowId(null);
     } catch (err: any) {
       toast({
         title: t('common:toast.error'),
@@ -1287,6 +1361,34 @@ export default function ConceptDetailView() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Approval wizard — opens instead of the plain submit-review dialog when
+          a `for_request_status_change` approval workflow is configured for the
+          `ontology_concept` entity. On completion it replays the concept
+          submit-review API (see handleWizardComplete). */}
+      {wizardWorkflowId && (
+        <ApprovalWizardDialog
+          isOpen={wizardOpen}
+          onOpenChange={(open) => {
+            setWizardOpen(open);
+            // Dismissed mid-flow: drop the resolved id so a fresh lookup runs on
+            // the next submit attempt (config may have changed since).
+            if (!open) setWizardWorkflowId(null);
+          }}
+          entityType="ontology_concept"
+          entityId={concept.iri}
+          entityName={conceptTitle}
+          preselectedWorkflowId={wizardWorkflowId}
+          autoStartWithPreselected
+          onComplete={handleWizardComplete}
+          onNoWorkflow={() => {
+            // Workflow vanished between lookup and open — fall back to the
+            // plain submit-review dialog so the user isn't blocked.
+            setWizardWorkflowId(null);
+            setSubmitReviewOpen(true);
+          }}
+        />
+      )}
 
       <Dialog open={submitReviewOpen} onOpenChange={setSubmitReviewOpen}>
         <DialogContent className="sm:max-w-md">

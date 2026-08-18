@@ -53,6 +53,10 @@ describe('isTriggerEntitySupported', () => {
       expect(isTriggerEntitySupported('for_request_status_change', 'data_product')).toBe(true);
     });
 
+    it('accepts for_request_status_change + ontology_concept (concept review gate)', () => {
+      expect(isTriggerEntitySupported('for_request_status_change', 'ontology_concept')).toBe(true);
+    });
+
     it('rejects for_subscribe + unrelated entity types', () => {
       expect(isTriggerEntitySupported('for_subscribe', 'catalog')).toBe(false);
       expect(isTriggerEntitySupported('for_subscribe', 'job')).toBe(false);

@@ -21,6 +21,7 @@ from src.models.users import UserInfo
 from src.routes.workflows_routes import (
     APP_ACTION_TRIGGER_TYPES,
     WIZARD_PERMISSION_DISPATCH,
+    _WIZARD_ENTITY_PERMISSION_OVERRIDES,
     enforce_wizard_permission,
 )
 
@@ -254,6 +255,79 @@ def test_unknown_trigger_silent_when_raise_on_unknown_false() -> None:
     _run(enforce_wizard_permission(
         "not_a_real_trigger", _user(["any"]), request, raise_on_unknown=False
     ))
+
+
+# ---------------------------------------------------------------------------
+# Entity-aware overrides — for_request_status_change is shared by data
+# products (data-products) and ontology concepts (semantic-models). A concept
+# steward must not be gated behind data-products write.
+# ---------------------------------------------------------------------------
+
+
+def test_status_change_override_table_shape() -> None:
+    """Lock the override map: concept status-change routes to semantic-models."""
+    assert _WIZARD_ENTITY_PERMISSION_OVERRIDES == {
+        (TriggerType.FOR_REQUEST_STATUS_CHANGE.value, "ontology_concept"):
+            ("semantic-models", FeatureAccessLevel.READ_WRITE),
+    }
+
+
+def test_status_change_concept_steward_with_semantic_models_allowed() -> None:
+    """Concept steward: semantic-models:READ_WRITE, no data-products write.
+    Must clear the concept status-change wizard gate (not 403)."""
+    request = _request_with_perms(effective={
+        "semantic-models": FeatureAccessLevel.READ_WRITE,
+        "data-products": FeatureAccessLevel.NONE,
+    })
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["stewards"]), request,
+        entity_type="ontology_concept",
+    ))
+
+
+def test_status_change_concept_user_without_semantic_models_denied() -> None:
+    """User with neither semantic-models nor data-products write is 403'd
+    for the concept status-change wizard."""
+    request = _request_with_perms(effective={
+        "semantic-models": FeatureAccessLevel.NONE,
+        "data-products": FeatureAccessLevel.NONE,
+    })
+    with pytest.raises(HTTPException) as exc:
+        _run(enforce_wizard_permission(
+            TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["stewards"]), request,
+            entity_type="ontology_concept",
+        ))
+    assert exc.value.status_code == 403
+
+
+def test_status_change_product_default_gate_unchanged() -> None:
+    """No entity_type (or data_product) still gates on data-products:READ_WRITE
+    — existing product behavior is unchanged."""
+    request = _request_with_perms(effective={"data-products": FeatureAccessLevel.READ_WRITE})
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["producers"]), request
+    ))
+    request2 = _request_with_perms(effective={"data-products": FeatureAccessLevel.READ_WRITE})
+    _run(enforce_wizard_permission(
+        TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["producers"]), request2,
+        entity_type="data_product",
+    ))
+
+
+def test_status_change_product_gate_denies_concept_only_steward() -> None:
+    """A concept steward (semantic-models only, no data-products) hitting the
+    PRODUCT variant of the trigger is still 403'd — the override is entity
+    scoped and does not leak to products."""
+    request = _request_with_perms(effective={
+        "semantic-models": FeatureAccessLevel.READ_WRITE,
+        "data-products": FeatureAccessLevel.NONE,
+    })
+    with pytest.raises(HTTPException) as exc:
+        _run(enforce_wizard_permission(
+            TriggerType.FOR_REQUEST_STATUS_CHANGE.value, _user(["stewards"]), request,
+            entity_type="data_product",
+        ))
+    assert exc.value.status_code == 403
 
 
 def test_user_with_no_groups_denied() -> None:

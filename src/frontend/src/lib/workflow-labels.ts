@@ -413,7 +413,11 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   for_request_review: ['data_product', 'data_contract', 'data_asset_review'],
   for_request_publish: ['data_product', 'data_contract'],
   for_request_certify: ['data_product', 'data_contract'],
-  for_request_status_change: ['data_product'],
+  // Concept review gate: `ontology_concept` lets an approval wizard be authored
+  // in the designer for the concept draft->under_review submit (mirrors the
+  // process gate on_request_status_change, which already lists it). The wizard
+  // runs BEFORE submit; the process gate holds the concept AFTER submit.
+  for_request_status_change: ['data_product', 'ontology_concept'],
   // User session triggers — fire on app mount for terms-of-use / disclaimers
   on_first_access: ['user'],
   // Manual/scheduled — always supported (no entity dependency)

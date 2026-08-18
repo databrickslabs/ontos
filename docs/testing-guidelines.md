@@ -721,22 +721,22 @@ hatch -e dev run pytest backend/src/tests/unit/test_data_products_manager.py::Te
 cd src/frontend
 
 # Interactive mode
-yarn test
+npm test
 
 # Run once
-yarn test:run
+npm run test:run
 
 # With coverage
-yarn test:coverage
+npm run test:coverage
 
 # Watch mode
-yarn test:watch
+npm run test:watch
 
 # UI mode
-yarn test:ui
+npm run test:ui
 
 # Specific file
-yarn test data-product-form.test.tsx
+npm test -- data-product-form.test.tsx
 ```
 
 ### E2E
@@ -745,16 +745,16 @@ yarn test data-product-form.test.tsx
 cd src/frontend
 
 # Run all E2E tests
-yarn test:e2e
+npm run test:e2e
 
 # Interactive mode
-yarn test:e2e:ui
+npm run test:e2e:ui
 
 # Debug mode
-yarn test:e2e:debug
+npm run test:e2e:debug
 
 # Specific test
-yarn test:e2e data-product-creation.spec.ts
+npm run test:e2e -- data-product-creation.spec.ts
 ```
 
 ---

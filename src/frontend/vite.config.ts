@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:8000';
+const devPort = Number(process.env.VITE_PORT) || 3000;
+
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/static/' : '/',
   plugins: [react()],
@@ -43,7 +46,7 @@ export default defineConfig(({ command }) => ({
     }
   },
   server: {
-    port: 3000,
+    port: devPort,
     // Exclude test files from file watching to prevent bundling errors
     watch: {
       ignored: [
@@ -58,17 +61,17 @@ export default defineConfig(({ command }) => ({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: proxyTarget,
         changeOrigin: true,
         secure: false,
       },
       '/docs': {
-        target: 'http://localhost:8000',
+        target: proxyTarget,
         changeOrigin: true,
         secure: false,
       },
       '/redoc': {
-        target: 'http://localhost:8000',
+        target: proxyTarget,
         changeOrigin: true,
         secure: false,
       },

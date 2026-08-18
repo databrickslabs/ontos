@@ -46,7 +46,7 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: 'yarn dev:frontend --port 3000',
+    command: 'npm run dev:frontend -- --port 3000',
     url: 'http://localhost:3000',
     reuseExistingServer: true,
     stdout: 'pipe',

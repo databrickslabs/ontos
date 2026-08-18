@@ -97,7 +97,7 @@ describe('LinkedObjectsPanel', () => {
     toastSpy.mockReset()
     // default mocks: links + entity enrichment
     mockGet.mockImplementation(async (url: string) => {
-      if (url.startsWith('/api/semantic-links/iri/')) {
+      if (url.startsWith('/api/semantic-links/by-iri')) {
         return { data: sampleLinks }
       }
       if (url.startsWith('/api/data-products/')) {
@@ -178,7 +178,7 @@ describe('LinkedObjectsPanel', () => {
 
   it('renders empty state when no links exist', async () => {
     mockGet.mockImplementation(async (url: string) => {
-      if (url.startsWith('/api/semantic-links/iri/')) {
+      if (url.startsWith('/api/semantic-links/by-iri')) {
         return { data: [] }
       }
       return { data: [] }

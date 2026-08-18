@@ -9,13 +9,8 @@ DEST_DIR="${BACKEND_DIR}/static"
 SRC_DIR="${FRONTEND_DIR}/static"
 
 echo "Building frontend in ${FRONTEND_DIR}..."
-if command -v yarn >/dev/null 2>&1; then
-  yarn --cwd "${FRONTEND_DIR}" install --frozen-lockfile
-  yarn --cwd "${FRONTEND_DIR}" build
-else
-  npm --prefix "${FRONTEND_DIR}" ci --silent --no-audit --no-fund || npm --prefix "${FRONTEND_DIR}" install --silent --no-audit --no-fund
-  npm --prefix "${FRONTEND_DIR}" run build
-fi
+npm --prefix "${FRONTEND_DIR}" ci --silent --no-audit --no-fund || npm --prefix "${FRONTEND_DIR}" install --silent --no-audit --no-fund
+npm --prefix "${FRONTEND_DIR}" run build
 
 if [[ ! -d "${SRC_DIR}" ]]; then
   echo "Error: build output not found at ${SRC_DIR}"

@@ -39,6 +39,7 @@ from src.common.search_registry import searchable_asset
 
 from src.common.logging import get_logger
 from src.common.database import get_session_factory
+from src.common.errors import ConflictError
 from src.db_models.data_contracts import (
     DataContractDb,
     DataContractTagDb,
@@ -3914,6 +3915,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         if not contract:
             raise ValueError("Contract not found")
         
+        # Get jobs manager and workflow installation.
+        # Checked BEFORE the run record is created: a failed precondition used to leave
+        # behind a 'pending' run that the UI would then poll indefinitely.
+        if not jobs_manager:
+            raise ValueError("Jobs manager not available")
+
+        workflow_id = "dqx_profile_datasets"
+        installation = workflow_installation_repo.get_by_workflow_id(db=db, workflow_id=workflow_id)
+        if not installation:
+            raise ConflictError(
+                "The DQX profiling background job is not enabled. "
+                "Ask an administrator to enable it under Settings > Jobs."
+            )
+
         # Create profiling run record
         profile_run_id = str(uuid4())
         run = DataProfilingRunDb(
@@ -3928,16 +3943,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         db.add(run)
         db.commit()
         db.refresh(run)
-        
-        # Get jobs manager and workflow installation
-        if not jobs_manager:
-            raise ValueError("Jobs manager not available")
-        
-        workflow_id = "dqx_profile_datasets"
-        installation = workflow_installation_repo.get_by_workflow_id(db=db, workflow_id=workflow_id)
-        if not installation:
-            raise ValueError(f"Workflow '{workflow_id}' not installed. Please install it via Settings > Jobs.")
-        
+
         # Trigger workflow with parameters
         # Only pass workflow-specific parameters
         # Database connection params are auto-injected by JobsManager

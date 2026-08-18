@@ -90,6 +90,8 @@ async def update_settings(
             details['sync_repository'] = settings_payload.get('sync_repository')
         if 'enabled_jobs' in settings_payload:
             details['enabled_jobs'] = settings_payload.get('enabled_jobs')
+        if 'allow_job_enablement_requests' in settings_payload:
+            details['allow_job_enablement_requests'] = settings_payload.get('allow_job_enablement_requests')
 
         updated = manager.update_settings(settings_payload)
         success = True

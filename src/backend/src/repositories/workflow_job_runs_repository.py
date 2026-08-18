@@ -105,14 +105,33 @@ class WorkflowJobRunRepository(CRUDBase[WorkflowJobRunDb, WorkflowJobRunCreate, 
             duration_ms = run_data['end_time'] - run_data['start_time']
 
         if existing:
+            # Skip the write entirely when nothing changed. The background poll
+            # re-fetches the last N days of runs every cycle, so the vast
+            # majority of upserts are for already-terminal runs whose state is
+            # identical to what we stored — committing those on every cycle kept
+            # Lakebase permanently busy (a job scheduled every 10 min = ~1000
+            # historical runs re-committed every 5 min). Only write on a real
+            # state transition.
+            new_values = {
+                'life_cycle_state': run_data.get('life_cycle_state'),
+                'result_state': run_data.get('result_state'),
+                'state_message': run_data.get('state_message'),
+                'start_time': run_data.get('start_time'),
+                'end_time': run_data.get('end_time'),
+                'duration_ms': duration_ms,
+                'run_name': run_data.get('run_name'),
+            }
+            unchanged = all(
+                getattr(existing, field) == value
+                for field, value in new_values.items()
+            )
+            if unchanged:
+                logger.debug(f"Job run {run_id} unchanged; skipping write")
+                return existing
+
             # Update existing record
-            existing.life_cycle_state = run_data.get('life_cycle_state')
-            existing.result_state = run_data.get('result_state')
-            existing.state_message = run_data.get('state_message')
-            existing.start_time = run_data.get('start_time')
-            existing.end_time = run_data.get('end_time')
-            existing.duration_ms = duration_ms
-            existing.run_name = run_data.get('run_name')
+            for field, value in new_values.items():
+                setattr(existing, field, value)
             db.commit()
             db.refresh(existing)
             logger.info(f"Updated job run {run_id}: {existing.life_cycle_state} / {existing.result_state}")

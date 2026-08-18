@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Info } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -166,6 +167,25 @@ function readableName(s: string): string {
 
 export default function EnrichView() {
   const { t } = useTranslation(['concepts', 'term-mapping', 'common']);
+  const navigate = useNavigate();
+
+  // Navigate to the physical asset a pending tag will land on. Mirrors the
+  // linked-objects-panel routing: registered Ontos asset -> Asset Explorer;
+  // raw UC object -> catalog-commander deep-link.
+  const goToPendingAsset = (it: {
+    entity_type: string;
+    entity_id: string;
+  }) => {
+    if (it.entity_type === 'asset') {
+      navigate(`/assets/${it.entity_id}`);
+      return;
+    }
+    const parts = String(it.entity_id).split('.');
+    let tableParam: string | null = null;
+    if (it.entity_type === 'uc_table' && parts.length >= 3) tableParam = it.entity_id;
+    else if (it.entity_type === 'uc_column' && parts.length >= 4) tableParam = parts.slice(0, 3).join('.');
+    navigate(tableParam ? `/catalog-commander?table=${encodeURIComponent(tableParam)}` : '/catalog-commander');
+  };
   const { hasPermission } = usePermissions();
   const currentUser = useUserStore((s) => s.userInfo);
   // Term-mapping governs concept-to-asset enrichment writes.
@@ -231,6 +251,9 @@ export default function EnrichView() {
     iri: string;
     label: string | null;
     created_at: string | null;
+    scheme?: string | null;
+    scheme_label?: string | null;
+    asset_name?: string | null;
   }
   interface TagStats {
     eligible: number;
@@ -522,10 +545,42 @@ export default function EnrichView() {
             ) : (
               (tagStats?.pending_items ?? []).map((it) => (
                 <div key={`${it.entity_type}:${it.entity_id}:${it.iri}`} className="flex items-center gap-3 py-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate" title={it.iri}>{it.label || readableName(it.iri)}</div>
-                    <div className="text-xs text-muted-foreground truncate" title={it.entity_id}>
-                      {t('enrich.deliver.pendingLinkedTo', 'linked to')} {readableName(it.entity_id)}
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    {/* Concept (linkable) + its scheme (linkable). No raw urn shown. */}
+                    <div className="truncate">
+                      <button
+                        type="button"
+                        className="font-medium text-primary hover:underline"
+                        title={it.iri}
+                        onClick={() => navigate(`/concepts/browser/${encodeURIComponent(it.iri)}`)}
+                      >
+                        {it.label || readableName(it.iri)}
+                      </button>
+                      {it.scheme && (
+                        <>
+                          <span className="text-muted-foreground"> {t('enrich.deliver.pendingInScheme', 'in')} </span>
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            title={it.scheme}
+                            onClick={() => navigate(`/concepts/browser?source=${encodeURIComponent(it.scheme!)}`)}
+                          >
+                            {it.scheme_label || readableName(it.scheme)}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    {/* Physical asset the tag will be applied to (linkable). */}
+                    <div className="text-xs text-muted-foreground truncate">
+                      {t('enrich.deliver.pendingAppliesTo', 'applies to')}{' '}
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        title={it.entity_id}
+                        onClick={() => goToPendingAsset(it)}
+                      >
+                        {it.asset_name || readableName(it.entity_id)}
+                      </button>
                     </div>
                   </div>
                   <Badge variant="outline" className="shrink-0 text-[10px]">{it.entity_type}</Badge>

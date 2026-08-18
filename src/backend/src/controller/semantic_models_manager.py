@@ -6725,14 +6725,59 @@ class SemanticModelsManager(SearchableAsset):
         # Collect the actual items (not just a count) so the UI can drill in.
         from src.models.semantic_models import TagPendingItem
 
+        # --- Enrichment maps (best-effort; built once, small result sets) so the
+        # UI can show the CONCEPT + its SCHEME and the physical ASSET name rather
+        # than a raw UUID/urn. Failures degrade gracefully to None.
+        scheme_labels: Dict[str, Optional[str]] = {}
+        try:
+            for c in self.get_collections():
+                scheme_labels[c["iri"]] = c.get("label")
+        except Exception as e:
+            logger.warning(f"tag-delivery-stats: could not load scheme labels: {e}")
+
+        concept_scheme_cache: Dict[str, Optional[str]] = {}
+
+        def _scheme_for(concept_iri: str) -> Optional[str]:
+            if concept_iri not in concept_scheme_cache:
+                ctx = None
+                try:
+                    c = self.get_concept(concept_iri)
+                    ctx = (c or {}).get("source_context")
+                except Exception:
+                    ctx = None
+                concept_scheme_cache[concept_iri] = ctx
+            return concept_scheme_cache[concept_iri]
+
+        # Resolve asset (AssetDb UUID) names in one batch.
+        asset_names: Dict[str, str] = {}
+        try:
+            asset_ids = {l.entity_id for l in eligible_links if l.entity_type == 'asset'}
+            if asset_ids:
+                from src.repositories.assets_repository import asset_repo
+                for a in asset_repo.get_multi(db, skip=0, limit=100_000):
+                    if str(a.id) in asset_ids:
+                        asset_names[str(a.id)] = a.name
+        except Exception as e:
+            logger.warning(f"tag-delivery-stats: could not resolve asset names: {e}")
+
+        def _asset_name_for(l) -> Optional[str]:
+            if l.entity_type == 'asset':
+                return asset_names.get(l.entity_id)  # human name, or None -> FE falls back
+            # uc_* entity_ids are FQNs; the last segment is the readable object name.
+            return str(l.entity_id).split('.')[-1] if l.entity_id else None
+
         def _to_item(l) -> 'TagPendingItem':
             created = getattr(l, 'created_at', None)
+            scheme = _scheme_for(l.iri)
             return TagPendingItem(
                 entity_id=l.entity_id,
                 entity_type=l.entity_type,
                 iri=l.iri,
                 label=getattr(l, 'label', None),
                 created_at=created.isoformat() if created is not None else None,
+                scheme=scheme,
+                scheme_label=scheme_labels.get(scheme) if scheme else None,
+                asset_name=_asset_name_for(l),
             )
 
         if last_success_end_ms is None:

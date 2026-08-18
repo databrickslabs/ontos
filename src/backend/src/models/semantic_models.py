@@ -70,12 +70,17 @@ class CoverageResponse(BaseModel):
 
 class TagPendingItem(BaseModel):
     """One eligible concept->asset link that is pending delivery (created since
-    the last successful sync)."""
-    entity_id: str  # the physical asset FQN / id
+    the last successful sync). Carries enough to render both sides linkably:
+    the CONCEPT (+ its scheme) and the physical ASSET it will be tagged on."""
+    entity_id: str  # the physical asset FQN / id (asset UUID, or uc FQN)
     entity_type: str  # asset / uc_table / uc_column / ...
     iri: str  # the concept IRI the asset is linked to
     label: Optional[str] = None  # concept label (link.label), if present
     created_at: Optional[str] = None  # ISO timestamp the link was created
+    # Enrichment for the "Pending tag changes" UI (surfaces meaning, not raw IDs):
+    scheme: Optional[str] = None        # the concept's source_context (scheme IRI)
+    scheme_label: Optional[str] = None  # friendly scheme name
+    asset_name: Optional[str] = None    # human name of the physical asset
 
 
 class TagDeliveryStats(BaseModel):

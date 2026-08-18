@@ -122,3 +122,59 @@ class TestImportSourceFilename:
             f"Imported concept should record source_file={filename!r}, "
             f"got {concept.get('source_file')!r}"
         )
+
+    def test_reupload_refreshes_source_filename_on_modified_concept(
+        self, client: TestClient, semantic_models_manager, make_collection
+    ):
+        """C2 regression: re-uploading a MODIFIED concept from a NEW file must
+        adopt the new filename, not keep the stale one copied into v2.
+
+        publish_concept_version copies the demoted version's triples (incl. the
+        OLD ontos:sourceFile) into the new version; the fix threads source_file
+        through _extract_changes + _PUBLISH_LITERAL_FIELDS so the new version's
+        provenance is rewritten. Without the fix the concept keeps v1.ttl.
+        """
+        coll = make_collection("Source Filename Reupload", collection_type="ontology")
+        collection_iri = coll["iri"]
+        iri = "http://example.org/onto/Customer"
+
+        # First import from v1.ttl.
+        r1 = client.post(
+            f"/api/knowledge/collections/{quote(collection_iri, safe='')}/import",
+            files={"file": ("customers_v1.ttl", _SAMPLE_TURTLE, "text/turtle")},
+        )
+        assert r1.status_code == 200, r1.text
+        assert r1.json().get("mode") == "imported"
+
+        # Re-upload from v2.ttl with a CHANGED definition (so the concept lands
+        # in the MODIFIED bucket -> publish_concept_version path). Re-upload into
+        # a non-empty scheme returns a preview token that must be confirmed.
+        modified_ttl = (
+            "@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
+            "@prefix ex: <http://example.org/onto/> .\n\n"
+            'ex:Customer a skos:Concept ; skos:prefLabel "Customer" ; '
+            'skos:definition "A buyer of goods (revised)." .\n'
+        )
+        r2 = client.post(
+            f"/api/knowledge/collections/{quote(collection_iri, safe='')}/import",
+            files={"file": ("customers_v2.ttl", modified_ttl, "text/turtle")},
+        )
+        assert r2.status_code == 200, r2.text
+        body2 = r2.json()
+        assert body2.get("mode") == "preview", body2
+        token = body2["preview_token"]
+
+        # Confirm the re-upload (applies the versioning event -> Customer v2).
+        c = client.post(
+            f"/api/semantic-models/uploads/preview/{quote(token, safe='')}/confirm",
+        )
+        assert c.status_code == 200, c.text
+
+        # The modified concept's provenance must now be the NEW filename.
+        detail = client.get("/api/knowledge/concepts/by-iri", params={"iri": iri})
+        assert detail.status_code == 200, detail.text
+        got = detail.json().get("source_file")
+        assert got == "customers_v2.ttl", (
+            f"Re-uploaded modified concept should refresh source_file to "
+            f"'customers_v2.ttl', got {got!r} (stale provenance = C2 regression)"
+        )

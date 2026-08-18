@@ -932,23 +932,21 @@ class SemanticModelsManager(SearchableAsset):
         self, context_name: str, preview_token: str, actor: Optional[str] = None,
         conflict_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Confirm entrypoint for a re-upload: gate it iff the scheme is governed.
+        """Confirm entrypoint for a re-upload — ALWAYS applies directly.
 
-        Loads the held stash for ``preview_token``, computes the AGGREGATE diff
-        (compute_concept_diff vs the current stored triples) and fires ONE
-        ``on_request_status_change`` trigger for ``EntityType.CONCEPT_CHANGESET``
-        scoped to the collection. Governed iff a workflow executed.
+        Scenario D (2026-08-18): the bulk-upload changeset approval gate is
+        DISABLED. Regardless of whether a ``concept_changeset`` workflow is
+        scoped to the collection, the upload applies immediately (concepts land
+        as Draft and follow the normal per-concept review) — nothing is ever
+        HELD behind an aggregate approval. Always returns
+        ``{status:'applied', summary, governed:False}``.
 
-          * GOVERNED  -> apply NOTHING. Open ONE DataAssetReview
-            (AssetType CONCEPT_CHANGESET) whose reviewed-asset FQN carries the
-            token; KEEP the stash token ALIVE (do NOT consume). Returns
-            ``{status:'held', review_request_id, summary, governed:True}``.
-          * UNGOVERNED-> confirm_upload(token) exactly as today (apply + consume).
-            Returns ``{status:'applied', summary, governed:False}``.
-
-        Exactly ONE trigger and at most ONE review per upload — the 40-wizards
-        failure mode is structurally impossible because the aggregate changeset,
-        not the individual concepts, is the gated unit.
+        (Historical: this once fired an ``on_request_status_change`` trigger for
+        ``EntityType.CONCEPT_CHANGESET`` and, when governed, held the upload
+        behind ONE DataAssetReview. That branch was removed; the changeset
+        primitives — apply_changeset_by_token / reject_changeset_by_token /
+        changeset_review_fqn — remain only so any legacy held review still
+        resolves. Re-instate the trigger block here to re-open gating.)
         """
         from src.repositories.upload_preview_repository import upload_preview_repo
         from src.controller.concept_diff import compute_concept_diff
@@ -1943,8 +1941,6 @@ class SemanticModelsManager(SearchableAsset):
                         ?concept a rdfs:Class .
                     } UNION {
                         ?concept a skos:Concept .
-                    } UNION {
-                        ?concept a skos:ConceptScheme .
                     } UNION {
                         ?concept a owl:Class .
                     } UNION {
@@ -3940,7 +3936,9 @@ class SemanticModelsManager(SearchableAsset):
             concept_type = "class"
         elif str(OWL.NamedIndividual) in types:
             concept_type = "individual"
-        elif str(SKOS.Concept) in types or str(SKOS.ConceptScheme) in types:
+        elif str(SKOS.Concept) in types:
+            # skos:ConceptScheme intentionally NOT mapped here — a scheme header
+            # is not a browseable concept (it is excluded from enumeration too).
             concept_type = "concept"
 
         # ``ontos:conceptType`` annotation lets us distinguish "term" from
@@ -4585,6 +4583,12 @@ class SemanticModelsManager(SearchableAsset):
     _PUBLISH_LITERAL_FIELDS = {
         "label": SKOS.prefLabel,
         "definition": SKOS.definition,
+        # Provenance: a re-uploaded (MODIFIED) concept must adopt the CURRENT
+        # file's name, not keep the stale sourceFile copied from the demoted
+        # version. Only rewritten when the incoming file carries a sourceFile
+        # (concept_diff._extract_changes emits it), so a manual edit that omits
+        # it leaves the existing value untouched.
+        "source_file": ONTOS.sourceFile,
     }
     _PUBLISH_LIST_LITERAL_FIELDS = {
         "synonyms": SKOS.altLabel,

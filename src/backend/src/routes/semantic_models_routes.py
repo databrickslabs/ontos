@@ -972,15 +972,15 @@ async def confirm_upload_preview(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
 ) -> UploadConfirmResponse:
-    """Confirm a previously previewed re-upload (P1-0 + P3 governance gate).
+    """Confirm a previously previewed re-upload (P1-0).
 
-    Routes through ``gate_or_apply_upload``: if a ``concept_changeset`` workflow
-    is scoped to the target collection the whole upload is HELD behind ONE
-    aggregate approval (nothing applied, the stash token stays alive, a backing
-    DataAssetReview is opened) — the response carries ``status:'held'`` and a
-    ``review_request_id``. Otherwise it applies directly (today's behavior) via
-    the EXISTING bulk-versioning-event primitive (modified→v2, new→v1,
-    removed→deprecated), run atomically, and the token is consumed.
+    Routes through ``gate_or_apply_upload``, which — since Scenario D
+    (2026-08-18) — ALWAYS applies directly via the bulk-versioning-event
+    primitive (modified→v2, new→v1 as Draft, removed→deprecated), run
+    atomically, and consumes the token. The response carries
+    ``status:'applied'`` and ``governed:False``. The changeset approval gate is
+    disabled, so ``status:'held'`` is no longer returned (the response model
+    still allows it for any legacy held review resolved elsewhere).
 
     Single-use: unknown/already-applied tokens → 404.
     """

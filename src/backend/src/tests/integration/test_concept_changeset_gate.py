@@ -211,9 +211,16 @@ def test_ungoverned_upload_applies_directly(managers, db_session):
 def test_governed_upload_applies_directly_scenario_d(managers, db_session, monkeypatch):
     """Even with a changeset workflow scoped, the upload applies directly.
 
-    Scenario D (2026-08-18) disabled the hold: ``gate_or_apply_upload`` skips the
-    trigger + held-review branch and always applies. This test pins that the
-    presence of a (would-be) governing execution does NOT hold the upload.
+    Scenario D (2026-08-18) disabled the hold: ``gate_or_apply_upload`` no longer
+    calls the trigger registry at all, so it always applies.
+
+    NOTE: ``_force_governed`` is a VESTIGIAL guard here — since the trigger call
+    was removed from ``gate_or_apply_upload``, the monkeypatch is not observed by
+    any live code path and the test would pass identically without it. It is kept
+    deliberately: if gating is ever re-opened (the trigger block re-instated),
+    this test would then WRONGLY hold and fail — a canary that the direct-apply
+    contract regressed. It does NOT prove "a would-be governing execution is
+    ignored" (there is no path left to ignore it); it proves direct-apply.
     """
     smm, dar = managers
     name = _unique_name()
@@ -223,7 +230,7 @@ def test_governed_upload_applies_directly_scenario_d(managers, db_session, monke
     preview = smm.preview_upload(ctx, _parse(GLOSSARY_MODIFIED))
     token = preview["preview_token"]
 
-    _force_governed(monkeypatch)
+    _force_governed(monkeypatch)  # vestigial — see docstring
     result = smm.gate_or_apply_upload(ctx, token, actor="uploader@example.com")
 
     # Gate disabled: applies directly, NOT held.

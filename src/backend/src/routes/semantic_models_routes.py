@@ -2110,6 +2110,38 @@ async def withdraw_concept_review_by_iri(
     )
 
 
+@router.post('/knowledge/concepts/by-iri/request-changes')
+async def request_concept_changes_by_iri(
+    request: Request,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Reviewer sends an under-review concept back to the owner (the ping-pong
+    send-back): under_review -> draft, carrying the reviewer's comment. Works
+    without a workflow (the ungoverned review track)."""
+    try:
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        result = manager.apply_review_decision(
+            concept_iri=concept_iri,
+            decision="changes_requested",
+            decided_by=current_user.email,
+            comments=(data or {}).get("comments") or (data or {}).get("reason"),
+        )
+        return result.get("concept") if isinstance(result, dict) else result
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error requesting changes on concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to request changes")
+
+
 @router.post('/knowledge/concepts/by-iri/approve')
 async def approve_concept_by_iri(
     current_user: CurrentUserDep,

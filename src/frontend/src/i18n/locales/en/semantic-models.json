@@ -106,6 +106,7 @@
     "submittedForReview": "Concept submitted for review",
     "submitReview": "Submitted for review",
     "submitReviewGoverned": "Submitted for review — awaiting approval.",
+    "changesRequested": "Sent back to the owner with your comment.",
     "withdrawReview": "Review withdrawn",
     "enterReviewerEmail": "Enter reviewer email address:",
     "conceptPromoted": "Concept promoted successfully",
@@ -224,10 +225,18 @@
     "submitReview": "Submit for review",
     "withdrawReview": "Withdraw Review",
     "approve": "Approve",
+    "requestChanges": "Request changes",
     "publish": "Publish",
     "certify": "Certify",
     "deprecate": "Deprecate",
     "archive": "Archive"
+  },
+  "requestChanges": {
+    "title": "Request changes",
+    "description": "Send this concept back to the owner as a draft, with your comment.",
+    "comment": "Comment for the owner",
+    "placeholder": "What should change before this can be approved?",
+    "submit": "Send back"
   },
   "submitReview": {
     "title": "Submit for Review",

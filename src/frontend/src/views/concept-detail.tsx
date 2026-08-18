@@ -100,6 +100,7 @@ const STATUS_TRANSITIONS: Record<string, { action: string; to: string; labelKey:
   draft: [{ action: 'submit-review', to: 'under_review', labelKey: 'semantic-models:lifecycle.submitReview', defaultLabel: 'Submit for review' }],
   under_review: [
     { action: 'approve', to: 'approved', labelKey: 'semantic-models:lifecycle.approve', defaultLabel: 'Approve' },
+    { action: 'request-changes', to: 'draft', labelKey: 'semantic-models:lifecycle.requestChanges', defaultLabel: 'Request changes' },
   ],
   approved: [{ action: 'publish', to: 'published', labelKey: 'semantic-models:lifecycle.publish', defaultLabel: 'Publish' }],
   published: [
@@ -218,6 +219,8 @@ export default function ConceptDetailView() {
   const [submitReviewOpen, setSubmitReviewOpen] = useState(false);
   const [reviewerEmail, setReviewerEmail] = useState<string | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
+  const [requestChangesOpen, setRequestChangesOpen] = useState(false);
+  const [requestChangesComment, setRequestChangesComment] = useState('');
   const selectedLanguage = i18n.language?.split('-')[0] || 'en';
 
   // Fetch the focused concept by IRI. This is intentionally separated from
@@ -420,8 +423,17 @@ export default function ConceptDetailView() {
   // Walk the status chain one step at a time from current to target.
   // If 'deprecate' is encountered along the way, stop and open the deprecate dialog.
   // If 'submit-review' is target, open the reviewer dialog instead.
-  const handleStatusTransition = async (targetStatus: string) => {
+  const handleStatusTransition = async (targetStatus: string, action?: string) => {
     if (!concept) return;
+
+    // Special case: reviewer "Request changes" (send-back ping-pong). Opens a
+    // small dialog to capture the comment, then posts to request-changes
+    // (under_review -> draft). Distinct from the owner's Withdraw.
+    if (action === 'request-changes') {
+      setRequestChangesComment('');
+      setRequestChangesOpen(true);
+      return;
+    }
 
     // Special case: if target is 'under_review', open the submit-review dialog
     if (targetStatus === 'under_review') {
@@ -529,6 +541,34 @@ export default function ConceptDetailView() {
         description: err?.message,
         variant: 'destructive',
       });
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const handleRequestChanges = async () => {
+    if (!concept) return;
+    setStatusBusy(true);
+    try {
+      const body: any = {};
+      if (requestChangesComment.trim()) body.comments = requestChangesComment.trim();
+      const response = await fetch(
+        `/api/knowledge/concepts/by-iri/request-changes?iri=${encodeURIComponent(concept.iri)}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({} as any));
+        throw new Error(err?.detail || 'Failed to request changes');
+      }
+      toast({
+        title: t('common:toast.success'),
+        description: t('semantic-models:messages.changesRequested', 'Sent back to the owner with your comment.'),
+      });
+      setRequestChangesOpen(false);
+      bumpKnowledgeGraphRefresh('concept-status');
+      await fetchConcept();
+    } catch (err: any) {
+      toast({ title: t('common:toast.error'), description: err?.message, variant: 'destructive' });
     } finally {
       setStatusBusy(false);
     }
@@ -653,8 +693,8 @@ export default function ConceptDetailView() {
               <DropdownMenuContent align="end">
                 {nextStepStatuses.map((item) => (
                   <DropdownMenuItem
-                    key={item.status}
-                    onClick={() => handleStatusTransition(item.status)}
+                    key={item.action || item.status}
+                    onClick={() => handleStatusTransition(item.status, item.action)}
                     className="font-medium"
                   >
                     {t(item.labelKey, item.defaultLabel)}
@@ -1227,6 +1267,42 @@ export default function ConceptDetailView() {
             >
               {statusBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t('semantic-models:submitReview.submit', 'Submit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reviewer "Request changes" — send the concept back to the owner with a
+          comment (the ping-pong send-back), works with or without a workflow. */}
+      <Dialog open={requestChangesOpen} onOpenChange={setRequestChangesOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t('semantic-models:requestChanges.title', 'Request changes')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('semantic-models:requestChanges.description', 'Send this concept back to the owner as a draft, with your comment.')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="request-changes-comment">
+              {t('semantic-models:requestChanges.comment', 'Comment for the owner')}
+            </Label>
+            <Textarea
+              id="request-changes-comment"
+              value={requestChangesComment}
+              onChange={(e) => setRequestChangesComment(e.target.value)}
+              placeholder={t('semantic-models:requestChanges.placeholder', 'What should change before this can be approved?')}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRequestChangesOpen(false)} disabled={statusBusy}>
+              {t('common:actions.cancel', 'Cancel')}
+            </Button>
+            <Button type="button" onClick={handleRequestChanges} disabled={statusBusy}>
+              {statusBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('semantic-models:requestChanges.submit', 'Send back')}
             </Button>
           </DialogFooter>
         </DialogContent>

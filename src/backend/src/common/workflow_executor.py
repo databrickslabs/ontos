@@ -2654,6 +2654,36 @@ class WorkflowExecutor:
             on_behalf_of=on_behalf_of,
         )
 
+        # Concept review ping-pong (O2): when the resumed approval step gates an
+        # ontology_concept, the approver's decision drives the concept lifecycle
+        # directly — approve -> under_review->approved; reject -> ->draft +
+        # the reason as the reviewer comment for the owner. This makes the
+        # governing workflow the single source of truth for a governed concept
+        # (no separate DataAssetReview needed). Best-effort: a reflection failure
+        # must not sink the workflow resume.
+        if context.entity_type == 'ontology_concept' and context.entity_id:
+            try:
+                from src.common.app_state import get_app_state_manager
+                smm = get_app_state_manager('semantic_models_manager')
+                if smm is not None:
+                    decision = 'approved' if step_result else 'changes_requested'
+                    comments = (result_data or {}).get('reason') or (result_data or {}).get('message')
+                    smm.apply_review_decision(
+                        concept_iri=context.entity_id,
+                        decision=decision,
+                        decided_by=user_email,
+                        comments=comments,
+                    )
+                    logger.info(
+                        f"Concept {context.entity_id} {decision} via workflow "
+                        f"approval (execution {execution_id})"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to reflect workflow approval onto concept "
+                    f"{context.entity_id}: {e}", exc_info=True,
+                )
+
         # Cross-workflow variable propagation (#291):
         # When the approval step was backed by a wizard session (approval flow),
         # the user may have entered data (e.g. workspaceId, reason).  Merge those

@@ -45,7 +45,7 @@ EXPORT_COLUMNS = [
     "description",
     "platform",
     "location",
-    "domain_id",
+    "domain_ids",
     "status",
     "tags",
     "properties",
@@ -63,7 +63,7 @@ IMPORT_COLUMNS = [
     "description",
     "platform",
     "location",
-    "domain_id",
+    "domain_ids",
     "status",
     "tags",
     "properties",
@@ -151,6 +151,20 @@ class AssetBulkManager:
         self._rel_repo = asset_relationship_repo
         logger.debug("AssetBulkManager initialized.")
 
+    def _set_asset_domains(self, db, asset_id, domain_ids, primary_domain_id, user):
+        """Replace an asset's domain assignments from a bulk-import row (no-op if empty)."""
+        from src.repositories.entity_domain_association_repository import entity_domain_repo
+        if not domain_ids:
+            return
+        try:
+            entity_domain_repo.set_domains_for_entity(
+                db, entity_type="asset", entity_id=str(asset_id),
+                domain_ids=domain_ids, primary_domain_id=primary_domain_id, assigned_by=user,
+            )
+        except ValueError as e:
+            # Unknown domain IDs in the CSV — log and skip rather than fail the whole import.
+            logger.warning(f"Bulk import: domain assignment skipped for asset {asset_id}: {e}")
+
     # ------------------------------------------------------------------
     # Export
     # ------------------------------------------------------------------
@@ -183,7 +197,13 @@ class AssetBulkManager:
             if platform:
                 query = query.filter(AssetDb.platform == platform)
             if domain_id:
-                query = query.filter(AssetDb.domain_id == domain_id)
+                from src.repositories.entity_domain_association_repository import entity_domain_repo
+                asset_ids_for_domain = entity_domain_repo.find_entity_ids_by_domain(
+                    db, domain_id=domain_id, entity_type="asset"
+                )
+                # Empty list -> always-false predicate (no rows). A string sentinel
+                # would crash: AssetDb.id is a Postgres UUID column.
+                query = query.filter(AssetDb.id.in_(asset_ids_for_domain))
             if status:
                 query = query.filter(AssetDb.status == status)
 
@@ -226,8 +246,21 @@ class AssetBulkManager:
         return self._rows_to_csv(rows, columns=IMPORT_COLUMNS), "assets-template.csv", "text/csv"
 
     def _assets_to_rows(self, assets: List[AssetDb]) -> List[Dict[str, str]]:
+        from sqlalchemy.orm import object_session
+        from src.repositories.entity_domain_association_repository import entity_domain_repo
+
+        # Batch-load domains once for the whole export (avoids N+1), mirroring the
+        # list/search paths. get_domains_for_entities already orders primary-first.
+        _session = object_session(assets[0]) if assets else None
+        domains_map = entity_domain_repo.get_domains_for_entities(
+            _session, entity_type="asset", entity_ids=[str(a.id) for a in assets]
+        ) if _session is not None and assets else {}
+
         rows = []
         for a in assets:
+            # Emit domain_ids as a semicolon-separated list, primary first (round-trips on import).
+            assigned = domains_map.get(str(a.id), [])
+            domain_ids_str = ";".join(d.domain_id for d in assigned)
             rows.append({
                 "id": str(a.id),
                 "name": a.name or "",
@@ -235,7 +268,7 @@ class AssetBulkManager:
                 "description": a.description or "",
                 "platform": a.platform or "",
                 "location": a.location or "",
-                "domain_id": a.domain_id or "",
+                "domain_ids": domain_ids_str,
                 "status": a.status or "",
                 "tags": _format_tags(a.tags),
                 "properties": _format_properties(a.properties),
@@ -586,7 +619,12 @@ class AssetBulkManager:
             description = row.get("description", "").strip() or None
             platform_val = row.get("platform", "").strip() or None
             location_val = row.get("location", "").strip() or None
-            domain_id_val = row.get("domain_id", "").strip() or None
+            # domain_ids: semicolon-separated; the first entry is treated as primary.
+            # Accept the legacy single-value "domain_id" header too, so CSVs exported by
+            # the pre-#520 version still round-trip their domain on re-import.
+            domain_ids_raw = row.get("domain_ids", "") or row.get("domain_id", "")
+            domain_ids_val = [d.strip() for d in domain_ids_raw.split(";") if d.strip()]
+            primary_domain_val = domain_ids_val[0] if domain_ids_val else None
             status_val = AssetStatus(status_raw) if status_raw else AssetStatus.ACTIVE
 
             # Determine create vs update
@@ -609,7 +647,6 @@ class AssetBulkManager:
                         asset_type_id=type_id,
                         platform=platform_val,
                         location=location_val,
-                        domain_id=domain_id_val,
                         properties=properties,
                         tags=tags,
                         status=status_val,
@@ -618,6 +655,7 @@ class AssetBulkManager:
                         db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
                     )
                     db.flush()
+                    self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
                     item.action = ImportAction.UPDATE
                     item.asset_id = str(updated.id)
                     result.updated += 1
@@ -630,7 +668,6 @@ class AssetBulkManager:
                     if existing:
                         update_data = AssetUpdate(
                             description=description,
-                            domain_id=domain_id_val,
                             properties=properties,
                             tags=tags,
                             status=status_val,
@@ -639,6 +676,7 @@ class AssetBulkManager:
                             db=db, db_obj=existing, obj_in=update_data.model_dump(exclude_unset=True)
                         )
                         db.flush()
+                        self._set_asset_domains(db, updated.id, domain_ids_val, primary_domain_val, current_user_id)
                         item.action = ImportAction.UPDATE
                         item.asset_id = str(updated.id)
                         result.updated += 1
@@ -650,7 +688,6 @@ class AssetBulkManager:
                             "asset_type_id": type_id,
                             "platform": platform_val,
                             "location": location_val,
-                            "domain_id": domain_id_val,
                             "properties": properties,
                             "tags": tags,
                             "status": status_val.value,
@@ -660,6 +697,7 @@ class AssetBulkManager:
                         db.add(db_asset)
                         db.flush()
                         db.refresh(db_asset)
+                        self._set_asset_domains(db, db_asset.id, domain_ids_val, primary_domain_val, current_user_id)
                         item.action = ImportAction.CREATE
                         item.asset_id = str(db_asset.id)
                         result.created += 1

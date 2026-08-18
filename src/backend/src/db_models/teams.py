@@ -7,7 +7,12 @@ from src.common.database import Base
 
 
 class TeamDb(Base):
-    """Team: name, title, description, optional domain_id; used for ownership and membership (TeamsManager, role resolution)."""
+    """Team: name, title, description; used for ownership and membership (TeamsManager, role resolution).
+
+    Domain assignment is polymorphic via ``entity_domain_associations``
+    (entity_type='team'); the legacy ``domain_id`` column was removed in favour of
+    multi-domain assignment.
+    """
     __tablename__ = 'teams'
 
     # Core Fields
@@ -15,10 +20,6 @@ class TeamDb(Base):
     name = Column(String, nullable=False, unique=True)
     title = Column(String, nullable=True)
     description = Column(Text, nullable=True)
-
-    # Optional parent domain relationship
-    domain_id = Column(String, ForeignKey('data_domains.id'), nullable=True)
-    domain = relationship("DataDomain", foreign_keys=[domain_id], lazy="select")
 
     # Metadata fields (stored as JSON strings)
     # tags: Moved to EntityTagAssociationDb for rich tag support

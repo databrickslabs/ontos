@@ -43,7 +43,8 @@ class AssetDb(Base):
     asset_type_id = Column(PG_UUID(as_uuid=True), ForeignKey("asset_types.id"), nullable=False, index=True)
     platform = Column(String, nullable=True)  # e.g., Databricks, Power BI, Salesforce
     location = Column(String, nullable=True)  # FQDN, URL, path
-    domain_id = Column(String, nullable=True, index=True)  # FK to data_domains (string ID)
+    # Domain assignment is polymorphic via entity_domain_associations (entity_type='asset');
+    # the legacy domain_id column was removed in favour of multi-domain assignment.
     properties = Column(JSON, nullable=True)  # Type-specific metadata following type's schema
     tags = Column(JSON, nullable=True)  # Quick tags/classifications
     status = Column(String, nullable=False, default="active", index=True)

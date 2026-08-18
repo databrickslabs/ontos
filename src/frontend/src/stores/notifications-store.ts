@@ -13,6 +13,8 @@ interface NotificationsState {
   deleteNotification: (notificationId: string) => Promise<void>;
   startPolling: () => void; // Action to start polling
   stopPolling: () => void; // Action to stop polling
+  resumePollingInterval: () => void; // Internal: (re)start the interval + fetch now
+  pausePollingInterval: () => void; // Internal: clear the interval, keep intent
 }
 
 // --- API Helper Functions (using fetch directly) ---
@@ -64,6 +66,13 @@ const apiDelete = async (endpoint: string): Promise<{ error?: string }> => {
 // Variable to hold the interval ID
 let pollingIntervalId: NodeJS.Timeout | null = null;
 const POLLING_INTERVAL = 60 * 1000; // 60 seconds
+
+// Whether the app wants polling active (set by start/stopPolling). We only run
+// the actual interval while the tab is visible so a backgrounded tab stops
+// hitting /api/notifications — otherwise the constant traffic keeps the
+// Lakebase compute from ever scaling down to idle.
+let pollingDesired = false;
+let visibilityHandler: (() => void) | null = null;
 
 // Guard flag to prevent concurrent fetches
 let isFetching = false;
@@ -196,21 +205,59 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     }
   },
   
-  // --- Polling Actions --- 
+  // --- Polling Actions ---
   startPolling: () => {
-      // Clear existing interval before starting a new one
-      get().stopPolling(); 
-      pollingIntervalId = setInterval(() => {
-          get().fetchNotifications();
-      }, POLLING_INTERVAL);
-      // Fetch immediately when polling starts
-      get().fetchNotifications(); 
+      pollingDesired = true;
+
+      // Pause the interval whenever the tab is hidden and resume (with an
+      // immediate refresh) when it becomes visible again. Registered once.
+      if (visibilityHandler === null && typeof document !== 'undefined') {
+          visibilityHandler = () => {
+              if (!pollingDesired) return;
+              if (document.visibilityState === 'visible') {
+                  get().resumePollingInterval();
+              } else {
+                  get().pausePollingInterval();
+              }
+          };
+          document.addEventListener('visibilitychange', visibilityHandler);
+      }
+
+      // Only run the interval if the tab is currently visible; otherwise wait
+      // for the visibility handler to start it when the user returns.
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+          get().resumePollingInterval();
+      }
   },
 
-  stopPolling: () => {
+  // Start the interval and fetch immediately. Idempotent — clears any existing
+  // interval first so we never end up with two running.
+  resumePollingInterval: () => {
       if (pollingIntervalId) {
           clearInterval(pollingIntervalId);
           pollingIntervalId = null;
+      }
+      pollingIntervalId = setInterval(() => {
+          get().fetchNotifications();
+      }, POLLING_INTERVAL);
+      // Fetch immediately so returning to the tab shows fresh data at once.
+      get().fetchNotifications();
+  },
+
+  // Stop the interval but keep pollingDesired/listener so we resume on focus.
+  pausePollingInterval: () => {
+      if (pollingIntervalId) {
+          clearInterval(pollingIntervalId);
+          pollingIntervalId = null;
+      }
+  },
+
+  stopPolling: () => {
+      pollingDesired = false;
+      get().pausePollingInterval();
+      if (visibilityHandler !== null && typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', visibilityHandler);
+          visibilityHandler = null;
       }
   },
 }));

@@ -50,6 +50,13 @@
       "placeholder": "audit_logs",
       "help": "Directory waar auditlog bestanden worden opgeslagen."
     },
+    "backgroundJobs": {
+      "title": "Achtergrondtaken",
+      "allowEnablementRequests": {
+        "label": "Gebruikers toestaan om activering van achtergrondtaken aan te vragen",
+        "help": "Wanneer een gebruiker een functie gebruikt waarvan de achtergrondtaak niet is ingeschakeld, kan deze een melding sturen om een beheerder te vragen die in te schakelen."
+      }
+    },
     "llm": {
       "title": "AI / LLM Configuratie",
       "enabled": {

@@ -175,3 +175,66 @@ class TestWorkflowJobRunRepository:
         # Assert
         assert count == 5
 
+    def test_upsert_run_skips_commit_when_unchanged(self, repository, db_session, sample_installation):
+        """upsert_run must not write when the incoming state matches storage.
+
+        The background poll re-fetches the last N days of runs every cycle, so
+        most upserts are for already-terminal runs whose state is identical to
+        what we stored. Committing those every cycle kept Lakebase permanently
+        busy; a no-op upsert must skip the write entirely.
+        """
+        from unittest.mock import patch
+
+        run_data = {
+            'run_name': 'nightly',
+            'life_cycle_state': 'TERMINATED',
+            'result_state': 'SUCCESS',
+            'state_message': None,
+            'start_time': 1000,
+            'end_time': 2000,
+        }
+        # First upsert creates the row.
+        repository.upsert_run(
+            db_session, run_id=555, workflow_installation_id=sample_installation.id, run_data=run_data,
+        )
+
+        # Second upsert with identical data must not commit.
+        with patch.object(db_session, "commit") as spy_commit:
+            result = repository.upsert_run(
+                db_session, run_id=555, workflow_installation_id=sample_installation.id, run_data=dict(run_data),
+            )
+            assert spy_commit.call_count == 0, "unchanged upsert should not commit"
+        assert result.run_id == 555
+
+    def test_upsert_run_commits_on_state_change(self, repository, db_session, sample_installation):
+        """A real state transition must still be persisted."""
+        from unittest.mock import patch
+
+        base = {
+            'run_name': 'nightly',
+            'life_cycle_state': 'RUNNING',
+            'result_state': None,
+            'state_message': None,
+            'start_time': 1000,
+            'end_time': None,
+        }
+        repository.upsert_run(
+            db_session, run_id=556, workflow_installation_id=sample_installation.id, run_data=base,
+        )
+
+        # A changed upsert must commit (spy). Refresh-under-mocked-commit would
+        # reload the stale row, so assert the commit fired here...
+        changed = dict(base, life_cycle_state='TERMINATED', result_state='SUCCESS', end_time=2000)
+        with patch.object(db_session, "commit") as spy_commit:
+            repository.upsert_run(
+                db_session, run_id=556, workflow_installation_id=sample_installation.id, run_data=changed,
+            )
+            assert spy_commit.call_count == 1, "state change must commit"
+
+        # ...and verify it actually persisted with a real (unmocked) upsert.
+        result = repository.upsert_run(
+            db_session, run_id=556, workflow_installation_id=sample_installation.id, run_data=changed,
+        )
+        assert result.life_cycle_state == 'TERMINATED'
+        assert result.result_state == 'SUCCESS'
+

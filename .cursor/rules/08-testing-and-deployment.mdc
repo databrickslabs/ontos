@@ -15,6 +15,18 @@ scope:
 - Always run Python snippets via `hatch -e dev run ...` to pick up the project's environment.
 - Input validation: Pydantic on the backend, Zod / `react-hook-form` on the frontend.
 
+**Multiple worktrees (parallel LLM sessions)**
+
+- The user's primary worktree owns ports **8000/3000** — **NEVER restart those** and never bind your own servers to them.
+- When working in a *separate* worktree, start your **own** frontend + backend on **distinct ports** so you don't collide with (or accidentally proxy into) another branch's servers. Worktrees can share the same local `app_ontos` PostgreSQL DB; only the HTTP ports must differ.
+- Frontend port + proxy target are env-var driven; the backend port is passed straight to `uvicorn` (the `dev-backend` hatch script is hard-coded to 8000, so a second worktree runs uvicorn directly):
+  - `VITE_PORT` (default `3000`) — Vite dev server.
+  - `VITE_PROXY_TARGET` (default `http://localhost:8000`) — must point at *your* backend port.
+- Example second pair (backend 8100 / frontend 3100):
+  - Backend (from `src/`): `hatch -e dev run uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8100`
+  - Frontend (from `src/frontend/`): `VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 yarn dev:frontend`
+- Full contributor-facing docs: `CONTRIBUTING.md` → "Running Multiple Worktrees Side-by-Side".
+
 **Testing**
 
 - Backend: `pytest` (tests under `src/backend/src/tests/` and top-level `e2e/`).

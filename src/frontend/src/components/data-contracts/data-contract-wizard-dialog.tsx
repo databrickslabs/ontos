@@ -10,6 +10,7 @@ import type { InferredSchemaObject } from './infer-from-asset-dialog'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import { PrincipalPicker } from '@/components/common/principal-picker'
 import { useDomains } from '@/hooks/use-domains'
+import DomainMultiSelector from '@/components/ui/domain-multi-selector'
 import { useToast } from '@/hooks/use-toast'
 
 type WizardProps = {
@@ -57,7 +58,7 @@ const ENVIRONMENTS = ['production', 'staging', 'development', 'test']
 const PHYSICAL_TYPES = ['table', 'view', 'materialized_view', 'external_table', 'managed_table', 'streaming_table']
 
 export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmit, initial }: WizardProps) {
-  const { domains, loading: domainsLoading, refetch: refetchDomains } = useDomains()
+  const { refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
 
   // Helper function to handle domain-related errors
@@ -73,7 +74,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       })
 
       // Clear the invalid domain selection
-      setDomain('')
+      setDomainIds([])
+      setPrimaryDomainId(null)
 
       // Refetch domains to get the latest list
       try {
@@ -102,7 +104,12 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const [version, setVersion] = useState(initial?.version || '1.0.0')
   const [status, setStatus] = useState(initial?.status || 'draft')
   const [owner, setOwner] = useState(initial?.owner || '')
-  const [domain, setDomain] = useState(initial?.domain || '')
+  const [domainIds, setDomainIds] = useState<string[]>(
+    initial?.domainIds || (initial?.domainId ? [initial.domainId] : (initial?.domain ? [initial.domain] : []))
+  )
+  const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(
+    initial?.primaryDomainId ?? initial?.domainId ?? initial?.domain ?? null
+  )
   const [tenant, setTenant] = useState(initial?.tenant || '')
   const [dataProduct, setDataProduct] = useState(initial?.dataProduct || '')
   const [descriptionUsage, setDescriptionUsage] = useState(initial?.descriptionUsage || '')
@@ -228,7 +235,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         setVersion('1.0.0')
         setStatus('draft')
         setOwner('')
-        setDomain('')
+        setDomainIds([])
+        setPrimaryDomainId(null)
         setTenant('')
         setDataProduct('')
         setDescriptionUsage('')
@@ -253,7 +261,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         setVersion(initial.version || '1.0.0')
         setStatus(initial.status || 'draft')
         setOwner(initial.owner || '')
-        setDomain(initial.domain || '')
+        setDomainIds(initial.domainIds || (initial.domainId ? [initial.domainId] : (initial.domain ? [initial.domain] : [])))
+        setPrimaryDomainId(initial.primaryDomainId ?? initial.domainId ?? initial.domain ?? null)
         setTenant(initial.tenant || '')
         setDataProduct(initial.dataProduct || '')
         setDescriptionUsage(initial.descriptionUsage || '')
@@ -388,7 +397,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         version,
         status: status, // Use user-selected status
         owner,
-        domainId: domain, // Send as domainId since domain variable contains the ID
+        domainIds: domainIds, // Multi-domain assignment (primary included)
+        primaryDomainId: primaryDomainId,
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
@@ -475,7 +485,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         version,
         status: 'draft', // Draft status for partial saves
         owner,
-        domainId: domain, // Send as domainId since domain variable contains the ID
+        domainIds: domainIds, // Multi-domain assignment (primary included)
+        primaryDomainId: primaryDomainId,
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
@@ -647,22 +658,17 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
               {/* Metadata Panel */}
               <div className="space-y-4">
                 <div>
-                  <Label className="text-sm font-medium">Domain</Label>
-                  <Select value={domain} onValueChange={setDomain} disabled={domainsLoading}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder={domainsLoading ? "Loading domains..." : "Select a data domain"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {domains.length === 0 && !domainsLoading && (
-                        <SelectItem value="no-domains" disabled>No domains available</SelectItem>
-                      )}
-                      {domains.map((domainOption) => (
-                        <SelectItem key={domainOption.id} value={domainOption.id}>
-                          {domainOption.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-sm font-medium">Domains</Label>
+                  <DomainMultiSelector
+                    className="mt-1"
+                    value={domainIds}
+                    primaryDomainId={primaryDomainId}
+                    onChange={(nextIds, nextPrimary) => {
+                      setDomainIds(nextIds)
+                      setPrimaryDomainId(nextPrimary)
+                    }}
+                    placeholder="Select data domains"
+                  />
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Tenant</Label>

@@ -89,6 +89,7 @@ def get_jobs_manager(request: Request):
 async def get_contracts(
     db: DBSessionDep,
     domain_id: Optional[str] = None,
+    domain_ids: Optional[str] = None,
     project_id: Optional[str] = None,
     status: Optional[str] = None,
     include_history: bool = False,
@@ -141,9 +142,11 @@ async def get_contracts(
                     "falling back to consumer visibility"
                 )
 
+        domain_ids_list = [d.strip() for d in domain_ids.split(",") if d.strip()] if domain_ids else None
         result = manager.list_contracts_from_db(
             db,
             domain_id=domain_id,
+            domain_ids=domain_ids_list,
             project_id=project_id,
             status=status,
             is_admin=is_admin,
@@ -2120,6 +2123,10 @@ async def start_profiling(
         )
         
         return result
+    except HTTPException:
+        # Includes ConflictError raised when the DQX background job is not enabled;
+        # its message is actionable, so let it reach the client unchanged.
+        raise
     except ValueError as e:
         logger.error("Validation error starting profiling for contract %s: %s", contract_id, e)
         raise HTTPException(status_code=400, detail="Invalid profiling request")

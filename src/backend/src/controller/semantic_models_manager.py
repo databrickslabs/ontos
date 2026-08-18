@@ -527,9 +527,17 @@ class SemanticModelsManager(SearchableAsset):
     
     def _skolemize_bnode(self, bnode: BNode, context_name: str) -> str:
         """Convert a blank node to a stable URI for persistence.
-        
+
         Blank nodes are graph-local identifiers. To persist them, we convert
         them to URIs that include the context name for global uniqueness.
+
+        IMPORTANT: ``str(bnode)`` is only stable if the bnode came from a graph
+        that has been canonicalised (see ``_import_graph_to_db``). rdflib mints
+        a fresh random id for every ``.parse()``, so without canonicalisation
+        the same blank node yields a different URI on each import — the
+        ``uq_rdf_triple`` constraint never matches and re-imports duplicate the
+        triples without bound. Canonical bnode ids are content-derived and
+        therefore reproducible across parses and process restarts.
         """
         return f"urn:ontos:bnode:{context_name}:{str(bnode)}"
 
@@ -616,8 +624,27 @@ class SemanticModelsManager(SearchableAsset):
         Returns:
             Number of triples actually inserted (excludes duplicates)
         """
+        # Canonicalise blank-node identifiers before persisting. rdflib assigns
+        # random bnode ids on each parse, so without this the skolemised URIs
+        # differ every import and the ON CONFLICT DO NOTHING dedup never fires —
+        # re-imports of any ontology with blank nodes (OWL restrictions, SHACL
+        # shapes, rdf:Lists) grow the table without bound. Canonicalisation
+        # (RGDA1) derives stable, content-based bnode ids, so identical content
+        # produces identical rows and re-imports become true no-ops.
+        # Only pay the O(n log n) cost when blank nodes are actually present.
+        if any(isinstance(t, BNode) for triple in graph for t in (triple[0], triple[2])):
+            try:
+                from rdflib.compare import to_canonical_graph
+                graph = to_canonical_graph(graph)
+            except Exception as e:
+                logger.warning(
+                    "Blank-node canonicalisation failed for %s:%s (%s); "
+                    "falling back to raw import — re-imports may duplicate.",
+                    source_type, source_identifier, e,
+                )
+
         triples_to_insert = []
-        
+
         for subj, pred, obj in graph:
             # Handle subject (can be URI or blank node)
             if isinstance(subj, BNode):
@@ -766,7 +793,14 @@ class SemanticModelsManager(SearchableAsset):
             loaded += 1
 
         logger.info(f"Loaded {loaded} triples into graph (skipped {skipped} from disabled models)")
-        
+
+        # A rebuild against a bloated table is a prime moment to snapshot where
+        # the rows come from (throttled + threshold-gated; no-op when healthy).
+        try:
+            rdf_triples_repo.maybe_log_bloat_diagnostics(self._db, trigger="rebuild")
+        except Exception as e:
+            logger.debug(f"Bloat diagnostic skipped: {e}")
+
         # Log stats by context
         contexts = rdf_triples_repo.list_contexts(self._db)
         for ctx in contexts:
@@ -856,9 +890,19 @@ class SemanticModelsManager(SearchableAsset):
         # Scan all contexts and register missing ones
         for context in self._graph.contexts():
             context_name = str(context.identifier)
-            
-            # Skip system contexts
-            if context_name in ("urn:x-rdflib:default", META_CONTEXT, ""):
+
+            # Skip system contexts. This includes the dynamic, recomputed-every-
+            # rebuild contexts (app entities, semantic links) — they are derived
+            # views, not user collections, and must not be registered as
+            # KnowledgeCollections (doing so pollutes the Collections list and
+            # writes spurious timestamped metadata each time they first appear).
+            if context_name in (
+                "urn:x-rdflib:default",
+                META_CONTEXT,
+                "urn:app-entities",
+                "urn:semantic-links",
+                "",
+            ):
                 continue
             
             # Skip if already registered
@@ -1192,6 +1236,39 @@ class SemanticModelsManager(SearchableAsset):
                     shutil.rmtree(temp_dir)
                 raise
 
+    def _ensure_caches_warm(self) -> bool:
+        """Repopulate both cache tiers from the current graph if they are cold.
+
+        Read paths call this on a cache miss so a single request re-warms the
+        caches for every subsequent read, instead of each request recomputing
+        SPARQL over the whole graph forever (the post-invalidation slow path).
+
+        Safe against staleness: it recomputes from ``self._graph``, which every
+        mutation path keeps fresh (full rebuild, or incremental graph edit +
+        invalidate). A warmed cache is therefore never staler than the graph.
+
+        Returns True if the in-memory caches are populated on return.
+        """
+        if (
+            self._cached_concepts is not None
+            and self._cached_taxonomies is not None
+            and self._cached_stats is not None
+        ):
+            return True
+        try:
+            # Reuse the atomic writer: it computes concepts/taxonomies/stats
+            # from the current graph, writes the JSON files under the rebuild
+            # lock, and sets self._cached_* — exactly what a warm-up needs.
+            self._build_persistent_caches_atomic()
+            return (
+                self._cached_concepts is not None
+                and self._cached_taxonomies is not None
+                and self._cached_stats is not None
+            )
+        except Exception as e:
+            logger.warning(f"Failed to warm semantic caches on read miss: {e}")
+            return False
+
     def _compute_taxonomies(self) -> List:
         """Compute taxonomies without caching - used for building persistent cache"""
         from src.models.ontology import SemanticModel as SemanticModelOntology
@@ -1345,9 +1422,14 @@ class SemanticModelsManager(SearchableAsset):
     # Call after create/update/delete/enable/disable
     def on_models_changed(self) -> None:
         try:
+            # rebuild_graph_from_enabled() already clears every cache tier and
+            # then rebuilds both the in-memory snapshots and the persistent JSON
+            # files from the fresh graph. Calling _invalidate_cache() afterwards
+            # would delete those just-built files and null the snapshots again,
+            # forcing every subsequent read to recompute SPARQL over the whole
+            # graph — the root cause of the post-mutation slowdown. So do NOT
+            # invalidate here; the rebuild is the authoritative refresh.
             self.rebuild_graph_from_enabled()
-            # Invalidate cache when models change
-            self._invalidate_cache()
         except Exception as e:
             logger.error(f"Failed to rebuild RDF graph: {e}")
 
@@ -1965,15 +2047,26 @@ class SemanticModelsManager(SearchableAsset):
         if self._cached_taxonomies is not None:
             return self._cached_taxonomies
 
-        # Cold start: fall back to persistent file cache
+        # Cold start: fall back to persistent file cache. Populate the in-memory
+        # snapshot too so we don't re-read + re-parse the file on every request.
+        # (File presence implies no mutation since the last rebuild — invalidation
+        # deletes these files — so loading it into memory is not a staleness risk.)
         cache_file = self._data_dir / "cache" / "taxonomies.json"
         if cache_file.exists():
             try:
                 with open(cache_file, "r") as f:
                     data = json.load(f)
-                    return [SemanticModelOntology(**item) for item in data]
+                    taxonomies = [SemanticModelOntology(**item) for item in data]
+                    self._cached_taxonomies = taxonomies
+                    return taxonomies
             except Exception as e:
                 logger.warning(f"Failed to load taxonomies from persistent cache: {e}")
+
+        # Cold cache: warm both tiers once so subsequent reads hit the cache
+        # instead of recomputing per request. Falls back to a direct compute if
+        # warming fails for any reason.
+        if self._ensure_caches_warm() and self._cached_taxonomies is not None:
+            return self._cached_taxonomies
 
         logger.warning("Persistent cache not found for taxonomies, computing live")
         taxonomies = self._compute_taxonomies()
@@ -2515,9 +2608,15 @@ class SemanticModelsManager(SearchableAsset):
             try:
                 with open(cache_file, "r") as f:
                     data = json.load(f)
-                    return TaxonomyStats(**data)
+                    stats = TaxonomyStats(**data)
+                    self._cached_stats = stats
+                    return stats
             except Exception as e:
                 logger.warning(f"Failed to load stats from persistent cache: {e}")
+
+        # Cold cache: warm both tiers once so subsequent reads hit the cache.
+        if self._ensure_caches_warm() and self._cached_stats is not None:
+            return self._cached_stats
 
         logger.warning("Persistent cache not found for stats, computing live")
         taxonomies = self.get_taxonomies()
@@ -2542,9 +2641,13 @@ class SemanticModelsManager(SearchableAsset):
                     with open(cache_file, "r") as f:
                         data = json.load(f)
                         concepts = [OntologyConcept(**item) for item in data]
+                        self._cached_concepts = concepts
                 except Exception as e:
                     logger.warning(f"Failed to load concepts from persistent cache: {e}")
                     concepts = self.get_concepts_by_taxonomy()
+            elif self._ensure_caches_warm() and self._cached_concepts is not None:
+                # Cold cache: warm both tiers once so subsequent reads hit it.
+                concepts = self._cached_concepts
             else:
                 logger.warning("Persistent cache not found for concepts, computing live")
                 concepts = self.get_concepts_by_taxonomy()

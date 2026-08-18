@@ -70,7 +70,10 @@ def get_readiness_report(
     # 2. At least one output port / contract
     output_ports = product.outputPorts or []
     has_output = len(output_ports) > 0
-    contract_count = sum(1 for op in output_ports if op.customProperties and op.customProperties.get("contract_id"))
+    contract_count = sum(
+        1 for op in output_ports
+        if getattr(op, "contractId", None)
+    )
     checks.append(ReadinessCheck(
         name="At least one output contract",
         status="pass" if contract_count > 0 else ("warn" if has_output else "fail"),

@@ -42,9 +42,9 @@ class DataContractFileModel(FileModel[DataContractDb]):
         result['version'] = entity.version
         result['status'] = entity.status
         
-        # Domain and ownership
-        if entity.domain_id:
-            result['domainId'] = entity.domain_id
+        # Domain assignment is polymorphic (entity_domain_associations) and is emitted by the
+        # ODCS export path (DomainExportAdapter); it is not available on this session-less
+        # YAML serializer.
         if entity.owner_team_id:
             result['ownerTeamId'] = entity.owner_team_id
         if entity.data_product:

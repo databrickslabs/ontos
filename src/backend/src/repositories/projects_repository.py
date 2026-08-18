@@ -187,13 +187,13 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
         logger.debug(f"Fetching domain-related projects for user: {user_identifier}")
         try:
             from src.db_models.teams import TeamMemberDb
-            from src.db_models.data_domains import DataDomain
-            
+            from src.repositories.entity_domain_association_repository import entity_domain_repo
+
             # Get user's team IDs (case-insensitive)
             member_filters = [func.lower(TeamMemberDb.member_identifier) == user_identifier.lower()]
             for group in user_groups:
                 member_filters.append(func.lower(TeamMemberDb.member_identifier) == group.lower())
-            
+
             user_team_ids_query = (
                 db.query(TeamDb.id)
                 .join(TeamMemberDb)
@@ -201,51 +201,54 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
                 .distinct()
             )
             user_team_ids = [tid[0] for tid in user_team_ids_query.all()]
-            
+
+            # Teams that carry at least one domain (via the junction table). A project whose
+            # owner team is NOT in this set has "no domain" and is treated as public.
+            teams_with_domain = set(
+                entity_domain_repo.find_entity_ids_with_any_domain(db, entity_type="team")
+            )
+
+            # Base visibility: projects with no owner team, or whose owner team is standalone.
+            public_filters = [self.model.owner_team_id.is_(None)]
+            if teams_with_domain:
+                public_filters.append(self.model.owner_team_id.notin_(teams_with_domain))
+
             if not user_team_ids:
-                # User not in any team, only show projects with no domain
+                # User not in any team → only public projects.
                 return (
                     db.query(self.model)
                     .options(selectinload(self.model.teams))
                     .options(selectinload(self.model.owner_team))
-                    .join(TeamDb, self.model.owner_team_id == TeamDb.id, isouter=True)
-                    .filter(
-                        or_(
-                            TeamDb.domain_id.is_(None),
-                            self.model.owner_team_id.is_(None)
-                        )
-                    )
+                    .filter(or_(*public_filters))
                     .distinct()
                     .order_by(self.model.name)
                     .all()
                 )
-            
-            # Get domains of user's teams
-            user_domain_ids_query = (
-                db.query(TeamDb.domain_id)
-                .filter(TeamDb.id.in_(user_team_ids))
-                .filter(TeamDb.domain_id.isnot(None))
-                .distinct()
+
+            # Union of all domains across the user's teams (primary + additional).
+            domains_map = entity_domain_repo.get_domains_for_entities(
+                db, entity_type="team", entity_ids=user_team_ids
             )
-            user_domain_ids = [did[0] for did in user_domain_ids_query.all()]
-            
-            # Build filter conditions
-            visibility_filters = [
-                # Projects with no domain (public)
-                TeamDb.domain_id.is_(None),
-                # Projects user is already a member of
-                project_team_association.c.team_id.in_(user_team_ids),
-            ]
-            
-            # Projects in same domains as user's teams
-            if user_domain_ids:
-                visibility_filters.append(TeamDb.domain_id.in_(user_domain_ids))
-            
+            user_domain_ids = {d.domain_id for assigned in domains_map.values() for d in assigned}
+
+            # Owner teams that share any of the user's domains.
+            owner_teams_sharing = (
+                set(entity_domain_repo.find_entity_ids_by_domains(
+                    db, domain_ids=list(user_domain_ids), entity_type="team"
+                ))
+                if user_domain_ids else set()
+            )
+
+            # Build visibility filters: public OR member OR owner team shares a domain.
+            visibility_filters = list(public_filters)
+            visibility_filters.append(project_team_association.c.team_id.in_(user_team_ids))
+            if owner_teams_sharing:
+                visibility_filters.append(self.model.owner_team_id.in_(owner_teams_sharing))
+
             return (
                 db.query(self.model)
                 .options(selectinload(self.model.teams))
                 .options(selectinload(self.model.owner_team))
-                .outerjoin(TeamDb, self.model.owner_team_id == TeamDb.id)
                 .outerjoin(
                     project_team_association,
                     project_team_association.c.project_id == self.model.id
@@ -255,7 +258,7 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
                 .order_by(self.model.name)
                 .all()
             )
-            
+
         except SQLAlchemyError as e:
             logger.error(f"Database error fetching domain-related projects: {e}", exc_info=True)
             db.rollback()

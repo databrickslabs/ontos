@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/accordion"
 import { useApi } from '@/hooks/use-api';
 import TagSelector from '@/components/ui/tag-selector';
+import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
 
 // --- Prop Types --- 
@@ -348,6 +349,13 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   const [jsonParseError, setJsonParseError] = useState<string | null>(null);
 
   // State for Schema Validation
+  // Domain assignment (#520) is kept in LOCAL state — NOT in the RHF form data — so it is
+  // never part of the payload validated against the ODPS schema (which is
+  // additionalProperties:false and would reject top-level domain_ids). It is injected into
+  // the payload after schema validation, just before the API call.
+  const [domainIds, setDomainIds] = useState<string[]>([]);
+  const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
+
   const [dataProductSchema, setDataProductSchema] = useState<object | null>(null);
   const [schemaValidator, setSchemaValidator] = useState<ValidateFunction | null>(null);
   const [validationStatusMessage, setValidationStatusMessage] = useState<string | null>(null);
@@ -444,7 +452,15 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
           delete formData.created_at; // Keep this for optional field
           // delete formData.updated_at; // REMOVE: updated_at is required in type
 
-          reset(formData); 
+          // Domains (#520) live in local state, not RHF — strip them from the form data so
+          // they never enter the ODPS-schema-validated payload.
+          setDomainIds((productData as any).domain_ids || []);
+          setPrimaryDomainId((productData as any).primary_domain_id ?? null);
+          delete (formData as any).domain_ids;
+          delete (formData as any).primary_domain_id;
+          delete (formData as any).domain;
+
+          reset(formData);
 
           // Populate state arrays for custom editors *after* reset
           setLinksArray(linksObjectToArray(formData.links));
@@ -470,8 +486,10 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         }
       } else if (isOpen && !isEditMode) {
           // Reset form for CREATE mode when dialog opens
+          setDomainIds([]);
+          setPrimaryDomainId(null);
           const defaultValues = createDefaultProduct();
-          reset(defaultValues); 
+          reset(defaultValues);
           setLinksArray(linksObjectToArray(defaultValues.links));
           setCustomArray(objectToArray(defaultValues.custom));
           setJsonString(JSON.stringify(cleanEmptyOptionalStrings(defaultValues), null, 2));
@@ -729,9 +747,14 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         toast({ title: "Validation Error", description: "Please fix validation errors before saving.", variant: "destructive" });
         setActiveTab('json'); // Switch to JSON tab to show errors easily
         // Update jsonString state to reflect the *cleaned* payload causing validation errors
-        setJsonString(JSON.stringify(payload, null, 2)); 
+        setJsonString(JSON.stringify(payload, null, 2));
         return; // Stop submission
     }
+
+    // Inject domain assignments AFTER schema validation (#520): domain_ids/primary_domain_id
+    // are app extension fields not in the ODPS schema, so they must not be validated.
+    (payload as any).domain_ids = domainIds;
+    (payload as any).primary_domain_id = primaryDomainId;
 
     try {
         let response;
@@ -962,9 +985,16 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="info.domain">Domain</Label>
-                                    <Input id="info.domain" {...register("info.domain")} />
-                                    {errors.info?.domain && <p className="text-sm text-red-600 mt-1">{errors.info.domain.message}</p>}
+                                    <Label htmlFor="domain_ids">Domains</Label>
+                                    <DomainMultiSelector
+                                      value={domainIds}
+                                      primaryDomainId={primaryDomainId}
+                                      onChange={(ids, primary) => {
+                                        setDomainIds(ids);
+                                        setPrimaryDomainId(primary);
+                                      }}
+                                      placeholder="Select domains..."
+                                    />
                                   </div>
                                   <div>
                                     <Label htmlFor="info.archetype">Archetype</Label>

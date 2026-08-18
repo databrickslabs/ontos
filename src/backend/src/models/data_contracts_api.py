@@ -401,7 +401,9 @@ class DataContractBase(BaseModel):
     project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
     apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
-    domainId: Optional[str] = Field(None, alias='domain_id')
+    domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
+    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain assignment (primary included)
+    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
@@ -473,7 +475,9 @@ class DataContractUpdate(BaseModel):
     project_id: Optional[str] = None  # Project association
     kind: Optional[str] = None
     apiVersion: Optional[str] = Field(None, alias='api_version')
-    domainId: Optional[str] = Field(None, alias='domain_id')
+    domainId: Optional[str] = Field(None, alias='domain_id')  # Legacy single-domain (primary)
+    domainIds: Optional[List[str]] = Field(None, alias='domain_ids')  # Multi-domain replace-all
+    primaryDomainId: Optional[str] = Field(None, alias='primary_domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None  # Nested description object (flattened in manager)
@@ -516,8 +520,10 @@ class DataContractRead(BaseModel):
     # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it
     apiVersion: str = Field('v3.1.0', alias='apiVersion')  # Required by ODCS
     tenant: Optional[str] = None
-    domain: Optional[str] = None
-    domainId: Optional[str] = None
+    domain: Optional[str] = None  # Primary domain name
+    domainId: Optional[str] = None  # Primary domain ID
+    domainIds: List[str] = Field(default_factory=list)  # All assigned domain IDs (primary first)
+    primaryDomainId: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
 
@@ -599,8 +605,10 @@ class DataContractSummary(BaseModel):
     kind: str = Field('DataContract')
     apiVersion: str = Field('v3.1.0', alias='apiVersion')
     tenant: Optional[str] = None
-    domain: Optional[str] = None
-    domainId: Optional[str] = None
+    domain: Optional[str] = None  # Primary domain name
+    domainId: Optional[str] = None  # Primary domain ID
+    domainIds: List[str] = Field(default_factory=list)  # All assigned domain IDs (primary first)
+    primaryDomainId: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
     tags: Optional[List[AssignedTag]] = Field(default_factory=list)

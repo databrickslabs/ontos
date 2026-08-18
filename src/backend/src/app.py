@@ -179,6 +179,11 @@ async def startup_event():
         from src.controller.grant_manager import init_grant_manager
         from src.common.workspace_client import get_workspace_client
         ws_client = get_workspace_client(settings=settings)
+        # Expose the app-identity workspace client for MCP analytics tools
+        # (get_table_schema / execute_analytics_query read
+        # app.state.workspace_client via ToolContext; it was never set,
+        # so those tools always failed with "Workspace client not available").
+        app.state.workspace_client = ws_client
         grant_manager = init_grant_manager(ws_client=ws_client, settings=settings)
         app.state.grant_manager = grant_manager
         logger.info("Grant Manager initialized")

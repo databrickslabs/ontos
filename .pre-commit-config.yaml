@@ -26,7 +26,7 @@ repos:
     hooks:
       - id: eslint
         name: eslint
-        entry: bash -c 'cd src/frontend && yarn lint:fix'
+        entry: bash -c 'cd src/frontend && npm run lint:fix'
         language: system
         files: ^src/frontend/src/.*\.(ts|tsx)$
         pass_filenames: false
@@ -36,7 +36,7 @@ repos:
     hooks:
       - id: prettier
         name: prettier
-        entry: bash -c 'cd src/frontend && yarn format'
+        entry: bash -c 'cd src/frontend && npm run format'
         language: system
         files: ^src/frontend/src/.*\.(ts|tsx|css)$
         pass_filenames: false
@@ -46,7 +46,7 @@ repos:
     hooks:
       - id: typescript
         name: typescript
-        entry: bash -c 'cd src/frontend && yarn type-check'
+        entry: bash -c 'cd src/frontend && npm run type-check'
         language: system
         files: ^src/frontend/src/.*\.(ts|tsx)$
         pass_filenames: false

@@ -4,7 +4,7 @@ import re
 import sys
 import argparse
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import uuid4
 
 from sqlalchemy import create_engine, text
@@ -163,7 +163,11 @@ class DatasetTagInfo:
     product_name: Optional[str]
     product_version: Optional[str]
     product_status: Optional[str]
-    # Domain metadata (prefer contract domain, fallback to product domain)
+    # Domain metadata: primary domain (prefer contract, fallback to product).
+    # With multi-domain assignment the primary feeds the single-value ``data_domain``
+    # tag; ``additional_domain_names`` carries the non-primary domains, each emitted as
+    # its own numbered tag (``data_domain_1``, ``data_domain_2``, ...) since a UC
+    # securable holds one value per tag key. See DomainExportAdapter.uc_tags.
     domain_id: Optional[str]
     domain_name: Optional[str]
     # Semantic links
@@ -171,6 +175,8 @@ class DatasetTagInfo:
     # Asset metadata (populated when sourced from assets table)
     asset_id: Optional[str] = None
     asset_type_name: Optional[str] = None
+    # Additional (non-primary) domain names for the chosen domain source.
+    additional_domain_names: List[str] = field(default_factory=list)
 
 
 def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -181,7 +187,6 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
                c.version AS contract_version,
                c.status AS contract_status,
                c.data_product AS product_name_from_contract,
-               c.domain_id AS contract_domain_id,
                o.id   AS object_id,
                o.name AS schema_name,
                o.physical_name,
@@ -189,19 +194,40 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
                el.label AS schema_semantic_label,
                d.id AS domain_id,
                d.name AS domain_name,
+               (SELECT array_agg(dd.name ORDER BY dd.name)
+                  FROM entity_domain_associations eda2
+                  JOIN data_domains dd ON dd.id = eda2.domain_id
+                 WHERE eda2.entity_type = 'data_contract'
+                   AND eda2.entity_id = c.id
+                   AND eda2.is_primary = FALSE) AS contract_additional_domains,
                p.id AS product_id,
                p.name AS product_name,
                p.version AS product_version,
                p.status AS product_status,
-               p.domain AS product_domain
+               pd.name AS product_domain,
+               (SELECT array_agg(dd.name ORDER BY dd.name)
+                  FROM entity_domain_associations eda3
+                  JOIN data_domains dd ON dd.id = eda3.domain_id
+                 WHERE eda3.entity_type = 'data_product'
+                   AND eda3.entity_id = p.id
+                   AND eda3.is_primary = FALSE) AS product_additional_domains
         FROM data_contracts c
         JOIN data_contract_schema_objects o ON o.contract_id = c.id
         LEFT JOIN entity_semantic_links el
           ON el.entity_type = 'data_contract_schema'
          AND el.entity_id = c.id || '#' || o.name
-        LEFT JOIN data_domains d ON c.domain_id = d.id
+        LEFT JOIN entity_domain_associations eda
+          ON eda.entity_type = 'data_contract'
+         AND eda.entity_id = c.id
+         AND eda.is_primary = TRUE
+        LEFT JOIN data_domains d ON d.id = eda.domain_id
         LEFT JOIN data_product_output_ports op ON op.contract_id = c.id AND op.asset_identifier = o.physical_name
         LEFT JOIN data_products p ON op.product_id = p.id
+        LEFT JOIN entity_domain_associations pda
+          ON pda.entity_type = 'data_product'
+         AND pda.entity_id = p.id
+         AND pda.is_primary = TRUE
+        LEFT JOIN data_domains pd ON pd.id = pda.domain_id
         """
         + (" LIMIT :limit" if limit else "")
     )
@@ -230,7 +256,9 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
                 "product_status": r.get("product_status"),
                 "domain_id": r.get("domain_id"),
                 "domain_name": r.get("domain_name"),
+                "contract_additional_domains": r.get("contract_additional_domains") or [],
                 "product_domain": r.get("product_domain"),
+                "product_additional_domains": r.get("product_additional_domains") or [],
                 "semantic_links": [],
             },
         )
@@ -258,12 +286,14 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
             continue
         cat, sch, tbl = parts
 
-        # Prefer contract domain, fallback to product domain (string field)
+        # Prefer contract domain, fallback to product domain. Additional (non-primary)
+        # domains follow whichever source supplied the primary domain.
         domain_id = data.get("domain_id")
         domain_name = data.get("domain_name")
+        additional_domains = list(data.get("contract_additional_domains") or [])
         if not domain_name and data.get("product_domain"):
-            # Product domain is a string field, not FK
             domain_name = data.get("product_domain")
+            additional_domains = list(data.get("product_additional_domains") or [])
 
         semantic_links = [
             SemanticLink(iri=link["iri"], label=link["label"], slug=link["slug"])
@@ -287,6 +317,7 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
                 domain_id=str(domain_id) if domain_id else None,
                 domain_name=str(domain_name) if domain_name else None,
                 semantic_links=semantic_links,
+                additional_domain_names=[str(n) for n in additional_domains if n],
             )
         )
     return out
@@ -300,9 +331,14 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
                a.name        AS asset_name,
                a.location    AS physical_name,
                at.name       AS asset_type_name,
-               a.domain_id   AS asset_domain_id,
                d.id          AS domain_id,
                d.name        AS domain_name,
+               (SELECT array_agg(dd.name ORDER BY dd.name)
+                  FROM entity_domain_associations eda2
+                  JOIN data_domains dd ON dd.id = eda2.domain_id
+                 WHERE eda2.entity_type = 'asset'
+                   AND eda2.entity_id = a.id::text
+                   AND eda2.is_primary = FALSE) AS asset_additional_domains,
                er.target_id  AS contract_id,
                c.name        AS contract_name,
                c.version     AS contract_version,
@@ -311,12 +347,22 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
                p.name        AS product_name,
                p.version     AS product_version,
                p.status      AS product_status,
-               p.domain      AS product_domain,
+               pd.name       AS product_domain,
+               (SELECT array_agg(dd.name ORDER BY dd.name)
+                  FROM entity_domain_associations eda3
+                  JOIN data_domains dd ON dd.id = eda3.domain_id
+                 WHERE eda3.entity_type = 'data_product'
+                   AND eda3.entity_id = p.id
+                   AND eda3.is_primary = FALSE) AS product_additional_domains,
                esl.iri       AS asset_semantic_iri,
                esl.label     AS asset_semantic_label
         FROM assets a
         JOIN asset_types at ON a.asset_type_id = at.id
-        LEFT JOIN data_domains d ON a.domain_id = d.id
+        LEFT JOIN entity_domain_associations ada
+          ON ada.entity_type = 'asset'
+         AND ada.entity_id = a.id::text
+         AND ada.is_primary = TRUE
+        LEFT JOIN data_domains d ON d.id = ada.domain_id
         LEFT JOIN entity_relationships er
           ON er.source_id = a.id::text
          AND er.source_type IN ('Table', 'View')
@@ -327,6 +373,11 @@ def read_assets_and_links(engine: Engine, limit: Optional[int] = None) -> List[D
           ON op.contract_id = c.id
          AND op.asset_identifier = a.location
         LEFT JOIN data_products p ON op.product_id = p.id
+        LEFT JOIN entity_domain_associations pda
+          ON pda.entity_type = 'data_product'
+         AND pda.entity_id = p.id
+         AND pda.is_primary = TRUE
+        LEFT JOIN data_domains pd ON pd.id = pda.domain_id
         LEFT JOIN entity_semantic_links esl
           ON esl.entity_id = a.id::text
          AND esl.entity_type = 'asset'
@@ -363,7 +414,9 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
                 "product_status": r.get("product_status"),
                 "domain_id": r.get("domain_id"),
                 "domain_name": r.get("domain_name"),
+                "asset_additional_domains": r.get("asset_additional_domains") or [],
                 "product_domain": r.get("product_domain"),
+                "product_additional_domains": r.get("product_additional_domains") or [],
                 "semantic_links": [],
             },
         )
@@ -391,8 +444,10 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
 
         domain_id = data.get("domain_id")
         domain_name = data.get("domain_name")
+        additional_domains = list(data.get("asset_additional_domains") or [])
         if not domain_name and data.get("product_domain"):
             domain_name = data.get("product_domain")
+            additional_domains = list(data.get("product_additional_domains") or [])
 
         semantic_links = [
             SemanticLink(iri=link["iri"], label=link["label"], slug=link["slug"])
@@ -418,6 +473,7 @@ def build_asset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[
                 semantic_links=semantic_links,
                 asset_id=str(data.get("asset_id") or "") or None,
                 asset_type_name=str(data.get("asset_type_name") or "") or None,
+                additional_domain_names=[str(n) for n in additional_domains if n],
             )
         )
     return out
@@ -448,10 +504,22 @@ def merge_dataset_tag_infos(contract_datasets: List[DatasetTagInfo], asset_datas
             existing.product_name = existing.product_name or d.product_name
             existing.product_version = existing.product_version or d.product_version
             existing.product_status = existing.product_status or d.product_status
-            existing.domain_id = existing.domain_id or d.domain_id
-            existing.domain_name = existing.domain_name or d.domain_name
             existing.asset_id = existing.asset_id or d.asset_id
             existing.asset_type_name = existing.asset_type_name or d.asset_type_name
+            # Domain: a primary and its additional domains belong to the SAME source.
+            # - existing has no primary yet  -> adopt d's primary + its additionals.
+            # - both sources share the same primary -> union the additionals (both are
+            #   legitimate additional domains for this FQN).
+            # - primaries differ -> keep existing's; do NOT attach d's additionals to a
+            #   different source's primary.
+            if not existing.domain_name and d.domain_name:
+                existing.domain_id = d.domain_id
+                existing.domain_name = d.domain_name
+                existing.additional_domain_names = list(d.additional_domain_names)
+            elif existing.domain_name and d.domain_name == existing.domain_name:
+                for name in d.additional_domain_names:
+                    if name not in existing.additional_domain_names:
+                        existing.additional_domain_names.append(name)
             # Union semantic links
             existing_iris = {link.iri for link in existing.semantic_links}
             for link in d.semantic_links:
@@ -726,6 +794,24 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
                 if tag_key and tag_value:
                     tag_key = sanitize_tag_key(tag_key)
                     desired[tag_key] = tag_value
+
+                    # Additional (non-primary) domains are emitted as separate UC
+                    # tags, one per assignment (PRD story 26). A UC securable holds
+                    # one value per tag key, so each additional domain gets its own
+                    # numbered key derived from the primary key (``data_domain_1``,
+                    # ``data_domain_2``, ...) written after the primary. Names are
+                    # sorted for deterministic key assignment. The running index skips
+                    # any key already present in ``desired`` (e.g. one produced by
+                    # another tag-sync config) so a numbered key never silently
+                    # clobbers an unrelated tag.
+                    idx = 1
+                    for name in sorted(d.additional_domain_names):
+                        additional_key = sanitize_tag_key(f"{tag_key}_{idx}")
+                        while additional_key in desired:
+                            idx += 1
+                            additional_key = sanitize_tag_key(f"{tag_key}_{idx}")
+                        desired[additional_key] = name
+                        idx += 1
 
         elif entity_type == "data_contract":
             if d.contract_name:

@@ -703,12 +703,12 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workflow_steps (id, workflow_id, step_id, name, step_type, config, on_pass, on_fail, "order", position, created_at, updated_at) VALUES
 ('02b00101-0003-4000-8000-000000000001', '02a00101-0003-4000-8000-000000000001', 'qm_review',    'Quality Manager Review',
- 'manual_approval',
- '{"approver_role": "0f000002-0003-4000-8000-000000000002"}',
+ 'approval',
+ '{"approvers": "business:0f000002-0003-4000-8000-000000000002"}',
  'pm_review', 'reject', 1, '{"x": 100, "y": 100}', NOW(), NOW()),
 ('02b00102-0003-4000-8000-000000000002', '02a00101-0003-4000-8000-000000000001', 'pm_review',    'Plant Manager Approval',
- 'manual_approval',
- '{"approver_role": "0f000001-0003-4000-8000-000000000001"}',
+ 'approval',
+ '{"approvers": "business:0f000001-0003-4000-8000-000000000001"}',
  'approve', 'reject', 2, '{"x": 300, "y": 100}', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 

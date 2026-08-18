@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import TagSelector from '@/components/ui/tag-selector';
+import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { principalAcceptsForMemberType } from '@/lib/team-members';
 import {
@@ -37,7 +38,6 @@ import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { TeamRead, TeamCreate, TeamUpdate, TeamMember } from '@/types/team';
-import { DataDomain } from '@/types/data-domain';
 
 // Form schema
 const teamMemberSchema = z.object({
@@ -50,7 +50,8 @@ const teamFormSchema = z.object({
   name: z.string().min(1, 'Team name is required'),
   title: z.string().optional(),
   description: z.string().optional(),
-  domain_id: z.string().optional(),
+  domain_ids: z.array(z.string()).optional(),
+  primary_domain_id: z.string().nullable().optional(),
   tags: z.array(z.any()).optional(),
   members: z.array(teamMemberSchema).optional(),
 });
@@ -72,7 +73,6 @@ export function TeamFormDialog({
   onSubmitSuccess,
   initialDomainId,
 }: TeamFormDialogProps) {
-  const [domains, setDomains] = useState<DataDomain[]>([]);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -86,7 +86,8 @@ export function TeamFormDialog({
       name: '',
       title: '',
       description: '',
-      domain_id: 'none',
+      domain_ids: [],
+      primary_domain_id: null,
       tags: [],
       members: [],
     },
@@ -100,7 +101,6 @@ export function TeamFormDialog({
   // Fetch data when dialog opens
   useEffect(() => {
     if (isOpen) {
-      fetchDomains();
       fetchAvailableRoles();
 
       if (team) {
@@ -109,7 +109,8 @@ export function TeamFormDialog({
           name: team.name,
           title: team.title || '',
           description: team.description || '',
-          domain_id: team.domain_id || 'none',
+          domain_ids: team.domain_ids || (team.domain_id ? [team.domain_id] : []),
+          primary_domain_id: team.primary_domain_id ?? team.domain_id ?? null,
           tags: team.tags || [],
           members: team.members?.map(member => ({
             member_type: member.member_type,
@@ -123,24 +124,14 @@ export function TeamFormDialog({
           name: '',
           title: '',
           description: '',
-          domain_id: initialDomainId || 'none',
+          domain_ids: initialDomainId ? [initialDomainId] : [],
+          primary_domain_id: initialDomainId || null,
           tags: [],
           members: [],
         });
       }
     }
   }, [isOpen, team, form, initialDomainId]);
-
-  const fetchDomains = async () => {
-    try {
-      const response = await apiGet<DataDomain[]>('/api/data-domains');
-      if (response.data && !response.error) {
-        setDomains(Array.isArray(response.data) ? response.data : []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch domains:', error);
-    }
-  };
 
   const fetchAvailableRoles = async () => {
     try {
@@ -167,9 +158,15 @@ export function TeamFormDialog({
     setIsSubmitting(true);
     try {
       // Filter out empty members and clean up data
+      const domainIds = data.domain_ids || [];
+      const primaryDomainId =
+        data.primary_domain_id && domainIds.includes(data.primary_domain_id)
+          ? data.primary_domain_id
+          : domainIds[0] ?? null;
       const cleanedData = {
         ...data,
-        domain_id: data.domain_id === 'none' ? undefined : data.domain_id,
+        domain_ids: domainIds,
+        primary_domain_id: primaryDomainId,
         tags: data.tags || [],
         members: data.members?.filter(member => member.member_identifier.trim() !== '').map(member => ({
           ...member,
@@ -184,7 +181,8 @@ export function TeamFormDialog({
           name: cleanedData.name,
           title: cleanedData.title || undefined,
           description: cleanedData.description || undefined,
-          domain_id: cleanedData.domain_id || undefined,
+          domain_ids: cleanedData.domain_ids,
+          primary_domain_id: cleanedData.primary_domain_id,
           tags: cleanedData.tags,
           metadata: undefined,
         };
@@ -226,7 +224,8 @@ export function TeamFormDialog({
           name: cleanedData.name,
           title: cleanedData.title || undefined,
           description: cleanedData.description || undefined,
-          domain_id: cleanedData.domain_id || undefined,
+          domain_ids: cleanedData.domain_ids,
+          primary_domain_id: cleanedData.primary_domain_id,
           tags: cleanedData.tags,
           metadata: undefined,
         };
@@ -335,25 +334,21 @@ export function TeamFormDialog({
 
               <FormField
                 control={form.control}
-                name="domain_id"
+                name="domain_ids"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('teams:form.labels.domain')}</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t('teams:form.placeholders.selectDomain')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No domain</SelectItem>
-                        {domains.map((domain) => (
-                          <SelectItem key={domain.id} value={domain.id}>
-                            {domain.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <DomainMultiSelector
+                        value={field.value || []}
+                        primaryDomainId={form.watch('primary_domain_id')}
+                        onChange={(domainIds, primaryDomainId) => {
+                          field.onChange(domainIds);
+                          form.setValue('primary_domain_id', primaryDomainId);
+                        }}
+                        placeholder={t('teams:form.placeholders.selectDomain')}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

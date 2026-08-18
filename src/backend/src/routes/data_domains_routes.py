@@ -141,6 +141,25 @@ def get_data_domain(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Data domain with id '{domain_id}' not found")
     return domain
 
+@router.get(
+    "/data-domains/{domain_id}/deletion-impact",
+    dependencies=[Depends(PermissionChecker(DATA_DOMAINS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))]
+)
+def get_data_domain_deletion_impact(
+    domain_id: UUID,
+    db: DBSessionDep,
+    manager: DataDomainManager = Depends(get_data_domain_manager)
+):
+    """Reports whether a domain can be deleted and which entities assign it (#520).
+
+    ``deletable`` is False when the domain (or a descendant that would cascade-delete
+    with it) is the primary domain for any entity; ``primary_assignments`` lists them.
+    """
+    try:
+        return manager.get_domain_deletion_impact(db=db, domain_id=domain_id)
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Data domain with id '{domain_id}' not found")
+
 @router.put(
     "/data-domains/{domain_id}",
     response_model=DataDomainRead,
@@ -258,6 +277,13 @@ def delete_data_domain(
         logger.error("Data domain not found for deletion %s: %s", domain_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data domain not found")
+    except ConflictError as e:
+        # Deletion blocked because the domain is a PRIMARY domain somewhere (#520).
+        # Pass the structured impact body through so the UI can list what to fix.
+        db.rollback()
+        logger.warning("Data domain deletion blocked %s: %s", domain_id, e.detail)
+        details_for_audit["exception"] = {"type": "ConflictError", "message": str(e.detail)}
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.detail)
     except Exception as e:
         db.rollback()
         logger.exception("Failed to delete data domain %s", domain_id)

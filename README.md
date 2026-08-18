@@ -53,8 +53,7 @@ Ontos is designed to run as a **Databricks App**:
 ### Prerequisites
 
 - Python 3.10 - 3.12
-- Node.js 18+
-- Yarn (v1.x Classic)
+- Node.js 18+ (includes npm)
 - Hatch (Python build tool)
 - PostgreSQL (for local development)
 
@@ -67,7 +66,7 @@ cd ontos
 
 # Install frontend dependencies
 cd src/frontend
-yarn install
+npm install
 
 # Copy and configure backend environment
 cd ../../src/backend
@@ -80,7 +79,7 @@ cp .env.example .env
 **Terminal 1 - Frontend:**
 ```bash
 cd src/frontend
-yarn dev:frontend
+npm run dev:frontend
 ```
 
 **Terminal 2 - Backend:**

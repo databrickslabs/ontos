@@ -251,6 +251,11 @@ class SettingsManager:
             if 'TAG_DISPLAY_FORMAT' in all_settings and all_settings['TAG_DISPLAY_FORMAT'] is not None:
                 logger.debug(f"Loaded TAG_DISPLAY_FORMAT from database: {all_settings['TAG_DISPLAY_FORMAT']}")
             
+            # Background job enablement requests
+            if 'ALLOW_JOB_ENABLEMENT_REQUESTS' in all_settings and all_settings['ALLOW_JOB_ENABLEMENT_REQUESTS'] is not None:
+                self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS = all_settings['ALLOW_JOB_ENABLEMENT_REQUESTS'].lower() == 'true'
+                logger.debug(f"Loaded ALLOW_JOB_ENABLEMENT_REQUESTS from database: {self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS}")
+
             # Delivery mode settings
             if 'DELIVERY_MODE_DIRECT' in all_settings and all_settings['DELIVERY_MODE_DIRECT'] is not None:
                 self._settings.DELIVERY_MODE_DIRECT = all_settings['DELIVERY_MODE_DIRECT'].lower() == 'true'
@@ -1258,6 +1263,8 @@ class SettingsManager:
             'llm_disclaimer_text': self._settings.LLM_DISCLAIMER_TEXT,
             # Tag display settings
             'tag_display_format': tag_display_format,
+            # Background job enablement requests
+            'allow_job_enablement_requests': self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS,
             # Delivery mode settings
             'delivery_mode_direct': self._settings.DELIVERY_MODE_DIRECT,
             'delivery_mode_indirect': self._settings.DELIVERY_MODE_INDIRECT,
@@ -1506,6 +1513,13 @@ class SettingsManager:
             else:
                 logger.warning(f"Invalid tag_display_format value: {value}. Must be 'short' or 'long'.")
         
+        # Handle background job enablement requests
+        if 'allow_job_enablement_requests' in settings:
+            value = settings.get('allow_job_enablement_requests')
+            app_settings_repo.set(self._db, 'ALLOW_JOB_ENABLEMENT_REQUESTS', str(value).lower() if value is not None else None)
+            self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS = bool(value) if value is not None else self._settings.ALLOW_JOB_ENABLEMENT_REQUESTS
+            logger.info(f"Updated ALLOW_JOB_ENABLEMENT_REQUESTS to: {value}")
+
         # Handle delivery mode settings
         if 'delivery_mode_direct' in settings:
             value = settings.get('delivery_mode_direct')

@@ -323,6 +323,50 @@ def t_conflict_payload_shape(base: str, base_iri: str) -> None:
     _created_iris.remove(overlay_iri) if overlay_iri in _created_iris else None
 
 
+def t_reupload_refreshes_sourcefile(base: str) -> None:
+    """C2: re-uploading a MODIFIED concept from a NEW file refreshes its
+    ontos:sourceFile provenance (does not keep the first filename)."""
+    run_ns = f"http://ontos-e2e.example.org/prov-{uuid.uuid4().hex[:8]}#"
+    v1 = (f"@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
+          f"@prefix ex: <{run_ns}> .\n"
+          f'ex:Customer a skos:Concept ; skos:prefLabel "Customer" ; '
+          f'skos:definition "A buyer." .\n')
+    v2 = (f"@prefix skos: <http://www.w3.org/2004/02/skos/core#> .\n"
+          f"@prefix ex: <{run_ns}> .\n"
+          f'ex:Customer a skos:Concept ; skos:prefLabel "Customer" ; '
+          f'skos:definition "A buyer (revised)." .\n')
+    cust = run_ns + "Customer"
+    label = f"E2E-AUTO-Prov-{uuid.uuid4().hex[:6]}"
+    iri = create_scheme(base, label)
+    if not iri:
+        record("C2 sourceFile refresh on re-upload", SKIP, "could not create scheme")
+        return
+    s1, _ = upload_file(base, iri, "prov_v1.ttl", v1)
+    if s1 != 200:
+        record("C2 sourceFile refresh on re-upload", SKIP, f"first import failed status={s1}")
+        return
+    # Re-upload the modified concept from a new filename -> preview token.
+    s2, d2 = upload_file(base, iri, "prov_v2.ttl", v2)
+    if s2 != 200 or not (isinstance(d2, dict) and d2.get("mode") == "preview"):
+        record("C2 sourceFile refresh on re-upload", SKIP,
+               f"expected preview on re-upload, got status={s2} {str(d2)[:100]}")
+        return
+    token = d2["preview_token"]
+    cs, cd = call(base, "POST",
+                  f"/api/semantic-models/uploads/preview/{urllib.parse.quote(token, safe='')}/confirm")
+    if cs != 200:
+        record("C2 sourceFile refresh on re-upload", FAIL, f"confirm failed status={cs} {str(cd)[:100]}")
+        return
+    _, cdata = call(base, "GET", "/api/semantic-models/concepts/by-iri", params={"iri": cust})
+    got = ((cdata or {}).get("concept") or {}).get("source_file") if isinstance(cdata, dict) else None
+    if got == "prov_v2.ttl":
+        record("C2 sourceFile refresh on re-upload", PASS, f"source_file={got}")
+    elif got == "prov_v1.ttl":
+        record("C2 sourceFile refresh on re-upload", FAIL, "kept stale prov_v1.ttl (C2 regression)")
+    else:
+        record("C2 sourceFile refresh on re-upload", SKIP, f"source_file={got!r} (field may be omitted)")
+
+
 def t_delete_recreate_no_leak(base: str) -> None:
     """Batch#5-2: delete a scheme with FILE-NATIVE IRIs, then recreate the same
     label + re-import the same file — must NOT leak version rows (no v2/history
@@ -461,6 +505,7 @@ def main() -> int:
         if base_iri:
             t_conflict_payload_shape(args.base, base_iri)
             t_submit_preview_governance(args.base, base_iri)
+        t_reupload_refreshes_sourcefile(args.base)
         t_delete_recreate_no_leak(args.base)
         t_changeset_trigger_hidden(args.base)
     finally:

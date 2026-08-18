@@ -171,6 +171,35 @@ class MappingSuggestionRepository(CRUDBase[MappingSuggestionDb, MappingSuggestio
             db.rollback()
             raise
 
+    def list_pending_by_target_concepts(
+        self,
+        db: Session,
+        iris: Sequence[str],
+    ) -> List[MappingSuggestionDb]:
+        """Return all PENDING suggestions whose target_concept_iri is in ``iris``.
+
+        Sibling to ``count_pending_by_target_concept`` but returns the rows (not
+        just a per-concept count) so the Enrich Map "Review suggested matches"
+        surface can hand the shared reviewer live suggestion ids + run ids for a
+        scheme. Ordered newest-first so the most recent run's suggestions lead.
+        """
+        if not iris:
+            return []
+        try:
+            return (
+                db.query(self.model)
+                .filter(
+                    self.model.target_concept_iri.in_(list(iris)),
+                    self.model.status == SUG_STATUS_PENDING,
+                )
+                .order_by(desc(self.model.created_at))
+                .all()
+            )
+        except SQLAlchemyError as e:
+            logger.error(f"list_pending_by_target_concepts failed: {e}", exc_info=True)
+            db.rollback()
+            raise
+
     def count_auto_apply_for_entity(
         self,
         db: Session,

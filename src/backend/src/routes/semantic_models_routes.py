@@ -11,7 +11,7 @@ from src.models.ontology import (
     TaxonomyStats,
     ConceptSearchResult
 )
-from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate, CoverageResponse, TagDeliveryStats
+from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate, CoverageResponse, TagDeliveryStats, SchemePendingSuggestion
 from src.utils.semantic_model_title_candidates import (
     extract_title_candidates,
     humanize_rdf_filename,
@@ -1057,8 +1057,12 @@ async def deprecate_concept(
             deprecated_by=current_user.email,
         )
         return DeprecateConceptResponse(**result)
+    except ReferenceCountError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception:
         logger.error("Error deprecating concept %s", body.iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to deprecate concept")
@@ -1978,6 +1982,30 @@ async def get_coverage_metrics(
     except Exception as e:
         logger.error(f"Error computing coverage metrics: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to compute coverage metrics")
+
+
+@router.get(
+    '/knowledge/coverage/{scheme_iri:path}/pending-suggestions',
+    response_model=List[SchemePendingSuggestion],
+)
+async def get_scheme_pending_suggestions(
+    scheme_iri: str,
+    db: DBSessionDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+):
+    """PENDING term-mapping suggestions whose target concept belongs to a scheme.
+
+    Backs the Enrich Map "Review suggested matches" surface: given a coverage
+    row's scheme key, return the live pending suggestions (each with its run id)
+    so the reviewer can accept-all via /api/term-mappings/runs/{run_id}/decisions
+    then materialise via /apply. Returns [] for an unknown/empty scheme.
+    """
+    try:
+        return manager.get_pending_suggestions_for_scheme(db, scheme_iri)
+    except Exception as e:
+        logger.error(f"Error listing pending suggestions for scheme: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list pending suggestions")
 
 
 # -------- tag delivery stats --------

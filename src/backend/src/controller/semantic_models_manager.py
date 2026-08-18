@@ -32,6 +32,7 @@ from src.models.semantic_models import (
     SemanticModelPreview,
     CoverageSchemeRow,
     CoverageResponse,
+    SchemePendingSuggestion,
 )
 from src.models.ontology import (
     OntologyConcept,
@@ -3152,6 +3153,8 @@ class SemanticModelsManager(SearchableAsset):
                 source_collection_iri=meta["source_collection_iri"],
                 promotion_type=meta["promotion_type"],
                 review_request_id=meta["review_request_id"],
+                review_comment=meta.get("review_comment"),
+                review_decision=meta.get("review_decision"),
                 source_file=meta.get("source_file"),
             )
             break  # Found in first matching context
@@ -4200,6 +4203,8 @@ class SemanticModelsManager(SearchableAsset):
         certified_by = self._get_uri(context, concept_uri, ONTOS.certifiedBy)
         cert_expires = self._get_literal(context, concept_uri, ONTOS.certificationExpiresAt)
         review_id = self._get_literal(context, concept_uri, ONTOS.reviewRequestId)
+        review_comment = self._get_literal(context, concept_uri, ONTOS.reviewComment)
+        review_decision = self._get_literal(context, concept_uri, ONTOS.reviewDecision)
 
         # Provenance
         source_concept = self._get_uri(context, concept_uri, ONTOS.sourceConceptIri)
@@ -4244,6 +4249,8 @@ class SemanticModelsManager(SearchableAsset):
             "source_collection_iri": source_coll,
             "promotion_type": promotion_type,
             "review_request_id": review_id,
+            "review_comment": review_comment,
+            "review_decision": review_decision,
             "source_file": source_file,
             "owners": owners,
         }
@@ -4342,6 +4349,8 @@ class SemanticModelsManager(SearchableAsset):
                     "source_collection_iri": meta["source_collection_iri"],
                     "promotion_type": meta["promotion_type"],
                     "review_request_id": meta["review_request_id"],
+                    "review_comment": meta.get("review_comment"),
+                    "review_decision": meta.get("review_decision"),
                     "source_file": meta.get("source_file"),
                     "tagged_assets": [],
                     "properties": [],
@@ -5034,6 +5043,29 @@ class SemanticModelsManager(SearchableAsset):
                 raise ValueError(f"Collection is not editable: {collection_iri}")
 
         replaced_by = replaced_by or []
+
+        # Reference gate (CV2-UI-08): refuse deprecating a still-REFERENCED
+        # concept UNLESS successor IRIs are supplied (the sanctioned 2B
+        # meaning-split remap — the successors carry the meaning forward), or
+        # the references have already been cleared. Deprecating an UNreferenced
+        # concept needs no successors.
+        #
+        # This gate applies ONLY to the interactive/API path
+        # (bypass_editable_gate=False). When bypass_editable_gate=True the caller
+        # is the re-upload/versioning engine: a re-upload that removes a concept
+        # is the file author's explicit tombstone and is legitimate even while
+        # referenced, so the reference gate is intentionally skipped there
+        # (mirrors the editable-gate bypass above).
+        if not bypass_editable_gate:
+            refs = self.reference_count(concept_iri)
+            if refs > 0 and not replaced_by:
+                raise ReferenceCountError(
+                    f"Cannot deprecate concept while referenced by {refs} place(s) "
+                    f"with no successor. Provide replacement concept(s) "
+                    f"(deprecate-with-successors) or remap the references first.",
+                    count=refs,
+                )
+
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))
         now = datetime.utcnow().isoformat() + "Z"
@@ -6730,6 +6762,43 @@ class SemanticModelsManager(SearchableAsset):
         )
 
         return CoverageResponse(schemes=scheme_rows, totals=totals)
+
+    def get_pending_suggestions_for_scheme(
+        self, db, scheme: str
+    ) -> List[SchemePendingSuggestion]:
+        """List PENDING term-mapping suggestions whose target concept belongs to
+        ``scheme`` (a source_context / scheme key from the coverage matrix).
+
+        Mirrors how ``get_coverage_metrics`` derives the per-scheme ``suggested``
+        count (pending suggestions whose target_concept_iri is one of the scheme's
+        concept IRIs) but LISTS the rows so the Enrich Map "Review suggested
+        matches" surface can accept + apply them. Each item carries its run id so
+        the FE can POST to /api/term-mappings/runs/{run_id}/decisions and /apply.
+
+        Returns [] for an unknown or empty scheme.
+        """
+        grouped = self.get_grouped_concepts()
+        concepts = grouped.get(scheme, [])
+        iris = [c.iri for c in concepts if c.iri]
+        if not iris:
+            return []
+        from src.repositories.term_mapping_repository import mapping_suggestion_repo
+
+        rows = mapping_suggestion_repo.list_pending_by_target_concepts(db, iris)
+        return [
+            SchemePendingSuggestion(
+                id=str(r.id),
+                run_id=str(r.run_id),
+                source_entity_type=r.source_entity_type,
+                source_entity_id=r.source_entity_id,
+                source_label=r.source_label,
+                target_concept_iri=r.target_concept_iri,
+                target_concept_label=r.target_concept_label,
+                confidence=r.confidence,
+                reason=r.reason,
+            )
+            for r in rows
+        ]
 
     def get_tag_delivery_stats(self, db) -> 'TagDeliveryStats':
         """Real tag-delivery stats for the Enrich Tags row.

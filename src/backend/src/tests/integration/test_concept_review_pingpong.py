@@ -167,6 +167,44 @@ def test_pingpong_changes_requested_then_resubmit(client, make_collection, manag
 
 
 # ---------------------------------------------------------------------------
+# 2b. SEND-BACK comment is READABLE on both read paths (regression guard)
+# ---------------------------------------------------------------------------
+def test_send_back_comment_visible_on_concept_reads(client, make_collection, managers):
+    """apply_review_decision('changes_requested') must leave the reviewer
+    comment retrievable via BOTH get_concept (knowledge by-iri) and
+    get_concept_details (semantic-models by-iri), with status back to draft.
+    Guards the bug where the comment was written as an RDF triple but never
+    read back into the OntologyConcept model."""
+    smm, _ = managers
+    coll = make_collection()
+    iri = _make_concept(client, coll["iri"], "Margin", "profit slice")
+
+    smm.submit_concept_for_review(
+        concept_iri=iri, reviewer_email="rev@example.com", submitted_by="own@example.com",
+    )
+    assert smm.get_concept(iri)["status"] == "under_review"
+
+    smm.apply_review_decision(
+        concept_iri=iri,
+        decision="changes_requested",
+        decided_by="rev@example.com",
+        comments="Add a unit.",
+    )
+
+    # get_concept (dict) — knowledge by-iri path
+    c = smm.get_concept(iri)
+    assert c["status"] == "draft"
+    assert c["review_comment"] == "Add a unit."
+    assert c["review_decision"] == "changes_requested"
+
+    # get_concept_details (OntologyConcept) — semantic-models by-iri path
+    d = smm.get_concept_details(iri)
+    assert d.status == "draft"
+    assert d.review_comment == "Add a unit."
+    assert d.review_decision == "changes_requested"
+
+
+# ---------------------------------------------------------------------------
 # 3. APPROVE: under_review -> approved
 # ---------------------------------------------------------------------------
 def test_approve_transitions_to_approved(client, make_collection, managers):

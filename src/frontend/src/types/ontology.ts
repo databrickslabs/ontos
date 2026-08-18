@@ -118,6 +118,8 @@ export interface OntologyConcept {
   
   // Review integration
   review_request_id?: string;
+  review_comment?: string;
+  review_decision?: string;
 }
 
 export interface ConceptCreate {

@@ -947,17 +947,20 @@ export default function ConceptDetailView() {
         {concept.status && !isProperty && (
           <StatusProgressBar status={concept.status} className="mt-0.5" />
         )}
-        {/* Reviewer-comment callout — only when a reviewer actually left a
-            comment (changes requested). The status chip already says "Under
-            Review", so we no longer show a redundant bar for the plain
-            under_review state. */}
-        {concept.status === 'under_review' && (concept as any)?.review_comment && (
+        {/* Reviewer-comment callout — shown whenever a reviewer left a
+            send-back comment and it is still relevant: in draft (post
+            send-back, so the owner knows what to fix) or under_review. A
+            fresh submit clears the comment, so it won't linger past the next
+            submission. */}
+        {(concept.status === 'draft' || concept.status === 'under_review') && concept.review_comment && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-2.5 space-y-1.5">
             <div className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
-              {t('semantic-models:concept.reviewerComment', 'Reviewer comment')}
+              {concept.review_decision === 'denied'
+                ? t('semantic-models:concept.reviewerCommentDenied', 'Denied — reviewer comment')
+                : t('semantic-models:concept.reviewerComment', 'Reviewer comment')}
             </div>
             <div className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">
-              {(concept as any).review_comment}
+              {concept.review_comment}
             </div>
           </div>
         )}

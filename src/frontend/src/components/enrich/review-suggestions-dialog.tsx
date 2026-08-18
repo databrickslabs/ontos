@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Check, ExternalLink, Info, X } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, ExternalLink, Info, Loader2, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,16 @@ export interface PendingSuggestionRef {
   fqn: string;
 }
 
+/** One live pending suggestion for the scheme-review (accept-and-apply) path. */
+export interface LiveSchemeSuggestion {
+  id: string;
+  runId: string;
+  concept: string;
+  target: string;
+  reason: string;
+  confidence: number; // 0..1
+}
+
 /** Inert sample rows shown when no live run context exists yet. */
 export interface PlaceholderSuggestion {
   id: string;
@@ -62,12 +72,33 @@ interface Props {
   schemeName: string;
   /** Live suggestion refs; when present the shared reviewer is embedded. */
   suggestionRefs?: PendingSuggestionRef[];
+  /**
+   * Live pending suggestions for a scheme (Enrich Map path). When non-empty the
+   * dialog lists them read-only with a single "Accept & apply all" action that
+   * accepts every suggestion then materialises the links.
+   */
+  liveSuggestions?: LiveSchemeSuggestion[];
+  /** True while liveSuggestions are being fetched. */
+  loading?: boolean;
+  /** Whether the current user may write (accept & apply). */
+  canWrite?: boolean;
+  /**
+   * Accept every live suggestion then apply the run(s). Must throw on failure.
+   * The dialog owns the submitting/done UI so the action can't be double-fired.
+   */
+  onAcceptAndApplyAll?: () => Promise<void>;
   /** Sample rows rendered when no live refs are available. */
   placeholders?: PlaceholderSuggestion[];
   /** Count of schema-drift items to resolve (placeholder metric). */
   driftCount?: number;
   /** Optional escape hatch to the full Review Board. */
   reviewBoardHref?: string;
+}
+
+function confidenceBucket(c: number): PlaceholderSuggestion['confidence'] {
+  if (c >= 0.75) return 'high';
+  if (c >= 0.5) return 'medium';
+  return 'low';
 }
 
 const CONF_CLASS: Record<PlaceholderSuggestion['confidence'], string> = {
@@ -81,15 +112,52 @@ export default function ReviewSuggestionsDialog({
   onOpenChange,
   schemeName,
   suggestionRefs,
+  liveSuggestions,
+  loading = false,
+  canWrite = true,
+  onAcceptAndApplyAll,
   placeholders = [],
   driftCount = 0,
   reviewBoardHref,
 }: Props) {
   const { t } = useTranslation(['concepts', 'term-mapping', 'common']);
   const [activeIndex, setActiveIndex] = useState(0);
+  // Accept-and-apply lifecycle for the scheme-review path. `submitting` guards
+  // the in-flight request (kills the endless-click bug); `done` locks the action
+  // after a successful apply so it can never be re-applied.
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+
+  // Reset the accept-and-apply lifecycle whenever the dialog (re)opens so a
+  // previous success/error state doesn't leak into a new scheme review.
+  useEffect(() => {
+    if (open) {
+      setSubmitting(false);
+      setDone(false);
+      setApplyError(null);
+    }
+  }, [open, schemeName]);
 
   const hasLive = Array.isArray(suggestionRefs) && suggestionRefs.length > 0;
   const liveRef = hasLive ? suggestionRefs![Math.min(activeIndex, suggestionRefs!.length - 1)] : null;
+
+  const scheme = Array.isArray(liveSuggestions) ? liveSuggestions : [];
+  const hasScheme = scheme.length > 0;
+
+  const handleAcceptApply = async () => {
+    if (!onAcceptAndApplyAll || submitting || done) return;
+    setSubmitting(true);
+    setApplyError(null);
+    try {
+      await onAcceptAndApplyAll();
+      setDone(true);
+    } catch (e) {
+      setApplyError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,6 +201,57 @@ export default function ReviewSuggestionsDialog({
               hasNext={activeIndex < suggestionRefs!.length - 1}
               onNext={() => setActiveIndex((i) => Math.min(i + 1, suggestionRefs!.length - 1))}
             />
+          ) : loading && !hasScheme && placeholders.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t('enrich.review.loading', 'Loading suggested matches…')}
+            </div>
+          ) : hasScheme ? (
+            // Live scheme-review path: list the scheme's pending suggestions and
+            // accept-and-apply them all in one action.
+            <>
+              {done ? (
+                <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-900/30 dark:text-emerald-100">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  {t('enrich.review.applied', {
+                    count: scheme.length,
+                    defaultValue: 'Applied {{count}} match(es). They will sync on next delivery.',
+                  })}
+                </div>
+              ) : (
+                applyError && (
+                  <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-900/50 dark:bg-rose-900/30 dark:text-rose-100">
+                    {t('enrich.review.applyError', 'Could not apply matches: ')}
+                    {applyError}
+                  </div>
+                )
+              )}
+              {scheme.map((s) => {
+                const conf = confidenceBucket(s.confidence);
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-3 rounded-md border px-3 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <span className="font-medium">{s.concept}</span>
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate font-mono text-xs text-muted-foreground">
+                          {s.target}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{s.reason}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${CONF_CLASS[conf]}`}
+                    >
+                      {conf}
+                    </span>
+                  </div>
+                );
+              })}
+            </>
           ) : (
             <>
               <p className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -195,8 +314,28 @@ export default function ReviewSuggestionsDialog({
           ) : (
             <span className="mr-auto" />
           )}
+          {hasScheme && onAcceptAndApplyAll && !done && (
+            <Button
+              onClick={handleAcceptApply}
+              disabled={submitting || done || !canWrite}
+            >
+              {submitting ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-1.5 h-4 w-4" />
+              )}
+              {submitting
+                ? t('enrich.review.applying', 'Applying…')
+                : t('enrich.review.acceptApplyAll', {
+                    count: scheme.length,
+                    defaultValue: 'Accept & apply all {{count}}',
+                  })}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('common:actions.close', 'Close')}
+            {done
+              ? t('common:actions.done', 'Done')
+              : t('common:actions.close', 'Close')}
           </Button>
         </DialogFooter>
       </DialogContent>

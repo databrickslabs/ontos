@@ -69,6 +69,41 @@ def test_count_pending_by_target_concept_empty(db_session: Session):
     # Any pre-existing rows are unrelated; just assert it does not raise and is a dict.
 
 
+def test_list_pending_by_target_concepts_returns_rows_with_run_id(db_session: Session):
+    """The Enrich Map "Review suggested matches" surface lists a scheme's PENDING
+    suggestions (each carrying its run id) so it can accept-all then apply."""
+    run = _mk_run(db_session, contexts=["urn:glossary:scheme"])
+    a = "urn:glossary:scheme#Customer"
+    b = "urn:glossary:scheme#Revenue"
+    other = "urn:glossary:other#Thing"
+
+    # a: 2 pending + 1 accepted (accepted must NOT be listed)
+    _mk_sug(db_session, run, a, SUG_STATUS_PENDING)
+    _mk_sug(db_session, run, a, SUG_STATUS_PENDING)
+    _mk_sug(db_session, run, a, SUG_STATUS_ACCEPTED)
+    # b: 1 pending
+    _mk_sug(db_session, run, b, SUG_STATUS_PENDING)
+    # other scheme: 1 pending (must NOT leak when we only ask for a,b)
+    _mk_sug(db_session, run, other, SUG_STATUS_PENDING)
+    db_session.flush()
+
+    rows = mapping_suggestion_repo.list_pending_by_target_concepts(db_session, [a, b])
+    iris = sorted({r.target_concept_iri for r in rows})
+    assert iris == sorted([a, b]), iris
+    assert len(rows) == 3, [r.target_concept_iri for r in rows]  # 2 pending on a + 1 on b
+    # every row carries its run id so the FE can post decisions/apply
+    assert all(str(r.run_id) == str(run.id) for r in rows)
+
+
+def test_list_pending_by_target_concepts_empty_scheme_returns_empty(db_session: Session):
+    # No IRIs (empty scheme) short-circuits to [].
+    assert mapping_suggestion_repo.list_pending_by_target_concepts(db_session, []) == []
+    # Unknown IRIs -> no matches.
+    assert mapping_suggestion_repo.list_pending_by_target_concepts(
+        db_session, ["urn:nope#Nothing"]
+    ) == []
+
+
 def test_last_run_at_by_context_takes_latest_per_scheme(db_session: Session):
     # Two runs on scheme A (newest wins) + one on scheme B.
     _mk_run(db_session, contexts=["urn:glossary:A"])

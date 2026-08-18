@@ -68,6 +68,23 @@ class CoverageResponse(BaseModel):
     totals: CoverageSchemeRow  # aggregate across all schemes
 
 
+class SchemePendingSuggestion(BaseModel):
+    """One PENDING term-mapping suggestion whose target concept belongs to a
+    scheme. Drives the Enrich Map "Review suggested matches" surface: it carries
+    the suggestion id + run id so the FE can accept-all via
+    POST /api/term-mappings/runs/{run_id}/decisions then apply via
+    POST /api/term-mappings/runs/{run_id}/apply, without a separate run lookup."""
+    id: str  # suggestion id
+    run_id: str
+    source_entity_type: str
+    source_entity_id: str
+    source_label: Optional[str] = None
+    target_concept_iri: str
+    target_concept_label: Optional[str] = None
+    confidence: float
+    reason: str
+
+
 class TagPendingItem(BaseModel):
     """One eligible concept->asset link that is pending delivery (created since
     the last successful sync). Carries enough to render both sides linkably:

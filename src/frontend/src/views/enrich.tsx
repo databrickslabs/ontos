@@ -195,6 +195,23 @@ export default function EnrichView() {
   const [mode] = useConceptMode();
   const advanced = mode === 'advanced';
   const [reviewScheme, setReviewScheme] = useState<CoverageRow | null>(null);
+  // Live pending suggestions for the scheme being reviewed, fetched from
+  // GET /api/knowledge/coverage/{scheme}/pending-suggestions. When present the
+  // ReviewSuggestionsDialog runs its live accept-and-apply path; empty/undefined
+  // falls back to the inert placeholder rows.
+  interface SchemePendingSuggestion {
+    id: string;
+    run_id: string;
+    source_entity_type: string;
+    source_entity_id: string;
+    source_label: string | null;
+    target_concept_iri: string;
+    target_concept_label: string | null;
+    confidence: number;
+    reason: string;
+  }
+  const [reviewSuggestions, setReviewSuggestions] = useState<SchemePendingSuggestion[]>([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
   // Suggest matches reuses the full term-mapping run dialog. On a completed run
   // we land on a RESULT SUMMARY (not the delegate form): from there the primary
   // action reviews the matches in place; requesting a Review-Board handoff is a
@@ -266,22 +283,74 @@ export default function EnrichView() {
   }
   const [tagStats, setTagStats] = useState<TagStats | null>(null);
   const [pendingOpen, setPendingOpen] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/knowledge/tag-delivery-stats');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled) setTagStats(data);
-      } catch {
-        /* endpoint unavailable — Tags row omits the coverage readout */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const fetchTagStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/knowledge/tag-delivery-stats');
+      if (!res.ok) return;
+      const data = await res.json();
+      setTagStats(data);
+    } catch {
+      /* endpoint unavailable — Tags row omits the coverage readout */
+    }
   }, []);
+  useEffect(() => {
+    void fetchTagStats();
+  }, [fetchTagStats]);
+
+  // Load a scheme's live pending suggestions when the Review dialog opens.
+  const openReview = useCallback(async (row: CoverageRow) => {
+    setReviewScheme(row);
+    setReviewSuggestions([]);
+    setReviewLoading(true);
+    try {
+      const res = await fetch(
+        `/api/knowledge/coverage/${encodeURIComponent(row.id)}/pending-suggestions`,
+      );
+      const data = res.ok ? await res.json() : [];
+      setReviewSuggestions(Array.isArray(data) ? data : []);
+    } catch {
+      setReviewSuggestions([]);
+    } finally {
+      setReviewLoading(false);
+    }
+  }, []);
+
+  // Accept every pending suggestion for the reviewed scheme, then materialise
+  // the links, then refresh coverage + tag stats so the table, the Deliver tag
+  // counter, and the Last-run column update without a manual page refresh.
+  const acceptAndApplyReview = useCallback(async () => {
+    // Group suggestion ids by run (they usually share one run, but be safe).
+    const byRun = new Map<string, string[]>();
+    for (const s of reviewSuggestions) {
+      const arr = byRun.get(s.run_id) ?? [];
+      arr.push(s.id);
+      byRun.set(s.run_id, arr);
+    }
+    for (const [runId, ids] of byRun.entries()) {
+      const decisionsRes = await fetch(
+        `/api/term-mappings/runs/${runId}/decisions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            decisions: ids.map((id) => ({ id, decision: 'accept' })),
+          }),
+        },
+      );
+      if (!decisionsRes.ok) {
+        throw new Error(`decisions failed for run ${runId}: ${decisionsRes.status}`);
+      }
+      const applyRes = await fetch(`/api/term-mappings/runs/${runId}/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!applyRes.ok) {
+        throw new Error(`apply failed for run ${runId}: ${applyRes.status}`);
+      }
+    }
+    // Refresh the surfaces that reflect the applied links.
+    await Promise.all([fetchCoverage(), fetchTagStats()]);
+  }, [reviewSuggestions, fetchCoverage, fetchTagStats]);
 
   const platformNoun = PLATFORM_NOUN[platform];
 
@@ -424,7 +493,7 @@ export default function EnrichView() {
             platformNoun={platformNoun}
             canWrite={canWrite}
             isLive={coverageRows !== null}
-            onReview={(row) => setReviewScheme(row)}
+            onReview={(row) => void openReview(row)}
           />
         </div>
       </section>
@@ -461,9 +530,23 @@ export default function EnrichView() {
       <ReviewSuggestionsDialog
         open={reviewScheme !== null}
         onOpenChange={(open) => {
-          if (!open) setReviewScheme(null);
+          if (!open) {
+            setReviewScheme(null);
+            setReviewSuggestions([]);
+          }
         }}
         schemeName={reviewScheme?.name ?? ''}
+        liveSuggestions={reviewSuggestions.map((s) => ({
+          id: s.id,
+          runId: s.run_id,
+          concept: s.target_concept_label || readableName(s.target_concept_iri),
+          target: s.source_label || s.source_entity_id,
+          reason: s.reason,
+          confidence: s.confidence,
+        }))}
+        loading={reviewLoading}
+        canWrite={canWrite}
+        onAcceptAndApplyAll={acceptAndApplyReview}
         placeholders={reviewScheme ? PLACEHOLDER_SUGGESTIONS[reviewScheme.id] ?? [] : []}
         driftCount={reviewScheme ? Math.min(3, reviewScheme.suggested) : 0}
         reviewBoardHref="/data-asset-reviews"

@@ -164,6 +164,8 @@ class OntologyConcept(BaseModel):
     
     # Review integration
     review_request_id: Optional[str] = None
+    review_comment: Optional[str] = None    # Reviewer's send-back comment (changes requested / denied)
+    review_decision: Optional[str] = None   # Reviewer's decision literal (e.g. 'changes_requested' | 'denied')
 
 
 class ConceptCreate(BaseModel):

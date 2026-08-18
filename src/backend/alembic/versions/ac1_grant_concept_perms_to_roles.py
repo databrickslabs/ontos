@@ -60,11 +60,11 @@ def upgrade() -> None:
                     SET feature_permissions = jsonb_set(
                         feature_permissions::jsonb,
                         '{{{feat_id}}}',
-                        to_jsonb(:level),
+                        to_jsonb(cast(:level as text)),
                         true
                     )::text
                     WHERE name = :role_name
-                      AND NOT (feature_permissions::jsonb ? :feat_id)
+                      AND NOT (feature_permissions::jsonb ? cast(:feat_id as text))
                 """),
                 {"level": level, "role_name": role_name, "feat_id": feat_id},
             )
@@ -81,7 +81,7 @@ def downgrade() -> None:
             conn.execute(
                 sa.text("""
                     UPDATE app_roles
-                    SET feature_permissions = (feature_permissions::jsonb - :feat_id)::text
+                    SET feature_permissions = (feature_permissions::jsonb - cast(:feat_id as text))::text
                     WHERE name = :role_name
                 """),
                 {"role_name": role_name, "feat_id": feat_id},

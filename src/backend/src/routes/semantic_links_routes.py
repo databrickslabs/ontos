@@ -7,7 +7,12 @@ from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.controller.semantic_models_manager import SemanticModelsManager
-from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
+from src.models.semantic_links import (
+    EntitySemanticLink,
+    EntitySemanticLinkCreate,
+    MappingStatusBatchRequest,
+    MappingStatusBatchResponse,
+)
 
 logger = get_logger(__name__)
 
@@ -55,6 +60,20 @@ async def list_links_by_iri(
     except Exception as e:
         logger.error("Failed listing semantic links for IRI %s", iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list semantic links for IRI")
+
+
+@router.post("/semantic-links/mapping-status", response_model=MappingStatusBatchResponse)
+async def get_mapping_status(
+    payload: MappingStatusBatchRequest,
+    manager: SemanticLinksManager = Depends(get_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+):
+    try:
+        statuses = manager.mapping_status_for_iris(payload.iris)
+        return MappingStatusBatchResponse(statuses=statuses)
+    except Exception as e:
+        logger.error("Failed getting mapping status for IRIs", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get mapping status")
 
 
 @router.post("/semantic-links/", response_model=EntitySemanticLink)

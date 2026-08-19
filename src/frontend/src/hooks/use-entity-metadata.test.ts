@@ -164,10 +164,10 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalledTimes(4);
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/rich-texts');
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/links');
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/documents');
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-456/attachments');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/rich-texts?entity_id=contract-456');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/links?entity_id=contract-456');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/documents?entity_id=contract-456');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/attachments?entity_id=contract-456');
     });
 
     it('sets loading state during fetch', async () => {
@@ -528,7 +528,7 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalled();
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_domain/domain-123/rich-texts');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_domain/rich-texts?entity_id=domain-123');
     });
 
     it('works with data_product entity type', async () => {
@@ -541,7 +541,7 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalled();
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/product-123/rich-texts');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=product-123');
     });
 
     it('works with data_contract entity type', async () => {
@@ -554,7 +554,7 @@ describe('useEntityMetadata Hook', () => {
         expect(fetchMock).toHaveBeenCalled();
       });
 
-      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/contract-123/rich-texts');
+      expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/rich-texts?entity_id=contract-123');
     });
   });
 
@@ -652,7 +652,7 @@ describe('useEntityMetadata Hook', () => {
       );
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/entity-1/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=entity-1');
       });
 
       fetchMock.mockClear();
@@ -660,7 +660,7 @@ describe('useEntityMetadata Hook', () => {
       rerender({ entityId: 'entity-2' });
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/entity-2/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=entity-2');
       });
     });
 
@@ -674,7 +674,7 @@ describe('useEntityMetadata Hook', () => {
       );
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/entity-123/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_product/rich-texts?entity_id=entity-123');
       });
 
       fetchMock.mockClear();
@@ -682,7 +682,7 @@ describe('useEntityMetadata Hook', () => {
       rerender({ entityType: 'data_contract' as EntityKind });
 
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/entity-123/rich-texts');
+        expect(fetchMock).toHaveBeenCalledWith('/api/entities/data_contract/rich-texts?entity_id=entity-123');
       });
     });
   });

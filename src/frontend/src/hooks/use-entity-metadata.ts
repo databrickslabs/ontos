@@ -117,11 +117,14 @@ export function useEntityMetadata(entityType: EntityKind, entityId: string | nul
     try {
       setLoading(true);
       setError(null);
+      // Metadata endpoints take the entity id as a query param (?entity_id=),
+      // not a path segment; the id may be an IRI so it must be URL-encoded.
+      const eid = encodeURIComponent(entityId);
       const [rt, li, docs, att] = await Promise.all([
-        fetch(`/api/entities/${entityType}/${entityId}/rich-texts`).then(r => r.ok ? r.json() : Promise.reject(new Error(`rich-texts ${r.status}`))),
-        fetch(`/api/entities/${entityType}/${entityId}/links`).then(r => r.ok ? r.json() : Promise.reject(new Error(`links ${r.status}`))),
-        fetch(`/api/entities/${entityType}/${entityId}/documents`).then(r => r.ok ? r.json() : Promise.reject(new Error(`documents ${r.status}`))),
-        fetch(`/api/entities/${entityType}/${entityId}/attachments`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/entities/${entityType}/rich-texts?entity_id=${eid}`).then(r => r.ok ? r.json() : Promise.reject(new Error(`rich-texts ${r.status}`))),
+        fetch(`/api/entities/${entityType}/links?entity_id=${eid}`).then(r => r.ok ? r.json() : Promise.reject(new Error(`links ${r.status}`))),
+        fetch(`/api/entities/${entityType}/documents?entity_id=${eid}`).then(r => r.ok ? r.json() : Promise.reject(new Error(`documents ${r.status}`))),
+        fetch(`/api/entities/${entityType}/attachments?entity_id=${eid}`).then(r => r.ok ? r.json() : []),
       ]);
       setRichTexts(Array.isArray(rt) ? rt : []);
       setLinks(Array.isArray(li) ? li : []);

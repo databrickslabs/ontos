@@ -437,8 +437,17 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
 
         db_obj_data = domain_in.model_dump(exclude_unset=True, exclude={'tags'})
         db_obj_data['created_by'] = current_user_id
+        # Optional caller-provided id (API only): drop null so the column default
+        # generates one; stringify a provided UUID for the String PK.
+        if db_obj_data.get('id') is None:
+            db_obj_data.pop('id', None)
+        elif isinstance(db_obj_data['id'], UUID):
+            db_obj_data['id'] = str(db_obj_data['id'])
+        # Normalize parent_id UUID to string for the String FK column (SQLite/PG).
+        if isinstance(db_obj_data.get('parent_id'), UUID):
+            db_obj_data['parent_id'] = str(db_obj_data['parent_id'])
         # Tags are now handled by TagsManager - no serialization needed
-        
+
         db_domain = DataDomain(**db_obj_data)
         try:
             db.add(db_domain)

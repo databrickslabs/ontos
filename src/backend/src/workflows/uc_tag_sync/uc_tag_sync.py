@@ -126,6 +126,21 @@ def slugify_iri(iri: str) -> str:
     return re.sub(r"[^a-z0-9-]", "-", last.lower()).strip('-')
 
 
+# Governed-tag key under which a domain is written for Databricks Discover.
+# Mirrors src.common.governed_tags.DOMAIN_TAG_KEY — inlined because this job
+# ships to the cluster as a single standalone file and cannot import app code.
+DOMAIN_TAG_KEY = "databricks_domain"
+
+
+def domain_tag_value(domain_name: str, parent_name: Optional[str] = None) -> Optional[str]:
+    """Discover governed-tag value: ``{domain}`` or ``{parent}/{subdomain}``."""
+    if not domain_name:
+        return None
+    if parent_name:
+        return f"{parent_name}/{domain_name}"
+    return domain_name
+
+
 def qualify_uc_name(physical_name: str, default_catalog: Optional[str], default_schema: Optional[str]) -> Optional[str]:
     if not physical_name:
         return None
@@ -177,6 +192,9 @@ class DatasetTagInfo:
     asset_type_name: Optional[str] = None
     # Additional (non-primary) domain names for the chosen domain source.
     additional_domain_names: List[str] = field(default_factory=list)
+    # Parent domain name of the primary domain, when it is a subdomain. Used to
+    # build the Discover governed-tag value (``{parent}/{subdomain}``).
+    domain_parent_name: Optional[str] = None
 
 
 def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -194,6 +212,7 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
                el.label AS schema_semantic_label,
                d.id AS domain_id,
                d.name AS domain_name,
+               dpar.name AS domain_parent_name,
                (SELECT array_agg(dd.name ORDER BY dd.name)
                   FROM entity_domain_associations eda2
                   JOIN data_domains dd ON dd.id = eda2.domain_id
@@ -205,6 +224,7 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
                p.version AS product_version,
                p.status AS product_status,
                pd.name AS product_domain,
+               pdpar.name AS product_domain_parent_name,
                (SELECT array_agg(dd.name ORDER BY dd.name)
                   FROM entity_domain_associations eda3
                   JOIN data_domains dd ON dd.id = eda3.domain_id
@@ -221,6 +241,7 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
          AND eda.entity_id = c.id
          AND eda.is_primary = TRUE
         LEFT JOIN data_domains d ON d.id = eda.domain_id
+        LEFT JOIN data_domains dpar ON dpar.id = d.parent_id
         LEFT JOIN data_product_output_ports op ON op.contract_id = c.id AND op.asset_identifier = o.physical_name
         LEFT JOIN data_products p ON op.product_id = p.id
         LEFT JOIN entity_domain_associations pda
@@ -228,6 +249,7 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
          AND pda.entity_id = p.id
          AND pda.is_primary = TRUE
         LEFT JOIN data_domains pd ON pd.id = pda.domain_id
+        LEFT JOIN data_domains pdpar ON pdpar.id = pd.parent_id
         """
         + (" LIMIT :limit" if limit else "")
     )
@@ -256,8 +278,10 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
                 "product_status": r.get("product_status"),
                 "domain_id": r.get("domain_id"),
                 "domain_name": r.get("domain_name"),
+                "domain_parent_name": r.get("domain_parent_name"),
                 "contract_additional_domains": r.get("contract_additional_domains") or [],
                 "product_domain": r.get("product_domain"),
+                "product_domain_parent_name": r.get("product_domain_parent_name"),
                 "product_additional_domains": r.get("product_additional_domains") or [],
                 "semantic_links": [],
             },
@@ -290,9 +314,11 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
         # domains follow whichever source supplied the primary domain.
         domain_id = data.get("domain_id")
         domain_name = data.get("domain_name")
+        domain_parent_name = data.get("domain_parent_name")
         additional_domains = list(data.get("contract_additional_domains") or [])
         if not domain_name and data.get("product_domain"):
             domain_name = data.get("product_domain")
+            domain_parent_name = data.get("product_domain_parent_name")
             additional_domains = list(data.get("product_additional_domains") or [])
 
         semantic_links = [
@@ -318,6 +344,7 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
                 domain_name=str(domain_name) if domain_name else None,
                 semantic_links=semantic_links,
                 additional_domain_names=[str(n) for n in additional_domains if n],
+                domain_parent_name=str(domain_parent_name) if domain_parent_name else None,
             )
         )
     return out
@@ -786,7 +813,18 @@ def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str
                     desired[tag_key] = tag_value
 
         elif entity_type == "data_domain":
-            if d.domain_name:
+            # When governed-tag domain sync is enabled, represent the domain as the
+            # Discover governed tag (key ``databricks_domain``, value ``{domain}`` or
+            # ``{parent}/{subdomain}``) instead of the plain configurable tag. This
+            # replaces the plain ontos_data_domain_name tag (nebw #3).
+            if config.get("use_governed_domain_tag") and d.domain_name:
+                value = domain_tag_value(d.domain_name, d.domain_parent_name)
+                if value:
+                    desired[DOMAIN_TAG_KEY] = value
+                # Additional domains cannot share the single governed-tag key (one
+                # value per key per securable), so they are intentionally not emitted
+                # here; the primary domain designates the Discover domain.
+            elif d.domain_name:
                 variables = build_variables_for_dataset(d)
                 tag_key = format_tag_string(tag_key_format, variables)
                 tag_value = format_tag_string(tag_value_format, variables)

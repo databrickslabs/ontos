@@ -80,6 +80,11 @@ configurable_parameters:
         tag_value_format: "{LINK.IRI}"
       - entity_type: "data_domain"
         enabled: true
+        # When true, sync the domain as the Databricks Discover governed tag
+        # (key "databricks_domain", value "{domain}" or "{parent}/{subdomain}")
+        # instead of the plain tag below. Discover Domains are layered on governed
+        # tags; the domain card itself is created in the Discover UI (no API).
+        use_governed_domain_tag: true
         tag_key_format: "ontos_data_domain_name"
         tag_value_format: "{DOMAIN.NAME}"
       - entity_type: "data_contract"

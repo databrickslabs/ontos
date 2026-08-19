@@ -17,9 +17,11 @@ Main PR (`nebw-bugfixes` → `development`) — **all four small/medium issues d
 - ✅ #5 asset-type relationship CRUD (`b9c06da8`) — 5 tests, 132 no-regression
 - ✅ #4 FK/PK import from UC (`b6546e82`) — 4 tests, 69 no-regression
 
-Separate PRs (off `nebw-bugfixes`) — **not started**:
-- ⬜ #2 contract change-tracking → review → semver adopt
-- ⬜ #3 Domains ↔ UC governed tags, bidirectional
+Separate PRs (off `nebw-bugfixes`):
+- ✅ #2 contract change-tracking → review → semver adopt — branch `nebw-contract-drift`, PR #736
+- ✅ #3 Domains ↔ UC governed tags, bidirectional — branch `nebw-domain-uc-sync` (see [nebw-domain-uc-sync.md](./nebw-domain-uc-sync.md))
+
+All six issues implemented with unit coverage. Remaining follow-ups are documented per-feature (cluster-job auto-review wiring for #2; a UC governed-tag reader for #3; indirect schema-verification path).
 
 ## Architectural decisions
 

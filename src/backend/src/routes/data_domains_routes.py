@@ -302,6 +302,94 @@ def delete_data_domain(
             details=details_for_audit
         )
 
+# --- Inbound domain import from UC governed tags (nebw #3) --- #
+
+from pydantic import BaseModel, Field
+from src.common.dependencies import DataAssetReviewManagerDep
+
+
+class DomainImportRequest(BaseModel):
+    tag_values: List[str] = Field(
+        ...,
+        description="Domain governed-tag values discovered in UC (e.g. 'Finance', 'Finance/Payments').",
+    )
+    reviewer_email: str = Field(None, description="Steward to review the import (required to open a review).")
+
+
+@router.post(
+    "/data-domains/import-from-uc/preview",
+    dependencies=[Depends(PermissionChecker(DATA_DOMAINS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+async def preview_domain_import(
+    payload: DomainImportRequest,
+    db: DBSessionDep,
+    manager: DataDomainManager = Depends(get_data_domain_manager),
+):
+    """Preview which domains would be created/exist from UC governed tags."""
+    from src.controller.domain_uc_sync_manager import DomainUcSyncManager
+    sync = DomainUcSyncManager(manager)
+    proposals = sync.compute_proposals(db, payload.tag_values)
+    return {"proposals": [p.to_dict() for p in proposals]}
+
+
+@router.post(
+    "/data-domains/import-from-uc/review",
+    dependencies=[Depends(PermissionChecker(DATA_DOMAINS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+async def create_domain_import_review(
+    payload: DomainImportRequest,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataDomainManager = Depends(get_data_domain_manager),
+    reviews_manager: DataAssetReviewManagerDep = None,
+):
+    """Open an Asset Review proposing domain imports from UC governed tags."""
+    if not payload.reviewer_email:
+        raise HTTPException(status_code=400, detail="reviewer_email is required to open a review")
+    from src.controller.domain_uc_sync_manager import DomainUcSyncManager
+    sync = DomainUcSyncManager(manager, asset_reviews_manager=reviews_manager)
+    requester = current_user.username if current_user else "system"
+    review_id = sync.create_import_review(
+        db, payload.tag_values,
+        reviewer_email=payload.reviewer_email, requester_email=requester,
+    )
+    audit_manager.log_action(
+        db=db, username=requester,
+        ip_address=request.client.host if request.client else None,
+        feature=DATA_DOMAINS_FEATURE_ID, action="IMPORT_DOMAINS_REVIEW",
+        success=review_id is not None, details={"review_id": review_id, "count": len(payload.tag_values)},
+    )
+    return {"review_id": review_id}
+
+
+@router.post(
+    "/data-domains/import-from-uc/apply",
+    dependencies=[Depends(PermissionChecker(DATA_DOMAINS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+async def apply_domain_import(
+    payload: DomainImportRequest,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataDomainManager = Depends(get_data_domain_manager),
+):
+    """Apply an approved domain import: create domains (parents before subdomains)."""
+    from src.controller.domain_uc_sync_manager import DomainUcSyncManager
+    sync = DomainUcSyncManager(manager)
+    user = current_user.username if current_user else "system"
+    result = sync.apply_import(db, payload.tag_values, current_user=user)
+    audit_manager.log_action(
+        db=db, username=user,
+        ip_address=request.client.host if request.client else None,
+        feature=DATA_DOMAINS_FEATURE_ID, action="IMPORT_DOMAINS_APPLY",
+        success=True, details=result,
+    )
+    return result
+
+
 def register_routes(app):
     app.include_router(router)
     logger.info("Data Domain routes registered with prefix /api/data-domains") 

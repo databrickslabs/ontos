@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Body, Request
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, Request
 
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, AuditManagerDep
@@ -31,6 +31,27 @@ async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksMan
     except Exception as e:
         logger.error("Failed listing semantic links for %s/%s", entity_type, entity_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list semantic links")
+
+
+# Canonical query-param form. IRIs like ``https://ontos.example.org/x#Y``
+# contain ``//`` which the Databricks Apps proxy collapses to ``/`` inside a
+# path segment (even URL-encoded ``%2F%2F``), issuing a 301 to a mangled path
+# so the ``{iri:path}`` route below never matches and returns ``[]``. The
+# query-param form is proxy-safe — mirror ``concepts/by-iri``. New callers must
+# use this; the path form is kept only for backwards compatibility.
+#
+# NOTE: registered BEFORE the ``{iri:path}`` route so ``/by-iri`` is not
+# swallowed by the catch-all path segment.
+@router.get("/semantic-links/by-iri", response_model=List[EntitySemanticLink])
+async def list_links_by_iri_query(
+    iri: str = Query(..., min_length=1, description="Concept IRI"),
+    manager: SemanticLinksManager = Depends(get_manager),
+):
+    try:
+        return manager.list_for_iri(iri=iri)
+    except Exception:
+        logger.error("Failed listing semantic links for IRI %s", iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list semantic links for IRI")
 
 
 @router.get("/semantic-links/iri/{iri:path}", response_model=List[EntitySemanticLink])

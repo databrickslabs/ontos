@@ -227,8 +227,11 @@ export default function LinkedObjectsPanel({
     }
     setIsLoading(true)
     try {
+      // Query-param form (``?iri=``) is required: IRIs containing ``//`` (e.g.
+      // ``https://...#Invoice``) get their ``%2F%2F`` collapsed by the Apps
+      // proxy on the path form, which 301s to a mangled path and returns [].
       const res = await get<SemanticLink[]>(
-        `/api/semantic-links/iri/${encodeURIComponent(conceptIri)}`
+        `/api/semantic-links/by-iri?iri=${encodeURIComponent(conceptIri)}`
       )
       const raw = res.data || []
       const enriched = await enrichLinks(raw)

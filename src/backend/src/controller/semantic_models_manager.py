@@ -6757,9 +6757,22 @@ class SemanticModelsManager(SearchableAsset):
             pending_by_iri = mapping_suggestion_repo.count_pending_by_target_concept(
                 semantic_links_manager._db
             )
-            last_run_by_scheme = mapping_run_repo.last_run_at_by_context(
+            # Runs store ontology_contexts as full graph IRIs (e.g.
+            # "urn:glossary:finance"), but the coverage rows below key on the
+            # short source-context bucket ("finance") from
+            # _extract_source_context. Normalize the run map through the SAME
+            # extractor so last_run_at actually lands on its scheme row (else
+            # every .get(scheme) misses and the Last-run column stays empty).
+            raw_last_run = mapping_run_repo.last_run_at_by_context(
                 semantic_links_manager._db
             )
+            last_run_by_scheme = {}
+            for ctx_iri, run_iso in raw_last_run.items():
+                bucket = self._extract_source_context(ctx_iri) or ctx_iri
+                # Multiple IRIs can normalize to one bucket; keep the newest run.
+                existing = last_run_by_scheme.get(bucket)
+                if existing is None or run_iso > existing:
+                    last_run_by_scheme[bucket] = run_iso
         except Exception as e:
             logger.warning(f"coverage: could not load term-mapping run data: {e}")
             pending_by_iri = {}

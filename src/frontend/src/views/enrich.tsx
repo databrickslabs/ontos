@@ -72,14 +72,26 @@ import type { Run } from '@/types/term-mapping';
 // (mode cards, provenance) reveals consistently. No shared store is edited.
 // ---------------------------------------------------------------------------
 
-type Platform = 'uc' | 'snowflake' | 'bigquery' | 'powerbi';
+// A delivery platform is either the host ("uc") or a connector_type from an
+// enabled connection (e.g. "snowflake", "bigquery"), so this is an open string
+// rather than a fixed union.
+type Platform = string;
 
-const PLATFORM_NOUN: Record<Platform, string> = {
+// Friendly nouns for known connector types; unknown types fall back to a
+// title-cased connector_type (see platformNounFor).
+const PLATFORM_NOUN: Record<string, string> = {
   uc: 'Unity Catalog',
+  databricks: 'Unity Catalog',
   snowflake: 'Snowflake',
   bigquery: 'BigQuery',
   powerbi: 'Power BI',
 };
+
+const titleCase = (s: string) =>
+  s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+const platformNounFor = (p: Platform): string =>
+  PLATFORM_NOUN[p] ?? titleCase(p);
 
 // PLACEHOLDER coverage rows — see coverage-matrix.tsx TODO(cb-v2).
 const PLACEHOLDER_ROWS: CoverageRow[] = [
@@ -192,6 +204,42 @@ export default function EnrichView() {
   const canWrite = hasPermission('term-mapping', FeatureAccessLevel.READ_WRITE);
 
   const [platform, setPlatform] = useState<Platform>('uc');
+
+  // Delivery platforms beyond the host (UC) come from ENABLED connections in
+  // Settings > Connectors, so the "Deliver to" list reflects what is actually
+  // wired. Databricks/UC is the host and always offered separately, so we skip
+  // any 'databricks'/'uc' connector here to avoid a duplicate entry. De-duped by
+  // connector_type (multiple connections of one type collapse to one platform).
+  const [deliveryPlatforms, setDeliveryPlatforms] = useState<
+    { value: string; label: string }[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/connections');
+        if (!res.ok) return;
+        const data = await res.json();
+        const conns: any[] = Array.isArray(data) ? data : data?.connections ?? [];
+        const seen = new Set<string>();
+        const platforms: { value: string; label: string }[] = [];
+        for (const c of conns) {
+          const ct = (c?.connector_type || '').toLowerCase();
+          if (!c?.enabled || !ct || ct === 'databricks' || ct === 'uc') continue;
+          if (seen.has(ct)) continue;
+          seen.add(ct);
+          platforms.push({ value: ct, label: platformNounFor(ct) });
+        }
+        if (!cancelled) setDeliveryPlatforms(platforms);
+      } catch {
+        /* connections endpoint unavailable — offer UC only */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [mode] = useConceptMode();
   const advanced = mode === 'advanced';
   const [reviewScheme, setReviewScheme] = useState<CoverageRow | null>(null);
@@ -352,7 +400,7 @@ export default function EnrichView() {
     await Promise.all([fetchCoverage(), fetchTagStats()]);
   }, [reviewSuggestions, fetchCoverage, fetchTagStats]);
 
-  const platformNoun = PLATFORM_NOUN[platform];
+  const platformNoun = platformNounFor(platform);
 
   const targets = useMemo<DeliveryTarget[]>(
     () => [
@@ -439,10 +487,17 @@ export default function EnrichView() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            {/* Databricks/UC is the host platform — always available, and the
+                only one with a live delivery path today (uc_tag_sync). Any
+                additional targets come from ENABLED connections configured in
+                Settings > Connectors (Snowflake, BigQuery, …), so the list
+                reflects what is actually wired rather than a fixed menu. */}
             <SelectItem value="uc">Databricks, Unity Catalog</SelectItem>
-            <SelectItem value="snowflake">Snowflake</SelectItem>
-            <SelectItem value="bigquery">BigQuery</SelectItem>
-            <SelectItem value="powerbi">Power BI</SelectItem>
+            {deliveryPlatforms.map((p) => (
+              <SelectItem key={p.value} value={p.value}>
+                {p.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <InfoDot

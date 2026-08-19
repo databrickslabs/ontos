@@ -37,9 +37,12 @@ def _isolate_committed_contracts(db_session: Session):
         SchemaPropertyRelationshipDb,
         SchemaObjectRelationshipDb,
     )
+    from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
     try:
         db_session.rollback()
         for model in (
+            ReviewedAssetDb,
+            DataAssetReviewRequestDb,
             DataQualityCheckDb,
             SchemaPropertyRelationshipDb,
             SchemaObjectRelationshipDb,
@@ -196,3 +199,75 @@ class TestDriftAdoption:
                 db_session, contract_with_schema, si,
                 mode=DriftAdoptionMode.NEW_VERSION, current_user="tester",
             )
+
+
+class _FakeReviewsManager:
+    """Minimal stand-in for DataAssetReviewManager.create_review_request.
+
+    Persists a real review + reviewed asset so dedup can query the DB.
+    """
+    def __init__(self, db):
+        self._db = db
+        self.created = []
+
+    def create_review_request(self, request, db=None):
+        import uuid as _uuid
+        from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
+        session = db or self._db
+        rid = str(_uuid.uuid4())
+        req = DataAssetReviewRequestDb(
+            id=rid, requester_email=request.requester_email,
+            reviewer_email=request.reviewer_email, title=request.title,
+            status="queued", notes=request.notes,
+        )
+        session.add(req)
+        session.flush()
+        for fqn in request.asset_fqns:
+            session.add(ReviewedAssetDb(
+                id=str(_uuid.uuid4()), review_request_id=rid,
+                asset_fqn=fqn, asset_type="data_contract", status="pending",
+            ))
+        session.flush()
+        self.created.append(rid)
+        return SimpleNamespace(id=rid)
+
+
+class TestDriftReviewCreation:
+    def test_creates_review_for_drift(self, db_session, contract_with_schema):
+        cm = _contracts_manager()
+        reviews = _FakeReviewsManager(db_session)
+        drift = ContractDriftManager(cm, asset_reviews_manager=reviews)
+        analysis = {"version_bump": "minor", "summary": "Added column", "new_features": ["Added optional field: orders.currency"]}
+        rid = drift.create_drift_review(
+            db_session, contract_with_schema, "main.sales.orders", analysis,
+            reviewer_email="steward@example.com", requester_email="system@example.com",
+        )
+        assert rid is not None
+        assert reviews.created == [rid]
+
+    def test_dedupes_open_review(self, db_session, contract_with_schema):
+        cm = _contracts_manager()
+        reviews = _FakeReviewsManager(db_session)
+        drift = ContractDriftManager(cm, asset_reviews_manager=reviews)
+        analysis = {"version_bump": "minor", "summary": "Added column"}
+        first = drift.create_drift_review(
+            db_session, contract_with_schema, "main.sales.orders", analysis,
+            reviewer_email="steward@example.com", requester_email="system@example.com",
+        )
+        second = drift.create_drift_review(
+            db_session, contract_with_schema, "main.sales.orders", analysis,
+            reviewer_email="steward@example.com", requester_email="system@example.com",
+        )
+        assert first is not None
+        assert second is None  # deduped against the open review
+        assert reviews.created == [first]
+
+    def test_no_reviews_manager_returns_none(self, db_session, contract_with_schema):
+        cm = _contracts_manager()
+        drift = ContractDriftManager(cm)  # no reviews manager
+        rid = drift.create_drift_review(
+            db_session, contract_with_schema, "main.sales.orders",
+            {"version_bump": "minor"},
+            reviewer_email="s@example.com", requester_email="sys@example.com",
+        )
+        assert rid is None

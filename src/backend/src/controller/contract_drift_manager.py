@@ -90,6 +90,72 @@ class ContractDriftManager:
         return asset.location or asset.name
 
     # ------------------------------------------------------------------
+    # Review creation from detected drift
+    # ------------------------------------------------------------------
+
+    # Review statuses that are still "open" (a new drift review would be a dup).
+    _OPEN_REVIEW_STATUSES = ("queued", "in_review", "needs_review")
+
+    def _has_open_review_for_asset(self, db: Session, asset_fqn: str) -> bool:
+        from src.db_models.data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
+
+        exists = (
+            db.query(ReviewedAssetDb.id)
+            .join(DataAssetReviewRequestDb, ReviewedAssetDb.review_request_id == DataAssetReviewRequestDb.id)
+            .filter(
+                ReviewedAssetDb.asset_fqn == asset_fqn,
+                DataAssetReviewRequestDb.status.in_(self._OPEN_REVIEW_STATUSES),
+            )
+            .first()
+        )
+        return exists is not None
+
+    def create_drift_review(
+        self,
+        db: Session,
+        contract_id: str,
+        asset_fqn: str,
+        analysis: Dict[str, Any],
+        reviewer_email: str,
+        requester_email: str,
+    ) -> Optional[str]:
+        """Create an Asset Review for detected drift, unless one is already open.
+
+        Returns the new review request id, or None when a matching open review
+        already exists (dedup) or the reviews manager is not wired.
+        """
+        if self._reviews is None:
+            logger.warning("No asset_reviews_manager configured; skipping drift review creation")
+            return None
+        if self._has_open_review_for_asset(db, asset_fqn):
+            logger.info("Open drift review already exists for %s; skipping", asset_fqn)
+            return None
+
+        from src.models.data_asset_reviews import DataAssetReviewRequestCreate
+
+        bump = analysis.get("version_bump", "patch")
+        summary = analysis.get("summary") or "Schema drift detected"
+        notes_lines = [
+            f"Automated drift review for contract {contract_id}.",
+            f"Suggested version bump: {bump}.",
+            summary,
+        ]
+        for label, key in (("Breaking", "breaking_changes"), ("Features", "new_features"), ("Fixes", "fixes")):
+            items = analysis.get(key) or []
+            if items:
+                notes_lines.append(f"{label}: " + "; ".join(items))
+
+        request = DataAssetReviewRequestCreate(
+            requester_email=requester_email,
+            reviewer_email=reviewer_email,
+            asset_fqns=[asset_fqn],
+            title=f"Schema drift: {asset_fqn} ({bump})",
+            notes="\n".join(notes_lines),
+        )
+        created = self._reviews.create_review_request(request, db=db)
+        return getattr(created, "id", None)
+
+    # ------------------------------------------------------------------
     # Adoption
     # ------------------------------------------------------------------
 

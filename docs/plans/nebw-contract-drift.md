@@ -16,6 +16,15 @@ Detect when an external catalog's schema has drifted from the data contract that
 - **Connector schema fetch** (`connectors/databricks.py` `get_asset_metadata().schema_info`) — now includes PK/FK from nebw #4.
 - **Asset↔Contract links** — `implementsContract` / `governedBy` relationships (`data_contracts_manager.auto_link_schema_to_assets`).
 
+## Status (updated 2026-08-19)
+
+- ✅ Candidate-ODCS-from-asset helper (`build_candidate_odcs_from_schema_info`) + `replace_contract_schema` on `DataContractsManager`.
+- ✅ `ContractDriftManager`: `analyze_contract_drift`, `find_linked_asset_fqn`, `adopt_drift` (severity-gated in-place vs new version), `create_drift_review` (with open-review dedup).
+- ✅ Routes: `POST /data-contracts/{id}/check-drift`, `/adopt-drift`, `/create-drift-review`.
+- ✅ Unit coverage: detection (none/minor/major), adoption (new-version/in-place/breaking-reject/override-guard/no-drift), review creation + dedup. 11 tests; no cross-test pollution.
+- ⬜ **Follow-up:** wire the existing `data_contract_validation` cluster job (which already detects drift) to auto-create reviews. Per decision, drift→review is app-side/on-demand in this PR. The job runs against Lakebase directly with no access to app managers, so auto-creation needs a job-side reimplementation or an app callback — deferred.
+- ⬜ **Follow-up:** indirect schema-verification path (no live connection).
+
 ## What must be built
 
 1. **Candidate ODCS from live asset** — a helper that turns a connector `SchemaInfo` (columns + PK/FK) into the ODCS `schema`/`properties` shape the analyzer expects, so the *current catalog state* can be diffed against the governing contract. Lives alongside the analyzer or in the contract manager.

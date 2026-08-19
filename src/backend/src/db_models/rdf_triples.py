@@ -69,6 +69,21 @@ class RdfTripleDb(Base):
             name='uq_rdf_triple',
             postgresql_nulls_not_distinct=True,
         ),
+        # Partial unique index for UNVERSIONED triples (concept_version_id IS
+        # NULL) on the natural key. The uq_rdf_triple constraint above already
+        # dedups these on Postgres via NULLS NOT DISTINCT, but that clause is a
+        # no-op on SQLite (unit tests) where NULLs are DISTINCT — so imports/bulk
+        # inserts (always unversioned) target THIS index instead, which dedups
+        # identically on both dialects. See rdf_triples_repository
+        # _NULL_VERSION_CONFLICT_COLS. Prod migration: m5_rdf_triple_null_version_uq.
+        Index(
+            'uq_rdf_triple_null_version',
+            'subject_uri', 'predicate_uri', 'object_value',
+            'object_language', 'object_datatype', 'context_name',
+            unique=True,
+            sqlite_where=concept_version_id.is_(None),
+            postgresql_where=concept_version_id.is_(None),
+        ),
         # Composite index for SPO lookups
         Index('ix_rdf_triples_spo', 'subject_uri', 'predicate_uri', 'object_value'),
     )

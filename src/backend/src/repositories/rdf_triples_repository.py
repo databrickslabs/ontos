@@ -55,6 +55,19 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
         'object_language', 'object_datatype', 'context_name', 'concept_version_id',
     ]
 
+    # Natural key WITHOUT concept_version_id, for deduping UNVERSIONED triples
+    # (concept_version_id IS NULL) — the shape every import/bulk insert produces.
+    # On Postgres the 7-col constraint above dedups these via NULLS NOT DISTINCT;
+    # on SQLite (unit tests) NULLs are always DISTINCT, so ON CONFLICT with the
+    # 7-col target never fires and re-imports duplicate. Targeting this 6-col
+    # natural key with a ``concept_version_id IS NULL`` predicate dedups
+    # correctly on BOTH dialects (partial unique index uq_rdf_triple_null_version,
+    # added by migration + create_all). Only used for unversioned inserts.
+    _NULL_VERSION_CONFLICT_COLS = [
+        'subject_uri', 'predicate_uri', 'object_value',
+        'object_language', 'object_datatype', 'context_name',
+    ]
+
     def add_triple(
         self,
         db: Session,
@@ -96,9 +109,19 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
             source_identifier=source_identifier,
             created_by=created_by,
             concept_version_id=concept_version_id,
-        ).on_conflict_do_nothing(
-            index_elements=self._CONFLICT_COLS
-        ).returning(RdfTripleDb.id)
+        )
+        # Unversioned rows (concept_version_id IS NULL) dedup on the natural key
+        # via the partial index — works on both Postgres and SQLite. Versioned
+        # rows use the full 7-col key (Postgres NULLS NOT DISTINCT covers NULLs,
+        # but versioned inserts here always carry a real id). See add_triples_bulk.
+        if concept_version_id is None:
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=self._NULL_VERSION_CONFLICT_COLS,
+                index_where=RdfTripleDb.concept_version_id.is_(None),
+            )
+        else:
+            stmt = stmt.on_conflict_do_nothing(index_elements=self._CONFLICT_COLS)
+        stmt = stmt.returning(RdfTripleDb.id)
         
         result = db.execute(stmt)
         row = result.fetchone()
@@ -147,10 +170,16 @@ class RdfTriplesRepository(CRUDBase[RdfTripleDb, dict, dict]):
                 if triple.get('object_datatype') is None:
                     triple['object_datatype'] = ''
             
+            # Import/bulk inserts are always UNVERSIONED (concept_version_id
+            # stays NULL — see callers), so dedup on the natural key with a
+            # NULL-version predicate. This matches the uq_rdf_triple_null_version
+            # partial index and dedups on both Postgres and SQLite (the plain
+            # 7-col target relies on NULLS NOT DISTINCT, a Postgres-only clause).
             stmt = insert(RdfTripleDb).values(batch).on_conflict_do_nothing(
-                index_elements=self._CONFLICT_COLS
+                index_elements=self._NULL_VERSION_CONFLICT_COLS,
+                index_where=RdfTripleDb.concept_version_id.is_(None),
             )
-            
+
             result = db.execute(stmt)
             total_inserted += result.rowcount
             db.flush()

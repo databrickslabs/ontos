@@ -15,6 +15,7 @@ from src.common.dependencies import (
     CurrentUserDep,
     AuditCurrentUserDep,
     NotificationsManagerDep,
+    DataAssetReviewManagerDep,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.db_models.data_contracts import (
@@ -52,6 +53,7 @@ from src.models.data_contracts_api import (
 )
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.errors import ConflictError, NotFoundError
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.notifications import NotificationType, Notification
@@ -82,6 +84,153 @@ def get_data_contracts_manager(request: Request) -> DataContractsManager:
 def get_jobs_manager(request: Request):
     """Retrieves the JobsManager instance from app.state."""
     return getattr(request.app.state, 'jobs_manager', None)
+
+
+class ContractDriftCheckRequest(BaseModel):
+    connection_id: str = Field(..., description="Connection to fetch the live asset schema from")
+    asset_fqn: Optional[str] = Field(
+        None,
+        description="Asset FQN to compare; if omitted, resolved from the contract's linked asset.",
+    )
+
+
+class ContractDriftAdoptRequest(ContractDriftCheckRequest):
+    mode: str = Field(..., description="'new_version' or 'in_place'")
+    bump_override: Optional[str] = Field(
+        None, description="Optional 'major'|'minor'|'patch'; may not weaken the required bump."
+    )
+
+
+class ContractDriftReviewRequest(ContractDriftCheckRequest):
+    reviewer_email: str = Field(..., description="Email of the steward who should review the drift")
+
+
+def _fetch_live_schema_info(request: Request, db, connection_id: str, asset_fqn: str):
+    """Resolve a connector for the connection and return the asset's SchemaInfo."""
+    from uuid import UUID as _UUID
+    from src.controller.connections_manager import ConnectionsManager
+    from src.common.config import get_settings
+    from src.common.workspace_client import get_obo_workspace_client
+
+    settings = get_settings()
+    ws = None
+    try:
+        ws = get_obo_workspace_client(request, settings)
+    except Exception:
+        pass
+    connections_mgr = ConnectionsManager(db=db, workspace_client=ws)
+    connector = connections_mgr.get_connector_for_connection(_UUID(str(connection_id)))
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connection not found or connector unavailable")
+    metadata = connector.get_asset_metadata(asset_fqn)
+    if not metadata or not metadata.schema_info:
+        raise HTTPException(status_code=404, detail=f"No live schema available for '{asset_fqn}'")
+    return metadata.schema_info
+
+
+def _build_drift_manager(manager: DataContractsManager, reviews_manager=None):
+    from src.controller.contract_drift_manager import ContractDriftManager
+    return ContractDriftManager(contracts_manager=manager, asset_reviews_manager=reviews_manager)
+
+
+@router.post('/data-contracts/{contract_id}/check-drift')
+async def check_contract_drift(
+    contract_id: str,
+    payload: ContractDriftCheckRequest,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY)),
+):
+    """Compare a contract against the live catalog schema and report the diff.
+
+    Returns the change analysis (version_bump, breaking/feature/fix lists, summary);
+    version_bump == 'none' means no drift.
+    """
+    drift = _build_drift_manager(manager)
+    asset_fqn = payload.asset_fqn or drift.find_linked_asset_fqn(db, contract_id)
+    if not asset_fqn:
+        raise HTTPException(status_code=400, detail="No asset_fqn provided and none linked to the contract")
+    schema_info = _fetch_live_schema_info(request, db, payload.connection_id, asset_fqn)
+    try:
+        result = drift.analyze_contract_drift(db, contract_id, schema_info)
+        return result
+    except (ValueError, NotFoundError) as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/create-drift-review')
+async def create_contract_drift_review(
+    contract_id: str,
+    payload: ContractDriftReviewRequest,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    reviews_manager: DataAssetReviewManagerDep = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+):
+    """Detect drift and open an Asset Review for a steward (deduped if one is open)."""
+    drift = _build_drift_manager(manager, reviews_manager)
+    asset_fqn = payload.asset_fqn or drift.find_linked_asset_fqn(db, contract_id)
+    if not asset_fqn:
+        raise HTTPException(status_code=400, detail="No asset_fqn provided and none linked to the contract")
+    schema_info = _fetch_live_schema_info(request, db, payload.connection_id, asset_fqn)
+    analysis = drift.analyze_contract_drift(db, contract_id, schema_info)
+    if analysis.get("version_bump", "none") == "none":
+        return {"drift": False, "review_id": None, "analysis": analysis}
+    requester = current_user.username if current_user else "system"
+    review_id = drift.create_drift_review(
+        db, contract_id, asset_fqn, analysis,
+        reviewer_email=payload.reviewer_email, requester_email=requester,
+    )
+    return {"drift": True, "review_id": review_id, "analysis": analysis}
+
+
+@router.post('/data-contracts/{contract_id}/adopt-drift')
+async def adopt_contract_drift(
+    contract_id: str,
+    payload: ContractDriftAdoptRequest,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+):
+    """Adopt drifted schema as a new version or in place (severity-gated)."""
+    drift = _build_drift_manager(manager)
+    asset_fqn = payload.asset_fqn or drift.find_linked_asset_fqn(db, contract_id)
+    if not asset_fqn:
+        raise HTTPException(status_code=400, detail="No asset_fqn provided and none linked to the contract")
+    schema_info = _fetch_live_schema_info(request, db, payload.connection_id, asset_fqn)
+    success = False
+    details = {"contract_id": contract_id, "mode": payload.mode, "asset_fqn": asset_fqn}
+    try:
+        result = drift.adopt_drift(
+            db, contract_id, schema_info,
+            mode=payload.mode, bump_override=payload.bump_override,
+            current_user=current_user.username if current_user else None,
+        )
+        success = True
+        details["version_bump"] = result.get("version_bump")
+        details["new_version"] = result.get("new_version")
+        return result
+    except ConflictError as e:
+        details["error"] = str(e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except NotFoundError as e:
+        details["error"] = str(e)
+        raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        audit_manager.log_action(
+            db=db, username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts', action='ADOPT_DRIFT', success=success, details=details,
+        )
 
  
 

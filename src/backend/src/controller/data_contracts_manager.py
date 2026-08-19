@@ -1599,6 +1599,105 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         return odcs
 
+    def build_candidate_odcs_from_schema_info(
+        self,
+        contract_db: DataContractDb,
+        schema_info: Any,
+        db_session=None,
+    ) -> Dict[str, Any]:
+        """Build an ODCS-shaped candidate contract from a live asset's schema.
+
+        Produces the same aliased dict shape that ``build_odcs_from_db`` emits and
+        that ``ContractChangeAnalyzer`` consumes, but with the schema/properties
+        taken from a connector ``SchemaInfo`` (columns + PK/FK) instead of the
+        stored contract. This lets drift detection diff the *current catalog
+        state* against the governing contract.
+
+        Non-schema metadata (version, status, descriptions, domains) is carried
+        over from ``contract_db`` unchanged so the analyzer attributes differences
+        to the schema alone, not to metadata churn.
+        """
+        # Start from the contract's own ODCS so metadata matches; then replace
+        # the schema section with what the live asset reports.
+        odcs = self.build_odcs_from_db(contract_db, db_session)
+
+        columns = list(getattr(schema_info, "columns", None) or [])
+        pk_names = list(getattr(schema_info, "primary_key", None) or [])
+        pk_position = {name: idx for idx, name in enumerate(pk_names)}
+
+        properties: List[Dict[str, Any]] = []
+        for col in columns:
+            name = getattr(col, "name", None)
+            if not name:
+                continue
+            prop: Dict[str, Any] = {"name": name}
+            logical = getattr(col, "logical_type", None)
+            physical = getattr(col, "data_type", None)
+            if logical:
+                prop["logicalType"] = logical
+            if physical:
+                prop["physicalType"] = physical
+            # A non-nullable column is treated as required (ODCS semantics).
+            nullable = getattr(col, "nullable", True)
+            prop["required"] = not bool(nullable)
+            if name in pk_position:
+                prop["primaryKey"] = True
+                prop["primaryKeyPosition"] = pk_position[name]
+            else:
+                prop["primaryKey"] = False
+                prop["primaryKeyPosition"] = -1
+            properties.append(prop)
+
+        # Preserve the existing schema object name(s) so the analyzer compares
+        # like-for-like; fall back to the contract name when none exist.
+        schema_name = None
+        existing_schema = odcs.get("schema") or []
+        if existing_schema and isinstance(existing_schema[0], dict):
+            schema_name = existing_schema[0].get("name")
+        schema_name = schema_name or contract_db.name
+
+        odcs["schema"] = [{"name": schema_name, "properties": properties}]
+        return odcs
+
+    def replace_contract_schema(
+        self,
+        db,
+        contract_id: str,
+        schema_data: List,
+        new_version: Optional[str] = None,
+        change_summary: Optional[str] = None,
+        current_user: Optional[str] = None,
+    ) -> DataContractDb:
+        """Replace a contract's schema objects in place from ODCS schema data.
+
+        Deletes the contract's existing schema objects (properties/relationships
+        cascade) and recreates them via ``_create_schema_objects``. Optionally
+        bumps the version and records a change summary. Used by in-place drift
+        adoption; the caller is responsible for the in-place-vs-new-version policy.
+        """
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+
+        # Remove existing schema objects; FK cascade removes properties, property
+        # relationships, and quality checks tied to them.
+        db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == contract_id).delete(
+            synchronize_session=False
+        )
+        db.flush()
+
+        self._create_schema_objects(db, contract_id, schema_data, current_user)
+
+        if new_version:
+            contract.version = new_version
+        if change_summary:
+            contract.change_summary = change_summary
+        if current_user:
+            contract.updated_by = current_user
+        db.add(contract)
+        db.flush()
+        return contract
+
     # --- App startup data loader ---
     def _resolve_team_name_to_id(self, db, team_name: str) -> Optional[str]:
         """Helper method to resolve team name to team UUID."""

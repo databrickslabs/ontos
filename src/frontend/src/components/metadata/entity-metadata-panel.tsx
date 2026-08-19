@@ -89,10 +89,10 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
     try {
       setLoading(true);
       const [rt, li, docs, att] = await Promise.all([
-        fetch(`/api/entities/${entityType}/${entityId}/rich-texts`).then(r => r.json()),
-        fetch(`/api/entities/${entityType}/${entityId}/links`).then(r => r.json()),
-        fetch(`/api/entities/${entityType}/${entityId}/documents`).then(r => r.json()),
-        fetch(`/api/entities/${entityType}/${entityId}/attachments`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/entities/${entityType}/rich-texts?entity_id=${encodeURIComponent(entityId)}`).then(r => r.json()),
+        fetch(`/api/entities/${entityType}/links?entity_id=${encodeURIComponent(entityId)}`).then(r => r.json()),
+        fetch(`/api/entities/${entityType}/documents?entity_id=${encodeURIComponent(entityId)}`).then(r => r.json()),
+        fetch(`/api/entities/${entityType}/attachments?entity_id=${encodeURIComponent(entityId)}`).then(r => r.ok ? r.json() : []),
       ]);
       // Sort by level ascending
       const sortByLevel = <T extends { level?: number; created_at?: string }>(arr: T[]) => 
@@ -276,7 +276,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                 <Button size="sm" onClick={async () => {
                   try {
                     const payload = { entity_id: entityId, entity_type: entityType, title: noteTitle, short_description: noteDesc || undefined, content_markdown: noteContent, level: noteLevel, inheritable: noteInheritable, is_shared: noteIsShared };
-                    const endpoint = noteIsShared ? '/api/metadata/shared/rich-texts' : `/api/entities/${entityType}/${entityId}/rich-texts`;
+                    const endpoint = noteIsShared ? '/api/metadata/shared/rich-texts' : `/api/entities/${entityType}/rich-texts?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (!resp.ok) throw new Error(await resp.text());
                     setNoteTitle(''); setNoteDesc(''); setNoteContent(''); setNoteLevel(50); setNoteInheritable(true); setNoteIsShared(false); setAddingNote(false);
@@ -422,7 +422,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                 <Button size="sm" onClick={async () => {
                   try {
                     const payload = { entity_id: entityId, entity_type: entityType, title: linkTitle, short_description: linkDesc || undefined, url: linkUrl, level: linkLevel, inheritable: linkInheritable, is_shared: linkIsShared };
-                    const endpoint = linkIsShared ? '/api/metadata/shared/links' : `/api/entities/${entityType}/${entityId}/links`;
+                    const endpoint = linkIsShared ? '/api/metadata/shared/links' : `/api/entities/${entityType}/links?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (!resp.ok) throw new Error(await resp.text());
                     setLinkTitle(''); setLinkDesc(''); setLinkUrl(''); setLinkLevel(50); setLinkInheritable(true); setLinkIsShared(false); setAddingLink(false);
@@ -505,7 +505,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     form.append('level', String(docLevel));
                     form.append('inheritable', String(docInheritable));
                     form.append('file', docFile);
-                    const endpoint = docIsShared ? '/api/metadata/shared/documents' : `/api/entities/${entityType}/${entityId}/documents`;
+                    const endpoint = docIsShared ? '/api/metadata/shared/documents' : `/api/entities/${entityType}/documents?entity_id=${encodeURIComponent(entityId)}`;
                     const resp = await fetch(endpoint, { method: 'POST', body: form });
                     if (!resp.ok) throw new Error(await resp.text());
                     setDocTitle(''); setDocDesc(''); setDocFile(null); setDocLevel(50); setDocInheritable(true); setDocIsShared(false); setUploadingDoc(false); setAddingDoc(false);

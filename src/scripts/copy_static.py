@@ -25,7 +25,7 @@ def copy_static_files():
 
     # Ensure build directory exists
     if not build_dir.exists():
-        print("Error: build directory not found. Please run 'yarn build' first.")
+        print("Error: build directory not found. Please run 'npm run build' first.")
         return False
 
     # Create static directory if it doesn't exist

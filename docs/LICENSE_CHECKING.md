@@ -24,8 +24,8 @@ License checking helps ensure compliance with open-source licenses and provides 
 ## Prerequisites
 
 ### Frontend
-- Yarn package manager installed
-- `license-checker` npm package (automatically installed with `yarn install`)
+- npm (bundled with Node.js)
+- `license-checker` npm package (automatically installed with `npm install`)
 
 ### Backend
 - Python environment with dependencies installed (virtual environment recommended)
@@ -45,7 +45,7 @@ License checking helps ensure compliance with open-source licenses and provides 
 From the `src/` directory:
 
 ```bash
-yarn license-check:all
+npm run license-check:all
 ```
 
 This will display license information for both frontend and backend dependencies.
@@ -58,23 +58,23 @@ This will display license information for both frontend and backend dependencies
 cd src/frontend
 
 # Quick summary
-yarn license-check
+npm run license-check
 
 # Full export (JSON + CSV)
-yarn license-check:full
+npm run license-check:full
 
 # Production dependencies only
-yarn license-check:production
+npm run license-check:production
 ```
 
 ### From `src/` Directory
 
 ```bash
 # Check frontend licenses
-yarn license-check:frontend
+npm run license-check:frontend
 
 # Full export with JSON and CSV files
-yarn license-check:frontend:full
+npm run license-check:frontend:full
 ```
 
 **Note:** Commands run from `src/` automatically change to the `frontend/` directory before executing. This is the simplest and most reliable approach.
@@ -101,10 +101,10 @@ yarn license-check:frontend:full
 
 ```bash
 # Markdown format (recommended)
-yarn license-check:backend
+npm run license-check:backend
 
 # JSON export
-yarn license-check:backend:json
+npm run license-check:backend:json
 ```
 
 ### From `src/backend/` Directory
@@ -182,7 +182,7 @@ You can add license checking to your CI/CD pipeline:
 - name: Check licenses
   run: |
     cd src/frontend
-    yarn license-check
+    npm run license-check
     cd ../backend
     bash check_licenses.sh
 ```
@@ -194,7 +194,7 @@ You can add license checking to your CI/CD pipeline:
 Install dependencies:
 ```bash
 cd src/frontend
-yarn install
+npm install
 ```
 
 ### Backend: "pip-licenses: command not found"
@@ -219,12 +219,9 @@ If you're not using a virtual environment, you may need to use:
 pip install --user pip-licenses
 ```
 
-### Yarn not found
+### npm not found
 
-Make sure yarn is installed:
-```bash
-npm install -g yarn
-```
+Make sure Node.js (which bundles npm) is installed. See the [Node.js downloads page](https://nodejs.org/en/download) or use a version manager such as `nvm`.
 
 ## Output Files
 

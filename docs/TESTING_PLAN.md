@@ -1127,12 +1127,12 @@ jobs:
       - name: Install dependencies
         run: |
           cd src/frontend
-          yarn install
+          npm ci
 
       - name: Run tests
         run: |
           cd src/frontend
-          yarn test:coverage
+          npm run test:coverage
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -1148,13 +1148,13 @@ jobs:
       - name: Install dependencies
         run: |
           cd src/frontend
-          yarn install
+          npm ci
           npx playwright install --with-deps
 
       - name: Run E2E tests
         run: |
           cd src/frontend
-          yarn test:e2e
+          npm run test:e2e
 ```
 
 ---
@@ -1464,15 +1464,15 @@ hatch -e dev run pytest --cov=backend/src --cov-report=html
 **Frontend**:
 ```bash
 cd src/frontend
-yarn test
-yarn test:coverage
+npm test
+npm run test:coverage
 ```
 
 **E2E**:
 ```bash
 cd src/frontend
-yarn test:e2e
-yarn test:e2e:ui  # Interactive mode
+npm run test:e2e
+npm run test:e2e:ui  # Interactive mode
 ```
 
 ### View Coverage Reports

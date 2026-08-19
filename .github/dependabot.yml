@@ -24,3 +24,8 @@ updates:
     directory: "/src/frontend"
     schedule:
       interval: "weekly"
+
+  - package-ecosystem: "npm"
+    directory: "/website/ontos"
+    schedule:
+      interval: "weekly"

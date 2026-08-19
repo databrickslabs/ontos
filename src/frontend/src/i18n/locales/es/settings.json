@@ -50,6 +50,13 @@
       "placeholder": "audit_logs",
       "help": "Directorio donde se almacenan los archivos de log de auditoría."
     },
+    "backgroundJobs": {
+      "title": "Trabajos en segundo plano",
+      "allowEnablementRequests": {
+        "label": "Permitir a los usuarios solicitar la activación de trabajos en segundo plano",
+        "help": "Cuando un usuario accede a una función cuyo trabajo en segundo plano no está activado, puede enviar una notificación para pedir a un administrador que lo active."
+      }
+    },
     "llm": {
       "title": "Configuración de AI / LLM",
       "enabled": {

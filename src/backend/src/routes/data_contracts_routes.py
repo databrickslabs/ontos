@@ -2123,6 +2123,10 @@ async def start_profiling(
         )
         
         return result
+    except HTTPException:
+        # Includes ConflictError raised when the DQX background job is not enabled;
+        # its message is actionable, so let it reach the client unchanged.
+        raise
     except ValueError as e:
         logger.error("Validation error starting profiling for contract %s: %s", contract_id, e)
         raise HTTPException(status_code=400, detail="Invalid profiling request")

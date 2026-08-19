@@ -170,7 +170,7 @@
 
 - Status: Not configured (no GitHub Actions, GitLab CI, or Jenkins detected)
 - Testing: Manual via `pytest` (backend) and `vitest`/`playwright` (frontend)
-- Build: Manual via `yarn build` and `hatch build`
+- Build: Manual via `npm run build` and `hatch build`
 
 **Configuration as Code:**
 

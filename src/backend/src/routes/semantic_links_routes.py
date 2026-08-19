@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Body, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Body, Request, Query
 
 from src.common.authorization import PermissionChecker
 from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, AuditManagerDep
@@ -7,12 +7,7 @@ from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.controller.semantic_models_manager import SemanticModelsManager
-from src.models.semantic_links import (
-    EntitySemanticLink,
-    EntitySemanticLinkCreate,
-    MappingStatusBatchRequest,
-    MappingStatusBatchResponse,
-)
+from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
 
 logger = get_logger(__name__)
 
@@ -24,7 +19,7 @@ def get_manager(request: Request, db: DBSessionDep) -> SemanticLinksManager:
     return SemanticLinksManager(db, semantic_models_manager=semantic_models_manager)
 
 
-@router.get("/semantic-links/entity/{entity_type}/{entity_id}", response_model=List[EntitySemanticLink])
+@router.get("/semantic-links/entity/{entity_type}/{entity_id:path}", response_model=List[EntitySemanticLink])
 async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksManager = Depends(get_manager)):
     try:
         return manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
@@ -33,48 +28,33 @@ async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksMan
         raise HTTPException(status_code=500, detail="Failed to list semantic links")
 
 
-# Canonical query-param form. IRIs like ``https://ontos.example.org/x#Y``
-# contain ``//`` which the Databricks Apps proxy collapses to ``/`` inside a
-# path segment (even URL-encoded ``%2F%2F``), issuing a 301 to a mangled path
-# so the ``{iri:path}`` route below never matches and returns ``[]``. The
-# query-param form is proxy-safe — mirror ``concepts/by-iri``. New callers must
-# use this; the path form is kept only for backwards compatibility.
-#
-# NOTE: registered BEFORE the ``{iri:path}`` route so ``/by-iri`` is not
-# swallowed by the catch-all path segment.
+@router.get("/semantic-links/entity-prefix/{entity_type}/{entity_id_prefix:path}", response_model=List[EntitySemanticLink])
+async def list_links_by_entity_prefix(
+    entity_type: str, entity_id_prefix: str, manager: SemanticLinksManager = Depends(get_manager)
+):
+    """List all links whose entity_id starts with the given prefix.
+
+    Lets the contract UI fetch every column-level concept assignment for a
+    schema in one request (entity_id shape ``{contract_id}#{schema}#{prop}``),
+    instead of one request per property.
+    """
+    try:
+        return manager.list_for_entity_prefix(entity_id_prefix=entity_id_prefix, entity_type=entity_type)
+    except Exception as e:
+        logger.error("Failed listing semantic links for prefix %s/%s", entity_type, entity_id_prefix, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list semantic links")
+
+
 @router.get("/semantic-links/by-iri", response_model=List[EntitySemanticLink])
-async def list_links_by_iri_query(
-    iri: str = Query(..., min_length=1, description="Concept IRI"),
+async def list_links_by_iri(
+    iri: str = Query(..., min_length=1, description="Concept IRI (query param survives %2F%2F proxy collapse)"),
     manager: SemanticLinksManager = Depends(get_manager),
 ):
-    try:
-        return manager.list_for_iri(iri=iri)
-    except Exception:
-        logger.error("Failed listing semantic links for IRI %s", iri, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to list semantic links for IRI")
-
-
-@router.get("/semantic-links/iri/{iri:path}", response_model=List[EntitySemanticLink])
-async def list_links_by_iri(iri: str, manager: SemanticLinksManager = Depends(get_manager)):
     try:
         return manager.list_for_iri(iri=iri)
     except Exception as e:
         logger.error("Failed listing semantic links for IRI %s", iri, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list semantic links for IRI")
-
-
-@router.post("/semantic-links/mapping-status", response_model=MappingStatusBatchResponse)
-async def get_mapping_status(
-    payload: MappingStatusBatchRequest,
-    manager: SemanticLinksManager = Depends(get_manager),
-    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
-):
-    try:
-        statuses = manager.mapping_status_for_iris(payload.iris)
-        return MappingStatusBatchResponse(statuses=statuses)
-    except Exception as e:
-        logger.error("Failed getting mapping status for IRIs", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to get mapping status")
 
 
 @router.post("/semantic-links/", response_model=EntitySemanticLink)

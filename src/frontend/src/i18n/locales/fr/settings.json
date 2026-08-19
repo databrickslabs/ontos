@@ -50,6 +50,13 @@
       "placeholder": "audit_logs",
       "help": "Répertoire où les fichiers de journaux d'audit sont stockés."
     },
+    "backgroundJobs": {
+      "title": "Tâches en arrière-plan",
+      "allowEnablementRequests": {
+        "label": "Autoriser les utilisateurs à demander l'activation des tâches en arrière-plan",
+        "help": "Lorsqu'un utilisateur accède à une fonctionnalité dont la tâche en arrière-plan n'est pas activée, il peut envoyer une notification demandant à un administrateur de l'activer."
+      }
+    },
     "llm": {
       "title": "Configuration AI / LLM",
       "enabled": {

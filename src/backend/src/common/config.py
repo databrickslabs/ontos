@@ -158,6 +158,11 @@ class Settings(BaseSettings):
     sandbox_allowed_schemas: List[str] = Field(default_factory=lambda: ['sandbox'], validation_alias=AliasChoices('SANDBOX_ALLOWED_SCHEMAS', 'sandbox_allowed_schemas'))
     sandbox_enforce_allowlist: bool = Field(True, validation_alias=AliasChoices('SANDBOX_ENFORCE_ALLOWLIST', 'sandbox_enforce_allowlist'))
 
+    # Background job enablement requests
+    # When True, users who hit a feature backed by a disabled background job may
+    # send an ACTION_REQUIRED notification to the Admin role asking for it to be enabled.
+    ALLOW_JOB_ENABLEMENT_REQUESTS: bool = Field(False, env='ALLOW_JOB_ENABLEMENT_REQUESTS')
+
     # Delivery Mode settings
     # Controls how governance changes (GRANTs, tag assignments, etc.) are propagated
     DELIVERY_MODE_DIRECT: bool = Field(False, env='DELIVERY_MODE_DIRECT')  # Apply changes directly to Unity Catalog via SDK

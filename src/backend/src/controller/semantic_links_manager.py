@@ -161,15 +161,27 @@ class SemanticLinksManager:
         self._compute_nesting_for_links(results)
         return results
 
+    def list_for_entity_prefix(self, entity_id_prefix: str, entity_type: str) -> List[EntitySemanticLink]:
+        items = entity_semantic_links_repo.list_for_entity_prefix(self._db, entity_id_prefix, entity_type)
+        return [self._to_api(it) for it in items]
+
     def list_for_iri(self, iri: str) -> List[EntitySemanticLink]:
         """Get all entities linked to an IRI, including both explicit links and inferred type relationships.
 
-        For physical assets linked through data contracts or products, parent_entity_id is set to
-        enable frontend nesting (concept -> contract -> asset in a visual hierarchy).
-        Only contract-structured nesting is currently implemented (safe, deterministic);
-        fuzzy FQN->product matching is deferred (uncertain and risky).
+        Explicit (stored) links and inferred (rdf:type in the graph) links can
+        describe the same (entity_type, entity_id) pair — an assignment is
+        persisted in entity_semantic_links AND surfaces again as a graph
+        relationship. Deduplicate on (entity_type, entity_id) so a single
+        assignment is never shown twice, preferring the explicit stored link
+        (it carries a real id/label) over the synthetic inferred one.
+
+        For physical assets linked through data contracts or products,
+        parent_entity_id is set (after dedup) to enable frontend nesting
+        (concept -> contract -> asset in a visual hierarchy). Only
+        contract-structured nesting is currently implemented (safe,
+        deterministic); fuzzy FQN->product matching is deferred.
         """
-        # Get explicit links from database
+        # Explicit links from the database come first so they win on dedup.
         items = entity_semantic_links_repo.list_for_iri(self._db, iri)
         results = [self._to_api(it) for it in items]
 
@@ -178,10 +190,22 @@ class SemanticLinksManager:
             inferred = self._get_inferred_links_from_graph(iri)
             results.extend(inferred)
 
-        # Compute nesting relationships for the concept's links
-        self._compute_nesting_for_links(results)
+        # Dedup on (entity_type, entity_id): explicit stored links come first
+        # so they win over the synthetic inferred duplicates.
+        deduped: List[EntitySemanticLink] = []
+        seen: set = set()
+        for link in results:
+            key = (link.entity_type, link.entity_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(link)
 
-        return results
+        # Compute nesting relationships on the deduped set (concept -> contract
+        # -> asset), so the frontend can render the visual hierarchy.
+        self._compute_nesting_for_links(deduped)
+
+        return deduped
 
     def mapping_status_for_iris(self, iris: List[str]) -> Dict[str, MappingStatus]:
         """Get mapping status for a batch of IRIs.

@@ -104,48 +104,22 @@ def get_all_owners(
 
 
 @router.get(
-    # QUERY-PARAM variant — the canonical read for object ids that are IRIs.
-    # A path segment (even with the :path converter) is unsafe for full IRIs:
-    # 'https://x/y#z' url-encodes to 'https%3A%2F%2Fx...' and Starlette collapses
-    # the encoded double-slash after the scheme, issuing a 301 to a normalized
-    # path ('https:/x') that the SPA fetch does not follow -> the owners panel
-    # reads nothing though the owner IS stored. Query params are never path-
-    # normalized, so this route handles IRIs (with '/' and '#') reliably.
-    "/for-object",
-    response_model=List[BusinessOwnerRead],
-)
-def get_owners_for_object_q(
-    db: DBSessionDep,
-    object_type: str = Query(...),
-    object_id: str = Query(...),
-    manager=Depends(get_business_owners_manager),
-    active_only: bool = Query(True),
-):
-    """Gets all owners for a specific object (object_id passed as a query param).
-
-    Same auth rationale as the legacy path-based variant below.
-    """
-    return manager.get_owners_for_object(
-        db=db, object_type=object_type, object_id=object_id, active_only=active_only
-    )
-
-
-@router.get(
-    # LEGACY path form — kept for non-IRI object ids (e.g. numeric data_product
-    # ids) and existing callers. IRIs should use /for-object above; a full IRI
-    # here 301-redirects due to double-slash normalization. object_id is :path so
-    # slash-bearing (non-scheme) ids at least don't truncate at the first slash.
-    "/by-object/{object_type}/{object_id:path}",
+    "/by-object/{object_type}",
     response_model=List[BusinessOwnerRead],
 )
 def get_owners_for_object(
     object_type: str,
-    object_id: str,
     db: DBSessionDep,
+    object_id: str = Query(..., min_length=1, description="Object id (may be an IRI)"),
     manager=Depends(get_business_owners_manager),
     active_only: bool = Query(True),
 ):
     """Gets all owners for a specific object.
+
+    ``object_id`` is a query parameter (not a path segment) because it may be a
+    concept IRI like ``http://…#Term``. The Databricks Apps proxy collapses
+    ``%2F%2F`` → ``/`` inside path segments, which mangles such IRIs before they
+    reach FastAPI (see PR #536); query-string values survive that intact.
 
     Authenticated-only (no feature-permission gate). Rationale: a user who
     can already view an entity (e.g. a data product in the marketplace)
@@ -165,15 +139,14 @@ def get_owners_for_object(
 
 
 @router.get(
-    # :path — see get_owners_for_object; object ids may be slash-bearing IRIs.
-    "/history/{object_type}/{object_id:path}",
+    "/history/{object_type}",
     response_model=BusinessOwnerHistory,
     dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
 )
 def get_owner_history(
     object_type: str,
-    object_id: str,
     db: DBSessionDep,
+    object_id: str = Query(..., min_length=1, description="Object id (may be an IRI)"),
     manager=Depends(get_business_owners_manager),
 ):
     """Gets the full ownership history (current + previous) for an object."""

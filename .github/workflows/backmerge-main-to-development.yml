@@ -1,10 +1,27 @@
 name: Back-merge main into development
 
 # Keeps `development` in sync with `main` ("points main back down to development").
-# On every push to main (and on demand), ensure an open PR exists that merges
-# main -> development. PR-based on purpose: it respects branch protection on
-# `development` and surfaces any merge conflicts for manual resolution instead
-# of force-pushing over them.
+#
+# On every push to main (and on demand) we bring main's commits down onto
+# development. We do this with a REAL merge commit pushed straight to
+# development rather than by squash-merging a PR.
+#
+# Why not a squash-merged PR? The `development` ruleset only allows the
+# `squash` merge method. Squashing a main -> development PR collapses all of
+# main's commits into one brand-new commit that lives only on development and
+# carries none of main's SHAs. The merge-base of main and development therefore
+# never advances, so `git merge-base --is-ancestor origin/main
+# origin/development` stays false and the next push to main regenerates a PR
+# with the entire history again -- the same diff replayed forever. A merge
+# commit (with main as a parent) advances the merge-base, so the sync becomes
+# idempotent: once development contains main, the ancestor check short-circuits
+# and nothing is reopened.
+#
+# Pushing a merge commit to development bypasses the PR flow, so the pushing
+# token MUST be listed in the ruleset's bypass_actors (see the repo ruleset
+# "main + development protection and merge queue"). Provide that token as the
+# BACKMERGE_TOKEN secret. If it is missing, or if the merge hits conflicts, we
+# fall back to opening a PR for manual resolution instead of force-pushing.
 
 on:
   push:
@@ -12,7 +29,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 concurrency:
@@ -30,37 +47,71 @@ jobs:
       labels: linux-ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
+          # Prefer a bypass-capable token so we can push the merge commit
+          # straight to development; fall back to the default token (PR path).
+          token: ${{ secrets.BACKMERGE_TOKEN || github.token }}
 
-      - name: Open or reuse back-merge PR (main -> development)
+      - name: Back-merge main into development
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
+          # Whether we hold a token allowed to bypass the development ruleset.
+          CAN_PUSH: ${{ secrets.BACKMERGE_TOKEN != '' }}
         run: |
           set -euo pipefail
 
           # Nothing to do if development already contains every commit on main.
+          # A prior merge-commit back-merge makes this true and stops the loop.
           if git merge-base --is-ancestor origin/main origin/development; then
             echo "development already up to date with main; no back-merge needed."
             exit 0
           fi
 
-          # Reuse an existing open back-merge PR if one is already there
-          # (a branch-to-branch PR auto-tracks new commits on main).
-          # Plain REST via `gh api`; the gh pr subcommands use GraphQL.
-          existing="$(gh api "repos/${REPO}/pulls?base=development&head=${OWNER}:main&state=open" \
-            --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then
-            echo "Back-merge PR already open: #$existing (it will include the new commits)."
+          open_pr() {
+            # Reuse an existing open back-merge PR if one is already there
+            # (a branch-to-branch PR auto-tracks new commits on main).
+            # Plain REST via `gh api`; the gh pr subcommands use GraphQL.
+            existing="$(gh api "repos/${REPO}/pulls?base=development&head=${OWNER}:main&state=open" \
+              --jq '.[0].number // empty')"
+            if [ -n "$existing" ]; then
+              echo "Back-merge PR already open: #$existing (it will include the new commits)."
+              return 0
+            fi
+            gh api "repos/${REPO}/pulls" \
+              -f base=development \
+              -f head=main \
+              -f title="chore: back-merge main into development" \
+              -f body="Automated back-merge to keep \`development\` in sync with \`main\`, triggered by a push to \`main\`. Merge this with a **merge commit** (not squash) so the merge-base advances and this PR does not regenerate. If the ruleset blocks merge commits, an admin must allow it or add the back-merge token to the ruleset bypass list. If GitHub reports conflicts, resolve them on this PR before merging. (Workflow: \`.github/workflows/backmerge-main-to-development.yml\`.)" \
+              --jq '"Opened back-merge PR #" + (.number | tostring)'
+          }
+
+          # Without a bypass-capable token we cannot push to development, so
+          # fall back to the PR flow for a human to merge (as a merge commit).
+          if [ "${CAN_PUSH}" != "true" ]; then
+            echo "No BACKMERGE_TOKEN available; opening a PR for manual merge."
+            open_pr
             exit 0
           fi
 
-          gh api "repos/${REPO}/pulls" \
-            -f base=development \
-            -f head=main \
-            -f title="chore: back-merge main into development" \
-            -f body="Automated back-merge to keep \`development\` in sync with \`main\`, triggered by a push to \`main\`. If GitHub reports conflicts, resolve them on this PR before merging. (Workflow: \`.github/workflows/backmerge-main-to-development.yml\`.)" \
-            --jq '"Opened back-merge PR #" + (.number | tostring)'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B development origin/development
+
+          # Create a real merge commit (main as a second parent) so the
+          # merge-base advances. --no-ff guarantees a merge commit even if
+          # development is strictly behind main.
+          if ! git merge --no-ff --no-edit \
+                 -m "chore: back-merge main into development" origin/main; then
+            echo "Merge conflicts; aborting direct push and opening a PR instead."
+            git merge --abort || true
+            open_pr
+            exit 0
+          fi
+
+          git push origin development
+          echo "Back-merged main into development via merge commit $(git rev-parse HEAD)."

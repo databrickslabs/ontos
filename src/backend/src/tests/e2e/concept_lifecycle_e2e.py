@@ -19,9 +19,10 @@ Design mirrors concept_v2_api_e2e.py: self-cleaning E2E-AUTO- schemes, SKIP (not
 FAIL) when a precondition can't be met (e.g. no governing workflow installed).
 
 Auth: DATABRICKS_TOKEN bearer for the app host (see concept_v2_api_e2e.py header).
-    DATABRICKS_TOKEN=$(databricks auth token --profile fevm-valcon-demo \\
+    DATABRICKS_TOKEN=$(databricks auth token --profile <profile> \\
         | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')
-    DATABRICKS_TOKEN=$DATABRICKS_TOKEN python tasks/concept_lifecycle_e2e.py
+    DATABRICKS_TOKEN=$DATABRICKS_TOKEN python -m src.tests.e2e.concept_lifecycle_e2e \\
+        --base https://<app-host>.aws.databricksapps.com
 
 Exit 0 if all executed checks pass (skips don't fail); 1 on any failure.
 """
@@ -349,11 +350,14 @@ def cleanup(base: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="https://ontos-cbv2b-7474646273329147.aws.databricksapps.com")
+    ap.add_argument("--base", default=os.environ.get("ONTOS_BASE_URL"),
+                    help="Ontos app base URL (or set ONTOS_BASE_URL)")
     ap.add_argument("--keep", action="store_true")
     args = ap.parse_args()
+    if not args.base:
+        print("SKIP: no app URL (pass --base or set ONTOS_BASE_URL); nothing to run.", file=sys.stderr); return 2
     if not (os.environ.get("DATABRICKS_TOKEN") or os.environ.get("ONTOS_COOKIE")):
-        print("ERROR: set DATABRICKS_TOKEN for the app host.", file=sys.stderr); return 2
+        print("SKIP: set DATABRICKS_TOKEN for the app host.", file=sys.stderr); return 2
     s, d = call(args.base, "GET", "/api/user/info")
     if s != 200:
         print(f"ERROR: not authenticated (status={s}).", file=sys.stderr); return 2

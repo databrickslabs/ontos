@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """API-driven E2E suite for the Concepts-v2 fix batch (2026-08-18).
 
-Runs against a LIVE Ontos app (default ontos-cbv2b) over REST, exercising the
-failure PATTERNS that unit/regression tests keep missing:
+Runs against a LIVE Ontos app over REST, exercising the failure PATTERNS that
+unit/regression tests keep missing:
 
   * lifecycle / multi-step state  — create -> import -> delete -> recreate,
     version-row leak, upload-as-draft, sourceFile freshness
@@ -19,13 +19,18 @@ Design:
   * SKIP (not FAIL) when a precondition can't be met (e.g. no governing
     workflow installed) — skips never fail the run, but are summarized.
 
-Auth: Databricks Apps sit behind OAuth. Provide a bearer token:
-    DATABRICKS_TOKEN=$(databricks auth token --profile fevm-valcon-demo \\
-        | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')
-    DATABRICKS_TOKEN=$DATABRICKS_TOKEN python tasks/concept_v2_api_e2e.py \\
-        --base https://ontos-cbv2b-7474646273329147.aws.databricksapps.com
+This is a manual/live harness, NOT a headless CI test: it needs a running Ontos
+app URL (``--base`` or ``ONTOS_BASE_URL``) and a bearer token, so it exits 2
+(skips) when they are absent rather than failing a CI run.
 
-Exit code: 0 if all executed checks pass (skips do not fail); 1 on any failure.
+Auth: Databricks Apps sit behind OAuth. Provide the app URL + a bearer token:
+    DATABRICKS_TOKEN=$(databricks auth token --profile <profile> \\
+        | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')
+    DATABRICKS_TOKEN=$DATABRICKS_TOKEN python -m src.tests.e2e.concept_v2_api_e2e \\
+        --base https://<app-host>.aws.databricksapps.com
+
+Exit code: 0 if all executed checks pass (skips do not fail); 1 on any failure;
+2 if the app URL / token are not configured (nothing to run).
 """
 import argparse
 import json
@@ -557,12 +562,16 @@ def cleanup(base: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="https://ontos-cbv2b-7474646273329147.aws.databricksapps.com")
+    ap.add_argument("--base", default=os.environ.get("ONTOS_BASE_URL"),
+                    help="Ontos app base URL (or set ONTOS_BASE_URL)")
     ap.add_argument("--keep", action="store_true", help="skip teardown (leave E2E-AUTO schemes)")
     args = ap.parse_args()
 
+    if not args.base:
+        print("SKIP: no app URL (pass --base or set ONTOS_BASE_URL); nothing to run.", file=sys.stderr)
+        return 2
     if not (os.environ.get("DATABRICKS_TOKEN") or os.environ.get("ONTOS_COOKIE")):
-        print("ERROR: set DATABRICKS_TOKEN (or ONTOS_COOKIE) for the app host.", file=sys.stderr)
+        print("SKIP: set DATABRICKS_TOKEN (or ONTOS_COOKIE) for the app host.", file=sys.stderr)
         return 2
 
     # Sanity: authed?

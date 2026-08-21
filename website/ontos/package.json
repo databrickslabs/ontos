@@ -19,7 +19,7 @@
     "@docusaurus/preset-classic": "^3.9.2",
     "@mdx-js/react": "^3.0.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "autoprefixer": "^10.4.23",
+    "autoprefixer": "^10.5.4",
     "clsx": "^2.0.0",
     "docusaurus-lunr-search": "^3.6.0",
     "docusaurus-plugin-image-zoom": "^3.0.1",

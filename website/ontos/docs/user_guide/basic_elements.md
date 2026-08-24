@@ -362,6 +362,19 @@ Ontos supports two data product states, namely:
 - **Active:** The product is healthy, fully supported, and up to date.
 - **Deprecated:** The data product is marked for retirement, signaling it will be shut down as it reaches the end of its lifespan.
 
+### Data product types
+
+Ontos supports the following types associated with Data Product definitions:
+
+- 🗄️ **Source:** Raw data resides in operational systems, databases, or third-party tools—like PostgreSQL, API payloads, or logs. It’s optimized for running the business, not for analytics.
+
+- 🪞 **Source-Aligned Data Product:** Clean, standardized, analytical data owned by the domain that produces it. It accurately mirrors the operational reality of that domain without changing its core meaning.
+
+- 🧩 **Aggregate Data Product:** A combined, higher-level data product created by blending data from multiple source-aligned products across different domains (e.g., combining "Orders", "Customer Profiles", and "Marketing Campaigns" into a single unified "Customer Lifetime Value" data product).
+
+- 🎯 **Consumer-Aligned Data Product:** A highly specialized data product designed to meet the precise needs of a particular downstream use case, dashboard, or application. For example, it could be a custom feature-store dataset created specifically for a "Real-Time Recommendation Engine" or a pre-aggregated dataset intended for an "Executive Financial Board Deck."
+
+
 ### Create and modify products
 
 To create a Data Product, follow these instructions:

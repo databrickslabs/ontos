@@ -43,6 +43,7 @@ from src.common.workflow_triggers import get_trigger_registry, fire_trigger_safe
 from src.models.process_workflows import EntityType
 from src.models.notifications import NotificationType
 from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
+from src.controller.compliance_templates_manager import compliance_templates_manager
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -385,6 +386,20 @@ async def set_publication_scope(
                 status_code=409,
                 detail=f"Product must be active to publish. Current status: {product_db.status}"
             )
+
+        # Compliance Templates (#712): block publishing to any non-none scope
+        # when mandatory compliance fields are incomplete. Advisory on edit,
+        # blocking here at publish. No-op when no template is active.
+        if scope != "none":
+            completeness = compliance_templates_manager.check_completeness(
+                db, entity_type="data_product", entity_id=product_id
+            )
+            if not completeness.passed:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cannot publish: required compliance fields are incomplete. "
+                    + " ".join(completeness.messages),
+                )
 
         product_db.publication_scope = scope
         if scope != "none":
@@ -2333,6 +2348,18 @@ async def update_data_product(
 
         success = True
         response_status_code = 200
+
+        # Reconcile compliance template values: materialize defaults for fields without rows.
+        # Wrapped in try/except so reconcile failure never breaks the product update.
+        try:
+            compliance_templates_manager.reconcile_entity(
+                db,
+                entity_type="data_product",
+                entity_id=product_id,
+                user_email=current_user.email if current_user else None,
+            )
+        except Exception as e:
+            logger.warning(f"Compliance reconcile failed for product {product_id}: {e}")
 
         # Fire on_update workflow trigger
         fire_trigger_safe(

@@ -212,6 +212,14 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_SETTINGS,
     },
+    'settings-compliance-templates': {
+        # Admin management of compliance template DEFINITIONS (typed, grouped
+        # governance-field schemas). Distinct from per-entity value read/write
+        # which is gated by the cross-cutting `compliance-template-values`.
+        'name': 'Compliance Templates',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
+        'group': GROUP_SETTINGS,
+    },
 
     # --- Settings: Configuration sub-pages ---
     'settings-general': {
@@ -384,6 +392,15 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'name': 'Entity Relationships',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_BUILD,
+        'cross_cutting': True,
+    },
+    'compliance-template-values': {
+        # Per-entity compliance template values, filled via the button+modal on
+        # entity detail pages. Read-only users can view; READ_WRITE can fill.
+        # No sidebar entry — the modal is surfaced inline.
+        'name': 'Compliance Template Values',
+        'allowed_levels': IMPLICIT_FEATURE_LEVELS,
+        'group': GROUP_GOVERN,
         'cross_cutting': True,
     },
 

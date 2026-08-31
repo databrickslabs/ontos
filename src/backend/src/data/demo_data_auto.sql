@@ -45,11 +45,10 @@ ON CONFLICT (id) DO NOTHING;
 -- 2. TEAMS
 -- ============================================================================
 
-INSERT INTO teams (id, name, title, description, domain_id, extra_metadata, created_by, updated_by, created_at, updated_at) VALUES
-('00100001-0004-4000-8000-000000000001', 'connected-vehicle-platform', 'Connected Vehicle Platform Team', 'Telematics data platform, OTA update orchestration, and remote diagnostics', '00000002-0004-4000-8000-000000000002', '{"slack_channel": "https://company.slack.com/channels/cv-platform", "lead": "cv.architect@oem.com"}', 'system@demo', 'system@demo', NOW(), NOW()),
-('00100002-0004-4000-8000-000000000002', 'adas-engineering', 'ADAS & AD Engineering Team', 'Sensor fusion, perception model training, and autonomous driving validation', '00000003-0004-4000-8000-000000000003', '{"slack_channel": "https://company.slack.com/channels/adas-eng", "tools": ["ROS2", "CARLA", "NVIDIA DRIVE"]}', 'system@demo', 'system@demo', NOW(), NOW()),
-('00100003-0004-4000-8000-000000000003', 'supply-chain-quality', 'Supply Chain Quality Team', 'Supplier PPAP/APQP management, incoming quality, and supply risk analytics', '00000004-0004-4000-8000-000000000004', '{"slack_channel": "https://company.slack.com/channels/scq-team", "responsibilities": ["PPAP", "APQP", "8D", "Supplier Audits"]}', 'system@demo', 'system@demo', NOW(), NOW())
-
+INSERT INTO teams (id, name, title, description, extra_metadata, created_by, updated_by, created_at, updated_at) VALUES
+('00100001-0004-4000-8000-000000000001', 'connected-vehicle-platform', 'Connected Vehicle Platform Team', 'Telematics data platform, OTA update orchestration, and remote diagnostics', '{"slack_channel": "https://company.slack.com/channels/cv-platform", "lead": "cv.architect@oem.com"}', 'system@demo', 'system@demo', NOW(), NOW()),
+('00100002-0004-4000-8000-000000000002', 'adas-engineering', 'ADAS & AD Engineering Team', 'Sensor fusion, perception model training, and autonomous driving validation', '{"slack_channel": "https://company.slack.com/channels/adas-eng", "tools": ["ROS2", "CARLA", "NVIDIA DRIVE"]}', 'system@demo', 'system@demo', NOW(), NOW()),
+('00100003-0004-4000-8000-000000000003', 'supply-chain-quality', 'Supply Chain Quality Team', 'Supplier PPAP/APQP management, incoming quality, and supply risk analytics', '{"slack_channel": "https://company.slack.com/channels/scq-team", "responsibilities": ["PPAP", "APQP", "8D", "Supplier Audits"]}', 'system@demo', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -99,12 +98,12 @@ ON CONFLICT (project_id, team_id) DO NOTHING;
 -- 4. DATA CONTRACTS
 -- ============================================================================
 
-INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, domain_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at, version_family_id) VALUES
-('00400001-0004-4000-8000-000000000001', 'Vehicle Telematics Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0004-4000-8000-000000000001', '00000002-0004-4000-8000-000000000002', 'Standardized vehicle telemetry including CAN bus signals, diagnostic trouble codes, and driving behavior events', 'Fleet health monitoring, predictive maintenance, usage-based insurance, and OTA campaign targeting', 'CAN signal sampling rate varies by ECU (10ms-1s); DTC freeze-frame data limited to 3 snapshots; GPS accuracy ±3m in urban canyons', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400001-0004-4000-8000-000000000001'),
-('00400002-0004-4000-8000-000000000002', 'ADAS Sensor Data Contract', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100002-0004-4000-8000-000000000002', '00000003-0004-4000-8000-000000000003', 'Camera, LiDAR, radar, and ultrasonic sensor recordings with synchronized timestamps and ego-vehicle pose', 'Perception model training, corner-case mining, simulation replay, and safety validation per ISO 21448 (SOTIF)', 'LiDAR point clouds at 10Hz; camera frames at 30fps; radar at 20Hz; temporal sync tolerance ±5ms; PII (faces, plates) must be anonymized before model training', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400002-0004-4000-8000-000000000002'),
-('00400003-0004-4000-8000-000000000003', 'Supplier Quality Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100003-0004-4000-8000-000000000003', '00000004-0004-4000-8000-000000000004', 'PPAP submissions, incoming inspection data, supplier SPC, and 8D corrective action reports', 'Supplier quality scorecard, incoming quality trends, PPAP status tracking, and risk-based audit planning', 'Supplier SPC data pushed daily via EDI; 8D reports require manual review before closure; sub-tier data limited to Tier-1 disclosures', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400003-0004-4000-8000-000000000003'),
-('00400004-0004-4000-8000-000000000004', 'Warranty Claims Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0004-4000-8000-000000000001', '00000005-0004-4000-8000-000000000005', 'Dealer warranty claims, field failure reports, recall campaign data, and goodwill repair authorizations', 'Early warning analytics, cost-per-vehicle trending, NTF (no trouble found) reduction, and recall scope optimization', 'Claims data lags 5-10 business days from dealer submission; labor codes vary by market; goodwill claims excluded from CPV calculations', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400004-0004-4000-8000-000000000004'),
-('00400005-0004-4000-8000-000000000005', 'Vehicle Configuration & BOM Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100001-0004-4000-8000-000000000001', '00000001-0004-4000-8000-000000000001', 'As-built vehicle configuration, 150% BOM, option constraint rules, and engineering change orders', 'Build-to-order scheduling, variant cost analysis, and engineering change impact assessment', 'ECO effectivity transitions may create temporary BOM inconsistencies; market-specific options encoded differently across legacy PLM systems', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400005-0004-4000-8000-000000000005')
+INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at, version_family_id) VALUES
+('00400001-0004-4000-8000-000000000001', 'Vehicle Telematics Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0004-4000-8000-000000000001', 'Standardized vehicle telemetry including CAN bus signals, diagnostic trouble codes, and driving behavior events', 'Fleet health monitoring, predictive maintenance, usage-based insurance, and OTA campaign targeting', 'CAN signal sampling rate varies by ECU (10ms-1s); DTC freeze-frame data limited to 3 snapshots; GPS accuracy ±3m in urban canyons', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400001-0004-4000-8000-000000000001'),
+('00400002-0004-4000-8000-000000000002', 'ADAS Sensor Data Contract', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100002-0004-4000-8000-000000000002', 'Camera, LiDAR, radar, and ultrasonic sensor recordings with synchronized timestamps and ego-vehicle pose', 'Perception model training, corner-case mining, simulation replay, and safety validation per ISO 21448 (SOTIF)', 'LiDAR point clouds at 10Hz; camera frames at 30fps; radar at 20Hz; temporal sync tolerance ±5ms; PII (faces, plates) must be anonymized before model training', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400002-0004-4000-8000-000000000002'),
+('00400003-0004-4000-8000-000000000003', 'Supplier Quality Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100003-0004-4000-8000-000000000003', 'PPAP submissions, incoming inspection data, supplier SPC, and 8D corrective action reports', 'Supplier quality scorecard, incoming quality trends, PPAP status tracking, and risk-based audit planning', 'Supplier SPC data pushed daily via EDI; 8D reports require manual review before closure; sub-tier data limited to Tier-1 disclosures', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400003-0004-4000-8000-000000000003'),
+('00400004-0004-4000-8000-000000000004', 'Warranty Claims Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0004-4000-8000-000000000001', 'Dealer warranty claims, field failure reports, recall campaign data, and goodwill repair authorizations', 'Early warning analytics, cost-per-vehicle trending, NTF (no trouble found) reduction, and recall scope optimization', 'Claims data lags 5-10 business days from dealer submission; labor codes vary by market; goodwill claims excluded from CPV calculations', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400004-0004-4000-8000-000000000004'),
+('00400005-0004-4000-8000-000000000005', 'Vehicle Configuration & BOM Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100001-0004-4000-8000-000000000001', 'As-built vehicle configuration, 150% BOM, option constraint rules, and engineering change orders', 'Build-to-order scheduling, variant cost analysis, and engineering change impact assessment', 'ECO effectivity transitions may create temporary BOM inconsistencies; market-specific options encoded differently across legacy PLM systems', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400005-0004-4000-8000-000000000005')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -236,12 +235,12 @@ ON CONFLICT (id) DO NOTHING;
 -- 5. DATA PRODUCTS
 -- ============================================================================
 
-INSERT INTO data_products (id, api_version, kind, status, name, version, domain, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at, version_family_id) VALUES
-('00700001-0004-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'Connected Vehicle Analytics v1', '1.0.0', 'Connected Vehicles', 'auto-demo', '00100001-0004-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700001-0004-4000-8000-000000000001'),
-('00700002-0004-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'ADAS Training Data Pipeline v1', '1.0.0', 'Autonomous Driving', 'auto-demo', '00100002-0004-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700002-0004-4000-8000-000000000002'),
-('00700003-0004-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'Supplier Quality Scorecard v1', '1.0.0', 'Supply Chain & Procurement', 'auto-demo', '00100003-0004-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700003-0004-4000-8000-000000000003'),
-('00700004-0004-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Warranty Analytics Platform v1', '1.0.0', 'After-Sales & Warranty', 'auto-demo', '00100001-0004-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700004-0004-4000-8000-000000000004'),
-('00700005-0004-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Vehicle Configuration Intelligence v1', '1.0.0', 'Vehicle Engineering', 'auto-demo', '00100001-0004-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700005-0004-4000-8000-000000000005')
+INSERT INTO data_products (id, api_version, kind, status, name, version, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at, version_family_id) VALUES
+('00700001-0004-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'Connected Vehicle Analytics v1', '1.0.0', 'auto-demo', '00100001-0004-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700001-0004-4000-8000-000000000001'),
+('00700002-0004-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'ADAS Training Data Pipeline v1', '1.0.0', 'auto-demo', '00100002-0004-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700002-0004-4000-8000-000000000002'),
+('00700003-0004-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'Supplier Quality Scorecard v1', '1.0.0', 'auto-demo', '00100003-0004-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700003-0004-4000-8000-000000000003'),
+('00700004-0004-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Warranty Analytics Platform v1', '1.0.0', 'auto-demo', '00100001-0004-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700004-0004-4000-8000-000000000004'),
+('00700005-0004-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Vehicle Configuration Intelligence v1', '1.0.0', 'auto-demo', '00100001-0004-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700005-0004-4000-8000-000000000005')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -512,109 +511,79 @@ ON CONFLICT (id) DO NOTHING;
 -- 15. ASSETS — AUTO catalog objects (type=0f3)
 -- ============================================================================
 
-INSERT INTO assets (id, name, description, asset_type_id, platform, location, domain_id, properties, tags, status, created_by, created_at, updated_at) VALUES
--- Vehicle Fleet (vertical asset type)
+INSERT INTO assets (id, name, description, asset_type_id, platform, location, properties, tags, status, created_by, created_at, updated_at) VALUES
 ('0f300101-0004-4000-8000-000000000001',
  'fleet.evx-2026.eu',
  'EVX-2026 European fleet (~120,000 vehicles).',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Vehicle Fleet' LIMIT 1), '0f200101-0004-4000-8000-000000000001'), 'Connected Cloud', 'fleet://evx-2026/eu',
- '00000002-0004-4000-8000-000000000002',
  '{"model": "EVX-2026", "region": "EU", "vehicle_count": 120000, "model_year": 2026}',
  '["series-production", "connected-services", "r155-in-scope"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- ECU Software (vertical asset type)
 ('0f300102-0004-4000-8000-000000000002',
  'ecu.adas.cam_perception.v4.2.1',
  'ADAS camera perception ECU firmware v4.2.1 — supports L2+ assist.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'ECU Software' LIMIT 1), '0f200102-0004-4000-8000-000000000002'), 'OTA Backend', 'ecu://adas/cam_perception/4.2.1',
- '00000003-0004-4000-8000-000000000003',
  '{"ecu_id": "cam_perception", "version": "4.2.1", "asil": "ASIL-D", "release_date": "2026-04-12"}',
  '["asil-d", "iso-21434", "r155-in-scope"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Telemetry table
 ('0f300103-0004-4000-8000-000000000003',
  'lakehouse.auto.telemetry.can_signals',
  'CAN bus signal telemetry from connected vehicles (resampled to 1Hz curated grid).',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.auto.telemetry.can_signals',
- '00000002-0004-4000-8000-000000000002',
  '{"catalog": "lakehouse", "schema": "auto_telemetry", "table_name": "can_signals", "row_count": 4500000000, "format": "delta"}',
  '["connected-services"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Stream
 ('0f300104-0004-4000-8000-000000000004',
  'kafka.fleet.events.diagnostic_trouble_codes',
  'Real-time DTC stream from on-vehicle diagnostics.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Stream' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Kafka', 'kafka://broker.fleet:9093/events.dtc',
- '00000005-0004-4000-8000-000000000005',
  '{"topic": "events.dtc", "throughput_msgs_per_sec": 9000}',
  '["connected-services"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Warranty Claim (vertical asset type)
 ('0f300105-0004-4000-8000-000000000005',
  'WC-2026-EU-89432',
  'Warranty claim WC-2026-EU-89432 — replacement of suspect HV battery module pack.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Warranty Claim' LIMIT 1), '0f200103-0004-4000-8000-000000000003'), 'Dealer Portal', 'warranty://claims/WC-2026-EU-89432',
- '00000005-0004-4000-8000-000000000005',
  '{"vin_prefix": "WBA****", "claim_amount_eur": 4500, "labor_hours": 8.5, "status": "approved"}',
  '[]',
  'active', 'system@demo', NOW(), NOW()),
-
--- PPAP Submission (vertical asset type)
 ('0f300106-0004-4000-8000-000000000006',
  'PPAP-2026-04-CRANK-EVX',
  'PPAP Level 3 submission for EVX-2026 crankshaft assembly (Tier-1 supplier ABC).',
  COALESCE((SELECT id FROM asset_types WHERE name = 'PPAP Submission' LIMIT 1), '0f200104-0004-4000-8000-000000000004'), 'Quality Portal', 'ppap://submissions/2026-04-CRANK-EVX',
- '00000004-0004-4000-8000-000000000004',
  '{"ppap_level": 3, "supplier": "ABC", "part_number": "CRANK-EVX-001", "status": "approved"}',
  '[]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Recall dashboard
 ('0f300107-0004-4000-8000-000000000007',
  'Recall Risk Dashboard',
  'Field failure trends, claim clusters, and recall risk indicators by VIN cohort.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Dashboard' LIMIT 1), '0f200002-0000-4000-8000-000000000002'), 'Databricks', 'https://bi.oem.com/dashboards/recall-risk-v1',
- '00000005-0004-4000-8000-000000000005',
  '{"refresh_schedule": "daily", "audience": "quality-recall-board"}',
  '["connected-services"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Supplier table
 ('0f300108-0004-4000-8000-000000000008',
  'lakehouse.auto.supply.tier_n_inventory',
  'Tier-1 to Tier-N supplier inventory and shipment status.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory',
- '00000004-0004-4000-8000-000000000004',
  '{"catalog": "lakehouse", "schema": "auto_supply", "table_name": "tier_n_inventory", "row_count": 280000, "format": "delta"}',
  '[]',
  'active', 'system@demo', NOW(), NOW()),
-
--- ── Column assets for the Auto Tables / Streams above ──
--- 0f300103 lakehouse.auto.telemetry.can_signals
-('0f520103-0004-4000-8000-000000000003', 'vin',           'Vehicle Identification Number',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.vin',           '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["telematics", "pii"]',     'active', 'system@demo', NOW(), NOW()),
-('0f520104-0004-4000-8000-000000000004', 'trip_id',       'Unique trip session identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.trip_id',       '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}',  '["telematics", "key"]',     'active', 'system@demo', NOW(), NOW()),
-('0f520105-0004-4000-8000-000000000005', 'signal_name',   'CAN signal name per DBC definition',              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.signal_name',   '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
-('0f520106-0004-4000-8000-000000000006', 'signal_value',  'Decoded physical signal value',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.signal_value',  '00000002-0004-4000-8000-000000000002', '{"data_type": "DECIMAL(18,6)", "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
-('0f520107-0004-4000-8000-000000000007', 'timestamp_utc', 'Signal timestamp (UTC, millisecond precision)',   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.timestamp_utc', '00000002-0004-4000-8000-000000000002', '{"data_type": "TIMESTAMP",     "nullable": false, "partition_key": true}',   '["telematics", "partition"]','active', 'system@demo', NOW(), NOW()),
-('0f520108-0004-4000-8000-000000000008', 'ecu_id',        'Source ECU identifier',                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.ecu_id',        '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",        "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
-
--- 0f300104 kafka.fleet.events.diagnostic_trouble_codes (Stream)
-('0f520111-0004-4000-8000-000000000011', 'event_id',      'Unique DTC event identifier',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.event_id',  '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false, "is_primary_key": true}', '["telematics", "key"]',      'active', 'system@demo', NOW(), NOW()),
-('0f520112-0004-4000-8000-000000000012', 'vin',           'Vehicle Identification Number',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.vin',       '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false}',                          '["telematics", "pii"]',     'active', 'system@demo', NOW(), NOW()),
-('0f520113-0004-4000-8000-000000000013', 'dtc_code',      'SAE J2012 diagnostic trouble code',               (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.dtc_code',  '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
-('0f520114-0004-4000-8000-000000000014', 'severity',      'pending | confirmed | permanent',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.severity',  '00000002-0004-4000-8000-000000000002', '{"data_type": "STRING",     "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
-('0f520115-0004-4000-8000-000000000015', 'first_seen_ts', 'First occurrence timestamp (UTC)',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.first_seen_ts','00000002-0004-4000-8000-000000000002','{"data_type": "TIMESTAMP","nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
-
--- 0f300108 lakehouse.auto.supply.tier_n_inventory
-('0f520121-0004-4000-8000-000000000021', 'part_number',     'OEM part number (PK)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.part_number',     '00000004-0004-4000-8000-000000000004', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}',     '["supply-chain", "key"]',  'active', 'system@demo', NOW(), NOW()),
-('0f520122-0004-4000-8000-000000000022', 'supplier_code',   'Supplier code (PK with part_number)',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.supplier_code',   '00000004-0004-4000-8000-000000000004', '{"data_type": "STRING",  "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
-('0f520123-0004-4000-8000-000000000023', 'tier',            'Supplier tier (1=direct, 2/3=upstream)',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.tier',            '00000004-0004-4000-8000-000000000004', '{"data_type": "INT",     "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
-('0f520124-0004-4000-8000-000000000024', 'on_hand_qty',     'Current on-hand quantity',                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.on_hand_qty',     '00000004-0004-4000-8000-000000000004', '{"data_type": "INT",     "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
-('0f520125-0004-4000-8000-000000000025', 'last_shipment_ts','Last shipment timestamp (UTC)',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.last_shipment_ts','00000004-0004-4000-8000-000000000004', '{"data_type": "TIMESTAMP","nullable": true }',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW())
+('0f520103-0004-4000-8000-000000000003', 'vin',           'Vehicle Identification Number',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.vin', '{"data_type": "STRING",        "nullable": false}',                          '["telematics", "pii"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520104-0004-4000-8000-000000000004', 'trip_id',       'Unique trip session identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.trip_id', '{"data_type": "STRING",        "nullable": false, "is_primary_key": true}',  '["telematics", "key"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520105-0004-4000-8000-000000000005', 'signal_name',   'CAN signal name per DBC definition',              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.signal_name', '{"data_type": "STRING",        "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520106-0004-4000-8000-000000000006', 'signal_value',  'Decoded physical signal value',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.signal_value', '{"data_type": "DECIMAL(18,6)", "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520107-0004-4000-8000-000000000007', 'timestamp_utc', 'Signal timestamp (UTC, millisecond precision)',   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.timestamp_utc', '{"data_type": "TIMESTAMP",     "nullable": false, "partition_key": true}',   '["telematics", "partition"]','active', 'system@demo', NOW(), NOW()),
+('0f520108-0004-4000-8000-000000000008', 'ecu_id',        'Source ECU identifier',                           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.telemetry.can_signals.ecu_id', '{"data_type": "STRING",        "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520111-0004-4000-8000-000000000011', 'event_id',      'Unique DTC event identifier',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.event_id', '{"data_type": "STRING",     "nullable": false, "is_primary_key": true}', '["telematics", "key"]',      'active', 'system@demo', NOW(), NOW()),
+('0f520112-0004-4000-8000-000000000012', 'vin',           'Vehicle Identification Number',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.vin', '{"data_type": "STRING",     "nullable": false}',                          '["telematics", "pii"]',     'active', 'system@demo', NOW(), NOW()),
+('0f520113-0004-4000-8000-000000000013', 'dtc_code',      'SAE J2012 diagnostic trouble code',               (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.dtc_code', '{"data_type": "STRING",     "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520114-0004-4000-8000-000000000014', 'severity',      'pending | confirmed | permanent',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.severity', '{"data_type": "STRING",     "nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520115-0004-4000-8000-000000000015', 'first_seen_ts', 'First occurrence timestamp (UTC)',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.fleet.events.diagnostic_trouble_codes.first_seen_ts','{"data_type": "TIMESTAMP","nullable": false}',                          '["telematics"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520121-0004-4000-8000-000000000021', 'part_number',     'OEM part number (PK)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.part_number', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}',     '["supply-chain", "key"]',  'active', 'system@demo', NOW(), NOW()),
+('0f520122-0004-4000-8000-000000000022', 'supplier_code',   'Supplier code (PK with part_number)',           (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.supplier_code', '{"data_type": "STRING",  "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520123-0004-4000-8000-000000000023', 'tier',            'Supplier tier (1=direct, 2/3=upstream)',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.tier', '{"data_type": "INT",     "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520124-0004-4000-8000-000000000024', 'on_hand_qty',     'Current on-hand quantity',                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.on_hand_qty', '{"data_type": "INT",     "nullable": false}',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520125-0004-4000-8000-000000000025', 'last_shipment_ts','Last shipment timestamp (UTC)',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.auto.supply.tier_n_inventory.last_shipment_ts', '{"data_type": "TIMESTAMP","nullable": true }',                              '["supply-chain"]',         'active', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -768,3 +737,48 @@ COMMIT;
 -- ============================================================================
 -- End of AUTO Demo Data — preset=auto
 -- ============================================================================
+
+
+-- ============================================================================
+-- Domain associations (multi-domain assignment; replaces removed single-value
+-- domain columns on teams/data_contracts/data_products/assets). Type code 031.
+-- ============================================================================
+INSERT INTO entity_domain_associations (id, domain_id, entity_id, entity_type, is_primary, assigned_by, assigned_at) VALUES
+('03100001-0004-4000-8000-000000000001', '00000002-0004-4000-8000-000000000002', '00100001-0004-4000-8000-000000000001', 'team', true, 'system@demo', NOW()),
+('03100002-0004-4000-8000-000000000002', '00000003-0004-4000-8000-000000000003', '00100002-0004-4000-8000-000000000002', 'team', true, 'system@demo', NOW()),
+('03100003-0004-4000-8000-000000000003', '00000004-0004-4000-8000-000000000004', '00100003-0004-4000-8000-000000000003', 'team', true, 'system@demo', NOW()),
+('03100004-0004-4000-8000-000000000004', '00000002-0004-4000-8000-000000000002', '00400001-0004-4000-8000-000000000001', 'data_contract', true, 'system@demo', NOW()),
+('03100005-0004-4000-8000-000000000005', '00000003-0004-4000-8000-000000000003', '00400002-0004-4000-8000-000000000002', 'data_contract', true, 'system@demo', NOW()),
+('03100006-0004-4000-8000-000000000006', '00000004-0004-4000-8000-000000000004', '00400003-0004-4000-8000-000000000003', 'data_contract', true, 'system@demo', NOW()),
+('03100007-0004-4000-8000-000000000007', '00000005-0004-4000-8000-000000000005', '00400004-0004-4000-8000-000000000004', 'data_contract', true, 'system@demo', NOW()),
+('03100008-0004-4000-8000-000000000008', '00000001-0004-4000-8000-000000000001', '00400005-0004-4000-8000-000000000005', 'data_contract', true, 'system@demo', NOW()),
+('03100009-0004-4000-8000-000000000009', '00000002-0004-4000-8000-000000000002', '00700001-0004-4000-8000-000000000001', 'data_product', true, 'system@demo', NOW()),
+('0310000a-0004-4000-8000-000000000010', '00000003-0004-4000-8000-000000000003', '00700002-0004-4000-8000-000000000002', 'data_product', true, 'system@demo', NOW()),
+('0310000b-0004-4000-8000-000000000011', '00000004-0004-4000-8000-000000000004', '00700003-0004-4000-8000-000000000003', 'data_product', true, 'system@demo', NOW()),
+('0310000c-0004-4000-8000-000000000012', '00000005-0004-4000-8000-000000000005', '00700004-0004-4000-8000-000000000004', 'data_product', true, 'system@demo', NOW()),
+('0310000d-0004-4000-8000-000000000013', '00000001-0004-4000-8000-000000000001', '00700005-0004-4000-8000-000000000005', 'data_product', true, 'system@demo', NOW()),
+('0310000e-0004-4000-8000-000000000014', '00000002-0004-4000-8000-000000000002', '0f300101-0004-4000-8000-000000000001', 'asset', true, 'system@demo', NOW()),
+('0310000f-0004-4000-8000-000000000015', '00000003-0004-4000-8000-000000000003', '0f300102-0004-4000-8000-000000000002', 'asset', true, 'system@demo', NOW()),
+('03100010-0004-4000-8000-000000000016', '00000002-0004-4000-8000-000000000002', '0f300103-0004-4000-8000-000000000003', 'asset', true, 'system@demo', NOW()),
+('03100011-0004-4000-8000-000000000017', '00000005-0004-4000-8000-000000000005', '0f300104-0004-4000-8000-000000000004', 'asset', true, 'system@demo', NOW()),
+('03100012-0004-4000-8000-000000000018', '00000005-0004-4000-8000-000000000005', '0f300105-0004-4000-8000-000000000005', 'asset', true, 'system@demo', NOW()),
+('03100013-0004-4000-8000-000000000019', '00000004-0004-4000-8000-000000000004', '0f300106-0004-4000-8000-000000000006', 'asset', true, 'system@demo', NOW()),
+('03100014-0004-4000-8000-000000000020', '00000005-0004-4000-8000-000000000005', '0f300107-0004-4000-8000-000000000007', 'asset', true, 'system@demo', NOW()),
+('03100015-0004-4000-8000-000000000021', '00000004-0004-4000-8000-000000000004', '0f300108-0004-4000-8000-000000000008', 'asset', true, 'system@demo', NOW()),
+('03100016-0004-4000-8000-000000000022', '00000002-0004-4000-8000-000000000002', '0f520103-0004-4000-8000-000000000003', 'asset', true, 'system@demo', NOW()),
+('03100017-0004-4000-8000-000000000023', '00000002-0004-4000-8000-000000000002', '0f520104-0004-4000-8000-000000000004', 'asset', true, 'system@demo', NOW()),
+('03100018-0004-4000-8000-000000000024', '00000002-0004-4000-8000-000000000002', '0f520105-0004-4000-8000-000000000005', 'asset', true, 'system@demo', NOW()),
+('03100019-0004-4000-8000-000000000025', '00000002-0004-4000-8000-000000000002', '0f520106-0004-4000-8000-000000000006', 'asset', true, 'system@demo', NOW()),
+('0310001a-0004-4000-8000-000000000026', '00000002-0004-4000-8000-000000000002', '0f520107-0004-4000-8000-000000000007', 'asset', true, 'system@demo', NOW()),
+('0310001b-0004-4000-8000-000000000027', '00000002-0004-4000-8000-000000000002', '0f520108-0004-4000-8000-000000000008', 'asset', true, 'system@demo', NOW()),
+('0310001c-0004-4000-8000-000000000028', '00000002-0004-4000-8000-000000000002', '0f520111-0004-4000-8000-000000000011', 'asset', true, 'system@demo', NOW()),
+('0310001d-0004-4000-8000-000000000029', '00000002-0004-4000-8000-000000000002', '0f520112-0004-4000-8000-000000000012', 'asset', true, 'system@demo', NOW()),
+('0310001e-0004-4000-8000-000000000030', '00000002-0004-4000-8000-000000000002', '0f520113-0004-4000-8000-000000000013', 'asset', true, 'system@demo', NOW()),
+('0310001f-0004-4000-8000-000000000031', '00000002-0004-4000-8000-000000000002', '0f520114-0004-4000-8000-000000000014', 'asset', true, 'system@demo', NOW()),
+('03100020-0004-4000-8000-000000000032', '00000002-0004-4000-8000-000000000002', '0f520115-0004-4000-8000-000000000015', 'asset', true, 'system@demo', NOW()),
+('03100021-0004-4000-8000-000000000033', '00000004-0004-4000-8000-000000000004', '0f520121-0004-4000-8000-000000000021', 'asset', true, 'system@demo', NOW()),
+('03100022-0004-4000-8000-000000000034', '00000004-0004-4000-8000-000000000004', '0f520122-0004-4000-8000-000000000022', 'asset', true, 'system@demo', NOW()),
+('03100023-0004-4000-8000-000000000035', '00000004-0004-4000-8000-000000000004', '0f520123-0004-4000-8000-000000000023', 'asset', true, 'system@demo', NOW()),
+('03100024-0004-4000-8000-000000000036', '00000004-0004-4000-8000-000000000004', '0f520124-0004-4000-8000-000000000024', 'asset', true, 'system@demo', NOW()),
+('03100025-0004-4000-8000-000000000037', '00000004-0004-4000-8000-000000000004', '0f520125-0004-4000-8000-000000000025', 'asset', true, 'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;

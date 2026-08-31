@@ -770,6 +770,7 @@ class SchemaImportManager:
                     "logical_type": col_info.logical_type,
                     "nullable": col_info.nullable,
                     "is_primary_key": col_info.is_primary_key,
+                    "is_foreign_key": col_info.is_foreign_key,
                     "is_partition_key": col_info.is_partition_key,
                     "source_path": item.path,
                 }
@@ -794,9 +795,16 @@ class SchemaImportManager:
                                     "logical_type": c.logical_type,
                                     "nullable": c.nullable,
                                     "description": c.description,
+                                    "is_primary_key": c.is_primary_key,
+                                    "is_foreign_key": c.is_foreign_key,
                                     "is_partition_key": c.is_partition_key,
                                 }
                                 for c in (meta.schema_info.columns or [])
+                            ],
+                            "primary_key": meta.schema_info.primary_key,
+                            "foreign_keys": [
+                                fk.model_dump(exclude_none=True)
+                                for fk in (meta.schema_info.foreign_keys or [])
                             ],
                         }
                     if meta.statistics:

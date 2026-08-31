@@ -29,6 +29,7 @@ from src.models.assets import (
     AssetStatistics,
     AssetValidationResult,
     ColumnInfo,
+    ForeignKeyInfo,
     SampleData,
     SchemaInfo,
     UnifiedAssetType,
@@ -526,10 +527,38 @@ class DatabricksConnector(AssetConnector):
     # Get Asset Metadata
     # -------------------------------------------------------------------------
     
+    @staticmethod
+    def _extract_constraints(table) -> tuple[list, list]:
+        """Extract primary-key columns and foreign keys from a UC TableInfo.
+
+        Unity Catalog exposes PK/FK as informational constraints under
+        ``table.table_constraints``; each entry carries a primary_key_constraint
+        or a foreign_key_constraint. Returns ``(pk_columns, foreign_keys)`` where
+        pk_columns is an ordered list of column names and foreign_keys is a list
+        of ForeignKeyInfo. Both are empty when the table has no such constraints.
+        """
+        pk_columns: list = []
+        foreign_keys: list = []
+        for tc in (getattr(table, "table_constraints", None) or []):
+            pk = getattr(tc, "primary_key_constraint", None)
+            if pk and getattr(pk, "child_columns", None):
+                # A table has at most one primary key; keep the first seen.
+                if not pk_columns:
+                    pk_columns = list(pk.child_columns)
+            fk = getattr(tc, "foreign_key_constraint", None)
+            if fk and getattr(fk, "child_columns", None):
+                foreign_keys.append(ForeignKeyInfo(
+                    name=getattr(fk, "name", None),
+                    columns=list(fk.child_columns),
+                    parent_table=getattr(fk, "parent_table", "") or "",
+                    parent_columns=list(getattr(fk, "parent_columns", None) or []),
+                ))
+        return pk_columns, foreign_keys
+
     def get_asset_metadata(self, identifier: str) -> Optional[AssetMetadata]:
         """
         Get detailed metadata for an asset.
-        
+
         The identifier should be a fully qualified name (catalog.schema.name).
         Single-part identifiers are treated as catalogs, two-part as schemas.
         """
@@ -645,10 +674,15 @@ class DatabricksConnector(AssetConnector):
                 UnifiedAssetType.UC_TABLE
             )
             
+            # Extract PK/FK from Unity Catalog informational constraints.
+            pk_columns, foreign_keys = self._extract_constraints(table)
+
             # Build schema info
             schema_info = None
             if table.columns:
                 columns = []
+                pk_set = set(pk_columns)
+                fk_col_set = {c for fk in foreign_keys for c in fk.columns}
                 for col in table.columns:
                     type_name_value = col.type_name.value if col.type_name else None
                     columns.append(ColumnInfo(
@@ -657,11 +691,15 @@ class DatabricksConnector(AssetConnector):
                         logical_type=type_name_value,
                         nullable=col.nullable if col.nullable is not None else True,
                         description=col.comment,
+                        is_primary_key=col.name in pk_set,
+                        is_foreign_key=col.name in fk_col_set,
                         is_partition_key=col.partition_index is not None,
                     ))
-                
+
                 schema_info = SchemaInfo(
                     columns=columns,
+                    primary_key=pk_columns or None,
+                    foreign_keys=foreign_keys,
                     partition_columns=[c.name for c in table.columns if c.partition_index is not None] if table.columns else None,
                 )
             

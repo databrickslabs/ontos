@@ -22,6 +22,8 @@ from src.models.ontology_schema import (
     EntityTypeDefinition,
     EntityTypeSchema,
     RelationshipDefinition,
+    RelationshipDefinitionCreate,
+    RelationshipDefinitionUpdate,
 )
 from src.common.logging import get_logger
 
@@ -58,15 +60,36 @@ JSON_SCHEMA_TYPE_MAP: Dict[str, str] = {
 
 
 def _local_name(iri: str) -> str:
-    """Extract local name from an IRI (fragment or last path segment)."""
+    """Extract local name from an IRI (fragment, last path segment, or urn tail)."""
     _, frag = urldefrag(iri)
     if frag:
         return frag
-    return iri.rsplit("/", 1)[-1] if "/" in iri else iri
+    if "/" in iri:
+        return iri.rsplit("/", 1)[-1]
+    # urn-style IRIs (e.g. urn:ontos:custom-property:ownedByDomain) have no
+    # fragment or path; take the final colon-delimited segment.
+    if ":" in iri:
+        return iri.rsplit(":", 1)[-1]
+    return iri
 
 
 def _str_or_none(val) -> Optional[str]:
     return str(val) if val is not None else None
+
+
+def _slugify_property_name(label: str) -> str:
+    """Derive a camelCase-ish local property name from a human label.
+
+    "Owned By" -> "ownedBy", "relates to" -> "relatesTo". Non-alphanumeric
+    characters split words; the result is a safe local name for an IRI.
+    """
+    import re
+
+    words = [w for w in re.split(r"[^0-9A-Za-z]+", label) if w]
+    if not words:
+        return ""
+    first, *rest = words
+    return first[:1].lower() + first[1:] + "".join(w[:1].upper() + w[1:] for w in rest)
 
 
 class OntologySchemaManager:
@@ -397,6 +420,207 @@ class OntologySchemaManager:
             outgoing=outgoing,
             incoming=incoming,
         )
+
+    # ------------------------------------------------------------------
+    # User-defined relationship CRUD
+    # ------------------------------------------------------------------
+
+    # rdf_triples context holding user-defined (custom) relationships, kept
+    # separate from the read-only ontos-ontology context so Ontos-RDF
+    # relationships can never be mutated through these endpoints.
+    CUSTOM_RELATIONSHIP_CONTEXT = "urn:ontos:custom-relationships"
+    # Namespace for minted custom property IRIs, distinct from the ONTOS
+    # ontology namespace so a user property can never shadow a built-in one.
+    CUSTOM_PROPERTY_NS = "urn:ontos:custom-property:"
+
+    def _class_exists(self, class_iri: str) -> bool:
+        """Whether an IRI denotes a known class in the ontology graph."""
+        cls = URIRef(class_iri)
+        # A class is anything declared as owl:Class / rdfs:Class, annotated with a
+        # model tier, or already used as the domain/range of a property.
+        if (cls, RDF.type, OWL.Class) in self._graph:
+            return True
+        if (cls, RDF.type, RDFS.Class) in self._graph:
+            return True
+        if self._graph.value(cls, ONTOS.modelTier) is not None:
+            return True
+        for _ in self._graph.subjects(RDFS.domain, cls):
+            return True
+        for _ in self._graph.subjects(RDFS.range, cls):
+            return True
+        return False
+
+    def _mint_property_iri(self, property_name: str) -> str:
+        """Mint a unique custom property IRI from a local name."""
+        base = f"{self.CUSTOM_PROPERTY_NS}{property_name}"
+        candidate = base
+        suffix = 2
+        while (URIRef(candidate), RDF.type, OWL.ObjectProperty) in self._graph:
+            candidate = f"{base}-{suffix}"
+            suffix += 1
+        return candidate
+
+    def _is_custom_property(self, db, property_iri: str) -> bool:
+        """Whether a property lives in the user-defined relationship context."""
+        from src.repositories.rdf_triples_repository import rdf_triples_repo
+
+        for triple in rdf_triples_repo.list_by_subject(db, property_iri):
+            if triple.context_name == self.CUSTOM_RELATIONSHIP_CONTEXT:
+                return True
+        return False
+
+    def _relationship_definition(self, property_iri: str, lang: Optional[str] = None) -> RelationshipDefinition:
+        """Build a RelationshipDefinition for a (custom) property from the graph."""
+        prop = URIRef(property_iri)
+        domain = self._graph.value(prop, RDFS.domain)
+        rng = self._graph.value(prop, RDFS.range)
+        ui_label = _str_or_none(self._graph.value(prop, ONTOS.uiLabel))
+        rdfs_label = _str_or_none(self._graph.value(prop, RDFS.label))
+        return RelationshipDefinition(
+            property_iri=property_iri,
+            property_name=_local_name(property_iri),
+            label=ui_label or rdfs_label or _local_name(property_iri),
+            inverse_label=_str_or_none(self._graph.value(prop, ONTOS.inverseLabel)),
+            source_type_iri=str(domain) if domain else "",
+            source_type_label=self._get_label(domain, RDFS.label, lang) if domain else None,
+            target_type_iri=str(rng) if rng else "",
+            target_type_label=self._get_label(rng, RDFS.label, lang) if rng else None,
+            cardinality=_str_or_none(self._graph.value(prop, ONTOS.cardinality)) or "0..*",
+            display_context=_str_or_none(self._graph.value(prop, ONTOS.uiDisplayContext)) or "tab",
+            direction="outgoing",
+        )
+
+    def list_custom_relationships(self, lang: Optional[str] = None) -> List[RelationshipDefinition]:
+        """List all user-defined relationships (from the custom context)."""
+        from src.repositories.rdf_triples_repository import rdf_triples_repo
+
+        db = self._smm._db
+        prop_iris: set = set()
+        for triple in rdf_triples_repo.list_by_context(db, self.CUSTOM_RELATIONSHIP_CONTEXT):
+            if triple.predicate_uri == str(RDF.type) and triple.object_value == str(OWL.ObjectProperty):
+                prop_iris.add(triple.subject_uri)
+        return [self._relationship_definition(iri, lang) for iri in sorted(prop_iris)]
+
+    def create_relationship(
+        self,
+        data: "RelationshipDefinitionCreate",
+        created_by: Optional[str] = None,
+    ) -> RelationshipDefinition:
+        """Create a user-defined relationship between two ontology classes.
+
+        Persists an owl:ObjectProperty (with rdfs:domain/range plus UI annotations)
+        into the custom-relationship context, then rebuilds the shared graph so the
+        new relationship is immediately visible via get_relationships().
+        """
+        from src.repositories.rdf_triples_repository import rdf_triples_repo
+
+        source_iri = self.resolve_type_iri(data.source_type_iri)
+        target_iri = self.resolve_type_iri(data.target_type_iri)
+
+        if not self._class_exists(source_iri):
+            raise ValueError(f"Unknown source type: {source_iri}")
+        if not self._class_exists(target_iri):
+            raise ValueError(f"Unknown target type: {target_iri}")
+
+        property_name = data.property_name or _slugify_property_name(data.label)
+        if not property_name:
+            raise ValueError("Could not derive a property name from the label")
+
+        db = self._smm._db
+        property_iri = self._mint_property_iri(property_name)
+
+        triples = [
+            (property_iri, str(RDF.type), str(OWL.ObjectProperty), True, ""),
+            (property_iri, str(RDFS.domain), source_iri, True, ""),
+            (property_iri, str(RDFS.range), target_iri, True, ""),
+            (property_iri, str(RDFS.label), data.label, False, ""),
+            (property_iri, str(ONTOS.uiLabel), data.label, False, ""),
+            (property_iri, str(ONTOS.cardinality), data.cardinality, False, ""),
+            (property_iri, str(ONTOS.uiDisplayContext), data.display_context, False, ""),
+        ]
+        if data.inverse_label:
+            triples.append((property_iri, str(ONTOS.inverseLabel), data.inverse_label, False, ""))
+
+        for subj, pred, obj, is_uri, lang in triples:
+            rdf_triples_repo.add_triple(
+                db,
+                subject_uri=subj,
+                predicate_uri=pred,
+                object_value=obj,
+                object_is_uri=is_uri,
+                object_language=lang,
+                context_name=self.CUSTOM_RELATIONSHIP_CONTEXT,
+                source_type="custom-relationship",
+                source_identifier=property_iri,
+                created_by=created_by,
+            )
+
+        self._smm.rebuild_graph_from_enabled()
+        return self._relationship_definition(property_iri)
+
+    def update_relationship(
+        self,
+        property_iri: str,
+        data: "RelationshipDefinitionUpdate",
+    ) -> RelationshipDefinition:
+        """Update editable attributes of a user-defined relationship.
+
+        Only relationships in the custom context may be updated; domain and range
+        are immutable (delete and recreate to re-point a relationship).
+        """
+        from src.repositories.rdf_triples_repository import rdf_triples_repo
+
+        db = self._smm._db
+        if not self._is_custom_property(db, property_iri):
+            raise ValueError(f"Not a user-defined relationship: {property_iri}")
+
+        # Replace each changed annotation: drop the old triple(s), add the new.
+        updates: List[tuple] = []
+        if data.label is not None:
+            updates.append((str(RDFS.label), data.label))
+            updates.append((str(ONTOS.uiLabel), data.label))
+        if data.inverse_label is not None:
+            updates.append((str(ONTOS.inverseLabel), data.inverse_label))
+        if data.cardinality is not None:
+            updates.append((str(ONTOS.cardinality), data.cardinality))
+        if data.display_context is not None:
+            updates.append((str(ONTOS.uiDisplayContext), data.display_context))
+
+        for predicate, value in updates:
+            rdf_triples_repo.remove_by_subject_predicate(
+                db,
+                subject_uri=property_iri,
+                predicate_uri=predicate,
+                context_name=self.CUSTOM_RELATIONSHIP_CONTEXT,
+            )
+            rdf_triples_repo.add_triple(
+                db,
+                subject_uri=property_iri,
+                predicate_uri=predicate,
+                object_value=value,
+                object_is_uri=False,
+                context_name=self.CUSTOM_RELATIONSHIP_CONTEXT,
+                source_type="custom-relationship",
+                source_identifier=property_iri,
+            )
+
+        self._smm.rebuild_graph_from_enabled()
+        return self._relationship_definition(property_iri)
+
+    def delete_relationship(self, property_iri: str) -> None:
+        """Delete a user-defined relationship. Ontos-RDF relationships are read-only."""
+        from src.repositories.rdf_triples_repository import rdf_triples_repo
+
+        db = self._smm._db
+        if not self._is_custom_property(db, property_iri):
+            raise ValueError(f"Not a user-defined relationship: {property_iri}")
+
+        rdf_triples_repo.remove_by_subject(
+            db,
+            subject_uri=property_iri,
+            context_name=self.CUSTOM_RELATIONSHIP_CONTEXT,
+        )
+        self._smm.rebuild_graph_from_enabled()
 
     # ------------------------------------------------------------------
     # Hierarchy Relationships (instance-level)

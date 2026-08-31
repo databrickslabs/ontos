@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 import json # For parsing stringified lists
 
+from .common import OptionalIdMixin
 from .tags import AssignedTag, AssignedTagCreate
 
 # --- Basic Info Model (New) --- #
@@ -28,8 +29,9 @@ class DataDomainBase(BaseModel):
         return v
 
 # --- Create Model --- #
-class DataDomainCreate(DataDomainBase):
-    # No extra fields needed for creation beyond Base + who is creating it (captured in manager)
+class DataDomainCreate(OptionalIdMixin, DataDomainBase):
+    # Inherits an optional caller-provided `id` (API only) from OptionalIdMixin;
+    # created_by is captured in the manager.
     pass
 
 # --- Update Model --- #

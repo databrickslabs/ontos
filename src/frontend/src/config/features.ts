@@ -64,7 +64,7 @@ import {
       description: 'Browse Unity Catalog assets, search columns, and analyze lineage.',
       icon: BookOpen,
       group: 'Discover',
-      maturity: 'beta',
+      maturity: 'ga',
       showInLanding: true,
     },
     // Build - Create and manage data assets
@@ -75,7 +75,7 @@ import {
       description: 'Catalog and manage data and analytics assets with identity, metadata, and relationships.',
       icon: Box,
       group: 'Build',
-      maturity: 'beta',
+      maturity: 'ga',
       showInLanding: true,
     },
     {

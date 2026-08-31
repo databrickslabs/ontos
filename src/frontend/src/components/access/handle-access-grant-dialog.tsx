@@ -157,8 +157,8 @@ export default function HandleAccessGrantDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[560px] flex flex-col max-h-[85vh] overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
             Handle Access Request
@@ -168,7 +168,7 @@ export default function HandleAccessGrantDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-y-auto px-1 -mx-1">
           {/* Request Details */}
           <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
             <div className="flex items-center gap-2">
@@ -287,7 +287,7 @@ export default function HandleAccessGrantDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row">
+        <DialogFooter className="gap-2 sm:gap-2 flex-col sm:flex-row shrink-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

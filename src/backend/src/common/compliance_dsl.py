@@ -79,6 +79,8 @@ class TokenType(Enum):
     IDENTIFIER = "IDENTIFIER"
     STRING = "STRING"
     NUMBER = "NUMBER"
+    TRUE = "TRUE"
+    FALSE = "FALSE"
 
     # Punctuation
     LPAREN = "("
@@ -111,7 +113,8 @@ class Lexer:
         'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         'MATCHES', 'IN', 'CONTAINS', 'AND', 'OR', 'NOT',
         'HAS_TAG', 'TAG', 'LENGTH', 'UPPER', 'LOWER',
-        'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY'
+        'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY',
+        'TRUE', 'FALSE'
     }
 
     def __init__(self, text: str):
@@ -390,6 +393,15 @@ class Parser:
         if token.type == TokenType.NUMBER:
             self.advance()
             return Literal(token.value)
+
+        # Boolean literals (case-insensitive: True/False/true/false)
+        if token.type == TokenType.TRUE:
+            self.advance()
+            return Literal(True)
+
+        if token.type == TokenType.FALSE:
+            self.advance()
+            return Literal(False)
 
         # List literal
         if token.type == TokenType.LBRACKET:

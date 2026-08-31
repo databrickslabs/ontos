@@ -14,8 +14,22 @@ from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
 
-# Add parent directory to path to enable imports from src.*
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Bootstrap the backend ``src`` root onto sys.path for the workflow's lazy
+# ``from src.*`` imports (they run inside the functions below, so importing this
+# module never needs it). On Databricks serverless the script runs via
+# exec(compile(...)) with ``__file__`` unbound, so ``Path(__file__)`` raised
+# NameError at import (issue #685). With ``__file__`` present, behaviour is
+# unchanged; on serverless we insert nothing rather than guess a path from cwd
+# (which could mask packages) and rely on the runtime env / PYTHONPATH.
+_entry_file = globals().get("__file__")
+if _entry_file is not None:
+    try:
+        sys.path.insert(0, str(Path(_entry_file).parent.parent.parent))
+    except Exception as _exc:  # pragma: no cover - defensive; must never abort import
+        # Narrowly guarded so a surprising failure is diagnosable but never
+        # crashes module load. Use print because the logging stack isn't wired
+        # up at this point (matches the rest of this script's stdout logging).
+        print(f"WARNING: compliance_checks sys.path bootstrap failed: {_exc}", file=sys.stderr)
 
 from sqlalchemy import text, create_engine
 from sqlalchemy.engine import Engine

@@ -27,7 +27,7 @@
     "postcss": "^8.5.26",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.2.8",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

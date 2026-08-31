@@ -9,6 +9,7 @@ from pydantic import ValidationError
 import json
 import uuid
 from sqlalchemy.orm import Session
+from src.common.authorization import is_user_feature_admin, is_user_feature_write
 
 from src.controller.data_products_manager import DataProductsManager
 from src.models.data_products import (
@@ -1765,10 +1766,13 @@ async def get_data_products(
         user_groups = current_user.groups if current_user else []
         caller_email = current_user.email if current_user else None
         is_admin = await is_user_feature_admin(
-            user_email=caller_email,
-            user_groups=user_groups,
-            feature_id=DATA_PRODUCTS_FEATURE_ID,
-            request=request,
+            user_email=caller_email, user_groups=user_groups,
+            feature_id=DATA_PRODUCTS_FEATURE_ID, request=request,
+        )
+
+        caller_can_write = is_admin or await is_user_feature_write(
+            user_email=caller_email, user_groups=user_groups,
+            feature_id=DATA_PRODUCTS_FEATURE_ID, request=request,
         )
 
         logger.info(f"User {current_user.email if current_user else 'unknown'} is_admin: {is_admin}")
@@ -1818,6 +1822,7 @@ async def get_data_products(
             caller_email=caller_email,
             caller_team_ids=caller_team_ids,
             caller_project_ids=caller_project_ids,
+            caller_can_write=caller_can_write,
             include_history=include_history,
         )
         if wanted_domains:

@@ -589,10 +589,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             )
 
             if not is_admin:
-                # Build ownership-scope filter from caller context. Each clause
-                # is appended only when the corresponding input is populated so
-                # we never produce a SQL-level ``IN ()`` (which Postgres rejects
-                # and SQLite treats as always-false anyway).
+                from src.common.version_visibility import PUBLISHED_STATUSES
+
                 scope_clauses = []
                 if caller_project_ids:
                     scope_clauses.append(self.model.project_id.in_(caller_project_ids))
@@ -601,24 +599,19 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 if caller_email:
                     scope_clauses.append(self.model.draft_owner_id == caller_email)
 
-                if not scope_clauses:
-                    # Fail-closed: non-admin with no resolvable scope sees
-                    # nothing. This is the safe behavior when route hasn't
-                    # plumbed scope through (back-compat call sites), or when
-                    # the caller genuinely owns no project/team/draft.
-                    logger.debug(
-                        "Non-admin caller has no scope (no email/teams/projects); "
-                        "returning empty list (fail-closed)"
-                    )
-                    return []
+                # Published products (active/deprecated) are visible to every non-admin
+                # caller regardless of project/team/ownership — without this, published
+                # products unrelated to the caller's project/team never reach the
+                # Python-side is_visible_consumer filter in list_products because they'd
+                # never be fetched from the DB at all.
+                scope_clauses.append(self.model.status.in_(list(PUBLISHED_STATUSES)))
 
+                # scope_clauses can no longer be empty (the published clause is always
+                # present), so the prior fail-closed empty-list branch is unreachable —
+                # that's intentional; a non-admin with zero project/team/draft overlap
+                # still sees published products.
                 query = query.filter(or_(*scope_clauses))
 
-                # Optional fast-path narrowing by query-param project_id.
-                # Applied ON TOP of the scope filter (an AND), not in place of
-                # it. We keep the legacy "null project_id" allowance so users
-                # can still see legacy products they own via team/email even
-                # when filtering by a specific project.
                 if project_id:
                     logger.debug(f"Additionally filtering products by project_id query param: {project_id}")
                     query = query.filter(
@@ -628,7 +621,6 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         )
                     )
             elif project_id:
-                # Admin with explicit project filter — keep prior semantics
                 logger.debug(f"Admin filtering products by project_id: {project_id}")
                 query = query.filter(
                     or_(

@@ -50,6 +50,55 @@ def is_user_admin(user_groups: Optional[List[str]], settings: Settings) -> bool:
         logger.error("Error parsing APP_ADMIN_DEFAULT_GROUPS: %s", e)
         # Fallback to simple check
         return "admins" in [g.lower() for g in user_groups]
+    
+async def is_user_feature_write(
+    user_email: Optional[str],
+    user_groups: Optional[List[str]],
+    feature_id: str,
+    request: Request,
+) -> bool:
+    """Return True if the user has at least READ_WRITE on the given feature.
+
+    Mirrors is_user_feature_admin's resolution order (team-role override →
+    applied-role override → group-based merge) but checks READ_WRITE via
+    auth_manager.has_permission's own level ordering rather than exact
+    equality to ADMIN.
+    """
+    if not user_email:
+        return False
+    try:
+        auth_manager: Optional[AuthorizationManager] = getattr(
+            request.app.state, "authorization_manager", None
+        )
+        settings_manager: Optional[SettingsManager] = getattr(
+            request.app.state, "settings_manager", None
+        )
+        if auth_manager is None:
+            return False
+
+        team_role_override = await get_user_team_role_overrides(
+            user_email, user_groups or [], request
+        )
+
+        applied_role_id: Optional[str] = None
+        if settings_manager is not None:
+            try:
+                applied_role_id = settings_manager.get_applied_role_override_for_user(user_email)
+            except Exception:
+                applied_role_id = None
+
+        if applied_role_id and settings_manager is not None:
+            effective = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+        else:
+            effective = auth_manager.get_user_effective_permissions(user_groups or [], team_role_override)
+
+        return auth_manager.has_permission(effective, feature_id, FeatureAccessLevel.READ_WRITE)
+    except Exception:
+        logger.exception(
+            "is_user_feature_write: failed to resolve write access for user '%s' on feature '%s'; "
+            "falling back to False", user_email, feature_id,
+        )
+        return False
 
 
 async def is_user_feature_admin(

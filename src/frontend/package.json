@@ -47,7 +47,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "cytoscape": "^3.33.1",
+    "cytoscape": "^3.34.2",
     "date-fns": "^4.4.0",
     "framer-motion": "12.43.0",
     "i18next": "^25.5.3",

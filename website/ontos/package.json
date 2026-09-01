@@ -15,7 +15,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@docusaurus/core": "3.9.2",
+    "@docusaurus/core": "3.10.2",
     "@docusaurus/preset-classic": "^3.9.2",
     "@mdx-js/react": "^3.0.0",
     "@tailwindcss/postcss": "^4.3.3",
@@ -27,7 +27,7 @@
     "postcss": "^8.5.26",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.2.8",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

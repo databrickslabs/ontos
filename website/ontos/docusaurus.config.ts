@@ -32,7 +32,7 @@ const config: Config = {
   onBrokenMarkdownLinks: 'throw',
   onDuplicateRoutes: 'throw',
   onBrokenAnchors: 'throw',
-  deploymentBranch: 'ontos-website',
+  deploymentBranch: 'ontos-docs',
   trailingSlash: false,
 
   // Even if you don't use internationalization, you can use this field to set

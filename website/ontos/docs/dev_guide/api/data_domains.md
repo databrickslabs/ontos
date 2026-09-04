@@ -280,5 +280,5 @@ Domains appear in other route groups as filters or sub-collections:
 
 ## See also
 
-- [Organize with Domains](../../user_guide/domains) — the user-facing guide.
+- [Organize with Domains](../../user_guide/basic_elements) — the user-facing guide.
 - [Core Concepts](../../introduction/concepts) — how domains relate to other Ontos entities.

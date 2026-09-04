@@ -1571,7 +1571,7 @@ Returns an Ontos team's members formatted for the contract's ODCS `team` array, 
 
 ## See also
 
-- [Define Data Contracts](../../user_guide/data_contracts) — the user-facing guide, including the lifecycle diagram and a sample ODCS document.
+- [Define Data Contracts](../../user_guide/basic_elements) — the user-facing guide, including the lifecycle diagram and a sample ODCS document.
 - [Data Products API](./data_products) — products reference contracts through their output ports.
 - [Tags API](./tags) — namespaced tags applied to contracts.
 - [Costs API](./costs) — attach cost items using entity type `data_contract`.

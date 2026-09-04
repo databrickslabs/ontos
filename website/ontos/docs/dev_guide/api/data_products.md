@@ -1329,7 +1329,7 @@ Starts creation of a Databricks Genie Space seeded with the selected products' d
 
 ## See also
 
-- [Create Data Products](../../user_guide/data_products) — the user-facing guide.
+- [Create Data Products](../../user_guide/basic_elements) — the user-facing guide.
 - [Data Contracts API](./data_contracts) — the contracts that govern output ports.
 - [Tags API](./tags) — namespaced tags applied to products.
 - [Costs API](./costs) — attach cost items using entity type `data_product`.

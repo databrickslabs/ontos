@@ -67,7 +67,6 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           exclude: ['admin_guide/jobs_workflows.md',
-            'faq.md',
             'admin_guide/personas.md',
             'admin_guide/previews.md',
             'admin_guide/roles.md',

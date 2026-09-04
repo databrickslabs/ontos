@@ -399,4 +399,4 @@ Sends a notification to the members of the project's teams asking them to grant 
 - [Teams API](./teams) — the teams you assign to projects.
 - [Data Contracts API](./data_contracts#list-data-contracts) — filter contracts with `project_id`.
 - [Data Products API](./data_products#list-data-products) — filter products with `project_id`.
-- [Projects and Teams](../../user_guide/projects_teams) — the user-facing guide.
+- [Projects and Teams](../../user_guide/basic_elements) — the user-facing guide.

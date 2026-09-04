@@ -414,4 +414,4 @@ Returns all teams assigned to a specific domain. Equivalent to `GET /api/teams?d
 
 - [Projects API](./projects) — assigning teams to projects.
 - [Data Domains API](./data_domains) — the domains teams are assigned to.
-- [Projects and Teams](../../user_guide/projects_teams) — the user-facing guide.
+- [Projects and Teams](../../user_guide/basic_elements) — the user-facing guide.

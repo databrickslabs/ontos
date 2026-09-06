@@ -39,7 +39,7 @@
   "relations": {
     "title": "Relations",
     "loading": "Loading relations...",
-    "empty": "No relations found.",
+    "empty": "No concept-to-concept relations yet. Add broader / narrower / related links, or see the Linked Objects panel for assets and products linked to this concept.",
     "outgoingTooltip": "This concept → target",
     "incomingTooltip": "Source → this concept"
   },
@@ -52,9 +52,23 @@
     "groupBySource": "Group by Source",
     "showProperties": "Show Properties",
     "groupByDomain": "Group by Domain",
+    "groupByNone": "None",
+    "groupByScheme": "Scheme",
+    "groupByDimSource": "Source",
+    "groupByDimDomain": "Domain",
+    "noSourceFile": "No source file",
     "allTypes": "All Types",
     "allScopes": "All Scopes",
-    "allCollections": "All Collections"
+    "allCollections": "All Collections",
+    "searchSchemes": "Search schemes...",
+    "sortBy": "Sort by",
+    "sortName": "Name",
+    "sortSize": "Size",
+    "groupTypeGlossary": "GLOSSARIES",
+    "groupTypeTaxonomy": "TAXONOMIES",
+    "groupTypeOntology": "ONTOLOGIES",
+    "groupTypeOther": "OTHER",
+    "importedDisable": "Imported — cannot delete"
   },
   "groupBy": {
     "collection": "By Collection",
@@ -91,6 +105,10 @@
     "conceptUpdated": "Concept updated successfully",
     "conceptDeleted": "Concept deleted successfully",
     "submittedForReview": "Concept submitted for review",
+    "submitReview": "Submitted for review",
+    "submitReviewGoverned": "Submitted for review — awaiting approval.",
+    "changesRequested": "Sent back to the owner with your comment.",
+    "withdrawReview": "Review withdrawn",
     "enterReviewerEmail": "Enter reviewer email address:",
     "conceptPromoted": "Concept promoted successfully",
     "conceptMigrated": "Concept migrated successfully",
@@ -98,7 +116,8 @@
     "noConceptsFound": "No concepts found",
     "selectConcept": "Select a concept to view details",
     "linkAdded": "Link added successfully",
-    "linkRemoved": "Link removed successfully"
+    "linkRemoved": "Link removed successfully",
+    "statusChanged": "Status updated"
   },
   "status": {
     "draft": "Draft",
@@ -134,7 +153,8 @@
     "childConcepts": "Child Concepts",
     "scope": "Scope",
     "concepts": "Concepts",
-    "source": "Source"
+    "source": "Source",
+    "sourceFile": "Imported from"
   },
   "form": {
     "createTitle": "Create Term",
@@ -185,10 +205,71 @@
       "title": "Delete Concept",
       "description": "Are you sure you want to delete \"{{label}}\"? This action cannot be undone. Only draft concepts can be deleted."
     },
+    "deleteScheme": {
+      "title": "Delete Scheme",
+      "description": "Are you sure you want to delete \"{{label}}\"? This will delete all concepts in this scheme and cannot be undone."
+    },
     "linkEditor": {
       "title": "Create Link",
       "description": "Define a relationship between two concepts"
+    },
+    "deprecate": {
+      "title": "Deprecate concept",
+      "description": "Optionally specify one or more successor concepts to indicate what this concept was replaced by.",
+      "successors": "Successor concepts",
+      "noSuccessors": "None selected",
+      "addSuccessor": "+ Add successor"
     }
+  },
+  "lifecycle": {
+    "changeStatus": "Change status",
+    "submitReview": "Submit for review",
+    "withdrawReview": "Withdraw Review",
+    "approve": "Approve",
+    "requestChanges": "Request changes",
+    "publish": "Publish",
+    "certify": "Certify",
+    "deprecate": "Deprecate",
+    "archive": "Archive"
+  },
+  "requestChanges": {
+    "title": "Request changes",
+    "description": "Send this concept back to the owner as a draft, with your comment.",
+    "comment": "Comment for the owner",
+    "placeholder": "What should change before this can be approved?",
+    "submit": "Send back"
+  },
+  "submitReview": {
+    "title": "Submit for Review",
+    "description": "Assign an optional reviewer and add notes.",
+    "reviewer": "Reviewer (optional)",
+    "reviewerPlaceholder": "Select a reviewer...",
+    "notes": "Notes (optional)",
+    "notesPlaceholder": "Add context or instructions...",
+    "submit": "Submit",
+    "checking": "Checking for approval workflow…",
+    "governedBanner": "This concept is governed by the '{{workflow}}' approval workflow. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.",
+    "governedBannerMulti": "This concept is governed by {{count}} approval workflows. Submitting will start that approval — it moves to Under Review and awaits approver sign-off.",
+    "ungovernedBanner": "No approval workflow is attached. Submitting moves this concept straight to Under Review; any user with write access can then approve it."
+  },
+  "concept": {
+    "inReview": "In Review",
+    "reviewerComment": "Reviewer comment",
+    "sparql": "SPARQL",
+    "sparqlTitle": "SPARQL query",
+    "sparqlDescription": "Query the knowledge graph. Pre-seeded with this concept."
+  },
+  "hierarchy": {
+    "title": "Hierarchy",
+    "parent": "Parent",
+    "children": "Children",
+    "none": "No broader or narrower concepts.",
+    "viewLabel": "Hierarchy view",
+    "list": "List",
+    "graph": "Graph"
+  },
+  "versionDiff": {
+    "compare": "Compare"
   },
   "rdfSources": {
     "syntaxColumn": "Syntax",
@@ -217,5 +298,64 @@
       "appEntities": "App Entities",
       "demoGraph": "Demo business concepts"
     }
+  },
+  "versionHistory": {
+    "title": "Version history",
+    "saveNewVersion": "Save new version",
+    "saveDescription": "Edit the definition and save it as a new version. The previous definition is kept in the history.",
+    "willCreate": "This will create v{{next}}.",
+    "whatChanged": "What changed?",
+    "notePlaceholder": "e.g. tightened the wording for clarity",
+    "saved": "New version saved",
+    "current": "Current",
+    "previous": "Previous version",
+    "previousDefinition": "Previous definition:",
+    "noDefinition": "No definition recorded for this version.",
+    "editedBy": "Edited by {{who}} on {{when}}",
+    "unknownEditor": "someone",
+    "none": "No previous versions yet.",
+    "unavailable": "Version history is unavailable.",
+    "replacedBy": "Replaced by {{label}}",
+    "saveNewVersionDraftLocked": "Available after this concept is approved (v1 must be approved before a new version)."
+  },
+  "import": {
+    "title": "Import files",
+    "descriptionMulti": "Drop one or more ontology files, then choose how they land. The file is just a carrier.",
+    "sourceFiles": "Source files",
+    "addMoreFiles": "Add more files…",
+    "chooseFiles": "Choose files…",
+    "supportedFormats": "Supported: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "howLand": "How should these land?",
+    "oneScheme": "One scheme",
+    "oneSchemeDesc": "Merge every file into a single concept scheme.",
+    "oneSchemePerFile": "One scheme per file",
+    "oneSchemePerFileDesc": "Each file becomes its own concept scheme.",
+    "perFileTodo": "One-scheme-per-file needs a backend that creates a scheme per file; for now all files land in the collection below.",
+    "targetCollection": "Target concept scheme",
+    "selectCollection": "Select a collection…",
+    "createNewScheme": "＋ Create a new scheme…",
+    "newSchemeName": "New scheme name (e.g. Finance Ontology)",
+    "noEditableCollections": "No editable collections available. Create one first.",
+    "reconcileNote": "Overlapping or duplicate terms across schemes are reconciled later in the Review Board. Import just brings the graph in.",
+    "summary": "Imported {{files}} file(s), {{count}} triples total.",
+    "summaryPending": "Upload submitted for approval ({{files}} file(s))",
+    "fileOk": "{{count}} triples",
+    "filePending": "Pending approval",
+    "allFailed": "No files could be imported. See per-file errors below.",
+    "computingDiff": "Computing changes…",
+    "changelogTitle": "Changes applied from {{file}}",
+    "previewTitle": "Changes from {{file}}",
+    "changelogSummary": "Modifies {{modified}}, adds {{added}}, removes {{removed}} ({{unchanged}} unchanged).",
+    "bucketModified": "Modified (new version)",
+    "bucketNew": "New",
+    "bucketRemoved": "Removed (deprecated, not deleted)",
+    "stillReferenced": "used by {{count}}",
+    "submitMulti": "Import {{count}} file(s)",
+    "conflict": {
+      "alreadyIn": "Already in {{scheme}}"
+    }
+  },
+  "columns": {
+    "fromFile": "from {{file}}"
   }
 }

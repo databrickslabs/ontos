@@ -38,6 +38,11 @@ export function getEntityDetailPathFromPayload(
   if (entityType === 'data_contract' || entityType === 'datacontract') {
     return `/data-contracts/${entityId}`;
   }
+  if (entityType === 'ontology_concept' || entityType === 'concept') {
+    // The concept IRI is carried as the entity_id; the concept browser route
+    // takes the encoded IRI as a path segment (see concept-detail.tsx).
+    return `/concepts/browser/${encodeURIComponent(entityId)}`;
+  }
   return null;
 }
 

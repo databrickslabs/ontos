@@ -190,7 +190,7 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_create": ["catalog", "schema", "table", "data_contract", "data_product", "domain"],
     "on_update": ["data_contract", "data_product", "domain"],
     "on_delete": ["data_contract", "data_product", "domain"],
-    "on_status_change": ["data_contract", "data_product", "data_asset_review"],
+    "on_status_change": ["data_contract", "data_product", "data_asset_review", "ontology_concept"],
     "on_publish": ["data_contract", "data_product"],
     "on_unpublish": ["data_contract", "data_product"],
     "on_certify": ["data_contract", "data_product"],
@@ -204,7 +204,11 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "on_request_access": ["access_grant", "project", "role"],
     "on_request_publish": ["data_contract", "data_product"],
     "on_request_certify": ["data_contract", "data_product"],
-    "on_request_status_change": ["data_product"],
+    # Concept curation: ontology_concept = single-concept Request Revision / review
+    # ping-pong (P2). concept_changeset (bulk RDF upload gate, P3) is intentionally
+    # NOT selectable — Scenario D (2026-08-18) disabled the gate; all file uploads
+    # land as Draft and follow per-concept review. Re-add if gating is re-opened.
+    "on_request_status_change": ["data_product", "ontology_concept"],
     "on_subscribe": ["subscription", "data_product", "data_contract"],
     "on_unsubscribe": ["subscription", "data_product", "data_contract"],
     "on_revoke": ["access_grant"],
@@ -217,7 +221,8 @@ _TRIGGER_ENTITY_TYPES: Dict[str, List[str]] = {
     "for_request_review": ["data_contract", "data_product", "data_asset_review"],
     "for_request_publish": ["data_contract", "data_product"],
     "for_request_certify": ["data_contract", "data_product"],
-    "for_request_status_change": ["data_product"],
+    # concept_changeset dropped here too — Scenario D disabled the bulk-upload gate.
+    "for_request_status_change": ["data_product", "ontology_concept"],
     "for_approval_response": [],  # system trigger — any entity
     # Background jobs
     "on_job_success": ["job"],
@@ -587,11 +592,26 @@ WIZARD_PERMISSION_DISPATCH: Dict[str, Optional[tuple]] = {
 }
 
 
+# Entity-aware overrides for wizards whose "owning feature" depends on the
+# entity being acted on, not just the trigger type. `for_request_status_change`
+# is shared by data products (data-products feature) and ontology concepts
+# (semantic-models feature) — a concept steward with semantic-models:READ_WRITE
+# but no data-products write must not be 403'd when resolving/running the
+# concept review wizard. Keyed on (trigger_type, entity_type); falls through to
+# WIZARD_PERMISSION_DISPATCH when no override matches, so product behavior is
+# unchanged.
+_WIZARD_ENTITY_PERMISSION_OVERRIDES: Dict[tuple, tuple] = {
+    (TriggerType.FOR_REQUEST_STATUS_CHANGE.value, "ontology_concept"):
+        ("semantic-models", FeatureAccessLevel.READ_WRITE),
+}
+
+
 async def enforce_wizard_permission(
     trigger_type: str,
     user_details: UserInfo,
     request: Request,
     *,
+    entity_type: Optional[str] = None,
     raise_on_unknown: bool = True,
 ) -> None:
     """Enforce the per-trigger permission gate from ``WIZARD_PERMISSION_DISPATCH``.
@@ -603,7 +623,16 @@ async def enforce_wizard_permission(
     If ``trigger_type`` isn't in the dispatch and ``raise_on_unknown`` is True
     (default), raises 400. Set to False for callers that have already
     validated the trigger (e.g. session handlers reading a stored workflow).
+
+    ``entity_type`` selects an entity-aware gate for triggers shared across
+    entities (see ``_WIZARD_ENTITY_PERMISSION_OVERRIDES``). When no override
+    matches, the per-trigger default from ``WIZARD_PERMISSION_DISPATCH`` is used.
     """
+    override = _WIZARD_ENTITY_PERMISSION_OVERRIDES.get((trigger_type, entity_type))
+    if override is not None:
+        feature_id, required_level = override
+        await enforce_feature_permission(feature_id, required_level, user_details, request)
+        return
     if trigger_type not in WIZARD_PERMISSION_DISPATCH:
         if raise_on_unknown:
             raise HTTPException(
@@ -644,7 +673,9 @@ async def get_workflow_for_trigger(
             detail=f"Invalid trigger_type. Allowed: {sorted(APP_ACTION_TRIGGER_TYPES)}",
         )
     # Per-trigger permission check — replaces the blanket settings:READ_ONLY gate.
-    await enforce_wizard_permission(trigger_type, user_details, request)
+    # entity_type selects the entity-aware gate for shared triggers (e.g.
+    # for_request_status_change on ontology_concept -> semantic-models).
+    await enforce_wizard_permission(trigger_type, user_details, request, entity_type=entity_type)
     workflow = manager.get_workflow_by_trigger_type(trigger_type, entity_type=entity_type)
     if not workflow:
         raise HTTPException(
@@ -687,7 +718,23 @@ async def get_workflow(
     if is_approval and trigger_type and trigger_type in WIZARD_PERMISSION_DISPATCH:
         # Reuse PR A's dispatch — None entries (e.g. on_first_access)
         # short-circuit to authenticated-only.
-        await enforce_wizard_permission(trigger_type, user_details, request, raise_on_unknown=False)
+        # For entity-aware triggers, derive the workflow's own entity_type so a
+        # concept-only approval workflow gets the semantic-models gate rather
+        # than the data-products default. A concept-only workflow declares
+        # 'ontology_concept' (and not 'data_product') in trigger.entity_types.
+        entity_types = (workflow.trigger.entity_types or []) if workflow.trigger else []
+        entity_types = [
+            (et.value if hasattr(et, "value") else et) for et in entity_types
+        ]
+        wf_entity_type = (
+            "ontology_concept"
+            if "ontology_concept" in entity_types and "data_product" not in entity_types
+            else None
+        )
+        await enforce_wizard_permission(
+            trigger_type, user_details, request,
+            entity_type=wf_entity_type, raise_on_unknown=False,
+        )
     else:
         # Process workflows, or approval workflows whose trigger isn't in
         # the dispatch table — keep the original admin-config gate.

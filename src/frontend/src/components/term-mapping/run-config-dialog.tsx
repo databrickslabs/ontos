@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Info } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import {
@@ -17,8 +17,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { useConceptMode, ConceptModeSwitch } from '@/components/concepts/mode-switch';
 
 import type {
   Run,
@@ -30,26 +37,20 @@ import {
   TARGET_ENTITY_TYPE_LABELS,
 } from '@/types/term-mapping';
 
-interface SemanticModelLite {
-  id: string;
-  name: string;
-  display_name?: string | null;
-  enabled?: boolean;
-}
-
-interface SemanticModelsResponse {
-  semantic_models: SemanticModelLite[];
-}
-
 /**
- * The /api/semantic-models endpoint returns DB-backed customer models AND
- * file/schema taxonomies in one list. File/schema rows use synthetic IDs
- * prefixed with `file-` (see backend route); only the un-prefixed ones are
- * persisted in the `semantic_models` table and therefore valid as
- * `urn:semantic-model:*` mapping contexts.
+ * A selectable concept-scheme mapping source, as returned by
+ * GET /api/term-mappings/contexts. This is provenance-agnostic: it includes
+ * schemes authored/imported on the Explore/Define page (urn:glossary /
+ * urn:ontology / urn:taxonomy) AND uploaded RDF sources (urn:semantic-model) —
+ * exactly the set the engine runs against. (Previously the dialog read the
+ * semantic_models table, so Explore-authored ontologies were invisible and it
+ * wrongly reported 'no customer ontologies loaded'.)
  */
-const isCustomerModel = (m: SemanticModelLite): boolean =>
-  typeof m.id === 'string' && !m.id.startsWith('file-');
+interface SelectableContext {
+  context: string;
+  label: string;
+  concept_count: number;
+}
 
 interface RunConfigDialogProps {
   isOpen: boolean;
@@ -71,8 +72,10 @@ export default function RunConfigDialog({
   const { t } = useTranslation(['term-mapping', 'common']);
   const { toast } = useToast();
   const { get, post } = useApi();
+  const [mode] = useConceptMode();
+  const advanced = mode === 'advanced';
 
-  const [models, setModels] = useState<SemanticModelLite[]>([]);
+  const [models, setModels] = useState<SelectableContext[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
 
@@ -108,20 +111,17 @@ export default function RunConfigDialog({
     setModelsLoading(true);
     setModelsError(null);
     try {
-      const res = await get<SemanticModelsResponse>('/api/semantic-models');
+      // Provenance-agnostic: every selectable concept scheme in the graph
+      // (authored/imported on Explore/Define AND uploaded RDF sources), i.e.
+      // exactly what the engine will run against. NOT the semantic_models table.
+      const res = await get<SelectableContext[]>('/api/term-mappings/contexts');
       if (res.error) throw new Error(res.error);
-      // Endpoint returns BOTH DB-backed customer models and file/schema
-      // taxonomies under `semantic_models`. Only customer models are valid as
-      // `ontology_contexts`; shipped taxonomies use the opt-in checkboxes.
-      const all = res.data?.semantic_models ?? [];
-      const customer = all.filter((m) => isCustomerModel(m) && m.enabled !== false);
-      setModels(customer);
-      // Out-of-the-box ergonomics: when the user has zero customer ontologies
-      // loaded, pre-check the Databricks shipped taxonomy so "Create run" is
-      // immediately useful for demos / first-time exploration. They can still
-      // uncheck it. When customer ontologies exist, leave shipped opt-ins off
-      // — those are the authoritative source.
-      if (customer.length === 0) {
+      const contexts = Array.isArray(res.data) ? res.data : [];
+      setModels(contexts);
+      // Out-of-the-box ergonomics: when the user has zero customer schemes,
+      // pre-check the Databricks shipped taxonomy so "Create run" is immediately
+      // useful for demos / first-time exploration. They can still uncheck it.
+      if (contexts.length === 0) {
         setShippedSelected((prev) =>
           prev.size === 0 ? new Set(['urn:taxonomy:databricks_ontology']) : prev,
         );
@@ -138,10 +138,10 @@ export default function RunConfigDialog({
   const enabledCustomerCount = models.length;
 
   const previewContextNames = useMemo(() => {
-    if (allContexts) return models.map((m) => m.display_name || m.name);
+    if (allContexts) return models.map((m) => m.label);
     return models
-      .filter((m) => selectedContexts.has(modelToContextUrn(m)))
-      .map((m) => m.display_name || m.name);
+      .filter((m) => selectedContexts.has(m.context))
+      .map((m) => m.label);
   }, [models, selectedContexts, allContexts]);
 
   const handleToggleContext = (urn: string) => {
@@ -158,7 +158,7 @@ export default function RunConfigDialog({
   };
 
   const handleToggleAll = () => {
-    setAllContexts(true);
+    setAllContexts((prev) => !prev);
     setSelectedContexts(new Set());
   };
 
@@ -260,6 +260,12 @@ export default function RunConfigDialog({
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             {t('runConfig.title')}
+            {/* Simple/Advanced toggle lives in the dialog so users can switch
+                without leaving the run setup. Drives the same global mode as
+                the rest of the concepts UI (adv-only rows + {advanced} blocks). */}
+            <span className="ml-auto">
+              <ConceptModeSwitch tipLeft />
+            </span>
           </DialogTitle>
           <DialogDescription>{t('runConfig.description')}</DialogDescription>
         </DialogHeader>
@@ -268,7 +274,21 @@ export default function RunConfigDialog({
           {/* Customer ontologies ---------------------------------------- */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">{t('runConfig.customerOntologies')}</Label>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">{t('runConfig.customerOntologies')}</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" aria-label="Info" className="text-muted-foreground hover:text-foreground">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px]">
+                      {t('runConfig.customerOntologiesTooltip', 'Select which ontologies to use for matching. Choose all or pick specific ones.')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <Badge variant="outline" className="text-xs">
                 {t('runConfig.enabledCount', { count: enabledCustomerCount })}
               </Badge>
@@ -297,17 +317,20 @@ export default function RunConfigDialog({
                 </label>
                 <div className="pl-6 space-y-1.5 border-l">
                   {models.map((m) => {
-                    const urn = modelToContextUrn(m);
+                    const urn = m.context;
                     const checked = allContexts || selectedContexts.has(urn);
                     return (
-                      <label key={m.id} className="flex items-center gap-2 text-sm">
+                      <label key={urn} className="flex items-center gap-2 text-sm">
                         <Checkbox
                           checked={checked}
                           disabled={allContexts}
                           onCheckedChange={() => handleToggleContext(urn)}
                         />
-                        <span>{m.display_name || m.name}</span>
-                        <span className="text-xs text-muted-foreground font-mono ml-auto">
+                        <span>{m.label}</span>
+                        <Badge variant="secondary" className="h-4 text-[10px] px-1">
+                          {m.concept_count}
+                        </Badge>
+                        <span className={`text-xs text-muted-foreground font-mono ml-auto ${!advanced ? 'hidden' : ''}`}>
                           {urn}
                         </span>
                       </label>
@@ -318,43 +341,80 @@ export default function RunConfigDialog({
             )}
           </section>
 
-          {/* Shipped opt-in --------------------------------------------- */}
-          <section className="space-y-2">
-            <Label className="text-sm font-medium">{t('runConfig.shippedTitle')}</Label>
-            <div className="rounded-md border p-3 space-y-2">
-              {SHIPPED_OPT_IN_CONTEXTS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={shippedSelected.has(opt.value)}
-                    onCheckedChange={() => handleToggleShipped(opt.value)}
-                  />
-                  <span>{opt.label}</span>
-                  <span className="text-xs text-muted-foreground font-mono ml-auto">
-                    {opt.value}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              <Trans i18nKey="term-mapping:runConfig.shippedHelp" components={{ code: <code /> }} />
-            </p>
-          </section>
+          {/* Shipped opt-in (advanced-only) ----------------------------- */}
+          {advanced && (
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm font-medium">{t('runConfig.shippedTitle')}</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" aria-label="Info" className="text-muted-foreground hover:text-foreground">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[240px]">
+                      {t('runConfig.shippedTooltip', 'Databricks-provided reference taxonomies you can also match against, in addition to your own.')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="rounded-md border p-3 space-y-2">
+                {SHIPPED_OPT_IN_CONTEXTS.map((opt) => (
+                  <label key={opt.value} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={shippedSelected.has(opt.value)}
+                      onCheckedChange={() => handleToggleShipped(opt.value)}
+                    />
+                    <span>{opt.label}</span>
+                    <span className="text-xs text-muted-foreground font-mono ml-auto">
+                      {opt.value}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                <Trans i18nKey="term-mapping:runConfig.shippedHelp" components={{ code: <code /> }} />
+              </p>
+            </section>
+          )}
 
           {/* Target selection ------------------------------------------- */}
           <section className="space-y-2">
-            <Label className="text-sm font-medium">{t('runConfig.targetTypes')}</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-medium">{t('runConfig.targetTypes')}</Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" aria-label="Info" className="text-muted-foreground hover:text-foreground">
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[240px]">
+                    {t('runConfig.targetTypesTooltip', 'Entity types to match concepts against. Select which platforms to include.')}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <div className="rounded-md border p-3 grid grid-cols-2 gap-2">
               {(Object.keys(TARGET_ENTITY_TYPE_LABELS) as TermMappingTargetEntityType[])
                 .filter((et) => et !== 'dataset')
-                .map((et) => (
-                  <label key={et} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={entityTypes.has(et)}
-                      onCheckedChange={() => handleToggleEntityType(et)}
-                    />
-                    <span>{TARGET_ENTITY_TYPE_LABELS[et]}</span>
-                  </label>
-                ))}
+                .map((et) => {
+                  // In Simple mode, hide non-core entity types
+                  const isCore = ['asset', 'data_product', 'data_contract'].includes(et);
+                  const hidden = !advanced && !isCore;
+                  return (
+                    <div key={et} className={hidden ? 'hidden' : ''}>
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={entityTypes.has(et)}
+                          onCheckedChange={() => handleToggleEntityType(et)}
+                        />
+                        <span>{TARGET_ENTITY_TYPE_LABELS[et]}</span>
+                      </label>
+                    </div>
+                  );
+                })}
             </div>
             {entityTypes.has('asset') && (
               <div className="space-y-1.5 pl-1">
@@ -460,17 +520,4 @@ export default function RunConfigDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-// ---------- helpers ----------
-
-/**
- * Convert a SemanticModelLite into the context URN the backend expects.
- * Mirrors src/backend/src/controller/semantic_models_manager._sanitize_context_name.
- */
-function modelToContextUrn(model: SemanticModelLite): string {
-  const sanitized = (model.name || '')
-    .replace(/ /g, '_')
-    .replace(/[^\w\-._~]/g, '_');
-  return `urn:semantic-model:${sanitized}`;
 }

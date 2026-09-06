@@ -305,6 +305,9 @@ export const ALL_ENTITY_TYPES: EntityType[] = [
   'job',
   'subscription',
   'user',
+  'ontology_concept',
+  'ontology_collection',
+  'concept_changeset',
 ];
 
 /**
@@ -376,7 +379,7 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   before_update: ['data_contract'],
   // Status & lifecycle
   before_status_change: ['data_contract', 'data_product'],
-  on_status_change: ['data_contract', 'data_product', 'data_asset_review'],
+  on_status_change: ['data_contract', 'data_product', 'data_asset_review', 'ontology_concept'],
   on_publish: ['data_contract', 'data_product'],
   on_unpublish: ['data_contract', 'data_product'],
   // Certification
@@ -387,7 +390,11 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   on_request_review: ['data_contract', 'data_product', 'data_asset_review'],
   on_request_access: ['access_grant', 'role', 'project'],
   on_request_publish: ['data_contract', 'data_product'],
-  on_request_status_change: ['data_product'],
+  // Concept curation: single-concept review ping-pong. concept_changeset (bulk-
+  // upload gate) is NOT selectable — Scenario D (2026-08-18) disabled the gate; all
+  // file uploads land as Draft and follow per-concept review. Kept in the
+  // EntityType union / ALL_ENTITY_TYPES so existing data + labels still resolve.
+  on_request_status_change: ['data_product', 'ontology_concept'],
   // Job triggers
   on_job_success: ['job'],
   on_job_failure: ['job'],
@@ -406,7 +413,11 @@ export const SUPPORTED_TRIGGER_ENTITY_MAP: Record<string, string[]> = {
   for_request_review: ['data_product', 'data_contract', 'data_asset_review'],
   for_request_publish: ['data_product', 'data_contract'],
   for_request_certify: ['data_product', 'data_contract'],
-  for_request_status_change: ['data_product'],
+  // Concept review gate: `ontology_concept` lets an approval wizard be authored
+  // in the designer for the concept draft->under_review submit (mirrors the
+  // process gate on_request_status_change, which already lists it). The wizard
+  // runs BEFORE submit; the process gate holds the concept AFTER submit.
+  for_request_status_change: ['data_product', 'ontology_concept'],
   // User session triggers — fire on app mount for terms-of-use / disclaimers
   on_first_access: ['user'],
   // Manual/scheduled — always supported (no entity dependency)
@@ -424,6 +435,57 @@ export function isTriggerEntitySupported(triggerType: string, entityType: string
   // Empty array means all entities are valid (scheduled, manual)
   if (supported.length === 0) return true;
   return supported.includes(entityType);
+}
+
+/**
+ * Entity types that carry concept-curation semantics. A trigger whose
+ * entity_types include any of these can drive concept workflows (review
+ * ping-pong, changeset gate). Used to surface a subtle "supports concepts"
+ * hint in the trigger picker.
+ */
+export const CONCEPT_ENTITY_TYPES = ['ontology_concept', 'ontology_collection', 'concept_changeset'];
+
+export function triggerSupportsConcepts(entityTypes: string[] | undefined): boolean {
+  if (!entityTypes) return false;
+  return entityTypes.some((et) => CONCEPT_ENTITY_TYPES.includes(et));
+}
+
+/**
+ * Valid lifecycle statuses per entity type — powers the From/To Status
+ * dropdowns on status-change triggers so authors pick real statuses instead of
+ * typing free text. Ordered by lifecycle progression. An entity type absent
+ * here has no known status vocabulary; callers fall back to a free-text input.
+ */
+export const ENTITY_STATUS_VALUES: Record<string, string[]> = {
+  ontology_concept: [
+    'draft', 'under_review', 'approved', 'published', 'certified', 'deprecated', 'archived',
+  ],
+  ontology_collection: [
+    'draft', 'under_review', 'approved', 'published', 'certified', 'deprecated', 'archived',
+  ],
+  data_product: [
+    'draft', 'sandbox', 'proposed', 'under_review', 'approved', 'active', 'deprecated', 'retired',
+  ],
+  data_contract: ['draft', 'proposed', 'active', 'deprecated', 'retired'],
+};
+
+/**
+ * Union of valid statuses across the given entity types (deduped, first-seen
+ * order). Empty array = no known vocabulary (caller should allow free text).
+ */
+export function statusValuesForEntities(entityTypes: string[] | undefined): string[] {
+  if (!entityTypes || entityTypes.length === 0) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const et of entityTypes) {
+    for (const s of ENTITY_STATUS_VALUES[et] ?? []) {
+      if (!seen.has(s)) {
+        seen.add(s);
+        out.push(s);
+      }
+    }
+  }
+  return out;
 }
 
 /**

@@ -67,7 +67,10 @@ export type EntityType =
   | 'data_asset_review'
   | 'job'
   | 'subscription'
-  | 'user';
+  | 'user'
+  | 'ontology_concept'
+  | 'ontology_collection'
+  | 'concept_changeset';
 
 export type ScopeType = 'all' | 'project' | 'catalog' | 'domain';
 

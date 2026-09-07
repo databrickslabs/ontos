@@ -76,7 +76,7 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
 
     # --- Build ---
     'data-products': {
-        'name': 'Data Products',
+        'name': 'Products',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS + [FeatureAccessLevel.FILTERED],  # Allow filtering
         'group': GROUP_BUILD,
     },
@@ -204,11 +204,6 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
     },
     'settings-maturity-levels': {
         'name': 'Maturity Levels',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS,
-        'group': GROUP_SETTINGS,
-    },
-    'settings-maturity-levels': {
-        'name': 'Settings — Maturity Levels',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS,
         'group': GROUP_SETTINGS,
     },

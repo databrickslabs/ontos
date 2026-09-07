@@ -58,3 +58,15 @@
   margin: 0.5rem 0 0.25rem 0.5rem;
   color: var(--ifm-color-content);
 }
+
+/* Align documentation pages directly beside the left sidebar. */
+@media (min-width: 997px) {
+  .theme-doc-sidebar-container + main > .container,
+  .theme-doc-sidebar-container + main > .container > .row > .col:first-child {
+    padding-left: 0;
+  }
+
+  .theme-doc-sidebar-container + main > .container > .row {
+    margin-left: 0;
+  }
+}

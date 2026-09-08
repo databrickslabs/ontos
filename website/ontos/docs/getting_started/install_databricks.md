@@ -8,7 +8,7 @@ The following section will walk you through the basic installation and configura
 
 ## Configuration process
 
-### Step 1: Clone Ontos repository {#dbsetup_step1}
+### Step 1: Clone Ontos repository {/* #dbsetup_step1 */}
    1. From the official Databricks Labs [page](https://github.com/databrickslabs/ontos.git), clone the ontos repository. In GitHub, select *Clone* and copy the HTTPS URL. 
    2. Select *Workspace* from the left-hand side menu in Databricks
    3. In your preferred directory, click on the *Create* button in the top-right corner and select *Git Folder*
@@ -16,14 +16,14 @@ The following section will walk you through the basic installation and configura
 
 ![Clone repo](../assets/clone_repo.gif)
 
-### Step 2: Setup Lakebase Database {#dbsetup_step2}
+### Step 2: Setup Lakebase Database {/* #dbsetup_step2 */}
 :::info[**Reusing Lakebase Instance**]
 If you prefer to reuse an existing instance and schema/database, you can **skip** this step and proceed to [Step 3](#dbsetup_step3).
 :::
 To configure a new Lakebase instance that Ontos will use, refer to the process described in [Lakebase Instance](../dev_guide/lakebase_setup.md) before moving on with this tutorial.
 
 
-### Step 3: Create App {#dbsetup_step3}
+### Step 3: Create App {/* #dbsetup_step3 */}
 
    1. Select *Compute* from the left-hand side menu in Databricks
    2. Go to the Apps tab and click on *Create App*
@@ -51,7 +51,7 @@ Make sure the parameter **PGSCHEMA** on the `app.yml` file corresponds to your L
 For a full reference and purpose of each environment configuration variable, refer to the [Environment Variables](../dev_guide/env_var) section.
 :::
 
-### Step 4: Ontos Application Deployment {#dbsetup_step4}
+### Step 4: Ontos Application Deployment {/* #dbsetup_step4 */}
 
    1. On the main application page of your newly created app, go to the Authorization tab and copy the UUID of the pre-created Service Principal. The name follows the syntax `app-id <app name>`. 
    2. On the SQL query used on Step 2, run the following statement: 

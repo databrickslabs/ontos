@@ -46,11 +46,10 @@ ON CONFLICT (id) DO NOTHING;
 -- 2. TEAMS
 -- ============================================================================
 
-INSERT INTO teams (id, name, title, description, domain_id, extra_metadata, created_by, updated_by, created_at, updated_at) VALUES
-('00100001-0001-4000-8000-000000000001', 'clinical-data', 'Clinical Data Team', 'Manages EHR integration, patient data pipelines, and clinical analytics', '00000001-0001-4000-8000-000000000001', '{"slack_channel": "https://company.slack.com/channels/clinical-data", "lead": "dr.chen@hospital.org"}', 'system@demo', 'system@demo', NOW(), NOW()),
-('00100002-0001-4000-8000-000000000002', 'research-and-dev', 'Research & Development Team', 'Clinical trial data management, study design analytics, and biostatistics', '00000002-0001-4000-8000-000000000002', '{"slack_channel": "https://company.slack.com/channels/rd-data", "tools": ["SAS", "R", "Python", "REDCap"]}', 'system@demo', 'system@demo', NOW(), NOW()),
-('00100003-0001-4000-8000-000000000003', 'regulatory-affairs', 'Regulatory Affairs Team', 'FDA/EMA submission preparation, pharmacovigilance, and compliance monitoring', '00000003-0001-4000-8000-000000000003', '{"slack_channel": "https://company.slack.com/channels/reg-affairs", "responsibilities": ["FDA 21 CFR Part 11", "HIPAA", "GxP"]}', 'system@demo', 'system@demo', NOW(), NOW())
-
+INSERT INTO teams (id, name, title, description, extra_metadata, created_by, updated_by, created_at, updated_at) VALUES
+('00100001-0001-4000-8000-000000000001', 'clinical-data', 'Clinical Data Team', 'Manages EHR integration, patient data pipelines, and clinical analytics', '{"slack_channel": "https://company.slack.com/channels/clinical-data", "lead": "dr.chen@hospital.org"}', 'system@demo', 'system@demo', NOW(), NOW()),
+('00100002-0001-4000-8000-000000000002', 'research-and-dev', 'Research & Development Team', 'Clinical trial data management, study design analytics, and biostatistics', '{"slack_channel": "https://company.slack.com/channels/rd-data", "tools": ["SAS", "R", "Python", "REDCap"]}', 'system@demo', 'system@demo', NOW(), NOW()),
+('00100003-0001-4000-8000-000000000003', 'regulatory-affairs', 'Regulatory Affairs Team', 'FDA/EMA submission preparation, pharmacovigilance, and compliance monitoring', '{"slack_channel": "https://company.slack.com/channels/reg-affairs", "responsibilities": ["FDA 21 CFR Part 11", "HIPAA", "GxP"]}', 'system@demo', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -100,12 +99,12 @@ ON CONFLICT (project_id, team_id) DO NOTHING;
 -- 4. DATA CONTRACTS
 -- ============================================================================
 
-INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, domain_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at, version_family_id) VALUES
-('00400001-0001-4000-8000-000000000001', 'Patient EHR Data Contract', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100001-0001-4000-8000-000000000001', '00000001-0001-4000-8000-000000000001', 'Standardized patient electronic health record data for clinical analytics and care coordination', 'Integrate into clinical dashboards, care pathway analysis, and population health management', 'All PHI must be de-identified for analytics; HIPAA Safe Harbor rules apply; data retention 7 years per state regulations', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400001-0001-4000-8000-000000000001'),
-('00400002-0001-4000-8000-000000000002', 'Clinical Trial Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100002-0001-4000-8000-000000000002', '00000002-0001-4000-8000-000000000002', 'Clinical trial enrollment, randomization, endpoint, and adverse event data', 'Support study monitoring, interim analyses, DSMB reporting, and regulatory submissions', 'Subject-level data requires IRB approval; blinded data restricted until study unblinding; 21 CFR Part 11 compliant', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400002-0001-4000-8000-000000000002'),
-('00400003-0001-4000-8000-000000000003', 'Adverse Event Reporting Contract', 'DataContract', 'v3.1.0', '1.1.0', 'active', true, '00100003-0001-4000-8000-000000000003', '00000003-0001-4000-8000-000000000003', 'Spontaneous and solicited adverse event reports for pharmacovigilance signal detection', 'Feed into safety signal detection algorithms, periodic safety reports (PSURs), and FDA FAERS submissions', 'MedDRA coding required; reporter identities must be anonymized; 15-day expedited reporting for serious AEs', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400003-0001-4000-8000-000000000003'),
-('00400004-0001-4000-8000-000000000004', 'Genomic Sequencing Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100002-0001-4000-8000-000000000002', '00000004-0001-4000-8000-000000000004', 'Whole genome and exome sequencing data for precision medicine research', 'Variant calling pipelines, biomarker discovery, and companion diagnostic development', 'Consent-gated access; re-identification risk assessment required; GINA compliance mandatory', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400004-0001-4000-8000-000000000004'),
-('00400005-0001-4000-8000-000000000005', 'Claims & Reimbursement Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0001-4000-8000-000000000001', '00000006-0001-4000-8000-000000000006', 'Healthcare insurance claims, adjudication outcomes, and reimbursement data', 'Revenue cycle analytics, denial management, and payer contract optimization', 'CMS HCPCS/CPT coding standards; member SSN must be masked; data shared under BAA only', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400005-0001-4000-8000-000000000005')
+INSERT INTO data_contracts (id, name, kind, api_version, version, status, published, owner_team_id, description_purpose, description_usage, description_limitations, publication_scope, created_by, updated_by, created_at, updated_at, version_family_id) VALUES
+('00400001-0001-4000-8000-000000000001', 'Patient EHR Data Contract', 'DataContract', 'v3.1.0', '2.0.0', 'active', true, '00100001-0001-4000-8000-000000000001', 'Standardized patient electronic health record data for clinical analytics and care coordination', 'Integrate into clinical dashboards, care pathway analysis, and population health management', 'All PHI must be de-identified for analytics; HIPAA Safe Harbor rules apply; data retention 7 years per state regulations', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400001-0001-4000-8000-000000000001'),
+('00400002-0001-4000-8000-000000000002', 'Clinical Trial Data Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100002-0001-4000-8000-000000000002', 'Clinical trial enrollment, randomization, endpoint, and adverse event data', 'Support study monitoring, interim analyses, DSMB reporting, and regulatory submissions', 'Subject-level data requires IRB approval; blinded data restricted until study unblinding; 21 CFR Part 11 compliant', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400002-0001-4000-8000-000000000002'),
+('00400003-0001-4000-8000-000000000003', 'Adverse Event Reporting Contract', 'DataContract', 'v3.1.0', '1.1.0', 'active', true, '00100003-0001-4000-8000-000000000003', 'Spontaneous and solicited adverse event reports for pharmacovigilance signal detection', 'Feed into safety signal detection algorithms, periodic safety reports (PSURs), and FDA FAERS submissions', 'MedDRA coding required; reporter identities must be anonymized; 15-day expedited reporting for serious AEs', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400003-0001-4000-8000-000000000003'),
+('00400004-0001-4000-8000-000000000004', 'Genomic Sequencing Contract', 'DataContract', 'v3.1.0', '1.0.0', 'draft', false, '00100002-0001-4000-8000-000000000002', 'Whole genome and exome sequencing data for precision medicine research', 'Variant calling pipelines, biomarker discovery, and companion diagnostic development', 'Consent-gated access; re-identification risk assessment required; GINA compliance mandatory', 'none', 'system@demo', 'system@demo', NOW(), NOW(), '00400004-0001-4000-8000-000000000004'),
+('00400005-0001-4000-8000-000000000005', 'Claims & Reimbursement Contract', 'DataContract', 'v3.1.0', '1.0.0', 'active', true, '00100001-0001-4000-8000-000000000001', 'Healthcare insurance claims, adjudication outcomes, and reimbursement data', 'Revenue cycle analytics, denial management, and payer contract optimization', 'CMS HCPCS/CPT coding standards; member SSN must be masked; data shared under BAA only', 'org', 'system@demo', 'system@demo', NOW(), NOW(), '00400005-0001-4000-8000-000000000005')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -241,12 +240,12 @@ ON CONFLICT (id) DO NOTHING;
 -- 5. DATA PRODUCTS
 -- ============================================================================
 
-INSERT INTO data_products (id, api_version, kind, status, name, version, domain, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at, version_family_id) VALUES
-('00700001-0001-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'Patient 360 View v1', '1.0.0', 'Clinical', 'hls-demo', '00100001-0001-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700001-0001-4000-8000-000000000001'),
-('00700002-0001-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'Clinical Trial Analytics v1', '1.0.0', 'Research', 'hls-demo', '00100002-0001-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700002-0001-4000-8000-000000000002'),
-('00700003-0001-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'Drug Safety Signal Detection v1', '1.0.0', 'Regulatory', 'hls-demo', '00100003-0001-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700003-0001-4000-8000-000000000003'),
-('00700004-0001-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Real-World Evidence Platform v1', '1.0.0', 'Research', 'hls-demo', '00100002-0001-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700004-0001-4000-8000-000000000004'),
-('00700005-0001-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Claims Analytics Dashboard v1', '1.0.0', 'Claims', 'hls-demo', '00100001-0001-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700005-0001-4000-8000-000000000005')
+INSERT INTO data_products (id, api_version, kind, status, name, version, tenant, owner_team_id, max_level_inheritance, published, publication_scope, created_at, updated_at, version_family_id) VALUES
+('00700001-0001-4000-8000-000000000001', 'v1.0.0', 'DataProduct', 'active', 'Patient 360 View v1', '1.0.0', 'hls-demo', '00100001-0001-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700001-0001-4000-8000-000000000001'),
+('00700002-0001-4000-8000-000000000002', 'v1.0.0', 'DataProduct', 'active', 'Clinical Trial Analytics v1', '1.0.0', 'hls-demo', '00100002-0001-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700002-0001-4000-8000-000000000002'),
+('00700003-0001-4000-8000-000000000003', 'v1.0.0', 'DataProduct', 'active', 'Drug Safety Signal Detection v1', '1.0.0', 'hls-demo', '00100003-0001-4000-8000-000000000003', 99, true, 'org', NOW(), NOW(), '00700003-0001-4000-8000-000000000003'),
+('00700004-0001-4000-8000-000000000004', 'v1.0.0', 'DataProduct', 'active', 'Real-World Evidence Platform v1', '1.0.0', 'hls-demo', '00100002-0001-4000-8000-000000000002', 99, true, 'org', NOW(), NOW(), '00700004-0001-4000-8000-000000000004'),
+('00700005-0001-4000-8000-000000000005', 'v1.0.0', 'DataProduct', 'active', 'Claims Analytics Dashboard v1', '1.0.0', 'hls-demo', '00100001-0001-4000-8000-000000000001', 99, true, 'org', NOW(), NOW(), '00700005-0001-4000-8000-000000000005')
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -531,114 +530,83 @@ ON CONFLICT (id) DO NOTHING;
 -- the HLS data products. asset_type_id is resolved by name; falls back to a
 -- known ontology UUID if the type name is missing.
 
-INSERT INTO assets (id, name, description, asset_type_id, platform, location, domain_id, properties, tags, status, created_by, created_at, updated_at) VALUES
--- Tables (Clinical)
+INSERT INTO assets (id, name, description, asset_type_id, platform, location, properties, tags, status, created_by, created_at, updated_at) VALUES
 ('0f300101-0001-4000-8000-000000000001',
  'lakehouse.hls.curated.patients',
  'De-identified patient master record (HIPAA Safe Harbor).',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.hls.curated.patients',
- '00000001-0001-4000-8000-000000000001',
  '{"catalog": "lakehouse", "schema": "hls_curated", "table_name": "patients", "row_count": 2400000, "format": "delta"}',
  '["curated", "phi-deidentified"]',
  'active', 'system@demo', NOW(), NOW()),
-
 ('0f300102-0001-4000-8000-000000000002',
  'lakehouse.hls.curated.encounters',
  'Inpatient and outpatient encounters with billing codes.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.hls.curated.encounters',
- '00000001-0001-4000-8000-000000000001',
  '{"catalog": "lakehouse", "schema": "hls_curated", "table_name": "encounters", "row_count": 18500000, "format": "delta"}',
  '["curated", "phi-limited"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Patient Cohort (vertical asset type)
 ('0f300103-0001-4000-8000-000000000003',
  'cohort.oncology.her2_positive_2024',
  'HER2-positive breast cancer cohort for 2024 RWE study (~12,400 patients).',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Patient Cohort' LIMIT 1), '0f200101-0001-4000-8000-000000000001'), 'Databricks', 'cohort.oncology.her2_positive_2024',
- '00000002-0001-4000-8000-000000000002',
  '{"cohort_size": 12400, "inclusion_criteria": ["HER2+", "stage_II_or_III"], "study_id": "ONCO-RWE-2024-08"}',
  '["cohort-eligible", "rwe-source"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Clinical Trial Dataset (vertical asset type)
 ('0f300104-0001-4000-8000-000000000004',
  'sdtm.onco-2025-001.dm',
  'CDISC SDTM DM (Demographics) dataset for protocol ONCO-2025-001.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Clinical Trial Dataset' LIMIT 1), '0f200102-0001-4000-8000-000000000002'), 'Databricks', 'sdtm.onco-2025-001.dm',
- '00000002-0001-4000-8000-000000000002',
  '{"protocol": "ONCO-2025-001", "cdisc_standard": "SDTM", "version": "3.3", "dataset": "DM"}',
  '["submission-ready", "21cfr-part-11"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Dashboard
 ('0f300105-0001-4000-8000-000000000005',
  'Trial Monitoring Dashboard',
  'Site enrollment, screen failure rate, and SAE summary across active oncology trials.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Dashboard' LIMIT 1), '0f200002-0000-4000-8000-000000000002'), 'Databricks', 'https://bi.pharma.com/dashboards/trial-monitoring',
- '00000002-0001-4000-8000-000000000002',
  '{"refresh_schedule": "daily", "audience": "study-team"}',
  '["analytics"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Streaming source (FAERS feed)
 ('0f300106-0001-4000-8000-000000000006',
  'kafka.pharma.faers.case_events',
  'Real-time stream of incoming FAERS adverse-event case submissions.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Stream' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Kafka', 'kafka://broker.pharma:9093/faers.case_events',
- '00000003-0001-4000-8000-000000000003',
  '{"topic": "faers.case_events", "throughput_msgs_per_sec": 1200}',
  '["real-time"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Adverse Event Case (vertical asset type)
 ('0f300107-0001-4000-8000-000000000007',
  'ICSR-2025-4521',
  'Individual Case Safety Report — serious adverse event, drug XYZ.',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Adverse Event Case' LIMIT 1), '0f200103-0001-4000-8000-000000000003'), 'Pharma Safety DB', 'safety://cases/ICSR-2025-4521',
- '00000003-0001-4000-8000-000000000003',
  '{"seriousness": "serious", "expectedness": "unexpected", "days_to_report": 12, "regulatory_status": "submitted"}',
  '["hipaa", "21cfr-part-11"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- Claims table
 ('0f300108-0001-4000-8000-000000000008',
  'lakehouse.hls.claims.adjudicated',
  'Adjudicated medical and pharmacy claims (commercial + Medicare Advantage).',
  COALESCE((SELECT id FROM asset_types WHERE name = 'Table' LIMIT 1), '0f200001-0000-4000-8000-000000000001'), 'Databricks', 'lakehouse.hls.claims.adjudicated',
- '00000006-0001-4000-8000-000000000006',
  '{"catalog": "lakehouse", "schema": "hls_claims", "table_name": "adjudicated", "row_count": 45000000, "format": "delta"}',
  '["curated"]',
  'active', 'system@demo', NOW(), NOW()),
-
--- ── Column assets for the HLS Tables / Streams above ──
--- 0f300101 lakehouse.hls.curated.patients
-('0f520101-0001-4000-8000-000000000001', 'patient_id',     'De-identified patient identifier (hash of MRN)',  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.patient_id',     '00000001-0001-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": false, "is_primary_key": true}', '["phi", "key", "deidentified"]', 'active', 'system@demo', NOW(), NOW()),
-('0f520102-0001-4000-8000-000000000002', 'date_of_birth',  'Patient date of birth (Safe Harbor shifted)',     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.date_of_birth',  '00000001-0001-4000-8000-000000000001', '{"data_type": "DATE",     "nullable": false}',                          '["phi", "deidentified"]',         'active', 'system@demo', NOW(), NOW()),
-('0f520103-0001-4000-8000-000000000003', 'gender',         'Administrative gender (M/F/O/U)',                 (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.gender',         '00000001-0001-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": false}',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
-('0f520104-0001-4000-8000-000000000004', 'race_ethnicity', 'OMB race/ethnicity category',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.race_ethnicity', '00000001-0001-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": true }',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
-('0f520105-0001-4000-8000-000000000005', 'zip_3',          'First 3 digits of ZIP (Safe Harbor)',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.zip_3',          '00000001-0001-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": true }',                          '["phi", "deidentified"]',         'active', 'system@demo', NOW(), NOW()),
-
--- 0f300102 lakehouse.hls.curated.encounters
-('0f520111-0001-4000-8000-000000000011', 'encounter_id',   'Unique encounter identifier',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.encounter_id',  '00000001-0001-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": false, "is_primary_key": true}', '["phi", "key"]',                  'active', 'system@demo', NOW(), NOW()),
-('0f520112-0001-4000-8000-000000000012', 'patient_id',     'FK to patients.patient_id',                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.patient_id',    '00000001-0001-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": false}',                          '["phi", "fk"]',                   'active', 'system@demo', NOW(), NOW()),
-('0f520113-0001-4000-8000-000000000013', 'encounter_type', 'inpatient | outpatient | emergency | observation',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.encounter_type','00000001-0001-4000-8000-000000000001', '{"data_type": "STRING",   "nullable": false}',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
-('0f520114-0001-4000-8000-000000000014', 'admit_date',     'Admit/visit date (UTC)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.admit_date',    '00000001-0001-4000-8000-000000000001', '{"data_type": "TIMESTAMP","nullable": false, "partition_key": true}',  '["phi", "partition"]',            'active', 'system@demo', NOW(), NOW()),
-('0f520115-0001-4000-8000-000000000015', 'discharge_date', 'Discharge date (NULL if still admitted)',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.discharge_date','00000001-0001-4000-8000-000000000001', '{"data_type": "TIMESTAMP","nullable": true }',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
-
--- 0f300106 kafka.pharma.faers.case_events (Stream)
-('0f520121-0001-4000-8000-000000000021', 'case_id',        'ICSR case number',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.case_id',         '00000003-0001-4000-8000-000000000003', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}', '["pharmacovigilance", "key"]',   'active', 'system@demo', NOW(), NOW()),
-('0f520122-0001-4000-8000-000000000022', 'product_id',     'Product (substance) identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.product_id',      '00000003-0001-4000-8000-000000000003', '{"data_type": "STRING",  "nullable": false}',                          '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
-('0f520123-0001-4000-8000-000000000023', 'meddra_pt',      'MedDRA preferred term',                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.meddra_pt',       '00000003-0001-4000-8000-000000000003', '{"data_type": "STRING",  "nullable": false}',                          '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
-('0f520124-0001-4000-8000-000000000024', 'seriousness',    'serious | non_serious',                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.seriousness',     '00000003-0001-4000-8000-000000000003', '{"data_type": "STRING",  "nullable": false}',                          '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
-('0f520125-0001-4000-8000-000000000025', 'received_ts',    'Submission receive timestamp (UTC)',              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.received_ts',     '00000003-0001-4000-8000-000000000003', '{"data_type": "TIMESTAMP","nullable": false}',                         '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
-
--- 0f300108 lakehouse.hls.claims.adjudicated
-('0f520131-0001-4000-8000-000000000031', 'claim_id',       'Unique medical claim identifier',                 (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.claim_id',      '00000006-0001-4000-8000-000000000006', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}', '["claims", "key"]',               'active', 'system@demo', NOW(), NOW()),
-('0f520132-0001-4000-8000-000000000032', 'member_id',      'Insurance plan member identifier',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.member_id',     '00000006-0001-4000-8000-000000000006', '{"data_type": "STRING",  "nullable": false}',                          '["claims", "phi"]',               'active', 'system@demo', NOW(), NOW()),
-('0f520133-0001-4000-8000-000000000033', 'service_date',   'Date of service (partition)',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.service_date',  '00000006-0001-4000-8000-000000000006', '{"data_type": "DATE",    "nullable": false, "partition_key": true}',  '["claims", "partition"]',         'active', 'system@demo', NOW(), NOW()),
-('0f520134-0001-4000-8000-000000000034', 'cpt_code',       'CMS HCPCS / CPT procedure code',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.cpt_code',      '00000006-0001-4000-8000-000000000006', '{"data_type": "STRING",  "nullable": false}',                          '["claims"]',                       'active', 'system@demo', NOW(), NOW()),
-('0f520135-0001-4000-8000-000000000035', 'allowed_amount', 'Amount allowed by payer (USD)',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.allowed_amount','00000006-0001-4000-8000-000000000006', '{"data_type": "DECIMAL(18,2)","nullable": false}',                     '["claims", "kpi"]',               'active', 'system@demo', NOW(), NOW())
+('0f520101-0001-4000-8000-000000000001', 'patient_id',     'De-identified patient identifier (hash of MRN)',  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.patient_id', '{"data_type": "STRING",   "nullable": false, "is_primary_key": true}', '["phi", "key", "deidentified"]', 'active', 'system@demo', NOW(), NOW()),
+('0f520102-0001-4000-8000-000000000002', 'date_of_birth',  'Patient date of birth (Safe Harbor shifted)',     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.date_of_birth', '{"data_type": "DATE",     "nullable": false}',                          '["phi", "deidentified"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520103-0001-4000-8000-000000000003', 'gender',         'Administrative gender (M/F/O/U)',                 (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.gender', '{"data_type": "STRING",   "nullable": false}',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
+('0f520104-0001-4000-8000-000000000004', 'race_ethnicity', 'OMB race/ethnicity category',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.race_ethnicity', '{"data_type": "STRING",   "nullable": true }',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
+('0f520105-0001-4000-8000-000000000005', 'zip_3',          'First 3 digits of ZIP (Safe Harbor)',             (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.patients.zip_3', '{"data_type": "STRING",   "nullable": true }',                          '["phi", "deidentified"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520111-0001-4000-8000-000000000011', 'encounter_id',   'Unique encounter identifier',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.encounter_id', '{"data_type": "STRING",   "nullable": false, "is_primary_key": true}', '["phi", "key"]',                  'active', 'system@demo', NOW(), NOW()),
+('0f520112-0001-4000-8000-000000000012', 'patient_id',     'FK to patients.patient_id',                       (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.patient_id', '{"data_type": "STRING",   "nullable": false}',                          '["phi", "fk"]',                   'active', 'system@demo', NOW(), NOW()),
+('0f520113-0001-4000-8000-000000000013', 'encounter_type', 'inpatient | outpatient | emergency | observation',(SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.encounter_type', '{"data_type": "STRING",   "nullable": false}',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
+('0f520114-0001-4000-8000-000000000014', 'admit_date',     'Admit/visit date (UTC)',                          (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.admit_date', '{"data_type": "TIMESTAMP","nullable": false, "partition_key": true}',  '["phi", "partition"]',            'active', 'system@demo', NOW(), NOW()),
+('0f520115-0001-4000-8000-000000000015', 'discharge_date', 'Discharge date (NULL if still admitted)',         (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.curated.encounters.discharge_date', '{"data_type": "TIMESTAMP","nullable": true }',                          '["phi"]',                          'active', 'system@demo', NOW(), NOW()),
+('0f520121-0001-4000-8000-000000000021', 'case_id',        'ICSR case number',                                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.case_id', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}', '["pharmacovigilance", "key"]',   'active', 'system@demo', NOW(), NOW()),
+('0f520122-0001-4000-8000-000000000022', 'product_id',     'Product (substance) identifier',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.product_id', '{"data_type": "STRING",  "nullable": false}',                          '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520123-0001-4000-8000-000000000023', 'meddra_pt',      'MedDRA preferred term',                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.meddra_pt', '{"data_type": "STRING",  "nullable": false}',                          '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520124-0001-4000-8000-000000000024', 'seriousness',    'serious | non_serious',                            (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.seriousness', '{"data_type": "STRING",  "nullable": false}',                          '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520125-0001-4000-8000-000000000025', 'received_ts',    'Submission receive timestamp (UTC)',              (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Kafka',      'kafka.pharma.faers.case_events.received_ts', '{"data_type": "TIMESTAMP","nullable": false}',                         '["pharmacovigilance"]',           'active', 'system@demo', NOW(), NOW()),
+('0f520131-0001-4000-8000-000000000031', 'claim_id',       'Unique medical claim identifier',                 (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.claim_id', '{"data_type": "STRING",  "nullable": false, "is_primary_key": true}', '["claims", "key"]',               'active', 'system@demo', NOW(), NOW()),
+('0f520132-0001-4000-8000-000000000032', 'member_id',      'Insurance plan member identifier',                (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.member_id', '{"data_type": "STRING",  "nullable": false}',                          '["claims", "phi"]',               'active', 'system@demo', NOW(), NOW()),
+('0f520133-0001-4000-8000-000000000033', 'service_date',   'Date of service (partition)',                     (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.service_date', '{"data_type": "DATE",    "nullable": false, "partition_key": true}',  '["claims", "partition"]',         'active', 'system@demo', NOW(), NOW()),
+('0f520134-0001-4000-8000-000000000034', 'cpt_code',       'CMS HCPCS / CPT procedure code',                  (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.cpt_code', '{"data_type": "STRING",  "nullable": false}',                          '["claims"]',                       'active', 'system@demo', NOW(), NOW()),
+('0f520135-0001-4000-8000-000000000035', 'allowed_amount', 'Amount allowed by payer (USD)',                   (SELECT id FROM asset_types WHERE name = 'Column' LIMIT 1), 'Databricks', 'lakehouse.hls.claims.adjudicated.allowed_amount', '{"data_type": "DECIMAL(18,2)","nullable": false}',                     '["claims", "kpi"]',               'active', 'system@demo', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 
@@ -823,3 +791,52 @@ COMMIT;
 -- ============================================================================
 -- End of HLS Demo Data — preset=hls
 -- ============================================================================
+
+
+-- ============================================================================
+-- Domain associations (multi-domain assignment; replaces removed single-value
+-- domain columns on teams/data_contracts/data_products/assets). Type code 031.
+-- ============================================================================
+INSERT INTO entity_domain_associations (id, domain_id, entity_id, entity_type, is_primary, assigned_by, assigned_at) VALUES
+('03100001-0001-4000-8000-000000000001', '00000001-0001-4000-8000-000000000001', '00100001-0001-4000-8000-000000000001', 'team', true, 'system@demo', NOW()),
+('03100002-0001-4000-8000-000000000002', '00000002-0001-4000-8000-000000000002', '00100002-0001-4000-8000-000000000002', 'team', true, 'system@demo', NOW()),
+('03100003-0001-4000-8000-000000000003', '00000003-0001-4000-8000-000000000003', '00100003-0001-4000-8000-000000000003', 'team', true, 'system@demo', NOW()),
+('03100004-0001-4000-8000-000000000004', '00000001-0001-4000-8000-000000000001', '00400001-0001-4000-8000-000000000001', 'data_contract', true, 'system@demo', NOW()),
+('03100005-0001-4000-8000-000000000005', '00000002-0001-4000-8000-000000000002', '00400002-0001-4000-8000-000000000002', 'data_contract', true, 'system@demo', NOW()),
+('03100006-0001-4000-8000-000000000006', '00000003-0001-4000-8000-000000000003', '00400003-0001-4000-8000-000000000003', 'data_contract', true, 'system@demo', NOW()),
+('03100007-0001-4000-8000-000000000007', '00000004-0001-4000-8000-000000000004', '00400004-0001-4000-8000-000000000004', 'data_contract', true, 'system@demo', NOW()),
+('03100008-0001-4000-8000-000000000008', '00000006-0001-4000-8000-000000000006', '00400005-0001-4000-8000-000000000005', 'data_contract', true, 'system@demo', NOW()),
+('03100009-0001-4000-8000-000000000009', '00000001-0001-4000-8000-000000000001', '00700001-0001-4000-8000-000000000001', 'data_product', true, 'system@demo', NOW()),
+('0310000a-0001-4000-8000-000000000010', '00000002-0001-4000-8000-000000000002', '00700002-0001-4000-8000-000000000002', 'data_product', true, 'system@demo', NOW()),
+('0310000b-0001-4000-8000-000000000011', '00000003-0001-4000-8000-000000000003', '00700003-0001-4000-8000-000000000003', 'data_product', true, 'system@demo', NOW()),
+('0310000c-0001-4000-8000-000000000012', '00000002-0001-4000-8000-000000000002', '00700004-0001-4000-8000-000000000004', 'data_product', true, 'system@demo', NOW()),
+('0310000d-0001-4000-8000-000000000013', '00000006-0001-4000-8000-000000000006', '00700005-0001-4000-8000-000000000005', 'data_product', true, 'system@demo', NOW()),
+('0310000e-0001-4000-8000-000000000014', '00000001-0001-4000-8000-000000000001', '0f300101-0001-4000-8000-000000000001', 'asset', true, 'system@demo', NOW()),
+('0310000f-0001-4000-8000-000000000015', '00000001-0001-4000-8000-000000000001', '0f300102-0001-4000-8000-000000000002', 'asset', true, 'system@demo', NOW()),
+('03100010-0001-4000-8000-000000000016', '00000002-0001-4000-8000-000000000002', '0f300103-0001-4000-8000-000000000003', 'asset', true, 'system@demo', NOW()),
+('03100011-0001-4000-8000-000000000017', '00000002-0001-4000-8000-000000000002', '0f300104-0001-4000-8000-000000000004', 'asset', true, 'system@demo', NOW()),
+('03100012-0001-4000-8000-000000000018', '00000002-0001-4000-8000-000000000002', '0f300105-0001-4000-8000-000000000005', 'asset', true, 'system@demo', NOW()),
+('03100013-0001-4000-8000-000000000019', '00000003-0001-4000-8000-000000000003', '0f300106-0001-4000-8000-000000000006', 'asset', true, 'system@demo', NOW()),
+('03100014-0001-4000-8000-000000000020', '00000003-0001-4000-8000-000000000003', '0f300107-0001-4000-8000-000000000007', 'asset', true, 'system@demo', NOW()),
+('03100015-0001-4000-8000-000000000021', '00000006-0001-4000-8000-000000000006', '0f300108-0001-4000-8000-000000000008', 'asset', true, 'system@demo', NOW()),
+('03100016-0001-4000-8000-000000000022', '00000001-0001-4000-8000-000000000001', '0f520101-0001-4000-8000-000000000001', 'asset', true, 'system@demo', NOW()),
+('03100017-0001-4000-8000-000000000023', '00000001-0001-4000-8000-000000000001', '0f520102-0001-4000-8000-000000000002', 'asset', true, 'system@demo', NOW()),
+('03100018-0001-4000-8000-000000000024', '00000001-0001-4000-8000-000000000001', '0f520103-0001-4000-8000-000000000003', 'asset', true, 'system@demo', NOW()),
+('03100019-0001-4000-8000-000000000025', '00000001-0001-4000-8000-000000000001', '0f520104-0001-4000-8000-000000000004', 'asset', true, 'system@demo', NOW()),
+('0310001a-0001-4000-8000-000000000026', '00000001-0001-4000-8000-000000000001', '0f520105-0001-4000-8000-000000000005', 'asset', true, 'system@demo', NOW()),
+('0310001b-0001-4000-8000-000000000027', '00000001-0001-4000-8000-000000000001', '0f520111-0001-4000-8000-000000000011', 'asset', true, 'system@demo', NOW()),
+('0310001c-0001-4000-8000-000000000028', '00000001-0001-4000-8000-000000000001', '0f520112-0001-4000-8000-000000000012', 'asset', true, 'system@demo', NOW()),
+('0310001d-0001-4000-8000-000000000029', '00000001-0001-4000-8000-000000000001', '0f520113-0001-4000-8000-000000000013', 'asset', true, 'system@demo', NOW()),
+('0310001e-0001-4000-8000-000000000030', '00000001-0001-4000-8000-000000000001', '0f520114-0001-4000-8000-000000000014', 'asset', true, 'system@demo', NOW()),
+('0310001f-0001-4000-8000-000000000031', '00000001-0001-4000-8000-000000000001', '0f520115-0001-4000-8000-000000000015', 'asset', true, 'system@demo', NOW()),
+('03100020-0001-4000-8000-000000000032', '00000003-0001-4000-8000-000000000003', '0f520121-0001-4000-8000-000000000021', 'asset', true, 'system@demo', NOW()),
+('03100021-0001-4000-8000-000000000033', '00000003-0001-4000-8000-000000000003', '0f520122-0001-4000-8000-000000000022', 'asset', true, 'system@demo', NOW()),
+('03100022-0001-4000-8000-000000000034', '00000003-0001-4000-8000-000000000003', '0f520123-0001-4000-8000-000000000023', 'asset', true, 'system@demo', NOW()),
+('03100023-0001-4000-8000-000000000035', '00000003-0001-4000-8000-000000000003', '0f520124-0001-4000-8000-000000000024', 'asset', true, 'system@demo', NOW()),
+('03100024-0001-4000-8000-000000000036', '00000003-0001-4000-8000-000000000003', '0f520125-0001-4000-8000-000000000025', 'asset', true, 'system@demo', NOW()),
+('03100025-0001-4000-8000-000000000037', '00000006-0001-4000-8000-000000000006', '0f520131-0001-4000-8000-000000000031', 'asset', true, 'system@demo', NOW()),
+('03100026-0001-4000-8000-000000000038', '00000006-0001-4000-8000-000000000006', '0f520132-0001-4000-8000-000000000032', 'asset', true, 'system@demo', NOW()),
+('03100027-0001-4000-8000-000000000039', '00000006-0001-4000-8000-000000000006', '0f520133-0001-4000-8000-000000000033', 'asset', true, 'system@demo', NOW()),
+('03100028-0001-4000-8000-000000000040', '00000006-0001-4000-8000-000000000006', '0f520134-0001-4000-8000-000000000034', 'asset', true, 'system@demo', NOW()),
+('03100029-0001-4000-8000-000000000041', '00000006-0001-4000-8000-000000000006', '0f520135-0001-4000-8000-000000000035', 'asset', true, 'system@demo', NOW())
+ON CONFLICT (id) DO NOTHING;

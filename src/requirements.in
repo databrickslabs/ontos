@@ -6,6 +6,6 @@ filelock>=3.32.5
 bcrypt>=4.0.0
 sse-starlette>=1.6.0,<4.0.0
 reportlab>=5.0.0
-google-cloud-bigquery>=3.25.0
+google-cloud-bigquery>=3.45.0
 openpyxl>=3.1.0
 fpdf2>=2.8.0

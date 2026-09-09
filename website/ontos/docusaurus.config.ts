@@ -32,7 +32,10 @@ const config: Config = {
   onBrokenMarkdownLinks: 'throw',
   onDuplicateRoutes: 'throw',
   onBrokenAnchors: 'throw',
-  deploymentBranch: 'ontos-docs',
+  // Deployment is handled by the "Deploy Docs to GitHub Pages" GitHub Actions
+  // workflow (Actions -> Pages artifact), so no deploymentBranch is needed here.
+  // Only set this if you switch back to the classic `docusaurus deploy` command.
+  // deploymentBranch: 'gh-pages',
   trailingSlash: false,
 
   // Even if you don't use internationalization, you can use this field to set

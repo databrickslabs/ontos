@@ -1,0 +1,16 @@
+# gitleaks allowlist — false-positive fingerprints.
+#
+# Each entry below is a documentation/example placeholder connection string
+# (not a real credential) that the Databricks pre-push secret scanner
+# (gitleaks) re-flags on every new-branch push, forcing SKIP_SECRET_SCAN=1.
+# Fingerprint format: <commit>:<file>:<rule>:<line>
+#
+# Verified 2026-09-10:
+#   - test-engineer.md: sample CI workflow using postgres:postgres@localhost/test_db
+#   - SECRETS_*.md: user:password@host examples inside secrets-handling docs
+#     (incl. a self-labeled "Simulated API response")
+
+114cb4e9effe26fa7b98e8078007148151f8125d:.claude/agents/test-engineer.md:postgres-connection-string:822
+114cb4e9effe26fa7b98e8078007148151f8125d:.claude/agents/test-engineer.md:postgres-connection-string:827
+0b3920d740c434b747bb8a0c58a5d5d99c950ef6:docs/SECRETS_SECURITY_SUMMARY.md:postgres-connection-string:62
+0b3920d740c434b747bb8a0c58a5d5d99c950ef6:docs/SECRETS_MANAGEMENT_SECURITY_ANALYSIS.md:postgres-connection-string:167

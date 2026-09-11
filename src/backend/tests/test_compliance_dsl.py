@@ -456,16 +456,27 @@ class TestBooleanLiterals:
         assert passed is False
         passed, _ = evaluate_rule_on_object("ASSERT obj.count != true", {'count': 1})
         assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = false", {'count': 0})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count != false", {'count': 0})
+        assert passed is True
         passed, _ = evaluate_rule_on_object("ASSERT obj.count = 1", {'count': 1})
         assert passed is True
 
+    def test_bool_literal_does_not_coerce_float_field(self):
+        """Float fields are not equal to booleans, while numeric equality is unchanged."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = true", {'count': 1.0})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = 1", {'count': 1.0})
+        assert passed is True
+
     def test_bool_literal_does_not_equal_string_field(self):
-        """String entity properties remain distinct from bare boolean literals."""
+        """Quoting regression: string properties do not match bare boolean literals."""
         passed, _ = evaluate_rule_on_object("ASSERT obj.status = true", {'status': 'active'})
         assert passed is False
 
     def test_tag_string_true_requires_quoted_literal(self):
-        """TAG values stored as strings only match quoted string literals."""
+        """Quoting regression: string TAG values require quoted string literals."""
         obj = {'tags': {'enabled': 'true'}}
         passed, _ = evaluate_rule_on_object("ASSERT TAG('enabled') = true", obj)
         assert passed is False

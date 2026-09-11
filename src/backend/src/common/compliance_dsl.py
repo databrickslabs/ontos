@@ -644,6 +644,7 @@ class Evaluator:
                 (type(left) is bool and type(right) in (int, float))
                 or (type(right) is bool and type(left) in (int, float))
             )
+            # Bool-to-bool intentionally falls through because neither type is int or float.
             if has_bool_number_mismatch:
                 return op == TokenType.NEQ
             return left == right if op == TokenType.EQ else left != right

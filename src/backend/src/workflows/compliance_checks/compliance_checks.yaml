@@ -1,11 +1,18 @@
 name: "Compliance Checks"
 description: "Run user-defined compliance DSL rules from compliance_policies table"
 format: "MULTI_TASK"
+deploy_backend_source: true
 environments:
   - environment_key: "compliance-checks-env"
     spec:
       dependencies:
         - "databricks-sdk>=0.81.0"
+        - "databricks-sql-connector"
+        - "alembic"
+        - "fastapi"
+        - "pydantic"
+        - "pydantic-settings"
+        - "pyyaml"
         - "sqlalchemy"
         - "psycopg2-binary"
 tasks:
@@ -23,6 +30,8 @@ tasks:
         - "{{job.parameters.entity_limit}}"
         - "--verbose"
         - "{{job.parameters.verbose}}"
+        - "--backend_source_path"
+        - "{{job.parameters.backend_source_path}}"
         - "--lakebase_instance_name"
         - "{{job.parameters.lakebase_instance_name}}"
         - "--postgres_host"
@@ -51,6 +60,7 @@ parameters:
   policy_severities: "null"
   entity_limit: "null"
   verbose: "false"
+  backend_source_path: ""
   lakebase_instance_name: ""
   postgres_host: ""
   postgres_db: ""

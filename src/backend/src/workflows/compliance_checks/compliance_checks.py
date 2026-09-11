@@ -14,17 +14,13 @@ from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
 
-# Bootstrap the backend ``src`` root onto sys.path for the workflow's lazy
-# ``from src.*`` imports (they run inside the functions below, so importing this
-# module never needs it). On Databricks serverless the script runs via
-# exec(compile(...)) with ``__file__`` unbound, so ``Path(__file__)`` raised
-# NameError at import (issue #685). With ``__file__`` present, behaviour is
-# unchanged; on serverless we insert nothing rather than guess a path from cwd
-# (which could mask packages) and rely on the runtime env / PYTHONPATH.
+# Bootstrap the backend package parent for local and file-based execution. The
+# serverless runner may execute this source without binding ``__file__``; main()
+# handles that case using the deployed backend source archive path.
 _entry_file = globals().get("__file__")
 if _entry_file is not None:
     try:
-        sys.path.insert(0, str(Path(_entry_file).parent.parent.parent))
+        sys.path.insert(0, str(Path(_entry_file).parent.parent.parent.parent))
     except Exception as _exc:  # pragma: no cover - defensive; must never abort import
         # Narrowly guarded so a surprising failure is diagnosable but never
         # crashes module load. Use print because the logging stack isn't wired
@@ -283,6 +279,7 @@ def main() -> None:
     parser.add_argument("--policy_severities", type=str, default=None)  # JSON array of severities
     parser.add_argument("--entity_limit", type=str, default=None)  # Limit entities checked per policy
     parser.add_argument("--verbose", type=str, default="false")
+    parser.add_argument("--backend_source_path", type=str, default=None)
 
     # Database connection parameters
     parser.add_argument("--lakebase_instance_name", type=str, required=True)
@@ -295,6 +292,9 @@ def main() -> None:
     parser.add_argument("--product_version", type=str, default="0.0.0")
 
     args, _ = parser.parse_known_args()
+
+    if args.backend_source_path and args.backend_source_path not in sys.path:
+        sys.path.insert(0, args.backend_source_path)
 
     # Parse arguments
     policy_filter = args.policy_filter

@@ -1,39 +1,18 @@
-"""Smoke tests for the compliance-checks workflow entry script.
+"""Serverless deployment tests for the compliance-checks workflow."""
 
-Regression coverage for issue #685: the entry script is submitted as a
-Databricks ``spark_python_task`` that runs on *serverless* compute, where the
-runtime executes the source via ``exec(compile(...))`` in a namespace with no
-``__file__`` bound. The module-level ``sys.path`` bootstrap must therefore not
-depend on ``__file__`` being present, or it raises ``NameError`` before
-``main()`` ever runs.
-
-These tests faithfully simulate the serverless case by executing the module's
-source in a globals dict that has NO ``__file__`` key. They assert two things:
-
-  * no ``NameError`` escapes module load (the original crash), and
-  * the bootstrap does NOT prepend a fabricated / unrelated directory to
-    ``sys.path`` -- the serverless branch must insert *nothing*, because there is
-    no reliable signal to derive the real source root and a wrong entry could
-    mask similarly named packages.
-
-A companion test proves the normal case (with ``__file__`` present) still puts
-the correct source root -- ``Path(module).parent.parent.parent`` -- on
-``sys.path``.
-
-Third-party top-level imports (``sqlalchemy``, ``databricks.sdk``) are stubbed
-when absent so the test isolates the ``__file__`` path bootstrap. Because the
-correctness assertions inspect ``sys.path`` directly, stubbing cannot mask an
-incorrect ``sys.path`` entry.
-"""
-
+import base64
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
+from zipfile import ZipFile
 
 import pytest
+from databricks.sdk.service import workspace
 
+from src.controller.jobs_manager import JobsManager
+from src.utils.workspace_deployer import WorkspaceDeployer
 
-# Absolute path to the workflow entry script under test.
 _MODULE_PATH = (
     Path(__file__).resolve().parent.parent
     / "src"
@@ -41,9 +20,8 @@ _MODULE_PATH = (
     / "compliance_checks"
     / "compliance_checks.py"
 )
-
-# The source root the __file__ branch is expected to add to sys.path.
-_EXPECTED_SRC_ROOT = str(_MODULE_PATH.parent.parent.parent)
+_BACKEND_PACKAGE_DIR = _MODULE_PATH.parent.parent.parent
+_EXPECTED_SRC_ROOT = str(_BACKEND_PACKAGE_DIR.parent)
 
 
 def _read_source() -> str:
@@ -51,43 +29,38 @@ def _read_source() -> str:
 
 
 @pytest.fixture(autouse=True)
-def restore_sys_path():
-    """Snapshot and restore ``sys.path`` around each test.
-
-    The module bootstrap mutates the real interpreter ``sys.path`` via
-    ``sys.path.insert``; restoring afterwards keeps tests independent.
-    """
-    original = list(sys.path)
+def restore_import_state():
+    original_path = list(sys.path)
+    original_src_modules = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == "src" or name.startswith("src.")
+    }
     try:
         yield
     finally:
-        sys.path[:] = original
+        sys.path[:] = original_path
+        for name in list(sys.modules):
+            if name == "src" or name.startswith("src."):
+                sys.modules.pop(name, None)
+        sys.modules.update(original_src_modules)
 
 
 @pytest.fixture
 def stub_third_party(monkeypatch):
-    """Ensure the module's top-level third-party imports resolve.
-
-    ``sqlalchemy`` and ``databricks.sdk`` are the only top-level third-party
-    imports. If they are importable in the test env we leave them alone;
-    otherwise we install lightweight stubs so the test exercises the
-    ``__file__`` path bootstrap rather than dependency availability.
-    """
-
     def ensure_module(name: str, attrs: dict) -> None:
-        try:  # already importable in this env -> use the real one
+        try:
             __import__(name)
             return
         except Exception:
             pass
-        # Create parent packages as needed (e.g. "databricks" for "databricks.sdk").
         parts = name.split(".")
-        for i in range(1, len(parts)):
-            parent = ".".join(parts[:i])
+        for index in range(1, len(parts)):
+            parent = ".".join(parts[:index])
             if parent not in sys.modules:
-                pkg = types.ModuleType(parent)
-                pkg.__path__ = []  # mark as package
-                monkeypatch.setitem(sys.modules, parent, pkg)
+                package = types.ModuleType(parent)
+                package.__path__ = []
+                monkeypatch.setitem(sys.modules, parent, package)
         module = types.ModuleType(name)
         for attr, value in attrs.items():
             setattr(module, attr, value)
@@ -102,64 +75,158 @@ def stub_third_party(monkeypatch):
 def test_serverless_load_without_file_inserts_no_fabricated_path(
     stub_third_party, monkeypatch, tmp_path
 ):
-    """Serverless simulation: exec the source with NO ``__file__`` in globals.
-
-    This is the exact failure mode from issue #685. We also simulate a plausible
-    serverless working directory (a deployed-workflow-shaped temp folder) so that
-    if the code fell back to a cwd-derived path it would be caught: we assert
-    ``sys.path`` is unchanged, i.e. the bootstrap prepended nothing.
-    """
-    source = _read_source()
-    code = compile(source, "<string>", "exec")
-
-    # Simulate a deployed workflow folder as cwd. A cwd-based guess would insert
-    # tmp_path.parent.parent -- we assert that (and everything else) is NOT added.
+    code = compile(_read_source(), "<string>", "exec")
     workflow_dir = tmp_path / "workflows" / "compliance_checks"
     workflow_dir.mkdir(parents=True)
     monkeypatch.chdir(workflow_dir)
     cwd_grandparent = str(Path.cwd().parent.parent)
 
     module_globals = {"__name__": "not_main"}
-    assert "__file__" not in module_globals
-
     sys_path_before = list(sys.path)
-    try:
-        exec(code, module_globals)  # noqa: S102 - deliberately executing module source
-    except NameError as exc:  # pragma: no cover - only on regression
-        pytest.fail(
-            f"module load raised NameError with __file__ absent (issue #685): {exc}"
-        )
+    exec(code, module_globals)  # noqa: S102 - intentionally simulates serverless execution
 
-    # main() must exist but must not have run (non-main __name__).
+    added_paths = [path for path in sys.path if path not in sys_path_before]
     assert "main" in module_globals
-
-    # Correctness: nothing was prepended to sys.path in the serverless branch...
-    assert sys.path == sys_path_before, (
-        "serverless bootstrap must not mutate sys.path; "
-        f"added: {[p for p in sys.path if p not in sys_path_before]}"
-    )
-    # ...and specifically not a cwd-derived, unrelated directory.
+    assert not added_paths
     assert cwd_grandparent not in sys.path
-    # No bound __file__ leaked into the namespace.
     assert "__file__" not in module_globals
 
 
-def test_normal_load_with_file_inserts_correct_src_root(stub_third_party):
-    """Normal case: with ``__file__`` present the correct source root is added."""
-    source = _read_source()
-    code = compile(source, str(_MODULE_PATH), "exec")
-    module_globals = {
-        "__name__": "not_main",
-        "__file__": str(_MODULE_PATH),
-    }
+def test_normal_load_with_file_inserts_backend_package_parent(stub_third_party):
+    code = compile(_read_source(), str(_MODULE_PATH), "exec")
+    module_globals = {"__name__": "not_main", "__file__": str(_MODULE_PATH)}
+    sys.path[:] = [path for path in sys.path if path != _EXPECTED_SRC_ROOT]
 
-    # Start from a sys.path that does not already contain the expected root, so
-    # the assertion proves the bootstrap added it rather than it being present.
-    sys.path[:] = [p for p in sys.path if p != _EXPECTED_SRC_ROOT]
-
-    exec(code, module_globals)  # noqa: S102 - deliberately executing module source
+    exec(code, module_globals)  # noqa: S102 - intentionally executes the entry source
 
     assert "main" in module_globals
-    assert _EXPECTED_SRC_ROOT in sys.path
-    # It should be prepended (inserted at position 0).
     assert sys.path[0] == _EXPECTED_SRC_ROOT
+
+
+def test_serverless_main_imports_backend_modules_from_deployed_archive(
+    monkeypatch, tmp_path
+):
+    archive_path = tmp_path / "backend_src.zip"
+    archive_path.write_bytes(
+        WorkspaceDeployer._build_python_package_archive(_BACKEND_PACKAGE_DIR)
+    )
+
+    for name in list(sys.modules):
+        if name == "src" or name.startswith("src."):
+            sys.modules.pop(name, None)
+    blocked_roots = {_EXPECTED_SRC_ROOT, str(_BACKEND_PACKAGE_DIR)}
+    sys.path[:] = [path for path in sys.path if path not in blocked_roots]
+
+    module_globals = {"__name__": "not_main"}
+    exec(  # noqa: S102 - intentionally simulates serverless execution
+        compile(_read_source(), "<string>", "exec"),
+        module_globals,
+    )
+
+    class FakeSession:
+        def get(self, model, policy_id):
+            return None
+
+        def close(self):
+            pass
+
+    fake_session = FakeSession()
+    module_globals["WorkspaceClient"] = lambda **kwargs: object()
+    module_globals["create_engine_from_params"] = lambda **kwargs: object()
+    module_globals["sessionmaker"] = lambda **kwargs: lambda: fake_session
+    module_globals["load_policies"] = lambda *args, **kwargs: [
+        {
+            "id": "policy-1",
+            "name": "Hermetic policy",
+            "category": "Governance",
+            "severity": "low",
+        }
+    ]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "compliance_checks.py",
+            "--backend_source_path",
+            str(archive_path),
+            "--lakebase_instance_name",
+            "instance",
+            "--postgres_host",
+            "host",
+            "--postgres_db",
+            "database",
+        ],
+    )
+
+    module_globals["main"]()
+
+    assert sys.path[0] == str(archive_path)
+    assert _EXPECTED_SRC_ROOT not in sys.path
+    assert str(_BACKEND_PACKAGE_DIR) not in sys.path
+    assert str(archive_path) in str(sys.modules["src.controller.compliance_manager"].__file__)
+    assert str(archive_path) in str(sys.modules["src.db_models.compliance"].__file__)
+
+
+def test_workspace_deployer_uploads_backend_source_archive(tmp_path):
+    workflow_dir = tmp_path / "compliance_checks"
+    workflow_dir.mkdir()
+    (workflow_dir / "compliance_checks.py").write_text("print('ok')\n", encoding="utf-8")
+    package_dir = tmp_path / "package"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (package_dir / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+    uploads = {}
+
+    class FakeWorkspaceApi:
+        def get_status(self, path):
+            return object()
+
+        def mkdirs(self, path):
+            pass
+
+        def import_(self, *, path, content, format, overwrite):
+            uploads[path] = (base64.b64decode(content), format, overwrite)
+
+    deployer = WorkspaceDeployer(
+        SimpleNamespace(workspace=FakeWorkspaceApi()),
+        "/Workspace/Shared/ontos-workflows",
+    )
+    target_path = deployer.deploy_workflow(
+        "compliance_checks",
+        workflow_dir,
+        python_package_dir=package_dir,
+    )
+
+    archive_bytes, format_type, overwrite = uploads[f"{target_path}/backend_src.zip"]
+    archive_path = tmp_path / "uploaded.zip"
+    archive_path.write_bytes(archive_bytes)
+    with ZipFile(archive_path) as archive:
+        assert set(archive.namelist()) == {"src/__init__.py", "src/module.py"}
+    assert format_type == workspace.ImportFormat.RAW
+    assert overwrite is True
+
+
+def test_workflow_definition_points_serverless_job_at_deployed_archive():
+    settings = SimpleNamespace(
+        WORKSPACE_DEPLOYMENT_PATH="/Workspace/Shared/ontos-workflows",
+        WORKSPACE_APP_PATH=None,
+    )
+    manager = JobsManager(
+        db=object(),
+        ws_client=object(),
+        settings=settings,
+        workflows_root=_BACKEND_PACKAGE_DIR / "workflows",
+    )
+
+    definition = manager._get_workflow_definition(
+        "compliance_checks",
+        job_cluster_id=None,
+    )
+
+    assert definition["parameters"]["backend_source_path"] == (
+        "/Workspace/Shared/ontos-workflows/compliance_checks/backend_src.zip"
+    )
+    task_parameters = definition["tasks"][0]["spark_python_task"]["parameters"]
+    backend_path_index = task_parameters.index("--backend_source_path")
+    assert task_parameters[backend_path_index + 1] == "{{job.parameters.backend_source_path}}"

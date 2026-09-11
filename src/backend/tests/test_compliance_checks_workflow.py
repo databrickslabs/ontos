@@ -107,6 +107,7 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
     monkeypatch, tmp_path
 ):
     archive_path = tmp_path / "backend_src.zip"
+    extracted_path = tmp_path / "extracted_backend"
     archive_path.write_bytes(
         WorkspaceDeployer._build_python_package_archive(_BACKEND_PACKAGE_DIR)
     )
@@ -122,6 +123,12 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
         compile(_read_source(), "<string>", "exec"),
         module_globals,
     )
+
+    def make_extract_dir(prefix):
+        extracted_path.mkdir()
+        return str(extracted_path)
+
+    module_globals["tempfile"] = SimpleNamespace(mkdtemp=make_extract_dir)
 
     class FakeSession:
         def get(self, model, policy_id):
@@ -160,11 +167,30 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
 
     module_globals["main"]()
 
-    assert sys.path[0] == str(archive_path)
+    assert sys.path[0] == str(extracted_path)
+    assert str(archive_path) not in sys.path
     assert _EXPECTED_SRC_ROOT not in sys.path
     assert str(_BACKEND_PACKAGE_DIR) not in sys.path
-    assert str(archive_path) in str(sys.modules["src.controller.compliance_manager"].__file__)
-    assert str(archive_path) in str(sys.modules["src.db_models.compliance"].__file__)
+    compliance_manager_file = Path(sys.modules["src.controller.compliance_manager"].__file__)
+    compliance_model_file = Path(sys.modules["src.db_models.compliance"].__file__)
+    assert compliance_manager_file.is_relative_to(extracted_path)
+    assert compliance_model_file.is_relative_to(extracted_path)
+    assert module_globals["_add_backend_source_path"](str(archive_path)) == str(extracted_path)
+
+
+def test_backend_source_directory_is_added_without_extraction(tmp_path):
+    module_globals = {"__name__": "not_main"}
+    exec(  # noqa: S102 - intentionally executes the workflow entry source
+        compile(_read_source(), "<string>", "exec"),
+        module_globals,
+    )
+    source_directory = tmp_path / "backend"
+    source_directory.mkdir()
+
+    added_path = module_globals["_add_backend_source_path"](str(source_directory))
+
+    assert added_path == str(source_directory)
+    assert sys.path[0] == str(source_directory)
 
 
 def test_workspace_deployer_uploads_backend_source_archive(tmp_path):

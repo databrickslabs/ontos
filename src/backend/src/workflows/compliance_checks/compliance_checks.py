@@ -9,10 +9,14 @@ import os
 import sys
 import json
 import argparse
+import shutil
+import tempfile
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
 # Bootstrap the backend package parent for local and file-based execution. The
 # serverless runner may execute this source without binding ``__file__``; main()
@@ -32,6 +36,54 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from databricks.sdk import WorkspaceClient
+
+
+_extracted_backend_sources: Dict[str, str] = {}
+
+
+def _add_backend_source_path(backend_source_path: Optional[str]) -> Optional[str]:
+    if not backend_source_path:
+        return None
+
+    source_path = Path(backend_source_path)
+    cached_path = _extracted_backend_sources.get(str(source_path))
+    if cached_path and Path(cached_path).is_dir():
+        import_path = cached_path
+        source_description = f"cached extraction of {source_path}"
+    elif source_path.is_dir():
+        import_path = str(source_path)
+        source_description = "source directory"
+    elif source_path.suffix.lower() == ".zip":
+        if not source_path.is_file():
+            print(f"WARNING: backend source archive not found: {source_path}", file=sys.stderr)
+            return None
+
+        extracted_path = tempfile.mkdtemp(prefix="ontos-compliance-backend-")
+        try:
+            with source_path.open("rb") as archive_file:
+                archive_bytes = archive_file.read()
+            with ZipFile(BytesIO(archive_bytes)) as archive:
+                archive.extractall(extracted_path)
+            if not (Path(extracted_path) / "src" / "__init__.py").is_file():
+                raise RuntimeError("archive does not contain the src package")
+        except (BadZipFile, OSError, RuntimeError) as exc:
+            shutil.rmtree(extracted_path, ignore_errors=True)
+            raise RuntimeError(
+                f"Failed to extract backend source archive {source_path}: {exc}"
+            ) from exc
+
+        import_path = extracted_path
+        _extracted_backend_sources[str(source_path)] = import_path
+        source_description = f"local extraction of {source_path}"
+    else:
+        print(f"WARNING: unsupported backend source path: {source_path}", file=sys.stderr)
+        return None
+
+    while import_path in sys.path:
+        sys.path.remove(import_path)
+    sys.path.insert(0, import_path)
+    print(f"Backend source added to sys.path: {import_path} ({source_description})")
+    return import_path
 
 
 # ============================================================================
@@ -293,8 +345,7 @@ def main() -> None:
 
     args, _ = parser.parse_known_args()
 
-    if args.backend_source_path and args.backend_source_path not in sys.path:
-        sys.path.insert(0, args.backend_source_path)
+    _add_backend_source_path(args.backend_source_path)
 
     # Parse arguments
     policy_filter = args.policy_filter

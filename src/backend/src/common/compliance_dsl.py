@@ -79,6 +79,8 @@ class TokenType(Enum):
     IDENTIFIER = "IDENTIFIER"
     STRING = "STRING"
     NUMBER = "NUMBER"
+    TRUE = "TRUE"
+    FALSE = "FALSE"
 
     # Punctuation
     LPAREN = "("
@@ -111,7 +113,8 @@ class Lexer:
         'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         'MATCHES', 'IN', 'CONTAINS', 'AND', 'OR', 'NOT',
         'HAS_TAG', 'TAG', 'LENGTH', 'UPPER', 'LOWER',
-        'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY'
+        'PASS', 'FAIL', 'ASSIGN_TAG', 'REMOVE_TAG', 'NOTIFY',
+        'TRUE', 'FALSE'
     }
 
     def __init__(self, text: str):
@@ -391,6 +394,15 @@ class Parser:
             self.advance()
             return Literal(token.value)
 
+        # Boolean literals (case-insensitive: True/False/true/false)
+        if token.type == TokenType.TRUE:
+            self.advance()
+            return Literal(True)
+
+        if token.type == TokenType.FALSE:
+            self.advance()
+            return Literal(False)
+
         # List literal
         if token.type == TokenType.LBRACKET:
             return self.parse_list()
@@ -625,10 +637,17 @@ class Evaluator:
         left = self.evaluate(node.left)
         right = self.evaluate(node.right)
 
-        if op == TokenType.EQ:
-            return left == right
-        if op == TokenType.NEQ:
-            return left != right
+        if op in (TokenType.EQ, TokenType.NEQ):
+            # Python considers bool a subclass of int, but DSL booleans must not
+            # compare equal to numeric entity values such as 1 or 0.
+            has_bool_number_mismatch = (
+                (type(left) is bool and type(right) in (int, float))
+                or (type(right) is bool and type(left) in (int, float))
+            )
+            # Bool-to-bool intentionally falls through because neither type is int or float.
+            if has_bool_number_mismatch:
+                return op == TokenType.NEQ
+            return left == right if op == TokenType.EQ else left != right
         if op == TokenType.GT:
             return left > right if left is not None and right is not None else False
         if op == TokenType.LT:

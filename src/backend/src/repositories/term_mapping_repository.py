@@ -42,6 +42,36 @@ class MappingRunRepository(CRUDBase[MappingApplyRunDb, RunCreate, RunRead]):
             db.rollback()
             raise
 
+    def last_run_at_by_context(self, db: Session) -> dict[str, str]:
+        """Return {scheme_context: latest_run_created_at_iso} across all runs.
+
+        A run's ``ontology_contexts`` is a JSON list of the schemes it targeted;
+        we take the most recent ``created_at`` per scheme. Powers the Enrich
+        coverage matrix "Last run" column. Done in Python (JSON-array membership
+        is awkward + non-portable in SQL across SQLite/Postgres, and the run
+        count is small).
+        """
+        try:
+            runs = (
+                db.query(self.model.ontology_contexts, self.model.created_at)
+                .order_by(desc(self.model.created_at))
+                .all()
+            )
+            latest: dict[str, str] = {}
+            for contexts, created in runs:
+                if not contexts or created is None:
+                    continue
+                iso = created.isoformat()
+                for ctx in contexts:
+                    # runs are newest-first, so first write per ctx wins
+                    if ctx not in latest:
+                        latest[ctx] = iso
+            return latest
+        except SQLAlchemyError as e:
+            logger.error(f"last_run_at_by_context failed: {e}", exc_info=True)
+            db.rollback()
+            raise
+
 
 class MappingSuggestionRepository(CRUDBase[MappingSuggestionDb, MappingSuggestionDb, MappingSuggestionDb]):
     """Suggestion queue. Uses the model itself as the create/update schema —
@@ -114,6 +144,59 @@ class MappingSuggestionRepository(CRUDBase[MappingSuggestionDb, MappingSuggestio
             )
         except SQLAlchemyError as e:
             logger.error(f"count_pending_for_entity failed: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def count_pending_by_target_concept(self, db: Session) -> dict[str, int]:
+        """Return {target_concept_iri: pending_suggestion_count} across all runs.
+
+        Powers the per-scheme "suggested" count on the Enrich coverage matrix:
+        the caller maps each concept IRI to its scheme and sums. Only PENDING
+        suggestions count (accepted/rejected/applied are done, not awaiting
+        review).
+        """
+        try:
+            rows = (
+                db.query(
+                    self.model.target_concept_iri,
+                    func.count(self.model.id),
+                )
+                .filter(self.model.status == SUG_STATUS_PENDING)
+                .group_by(self.model.target_concept_iri)
+                .all()
+            )
+            return {iri: int(count) for iri, count in rows if iri}
+        except SQLAlchemyError as e:
+            logger.error(f"count_pending_by_target_concept failed: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def list_pending_by_target_concepts(
+        self,
+        db: Session,
+        iris: Sequence[str],
+    ) -> List[MappingSuggestionDb]:
+        """Return all PENDING suggestions whose target_concept_iri is in ``iris``.
+
+        Sibling to ``count_pending_by_target_concept`` but returns the rows (not
+        just a per-concept count) so the Enrich Map "Review suggested matches"
+        surface can hand the shared reviewer live suggestion ids + run ids for a
+        scheme. Ordered newest-first so the most recent run's suggestions lead.
+        """
+        if not iris:
+            return []
+        try:
+            return (
+                db.query(self.model)
+                .filter(
+                    self.model.target_concept_iri.in_(list(iris)),
+                    self.model.status == SUG_STATUS_PENDING,
+                )
+                .order_by(desc(self.model.created_at))
+                .all()
+            )
+        except SQLAlchemyError as e:
+            logger.error(f"list_pending_by_target_concepts failed: {e}", exc_info=True)
             db.rollback()
             raise
 

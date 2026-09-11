@@ -4,32 +4,158 @@ from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Query, UploadFile, File
 
-from src.controller.semantic_models_manager import SemanticModelsManager
+from src.controller.semantic_models_manager import SemanticModelsManager, ReferenceCountError
 from src.models.ontology import (
     OntologyConcept,
     ConceptHierarchy,
     TaxonomyStats,
     ConceptSearchResult
 )
-from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate
+from src.models.semantic_models import SemanticModelCreate, SemanticModelUpdate, CoverageResponse, TagDeliveryStats, SchemePendingSuggestion
 from src.utils.semantic_model_title_candidates import (
     extract_title_candidates,
     humanize_rdf_filename,
     pick_auto_display_name,
 )
 from src.utils.rdf_serialization_display import serialization_label_for_graph_taxonomy
-from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep, AuditCurrentUserDep
+from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep, AuditCurrentUserDep, AuthorizationManagerDep
 from src.common.authorization import PermissionChecker
+# Module-level so the review-bypass guard can reference them (and tests can
+# monkeypatch them). WorkflowsManager gives a NON-firing existence check for a
+# governing concept workflow; AuthorizationManager gates the admin override.
+from src.controller.workflows_manager import WorkflowsManager
+from src.controller.authorization_manager import AuthorizationManager
+from src.models.process_workflows import TriggerType, EntityType
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 from src.owl.owl_parser import clean_truncated_turtle
 from rdflib import ConjunctiveGraph, RDF
+from pydantic import BaseModel, Field
 
 # Configure logging
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Semantic Models"])
+
+
+# --- Concept-versioning request/response models (API contract §4, signed off) ---
+class PublishVersionRequest(BaseModel):
+    """Body for POST /semantic-models/concepts/version/publish."""
+    iri: str = Field(..., min_length=1, description="Stable concept IRI (never changes across versions)")
+    changes: dict = Field(default_factory=dict, description="Concept fields to overwrite in the new version")
+    change_note: Optional[str] = Field(None, description="Human note describing what changed")
+
+
+class PublishVersionResponse(BaseModel):
+    """Response for the publish action. NO graph_refreshed field: a 200 means the
+    graph was patched synchronously and the new version is already live."""
+    iri: str
+    label: Optional[str] = None
+    new_version: int
+    is_current: bool
+
+
+# --- Version read models (API contract §1, §2, signed off) ---
+class ConceptVersionEntry(BaseModel):
+    version: int
+    is_current: bool
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    created_by: Optional[str] = None
+
+
+class ConceptVersionInfo(BaseModel):
+    """GET /semantic-models/concepts/version — current version + history (§1).
+
+    label is REQUIRED so the Simple view renders a name, never the IRI."""
+    iri: str
+    label: str
+    current_version: Optional[int] = None
+    status: Optional[str] = None
+    versions: List[ConceptVersionEntry] = Field(default_factory=list)
+    replaces_iri: Optional[str] = None
+    replaced_by_iris: List[str] = Field(default_factory=list)
+
+
+# --- Safe-transition models (API contract §5, signed off) ---
+class ReferenceCountResponse(BaseModel):
+    """GET /semantic-models/concepts/reference-count → the retire gate."""
+    iri: str
+    count: int
+
+
+class UploadPreviewConceptEntry(BaseModel):
+    """One concept row in an upload preview."""
+    iri: str
+    label: Optional[str] = None
+    reference_count: Optional[int] = None
+
+
+class UploadPreviewSummary(BaseModel):
+    unchanged: int = 0
+    modified: int = 0
+    new: int = 0
+    removed: int = 0
+
+
+class UploadPreviewResponse(BaseModel):
+    """Dry-run preview of a file re-upload (P1-0). Applies NOTHING until confirm."""
+    preview_token: str
+    context_name: str
+    summary: UploadPreviewSummary
+    modified: List[UploadPreviewConceptEntry] = Field(default_factory=list)
+    new: List[UploadPreviewConceptEntry] = Field(default_factory=list)
+    removed: List[UploadPreviewConceptEntry] = Field(default_factory=list)
+
+
+class UploadConfirmResponse(BaseModel):
+    """Result of confirming a previously previewed upload (P1-0 + P3 gate).
+
+    ``status`` distinguishes a direct apply (ungoverned scheme — today's
+    behavior) from a held changeset awaiting one aggregate approval (governed
+    scheme). When held, ``review_request_id`` points at the backing review and
+    nothing has been applied yet.
+    """
+    preview_token: str
+    summary: UploadPreviewSummary
+    status: str = "applied"  # 'applied' (direct) | 'held' (awaiting approval)
+    governed: bool = False
+    review_request_id: Optional[str] = None
+
+
+class DeprecateConceptRequest(BaseModel):
+    """POST /semantic-models/concepts/deprecate."""
+    iri: str = Field(..., min_length=1)
+    replaced_by: Optional[List[str]] = Field(None, description="Successor IRIs for a 2B split")
+
+
+class DeprecateConceptResponse(BaseModel):
+    iri: str
+    label: Optional[str] = None
+    status: str
+    replaced_by: List[str] = Field(default_factory=list)
+
+
+class RetireConceptRequest(BaseModel):
+    """POST /semantic-models/concepts/retire."""
+    iri: str = Field(..., min_length=1)
+
+
+class RetireConceptResponse(BaseModel):
+    iri: str
+    label: Optional[str] = None
+    status: str
+
+
+# --- Graph freshness (API contract §6, signed off) ---
+class GraphFreshnessResponse(BaseModel):
+    """Served in-memory graph freshness. UI shows 'last refreshed HH:MM, N
+    concepts' + a SEPARATE 'synced to UC' line (uc_* fields)."""
+    last_refreshed: str
+    concept_count: int
+    uc_synced_at: Optional[str] = None
+    uc_next_sync_est: Optional[str] = None
 
 # Internal named-graph contexts that must never surface as user-facing RDF
 # Sources. These are computed/managed graphs (app entities, semantic links,
@@ -693,6 +819,319 @@ async def get_concept_details_by_iri(
         raise HTTPException(status_code=500, detail="Failed to retrieve concept details")
 
 
+# NOTE: these version READ routes MUST be registered ABOVE the catch-all
+# `@router.get('/semantic-models/concepts/{concept_iri:path}')` (below) or the
+# path-param route swallows `/version` and `/version/detail`.
+@router.get(
+    '/semantic-models/concepts/version',
+    response_model=ConceptVersionInfo,
+)
+async def get_concept_version_info(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> ConceptVersionInfo:
+    """Current version + version history for a concept (P0-2, API contract §1)."""
+    try:
+        info = manager.get_concept_version_info(concept_iri)
+        if info is None:
+            raise HTTPException(status_code=404, detail="Concept not found")
+        return ConceptVersionInfo(**info)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error retrieving version info for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve version info")
+
+
+@router.get('/semantic-models/concepts/version/detail')
+async def get_concept_version_detail(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    version: int = Query(..., ge=1, description="Version number to fetch"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> dict:
+    """Concept detail as of a specific version, by (iri, version) key (§2).
+
+    Cold fetch; does not touch the hot graph. Same shape as concepts/by-iri
+    detail plus version / is_current."""
+    try:
+        detail = manager.get_concept_version_detail(concept_iri, version)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="Concept version not found")
+        return detail
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error retrieving version detail for %s v%s", concept_iri, version, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve version detail")
+
+
+@router.post(
+    '/semantic-models/concepts/version/publish',
+    response_model=PublishVersionResponse,
+)
+async def publish_concept_version(
+    body: PublishVersionRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> PublishVersionResponse:
+    """Publish a new version of a concept (P0-3, API contract §4).
+
+    DB-first atomic swap (demote old -> history, insert new current, reassign the
+    concept's triples) in ONE Postgres transaction, THEN patch the served graph.
+    On the rare DB-committed-but-graph-patch-failed case the manager force-rebuilds
+    and re-raises; we surface that as a 500 (the DB is correct, the served graph
+    is being reconciled) rather than pretending success.
+    """
+    try:
+        result = manager.publish_concept_version(
+            concept_iri=body.iri,
+            changes=body.changes,
+            change_note=body.change_note,
+            published_by=current_user.email,
+        )
+        return PublishVersionResponse(**result)
+    except ValueError as e:
+        # Not editable / not found / bad input.
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        # Includes the recovery-contract re-raise: DB committed, graph patch
+        # failed and a rebuild was forced. Do NOT report success.
+        logger.error("Error publishing concept version for %s", body.iri, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="New version committed to the database but the served graph "
+                   "could not be patched; a rebuild was triggered. Retry the read "
+                   "shortly or use the graph reload control.",
+        )
+
+
+# --------------------------------------------------------------------------
+# P1-0: steward preview + confirm on file re-upload. Declared here (well ABOVE
+# the ``/concepts/{concept_iri:path}`` catch-all) so the literal ``uploads/...``
+# segments are not swallowed by the path-param route.
+# --------------------------------------------------------------------------
+@router.get(
+    '/semantic-models/uploads/preview/{preview_token}',
+    response_model=UploadPreviewResponse,
+)
+async def get_upload_preview(
+    preview_token: str,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> UploadPreviewResponse:
+    """Re-fetch a pending (not-yet-applied) upload preview by token."""
+    from src.repositories.upload_preview_repository import upload_preview_repo
+    from src.controller.concept_diff import compute_concept_diff
+    from src.repositories.rdf_triples_repository import rdf_triples_repo
+    from rdflib import Graph as _Graph
+
+    stash = upload_preview_repo.get(manager._db, preview_token)
+    if stash is None:
+        raise HTTPException(status_code=404, detail="Unknown or already-applied preview token")
+    try:
+        graph = _Graph()
+        fmt = 'turtle' if stash.format == 'skos' else 'xml'
+        content = clean_truncated_turtle(stash.content_text) if fmt == 'turtle' else stash.content_text
+        graph.parse(data=content, format=fmt)
+        current_triples = rdf_triples_repo.list_by_context(manager._db, stash.context_name)
+        diff = compute_concept_diff(graph, current_triples)
+        return UploadPreviewResponse(
+            preview_token=str(stash.token),
+            context_name=stash.context_name,
+            summary=UploadPreviewSummary(**diff.summary()),
+            modified=[
+                UploadPreviewConceptEntry(iri=i, label=manager._preview_label(i, graph), reference_count=manager.reference_count(i))
+                for i in diff.modified
+            ],
+            new=[UploadPreviewConceptEntry(iri=i, label=manager._preview_label(i, graph)) for i in diff.new],
+            removed=[
+                UploadPreviewConceptEntry(iri=i, label=manager._preview_label(i, graph), reference_count=manager.reference_count(i))
+                for i in diff.removed
+            ],
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error re-fetching upload preview %s", preview_token, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load upload preview")
+
+
+@router.post(
+    '/semantic-models/uploads/preview/{preview_token}/confirm',
+    response_model=UploadConfirmResponse,
+)
+async def confirm_upload_preview(
+    preview_token: str,
+    current_user: CurrentUserDep,
+    conflict_mode: Optional[str] = Query(None, description="Override cross-scheme conflict handling: block | skip | update (defaults to the mode chosen at preview time)"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> UploadConfirmResponse:
+    """Confirm a previously previewed re-upload (P1-0).
+
+    Routes through ``gate_or_apply_upload``, which — since Scenario D
+    (2026-08-18) — ALWAYS applies directly via the bulk-versioning-event
+    primitive (modified→v2, new→v1 as Draft, removed→deprecated), run
+    atomically, and consumes the token. The response carries
+    ``status:'applied'`` and ``governed:False``. The changeset approval gate is
+    disabled, so ``status:'held'`` is no longer returned (the response model
+    still allows it for any legacy held review resolved elsewhere).
+
+    Single-use: unknown/already-applied tokens → 404.
+    """
+    try:
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        # The context/collection is resolved from the stash (the confirm route
+        # only has the token). Missing stash -> 404 (single-use / unknown).
+        stash = upload_preview_repo.get(manager._db, preview_token)
+        if stash is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Unknown or already-applied preview token: {preview_token}",
+            )
+        result = manager.gate_or_apply_upload(
+            stash.context_name, preview_token, actor=current_user.email,
+            conflict_mode=conflict_mode,
+        )
+        return UploadConfirmResponse(
+            preview_token=preview_token,
+            summary=UploadPreviewSummary(**result["summary"]),
+            status=result.get("status", "applied"),
+            governed=result.get("governed", False),
+            review_request_id=result.get("review_request_id"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error confirming upload preview %s", preview_token, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Upload apply failed; the store is unchanged (atomic rollback). Retry the confirm.",
+        )
+
+
+@router.get(
+    '/semantic-models/concepts/reference-count',
+    response_model=ReferenceCountResponse,
+)
+async def get_concept_reference_count(
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> ReferenceCountResponse:
+    """Reference count for a concept (P0-6): entity_semantic_links rows + concept->concept refs.
+
+    This is the retire gate — retirement is refused while count > 0.
+    """
+    try:
+        return ReferenceCountResponse(iri=concept_iri, count=manager.reference_count(concept_iri))
+    except Exception:
+        logger.error("Error computing reference count for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute reference count")
+
+
+@router.post(
+    '/semantic-models/concepts/deprecate',
+    response_model=DeprecateConceptResponse,
+)
+async def deprecate_concept(
+    body: DeprecateConceptRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> DeprecateConceptResponse:
+    """Deprecate a concept (stays resolvable); on a 2B split write isReplacedBy /
+    replaces / wasRevisionOf lineage links (P0-6, API contract §5)."""
+    try:
+        result = manager.deprecate_concept(
+            concept_iri=body.iri,
+            replaced_by=body.replaced_by,
+            deprecated_by=current_user.email,
+        )
+        return DeprecateConceptResponse(**result)
+    except ReferenceCountError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error deprecating concept %s", body.iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to deprecate concept")
+
+
+@router.post(
+    '/semantic-models/concepts/retire',
+    response_model=RetireConceptResponse,
+)
+async def retire_concept(
+    body: RetireConceptRequest,
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> RetireConceptResponse:
+    """Retire a concept to a tombstone, gated on reference_count == 0 (P0-6, §5).
+
+    Returns 409 if the concept is still referenced (retirement refused); otherwise
+    tombstones it (status=retired, still resolvable, never hard-deleted).
+    """
+    try:
+        result = manager.retire_concept(concept_iri=body.iri, retired_by=current_user.email)
+        return RetireConceptResponse(**result)
+    except ReferenceCountError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error retiring concept %s", body.iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retire concept")
+
+
+@router.get(
+    '/semantic-models/graph/freshness',
+    response_model=GraphFreshnessResponse,
+)
+async def get_graph_freshness(
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY)),
+) -> GraphFreshnessResponse:
+    """Served-graph freshness (P0-8, API contract §6): last_refreshed +
+    concept_count + separate UC sync timing."""
+    try:
+        return GraphFreshnessResponse(**manager.graph_freshness())
+    except Exception:
+        logger.error("Error computing graph freshness", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute graph freshness")
+
+
+@router.post(
+    '/semantic-models/graph/reload',
+    response_model=GraphFreshnessResponse,
+)
+async def reload_graph(
+    current_user: CurrentUserDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE)),
+) -> GraphFreshnessResponse:
+    """Force a full rebuild of the served graph and return the updated freshness
+    (P0-8, API contract §6). The user-facing recovery/backstop control."""
+    try:
+        return GraphFreshnessResponse(**manager.reload_graph())
+    except Exception:
+        logger.error("Error reloading graph", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to reload graph")
+
+
 @router.get(
     '/semantic-models/concepts/{concept_iri:path}',
     deprecated=True,
@@ -953,29 +1392,112 @@ async def export_knowledge_collection(
         raise HTTPException(status_code=500, detail="Failed to export collection")
 
 
+@router.post('/knowledge/collections/{collection_iri:path}/import/conflicts')
+async def detect_import_conflicts_for_collection(
+    collection_iri: str,
+    file: UploadFile = File(...),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Pre-check an upload for cross-scheme IRI conflicts BEFORE importing.
+
+    Parses the uploaded file (same read as /import) and returns the typed subject
+    IRIs that already live in ANOTHER scheme, so the UI can render the
+    block/skip/update choice up front rather than discovering conflicts via a
+    failed import. Empty list = the import is safe in any mode.
+
+    Response: {conflicts: [{iri, existing_context, existing_label}], count}
+    """
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8')
+        format = "turtle" if file.filename and file.filename.endswith('.ttl') else "xml"
+        conflicts = manager.detect_import_conflicts(collection_iri, content_str, format=format)
+        return {'conflicts': conflicts, 'count': len(conflicts)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error detecting import conflicts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to detect import conflicts")
+
+
 @router.post('/knowledge/collections/{collection_iri:path}/import')
 async def import_to_knowledge_collection(
     collection_iri: str,
     file: UploadFile = File(...),
+    conflict_mode: str = Query("block", description="Cross-scheme conflict handling: block | skip | update"),
+    additive: bool = Query(False, description="Append the file's concepts as new Draft concepts even if the collection is non-empty (multi-file merge into one scheme), instead of the re-upload diff/version path."),
     current_user: CurrentUserDep = None,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
-    """Import RDF content into an existing collection."""
+    """Import RDF content into a collection.
+
+    Re-upload semantics (P0-4 diff engine + P1-0 steward preview): if the target
+    collection ALREADY has triples, this returns a DIFF PREVIEW (applies nothing)
+    so the steward can review 'modifies N / adds M / removes K' and apply via the
+    confirm endpoint. A FIRST import into an empty collection is a plain add
+    (concepts stamped Draft), since there is nothing to diff against.
+
+    additive: when True, the re-upload diff/preview path is SKIPPED even if the
+    collection is non-empty — the file's concepts are appended as new Draft
+    concepts (import_rdf_to_collection mints v1-as-draft per typed subject,
+    idempotently). This is the multi-file "merge into one scheme" contract: every
+    file must land additively as Draft, nothing gets deprecated. It bypasses only
+    the SAME-scheme diff; cross-scheme IRI identity (conflict_mode) still applies.
+    Response is always {mode:'imported', ...} in additive mode.
+
+    conflict_mode governs cross-scheme IRI conflicts (an incoming IRI already
+    owned by ANOTHER scheme): 'block' (default) refuses as before; 'skip' imports
+    only the non-conflicting subjects; 'update' applies the file's values to the
+    conflicting concept in its EXISTING scheme as a versioned update.
+
+    Response is one of:
+      - first import / additive:  {mode:'imported', success, triples_imported}
+      - re-upload:                {mode:'preview', preview_token, conflict_mode, conflicts, summary, ...}
+    """
     try:
         content = await file.read()
         content_str = content.decode('utf-8')
-        
+
         # Determine format from filename
         format = "turtle" if file.filename and file.filename.endswith('.ttl') else "xml"
-        
+
+        # Does the collection already have content? If so, this is a re-upload and
+        # goes through the diff-preview path instead of a blind append — UNLESS
+        # additive=True (multi-file merge into one scheme), where every file must
+        # append as Draft and nothing is deprecated, so we skip the diff branch.
+        existing = manager.list_triples_by_context(collection_iri)
+        if existing and not additive:
+            from rdflib import Graph
+            temp_graph = Graph()
+            rdf_format = "turtle" if format in ("ttl", "turtle") else "xml"
+            parse_input = clean_truncated_turtle(content_str) if rdf_format == "turtle" else content_str
+            try:
+                temp_graph.parse(data=parse_input, format=rdf_format)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid {rdf_format} content: {e}")
+            preview = manager.preview_upload(
+                collection_iri, temp_graph, source_filename=file.filename,
+                conflict_mode=conflict_mode,
+            )
+            return {'mode': 'preview', **preview}
+
         count = manager.import_rdf_to_collection(
             collection_iri=collection_iri,
             content=content_str,
             format=format,
             imported_by=current_user.email if current_user else None,
+            # File-imported concepts land as Draft so they flow through review
+            # before certification, matching the generator save path. Without
+            # this, imported classes/properties showed no status at all.
+            default_status="draft",
+            source_filename=file.filename,
+            conflict_mode=conflict_mode,
         )
-        return {'success': True, 'triples_imported': count}
+        return {'mode': 'imported', 'success': True, 'triples_imported': count}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1226,20 +1748,21 @@ async def _submit_concept_for_review_payload(
             data = await request.json()
         except Exception:
             data = {}
-        review_data = manager.submit_concept_for_review(
+        # Real submission: computes the diff, fires the governance trigger,
+        # opens a backing DataAssetReview (when a reviewer is supplied and the
+        # review manager is reachable) and transitions draft -> under_review.
+        result = manager.submit_concept_for_review(
             concept_iri=concept_iri,
             reviewer_email=data.get('reviewer_email'),
             submitted_by=submitted_by,
             notes=data.get('notes'),
+            reset_mode=data.get('reset_approvals_on_resubmit', 'reset_all'),
         )
-        # TODO: Integrate with DataAssetReviewManager to create actual review request
-        # For now, update status directly
-        updated = manager.update_concept_status(
-            concept_iri=concept_iri,
-            new_status="under_review",
-            updated_by=submitted_by,
-        )
-        return {'review_data': review_data, 'concept': updated}
+        return {
+            'concept': result.get('concept'),
+            'review_request_id': result.get('review_request_id'),
+            'governed': result.get('governed', False),
+        }
     except HTTPException:
         raise
     except ValueError as e:
@@ -1247,6 +1770,85 @@ async def _submit_concept_for_review_payload(
     except Exception as e:
         logger.error(f"Error submitting for review: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to submit for review")
+
+
+async def _withdraw_concept_review_payload(
+    manager: SemanticModelsManager,
+    concept_iri: str,
+    withdrawn_by: str,
+) -> dict:
+    """Owner-initiated withdraw: under_review -> draft, cancel the open review."""
+    try:
+        result = manager.withdraw_concept_review(
+            concept_iri=concept_iri,
+            withdrawn_by=withdrawn_by,
+        )
+        return result
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error withdrawing review: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to withdraw review")
+
+
+def _guard_review_bypass(
+    manager: "SemanticModelsManager",
+    db,
+    concept_iri: str,
+    target_status: str,
+    current_user,
+    auth_manager: AuthorizationManager,
+) -> None:
+    """Raise 403 if a non-admin tries to advance a governed concept past review
+    (under_review -> approved/published) via a direct status flip instead of the
+    review decision. Admins may override.
+
+    Only guards when the concept's CURRENT status is ``under_review`` and the
+    ``target_status`` advances it past review. Ungoverned concepts stay
+    zero-friction. On any unexpected error probing the workflow subsystem we log
+    and treat the concept as ungoverned (allow), matching the codebase's
+    zero-friction-on-error posture.
+    """
+    if target_status not in ("approved", "published"):
+        return
+
+    try:
+        concept = manager.get_concept(concept_iri)
+    except Exception:
+        concept = None
+    if not concept or concept.get("status") != "under_review":
+        return
+
+    # Admins may always override the workflow.
+    if auth_manager.is_user_ontos_admin(getattr(current_user, "groups", None)):
+        return
+
+    # Non-firing existence check: is there a governing workflow for concepts?
+    try:
+        wfs = WorkflowsManager(db).get_workflows_for_trigger(
+            trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE,
+            entity_type=EntityType.ONTOLOGY_CONCEPT,
+        )
+        governed = bool(wfs)
+    except Exception as e:
+        logger.warning(
+            "Review-bypass guard could not check governing workflows for %s; "
+            "treating as ungoverned (allow). Error: %s",
+            concept_iri, e,
+        )
+        governed = False
+
+    if governed:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This concept is under review and governed by an approval "
+                "workflow. Advance it through the review decision "
+                "(approve / request changes), not a direct status change."
+            ),
+        )
 
 
 def _set_concept_status_payload(
@@ -1269,6 +1871,10 @@ def _set_concept_status_payload(
         return concept
     except HTTPException:
         raise
+    except ReferenceCountError as e:
+        # Still-referenced concept can't be deprecated/archived via the raw
+        # status path — surface the same 409 the retire gate uses.
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -1351,6 +1957,74 @@ async def _migrate_concept_payload(
     except Exception as e:
         logger.error(f"Error migrating concept: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to migrate concept")
+
+
+# -------- coverage metrics --------
+
+@router.get('/knowledge/coverage', response_model=CoverageResponse)
+async def get_coverage_metrics(
+    db: DBSessionDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+):
+    """Get semantic enrichment coverage metrics per scheme.
+
+    Returns concept count, coverage percentage (% with >=1 semantic link),
+    and distinct entity counts per layer (products/contracts/assets) for each
+    source_context (scheme/taxonomy).
+    """
+    try:
+        from src.controller.semantic_links_manager import SemanticLinksManager
+
+        semantic_links_manager = SemanticLinksManager(db, semantic_models_manager=manager)
+        coverage = manager.get_coverage_metrics(semantic_links_manager)
+        return coverage
+    except Exception as e:
+        logger.error(f"Error computing coverage metrics: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute coverage metrics")
+
+
+@router.get(
+    '/knowledge/coverage/{scheme_iri:path}/pending-suggestions',
+    response_model=List[SchemePendingSuggestion],
+)
+async def get_scheme_pending_suggestions(
+    scheme_iri: str,
+    db: DBSessionDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+):
+    """PENDING term-mapping suggestions whose target concept belongs to a scheme.
+
+    Backs the Enrich Map "Review suggested matches" surface: given a coverage
+    row's scheme key, return the live pending suggestions (each with its run id)
+    so the reviewer can accept-all via /api/term-mappings/runs/{run_id}/decisions
+    then materialise via /apply. Returns [] for an unknown/empty scheme.
+    """
+    try:
+        return manager.get_pending_suggestions_for_scheme(db, scheme_iri)
+    except Exception as e:
+        logger.error(f"Error listing pending suggestions for scheme: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list pending suggestions")
+
+
+# -------- tag delivery stats --------
+
+@router.get('/knowledge/tag-delivery-stats', response_model=TagDeliveryStats)
+async def get_tag_delivery_stats(
+    db: DBSessionDep,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+):
+    """Real tag-delivery stats for the Enrich Tags row: eligible concept->asset
+    links, how many are pending (created since the last successful uc_tag_sync
+    run), and the last run's state/time. See TagDeliveryStats for the honesty
+    caveats (no per-link delivery log; edits not counted as pending)."""
+    try:
+        return manager.get_tag_delivery_stats(db)
+    except Exception as e:
+        logger.error(f"Error computing tag delivery stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compute tag delivery stats")
 
 
 # -------- create (no IRI in URL — already collision-free) --------
@@ -1448,6 +2122,30 @@ async def remove_concept_owner_by_iri(
     return _remove_concept_owner_payload(manager, concept_iri, user_email, current_user.email)
 
 
+@router.get('/knowledge/concepts/by-iri/submit-review/preview')
+async def preview_submit_concept_for_review_by_iri(
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_ONLY))
+) -> dict:
+    """Preview whether submitting this draft for review would be governed.
+
+    Read-only: runs the workflow MATCHING path only (fires nothing, opens no
+    review, changes no status) so the submit dialog can tell the user in
+    advance whether an approval workflow will gate the transition. This literal
+    segment is registered ABOVE the ``/concepts/{concept_iri:path}`` catch-all
+    so it is not swallowed by it.
+    """
+    try:
+        return manager.preview_submit_for_review(concept_iri)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error previewing submit-for-review: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to preview submit for review")
+
+
 @router.post('/knowledge/concepts/by-iri/submit-review')
 async def submit_concept_for_review_by_iri(
     request: Request,
@@ -1462,14 +2160,62 @@ async def submit_concept_for_review_by_iri(
     )
 
 
-@router.post('/knowledge/concepts/by-iri/approve')
-async def approve_concept_by_iri(
+@router.post('/knowledge/concepts/by-iri/withdraw-review')
+async def withdraw_concept_review_by_iri(
     current_user: CurrentUserDep,
     concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
+    """Owner withdraws a concept from review (under_review -> draft)."""
+    return await _withdraw_concept_review_payload(
+        manager, concept_iri, current_user.email
+    )
+
+
+@router.post('/knowledge/concepts/by-iri/request-changes')
+async def request_concept_changes_by_iri(
+    request: Request,
+    current_user: CurrentUserDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
+    """Reviewer sends an under-review concept back to the owner (the ping-pong
+    send-back): under_review -> draft, carrying the reviewer's comment. Works
+    without a workflow (the ungoverned review track)."""
+    try:
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        result = manager.apply_review_decision(
+            concept_iri=concept_iri,
+            decision="changes_requested",
+            decided_by=current_user.email,
+            comments=(data or {}).get("comments") or (data or {}).get("reason"),
+        )
+        return result.get("concept") if isinstance(result, dict) else result
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error requesting changes on concept: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to request changes")
+
+
+@router.post('/knowledge/concepts/by-iri/approve')
+async def approve_concept_by_iri(
+    current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
+    concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+    _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
+) -> dict:
     """Approve a concept that is under review."""
+    _guard_review_bypass(manager, db, concept_iri, "approved", current_user, auth_manager)
     return _set_concept_status_payload(
         manager, concept_iri, "approved", current_user.email, error_verb="approve"
     )
@@ -1478,11 +2224,14 @@ async def approve_concept_by_iri(
 @router.post('/knowledge/concepts/by-iri/publish')
 async def publish_concept_by_iri(
     current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
     concept_iri: str = Query(..., alias="iri", min_length=1, description="Concept IRI"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
     """Publish an approved concept (auto-approves if under_review)."""
+    _guard_review_bypass(manager, db, concept_iri, "published", current_user, auth_manager)
     return _publish_concept_payload(manager, concept_iri, current_user.email)
 
 
@@ -1628,10 +2377,13 @@ async def submit_concept_for_review(
 async def approve_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
     """DEPRECATED: use ``POST /knowledge/concepts/by-iri/approve?iri=<urlencoded-iri>``."""
+    _guard_review_bypass(manager, db, concept_iri, "approved", current_user, auth_manager)
     return _set_concept_status_payload(
         manager, concept_iri, "approved", current_user.email, error_verb="approve"
     )
@@ -1641,10 +2393,13 @@ async def approve_concept(
 async def publish_concept(
     concept_iri: str,
     current_user: CurrentUserDep,
+    db: DBSessionDep,
+    auth_manager: AuthorizationManagerDep,
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
     _: bool = Depends(PermissionChecker('semantic-models', FeatureAccessLevel.READ_WRITE))
 ) -> dict:
     """DEPRECATED: use ``POST /knowledge/concepts/by-iri/publish?iri=<urlencoded-iri>``."""
+    _guard_review_bypass(manager, db, concept_iri, "published", current_user, auth_manager)
     return _publish_concept_payload(manager, concept_iri, current_user.email)
 
 

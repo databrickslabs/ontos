@@ -175,7 +175,8 @@ export default function PropertiesSearch({
     }
 
     try {
-      const res = await get<SemanticLink[]>(`/api/semantic-links/iri/${encodeURIComponent(property.value)}`);
+      // Query-param form: proxy-safe for IRIs containing ``//`` (see by-iri route).
+      const res = await get<SemanticLink[]>(`/api/semantic-links/by-iri?iri=${encodeURIComponent(property.value)}`);
       const links = res.data || [];
       const enriched = await enrichSemanticLinksWithNames(links);
       setSemanticLinks(enriched);

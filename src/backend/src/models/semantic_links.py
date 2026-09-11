@@ -17,6 +17,7 @@ class EntitySemanticLink(BaseModel):
     entity_type: EntityType
     iri: str
     label: Optional[str] = None
+    parent_entity_id: Optional[str] = None
 
 
 class EntitySemanticLinkCreate(BaseModel):
@@ -24,5 +25,22 @@ class EntitySemanticLinkCreate(BaseModel):
     entity_type: EntityType
     iri: str
     label: Optional[str] = None
+
+
+class MappingStatus(BaseModel):
+    """Per-IRI mapping status: which layer(s) it is linked to."""
+    asset: bool
+    product: bool
+    contract: bool
+
+
+class MappingStatusBatchRequest(BaseModel):
+    """Batch request for mapping status of multiple IRIs."""
+    iris: list[str]
+
+
+class MappingStatusBatchResponse(BaseModel):
+    """Batch response mapping IRIs to their layer statuses."""
+    statuses: dict[str, MappingStatus]
 
 

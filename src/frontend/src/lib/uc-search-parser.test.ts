@@ -89,10 +89,19 @@ describe('uc-search-parser', () => {
 
     it('returns readable names per type', () => {
       expect(getTypeFilterDisplayName(UCAssetType.TABLE)).toBe('Tables');
+      expect(getTypeFilterDisplayName(UCAssetType.VIEW)).toBe('Views');
       expect(getTypeFilterDisplayName(UCAssetType.MATERIALIZED_VIEW)).toBe('Materialized Views');
+      expect(getTypeFilterDisplayName(UCAssetType.STREAMING_TABLE)).toBe('Streaming Tables');
       expect(getTypeFilterDisplayName(UCAssetType.FUNCTION)).toBe('Functions');
+      expect(getTypeFilterDisplayName(UCAssetType.MODEL)).toBe('Models');
       expect(getTypeFilterDisplayName(UCAssetType.VOLUME)).toBe('Volumes');
       expect(getTypeFilterDisplayName(UCAssetType.METRIC)).toBe('Metrics');
+    });
+
+    it('returns "Unknown" for a type outside the known set (default branch)', () => {
+      // CATALOG/SCHEMA are container types not handled by the leaf-type switch,
+      // so they fall through to the default arm.
+      expect(getTypeFilterDisplayName(UCAssetType.CATALOG)).toBe('Unknown');
     });
   });
 

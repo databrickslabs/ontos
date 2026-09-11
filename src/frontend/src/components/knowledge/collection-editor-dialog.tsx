@@ -21,6 +21,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   KnowledgeCollection,
   KnowledgeCollectionCreate,
   KnowledgeCollectionUpdate,
@@ -121,16 +127,17 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
   const flatParentOptions = flattenCollections(parentOptions);
 
   return (
+    <TooltipProvider>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {isNew ? t('Create Collection') : t('Edit Collection')}
+            {isNew ? t('Create scheme') : t('Edit scheme')}
           </DialogTitle>
           <DialogDescription>
             {isNew
-              ? t('Create a new glossary, taxonomy, or ontology collection.')
-              : t('Update collection settings.')}
+              ? t('Create a new concept scheme. Start simple as a glossary; you can add structure later.')
+              : t('Update scheme settings.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -167,7 +174,20 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
             {/* Collection Type (only for new) */}
             {isNew && (
               <div className="grid gap-2">
-                <Label htmlFor="collection_type">{t('Type')}</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="collection_type">{t('Type')}</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help text-xs text-muted-foreground border rounded-full h-4 w-4 inline-flex items-center justify-center">i</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[280px]">
+                      {t(
+                        'collection.typeTooltip',
+                        'Glossary, taxonomy, and ontology are points on a maturity ladder, not different tools. Glossary = a flat list of agreed terms and definitions. Taxonomy = terms arranged in a broader/narrower hierarchy. Ontology = formal classes and properties a machine can reason over. Pick where you are today; you can add structure later.',
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Select
                   value={formData.collection_type}
                   onValueChange={(value: CollectionType) =>
@@ -270,6 +290,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
         </form>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   );
 };
 

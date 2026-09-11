@@ -34,9 +34,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getTriggerLabel, getRequiredPermission } from '@/lib/workflow-labels';
+import { getTriggerLabel, getRequiredPermission, triggerSupportsConcepts } from '@/lib/workflow-labels';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Info } from 'lucide-react';
+import { Info, Layers } from 'lucide-react';
 
 /** Field-label constants for the trigger picker. Exported so the parent
  * form and tests can reference the same source of truth. */
@@ -155,20 +155,33 @@ export function TriggerPicker({
           {groups.map(({ group, label, items }) => (
             <SelectGroup key={group}>
               <SelectLabel>{label}</SelectLabel>
-              {items.map((opt) => (
-                <TooltipProvider key={opt.value} delayDuration={400}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <SelectItem value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <code className="text-xs">{opt.value}</code>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
+              {items.map((opt) => {
+                const supportsConcepts = triggerSupportsConcepts(opt.entity_types);
+                return (
+                  <TooltipProvider key={opt.value} delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SelectItem value={opt.value}>
+                          <span className="flex items-center gap-1.5">
+                            {opt.label}
+                            {/* Subtle marker: this trigger can drive concept
+                                workflows (its entity types include concepts). */}
+                            {supportsConcepts && (
+                              <Layers className="h-3 w-3 text-muted-foreground" aria-label="Supports concepts" />
+                            )}
+                          </span>
+                        </SelectItem>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <code className="text-xs">{opt.value}</code>
+                        {supportsConcepts && (
+                          <div className="mt-1 text-xs text-muted-foreground">Supports concept workflows</div>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                );
+              })}
             </SelectGroup>
           ))}
           {groups.length === 0 && (

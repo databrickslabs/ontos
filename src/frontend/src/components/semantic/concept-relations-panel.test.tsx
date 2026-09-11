@@ -79,6 +79,24 @@ const sampleNeighbors = [
     stepIri: 'http://example.org/onto#someSubject',
     stepIsResource: true,
   },
+  // ontos:* governance metadata -- internal, must NOT appear as relations
+  // (this is what showed the confusing "version -> 1.0.0" / "status -> draft").
+  {
+    direction: 'outgoing',
+    predicate: 'http://ontos.app/ontology#version',
+    display: '1.0.0',
+    displayType: 'literal',
+    stepIri: null,
+    stepIsResource: false,
+  },
+  {
+    direction: 'outgoing',
+    predicate: 'http://ontos.app/ontology#status',
+    display: 'draft',
+    displayType: 'literal',
+    stepIri: null,
+    stepIsResource: false,
+  },
 ]
 
 describe('ConceptRelationsPanel', () => {
@@ -117,6 +135,9 @@ describe('ConceptRelationsPanel', () => {
     // Filtered ones are absent
     expect(screen.queryByText(/owl#Class/)).not.toBeInTheDocument()
     expect(screen.queryByText('Atmospheric Measurement')).not.toBeInTheDocument()
+    // ontos:* governance metadata is hidden (no raw "version 1.0.0"/"status draft" rows)
+    expect(screen.queryByText('1.0.0')).not.toBeInTheDocument()
+    expect(screen.queryByText('draft')).not.toBeInTheDocument()
   })
 
   it('shows total count and outgoing/incoming breakdown in the header', async () => {
@@ -149,7 +170,7 @@ describe('ConceptRelationsPanel', () => {
     mockGet.mockResolvedValue({ data: [] })
     renderPanel()
     await waitFor(() => {
-      expect(screen.getByText(/No relations found\./i)).toBeInTheDocument()
+      expect(screen.getByText(/No concept-to-concept relations yet/i)).toBeInTheDocument()
     })
   })
 })

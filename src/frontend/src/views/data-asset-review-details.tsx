@@ -33,6 +33,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 // Import Asset Review Editor Component
 import AssetReviewEditor from '@/components/data-asset-reviews/asset-review-editor';
 
+// Concept diff panel for knowledge-concept reviews
+interface ConceptDiffPanelProps {
+  request: DataAssetReviewRequest;
+  asset: ReviewedAsset;
+}
+
+function ConceptDiffPanel({ request, asset }: ConceptDiffPanelProps) {
+  const iri = asset.asset_fqn?.replace('knowledge-concept://', '') || '';
+  const diffData = (request as any)?.details?.diff || (request as any)?.notes;
+
+  return (
+    <div className="mt-2 rounded border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950 p-2 text-xs space-y-1">
+      <div className="font-mono text-blue-900 dark:text-blue-100 break-all">{iri}</div>
+      {diffData && typeof diffData === 'object' && (
+        <div className="text-blue-800 dark:text-blue-200">
+          {diffData.definition && (
+            <div className="mt-1">
+              <span className="font-semibold">Definition:</span>
+              <div className="mt-0.5 whitespace-pre-wrap">{diffData.definition}</div>
+            </div>
+          )}
+          {diffData.prefLabel && (
+            <div className="mt-1">
+              <span className="font-semibold">Label:</span> {diffData.prefLabel}
+            </div>
+          )}
+          {diffData.reference_count != null && (
+            <div className="mt-1">
+              <span className="font-semibold">Used by:</span> {diffData.reference_count} places
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Helper function to check API response (reuse if available globally)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
     // ... (implementation as in data-asset-reviews.tsx)
@@ -425,7 +462,13 @@ export default function DataAssetReviewDetails() {
                 <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
                     <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-background">
                         <CardHeader className="flex flex-row justify-between items-center">
-                            <CardTitle>Reviewing: {selectedAsset.asset_fqn}</CardTitle>
+                            <div className="flex-1 min-w-0">
+                                <CardTitle className="truncate">Reviewing: {selectedAsset.asset_fqn}</CardTitle>
+                                {/* Concept diff panel for knowledge concepts */}
+                                {selectedAsset.asset_fqn?.startsWith('knowledge-concept://') && request && (
+                                    <ConceptDiffPanel request={request} asset={selectedAsset} />
+                                )}
+                            </div>
                             <Button variant="ghost" size="icon" onClick={() => setIsEditorOpen(false)}><X className="h-4 w-4" /></Button>
                         </CardHeader>
                         <CardContent className="flex-1 overflow-auto space-y-4">

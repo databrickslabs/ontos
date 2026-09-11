@@ -23,6 +23,7 @@ import { Loader2, Check, XCircle, ExternalLink } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { getUnderlyingEntityDetailPath } from '@/lib/entity-detail-path';
+import { useKnowledgeGraphStore } from '@/stores/knowledge-graph-store';
 
 /** Built from GET /api/workflows/for-trigger/for_approval_response (first step used for dialog). */
 interface DefaultResponseWorkflowStep {
@@ -76,6 +77,8 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   data_asset_review: 'Data Asset Review',
   access_grant: 'Access Grant',
   asset: 'Asset',
+  ontology_concept: 'Concept',
+  concept: 'Concept',
 };
 
 function humanizeEntityType(entityType: string | undefined | null): string {
@@ -179,6 +182,22 @@ function buildDetailRows(
     rows.push({ label: 'Workflow', value: payload.workflow_name });
   }
 
+  // Concept approvals carry a definition (+ type / scheme) in full_payload.
+  // Surface them explicitly with clean labels near the top rather than letting
+  // the generic loop dump them as raw keys further down.
+  const conceptType = payload.full_payload?.concept_type;
+  if (typeof conceptType === 'string' && conceptType) {
+    rows.push({ label: 'Type', value: conceptType });
+  }
+  const sourceContext = payload.full_payload?.source_context;
+  if (typeof sourceContext === 'string' && sourceContext) {
+    rows.push({ label: 'Scheme', value: sourceContext });
+  }
+  const definition = payload.full_payload?.definition;
+  if (typeof definition === 'string' && definition) {
+    rows.push({ label: 'Definition', value: definition });
+  }
+
   if (payload.full_payload) {
     const alreadySurfaced = new Set([
       'requester_email', 'on_behalf_of', 'entity_type', 'entity_id', 'entity_name',
@@ -186,6 +205,7 @@ function buildDetailRows(
       'permission_level', 'requested_duration_days', 'reason',
       'message', 'workflow_name', 'workflow_id', 'execution_id', 'request_id',
       'workspace_id', 'step_results', 'required_fields_answers', 'data_product_name',
+      'definition', 'concept_type', 'source_context',
     ]);
     for (const [key, val] of Object.entries(payload.full_payload)) {
       if (key.startsWith('_')) continue;
@@ -208,6 +228,7 @@ export default function WorkflowApprovalResponseDialog({
 }: WorkflowApprovalResponseDialogProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
+  const bumpKnowledgeGraphRefresh = useKnowledgeGraphStore((s) => s.bumpRefreshNonce);
   const [stepConfig, setStepConfig] = useState<DefaultResponseWorkflowStep | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -297,6 +318,12 @@ export default function WorkflowApprovalResponseDialog({
         description: `${payload.entity_name || 'Request'} has been ${approved ? 'approved' : 'rejected'}.`,
         variant: approved ? 'default' : 'destructive',
       });
+      // A concept approval changes the concept's lifecycle state (draft/
+      // approved). Nudge any open concept view to refetch. Scoped to concepts
+      // so other entity types don't trigger a needless knowledge-graph refresh.
+      if (payload.entity_type?.toLowerCase() === 'ontology_concept') {
+        bumpKnowledgeGraphRefresh('concept-approval-decision');
+      }
       onOpenChange(false);
       onDecisionMade?.();
     } catch (e) {
@@ -319,7 +346,7 @@ export default function WorkflowApprovalResponseDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -330,6 +357,10 @@ export default function WorkflowApprovalResponseDialog({
           </div>
         ) : (
           <>
+            {/* Cap height + scroll the body so a long concept payload
+                (definition + many rows) doesn't overflow the viewport. Header
+                and action buttons stay pinned outside this container. */}
+            <div className="overflow-y-auto min-h-0 flex-1 space-y-4 pr-1">
             {detailRows.length > 0 && (
               <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -396,6 +427,7 @@ export default function WorkflowApprovalResponseDialog({
                 className="resize-none"
                 disabled={submitting}
               />
+            </div>
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
               <Button

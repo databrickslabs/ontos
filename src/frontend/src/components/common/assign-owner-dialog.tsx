@@ -8,13 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import type { OwnerObjectType } from '@/types/business-owner';
 import type { BusinessRoleRead } from '@/types/business-role';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface AssignOwnerDialogProps {
   open: boolean;
@@ -32,24 +32,30 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
   const { toast } = useToast();
 
   const [roles, setRoles] = useState<BusinessRoleRead[]>([]);
-  const [rolesLoading, setRolesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [noRolesError, setNoRolesError] = useState(false);
 
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
-  const [roleId, setRoleId] = useState('');
+  const [defaultRoleId, setDefaultRoleId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && roles.length === 0) {
-      setRolesLoading(true);
       apiGet<BusinessRoleRead[]>('/api/business-roles')
         .then((res) => {
           if (res.data && Array.isArray(res.data)) {
             const active = res.data.filter((r) => r.status === 'active');
             setRoles(active);
+            if (active.length === 0) {
+              setNoRolesError(true);
+            } else {
+              // Prefer a role named "Business Owner", else use the first active role
+              const boRole = active.find((r) => r.name.toLowerCase() === 'business owner');
+              setDefaultRoleId(boRole ? boRole.id : active[0].id);
+              setNoRolesError(false);
+            }
           }
-        })
-        .finally(() => setRolesLoading(false));
+        });
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -60,12 +66,13 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
     } else {
       setUserEmail('');
       setUserName('');
-      setRoleId('');
+      setDefaultRoleId(null);
+      setNoRolesError(false);
     }
   }, [open, initialEmail, initialName]);
 
   const handleSubmit = async () => {
-    if (!userEmail.trim() || !roleId) return;
+    if (!userEmail.trim() || !defaultRoleId) return;
     setSubmitting(true);
     try {
       const res = await apiPost('/api/business-owners', {
@@ -73,7 +80,7 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
         object_id: objectId,
         user_email: userEmail.trim(),
         user_name: userName.trim() || null,
-        role_id: roleId,
+        role_id: defaultRoleId,
       });
       if (res.error) throw new Error(res.error);
       toast({ title: t('panel.assignOwner'), description: t('messages.assignedSuccess', { defaultValue: 'Owner assigned successfully.' }) });
@@ -86,7 +93,7 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
     }
   };
 
-  const isValid = userEmail.trim().length > 0 && roleId.length > 0;
+  const isValid = userEmail.trim().length > 0 && !noRolesError && defaultRoleId != null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,11 +101,19 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
         <DialogHeader>
           <DialogTitle>{t('panel.assignOwner')}</DialogTitle>
           <DialogDescription>
-            {t('assignDialog.description', { defaultValue: 'Assign a business owner with a specific role.' })}
+            {t('assignDialog.description', { defaultValue: 'Assign a business owner.' })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {noRolesError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {t('assignDialog.noRolesError', { defaultValue: 'No business roles configured; ask an admin.' })}
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="grid gap-2">
             <Label htmlFor="owner-email">{t('assignDialog.emailLabel', { defaultValue: 'User' })} *</Label>
             <PrincipalPicker
@@ -119,28 +134,6 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
             />
-          </div>
-
-          <div className="grid gap-2">
-            <Label>{t('assignDialog.roleLabel', { defaultValue: 'Role' })} *</Label>
-            {rolesLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}
-              </div>
-            ) : (
-              <Select value={roleId} onValueChange={setRoleId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t('assignDialog.rolePlaceholder', { defaultValue: 'Select a role...' })} />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id}>
-                      {role.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           </div>
         </div>
 

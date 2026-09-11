@@ -639,6 +639,32 @@ class TestOntologyGeneratorSave:
         assert r.status_code == 400, r.text
         assert "invalid" in r.json().get("detail", "").lower() or "turtle" in r.json().get("detail", "").lower()
 
+    def test_generated_concepts_are_saved_as_draft(
+        self, client: TestClient, semantic_models_manager
+    ):
+        """Machine-generated concepts must land as Draft so they flow through
+        review before certification (matches manual authoring). Previously the
+        save path imported triples verbatim and set no ontos:status, so generated
+        concepts showed no status at all in Explore.
+        """
+        r = client.post("/api/ontology/save-to-collection", json={
+            "collection_name": "Draft Status Onto",
+            "owl_content": _TINY_TURTLE,
+        })
+        assert r.status_code == 200, r.text
+
+        # Each generated class should carry status 'draft' on the concept detail.
+        for slug in ("Person", "Animal"):
+            iri = f"http://example.org/onto/{slug}"
+            detail = client.get(
+                "/api/semantic-models/concepts/by-iri", params={"iri": iri},
+            )
+            assert detail.status_code == 200, detail.text
+            concept = detail.json().get("concept", {})
+            assert (concept.get("status") or "").lower() == "draft", (
+                f"Generated concept {slug} should be Draft, got {concept.get('status')!r}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Bug 3 — semantic links to concepts

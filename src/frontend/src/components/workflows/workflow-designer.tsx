@@ -125,6 +125,7 @@ import {
   ALL_ENTITY_TYPES,
   isTriggerEntitySupported,
   ENTITY_TYPE_TO_APPROVAL_ENTITY,
+  statusValuesForEntities,
 } from '@/lib/workflow-labels';
 import { TriggerPicker, type TriggerTypeOption } from './trigger-picker';
 import { EntityTypeMultiselect } from './entity-type-multiselect';
@@ -1681,26 +1682,47 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       }
                     />
                   </div>
-                  {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (
-                    <div className="grid grid-cols-2 gap-2">
+                  {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (() => {
+                    // Offer real lifecycle statuses for the selected entity
+                    // type(s) instead of free text. No known vocabulary (mixed
+                    // or unknown entity) falls back to a plain input. "Any" =
+                    // unset (fires regardless of that side of the transition).
+                    const ANY = '__any__';
+                    const statusOpts = statusValuesForEntities(entityTypes as string[]);
+                    const StatusField = ({
+                      label, value, onChange,
+                    }: { label: string; value: string; onChange: (v: string) => void }) => (
                       <div>
-                        <Label>From Status</Label>
-                        <Input
-                          value={triggerFromStatus}
-                          onChange={(e) => setTriggerFromStatus(e.target.value)}
-                          placeholder="e.g. draft"
-                        />
+                        <Label>{label}</Label>
+                        {statusOpts.length > 0 ? (
+                          <Select
+                            value={value || ANY}
+                            onValueChange={(v) => onChange(v === ANY ? '' : v)}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={ANY}>Any</SelectItem>
+                              {statusOpts.map((s) => (
+                                <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={value}
+                            onChange={(e) => onChange(e.target.value)}
+                            placeholder="e.g. draft"
+                          />
+                        )}
                       </div>
-                      <div>
-                        <Label>To Status</Label>
-                        <Input
-                          value={triggerToStatus}
-                          onChange={(e) => setTriggerToStatus(e.target.value)}
-                          placeholder="e.g. active"
-                        />
+                    );
+                    return (
+                      <div className="grid grid-cols-2 gap-2">
+                        <StatusField label="From Status" value={triggerFromStatus} onChange={setTriggerFromStatus} />
+                        <StatusField label="To Status" value={triggerToStatus} onChange={setTriggerToStatus} />
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   <div>
                     <Label>Description</Label>

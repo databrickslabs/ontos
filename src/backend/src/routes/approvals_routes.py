@@ -71,6 +71,16 @@ def _resolve_trigger_type_for_session(db, session_id: str) -> Optional[str]:
     return _resolve_trigger_type_for_workflow(db, session.workflow_id)
 
 
+def _resolve_entity_type_for_session(db, session_id: str) -> Optional[str]:
+    """Look up the entity_type recorded on an existing wizard session so the
+    permission gate can pick the entity-aware feature (e.g.
+    for_request_status_change on ontology_concept -> semantic-models)."""
+    session = agreement_wizard_sessions_repo.get(db, session_id)
+    if not session:
+        return None
+    return getattr(session, "entity_type", None)
+
+
 @router.get('/approvals/sessions')
 async def list_approval_sessions(
     limit: int = Query(50, ge=1, le=100),
@@ -147,8 +157,11 @@ async def create_approval_session(
         # Skip the unknown-trigger 400: missing workflow falls through to the
         # manager call below, which surfaces a better 400/404 from the
         # underlying ValueError. raise_on_unknown=False keeps that contract.
+        # entity_type (from the request body) selects the entity-aware gate for
+        # shared triggers (e.g. for_request_status_change on ontology_concept).
         await enforce_wizard_permission(
-            trigger_type, user_details, request, raise_on_unknown=False,
+            trigger_type, user_details, request,
+            entity_type=body.entity_type, raise_on_unknown=False,
         )
     try:
         created_by = current_user.email if current_user else None
@@ -200,8 +213,10 @@ async def submit_approval_step(
     """
     trigger_type = _resolve_trigger_type_for_session(db, session_id)
     if trigger_type:
+        entity_type = _resolve_entity_type_for_session(db, session_id)
         await enforce_wizard_permission(
-            trigger_type, user_details, request, raise_on_unknown=False,
+            trigger_type, user_details, request,
+            entity_type=entity_type, raise_on_unknown=False,
         )
     try:
         created_by = current_user.email if current_user else None
@@ -230,8 +245,10 @@ async def abort_approval_session(
     """
     trigger_type = _resolve_trigger_type_for_session(db, session_id)
     if trigger_type:
+        entity_type = _resolve_entity_type_for_session(db, session_id)
         await enforce_wizard_permission(
-            trigger_type, user_details, request, raise_on_unknown=False,
+            trigger_type, user_details, request,
+            entity_type=entity_type, raise_on_unknown=False,
         )
     ok = wizard_manager.abort_session(session_id)
     if not ok:

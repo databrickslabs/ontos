@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ConceptModeSwitch, useConceptMode } from '@/components/concepts/mode-switch';
 import {
   OntologyConcept,
   ConceptCreate,
@@ -76,6 +77,8 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
   readOnly = false,
 }) => {
   const { t } = useTranslation();
+  const [mode] = useConceptMode();
+  const advanced = mode === 'advanced';
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     collection_iri: '',
@@ -232,19 +235,24 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isNew ? t('Create Concept') : t('Edit Concept')}
-            {concept?.status && (
-              <Badge className={statusColors[concept.status as ConceptStatus]}>
-                {concept.status}
-              </Badge>
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            {isNew
-              ? t('Create a new term or concept in the collection.')
-              : concept?.iri}
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                {isNew ? t('Create Concept') : t('Edit Concept')}
+                {concept?.status && (
+                  <Badge className={statusColors[concept.status as ConceptStatus]}>
+                    {concept.status}
+                  </Badge>
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                {isNew
+                  ? t('Create a new term or concept in the collection.')
+                  : concept?.iri}
+              </DialogDescription>
+            </div>
+            <ConceptModeSwitch tipLeft />
+          </div>
         </DialogHeader>
 
         <ScrollArea className="max-h-[60vh] px-1">
@@ -275,33 +283,37 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                 </div>
               )}
 
-              {/* Type Selector */}
-              <div className="grid gap-2">
-                <Label>{t('Type')}</Label>
-                <Select
-                  value={formData.concept_type}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, concept_type: value as any }))
-                  }
-                  disabled={!canEdit || !isNew} // Can only set type on creation
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('Select type...')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conceptTypes.map((type) => (
-                      <SelectItem
-                        key={type.value}
-                        value={type.value}
-                        displayValue={type.label}
-                        description={type.description}
-                      >
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Type Selector — ontology layer, Advanced view only. In Simple
+                  mode a new concept defaults to skos:Concept; the raw type is
+                  hidden. Existing concepts still show their type in Advanced. */}
+              {advanced && (
+                <div className="grid gap-2">
+                  <Label>{t('Type')}</Label>
+                  <Select
+                    value={formData.concept_type}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, concept_type: value as any }))
+                    }
+                    disabled={!canEdit || !isNew} // Can only set type on creation
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('Select type...')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {conceptTypes.map((type) => (
+                        <SelectItem
+                          key={type.value}
+                          value={type.value}
+                          displayValue={type.label}
+                          description={type.description}
+                        >
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Label */}
               <div className="grid gap-2">
@@ -333,8 +345,8 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                 />
               </div>
 
-              {/* Property-specific fields */}
-              {formData.concept_type === 'property' && (
+              {/* Property-specific fields — ontology layer, Advanced only. */}
+              {advanced && formData.concept_type === 'property' && (
                 <>
                   <Separator />
                   <div className="space-y-4 bg-muted/30 rounded-lg p-4">

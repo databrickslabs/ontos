@@ -637,10 +637,16 @@ class Evaluator:
         left = self.evaluate(node.left)
         right = self.evaluate(node.right)
 
-        if op == TokenType.EQ:
-            return left == right
-        if op == TokenType.NEQ:
-            return left != right
+        if op in (TokenType.EQ, TokenType.NEQ):
+            # Python considers bool a subclass of int, but DSL booleans must not
+            # compare equal to numeric entity values such as 1 or 0.
+            has_bool_number_mismatch = (
+                (type(left) is bool and type(right) in (int, float))
+                or (type(right) is bool and type(left) in (int, float))
+            )
+            if has_bool_number_mismatch:
+                return op == TokenType.NEQ
+            return left == right if op == TokenType.EQ else left != right
         if op == TokenType.GT:
             return left > right if left is not None and right is not None else False
         if op == TokenType.LT:

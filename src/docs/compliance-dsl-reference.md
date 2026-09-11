@@ -114,8 +114,9 @@ ASSERT obj.has_owner = True
 ASSERT obj.has_pii != True
 ```
 
-> Note: `True` unquoted is a boolean literal, whereas `'true'` (quoted) is the
-> string `"true"`. Compare boolean properties against unquoted `True`/`False`.
+> Note: bare `True`/`False` are boolean literals, whereas `'true'`/`'false'`
+> are strings. Compare string properties and `TAG()` values against quoted
+> values. Numeric fields such as `1` and `0` are not equal to booleans.
 
 ## Functions
 

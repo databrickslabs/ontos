@@ -450,6 +450,40 @@ class TestBooleanLiterals:
         assert evaluator.evaluate(ast) is True
         assert evaluator.evaluate(ast) != "True"
 
+    def test_bool_literal_does_not_coerce_integer_field(self):
+        """Integer fields are not equal to booleans, while numeric equality is unchanged."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = true", {'count': 1})
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count != true", {'count': 1})
+        assert passed is True
+        passed, _ = evaluate_rule_on_object("ASSERT obj.count = 1", {'count': 1})
+        assert passed is True
+
+    def test_bool_literal_does_not_equal_string_field(self):
+        """String entity properties remain distinct from bare boolean literals."""
+        passed, _ = evaluate_rule_on_object("ASSERT obj.status = true", {'status': 'active'})
+        assert passed is False
+
+    def test_tag_string_true_requires_quoted_literal(self):
+        """TAG values stored as strings only match quoted string literals."""
+        obj = {'tags': {'enabled': 'true'}}
+        passed, _ = evaluate_rule_on_object("ASSERT TAG('enabled') = true", obj)
+        assert passed is False
+        passed, _ = evaluate_rule_on_object("ASSERT TAG('enabled') = 'true'", obj)
+        assert passed is True
+
+    @pytest.mark.parametrize('field', [
+        'has_owner',
+        'has_description',
+        'has_upstream_lineage',
+        'has_delivery_channels',
+        'has_contract',
+    ])
+    def test_live_maturity_boolean_gates_still_pass(self, field):
+        """Live maturity gates continue comparing real booleans normally."""
+        passed, _ = evaluate_rule_on_object(f"ASSERT obj.{field} = True", {field: True})
+        assert passed is True
+
 
 class TestRuleParsing:
     """Test full rule parsing."""

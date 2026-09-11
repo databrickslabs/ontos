@@ -230,3 +230,37 @@ def test_workflow_definition_points_serverless_job_at_deployed_archive():
     task_parameters = definition["tasks"][0]["spark_python_task"]["parameters"]
     backend_path_index = task_parameters.index("--backend_source_path")
     assert task_parameters[backend_path_index + 1] == "{{job.parameters.backend_source_path}}"
+
+
+@pytest.mark.parametrize(
+    ("workspace_app_path", "expected_backend_source_path"),
+    [
+        (
+            "/Workspace/Users/user@example.com/ontos/src/backend/src",
+            "/Workspace/Users/user@example.com/ontos/src/backend",
+        ),
+        (None, str(_BACKEND_PACKAGE_DIR.parent)),
+    ],
+)
+def test_workflow_definition_uses_backend_package_parent_without_deployer(
+    workspace_app_path,
+    expected_backend_source_path,
+):
+    settings = SimpleNamespace(
+        WORKSPACE_DEPLOYMENT_PATH=None,
+        WORKSPACE_APP_PATH=workspace_app_path,
+    )
+    manager = JobsManager(
+        db=object(),
+        ws_client=object(),
+        settings=settings,
+        workflows_root=_BACKEND_PACKAGE_DIR / "workflows",
+    )
+
+    definition = manager._get_workflow_definition(
+        "compliance_checks",
+        job_cluster_id=None,
+    )
+
+    assert definition["parameters"]["backend_source_path"] == expected_backend_source_path
+    assert Path(expected_backend_source_path).name == "backend"

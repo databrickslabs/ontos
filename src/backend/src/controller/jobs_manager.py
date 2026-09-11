@@ -605,6 +605,12 @@ class JobsManager:
                 if self._settings and self._settings.WORKSPACE_DEPLOYMENT_PATH:
                     backend_source_path = f"{base_path}/{workflow_id}/backend_src.zip"
                 else:
+                    # Both non-deployment base paths name the ``src`` package directory:
+                    # WORKSPACE_APP_PATH is configured as ``.../src/backend/src``; the
+                    # fallback derives ``.../backend/src`` from this file at
+                    # ``.../backend/src/controller/jobs_manager.py``. ``from src.*``
+                    # therefore needs exactly their parent, ``.../src/backend`` or
+                    # ``.../backend``, on sys.path.
                     backend_source_path = str(Path(base_path).parent)
                 parameters['backend_source_path'] = backend_source_path
 

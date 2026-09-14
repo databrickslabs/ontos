@@ -1,12 +1,17 @@
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from rdflib import Graph, ConjunctiveGraph, Dataset
 from rdflib.namespace import RDF, RDFS, SKOS, OWL
 from rdflib import URIRef, Literal, Namespace, BNode
 
 # Ontos application ontology namespace
 ONTOS = Namespace("http://ontos.app/ontology#")
+
+# Dublin Core Terms + PROV — used for 2B split lineage links (P0-6 safe transition):
+# dct:isReplacedBy (old->new), dct:replaces (new->old), prov:wasRevisionOf (new->old).
+DCT = Namespace("http://purl.org/dc/terms/")
+PROV = Namespace("http://www.w3.org/ns/prov#")
 
 # XSD namespace for datatype handling
 from rdflib.namespace import XSD
@@ -19,11 +24,15 @@ import urllib.parse
 from filelock import FileLock
 
 from src.db_models.semantic_models import SemanticModelDb
+from src.db_models.concept_versions import ConceptVersionDb
 from src.models.semantic_models import (
     SemanticModel as SemanticModelApi,
     SemanticModelCreate,
     SemanticModelUpdate,
     SemanticModelPreview,
+    CoverageSchemeRow,
+    CoverageResponse,
+    SchemePendingSuggestion,
 )
 from src.models.ontology import (
     OntologyConcept,
@@ -35,6 +44,7 @@ from src.models.ontology import (
 )
 from src.repositories.semantic_models_repository import semantic_models_repo
 from src.repositories.rdf_triples_repository import rdf_triples_repo
+from src.common.app_state import get_app_state_manager
 from src.common.logging import get_logger
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
@@ -84,6 +94,23 @@ def _normalise_property_type(property_type: Optional[str]) -> str:
     """Coerce a user-supplied property_type to a known value (defaults object)."""
     pt = (property_type or "object").strip().lower()
     return pt if pt in _VALID_PROPERTY_TYPES else "object"
+
+
+# RDF/RDFS/OWL/SKOS vocabulary namespaces. Terms under these (owl:Class,
+# owl:Thing, rdfs:Resource, skos:Concept, ...) are meta/vocabulary IRIs and are
+# NEVER valid parent concepts. Bad data can attach e.g. `skos:broader owl:Class`
+# to a concept; every parent-list read path must filter these out.
+_VOCAB_PARENT_PREFIXES = (
+    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "http://www.w3.org/2000/01/rdf-schema#",
+    "http://www.w3.org/2004/02/skos/core#",
+    "http://www.w3.org/2002/07/owl#",
+)
+
+
+def _is_vocab_iri(iri) -> bool:
+    """True if ``iri`` is an RDF/RDFS/OWL/SKOS vocabulary term (never a parent)."""
+    return any(str(iri).startswith(p) for p in _VOCAB_PARENT_PREFIXES)
 
 
 def _sanitize_context_name(name: str) -> str:
@@ -149,6 +176,16 @@ class CachedResult:
         return datetime.now() < self.expires_at
 
 
+class ReferenceCountError(Exception):
+    """Raised when a concept cannot be retired because it is still referenced (P0-6).
+
+    Carries the live reference ``count`` so the route can surface it in the 409.
+    """
+    def __init__(self, message: str, count: int = 0):
+        super().__init__(message)
+        self.count = count
+
+
 @searchable_asset
 class SemanticModelsManager(SearchableAsset):
     def __init__(self, db: Session, data_dir: Optional[Path] = None):
@@ -163,6 +200,11 @@ class SemanticModelsManager(SearchableAsset):
         self._cached_concepts: Optional[List[OntologyConcept]] = None
         self._cached_taxonomies: Optional[List] = None
         self._cached_stats: Optional[TaxonomyStats] = None
+        # P0-8 graph freshness: when the served in-memory graph was last (re)built
+        # or targeted-patched. Advanced on every rebuild AND every targeted write
+        # (create/update/publish/deprecate/retire all route through
+        # _invalidate_cache). Surfaced via graph_freshness() / the /graph endpoints.
+        self._graph_last_refreshed: datetime = datetime.now(timezone.utc)
         logger.info(f"SemanticModelsManager initialized with data_dir: {self._data_dir}")
         # Load file-based taxonomies immediately
         try:
@@ -303,7 +345,19 @@ class SemanticModelsManager(SearchableAsset):
             })
         return candidates
 
-    def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str]) -> Optional[SemanticModelApi]:
+    def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str], auto_apply: bool = False) -> Any:
+        """Handle a file (re-)upload for an existing semantic model.
+
+        P1-0 change: a re-upload of a model that ALREADY has stored triples no
+        longer auto-applies the diff. It now returns a PREVIEW (via
+        ``preview_upload``) and applies NOTHING until the steward confirms with
+        the returned ``preview_token``. Pass ``auto_apply=True`` to preserve the
+        old non-interactive behaviour (diff applied inline, returns the model
+        API) for any programmatic caller that needs it.
+
+        Returns a preview dict (interactive re-upload), or a ``SemanticModelApi``
+        (first-ever upload, or ``auto_apply=True``).
+        """
         db_obj = semantic_models_repo.get(self._db, id=model_id)
         if not db_obj:
             return None
@@ -320,21 +374,40 @@ class SemanticModelsManager(SearchableAsset):
         self._db.flush()
         self._db.refresh(db_obj)
         
-        # Update rdf_triples: remove old triples, import new ones
-        # Use sanitized name for human-readable context identifiers
+        # Update rdf_triples. Re-upload is a BULK VERSIONING EVENT (P0-4), not a
+        # blind delete-replace: when this model already has stored triples we
+        # diff the incoming graph against them and mint versions per concept
+        # (unchanged=no-op, modified=v2, new=v1, removed=deprecate). A byte-
+        # identical re-upload mints ZERO new versions (URDNA2015 canonicalization
+        # in the diff engine). A FIRST-EVER upload (no prior context) has nothing
+        # to diff, so it stays on the plain import path.
         sanitized_name = _sanitize_context_name(db_obj.name)
         context_name = f"urn:semantic-model:{sanitized_name}"
+
+        # Parse the incoming content once.
+        temp_graph = Graph()
+        fmt = 'turtle' if db_obj.format == 'skos' else 'xml'
+        content_for_parse = (
+            clean_truncated_turtle(content_text) if fmt == 'turtle' else content_text
+        )
+        temp_graph.parse(data=content_for_parse, format=fmt)
+
+        has_prior_context = rdf_triples_repo.context_exists(self._db, context_name)
+        if has_prior_context:
+            # Commit the semantic-model row edits (content_text etc.) first so
+            # they are not left uncommitted.
+            self._db.commit()
+            if auto_apply:
+                # Legacy non-interactive path: diff + apply inline.
+                self.apply_upload_as_versioning_event(context_name, temp_graph, actor=updated_by)
+                self._db.refresh(db_obj)
+                return self._to_api(db_obj)
+            # P1-0 interactive path: build a PREVIEW and apply NOTHING. The
+            # steward confirms via confirm_upload(preview_token) to apply.
+            return self.preview_upload(context_name, temp_graph)
+
+        # First-ever upload for this model: nothing to diff, plain import.
         try:
-            # Remove existing triples for this model
-            rdf_triples_repo.remove_by_context(self._db, context_name)
-            
-            # Import new triples
-            temp_graph = Graph()
-            fmt = 'turtle' if db_obj.format == 'skos' else 'xml'
-            content_for_parse = (
-                clean_truncated_turtle(content_text) if fmt == 'turtle' else content_text
-            )
-            temp_graph.parse(data=content_for_parse, format=fmt)
             self._import_graph_to_db(
                 graph=temp_graph,
                 context_name=context_name,
@@ -344,9 +417,625 @@ class SemanticModelsManager(SearchableAsset):
             )
         except Exception as e:
             logger.warning(f"Failed to update semantic model triples in database: {e}")
-        
+
         self._db.commit()  # Persist changes immediately since manager uses singleton session
         return self._to_api(db_obj)
+
+    # ------------------------------------------------------------------
+    # P0-4: file re-upload as a bulk versioning event (diff + orchestrate)
+    # ------------------------------------------------------------------
+    def _selfheal_orphaned_concept_versions(self, concept_iri: str, context_name: str) -> None:
+        """Delete leftover concept_version rows for an IRI when the concept has
+        ZERO rdf_triples in this context (an orphan).
+
+        Same guard ``create_concept`` uses: version rows can be left behind by a
+        deleted scheme, a prior failed upload, or the same file-native IRI reused
+        in another context. Left in place they collide with
+        ``uq_concept_version_iri_version`` / ``uq_concept_version_current_per_iri``
+        on the next ``create_version`` and 500 the diff-apply. NEVER delete when
+        the subject genuinely has triples in this context — that would destroy a
+        real concept's history.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        if not concept_versions_repo.list_versions(self._db, concept_iri):
+            return
+        subject_triples = [
+            t for t in rdf_triples_repo.list_by_subject(self._db, concept_iri)
+            if t.context_name == context_name
+        ]
+        if not subject_triples:
+            logger.warning(
+                f"Self-healing orphaned concept_version rows for {concept_iri} "
+                f"(no rdf_triples in context {context_name})"
+            )
+            concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
+    def _mint_new_concept_version(
+        self,
+        concept_iri: str,
+        context_name: str,
+        *,
+        actor: Optional[str] = None,
+        status: str = "active",
+    ) -> ConceptVersionDb:
+        """The ONLY sanctioned way to create the FIRST concept_version for a
+        (possibly-recreated) concept. Self-heals orphaned leftover version rows for
+        the IRI (guarded: only when zero rdf_triples for the subject in context),
+        then mints the next free version (max_version+1) as is_current=True. Callers
+        never compute a version number or worry about collisions.
+
+        NOT for publishing a further version (v2+): ``publish_concept_version``
+        demotes the current row first and must reuse ``create_version`` directly —
+        it deliberately does NOT go through here (this helper would reuse an
+        existing current row, which publish has already demoted).
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        self._selfheal_orphaned_concept_versions(concept_iri, context_name)
+        existing_current = concept_versions_repo.get_current(self._db, concept_iri)
+        if existing_current is not None:
+            # A real concept is already versioned (not an orphan) -> reuse its
+            # current row instead of colliding on a fresh v1.
+            return existing_current
+        next_version = concept_versions_repo.max_version(self._db, concept_iri) + 1
+        return concept_versions_repo.create_version(
+            self._db,
+            iri=concept_iri,
+            version=next_version,
+            is_current=True,
+            status=status,
+            created_by=actor,
+        )
+
+    def _ensure_concept_version_v1(
+        self, concept_iri: str, context_name: str, actor: Optional[str], status: str = "active"
+    ) -> None:
+        """Lazily mint a v1 concept_version for a concept that has none.
+
+        Concepts that arrived via a raw file import (``_import_graph_to_db``)
+        never got a ``concept_version`` row — only ``create_concept`` mints one.
+        Before a diff-driven publish can bump such a concept to v2 we must give
+        it its v1, owning the subject's currently-unowned triples (subject-IRI
+        ownership rule, P0-1). Idempotent: no-op if a current version exists.
+
+        ``status`` defaults to "active" (the versioning-event path needs a
+        frozen/active v1). The file-import path passes status="draft" so
+        imported concepts get a v1 that matches their governance status.
+        """
+        # Route through the single new-concept mint chokepoint: it is idempotent
+        # (reuses the current row when one already exists), self-heals true
+        # orphans, and never collides on the version number.
+        v1 = self._mint_new_concept_version(
+            concept_iri, context_name, actor=actor, status=status
+        )
+        rdf_triples_repo.reassign_subject_to_concept_version(
+            self._db, concept_iri, v1.id, context_name=context_name
+        )
+
+    def _import_new_concept_from_graph(
+        self, concept_iri: str, incoming_graph, context_name: str, actor: Optional[str]
+    ) -> None:
+        """Insert a brand-new concept's triples (v1) from the incoming graph.
+
+        Preserves the concept's FILE-NATIVE IRI (unlike ``create_concept`` which
+        fabricates ``collection/slug`` IRIs) so a re-upload keeps the ontology's
+        own identifiers stable. Mints a v1 concept_version (same mechanic as
+        ``create_concept``) and stamps every inserted triple with it. The
+        subject's blank-node closure (owl:Restriction subgraphs etc.) is walked
+        and skolemized so OWL class expressions survive.
+        """
+        subj = URIRef(concept_iri)
+        # Collect the subject's outgoing triples + its blank-node closure.
+        to_visit = [subj]
+        seen_bnodes: set = set()
+        rows: List[tuple] = []  # (subject_term, pred, obj)
+        while to_visit:
+            s = to_visit.pop()
+            for p, o in incoming_graph.predicate_objects(s):
+                rows.append((s, p, o))
+                if isinstance(o, BNode) and str(o) not in seen_bnodes:
+                    seen_bnodes.add(str(o))
+                    to_visit.append(o)
+
+        # Mint v1 through the single new-concept chokepoint. The diff put this
+        # file-native IRI in the NEW bucket, but leftover concept_version rows can
+        # still exist for it (deleted scheme sharing the IRI, a prior failed
+        # upload, or the same IRI used in another context). The helper self-heals
+        # true orphans (zero rdf_triples for the subject in THIS context), reuses
+        # an existing current row for a defensively not-actually-new concept, and
+        # never collides on uq_concept_version_iri_version /
+        # uq_concept_version_current_per_iri.
+        # Scenario D (2026-08-18): merge-uploaded NEW concepts land as draft (no
+        # changeset gate), matching first-into-empty uploads (default_status
+        # "draft") so all uploaded concepts follow per-concept review.
+        v1 = self._mint_new_concept_version(
+            concept_iri, context_name, actor=actor, status="draft"
+        )
+
+        for s, p, o in rows:
+            subject_uri = (
+                self._skolemize_bnode(s, context_name) if isinstance(s, BNode) else str(s)
+            )
+            if isinstance(o, BNode):
+                object_value, object_is_uri, object_language, object_datatype = (
+                    self._skolemize_bnode(o, context_name), True, "", "",
+                )
+            elif isinstance(o, Literal):
+                object_value = str(o)
+                object_is_uri = False
+                object_language = o.language or ""
+                object_datatype = str(o.datatype) if o.datatype else ""
+            else:
+                object_value, object_is_uri, object_language, object_datatype = (
+                    str(o), True, "", "",
+                )
+            rdf_triples_repo.add_triple(
+                self._db,
+                subject_uri=subject_uri,
+                predicate_uri=str(p),
+                object_value=object_value,
+                object_is_uri=object_is_uri,
+                object_language=object_language,
+                object_datatype=object_datatype,
+                context_name=context_name,
+                source_type="upload",
+                source_identifier=concept_iri,
+                created_by=actor,
+                concept_version_id=v1.id,
+            )
+
+    def apply_upload_as_versioning_event(
+        self, context_name: str, incoming_graph, actor: Optional[str] = None,
+        conflict_mode: str = "block",
+    ) -> Dict[str, Any]:
+        """Apply a re-upload as ONE atomic bulk versioning event (P0-4).
+
+        Diffs the incoming graph against the current stored triples for
+        ``context_name`` (canonicalized with URDNA2015 inside
+        ``compute_concept_diff``), then maps each bucket to the EXISTING
+        versioning primitives:
+
+          - MODIFIED -> ``publish_concept_version`` (demote+snapshot+swap = v2)
+          - NEW      -> import file-native triples + mint v1
+          - REMOVED  -> ``deprecate_concept`` ONLY (tombstone, never retire /
+                        hard-delete, regardless of reference count)
+          - UNCHANGED -> nothing (this is what makes a byte-identical re-upload
+                        a no-op: ZERO new versions).
+
+        conflict_mode governs cross-scheme IRI conflicts (subjects that already
+        live in a DIFFERENT scheme) in the SAME atomic transaction:
+          - 'block'  -> raise (conflicts here mean the preview should not have
+                        been created; fail closed).
+          - 'skip'   -> drop conflicting subjects before bucketing (they never
+                        touch ``context_name`` or their home scheme).
+          - 'update' -> apply the file's values to each conflicting concept in
+                        its EXISTING (home) scheme (publish_concept_version),
+                        and drop them from the target bucketing.
+
+        ATOMICITY: the composed primitives each ``commit()`` internally. To make
+        the whole changeset one Postgres transaction we neutralize the inner
+        commits (redirect ``commit`` -> ``flush``) for the duration of the apply,
+        then issue ONE real commit at the end. On ANY exception we restore
+        ``commit`` and ``rollback()`` so the file's triples are NEVER left
+        half-replaced (mid-apply failure => store unchanged). AFTER the commit we
+        refresh the served graph ONCE via ``rebuild_graph_from_enabled`` (DB-first
+        recovery contract: the DB is the source of truth; a graph-patch/rebuild
+        failure leaves the DB correct and only the served copy stale).
+        """
+        from src.controller.concept_diff import compute_concept_diff
+
+        mode = self._normalize_conflict_mode(conflict_mode)
+        raw_conflicts = self._detect_cross_scheme_iri_conflicts(incoming_graph, context_name)
+        if raw_conflicts and mode == "block":
+            self._raise_on_cross_scheme_conflict(incoming_graph, context_name)
+
+        conflict_iris = sorted({iri for iri, _ in raw_conflicts})
+        # Bucket only the TARGET-scheme portion. Keep the full graph around for
+        # the 'update' path (it extracts the conflicting subjects' field values).
+        full_graph = incoming_graph
+        target_graph = incoming_graph
+        if raw_conflicts and mode in ("skip", "update"):
+            target_graph = Graph()
+            for t in incoming_graph:
+                target_graph.add(t)
+            self._strip_subjects_from_graph(target_graph, conflict_iris)
+
+        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        diff = compute_concept_diff(target_graph, current_triples)
+
+        original_commit = self._db.commit
+        try:
+            # Neutralize the inner commits of the composed primitives so the whole
+            # changeset lands in ONE transaction (atomicity contract).
+            self._db.commit = self._db.flush  # type: ignore[assignment]
+
+            if raw_conflicts and mode == "update":
+                # Apply conflicting IRIs to their HOME scheme first (same txn).
+                self._apply_cross_scheme_updates(full_graph, conflict_iris, actor)
+
+            for iri in diff.modified:
+                self._ensure_concept_version_v1(iri, context_name, actor)
+                self.publish_concept_version(
+                    iri, changes=diff.changes.get(iri), published_by=actor,
+                    bypass_editable_gate=True,
+                )
+
+            for iri in diff.new:
+                self._import_new_concept_from_graph(iri, target_graph, context_name, actor)
+
+            for iri in diff.removed:
+                self.deprecate_concept(iri, deprecated_by=actor, bypass_editable_gate=True)
+        except Exception:
+            self._db.commit = original_commit  # type: ignore[assignment]
+            self._db.rollback()
+            logger.error(
+                "Upload versioning event failed for context '%s'; rolled back "
+                "(store unchanged, no half-replace)", context_name, exc_info=True,
+            )
+            # A partial modified-bucket publish may have patched the in-memory
+            # graph before the failure. The DB is now reverted, so reconcile the
+            # served graph with the correct (reverted) DB — best effort, then
+            # re-raise so the caller surfaces the failure.
+            try:
+                self.rebuild_graph_from_enabled()
+            except Exception:
+                logger.error("Recovery rebuild after rollback also failed", exc_info=True)
+            raise
+        finally:
+            self._db.commit = original_commit  # type: ignore[assignment]
+
+        # ONE real commit -> the whole bulk changeset is atomic.
+        self._db.commit()
+
+        # Refresh the served graph ONCE (DB-first recovery contract).
+        try:
+            self.rebuild_graph_from_enabled()
+        except Exception:
+            logger.error(
+                "Graph rebuild after upload versioning event failed; DB is "
+                "correct, served graph is stale until next reload", exc_info=True,
+            )
+        self._invalidate_cache()
+
+        return diff.summary()
+
+    # ------------------------------------------------------------------
+    # P1-0: steward preview + confirm on re-upload (dry-run then apply-by-token)
+    # ------------------------------------------------------------------
+    def _preview_label(self, iri: str, incoming_graph) -> str:
+        """Best-effort human label for a concept in a preview payload.
+
+        Prefers the label carried by the INCOMING graph (new/modified concepts);
+        falls back to the served graph (removed concepts, which are absent from
+        the incoming file); finally to the bare IRI so the row is never blank.
+        """
+        subj = URIRef(iri)
+        for g in (incoming_graph, getattr(self, "_graph", None)):
+            if g is None:
+                continue
+            for pred in (SKOS.prefLabel, RDFS.label):
+                val = g.value(subj, pred)
+                if val is not None:
+                    return str(val)
+        return iri
+
+    def list_triples_by_context(self, context_name: str) -> list:
+        """Triples currently stored for a context (collection/file). Used by the
+        import route to detect a re-upload (non-empty) vs a first import (empty)."""
+        return rdf_triples_repo.list_by_context(self._db, context_name)
+
+    def preview_upload(
+        self,
+        context_name: str,
+        incoming_graph,
+        source_filename: Optional[str] = None,
+        conflict_mode: str = "block",
+    ) -> Dict[str, Any]:
+        """Dry-run a re-upload: compute the diff, stash the content, apply NOTHING.
+
+        Runs the EXISTING ``compute_concept_diff`` against the currently stored
+        triples for ``context_name`` and returns a preview the steward can review
+        BEFORE anything is applied. The incoming content is stashed (keyed by an
+        opaque ``preview_token``) so ``confirm_upload`` can apply it later without
+        the user re-uploading. reference_count reuses the P0-6 primitive so the
+        steward sees "removing X, referenced by N".
+
+        conflict_mode governs cross-scheme IRI conflicts exactly as in
+        ``import_rdf_to_collection``: 'block' raises (default); 'skip'/'update'
+        fold the conflicts into the preview (returned under ``conflicts``) so the
+        confirm step can apply the chosen mode. The mode is stashed as a marker
+        triple so ``confirm``/apply recovers it migration-free.
+
+        Returns::
+
+            {preview_token, context_name, conflict_mode,
+             summary: {unchanged, modified, new, removed},
+             conflicts: [{iri, existing_context, existing_label}],
+             modified: [{iri, label, reference_count}],
+             new:      [{iri, label}],
+             removed:  [{iri, label, reference_count}]}
+        """
+        from src.controller.concept_diff import compute_concept_diff
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        mode = self._normalize_conflict_mode(conflict_mode)
+
+        # Re-uploading INTO THE SAME context is versioning (allowed). Only refuse
+        # when an incoming subject IRI already lives in a DIFFERENT scheme AND the
+        # mode is 'block'. skip/update fold the conflicts into the preview.
+        raw_conflicts = self._detect_cross_scheme_iri_conflicts(incoming_graph, context_name)
+        if raw_conflicts and mode == "block":
+            self._raise_on_cross_scheme_conflict(incoming_graph, context_name)
+
+        conflict_iris = sorted({iri for iri, _ in raw_conflicts})
+        # Diff the TARGET-scheme portion only (conflicts don't land here in
+        # skip/update), but STASH the full graph so 'update' apply can still
+        # extract the conflicting subjects' field values for the home scheme.
+        diff_graph = incoming_graph
+        if raw_conflicts and mode in ("skip", "update"):
+            diff_graph = Graph()
+            for t in incoming_graph:
+                diff_graph.add(t)
+            self._strip_subjects_from_graph(diff_graph, conflict_iris)
+
+        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        diff = compute_concept_diff(diff_graph, current_triples)
+
+        # Stamp the origin filename into the incoming graph (per typed subject)
+        # BEFORE serialization so it round-trips through the stashed content_text
+        # and confirm_upload re-parses it for free (no schema migration needed).
+        if source_filename:
+            _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+            typed_subjects = {
+                s for s, _, o in incoming_graph.triples((None, RDF.type, None))
+                if o in _concept_types
+            }
+            for subj in typed_subjects:
+                # OVERWRITE (graph.set) rather than add-if-absent: a v2 re-upload
+                # that already carries/inherits an old sourceFile must adopt the
+                # CURRENT filename, not keep the stale one.
+                incoming_graph.set((subj, ONTOS.sourceFile, Literal(source_filename)))
+
+        # Persist the chosen mode as a marker triple so confirm/apply recovers it
+        # (migration-free — no column on the stash).
+        self._stamp_conflict_mode_marker(incoming_graph, mode)
+
+        # Friendly labels for the conflicts surfaced in the preview payload.
+        try:
+            _coll_labels = {c["iri"]: c.get("label") for c in self.get_collections()}
+        except Exception:
+            _coll_labels = {}
+
+        # Serialize the incoming graph back to turtle for the stash so confirm can
+        # re-parse it deterministically regardless of the original wire format.
+        content_text = incoming_graph.serialize(format="turtle")
+        stash = upload_preview_repo.create(
+            self._db,
+            context_name=context_name,
+            content_text=content_text,
+            format="skos",  # stashed as turtle; confirm parses accordingly
+            created_by=None,
+        )
+        self._db.commit()
+
+        return {
+            "preview_token": str(stash.token),
+            "context_name": context_name,
+            "conflict_mode": mode,
+            "conflicts": [
+                {
+                    "iri": iri,
+                    "existing_context": ctx,
+                    "existing_label": _coll_labels.get(ctx),
+                }
+                for iri, ctx in raw_conflicts
+            ],
+            "summary": diff.summary(),
+            "modified": [
+                {
+                    "iri": iri,
+                    "label": self._preview_label(iri, incoming_graph),
+                    "reference_count": self.reference_count(iri),
+                }
+                for iri in diff.modified
+            ],
+            "new": [
+                {"iri": iri, "label": self._preview_label(iri, incoming_graph)}
+                for iri in diff.new
+            ],
+            "removed": [
+                {
+                    "iri": iri,
+                    "label": self._preview_label(iri, incoming_graph),
+                    "reference_count": self.reference_count(iri),
+                }
+                for iri in diff.removed
+            ],
+        }
+
+    @staticmethod
+    def _load_stash_graph(stash) -> "Graph":
+        """Re-parse a stashed upload preview back into an rdflib Graph.
+
+        Shared by ``confirm_upload`` (apply-by-token) and ``gate_or_apply_upload``
+        (the P3 governance gate) so the parse logic lives in exactly one place.
+        Stashes are serialized as turtle (``format == 'skos'``) or xml.
+        """
+        graph = Graph()
+        fmt = "turtle" if stash.format == "skos" else "xml"
+        content_for_parse = (
+            clean_truncated_turtle(stash.content_text) if fmt == "turtle" else stash.content_text
+        )
+        graph.parse(data=content_for_parse, format=fmt)
+        return graph
+
+    def confirm_upload(
+        self, preview_token: str, actor: Optional[str] = None,
+        conflict_mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Apply a previously previewed re-upload by token, then consume the stash.
+
+        Loads the stashed content, re-parses it to a graph and runs the EXISTING
+        ``apply_upload_as_versioning_event`` (never reimplements apply), then
+        deletes the stash row so a token is single-use. Unknown/already-consumed
+        tokens raise ``ValueError`` (the route maps this to 404).
+
+        conflict_mode: when None (the common case), recovered from the marker
+            triple ``preview_upload`` stamped on the stashed graph, so the mode
+            chosen at preview time survives to apply without a schema migration.
+            An explicit value (e.g. from the confirm route body) overrides it.
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        stash = upload_preview_repo.get(self._db, preview_token)
+        if stash is None:
+            raise ValueError(f"Unknown or already-applied preview token: {preview_token}")
+
+        context_name = stash.context_name
+        graph = self._load_stash_graph(stash)
+
+        mode = conflict_mode or self._read_conflict_mode_marker(graph) or "block"
+
+        summary = self.apply_upload_as_versioning_event(
+            context_name, graph, actor=actor, conflict_mode=mode
+        )
+
+        # Consume the stash (single-use). apply_* already committed the changeset.
+        upload_preview_repo.delete(self._db, preview_token)
+        self._db.commit()
+
+        return summary
+
+    # ------------------------------------------------------------------ #
+    # P3: gate a BULK RDF upload behind ONE aggregate changeset approval  #
+    # ------------------------------------------------------------------ #
+    # A held changeset is carried on a DataAssetReview (AssetType
+    # CONCEPT_CHANGESET) whose reviewed-asset FQN wraps the UploadPreviewDb
+    # token: ``concept-changeset://<preview_token>``. The token stays ALIVE
+    # (the stash is NOT consumed) until the approval resolves, so persistence
+    # is migration-free — apply-on-approval just re-runs confirm_upload(token).
+    CHANGESET_REVIEW_FQN_PREFIX = "concept-changeset://"
+
+    @classmethod
+    def changeset_review_fqn(cls, preview_token: str) -> str:
+        """Wrap a preview token as the reviewed-asset FQN stored on the review."""
+        return f"{cls.CHANGESET_REVIEW_FQN_PREFIX}{preview_token}"
+
+    @classmethod
+    def preview_token_from_changeset_fqn(cls, asset_fqn: str) -> Optional[str]:
+        """Recover the preview token from a changeset reviewed-asset FQN (or None)."""
+        if asset_fqn and asset_fqn.startswith(cls.CHANGESET_REVIEW_FQN_PREFIX):
+            return asset_fqn[len(cls.CHANGESET_REVIEW_FQN_PREFIX):]
+        return None
+
+    def gate_or_apply_upload(
+        self, context_name: str, preview_token: str, actor: Optional[str] = None,
+        conflict_mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Confirm entrypoint for a re-upload — ALWAYS applies directly.
+
+        Scenario D (2026-08-18): the bulk-upload changeset approval gate is
+        DISABLED. Regardless of whether a ``concept_changeset`` workflow is
+        scoped to the collection, the upload applies immediately (concepts land
+        as Draft and follow the normal per-concept review) — nothing is ever
+        HELD behind an aggregate approval. Always returns
+        ``{status:'applied', summary, governed:False}``.
+
+        (Historical: this once fired an ``on_request_status_change`` trigger for
+        ``EntityType.CONCEPT_CHANGESET`` and, when governed, held the upload
+        behind ONE DataAssetReview. That branch was removed; the changeset
+        primitives — apply_changeset_by_token / reject_changeset_by_token /
+        changeset_review_fqn — remain only so any legacy held review still
+        resolves. Re-instate the trigger block here to re-open gating.)
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+        from src.controller.concept_diff import compute_concept_diff
+
+        stash = upload_preview_repo.get(self._db, preview_token)
+        if stash is None:
+            raise ValueError(f"Unknown or already-applied preview token: {preview_token}")
+
+        # Aggregate diff for the WHOLE upload (never per-concept).
+        incoming_graph = self._load_stash_graph(stash)
+        current_triples = rdf_triples_repo.list_by_context(self._db, context_name)
+        diff = compute_concept_diff(incoming_graph, current_triples)
+        summary = diff.summary()
+
+        # Human label for the collection (falls back to the context name).
+        collection = self.get_collection(context_name)
+        collection_label = (collection or {}).get("label") or context_name
+
+        # Aggregate reference_count over the concepts this changeset touches
+        # (modified + removed — new concepts have none). One number for the
+        # whole changeset, matching the "one upload = one approval" contract.
+        touched = list(diff.modified) + list(diff.removed)
+        aggregate_reference_count = sum(self.reference_count(iri) for iri in touched)
+
+        # Scenario D (2026-08-18): file uploads always land directly as Draft and
+        # follow per-concept review; the bulk concept_changeset approval gate is
+        # intentionally disabled here. We keep the early stash-load / diff-summary
+        # logic above (cheap and harmless), but SKIP the on_request_status_change
+        # trigger and the GOVERNED hold branch — no new held changeset is ever
+        # created. apply_changeset_by_token / reject_changeset_by_token /
+        # changeset_review_fqn remain (existing held reviews may still reference
+        # them); we simply stop CREATING new holds.
+        applied = self.confirm_upload(
+            preview_token, actor=actor, conflict_mode=conflict_mode
+        )
+        return {"status": "applied", "summary": applied, "governed": False}
+
+    @staticmethod
+    def _changeset_reviewer_from_executions(executions, actor) -> Optional[str]:
+        """Best-effort reviewer email for a held changeset.
+
+        Prefers a reviewer/approver surfaced by an executed workflow; falls back
+        to the actor so the review is never orphaned without an assignee.
+        """
+        for ex in (executions or []):
+            for attr in ("reviewer_email", "assigned_to", "approver_email"):
+                val = getattr(ex, attr, None)
+                if val:
+                    return val
+            data = getattr(ex, "entity_data", None) or getattr(ex, "context", None)
+            if isinstance(data, dict):
+                for key in ("reviewer_email", "assigned_to", "approver_email"):
+                    if data.get(key):
+                        return data[key]
+        return actor
+
+    def apply_changeset_by_token(
+        self, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Apply a held changeset on APPROVAL — apply + consume the token.
+
+        The approval callback for a CONCEPT_CHANGESET review. Delegates to the
+        UNCHANGED ``confirm_upload`` (single-transaction bulk apply, then
+        single-use consume of the stash), so the apply happens exactly once.
+        """
+        summary = self.confirm_upload(preview_token, actor=actor)
+        logger.info(
+            f"Concept changeset {preview_token} applied on approval by {actor}"
+        )
+        return {"status": "applied", "summary": summary}
+
+    def reject_changeset_by_token(
+        self, preview_token: str, actor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Drop a held changeset on DENY/CANCEL — delete the stash, apply nothing.
+
+        The reject callback for a CONCEPT_CHANGESET review. Deletes the held
+        UploadPreviewDb token so nothing is ever applied; the uploader re-uploads
+        a corrected file (a changeset is not edited in place).
+        """
+        from src.repositories.upload_preview_repository import upload_preview_repo
+
+        deleted = upload_preview_repo.delete(self._db, preview_token)
+        self._db.commit()
+        logger.info(
+            f"Concept changeset {preview_token} dropped (deleted={deleted}) by {actor}"
+        )
+        return {"status": "rejected", "deleted": bool(deleted)}
 
     def delete(self, model_id: str) -> bool:
         # Get the model before deleting to check if we need to delete the physical file
@@ -374,7 +1063,19 @@ class SemanticModelsManager(SearchableAsset):
                 logger.info(f"Deleted {deleted_count} triples for semantic model '{model.name}' (context: {context_name})")
         except Exception as e:
             logger.warning(f"Failed to delete triples for semantic model '{model.name}': {e}")
-        
+
+        # Also delete the concept_version rows for concepts in this uploaded
+        # semantic model, in the SAME transaction as the triple removal above.
+        # Concept IRIs in an uploaded model are always ``<context_name>/...`` so
+        # the prefix delete (LIKE-escaped in the repo) is exact and safe. Leaving
+        # these rows behind orphaned them: a same-named re-upload then collided
+        # with the unique constraints on (iri, version) / (iri WHERE is_current).
+        try:
+            from src.repositories.concept_versions_repository import concept_versions_repo
+            concept_versions_repo.delete_for_collection(self._db, context_name)
+        except Exception as e:
+            logger.warning(f"Failed to delete concept_version rows for semantic model '{model.name}': {e}")
+
         # Delete from database
         obj = semantic_models_repo.remove(self._db, id=model_id)
         self._db.commit()  # Persist changes immediately since manager uses singleton session
@@ -765,7 +1466,12 @@ class SemanticModelsManager(SearchableAsset):
         if disabled_contexts:
             logger.info(f"Skipping {len(disabled_contexts)} disabled contexts: {disabled_contexts}")
 
-        all_triples = rdf_triples_repo.list_all(self._db)
+        # P0-2 write-time current/history split: the served hot graph is built
+        # from CURRENT-ONLY triples. The is_current filter runs HERE, once, at
+        # build time — downstream SPARQL/MCP reads carry NO version predicate.
+        # list_current keeps unowned (scheme/collection/metadata) triples and
+        # drops only history triples owned by a non-current concept-version.
+        all_triples = rdf_triples_repo.list_current(self._db)
         loaded = 0
         skipped = 0
 
@@ -1162,6 +1868,9 @@ class SemanticModelsManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to build persistent caches: {e}", exc_info=True)
 
+        # P0-8: the served graph is now fresh — advance the freshness timestamp.
+        self._graph_last_refreshed = datetime.now(timezone.utc)
+
     def _build_persistent_caches_atomic(self) -> None:
         """Build and save persistent caches atomically to disk.
 
@@ -1311,8 +2020,6 @@ class SemanticModelsManager(SearchableAsset):
                     } UNION {
                         ?concept a skos:Concept .
                     } UNION {
-                        ?concept a skos:ConceptScheme .
-                    } UNION {
                         ?concept a owl:Class .
                     } UNION {
                         # Include any resource that is used as a class (has instances or subclasses)
@@ -1446,6 +2153,11 @@ class SemanticModelsManager(SearchableAsset):
         self._cached_taxonomies = None
         self._cached_stats = None
 
+        # P0-8: every targeted write (create/update/publish/deprecate/retire)
+        # calls this AFTER patching the served graph, so treat it as a freshness
+        # bump — the graph now reflects the just-committed change.
+        self._graph_last_refreshed = datetime.now(timezone.utc)
+
         cache_dir = self._data_dir / "cache"
         if cache_dir.exists():
             for cache_file in ["concepts_all.json", "taxonomies.json", "stats.json"]:
@@ -1458,6 +2170,63 @@ class SemanticModelsManager(SearchableAsset):
                         logger.warning(f"Failed to delete cache file {cache_file}: {e}")
 
         logger.info("Semantic models cache invalidated (in-memory and persistent)")
+
+    def graph_freshness(self) -> Dict[str, Any]:
+        """Explicit graph-freshness surface for the UI (P0-8, API contract §6).
+
+        Returns:
+          - last_refreshed: ISO ts of the last rebuild OR targeted patch of the
+            served in-memory graph (so users SEE that their edit is live).
+          - concept_count: current concepts in the served graph.
+          - uc_synced_at / uc_next_sync_est: last successful uc_tag_sync run end
+            and a rough next-run estimate — surfaced SEPARATELY so "not yet synced
+            to UC" (eventual, ~4h) is not confused with "not saved". Reuses the
+            same job-run source as get_tag_delivery_stats; null when unavailable.
+        """
+        # concept_count from taxonomy stats (cached, always fresh post-rebuild).
+        try:
+            concept_count = self.get_taxonomy_stats().total_concepts
+        except Exception:
+            logger.warning("graph_freshness: could not compute concept_count", exc_info=True)
+            concept_count = 0
+
+        uc_synced_at, uc_next_sync_est = self._uc_sync_timing()
+
+        return {
+            "last_refreshed": self._graph_last_refreshed.isoformat(),
+            "concept_count": concept_count,
+            "uc_synced_at": uc_synced_at,
+            "uc_next_sync_est": uc_next_sync_est,
+        }
+
+    def _uc_sync_timing(self):
+        """(last_successful_uc_tag_sync_end_iso, next_run_estimate_iso) or (None, None).
+
+        Reuses the existing uc_tag_sync job-run history (same source as
+        get_tag_delivery_stats). Does NOT invent a new job. The uc_tag_sync job
+        runs on roughly a 4h cadence (PRD §2); estimate = last success + 4h.
+        Returns (None, None) if the job never ran or timing isn't readable.
+        """
+        try:
+            from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
+            runs = workflow_job_run_repo.get_recent_runs(self._db, workflow_id='uc_tag_sync', limit=20)
+            for r in runs:
+                if r.result_state == 'SUCCESS' and r.end_time:
+                    synced = datetime.fromtimestamp(r.end_time / 1000, tz=timezone.utc)
+                    nxt = synced + timedelta(hours=4)
+                    return synced.isoformat(), nxt.isoformat()
+        except Exception as e:
+            logger.warning(f"graph_freshness: could not read uc_tag_sync timing: {e}")
+        return None, None
+
+    def reload_graph(self) -> Dict[str, Any]:
+        """Force a full rebuild of the served graph and return freshness (P0-8).
+
+        The user-facing 'Reload graph' backstop. rebuild_graph_from_enabled
+        advances last_refreshed; we then return the freshness object.
+        """
+        self.rebuild_graph_from_enabled()
+        return self.graph_freshness()
 
     @staticmethod
     def _extract_source_context(context_name: str) -> Optional[str]:
@@ -2076,112 +2845,93 @@ class SemanticModelsManager(SearchableAsset):
         """Compute all concepts without caching - used for building persistent cache"""
         concepts = []
 
-        # Determine which contexts to search
-        contexts_to_search = []
+        # Determine which context NAMES to search. We derive the name set from
+        # the UNION graph's quads (self._graph.quads) rather than iterating
+        # self._graph.contexts(): the latter has been observed to omit / return
+        # empty member graphs for some contexts (a whole scheme's concepts then
+        # vanished from Explore though quads over the union clearly contain them).
+        # get_context(name) below always returns a working handle onto the store.
         if taxonomy_name:
-            # Find the specific context
-            target_contexts = [
+            target_contexts = {
                 f"urn:taxonomy:{taxonomy_name}",
                 f"urn:semantic-model:{taxonomy_name}",
                 f"urn:schema:{taxonomy_name}",
                 f"urn:glossary:{taxonomy_name}",
                 f"urn:ontology:{taxonomy_name}",
-            ]
-            for context in self._graph.contexts():
-                if hasattr(context, 'identifier') and str(context.identifier) in target_contexts:
-                    contexts_to_search.append((str(context.identifier), context))
+            }
+            context_names = sorted(target_contexts)
         else:
-            # Search all contexts
-            contexts_to_search = [(str(context.identifier), context)
-                                for context in self._graph.contexts()
-                                if hasattr(context, 'identifier')]
+            names = set()
+            for _s, _p, _o, ctx in self._graph.quads((None, None, None, None)):
+                if ctx is None:
+                    continue
+                cid = getattr(ctx, 'identifier', ctx)
+                cid = str(cid)
+                if cid and cid != "urn:x-rdflib:default":
+                    names.add(cid)
+            context_names = sorted(names)
+
+        contexts_to_search = [
+            (name, self._graph.get_context(URIRef(name))) for name in context_names
+        ]
+
+        # rdf:type objects that mark a subject as an enumerable "concept" (class /
+        # SKOS concept / property / individual). Collected via plain triple-pattern
+        # lookups below.
+        # NOTE: skos:ConceptScheme is deliberately EXCLUDED. A ConceptScheme is the
+        # scheme's own top node (e.g. an uploaded file's <...#DefinitionApprovals>),
+        # not a browseable concept — enumerating it produced a phantom concept named
+        # after the file/scheme in Explore. The scheme header is surfaced separately
+        # (collection metadata), not as a concept row.
+        _CONCEPT_TYPE_OBJECTS = (
+            RDFS.Class, OWL.Class, SKOS.Concept,
+            RDF.Property, OWL.ObjectProperty, OWL.DatatypeProperty,
+            OWL.AnnotationProperty, OWL.NamedIndividual,
+        )
+        # Vocabulary namespaces whose own terms must never be listed as concepts.
+        _VOCAB_PREFIXES = (
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+            "http://www.w3.org/2000/01/rdf-schema#",
+            "http://www.w3.org/2004/02/skos/core#",
+            "http://www.w3.org/2002/07/owl#",
+            "urn:ontos:bnode:",
+        )
 
         for context_name, context in contexts_to_search:
-            # Find all classes and concepts in this context
-            # NOTE: Removed expensive UNION clauses that scanned all rdf:type triples
-            # which caused server to hang with large triple counts (50k+)
-            class_query = """
-            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-            PREFIX owl: <http://www.w3.org/2002/07/owl#>
-            PREFIX dcat: <http://www.w3.org/ns/dcat#>
-            SELECT DISTINCT ?concept ?label ?comment WHERE {
-                # Classes
-                {
-                    ?concept a rdfs:Class .
-                } UNION {
-                    ?concept a owl:Class .
-                } UNION {
-                    ?concept rdfs:subClassOf ?parent .
-                }
-                # SKOS Concepts
-                UNION {
-                    ?concept a skos:Concept .
-                } UNION {
-                    ?concept a skos:ConceptScheme .
-                }
-                # Properties (all types)
-                UNION {
-                    ?concept a rdf:Property .
-                } UNION {
-                    ?concept a owl:ObjectProperty .
-                } UNION {
-                    ?concept a owl:DatatypeProperty .
-                } UNION {
-                    ?concept a owl:AnnotationProperty .
-                } UNION {
-                    ?concept rdfs:subPropertyOf ?parentProp .
-                }
-                # Individuals (named instances)
-                UNION {
-                    ?concept a owl:NamedIndividual .
-                }
-                # Extract labels with priority: skos:prefLabel > rdfs:label
-                OPTIONAL { ?concept skos:prefLabel ?skos_pref_label }
-                OPTIONAL { ?concept rdfs:label ?rdfs_label }
-                BIND(COALESCE(STR(?skos_pref_label), STR(?rdfs_label)) AS ?label)
-
-                # Extract comments/definitions with priority: skos:definition > rdfs:comment
-                OPTIONAL { ?concept skos:definition ?skos_definition }
-                OPTIONAL { ?concept rdfs:comment ?rdfs_comment }
-                BIND(COALESCE(STR(?skos_definition), STR(?rdfs_comment)) AS ?comment)
-
-                # Filter out blank nodes (anonymous classes, restrictions, etc.)
-                # Note: isBlank() + also filter urn:ontos:bnode: URIs (converted blank nodes)
-                FILTER(!isBlank(?concept))
-                FILTER(!STRSTARTS(STR(?concept), "urn:ontos:bnode:"))
-                
-                # Filter out basic RDF/RDFS/SKOS/OWL vocabulary terms
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/1999/02/22-rdf-syntax-ns#"))
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2000/01/rdf-schema#"))
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2004/02/skos/core#"))
-                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2002/07/owl#"))
-            }
-            ORDER BY ?concept
-            """
-
+            # Enumerate concept subjects via TRIPLE-PATTERN lookups, NOT SPARQL.
+            # A per-context ``context.query(...)`` over a ConjunctiveGraph member
+            # graph evaluates the UNION/OPTIONAL/BIND pattern inconsistently and
+            # silently drops rows (observed live: 2 of 4 e2e-author concepts
+            # returned, though every one is present in the store and the SAME
+            # pattern over the UNION graph returns all 4). ``context.subjects()``
+            # is a direct index scan and returns every match deterministically.
             try:
-                results = context.query(class_query)
-                results_list = list(results)
-                logger.debug(f"SPARQL query returned {len(results_list)} results for context {context_name}")
-
-                # First pass: collect unique concept IRIs to avoid duplicates from multi-label results
                 seen_iris = set()
                 unique_concept_iris = []
-                for row in results_list:
-                    try:
-                        if hasattr(row, 'concept'):
-                            concept_iri = str(row.concept)
-                        else:
-                            concept_iri = str(row[0]) if len(row) > 0 else None
-                    except Exception:
-                        continue
-                    if concept_iri and concept_iri not in seen_iris:
-                        seen_iris.add(concept_iri)
-                        unique_concept_iris.append(concept_iri)
-                
-                logger.debug(f"Processing {len(unique_concept_iris)} unique concepts (from {len(results_list)} SPARQL rows)")
+
+                def _add_subject(subj):
+                    if isinstance(subj, BNode):
+                        return
+                    s = str(subj)
+                    if s in seen_iris:
+                        return
+                    if any(s.startswith(p) for p in _VOCAB_PREFIXES):
+                        return
+                    seen_iris.add(s)
+                    unique_concept_iris.append(s)
+
+                # Typed subjects (class / concept / property / individual).
+                for type_obj in _CONCEPT_TYPE_OBJECTS:
+                    for subj in context.subjects(RDF.type, type_obj):
+                        _add_subject(subj)
+                # Untyped-but-structural: subjects with subClassOf / subPropertyOf
+                # (inherited class/property that may lack an explicit rdf:type).
+                for subj in context.subjects(RDFS.subClassOf, None):
+                    _add_subject(subj)
+                for subj in context.subjects(RDFS.subPropertyOf, None):
+                    _add_subject(subj)
+
+                logger.debug(f"Processing {len(unique_concept_iris)} unique concepts in context {context_name}")
 
                 # Second pass: process each unique concept
                 for concept_iri in unique_concept_iris:
@@ -2243,10 +2993,10 @@ class SemanticModelsManager(SearchableAsset):
                         concept_type = "class"
                     elif (concept_uri, RDF.type, OWL.Class) in context:
                         concept_type = "class"
-                    # Check for SKOS concepts
+                    # Check for SKOS concepts. (skos:ConceptScheme is NOT a concept
+                    # type — the scheme header node is excluded from enumeration
+                    # above, so it never reaches here.)
                     elif (concept_uri, RDF.type, SKOS.Concept) in context:
-                        concept_type = "concept"
-                    elif (concept_uri, RDF.type, SKOS.ConceptScheme) in context:
                         concept_type = "concept"
                     # Check for all property types
                     elif (concept_uri, RDF.type, RDF.Property) in context:
@@ -2272,35 +3022,34 @@ class SemanticModelsManager(SearchableAsset):
                     else:
                         concept_type = "individual"
 
-                    # Get parent concepts/properties
+                    # Get parent concepts/properties. RDF/RDFS/OWL/SKOS
+                    # vocabulary IRIs (owl:Class, owl:Thing, ...) are never valid
+                    # parents and are filtered out of every source below.
                     parent_concepts = []
                     # Handle rdfs:subClassOf relationships (class-to-class)
                     for parent in context.objects(concept_uri, RDFS.subClassOf):
                         parent_str = str(parent)
-                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
+                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
                             parent_concepts.append(parent_str)
                     # Handle owl:equivalentClass + owl:intersectionOf (A ≡ B ∩ C implies A ⊑ B)
                     for parent_iri in self._extract_parents_from_owl_equivalent_class(context, concept_uri):
-                        if parent_iri not in parent_concepts:
+                        if not _is_vocab_iri(parent_iri) and parent_iri not in parent_concepts:
                             parent_concepts.append(parent_iri)
                     # Handle rdfs:subPropertyOf relationships (property-to-property)
                     for parent in context.objects(concept_uri, RDFS.subPropertyOf):
                         parent_str = str(parent)
-                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
+                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
                             parent_concepts.append(parent_str)
                     # Handle SKOS broader relationships
                     for parent in context.objects(concept_uri, SKOS.broader):
-                        parent_concepts.append(str(parent))
+                        parent_str = str(parent)
+                        if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
+                            parent_concepts.append(parent_str)
                     # Handle rdf:type relationships (instance-to-class)
                     for parent_type in context.objects(concept_uri, RDF.type):
                         # Only include custom types, not basic RDF/RDFS/SKOS/OWL types
                         parent_type_str = str(parent_type)
-                        if not any(parent_type_str.startswith(prefix) for prefix in [
-                            "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                            "http://www.w3.org/2000/01/rdf-schema#",
-                            "http://www.w3.org/2004/02/skos/core#",
-                            "http://www.w3.org/2002/07/owl#"
-                        ]):
+                        if not _is_vocab_iri(parent_type_str):
                             parent_concepts.append(parent_type_str)
 
                     source_context = self._extract_source_context(context_name)
@@ -2323,20 +3072,40 @@ class SemanticModelsManager(SearchableAsset):
                     # Extract related concepts (skos:related)
                     related_concepts = [str(r) for r in context.objects(concept_uri, SKOS.related)]
 
-                    concepts.append(OntologyConcept(
-                        iri=concept_iri,
-                        label=primary_label,
-                        labels=labels,
-                        comment=comment,
-                        comments=comments,
-                        concept_type=concept_type,
-                        property_type=property_type_val,
-                        source_context=source_context,
-                        parent_concepts=parent_concepts,
-                        domain=domain_val,
-                        range=range_val,
-                        related_concepts=related_concepts
-                    ))
+                    # Governance status (ONTOS.status). Needed so the Explore
+                    # list can render the Status column; without it every row
+                    # showed a blank status. Falls back to the created default.
+                    status_val = self._get_literal(context, concept_uri, ONTOS.status)
+
+                    # Per-concept guard: constructing a single OntologyConcept must
+                    # NEVER be able to blank the whole context. A bad value in one
+                    # concept (historically an ONTOS.status literal the enum didn't
+                    # yet know about, e.g. 'published') raised a Pydantic
+                    # ValidationError that the OUTER except swallowed, dropping every
+                    # concept in the scheme from Explore. Now one bad concept is
+                    # skipped and the rest still enumerate.
+                    try:
+                        concepts.append(OntologyConcept(
+                            iri=concept_iri,
+                            label=primary_label,
+                            labels=labels,
+                            comment=comment,
+                            comments=comments,
+                            concept_type=concept_type,
+                            property_type=property_type_val,
+                            source_context=source_context,
+                            parent_concepts=parent_concepts,
+                            domain=domain_val,
+                            range=range_val,
+                            related_concepts=related_concepts,
+                            status=status_val,
+                            source_file=self._get_literal(context, concept_uri, ONTOS.sourceFile),
+                        ))
+                    except Exception as concept_err:
+                        logger.warning(
+                            f"Skipping concept {concept_iri} in context {context_name}: {concept_err}"
+                        )
+                        continue
             except Exception as e:
                 logger.warning(f"Failed to query concepts in context {context_name}: {e}")
 
@@ -2398,29 +3167,29 @@ class SemanticModelsManager(SearchableAsset):
             # "individual" default and the UI badge was wrong.
             concept_type, _ = self._detect_concept_type(context, concept_uri)
 
-            # Get parent concepts
+            # Get parent concepts. RDF/RDFS/OWL/SKOS vocabulary IRIs
+            # (owl:Class, owl:Thing, ...) are never valid parents and are
+            # filtered out of every source below.
             parent_concepts = []
             # Handle rdfs:subClassOf relationships (class-to-class)
             for parent in context.objects(concept_uri, RDFS.subClassOf):
                 parent_str = str(parent)
-                if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str):
+                if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
                     parent_concepts.append(parent_str)
             # Handle owl:equivalentClass + owl:intersectionOf (A ≡ B ∩ C implies A ⊑ B)
             for parent_iri in self._extract_parents_from_owl_equivalent_class(context, concept_uri):
-                if parent_iri not in parent_concepts:
+                if not _is_vocab_iri(parent_iri) and parent_iri not in parent_concepts:
                     parent_concepts.append(parent_iri)
             # Handle SKOS broader relationships
             for parent in context.objects(concept_uri, SKOS.broader):
-                parent_concepts.append(str(parent))
+                parent_str = str(parent)
+                if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str):
+                    parent_concepts.append(parent_str)
             # Handle rdf:type relationships (instance-to-class)
             for parent_type in context.objects(concept_uri, RDF.type):
-                # Only include custom types, not basic RDF/RDFS/SKOS types
+                # Only include custom types, not basic RDF/RDFS/SKOS/OWL types
                 parent_type_str = str(parent_type)
-                if not any(parent_type_str.startswith(prefix) for prefix in [
-                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                    "http://www.w3.org/2000/01/rdf-schema#", 
-                    "http://www.w3.org/2004/02/skos/core#"
-                ]):
+                if not _is_vocab_iri(parent_type_str):
                     parent_concepts.append(parent_type_str)
             
             # Get child concepts
@@ -2477,6 +3246,9 @@ class SemanticModelsManager(SearchableAsset):
                 source_collection_iri=meta["source_collection_iri"],
                 promotion_type=meta["promotion_type"],
                 review_request_id=meta["review_request_id"],
+                review_comment=meta.get("review_comment"),
+                review_decision=meta.get("review_decision"),
+                source_file=meta.get("source_file"),
             )
             break  # Found in first matching context
         
@@ -3159,10 +3931,34 @@ class SemanticModelsManager(SearchableAsset):
         
         # Remove collection metadata from meta context
         rdf_triples_repo.remove_by_subject(self._db, collection_iri, META_CONTEXT)
-        
+
+        # Collect the DISTINCT subject IRIs actually present in this context
+        # BEFORE removing the triples — this is the reliable set of concept IRIs
+        # in the scheme regardless of namespace. IMPORTED concepts keep their
+        # FILE's own namespace (e.g. https://ontos.example.org/sales#placesOrder),
+        # which is NOT under the scheme's <collection_iri>/... prefix, so the
+        # prefix match below misses them and their concept_version rows leak
+        # (version history survived across repeated deletes -> "v6").
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        context_rows = rdf_triples_repo.list_by_context(self._db, collection_iri)
+        subject_iris = list({row.subject_uri for row in context_rows})
+
         # Remove all concepts in the collection's context
         rdf_triples_repo.remove_by_context(self._db, collection_iri)
-        
+
+        # Delete the concept_version rows for every concept in this collection,
+        # in the SAME transaction as the rdf_triples deletion above. Leaving
+        # these rows behind orphaned them: recreating a same-named scheme +
+        # same-named concept then collided with the unique constraints on
+        # (iri, version) / (iri WHERE is_current) -> IntegrityError
+        # ("Failed to create concept") and the concept never appeared.
+        #   1. Prefix match catches urn-prefixed <collection_iri>/<slug> concepts
+        #      (cheap safety net).
+        #   2. Explicit IRI match catches file-native IRIs (any namespace) that
+        #      actually lived in this context but sit outside the prefix.
+        concept_versions_repo.delete_for_collection(self._db, collection_iri)
+        concept_versions_repo.delete_by_iris(self._db, subject_iris)
+
         # Remove from in-memory graph
         meta_context = self._graph.get_context(URIRef(META_CONTEXT))
         coll_uri = URIRef(collection_iri)
@@ -3246,7 +4042,9 @@ class SemanticModelsManager(SearchableAsset):
             concept_type = "class"
         elif str(OWL.NamedIndividual) in types:
             concept_type = "individual"
-        elif str(SKOS.Concept) in types or str(SKOS.ConceptScheme) in types:
+        elif str(SKOS.Concept) in types:
+            # skos:ConceptScheme intentionally NOT mapped here — a scheme header
+            # is not a browseable concept (it is excluded from enumeration too).
             concept_type = "concept"
 
         # ``ontos:conceptType`` annotation lets us distinguish "term" from
@@ -3421,9 +4219,26 @@ class SemanticModelsManager(SearchableAsset):
         if created_by:
             user_uri = f"urn:user:{created_by}" if not created_by.startswith("urn:") else created_by
             coll_context.add((concept_uri, ONTOS.createdBy, URIRef(user_uri)))
-        
+
+        # Mint the v1 concept_version row so a freshly-created concept is
+        # versioned like a backfilled one (P0-1 backfill only versioned
+        # PRE-EXISTING concepts). Without this, a later publish computes
+        # max_version=0 -> new_version=1 and history is empty. Routed through the
+        # single new-concept chokepoint, which self-heals orphaned leftover rows
+        # (e.g. a deleted scheme that shared this sanitized IRI) and mints the
+        # next free version so a same-named recreate never hits an IntegrityError.
+        # A new concept starts as a draft. Assign every triple owned by this
+        # subject IRI (subject-IRI ownership, same rule as the backfill + publish)
+        # in the SAME commit.
+        v1 = self._mint_new_concept_version(
+            concept_iri, collection_iri, actor=created_by, status="draft"
+        )
+        rdf_triples_repo.reassign_subject_to_concept_version(
+            self._db, concept_iri, v1.id, context_name=collection_iri
+        )
+
         self._db.commit()
-        
+
         # Add owners if provided
         for owner in owners:
             owner_user = owner.get("user_uri", "")
@@ -3491,11 +4306,14 @@ class SemanticModelsManager(SearchableAsset):
         certified_by = self._get_uri(context, concept_uri, ONTOS.certifiedBy)
         cert_expires = self._get_literal(context, concept_uri, ONTOS.certificationExpiresAt)
         review_id = self._get_literal(context, concept_uri, ONTOS.reviewRequestId)
+        review_comment = self._get_literal(context, concept_uri, ONTOS.reviewComment)
+        review_decision = self._get_literal(context, concept_uri, ONTOS.reviewDecision)
 
         # Provenance
         source_concept = self._get_uri(context, concept_uri, ONTOS.sourceConceptIri)
         source_coll = self._get_uri(context, concept_uri, ONTOS.sourceCollectionIri)
         promotion_type = self._get_literal(context, concept_uri, ONTOS.promotionType)
+        source_file = self._get_literal(context, concept_uri, ONTOS.sourceFile)
 
         # Owners
         owners = []
@@ -3534,6 +4352,9 @@ class SemanticModelsManager(SearchableAsset):
             "source_collection_iri": source_coll,
             "promotion_type": promotion_type,
             "review_request_id": review_id,
+            "review_comment": review_comment,
+            "review_decision": review_decision,
+            "source_file": source_file,
             "owners": owners,
         }
 
@@ -3570,20 +4391,37 @@ class SemanticModelsManager(SearchableAsset):
                 # restore form state.
                 meta = self._extract_concept_metadata(context, concept_uri)
                 
-                # Get hierarchy
-                broader = [str(b) for b in context.objects(concept_uri, SKOS.broader)]
+                # Get hierarchy. Exclude RDF/RDFS/OWL/SKOS vocabulary IRIs from
+                # the parent list: bad data can attach `skos:broader owl:Class`
+                # (or subClassOf owl:Thing), and those meta IRIs are never valid
+                # parents and render as dead links in the UI.
+                broader = [
+                    str(b) for b in context.objects(concept_uri, SKOS.broader)
+                    if not isinstance(b, BNode)
+                    and not self._is_skolemized_bnode(str(b))
+                    and not _is_vocab_iri(b)
+                ]
                 narrower = [str(n) for n in context.objects(concept_uri, SKOS.narrower)]
-                
+
                 # Also check rdfs:subClassOf for classes
                 for parent in context.objects(concept_uri, RDFS.subClassOf):
                     parent_str = str(parent)
-                    if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and parent_str not in broader:
+                    if not isinstance(parent, BNode) and not self._is_skolemized_bnode(parent_str) and not _is_vocab_iri(parent_str) and parent_str not in broader:
                         broader.append(parent_str)
                 # Also check owl:equivalentClass + owl:intersectionOf
                 for parent_iri in self._extract_parents_from_owl_equivalent_class(context, concept_uri):
-                    if parent_iri not in broader:
+                    if not _is_vocab_iri(parent_iri) and parent_iri not in broader:
                         broader.append(parent_iri)
                 
+                # The concept's reported version must reflect the REAL current
+                # concept_version number, not the frozen ``ONTOS.version`` literal
+                # (hardcoded "1.0.0" at create, stale after any publish). When a
+                # concept_version row exists, it is the source of truth. The
+                # ONTOS.version triple is left intact for other readers.
+                from src.repositories.concept_versions_repository import concept_versions_repo
+                cv = concept_versions_repo.get_current(self._db, concept_iri)
+                reported_version = str(cv.version) if cv is not None else meta["version"]
+
                 return {
                     "iri": concept_iri,
                     "label": label,
@@ -3599,7 +4437,7 @@ class SemanticModelsManager(SearchableAsset):
                     "synonyms": meta["synonyms"],
                     "examples": meta["examples"],
                     "status": meta["status"],
-                    "version": meta["version"],
+                    "version": reported_version,
                     "owners": meta["owners"],
                     "created_at": meta["created_at"],
                     "created_by": meta["created_by"],
@@ -3614,6 +4452,9 @@ class SemanticModelsManager(SearchableAsset):
                     "source_collection_iri": meta["source_collection_iri"],
                     "promotion_type": meta["promotion_type"],
                     "review_request_id": meta["review_request_id"],
+                    "review_comment": meta.get("review_comment"),
+                    "review_decision": meta.get("review_decision"),
+                    "source_file": meta.get("source_file"),
                     "tagged_assets": [],
                     "properties": [],
                 }
@@ -3823,11 +4664,612 @@ class SemanticModelsManager(SearchableAsset):
                 source_identifier=concept_iri,
                 created_by=updated_by,
             )
-        
+
+        # Ownership invariant: draft edits above re-add rows via add_triple
+        # WITHOUT a concept_version_id, so the rewritten rows are born
+        # NULL-owned. A versioned concept's live triples must all be owned by
+        # its CURRENT concept_version or they drop out of list_current (the
+        # served graph builder) and the concept vanishes. Re-stamp the subject's
+        # rows to the current version before the commit, mirroring
+        # create_concept. Un-versioned legacy concepts (no current row) are left
+        # as-is. only_null_owned=True so we ONLY adopt the freshly-added rows and
+        # never touch a prior version's frozen snapshot (moving those onto the
+        # current version would destroy the snapshot AND collide with the current
+        # version's identical rows -> IntegrityError).
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        current_cv = concept_versions_repo.get_current(self._db, concept_iri)
+        if current_cv is not None:
+            rdf_triples_repo.reassign_subject_to_concept_version(
+                self._db, concept_iri, current_cv.id, context_name=collection_iri,
+                only_null_owned=True,
+            )
+
         self._db.commit()
         self._invalidate_cache()
-        
+
         return self.get_concept(concept_iri)
+
+    # -- P0-3: atomic publish (single-concept version swap) --------------------
+    # Human-field -> SKOS predicate map for applying `changes` on publish. Mirrors
+    # update_concept's predicate choices so the two write paths cannot drift.
+    _PUBLISH_LITERAL_FIELDS = {
+        "label": SKOS.prefLabel,
+        "definition": SKOS.definition,
+        # Provenance: a re-uploaded (MODIFIED) concept must adopt the CURRENT
+        # file's name, not keep the stale sourceFile copied from the demoted
+        # version. Only rewritten when the incoming file carries a sourceFile
+        # (concept_diff._extract_changes emits it), so a manual edit that omits
+        # it leaves the existing value untouched.
+        "source_file": ONTOS.sourceFile,
+    }
+    _PUBLISH_LIST_LITERAL_FIELDS = {
+        "synonyms": SKOS.altLabel,
+        "examples": SKOS.example,
+    }
+    _PUBLISH_LIST_URI_FIELDS = {
+        "broader_iris": SKOS.broader,
+        "narrower_iris": SKOS.narrower,
+        "related_iris": SKOS.related,
+    }
+
+    def publish_concept_version(
+        self,
+        concept_iri: str,
+        changes: Optional[Dict[str, Any]] = None,
+        change_note: Optional[str] = None,
+        published_by: Optional[str] = None,
+        bypass_editable_gate: bool = False,
+    ) -> Dict[str, Any]:
+        """Publish a new version of a concept — DB-first atomic swap (P0-3).
+
+        Transaction (ONE Postgres commit):
+          1. Demote the current ``concept_version`` -> history (is_current=false,
+             status='superseded' — replaced by a newer version; the concept stays
+             active, distinct from 'deprecated'=stop using the concept) and FLUSH,
+             so the partial unique index
+             ``uq_concept_version_current_per_iri`` never sees two current rows.
+          2. Insert the new ``concept_version`` (version = max+1 for this iri,
+             is_current=true, parent_version_id = the demoted row's id).
+          3. Apply ``changes`` to the concept's rdf_triples (overwrite the human
+             SKOS fields, matching update_concept's predicate choices).
+          4. Reassign every triple owned by this subject IRI (triple-ownership
+             rule) to the new concept_version_id.
+          5. commit() — everything above lands atomically. The stable ``iri``
+             never changes.
+
+        Cross-store ordering (RECOVERY CONTRACT): the DB and the in-memory rdflib
+        graph are two separate stores; there is NO XA between them. We commit the
+        Postgres transaction FIRST, THEN patch the served graph (swap this
+        concept's triples). If the graph patch throws, the DB is the source of
+        truth and the served copy is merely stale for this one concept: we force
+        a full rebuild (``rebuild_graph_from_enabled``) to reconcile, and
+        re-raise so the endpoint surfaces a non-200 instead of pretending
+        success. No DB rollback — this is a STALENESS failure, not data loss.
+        """
+        changes = changes or {}
+
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            raise ValueError("Cannot determine collection for concept")
+
+        # Gate on editable scheme/collection (same guard as create/update).
+        # The re-upload diff engine (P0-4) passes bypass_editable_gate=True:
+        # for file-sourced collections (auto-registered as non-editable because
+        # they are not hand-edited via the concept UI) re-upload IS the sanctioned
+        # write channel, so the UI-editability gate must not block it.
+        if not bypass_editable_gate:
+            collection = self.get_collection(collection_iri)
+            if collection and not collection.get("is_editable"):
+                raise ValueError(f"Collection is not editable: {collection_iri}")
+
+        # ---- snapshot-per-version swap inside ONE transaction (no commit yet) --
+        # PRD "snapshots over deltas": the PRIOR version keeps its OWN frozen
+        # triple set (its old field values) so "what was the previous definition?"
+        # stays answerable and P0-4's diff engine has something to diff. We COPY
+        # the concept's current triples into a new set owned by v2, then mutate
+        # ONLY v2's copy. v1's rows are never touched.
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        # 1. Demote current version row -> history metadata (is_current=false,
+        #    status=superseded). Its triples STAY owned by this (demoted) id =
+        #    v1's frozen snapshot.
+        demoted = concept_versions_repo.demote_current(self._db, concept_iri)  # flushes
+
+        # 2. Create the new current version row.
+        new_version_num = concept_versions_repo.max_version(self._db, concept_iri) + 1
+        new_cv = concept_versions_repo.create_version(  # flushes -> new_cv.id available
+            self._db,
+            iri=concept_iri,
+            version=new_version_num,
+            is_current=True,
+            status="active",
+            parent_version_id=(demoted.id if demoted else None),
+            created_by=published_by,
+        )
+
+        # 3. COPY the concept's current triples into a NEW set owned by v2. The
+        #    source is the demoted version's rows (the live set before this
+        #    publish); if there is no demoted row (edge case), fall back to the
+        #    subject's currently-owned rows. v1's rows are left untouched.
+        source_version_id = demoted.id if demoted else None
+        copied = rdf_triples_repo.copy_triples_to_version(
+            self._db,
+            subject_uri=concept_iri,
+            source_concept_version_id=source_version_id,
+            target_concept_version_id=new_cv.id,
+            context_name=collection_iri,
+            created_by=published_by,
+        )
+
+        # SAFETY NET (no-vanish invariant): if the scoped copy captured nothing
+        # (legacy/edge data where the demoted version owned no rows, or the live
+        # rows were NULL-owned), v2 would be born EMPTY and the concept would
+        # drop out of list_current. Fall back to copying the subject's COMPLETE
+        # current view into v2, stamped with the new version id, so v2 is never
+        # empty. Skip the new version's own rows (there are none yet) and skip
+        # any row already owned by new_cv.id.
+        if copied == 0:
+            for r in rdf_triples_repo.list_current_by_subject(self._db, concept_iri):
+                if r.concept_version_id == new_cv.id:
+                    continue
+                rdf_triples_repo.add_triple(
+                    self._db,
+                    subject_uri=r.subject_uri,
+                    predicate_uri=r.predicate_uri,
+                    object_value=r.object_value,
+                    object_is_uri=r.object_is_uri,
+                    object_language=r.object_language,
+                    object_datatype=r.object_datatype,
+                    context_name=r.context_name,
+                    source_type=r.source_type,
+                    source_identifier=r.source_identifier,
+                    created_by=published_by or r.created_by,
+                    concept_version_id=new_cv.id,
+                )
+
+        # 4. Apply the human-field changes to v2's SET ONLY (remove/add the
+        #    changed predicates among rows owned by new_cv.id). DB-only here; the
+        #    graph is patched AFTER commit per the recovery contract.
+        self._apply_publish_changes_to_db(
+            concept_iri, collection_iri, changes, published_by, target_version_id=new_cv.id
+        )
+
+        # Optional change note as provenance on the NEW version's set.
+        if change_note:
+            rdf_triples_repo.add_triple(
+                self._db,
+                subject_uri=concept_iri,
+                predicate_uri=str(ONTOS.changeNote),
+                object_value=change_note,
+                object_is_uri=False,
+                context_name=collection_iri,
+                source_type="concept",
+                source_identifier=concept_iri,
+                created_by=published_by,
+                concept_version_id=new_cv.id,
+            )
+
+        # 5. ONE commit -> the whole swap is atomic. A concurrent reader sees
+        #    all-old or all-new, never a torn mix.
+        self._db.commit()
+
+        # ---- Cross-store step: patch the served graph AFTER the DB commit -----
+        try:
+            self._swap_concept_in_graph(concept_iri, collection_iri)
+        except Exception:
+            # RECOVERY CONTRACT (P0-3): DB is already correct and committed; the
+            # served graph patch failed, so the served copy is stale for this one
+            # concept. Force a full rebuild to reconcile, then re-raise so the
+            # endpoint returns a non-200/warning rather than silently claiming
+            # success.
+            logger.error(
+                "Graph patch failed after DB commit for %s; forcing rebuild (recovery contract)",
+                concept_iri, exc_info=True,
+            )
+            try:
+                self.rebuild_graph_from_enabled()
+            except Exception:
+                logger.error("Recovery rebuild_graph_from_enabled also failed", exc_info=True)
+            raise
+
+        self._invalidate_cache()
+
+        refreshed = self.get_concept(concept_iri) or {}
+        return {
+            "iri": concept_iri,
+            "label": refreshed.get("label") or existing.get("label"),
+            "new_version": new_version_num,
+            "is_current": True,
+        }
+
+    def _apply_publish_changes_to_db(
+        self,
+        concept_iri: str,
+        collection_iri: str,
+        changes: Dict[str, Any],
+        published_by: Optional[str],
+        target_version_id=None,
+    ) -> None:
+        """Overwrite the human SKOS fields on the NEW version's triple set only.
+
+        DB-only (no graph patch here — the graph is swapped after the commit).
+        Only fields present in ``changes`` are touched. All removes/adds are
+        SCOPED to rows owned by ``target_version_id`` (v2's copied set), so the
+        prior version's frozen snapshot is never mutated.
+        """
+        for field, predicate in self._PUBLISH_LITERAL_FIELDS.items():
+            if field in changes and changes[field] is not None:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(predicate), collection_iri,
+                    concept_version_id=target_version_id,
+                )
+                rdf_triples_repo.add_triple(
+                    self._db, subject_uri=concept_iri, predicate_uri=str(predicate),
+                    object_value=str(changes[field]), object_is_uri=False,
+                    context_name=collection_iri, source_type="concept",
+                    source_identifier=concept_iri, created_by=published_by,
+                    concept_version_id=target_version_id,
+                )
+
+        for field, predicate in self._PUBLISH_LIST_LITERAL_FIELDS.items():
+            if field in changes and changes[field] is not None:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(predicate), collection_iri,
+                    concept_version_id=target_version_id,
+                )
+                for val in changes[field]:
+                    rdf_triples_repo.add_triple(
+                        self._db, subject_uri=concept_iri, predicate_uri=str(predicate),
+                        object_value=str(val), object_is_uri=False,
+                        context_name=collection_iri, source_type="concept",
+                        source_identifier=concept_iri, created_by=published_by,
+                        concept_version_id=target_version_id,
+                    )
+
+        for field, predicate in self._PUBLISH_LIST_URI_FIELDS.items():
+            if field in changes and changes[field] is not None:
+                rdf_triples_repo.remove_by_subject_predicate(
+                    self._db, concept_iri, str(predicate), collection_iri,
+                    concept_version_id=target_version_id,
+                )
+                for val in changes[field]:
+                    rdf_triples_repo.add_triple(
+                        self._db, subject_uri=concept_iri, predicate_uri=str(predicate),
+                        object_value=str(val), object_is_uri=True,
+                        context_name=collection_iri, source_type="concept",
+                        source_identifier=concept_iri, created_by=published_by,
+                        concept_version_id=target_version_id,
+                    )
+
+    def _swap_concept_in_graph(self, concept_iri: str, collection_iri: str) -> None:
+        """Swap one concept's triples in the served in-memory graph (P0-3).
+
+        Remove every triple with this subject from the collection context, then
+        re-add ONLY the concept's CURRENT-version triples from the DB. Since
+        publish now snapshots the prior version (its old rows remain in the DB
+        owned by the demoted version), we must re-add the current set only —
+        list_by_subject would leak the frozen v1 rows back into the served graph.
+        Called AFTER the DB commit; a failure here triggers the recovery-contract
+        rebuild in the caller.
+        """
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        # Remove the old view of this concept.
+        coll_context.remove((concept_uri, None, None))
+        # Re-add the CURRENT-version (+ unowned) rows for this subject only.
+        for triple in rdf_triples_repo.list_current_by_subject(self._db, concept_iri):
+            if triple.context_name != collection_iri:
+                continue
+            pred = URIRef(triple.predicate_uri)
+            if triple.object_is_uri:
+                obj = URIRef(triple.object_value)
+            elif triple.object_language:
+                obj = Literal(triple.object_value, lang=triple.object_language)
+            elif triple.object_datatype:
+                obj = Literal(triple.object_value, datatype=URIRef(triple.object_datatype))
+            else:
+                obj = Literal(triple.object_value)
+            coll_context.add((concept_uri, pred, obj))
+
+    # -- P0-2/§1-§2: version-info + historical-detail reads --------------------
+    def get_concept_version_info(self, concept_iri: str) -> Optional[Dict[str, Any]]:
+        """Current version + version history for one concept (API contract §1).
+
+        Returns None if the concept isn't found. ``label`` is always populated
+        (Simple view requirement). Lineage pointers come from the graph:
+        ``replaces_iri`` from dct:replaces / prov:wasRevisionOf on this concept,
+        ``replaced_by_iris`` from dct:isReplacedBy on this concept.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        concept = self.get_concept(concept_iri)
+        if not concept:
+            return None
+
+        label = concept.get("label") or concept_iri
+        rows = concept_versions_repo.list_versions(self._db, concept_iri)  # newest-first
+        versions = [
+            {
+                "version": r.version,
+                "is_current": r.is_current,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_by": r.created_by,
+            }
+            for r in rows
+        ]
+        current = next((r for r in rows if r.is_current), rows[0] if rows else None)
+
+        # Lineage from the served graph (current-only triples).
+        concept_uri = URIRef(concept_iri)
+        replaced_by_iris = [str(o) for o in self._graph.objects(concept_uri, DCT.isReplacedBy)]
+        replaces = [str(o) for o in self._graph.objects(concept_uri, DCT.replaces)]
+        replaces_iri = replaces[0] if replaces else None
+
+        return {
+            "iri": concept_iri,
+            "label": label,
+            "current_version": current.version if current else None,
+            # Governance/workflow status (ONTOS.status from the graph, e.g.
+            # "under_review") is what the Status column shows. Prefer it over the
+            # concept_version ROW's lifecycle status ("active"/"superseded"),
+            # which is a VERSIONING state, not the governance status. Fall back
+            # to the version row only when the graph carries no status.
+            "status": concept.get("status") or (current.status if current else None),
+            "versions": versions,
+            "replaces_iri": replaces_iri,
+            "replaced_by_iris": replaced_by_iris,
+        }
+
+    def get_concept_version_detail(
+        self, concept_iri: str, version: int
+    ) -> Optional[Dict[str, Any]]:
+        """Concept detail AS OF a specific version, by (iri, version) key (§2).
+
+        Cold-path fetch: does NOT touch the hot graph. Reads the triples OWNED by
+        that version's concept_version_id (its frozen snapshot), so an old version
+        returns its OLD field values (e.g. the previous definition text). Returns
+        None if that (iri, version) does not exist.
+        """
+        from src.repositories.concept_versions_repository import concept_versions_repo
+
+        cv = concept_versions_repo.get_by_iri_version(self._db, concept_iri, version)
+        if cv is None:
+            return None
+
+        # Read this version's OWN triples into a throwaway graph, then extract the
+        # human fields exactly as get_concept would — but from the frozen snapshot.
+        snap = Graph()
+        concept_uri = URIRef(concept_iri)
+        for t in rdf_triples_repo.list_by_concept_version(self._db, cv.id):
+            pred = URIRef(t.predicate_uri)
+            if t.object_is_uri:
+                obj = URIRef(t.object_value)
+            elif t.object_language:
+                obj = Literal(t.object_value, lang=t.object_language)
+            elif t.object_datatype:
+                obj = Literal(t.object_value, datatype=URIRef(t.object_datatype))
+            else:
+                obj = Literal(t.object_value)
+            snap.add((concept_uri, pred, obj))
+
+        def _lit(pred):
+            v = snap.value(concept_uri, pred)
+            return str(v) if v is not None else None
+
+        label = _lit(SKOS.prefLabel) or _lit(RDFS.label) or concept_iri
+        definition = _lit(SKOS.definition) or _lit(RDFS.comment)
+        detail = {
+            "iri": concept_iri,
+            "label": label,
+            "definition": definition,
+            "synonyms": [str(o) for o in snap.objects(concept_uri, SKOS.altLabel)],
+            "examples": [str(o) for o in snap.objects(concept_uri, SKOS.example)],
+            "broader": [str(o) for o in snap.objects(concept_uri, SKOS.broader)],
+            "narrower": [str(o) for o in snap.objects(concept_uri, SKOS.narrower)],
+            "related": [str(o) for o in snap.objects(concept_uri, SKOS.related)],
+            "version": cv.version,
+            "is_current": cv.is_current,
+            "status": cv.status,
+            "created_at": cv.created_at.isoformat() if cv.created_at else None,
+            "created_by": cv.created_by,
+        }
+        return detail
+
+    # -- P0-6: reference-count / safe-transition primitives -------------------
+    def reference_count(self, concept_iri: str) -> int:
+        """How many things reference this concept — the retire gate (P0-6).
+
+        Counts:
+          - rows in ``entity_semantic_links`` for this iri (physical UC/asset
+            references — the IRI is the join key baked into UC tags), PLUS
+          - concept->concept references: any OTHER concept pointing at this iri
+            via skos:broader / skos:narrower / skos:related / rdfs:subClassOf in
+            the served graph.
+
+        Retirement is gated on this being 0 (tombstone, never hard-delete).
+        """
+        from src.repositories.semantic_links_repository import entity_semantic_links_repo
+
+        link_count = entity_semantic_links_repo.count_for_iri(self._db, concept_iri)
+
+        # Concept->concept references in the hot graph. The iri appears as the
+        # OBJECT of a relationship predicate from some other subject.
+        concept_uri = URIRef(concept_iri)
+        ref_predicates = (SKOS.broader, SKOS.narrower, SKOS.related, RDFS.subClassOf)
+        concept_refs = 0
+        for pred in ref_predicates:
+            for subj in self._graph.subjects(pred, concept_uri):
+                if str(subj) != concept_iri:  # a concept referencing itself doesn't count
+                    concept_refs += 1
+
+        return link_count + concept_refs
+
+    def deprecate_concept(
+        self,
+        concept_iri: str,
+        replaced_by: Optional[List[str]] = None,
+        deprecated_by: Optional[str] = None,
+        bypass_editable_gate: bool = False,
+    ) -> Dict[str, Any]:
+        """Deprecate a concept (stop-using) — stays fully resolvable (P0-6).
+
+        Sets concept status to ``deprecated`` (this is the CONCEPT-level
+        stop-using signal, NOT the version-level ``superseded``). If ``replaced_by``
+        IRIs are given (a 2B meaning-split), writes the lineage links so the old
+        IRI still resolves and points forward, and each successor points back:
+          - old  --dct:isReplacedBy-->  new   (forward pointer)
+          - new  --prov:wasRevisionOf--> old  (provenance back-pointer)
+          - new  --dct:replaces-->       old  (Dublin Core back-pointer)
+
+        DB-first then graph patch, matching the create/update dual-write pattern.
+        """
+        from datetime import datetime
+
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            raise ValueError("Cannot determine collection for concept")
+        # See publish_concept_version: the re-upload diff engine (P0-4) bypasses
+        # the UI-editability gate because re-upload is the sanctioned write
+        # channel for file-sourced (non-editable) collections.
+        if not bypass_editable_gate:
+            collection = self.get_collection(collection_iri)
+            if collection and not collection.get("is_editable"):
+                raise ValueError(f"Collection is not editable: {collection_iri}")
+
+        replaced_by = replaced_by or []
+
+        # Reference gate (CV2-UI-08): refuse deprecating a still-REFERENCED
+        # concept UNLESS successor IRIs are supplied (the sanctioned 2B
+        # meaning-split remap — the successors carry the meaning forward), or
+        # the references have already been cleared. Deprecating an UNreferenced
+        # concept needs no successors.
+        #
+        # This gate applies ONLY to the interactive/API path
+        # (bypass_editable_gate=False). When bypass_editable_gate=True the caller
+        # is the re-upload/versioning engine: a re-upload that removes a concept
+        # is the file author's explicit tombstone and is legitimate even while
+        # referenced, so the reference gate is intentionally skipped there
+        # (mirrors the editable-gate bypass above).
+        if not bypass_editable_gate:
+            refs = self.reference_count(concept_iri)
+            if refs > 0 and not replaced_by:
+                raise ReferenceCountError(
+                    f"Cannot deprecate concept while referenced by {refs} place(s) "
+                    f"with no successor. Provide replacement concept(s) "
+                    f"(deprecate-with-successors) or remap the references first.",
+                    count=refs,
+                )
+
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        now = datetime.utcnow().isoformat() + "Z"
+
+        # 1. status -> deprecated (overwrite existing status).
+        rdf_triples_repo.remove_by_subject_predicate(self._db, concept_iri, str(ONTOS.status), collection_iri)
+        rdf_triples_repo.add_triple(
+            self._db, subject_uri=concept_iri, predicate_uri=str(ONTOS.status),
+            object_value="deprecated", object_is_uri=False, context_name=collection_iri,
+            source_type="concept", source_identifier=concept_iri, created_by=deprecated_by,
+        )
+        coll_context.remove((concept_uri, ONTOS.status, None))
+        coll_context.add((concept_uri, ONTOS.status, Literal("deprecated")))
+
+        # 2. 2B split lineage links (idempotent add — ON CONFLICT DO NOTHING).
+        for successor in replaced_by:
+            succ_uri = URIRef(successor)
+            # old --isReplacedBy--> new
+            rdf_triples_repo.add_triple(
+                self._db, subject_uri=concept_iri, predicate_uri=str(DCT.isReplacedBy),
+                object_value=successor, object_is_uri=True, context_name=collection_iri,
+                source_type="concept", source_identifier=concept_iri, created_by=deprecated_by,
+            )
+            coll_context.add((concept_uri, DCT.isReplacedBy, succ_uri))
+            # new --wasRevisionOf--> old
+            rdf_triples_repo.add_triple(
+                self._db, subject_uri=successor, predicate_uri=str(PROV.wasRevisionOf),
+                object_value=concept_iri, object_is_uri=True, context_name=collection_iri,
+                source_type="concept", source_identifier=successor, created_by=deprecated_by,
+            )
+            coll_context.add((succ_uri, PROV.wasRevisionOf, concept_uri))
+            # new --replaces--> old
+            rdf_triples_repo.add_triple(
+                self._db, subject_uri=successor, predicate_uri=str(DCT.replaces),
+                object_value=concept_iri, object_is_uri=True, context_name=collection_iri,
+                source_type="concept", source_identifier=successor, created_by=deprecated_by,
+            )
+            coll_context.add((succ_uri, DCT.replaces, concept_uri))
+
+        self._db.commit()
+        self._invalidate_cache()
+
+        refreshed = self.get_concept(concept_iri) or {}
+        return {
+            "iri": concept_iri,
+            "label": refreshed.get("label") or existing.get("label"),
+            "status": "deprecated",
+            "replaced_by": replaced_by,
+        }
+
+    def retire_concept(self, concept_iri: str, retired_by: Optional[str] = None) -> Dict[str, Any]:
+        """Retire a concept to a tombstone — gated on reference_count == 0 (P0-6).
+
+        If anything still references the concept, raises ``ReferenceCountError``
+        (the route maps it to 409) — retirement is REFUSED. If nothing references
+        it, sets status ``retired``; the concept row and triples STAY (tombstone,
+        still resolvable). NEVER a hard delete.
+        """
+        from datetime import datetime
+
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            raise ValueError("Cannot determine collection for concept")
+        collection = self.get_collection(collection_iri)
+        if collection and not collection.get("is_editable"):
+            raise ValueError(f"Collection is not editable: {collection_iri}")
+
+        # Retire gate: refuse while still referenced.
+        count = self.reference_count(concept_iri)
+        if count > 0:
+            raise ReferenceCountError(
+                f"Cannot retire concept referenced by {count} place(s). "
+                f"Remap references first.",
+                count=count,
+            )
+
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+
+        rdf_triples_repo.remove_by_subject_predicate(self._db, concept_iri, str(ONTOS.status), collection_iri)
+        rdf_triples_repo.add_triple(
+            self._db, subject_uri=concept_iri, predicate_uri=str(ONTOS.status),
+            object_value="retired", object_is_uri=False, context_name=collection_iri,
+            source_type="concept", source_identifier=concept_iri, created_by=retired_by,
+        )
+        coll_context.remove((concept_uri, ONTOS.status, None))
+        coll_context.add((concept_uri, ONTOS.status, Literal("retired")))
+
+        self._db.commit()
+        self._invalidate_cache()
+
+        refreshed = self.get_concept(concept_iri) or {}
+        return {
+            "iri": concept_iri,
+            "label": refreshed.get("label") or existing.get("label"),
+            "status": "retired",
+        }
 
     def delete_concept(self, concept_iri: str, deleted_by: Optional[str] = None) -> bool:
         """Delete a concept.
@@ -3855,12 +5297,21 @@ class SemanticModelsManager(SearchableAsset):
         
         # Remove all triples for this concept
         rdf_triples_repo.remove_by_subject(self._db, concept_iri, collection_iri)
-        
+
+        # Also delete this concept's concept_version rows, in the SAME transaction
+        # as the triple removal above. A deleted draft must not leave version rows
+        # behind: orphaned rows (keyed by concept IRI) collide with the unique
+        # constraints when a same-named concept is later recreated with the
+        # identical IRI ("Failed to create concept"). Mirrors delete_collection,
+        # which already calls delete_for_collection for the same reason.
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        concept_versions_repo.delete_by_iri(self._db, concept_iri)
+
         # Also remove any ownership records
         for owner in existing.get("owners", []):
             owner_iri = f"{concept_iri}/owner/{owner.get('user_uri', '').split(':')[-1]}"
             rdf_triples_repo.remove_by_subject(self._db, owner_iri, collection_iri)
-        
+
         # Remove from in-memory graph
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))
@@ -4043,7 +5494,23 @@ class SemanticModelsManager(SearchableAsset):
         allowed = VALID_TRANSITIONS.get(current_status, [])
         if new_status not in allowed:
             raise ValueError(f"Invalid status transition: {current_status} -> {new_status}. Allowed: {allowed}")
-        
+
+        # Reference-count gate (P0-6): a still-referenced concept must NOT be
+        # retired to a terminal state via the raw status path — that bypasses
+        # the retire gate / deprecate-with-successors flow. Deprecating a
+        # referenced concept must go through deprecate_concept (which records
+        # successors); retiring must go through retire_concept (0 refs). So
+        # refuse deprecated/archived here while references remain.
+        if new_status in ("deprecated", "archived"):
+            count = self.reference_count(concept_iri)
+            if count > 0:
+                raise ReferenceCountError(
+                    f"Cannot move concept to '{new_status}' while referenced by "
+                    f"{count} place(s). Deprecate with successors, or remap the "
+                    f"references first.",
+                    count=count,
+                )
+
         concept_uri = URIRef(concept_iri)
         coll_context = self._graph.get_context(URIRef(collection_iri))
         now = datetime.utcnow().isoformat() + "Z"
@@ -4119,52 +5586,455 @@ class SemanticModelsManager(SearchableAsset):
             coll_context.add((concept_uri, ONTOS.certifiedAt, Literal(now, datatype=XSD.dateTime)))
             coll_context.add((concept_uri, ONTOS.certifiedBy, URIRef(user_uri)))
             coll_context.add((concept_uri, ONTOS.certificationExpiresAt, Literal(expires, datatype=XSD.dateTime)))
-        
+
+        # Ownership invariant: the status/timestamp/publishedAt rows added above
+        # go through add_triple WITHOUT a concept_version_id, so they are born
+        # NULL-owned. Re-stamp ONLY those freshly-added NULL-owned rows to the
+        # current version before the commit (mirrors create_concept /
+        # update_concept) so a versioned concept never leaks NULL-owned payload
+        # rows out of list_current. only_null_owned=True is CRITICAL here: after
+        # a version publish the PRIOR version's frozen rows also live in this
+        # context; re-stamping them onto the current version would destroy the
+        # snapshot AND collide with the current version's identical rows
+        # (IntegrityError -> the 500 the user hit when moving a concept to
+        # Publish after it had already been versioned).
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        current_cv = concept_versions_repo.get_current(self._db, concept_iri)
+        if current_cv is not None:
+            rdf_triples_repo.reassign_subject_to_concept_version(
+                self._db, concept_iri, current_cv.id, context_name=collection_iri,
+                only_null_owned=True,
+            )
+
         self._db.commit()
         self._invalidate_cache()
-        
+
         return self.get_concept(concept_iri)
+
+    # ------------------------------------------------------------------ #
+    # Concept review PING-PONG loop (P2)                                  #
+    # ------------------------------------------------------------------ #
+    # The concept IRI is stored on a ``DataAssetReview`` (AssetType
+    # KNOWLEDGE_CONCEPT) using a scheme-prefixed FQN, mirroring the existing
+    # ``mdm://`` / ``term-mapping://`` conventions so ``_determine_asset_type``
+    # resolves the type deterministically and the reviewer-decision callback can
+    # read the concept IRI straight back off the reviewed asset.
+    CONCEPT_REVIEW_FQN_PREFIX = "knowledge-concept://"
+
+    @classmethod
+    def concept_review_fqn(cls, concept_iri: str) -> str:
+        """Wrap a concept IRI as the reviewed-asset FQN stored on the review."""
+        return f"{cls.CONCEPT_REVIEW_FQN_PREFIX}{concept_iri}"
+
+    @classmethod
+    def concept_iri_from_review_fqn(cls, asset_fqn: str) -> Optional[str]:
+        """Recover the concept IRI from a reviewed-asset FQN (or None)."""
+        if asset_fqn and asset_fqn.startswith(cls.CONCEPT_REVIEW_FQN_PREFIX):
+            return asset_fqn[len(cls.CONCEPT_REVIEW_FQN_PREFIX):]
+        return None
+
+    def _compute_review_diff(self, concept_iri: str, current: Dict[str, Any]) -> Dict[str, Any]:
+        """Field-level diff of the proposed concept vs its last frozen version.
+
+        Compares the live (proposed) label / skos:definition / skos:broader
+        against the highest non-current concept_version snapshot. When there is
+        no prior version the diff is reported as ``initial``. Best-effort: any
+        failure degrades to ``initial`` rather than blocking the submit.
+        """
+        try:
+            from src.repositories.concept_versions_repository import concept_versions_repo
+            versions = concept_versions_repo.list_versions(self._db, concept_iri)
+            prior = [v for v in versions if not v.is_current]
+            if not prior:
+                return {"kind": "initial"}
+            snap = max(prior, key=lambda v: v.version)
+            old = self._concept_fields_from_version(snap.id)
+            proposed = {
+                "label": current.get("label"),
+                "definition": current.get("comment"),
+                "broader": sorted(current.get("parent_concepts") or []),
+            }
+            changed: Dict[str, Any] = {}
+            for field in ("label", "definition", "broader"):
+                if old.get(field) != proposed.get(field):
+                    changed[field] = {"old": old.get(field), "new": proposed.get(field)}
+            return {"kind": "update", "from_version": snap.version, "changed": changed}
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"Review diff computation failed for {concept_iri}: {e}")
+            return {"kind": "initial"}
+
+    def _concept_fields_from_version(self, concept_version_id) -> Dict[str, Any]:
+        """Read label/definition/broader off a frozen concept-version snapshot."""
+        rows = rdf_triples_repo.list_by_concept_version(self._db, concept_version_id)
+        label = definition = None
+        broader: List[str] = []
+        for r in rows:
+            if r.predicate_uri == str(SKOS.prefLabel):
+                label = r.object_value
+            elif r.predicate_uri == str(RDFS.label) and label is None:
+                label = r.object_value
+            elif r.predicate_uri == str(SKOS.definition):
+                definition = r.object_value
+            elif r.predicate_uri == str(RDFS.comment) and definition is None:
+                definition = r.object_value
+            elif r.predicate_uri in (str(SKOS.broader), str(RDFS.subClassOf)):
+                broader.append(r.object_value)
+        return {"label": label, "definition": definition, "broader": sorted(broader)}
+
+    def _set_concept_annotation(
+        self, concept_iri: str, predicate, value: Optional[str], updated_by: Optional[str] = None
+    ) -> None:
+        """Replace (or clear when value is None) a literal annotation on a concept.
+
+        Used for the ping-pong bookkeeping annotations (``reviewComment`` /
+        ``reviewDecision``) that must be visible to the owner without minting a
+        new version. Commits its own change.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            return
+        collection_iri = existing.get("source_context")
+        if not collection_iri:
+            return
+        concept_uri = URIRef(concept_iri)
+        coll_context = self._graph.get_context(URIRef(collection_iri))
+        rdf_triples_repo.remove_by_subject_predicate(
+            self._db, concept_iri, str(predicate), collection_iri
+        )
+        coll_context.remove((concept_uri, predicate, None))
+        if value is not None:
+            rdf_triples_repo.add_triple(
+                self._db, concept_iri, str(predicate), value,
+                False, None, None, collection_iri, "concept", concept_iri, updated_by,
+            )
+            coll_context.add((concept_uri, predicate, Literal(value)))
+        # Keep the ownership invariant: freshly-added NULL-owned rows get
+        # re-stamped onto the current version (mirrors update_concept_status).
+        from src.repositories.concept_versions_repository import concept_versions_repo
+        current_cv = concept_versions_repo.get_current(self._db, concept_iri)
+        if current_cv is not None:
+            rdf_triples_repo.reassign_subject_to_concept_version(
+                self._db, concept_iri, current_cv.id, context_name=collection_iri,
+                only_null_owned=True,
+            )
+        self._db.commit()
+        self._invalidate_cache()
+
+    def preview_submit_for_review(self, concept_iri: str) -> Dict[str, Any]:
+        """Report whether submitting a draft for review would be GOVERNED.
+
+        Read-only counterpart to ``submit_concept_for_review``: it runs ONLY
+        the workflow MATCHING path (never fires/executes anything, opens no
+        review, changes no status) so the submit dialog can tell the user in
+        advance whether an approval workflow will gate the transition.
+
+        Mirrors the trigger args ``submit_concept_for_review`` uses:
+        ``on_request_status_change`` for ``EntityType.ONTOLOGY_CONCEPT``,
+        draft -> under_review, no scope. Any registry failure degrades to
+        ungoverned so the dialog never breaks.
+
+        Returns ``{governed, workflow_names, workflow_count}``.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import TriggerType, EntityType
+
+            registry = get_trigger_registry(self._db)
+            workflows_manager = registry._get_workflows_manager()
+            matching = workflows_manager.get_workflows_for_trigger(
+                trigger_type=TriggerType.ON_REQUEST_STATUS_CHANGE,
+                entity_type=EntityType.ONTOLOGY_CONCEPT,
+                scope_type=None,
+                scope_id=None,
+                from_status="draft",
+                to_status="under_review",
+            )
+            return {
+                "governed": bool(matching),
+                "workflow_names": [w.name for w in matching],
+                "workflow_count": len(matching),
+            }
+        except Exception as e:
+            logger.warning(
+                f"preview_submit_for_review lookup failed for {concept_iri}: {e}"
+            )
+            return {"governed": False, "workflow_names": [], "workflow_count": 0}
 
     def submit_concept_for_review(
         self,
         concept_iri: str,
-        reviewer_email: str,
+        reviewer_email: Optional[str],
         submitted_by: str,
         notes: Optional[str] = None,
+        reset_mode: str = "reset_all",
     ) -> Dict[str, Any]:
-        """Submit a concept for review via the DataAssetReviewManager.
-        
-        Creates a review request and updates concept status to 'under_review'.
-        Returns the updated concept with review_request_id set.
+        """Submit a draft concept for review (P2 ping-pong entry point).
+
+        Behaviour:
+          * Guards status == 'draft'.
+          * Computes a field-level diff vs the last frozen version plus the
+            concept's reference_count into a ``review_context`` dict.
+          * Fires ``on_request_status_change`` (draft -> under_review) for
+            ``EntityType.ONTOLOGY_CONCEPT``. If ANY workflow executes, the
+            submission is GOVERNED (an approval gates the exit); if none match,
+            it is UNGOVERNED (opt-in governance — plain status flip).
+          * When a ``DataAssetReviewManager`` is reachable AND a reviewer is
+            supplied, creates a ``DataAssetReview`` (AssetType KNOWLEDGE_CONCEPT)
+            carrying the concept IRI, and stashes ``review_request_id`` on the
+            concept. Ungoverned/no-reviewer submits stay zero-friction: they
+            still transition to under_review, just without a backing review.
+
+        Returns ``{concept, review_request_id, governed}``.
         """
-        from src.models.data_asset_reviews import (
-            DataAssetReviewRequestCreate,
-            AssetType,
-        )
-        
         existing = self.get_concept(concept_iri)
         if not existing:
             raise ValueError(f"Concept not found: {concept_iri}")
-        
+
         status = existing.get("status") or "draft"
         if status != "draft":
-            raise ValueError(f"Can only submit draft concepts for review. Current status: {status}")
-        
-        # Create the review request
-        # Note: This requires the DataAssetReviewManager to be available
-        # The actual integration happens in the route layer
-        review_request_data = {
+            raise ValueError(
+                f"Can only submit draft concepts for review. Current status: {status}"
+            )
+
+        label = existing.get("label") or concept_iri
+
+        # 1. Diff + reference-count context for the workflow/review payload.
+        review_context: Dict[str, Any] = {
             "concept_iri": concept_iri,
-            "concept_label": existing.get("label"),
+            "label": label,
+            "reference_count": self.reference_count(concept_iri),
+            "diff": self._compute_review_diff(concept_iri, existing),
             "reviewer_email": reviewer_email,
-            "requester_email": submitted_by,
-            "notes": notes,
-            "asset_type": "knowledge_concept",
+            "reset_approvals_on_resubmit": reset_mode or "reset_all",
         }
-        
-        # Return the data needed for review request creation
-        # The route layer will create the actual review request
-        return review_request_data
+        # surfaced in the approver notification payload (definition/type/scheme) so the reviewer sees what they're approving
+        _definition = existing.get("comment") or existing.get("definition")  # concept detail model uses `comment` for the definition; include both fallbacks
+        if _definition:
+            review_context["definition"] = _definition
+        if existing.get("concept_type"):
+            review_context["concept_type"] = existing.get("concept_type")
+        if existing.get("source_context"):
+            review_context["source_context"] = existing.get("source_context")
+
+        # 2. Fire the governance trigger. Governed iff a workflow executed.
+        governed = False
+        try:
+            from src.common.workflow_triggers import get_trigger_registry
+            from src.models.process_workflows import EntityType
+
+            registry = get_trigger_registry(self._db)
+            executions = registry.on_request_status_change(
+                entity_type=EntityType.ONTOLOGY_CONCEPT,
+                entity_id=concept_iri,
+                from_status="draft",
+                to_status="under_review",
+                entity_name=label,
+                entity_data=review_context,
+                user_email=submitted_by,
+                blocking=True,
+            )
+            governed = bool(executions)
+        except Exception as e:
+            # A trigger-registry failure must not sink an otherwise valid submit
+            # (ungoverned path stays zero-friction).
+            logger.warning(f"on_request_status_change trigger failed for {concept_iri}: {e}")
+
+        # 3. Create the backing DataAssetReview when a review manager + reviewer
+        #    are available. This is the sanctioned reuse of the review system.
+        review_request_id: Optional[str] = None
+        review_mgr = get_app_state_manager("data_asset_review_manager")
+        if review_mgr is not None and reviewer_email:
+            try:
+                from src.models.data_asset_reviews import DataAssetReviewRequestCreate
+
+                # reset_approvals_on_resubmit is stashed on the review notes as a
+                # machine-readable marker (no schema column exists — see the P2
+                # follow-up TODO). Default 'reset_all' is fully implemented;
+                # 'only_changer' is treated as reset_all until a column lands.
+                effective_mode = reset_mode if reset_mode in ("reset_all", "only_changer") else "reset_all"
+                stashed_notes = self._encode_reset_mode_in_notes(notes, effective_mode)
+                req = DataAssetReviewRequestCreate(
+                    requester_email=submitted_by,
+                    reviewer_email=reviewer_email,
+                    asset_fqns=[self.concept_review_fqn(concept_iri)],
+                    title=f"Concept review: {label}",
+                    notes=stashed_notes,
+                )
+                created = review_mgr.create_review_request(req, db=self._db)
+                review_request_id = created.id
+            except Exception as e:
+                # Failing to open the review must not block the transition; log
+                # and continue (the concept still moves to under_review).
+                logger.error(
+                    f"Failed to create DataAssetReview for concept {concept_iri}: {e}",
+                    exc_info=True,
+                )
+
+        # 4. Clear any stale review comment from a prior ping-pong iteration.
+        self._set_concept_annotation(concept_iri, ONTOS.reviewComment, None, submitted_by)
+
+        # 5. ALWAYS transition draft -> under_review (governed or not).
+        updated = self.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="under_review",
+            updated_by=submitted_by,
+            review_request_id=review_request_id,
+        )
+
+        return {
+            "concept": updated,
+            "review_request_id": review_request_id,
+            "governed": governed,
+        }
+
+    @staticmethod
+    def _encode_reset_mode_in_notes(notes: Optional[str], mode: str) -> Optional[str]:
+        """Append a machine-readable reset-mode marker to the review notes.
+
+        There is no dedicated column for ``reset_approvals_on_resubmit`` (no
+        migration in this task), so the mode is stashed as a trailing marker line
+        on the review's ``notes`` field. ``_decode_reset_mode_from_notes`` reads
+        it back.
+        """
+        marker = f"[reset_approvals_on_resubmit={mode}]"
+        base = (notes or "").rstrip()
+        return f"{base}\n{marker}".strip() if base else marker
+
+    @staticmethod
+    def _decode_reset_mode_from_notes(notes: Optional[str]) -> str:
+        """Recover the reset mode from stashed notes; unknown -> reset_all."""
+        import re
+        if not notes:
+            return "reset_all"
+        m = re.search(r"\[reset_approvals_on_resubmit=(reset_all|only_changer)\]", notes)
+        return m.group(1) if m else "reset_all"
+
+    def withdraw_concept_review(
+        self, concept_iri: str, withdrawn_by: str
+    ) -> Dict[str, Any]:
+        """Owner-initiated withdrawal: under_review -> draft, cancel the review.
+
+        Guards status == 'under_review'. Cancels the linked DataAssetReview
+        (ReviewRequestStatus.CANCELLED — which does NOT drive the concept
+        callback) and clears ``ONTOS.reviewRequestId``. Notifies nothing beyond
+        a log.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+        status = existing.get("status") or "draft"
+        if status != "under_review":
+            raise ValueError(
+                f"Can only withdraw a concept that is under review. Current status: {status}"
+            )
+
+        review_request_id = existing.get("review_request_id")
+
+        # Cancel the backing review first (CANCELLED is terminal + non-reflecting).
+        if review_request_id:
+            review_mgr = get_app_state_manager("data_asset_review_manager")
+            if review_mgr is not None:
+                try:
+                    from src.models.data_asset_reviews import (
+                        DataAssetReviewRequestUpdateStatus,
+                        ReviewRequestStatus,
+                    )
+                    review_mgr.update_review_request_status(
+                        review_request_id,
+                        DataAssetReviewRequestUpdateStatus(
+                            status=ReviewRequestStatus.CANCELLED,
+                            notes="Withdrawn by owner",
+                        ),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to cancel review {review_request_id} on withdraw: {e}"
+                    )
+
+        # under_review -> draft
+        updated = self.update_concept_status(
+            concept_iri=concept_iri,
+            new_status="draft",
+            updated_by=withdrawn_by,
+        )
+
+        # Clear the review linkage + any pending comment.
+        self._set_concept_annotation(concept_iri, ONTOS.reviewRequestId, None, withdrawn_by)
+        self._set_concept_annotation(concept_iri, ONTOS.reviewComment, None, withdrawn_by)
+
+        logger.info(f"Concept {concept_iri} review withdrawn by {withdrawn_by}")
+        return {"concept": self.get_concept(concept_iri), "review_request_id": None}
+
+    def apply_review_decision(
+        self,
+        concept_iri: str,
+        decision: str,
+        decided_by: Optional[str] = None,
+        comments: Optional[str] = None,
+        reset_mode: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Reflect a reviewer decision onto the concept (send-back hook).
+
+        Called from ``DataAssetReviewManager.update_review_request_status`` when a
+        KNOWLEDGE_CONCEPT review reaches a terminal reviewer status.
+
+          * ``approved``          -> under_review -> approved.
+          * ``changes_requested`` -> under_review -> draft, carrying reviewer
+            comments onto ``ONTOS.reviewComment`` for the owner.
+          * ``denied``            -> under_review -> draft, flagged terminal-deny
+            via ``ONTOS.reviewDecision`` (no hard delete).
+
+        Idempotent-ish: if the concept is already in the decision's target state
+        the call is a no-op; an otherwise illegal current status raises
+        ``ValueError``.
+        """
+        existing = self.get_concept(concept_iri)
+        if not existing:
+            raise ValueError(f"Concept not found: {concept_iri}")
+        current_status = existing.get("status") or "draft"
+
+        if decision == "approved":
+            if current_status == "approved":
+                return {"concept": existing, "decision": decision}
+            if current_status != "under_review":
+                raise ValueError(
+                    f"Cannot approve concept in status '{current_status}'"
+                )
+            updated = self.update_concept_status(
+                concept_iri=concept_iri, new_status="approved", updated_by=decided_by
+            )
+            logger.info(f"Concept {concept_iri} approved by {decided_by}")
+            return {"concept": updated, "decision": decision}
+
+        if decision in ("changes_requested", "denied"):
+            if current_status == "draft":
+                # Already sent back (idempotent) — still record the annotations.
+                updated = existing
+            elif current_status != "under_review":
+                raise ValueError(
+                    f"Cannot send back concept in status '{current_status}'"
+                )
+            else:
+                updated = self.update_concept_status(
+                    concept_iri=concept_iri, new_status="draft", updated_by=decided_by
+                )
+            if comments:
+                self._set_concept_annotation(
+                    concept_iri, ONTOS.reviewComment, comments, decided_by
+                )
+            self._set_concept_annotation(
+                concept_iri, ONTOS.reviewDecision, decision, decided_by
+            )
+            logger.info(
+                f"Concept {concept_iri} sent back to draft ({decision}) by {decided_by}"
+            )
+            return {"concept": self.get_concept(concept_iri), "decision": decision}
+
+        raise ValueError(f"Unknown review decision: {decision}")
 
     # ========================================================================
     # COLLECTION EXPORT
@@ -4203,24 +6073,249 @@ class SemanticModelsManager(SearchableAsset):
             logger.error(f"Failed to export collection: {e}")
             raise ValueError(f"Failed to export collection: {e}")
 
+    def _detect_cross_scheme_iri_conflicts(
+        self, incoming_graph, target_context: str
+    ) -> List[tuple]:
+        """Find incoming concept IRIs that already live in a DIFFERENT scheme.
+
+        An IRI denotes ONE concept globally (the concept_version table keys
+        is_current per IRI across all schemes). So the same subject IRI asserted
+        into two different collections is not two concepts — it is one identity
+        forked into two contexts with potentially divergent status. We refuse it
+        at import time. Re-importing an IRI that already lives in THIS target
+        context is legitimate (that is versioning) and is NOT a conflict.
+
+        Returns a list of ``(iri, other_context)`` pairs, one per conflicting
+        typed subject found in another non-empty context.
+        """
+        # Concept-identity types: only typed subjects carry a governed concept
+        # identity, so only they can collide across schemes.
+        _conflict_types = {
+            SKOS.Concept, OWL.Class, RDFS.Class,
+            OWL.ObjectProperty, OWL.DatatypeProperty, OWL.AnnotationProperty,
+        }
+        typed_subjects = {
+            s for s, _, o in incoming_graph.triples((None, RDF.type, None))
+            if o in _conflict_types and isinstance(s, URIRef)
+        }
+
+        conflicts: List[tuple] = []
+        for subj in typed_subjects:
+            subject_uri = str(subj)
+            existing_rows = rdf_triples_repo.list_by_subject(self._db, subject_uri)
+            other_contexts = {
+                row.context_name
+                for row in existing_rows
+                if row.context_name and row.context_name != target_context
+            }
+            for other in sorted(other_contexts):
+                conflicts.append((subject_uri, other))
+        return conflicts
+
+    def _raise_on_cross_scheme_conflict(
+        self, incoming_graph, target_context: str
+    ) -> None:
+        """Raise ValueError (-> HTTP 400) if the import forks an IRI into a new scheme."""
+        conflicts = self._detect_cross_scheme_iri_conflicts(incoming_graph, target_context)
+        if not conflicts:
+            return
+        shown = conflicts[:5]
+        detail = "; ".join(f"{iri} (already in {ctx})" for iri, ctx in shown)
+        remaining = len(conflicts) - len(shown)
+        if remaining > 0:
+            detail += f"; and {remaining} more"
+        raise ValueError(
+            f"Import blocked: {len(conflicts)} concept IRI(s) already exist in "
+            f"another scheme and an IRI identifies one concept globally. Give the "
+            f"new concept a distinct IRI (e.g. a different namespace) or remove it, "
+            f"then re-import. Conflicts: {detail}"
+        )
+
+    # A cross-scheme conflict is not always a dead-end: the same IRI + a new
+    # definition can be a legitimate versioned UPDATE of the concept where it
+    # already lives (an IRI denotes one concept globally). ``conflict_mode``
+    # turns the block into a CHOICE:
+    #   'block'  -> raise (default; preserves today's behavior).
+    #   'skip'   -> import only the non-conflicting subjects into the target;
+    #               leave conflicting IRIs owned by their existing scheme.
+    #   'update' -> do NOT create conflicting IRIs in the target; instead apply
+    #               the file's field values to each concept IN ITS EXISTING
+    #               (home) scheme as a normal versioned update.
+    _CONFLICT_MODES = ("block", "skip", "update")
+
+    # Marker triple stashed on a preview so ``confirm``/apply can recover the
+    # chosen mode without a schema migration (survives round-trip through the
+    # serialized stash content).
+    _CONFLICT_MODE_MARKER_SUBJECT = "urn:ontos:import#conflict-mode"
+
+    def _normalize_conflict_mode(self, conflict_mode: Optional[str]) -> str:
+        mode = (conflict_mode or "block").strip().lower()
+        if mode not in self._CONFLICT_MODES:
+            raise ValueError(
+                f"Invalid conflict_mode '{conflict_mode}'. "
+                f"Expected one of {self._CONFLICT_MODES}."
+            )
+        return mode
+
+    @staticmethod
+    def _strip_subjects_from_graph(graph, subject_iris) -> None:
+        """Remove every triple whose subject is one of ``subject_iris`` (in-place)."""
+        for iri in subject_iris:
+            subj = URIRef(iri)
+            for triple in list(graph.triples((subj, None, None))):
+                graph.remove(triple)
+
+    def _apply_cross_scheme_updates(
+        self, full_graph, conflict_iris, actor: Optional[str]
+    ) -> None:
+        """Apply the incoming file's field values to each conflicting concept IN
+        ITS EXISTING (home) scheme as a versioned update (the 'update' mode).
+
+        Reuses the SAME field extraction the re-upload diff engine uses
+        (``_extract_changes``) and the SAME versioning primitive
+        (``publish_concept_version``), so 'update' produces the same field set as
+        a normal MODIFIED bucket. Never forks the IRI into the target scheme.
+
+        NO transaction management here — the CALLER wraps this in an atomic block
+        (neutralized inner commits + one real commit) so a failure never
+        half-applies. ``full_graph`` must still contain the conflicting subjects'
+        triples (i.e. call this BEFORE stripping them from the target import).
+        """
+        from src.controller.concept_diff import _extract_changes
+
+        for iri in conflict_iris:
+            existing = self.get_concept(iri)
+            if not existing:
+                # No resolvable home concept (shouldn't happen — it was a
+                # conflict); skip rather than fork it into the target.
+                continue
+            home_context = existing.get("source_context")
+            self._ensure_concept_version_v1(iri, home_context, actor)
+            self.publish_concept_version(
+                iri,
+                changes=_extract_changes(full_graph, iri),
+                published_by=actor,
+                bypass_editable_gate=True,
+            )
+
+    def _stamp_conflict_mode_marker(self, graph, conflict_mode: str) -> None:
+        """Embed the chosen conflict_mode as a marker triple in a preview graph.
+
+        The marker subject carries no concept rdf:type, so ``compute_concept_diff``
+        ignores it and it is never imported as a concept. It only survives the
+        stash round-trip so ``confirm``/apply can recover the mode migration-free.
+        """
+        graph.set((
+            URIRef(self._CONFLICT_MODE_MARKER_SUBJECT),
+            ONTOS.conflictMode,
+            Literal(conflict_mode),
+        ))
+
+    def _read_conflict_mode_marker(self, graph) -> Optional[str]:
+        val = graph.value(
+            URIRef(self._CONFLICT_MODE_MARKER_SUBJECT), ONTOS.conflictMode
+        )
+        return str(val) if val is not None else None
+
+    def detect_import_conflicts(
+        self, collection_iri: str, content: str, format: str = "turtle"
+    ) -> List[Dict[str, Any]]:
+        """Detect cross-scheme IRI conflicts for a would-be import (a PRE-CHECK).
+
+        Parses ``content`` and returns the list of typed subject IRIs that already
+        live in ANOTHER scheme, so the UI can render the block/skip/update choice
+        BEFORE importing rather than discovering the conflict via a failed import.
+
+        Returns one dict per conflict::
+
+            {"iri": <conflicting IRI>,
+             "existing_context": <the OTHER scheme's context>,
+             "existing_label": <friendly scheme label, or None if unresolved>}
+
+        Empty list = no conflicts (import is safe in any mode).
+        """
+        graph = Graph()
+        rdf_format = "turtle" if format.lower() in ("ttl", "turtle") else "xml"
+        parse_input = clean_truncated_turtle(content) if rdf_format == "turtle" else content
+        try:
+            graph.parse(data=parse_input, format=rdf_format)
+        except Exception as e:
+            raise ValueError(f"Invalid {rdf_format} content: {e}")
+
+        conflicts = self._detect_cross_scheme_iri_conflicts(graph, collection_iri)
+        if not conflicts:
+            return []
+
+        # Resolve friendly scheme labels once (best-effort; None if unresolvable).
+        try:
+            labels = {c["iri"]: c.get("label") for c in self.get_collections()}
+        except Exception:
+            labels = {}
+
+        def _concept_label(iri: str) -> str:
+            """The CONFLICTING CONCEPT's own human label (NOT the scheme).
+
+            Best-effort: try the concept's stored label; on any failure or empty
+            value fall back to the IRI's last path segment so a lookup failure
+            never breaks the conflict list.
+            """
+            try:
+                concept = self.get_concept(iri)
+                lbl = (concept or {}).get("label")
+                if lbl:
+                    return lbl
+            except Exception:
+                pass
+            return iri.split("#")[-1].split("/")[-1]
+
+        return [
+            {
+                "iri": iri,
+                "label": _concept_label(iri),
+                "existing_context": ctx,
+                "existing_label": labels.get(ctx),
+            }
+            for iri, ctx in conflicts
+        ]
+
     def import_rdf_to_collection(
         self,
         collection_iri: str,
         content: str,
         format: str = "turtle",
         imported_by: Optional[str] = None,
+        default_status: Optional[str] = None,
+        source_filename: Optional[str] = None,
+        conflict_mode: str = "block",
     ) -> int:
         """Import RDF content into an existing collection.
-        
+
         Parses the RDF and adds triples to the collection's context.
         Returns the number of triples imported.
+
+        conflict_mode: how to handle incoming subject IRIs that already live in
+            ANOTHER scheme (one IRI == one concept globally):
+              - 'block'  (default): raise ValueError as today (dead-end preserved).
+              - 'skip'   : strip the conflicting subjects; import only the rest.
+              - 'update' : strip the conflicting subjects from the target import,
+                           then apply the file's field values to each conflicting
+                           concept IN ITS EXISTING scheme as a versioned update
+                           (publish_concept_version), never forking it here.
+
+        default_status: when set (e.g. "draft"), every typed subject (a
+            skos:Concept / owl:Class / rdfs:Class) that does NOT already carry an
+            ontos:status is stamped with that status before import. Used by the
+            LLM generator save path so machine-drafted concepts land as Draft and
+            flow through review, mirroring manual authoring (create_concept). Left
+            None for verbatim imports (e.g. uploading a curated ontology file),
+            which keep whatever status the source declares.
         """
         collection = self.get_collection(collection_iri)
         if not collection:
             raise ValueError(f"Collection not found: {collection_iri}")
         if not collection.get("is_editable"):
             raise ValueError(f"Collection is not editable: {collection_iri}")
-        
+
         # Parse the content. LLM-generated Turtle is often truncated mid-statement,
         # which crashes rdflib's notation3 parser with an IndexError. Apply the
         # shared cleanup heuristic before parsing and translate parse failures
@@ -4233,7 +6328,92 @@ class SemanticModelsManager(SearchableAsset):
             temp_graph.parse(data=content, format=rdf_format)
         except Exception as e:
             raise ValueError(f"Invalid {rdf_format} content: {e}")
-        
+
+        # Handle IRIs that already live in another scheme (one IRI == one concept
+        # globally). Re-importing into THIS collection is allowed. The mode turns
+        # the old hard-block into a choice.
+        mode = self._normalize_conflict_mode(conflict_mode)
+        conflicts = self._detect_cross_scheme_iri_conflicts(temp_graph, collection_iri)
+        if conflicts and mode == "block":
+            self._raise_on_cross_scheme_conflict(temp_graph, collection_iri)
+
+        conflict_iris = sorted({iri for iri, _ in conflicts})
+        if conflicts and mode in ("skip", "update"):
+            # In BOTH skip and update the conflicting subjects must NOT be created
+            # in the target scheme: strip them from the incoming graph so only the
+            # non-conflicting subjects import here.
+            self._strip_subjects_from_graph(temp_graph, conflict_iris)
+
+        if conflicts and mode == "update":
+            # Apply the file's field values to each conflicting concept IN ITS
+            # EXISTING (home) scheme as a versioned update, atomically. Neutralize
+            # inner commits so a failure cannot half-apply (mirror
+            # apply_upload_as_versioning_event's atomic pattern). Re-parse the FULL
+            # content because temp_graph has already had the conflicts stripped.
+            incoming_full = Graph()
+            incoming_full.parse(data=content, format=rdf_format)
+
+            original_commit = self._db.commit
+            try:
+                self._db.commit = self._db.flush  # type: ignore[assignment]
+                self._apply_cross_scheme_updates(incoming_full, conflict_iris, imported_by)
+            except Exception:
+                self._db.commit = original_commit  # type: ignore[assignment]
+                self._db.rollback()
+                logger.error(
+                    "Cross-scheme 'update' import failed for '%s'; rolled back",
+                    collection_iri, exc_info=True,
+                )
+                try:
+                    self.rebuild_graph_from_enabled()
+                except Exception:
+                    logger.error("Recovery rebuild after rollback also failed", exc_info=True)
+                raise
+            finally:
+                self._db.commit = original_commit  # type: ignore[assignment]
+
+            # Persist the home-scheme updates now. _import_graph_to_db below only
+            # commits when it has target triples to insert (which is false when
+            # every incoming subject conflicted), so commit here to guarantee the
+            # versioned updates land regardless.
+            self._db.commit()
+            try:
+                self.rebuild_graph_from_enabled()
+            except Exception:
+                logger.error(
+                    "Graph rebuild after cross-scheme 'update' import failed; DB "
+                    "is correct, served graph stale until next reload", exc_info=True,
+                )
+            self._invalidate_cache()
+
+        # Stamp a governance status on typed subjects that lack one (opt-in).
+        # A subject is a concept/class if it has an rdf:type in the concept types;
+        # only those get a status, and only if the source did not already set one.
+        if default_status:
+            _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+            typed_subjects = {
+                s for s, _, o in temp_graph.triples((None, RDF.type, None))
+                if o in _concept_types
+            }
+            for subj in typed_subjects:
+                if (subj, ONTOS.status, None) not in temp_graph:
+                    temp_graph.add((subj, ONTOS.status, Literal(default_status)))
+
+        # Stamp the origin filename as a per-subject provenance triple so each
+        # imported concept records the file it came from (rather than only the
+        # scheme label). Applies to typed subjects lacking an ontos:sourceFile.
+        if source_filename:
+            _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+            typed_subjects = {
+                s for s, _, o in temp_graph.triples((None, RDF.type, None))
+                if o in _concept_types
+            }
+            for subj in typed_subjects:
+                # OVERWRITE (graph.set) rather than add-if-absent: a v2 re-upload
+                # that already carries/inherits an old sourceFile must adopt the
+                # CURRENT filename, not keep the stale one.
+                temp_graph.set((subj, ONTOS.sourceFile, Literal(source_filename)))
+
         # Import to database
         count = self._import_graph_to_db(
             graph=temp_graph,
@@ -4242,14 +6422,35 @@ class SemanticModelsManager(SearchableAsset):
             source_identifier=collection_iri,
             created_by=imported_by,
         )
-        
+
+        # Mint a v1 concept_version (as DRAFT) for each imported typed concept.
+        # A raw file import never went through create_concept, so without this the
+        # imported concepts would show "no version" while still offering "Save new
+        # version". Mirror the typed_subjects comprehension used by the
+        # default_status/source_filename blocks above (same _concept_types set).
+        # _ensure_concept_version_v1 is idempotent (no-op when a current version
+        # already exists), so re-uploads / cross-scheme cases are safe.
+        _concept_types = {SKOS.Concept, OWL.Class, RDFS.Class}
+        typed_subjects = {
+            s for s, _, o in temp_graph.triples((None, RDF.type, None))
+            if o in _concept_types
+        }
+        for subj in typed_subjects:
+            self._ensure_concept_version_v1(
+                str(subj), collection_iri, imported_by, status="draft"
+            )
+        # _import_graph_to_db committed the triples; _ensure_concept_version_v1
+        # only flushes, so commit the freshly-minted version rows with the import
+        # (mirrors create_concept committing after its mint).
+        self._db.commit()
+
         # Also add to in-memory graph
         coll_context = self._graph.get_context(URIRef(collection_iri))
         for triple in temp_graph:
             coll_context.add(triple)
-        
+
         self._invalidate_cache()
-        
+
         return count
 
     # ========================================================================
@@ -4525,6 +6726,329 @@ class SemanticModelsManager(SearchableAsset):
         self._invalidate_cache()
         
         return self.get_concept(new_iri)
+
+    def get_coverage_metrics(self, semantic_links_manager) -> CoverageResponse:
+        """Compute semantic enrichment coverage metrics per scheme.
+
+        Fetches all concepts grouped by source_context, then batch-queries semantic links
+        to compute coverage per scheme: concepts with >=1 link, distinct product/contract/asset
+        link counts.
+
+        Args:
+            semantic_links_manager: SemanticLinksManager instance for link lookups.
+
+        Returns:
+            CoverageResponse with per-scheme metrics and totals.
+        """
+        # Get all concepts grouped by source_context
+        grouped_concepts = self.get_grouped_concepts()
+
+        # Pending term-mapping suggestions per concept IRI. Drives the per-scheme
+        # "suggested" count (and hence whether the Enrich matrix Review button is
+        # enabled). Best-effort: a term-mapping subsystem hiccup must not sink the
+        # whole coverage response, so fall back to an empty map (suggested=0).
+        pending_by_iri: Dict[str, int] = {}
+        last_run_by_scheme: Dict[str, str] = {}
+        try:
+            from src.repositories.term_mapping_repository import (
+                mapping_suggestion_repo,
+                mapping_run_repo,
+            )
+            pending_by_iri = mapping_suggestion_repo.count_pending_by_target_concept(
+                semantic_links_manager._db
+            )
+            # Runs store ontology_contexts as full graph IRIs (e.g.
+            # "urn:glossary:finance"), but the coverage rows below key on the
+            # short source-context bucket ("finance") from
+            # _extract_source_context. Normalize the run map through the SAME
+            # extractor so last_run_at actually lands on its scheme row (else
+            # every .get(scheme) misses and the Last-run column stays empty).
+            raw_last_run = mapping_run_repo.last_run_at_by_context(
+                semantic_links_manager._db
+            )
+            last_run_by_scheme = {}
+            for ctx_iri, run_iso in raw_last_run.items():
+                bucket = self._extract_source_context(ctx_iri) or ctx_iri
+                # Multiple IRIs can normalize to one bucket; keep the newest run.
+                existing = last_run_by_scheme.get(bucket)
+                if existing is None or run_iso > existing:
+                    last_run_by_scheme[bucket] = run_iso
+        except Exception as e:
+            logger.warning(f"coverage: could not load term-mapping run data: {e}")
+            pending_by_iri = {}
+            last_run_by_scheme = {}
+
+        # Entity types that belong to each layer
+        product_layer_types = {'data_product'}
+        contract_layer_types = {'data_contract', 'data_contract_schema', 'data_contract_property'}
+        asset_layer_types = {'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'}
+
+        scheme_rows: List[CoverageSchemeRow] = []
+        total_concepts = 0
+        total_with_links = 0
+        total_suggested = 0
+        total_products_set = set()
+        total_contracts_set = set()
+        total_assets_set = set()
+
+        for source_context, concepts in sorted(grouped_concepts.items()):
+            scheme = source_context  # 'Unassigned' or a taxonomy name
+            total_concepts += len(concepts)
+
+            # Extract all IRIs from concepts in this scheme
+            iris = [c.iri for c in concepts if c.iri]
+            if not iris:
+                # Empty scheme (no concepts with IRIs)
+                scheme_rows.append(CoverageSchemeRow(
+                    scheme=scheme,
+                    label=scheme if scheme != "Unassigned" else None,
+                    concepts=len(concepts),
+                    coverage_pct=0,
+                    products=0,
+                    contracts=0,
+                    assets=0,
+                    suggested=0,
+                    last_run_at=last_run_by_scheme.get(scheme),
+                ))
+                continue
+
+            # Batch-fetch links for all IRIs in this scheme. The repo is a
+            # module-level singleton (not an attribute of the links manager), so
+            # import and use it directly.
+            from src.repositories.semantic_links_repository import entity_semantic_links_repo
+            links = entity_semantic_links_repo.list_for_iris(
+                semantic_links_manager._db, iris
+            )
+
+            # Group links by IRI to track which concepts have >=1 link
+            links_by_iri = {}
+            for link in links:
+                if link.iri not in links_by_iri:
+                    links_by_iri[link.iri] = []
+                links_by_iri[link.iri].append(link)
+
+            # Count concepts with at least one link
+            concepts_with_links = len(links_by_iri)
+            total_with_links += concepts_with_links
+            coverage_pct = int(100 * concepts_with_links / len(concepts)) if concepts else 0
+
+            # Pending suggestions awaiting review for this scheme's concepts.
+            scheme_suggested = sum(pending_by_iri.get(iri, 0) for iri in iris)
+            total_suggested += scheme_suggested
+
+            # Deduplicate entity_ids by layer within this scheme
+            scheme_products = set()
+            scheme_contracts = set()
+            scheme_assets = set()
+
+            for link in links:
+                if link.entity_type in product_layer_types:
+                    scheme_products.add(link.entity_id)
+                    total_products_set.add(link.entity_id)
+                elif link.entity_type in contract_layer_types:
+                    scheme_contracts.add(link.entity_id)
+                    total_contracts_set.add(link.entity_id)
+                elif link.entity_type in asset_layer_types:
+                    scheme_assets.add(link.entity_id)
+                    total_assets_set.add(link.entity_id)
+
+            scheme_rows.append(CoverageSchemeRow(
+                scheme=scheme,
+                label=scheme if scheme != "Unassigned" else None,
+                concepts=len(concepts),
+                coverage_pct=coverage_pct,
+                products=len(scheme_products),
+                contracts=len(scheme_contracts),
+                assets=len(scheme_assets),
+                suggested=scheme_suggested,
+                last_run_at=last_run_by_scheme.get(scheme),
+            ))
+
+        # Compute totals
+        total_coverage_pct = int(100 * total_with_links / total_concepts) if total_concepts > 0 else 0
+        totals = CoverageSchemeRow(
+            scheme="__total__",
+            label=None,
+            concepts=total_concepts,
+            coverage_pct=total_coverage_pct,
+            products=len(total_products_set),
+            contracts=len(total_contracts_set),
+            assets=len(total_assets_set),
+            suggested=total_suggested,
+        )
+
+        return CoverageResponse(schemes=scheme_rows, totals=totals)
+
+    def get_pending_suggestions_for_scheme(
+        self, db, scheme: str
+    ) -> List[SchemePendingSuggestion]:
+        """List PENDING term-mapping suggestions whose target concept belongs to
+        ``scheme`` (a source_context / scheme key from the coverage matrix).
+
+        Mirrors how ``get_coverage_metrics`` derives the per-scheme ``suggested``
+        count (pending suggestions whose target_concept_iri is one of the scheme's
+        concept IRIs) but LISTS the rows so the Enrich Map "Review suggested
+        matches" surface can accept + apply them. Each item carries its run id so
+        the FE can POST to /api/term-mappings/runs/{run_id}/decisions and /apply.
+
+        Returns [] for an unknown or empty scheme.
+        """
+        grouped = self.get_grouped_concepts()
+        concepts = grouped.get(scheme, [])
+        iris = [c.iri for c in concepts if c.iri]
+        if not iris:
+            return []
+        from src.repositories.term_mapping_repository import mapping_suggestion_repo
+
+        rows = mapping_suggestion_repo.list_pending_by_target_concepts(db, iris)
+        return [
+            SchemePendingSuggestion(
+                id=str(r.id),
+                run_id=str(r.run_id),
+                source_entity_type=r.source_entity_type,
+                source_entity_id=r.source_entity_id,
+                source_label=r.source_label,
+                target_concept_iri=r.target_concept_iri,
+                target_concept_label=r.target_concept_label,
+                confidence=r.confidence,
+                reason=r.reason,
+            )
+            for r in rows
+        ]
+
+    def get_tag_delivery_stats(self, db) -> 'TagDeliveryStats':
+        """Real tag-delivery stats for the Enrich Tags row.
+
+        eligible = concept->asset semantic links (what semantic_assignment tags
+        target). pending = eligible links created AFTER the last successful
+        uc_tag_sync run end_time (the new links a re-run would deliver); if the
+        job never ran successfully, everything eligible is pending. synced =
+        eligible - pending. Also reports last-run state/time and install status.
+
+        This is a 'changes since last sync' signal from data we already have
+        (link created_at vs job end_time), not a UC-verified tag count. Links
+        carry no updated_at, so in-place edits are not counted as pending.
+        """
+        from datetime import datetime, timezone
+        from src.models.semantic_models import TagDeliveryStats
+        from src.repositories.semantic_links_repository import entity_semantic_links_repo
+        from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
+
+        ASSET_LAYER = {'asset', 'uc_catalog', 'uc_schema', 'uc_table', 'uc_column'}
+
+        # Eligible = concept->asset links.
+        all_links = entity_semantic_links_repo.list_all(db)
+        eligible_links = [l for l in all_links if l.entity_type in ASSET_LAYER]
+        eligible = len(eligible_links)
+
+        # Last SUCCESSFUL uc_tag_sync run (end_time is ms epoch).
+        last_state: Optional[str] = None
+        last_at: Optional[str] = None
+        installed = False
+        last_success_end_ms: Optional[int] = None
+        try:
+            runs = workflow_job_run_repo.get_recent_runs(db, workflow_id='uc_tag_sync', limit=20)
+            installed = len(runs) > 0
+            if runs:
+                # Most recent run overall (for state/time display).
+                newest = runs[0]
+                last_state = newest.result_state or newest.life_cycle_state
+                if newest.end_time:
+                    last_at = datetime.fromtimestamp(newest.end_time / 1000, tz=timezone.utc).isoformat()
+                # Most recent SUCCESS drives the pending cutoff.
+                for r in runs:
+                    if r.result_state == 'SUCCESS' and r.end_time:
+                        last_success_end_ms = r.end_time
+                        break
+        except Exception as e:
+            logger.warning(f"tag-delivery-stats: could not read job runs: {e}")
+
+        # Pending = eligible links created since the last successful sync.
+        # Collect the actual items (not just a count) so the UI can drill in.
+        from src.models.semantic_models import TagPendingItem
+
+        # --- Enrichment maps (best-effort; built once, small result sets) so the
+        # UI can show the CONCEPT + its SCHEME and the physical ASSET name rather
+        # than a raw UUID/urn. Failures degrade gracefully to None.
+        scheme_labels: Dict[str, Optional[str]] = {}
+        try:
+            for c in self.get_collections():
+                scheme_labels[c["iri"]] = c.get("label")
+        except Exception as e:
+            logger.warning(f"tag-delivery-stats: could not load scheme labels: {e}")
+
+        concept_scheme_cache: Dict[str, Optional[str]] = {}
+
+        def _scheme_for(concept_iri: str) -> Optional[str]:
+            if concept_iri not in concept_scheme_cache:
+                ctx = None
+                try:
+                    c = self.get_concept(concept_iri)
+                    ctx = (c or {}).get("source_context")
+                except Exception:
+                    ctx = None
+                concept_scheme_cache[concept_iri] = ctx
+            return concept_scheme_cache[concept_iri]
+
+        # Resolve asset (AssetDb UUID) names in one batch.
+        asset_names: Dict[str, str] = {}
+        try:
+            asset_ids = {l.entity_id for l in eligible_links if l.entity_type == 'asset'}
+            if asset_ids:
+                from src.repositories.assets_repository import asset_repo
+                for a in asset_repo.get_multi(db, skip=0, limit=100_000):
+                    if str(a.id) in asset_ids:
+                        asset_names[str(a.id)] = a.name
+        except Exception as e:
+            logger.warning(f"tag-delivery-stats: could not resolve asset names: {e}")
+
+        def _asset_name_for(l) -> Optional[str]:
+            if l.entity_type == 'asset':
+                return asset_names.get(l.entity_id)  # human name, or None -> FE falls back
+            # uc_* entity_ids are FQNs; the last segment is the readable object name.
+            return str(l.entity_id).split('.')[-1] if l.entity_id else None
+
+        def _to_item(l) -> 'TagPendingItem':
+            created = getattr(l, 'created_at', None)
+            scheme = _scheme_for(l.iri)
+            return TagPendingItem(
+                entity_id=l.entity_id,
+                entity_type=l.entity_type,
+                iri=l.iri,
+                label=getattr(l, 'label', None),
+                created_at=created.isoformat() if created is not None else None,
+                scheme=scheme,
+                scheme_label=scheme_labels.get(scheme) if scheme else None,
+                asset_name=_asset_name_for(l),
+            )
+
+        if last_success_end_ms is None:
+            pending_links = list(eligible_links)  # never synced successfully → all pending
+        else:
+            cutoff = datetime.fromtimestamp(last_success_end_ms / 1000, tz=timezone.utc)
+            pending_links = []
+            for l in eligible_links:
+                created = getattr(l, 'created_at', None)
+                if created is None:
+                    continue
+                # Normalize naive timestamps to UTC for a safe comparison.
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if created > cutoff:
+                    pending_links.append(l)
+
+        pending = len(pending_links)
+        pending_items = [_to_item(l) for l in pending_links]
+
+        return TagDeliveryStats(
+            eligible=eligible,
+            pending=pending,
+            synced=max(eligible - pending, 0),
+            last_run_state=last_state,
+            last_run_at=last_at,
+            job_installed=installed,
+            pending_items=pending_items,
+        )
 
     # ========================================================================
     # HELPER METHODS

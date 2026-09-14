@@ -77,6 +77,7 @@ export interface OntologyConcept {
   comments?: Record<string, string>;  // Multi-language comments: {"en": "A curated...", "ja": "..."}
   concept_type: 'class' | 'concept' | 'individual' | 'property' | 'term';
   source_context?: string;
+  source_file?: string;  // Origin filename this concept was imported from
   parent_concepts: string[];
   child_concepts: string[];
   related_concepts?: string[];
@@ -117,6 +118,8 @@ export interface OntologyConcept {
   
   // Review integration
   review_request_id?: string;
+  review_comment?: string;
+  review_decision?: string;
 }
 
 export interface ConceptCreate {

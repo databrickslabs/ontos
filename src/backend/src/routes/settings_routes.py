@@ -550,6 +550,7 @@ async def load_demo_data(
                 current_statement = []
 
         executed_count = 0
+        failures: List[Dict[str, str]] = []
         for stmt in statements:
             if stmt.strip():
                 try:
@@ -559,30 +560,58 @@ async def load_demo_data(
                     executed_count += 1
                 except Exception as stmt_error:
                     nested.rollback()
+                    err_short = str(stmt_error).splitlines()[0][:200]
+                    # First token(s) of the statement identify what failed
+                    # (e.g. "INSERT INTO assets") without dumping the payload.
+                    head = " ".join(stmt.split()[:3])
                     logger.warning(
-                        f"Statement execution warning ({sql_file.name}): {stmt_error}"
+                        f"Statement execution FAILED ({sql_file.name}): {err_short} | at: {head}"
                     )
+                    failures.append({"statement": head, "error": err_short})
 
         db.commit()
 
-        success = True
+        # A "success" that silently dropped half the statements is a lie that
+        # hides schema drift (the packs falling out of sync with migrations).
+        # Report the real outcome so callers see partial loads.
+        failed_count = len(failures)
+        success = failed_count == 0
         details["statements_executed"] = executed_count
+        details["statements_failed"] = failed_count
         details["file"] = sql_file.name
+        if failures:
+            details["failures"] = failures[:20]
 
-        logger.info(
-            f"Demo data loaded successfully. Preset='{preset_slug}', "
-            f"file='{sql_file.name}', statements={executed_count}."
-        )
-
-        return {
-            "status": "success",
-            "message": (
+        if success:
+            logger.info(
+                f"Demo data loaded successfully. Preset='{preset_slug}', "
+                f"file='{sql_file.name}', statements={executed_count}."
+            )
+            message = (
                 f"Demo data loaded successfully (preset='{preset_slug}'). "
                 f"Executed {executed_count} SQL statements from {sql_file.name}."
-            ),
+            )
+        else:
+            logger.error(
+                f"Demo data load INCOMPLETE. Preset='{preset_slug}', "
+                f"file='{sql_file.name}': {executed_count} executed, "
+                f"{failed_count} FAILED (schema drift?)."
+            )
+            message = (
+                f"Demo data load incomplete (preset='{preset_slug}'): "
+                f"{executed_count} statements executed, {failed_count} failed "
+                f"from {sql_file.name}. See 'failures' for details — the pack may "
+                f"be out of sync with the current schema."
+            )
+
+        return {
+            "status": "success" if success else "partial",
+            "message": message,
             "preset": preset_slug,
             "file": sql_file.name,
             "statements_executed": executed_count,
+            "statements_failed": failed_count,
+            "failures": failures[:20],
         }
 
     except HTTPException:
@@ -630,184 +659,66 @@ async def clear_demo_data(
     details = {"action": "clear_demo_data"}
     
     try:
-        from sqlalchemy import text
-        
-        # Delete in reverse dependency order
-        # UUID patterns use type codes in first 3 hex chars (see demo_data_retail.sql for mapping)
-        # Pattern: {type:3}{seq:5}-{dataset:4}-4000-8000-...
-        # Dataset segments: 0000=retail, 0001=hls, 0002=fsi, 0003=mfg, 0004=auto.
-        # The LIKE patterns below match by type-code prefix only, so they remove rows
-        # from every preset (the dataset segment is in chars 9-12, not the prefix).
-        delete_statements = [
-            # Suggested quality checks (02e%) - before data_profiling_runs
-            "DELETE FROM suggested_quality_checks WHERE id::text LIKE '02e%'",
-            
-            # Data profiling runs (02d%)
-            "DELETE FROM data_profiling_runs WHERE id::text LIKE '02d%'",
-            
-            # Comments/ratings (02c%)
-            "DELETE FROM comments WHERE id::text LIKE '02c%'",
-            
-            # Workflow steps (02b%, 02e%) - before process_workflows
-            "DELETE FROM workflow_steps WHERE id::text LIKE '02b%'",
-            "DELETE FROM workflow_steps WHERE id::text LIKE '02e%'",
-            
-            # Process workflows (02a%, 02d%)
-            "DELETE FROM process_workflows WHERE id::text LIKE '02a%'",
-            "DELETE FROM process_workflows WHERE id::text LIKE '02d%'",
-            
-            # Entity tag associations (029%) - all entity types, before tags
-            "DELETE FROM entity_tag_associations WHERE id::text LIKE '029%'",
-            
-            # Tag namespace permissions (028%) - before tag_namespaces
-            "DELETE FROM tag_namespace_permissions WHERE id::text LIKE '028%'",
-            
-            # Tags (027%) - before tag_namespaces
-            "DELETE FROM tags WHERE id::text LIKE '027%'",
-            
-            # Tag namespaces (0260%) - note: uses 02601xx pattern to avoid collision with dataset_subscriptions
-            "DELETE FROM tag_namespaces WHERE id::text LIKE '0260%'",
-            
-            # RDF triples (020%, 030%)
-            "DELETE FROM rdf_triples WHERE id::text LIKE '020%'",
-            "DELETE FROM rdf_triples WHERE id::text LIKE '030%'",
-            
-            # Entity subscriptions (022%, 0260%) — migrated from dataset_subscriptions
-            "DELETE FROM entity_subscriptions WHERE id::text LIKE '022%'",
-            "DELETE FROM entity_subscriptions WHERE id::text LIKE '0260%'",
-            
-            # Entity relationships (0215%) — Dataset→Table/View/Contract
-            "DELETE FROM entity_relationships WHERE id::text LIKE '0215%'",
-            # Entity relationships (0f4%) — asset lineage/containment
-            "DELETE FROM entity_relationships WHERE id::text LIKE '0f4%'",
-            # Entity relationships (0fa%) — business lineage
-            "DELETE FROM entity_relationships WHERE id::text LIKE '0fa%'",
-            # Entity relationships (0f6%) — hasColumn
-            "DELETE FROM entity_relationships WHERE id::text LIKE '0f6%'",
-            
-            # Physical assets (025%) — migrated from dataset_instances
-            "DELETE FROM assets WHERE id::text LIKE '025%'",
-            
-            # Dataset assets (021%) — migrated from datasets table
-            "DELETE FROM assets WHERE id::text LIKE '021%'",
-            
-            # Policy assets (0f1%)
-            "DELETE FROM assets WHERE id::text LIKE '0f1%'",
-            # General catalog assets (0f3%) — Tables, Views, Dashboards, Streams,
-            # Patient Cohorts, ICSR cases, etc. (covers all preset packs).
-            "DELETE FROM assets WHERE id::text LIKE '0f3%'",
-            # Column assets (0f5%)
-            "DELETE FROM assets WHERE id::text LIKE '0f5%'",
-            # Business Term assets (0f7%)
-            "DELETE FROM assets WHERE id::text LIKE '0f7%'",
-            # Logical Entity/Attribute assets (0f8%)
-            "DELETE FROM assets WHERE id::text LIKE '0f8%'",
-            # Delivery Channel assets (0f9%)
-            "DELETE FROM assets WHERE id::text LIKE '0f9%'",
-            # Business Owners — must be removed before business_roles because
-            # of the role_id FK. Retail uses the 0f6% prefix; the vertical
-            # packs (hls/fsi/mfg/auto) use 0fb%.
-            "DELETE FROM business_owners WHERE id::text LIKE '0f6%'",
-            "DELETE FROM business_owners WHERE id::text LIKE '0fb%'",
-            # Vertical-specific demo asset types (0f2%, is_system=false)
-            "DELETE FROM asset_types WHERE id::text LIKE '0f2%' AND is_system = false AND created_by = 'system@demo'",
-            # Demo-inserted business_roles and delivery_methods — scoped by
-            # created_by to avoid touching app-seeded reference rows.
-            "DELETE FROM business_roles WHERE id::text LIKE '0f0%' AND created_by = 'system@demo'",
-            "DELETE FROM delivery_methods WHERE id::text LIKE '0f4%' AND created_by = 'system@demo'",
-            # Note: legacy dataset_subscriptions / dataset_custom_properties /
-            # dataset_instances / datasets tables were dropped by migration
-            # c1_drop_legacy_dataset_tables.py — no DELETEs needed.
-            
-            # Data contract servers (srv pattern for server IDs)
-            "DELETE FROM data_contract_servers WHERE id::text LIKE 'srv%'",
-            
-            # Metadata (018=document, 017=link, 016=rich_text)
-            "DELETE FROM document_metadata WHERE id::text LIKE '018%'",
-            "DELETE FROM link_metadata WHERE id::text LIKE '017%'",
-            "DELETE FROM rich_text_metadata WHERE id::text LIKE '016%'",
-            
-            # MDM (01c=match_candidates, 01b=match_runs, 01a=source_links, 019=configs)
-            "DELETE FROM mdm_match_candidates WHERE id::text LIKE '01c%'",
-            "DELETE FROM mdm_match_runs WHERE id::text LIKE '01b%'",
-            "DELETE FROM mdm_source_links WHERE id::text LIKE '01a%'",
-            "DELETE FROM mdm_configs WHERE id::text LIKE '019%'",
-            
-            # Authoritative Definitions (01f=property, 01e=schema_object, 01d=contract)
-            "DELETE FROM data_contract_schema_property_authoritative_definitions WHERE id::text LIKE '01f%'",
-            "DELETE FROM data_contract_schema_object_authoritative_definitions WHERE id::text LIKE '01e%'",
-            "DELETE FROM data_contract_authoritative_definitions WHERE id::text LIKE '01d%'",
-            
-            # Semantic Links (015)
-            "DELETE FROM entity_semantic_links WHERE id::text LIKE '015%'",
-            
-            # Cost Items (014)
-            "DELETE FROM cost_items WHERE id::text LIKE '014%'",
-            
-            # Compliance (013=results, 012=runs, 011=policies)
-            "DELETE FROM compliance_results WHERE id::text LIKE '013%'",
-            "DELETE FROM compliance_runs WHERE id::text LIKE '012%'",
-            "DELETE FROM compliance_policies WHERE id::text LIKE '011%'",
-            
-            # Notifications (010)
-            "DELETE FROM notifications WHERE id::text LIKE '010%'",
-            
-            # Reviews (00f=reviewed_assets, 00e=requests)
-            "DELETE FROM reviewed_assets WHERE id::text LIKE '00f%'",
-            "DELETE FROM data_asset_review_requests WHERE id::text LIKE '00e%'",
-            
-            # Data Products (00d=team_members, 00c=teams, 00b=support, 00a=input, 009=output, 008=desc, 007=products)
-            "DELETE FROM data_product_team_members WHERE id::text LIKE '00d%'",
-            "DELETE FROM data_product_teams WHERE id::text LIKE '00c%'",
-            "DELETE FROM data_product_support_channels WHERE id::text LIKE '00b%'",
-            "DELETE FROM data_product_input_ports WHERE id::text LIKE '00a%'",
-            "DELETE FROM data_product_output_ports WHERE id::text LIKE '009%'",
-            "DELETE FROM data_product_descriptions WHERE id::text LIKE '008%'",
-            "DELETE FROM data_products WHERE id::text LIKE '007%'",
-            
-            # Data Contracts (006=properties, 005=schema_objects, 004=contracts)
-            "DELETE FROM data_contract_schema_properties WHERE id::text LIKE '006%'",
-            "DELETE FROM data_contract_schema_objects WHERE id::text LIKE '005%'",
-            "DELETE FROM data_contracts WHERE id::text LIKE '004%'",
-            
-            # Projects (003)
-            "DELETE FROM project_teams WHERE project_id::text LIKE '003%'",
-            "DELETE FROM projects WHERE id::text LIKE '003%'",
-            
-            # Teams (002=members, 001=teams)
-            "DELETE FROM team_members WHERE id::text LIKE '002%'",
-            "DELETE FROM teams WHERE id::text LIKE '001%'",
-            
-            # Domains (000)
-            "DELETE FROM data_domains WHERE id::text LIKE '000%'",
-        ]
-        
-        # Wrap each statement in a SAVEPOINT so that a single failing
-        # DELETE (e.g. against a table dropped by a later migration) does
-        # not poison the surrounding transaction and silently abort all
-        # subsequent deletes. Accumulate rowcounts per table since several
-        # patterns target the same table (e.g. entity_relationships).
+        from pathlib import Path
+        from sqlalchemy import bindparam, text
+        from src.utils.demo_data_sql import parse_demo_inserts
+
+        # Derive the teardown directly from the demo packs instead of maintaining a
+        # hand-written prefix list. The prefix list silently drifted from the packs
+        # (columns/tables change under migrations, the list did not), so teardown
+        # left orphaned rows behind. Parsing the packs recovers the exact
+        # (table, pk_column, ids) each preset inserts; deleting those precise keys
+        # in reverse insertion order is drift-proof and FK-safe (a referencing row
+        # is always inserted after — thus deleted before — the row it points at),
+        # and can never touch a built-in row that merely shares an id prefix.
+        data_dir = Path(__file__).parent.parent / "data"
+        all_inserts = []
+        for preset_slug in DEMO_DATA_PRESETS:
+            pack = data_dir / f"demo_data_{preset_slug}.sql"
+            if pack.exists():
+                all_inserts.extend(parse_demo_inserts(pack.read_text(encoding="utf-8")))
+
+        # Coalesce every (table, pk_column) into a single DELETE, anchored at its
+        # first reverse-encounter. Coalescing is required for self-referential
+        # tables (e.g. data_domains.parent_id): splitting the hierarchy across
+        # multiple statements can delete a parent before its child under the FK's
+        # NO ACTION check, whereas one multi-row DELETE is validated at
+        # end-of-statement and succeeds.
+        order: List[tuple] = []
+        agg: Dict[tuple, List[str]] = {}
+        for ins in reversed(all_inserts):
+            key = (ins.table, ins.pk_column)
+            if key not in agg:
+                agg[key] = []
+                order.append(key)
+            agg[key].extend(ins.pk_values)
+
+        # Wrap each statement in a SAVEPOINT so that a single failing DELETE (e.g.
+        # against a table dropped by a later migration) does not poison the
+        # surrounding transaction and silently abort all subsequent deletes.
         deleted_counts: Dict[str, int] = {}
         skipped: List[Dict[str, str]] = []
-        for stmt in delete_statements:
-            table_name = stmt.split("FROM ")[1].split(" ")[0]
+        for table_name, pk_column in order:
+            ids = list(dict.fromkeys(agg[(table_name, pk_column)]))  # dedup, keep order
+            stmt = text(
+                f"DELETE FROM {table_name} WHERE {pk_column}::text IN :ids"
+            ).bindparams(bindparam("ids", expanding=True))
             try:
                 with db.begin_nested():
-                    result = db.execute(text(stmt))
+                    result = db.execute(stmt, {"ids": ids})
                 rowcount = result.rowcount or 0
                 if rowcount > 0:
                     deleted_counts[table_name] = deleted_counts.get(table_name, 0) + rowcount
             except Exception as e:
                 err_short = str(e).splitlines()[0][:200]
                 logger.warning(
-                    f"Delete statement FAILED ({table_name}): {err_short} | stmt={stmt}"
+                    f"Delete statement FAILED ({table_name}): {err_short}"
                 )
                 skipped.append({
                     "table": table_name,
-                    "statement": stmt,
                     "error": err_short,
                 })
-        
+
         db.commit()
 
         success = True

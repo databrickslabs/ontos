@@ -4,28 +4,48 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "pip"
     directory: "/src"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "pip"
     directory: "/src/backend"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "pip"
     directory: "/src/e2e"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "npm"
     directory: "/src/frontend"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "npm"
     directory: "/website/ontos"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+    # TypeScript 7.x is the native (Go) compiler rewrite; it breaks the JS
+    # compiler API that Docusaurus 3.x and its tooling rely on, and is not
+    # supported yet. Cap bumps below 7 so Dependabot still tracks the
+    # supported 6.x line but never proposes 7.x. Revisit when Docusaurus v4
+    # (which is expected to carry TS 7 support) lands.
+    ignore:
+      - dependency-name: "typescript"
+        versions: [">=7"]

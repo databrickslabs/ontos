@@ -89,3 +89,30 @@ class AssetTypeSyncResult(BaseModel):
     updated: List[str] = Field(default_factory=list)
     unchanged: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
+
+
+class RelationshipDefinitionCreate(BaseModel):
+    """Payload to create a user-defined relationship (object property).
+
+    Source and target may be any class in the ontology graph (custom asset types
+    or built-in Ontos classes). Only user-defined relationships can be created,
+    updated, or deleted; Ontos-RDF relationships remain read-only.
+    """
+    source_type_iri: str = Field(..., description="IRI of the domain (source) class")
+    target_type_iri: str = Field(..., description="IRI of the range (target) class")
+    label: str = Field(..., min_length=1, description="Human-readable label for the relationship")
+    inverse_label: Optional[str] = Field(None, description="Label for the reverse direction")
+    property_name: Optional[str] = Field(
+        None,
+        description="Optional local name for the property; derived from the label if omitted.",
+    )
+    cardinality: str = Field("0..*", description="Cardinality constraint (0..1, 1..1, 0..*, 1..*)")
+    display_context: str = Field("tab", description="Where to render: detail-page, sidebar, tab, inline")
+
+
+class RelationshipDefinitionUpdate(BaseModel):
+    """Editable attributes of a user-defined relationship. Domain/range are immutable."""
+    label: Optional[str] = Field(None, min_length=1)
+    inverse_label: Optional[str] = None
+    cardinality: Optional[str] = None
+    display_context: Optional[str] = None

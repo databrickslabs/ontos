@@ -346,13 +346,13 @@ export default function WorkflowApprovalResponseDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md flex flex-col max-h-[85vh] overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {loadingConfig ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex flex-1 items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
@@ -360,7 +360,7 @@ export default function WorkflowApprovalResponseDialog({
             {/* Cap height + scroll the body so a long concept payload
                 (definition + many rows) doesn't overflow the viewport. Header
                 and action buttons stay pinned outside this container. */}
-            <div className="overflow-y-auto min-h-0 flex-1 space-y-4 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-4 px-1 -mx-1">
             {detailRows.length > 0 && (
               <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -429,7 +429,7 @@ export default function WorkflowApprovalResponseDialog({
               />
             </div>
             </div>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter className="gap-2 sm:gap-0 shrink-0">
               <Button
                 variant="destructive"
                 disabled={submitting}

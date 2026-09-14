@@ -333,131 +333,54 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             raise
 
     def list_products(
-        self,
-        skip: int = 0,
-        limit: int = 100,
-        project_id: Optional[str] = None,
-        is_admin: bool = False,
-        caller_email: Optional[str] = None,
-        caller_team_ids: Optional[List[str]] = None,
-        caller_project_ids: Optional[List[str]] = None,
+        self, skip: int = 0, limit: int = 100, project_id: Optional[str] = None,
+        is_admin: bool = False, caller_email: Optional[str] = None,
+        caller_team_ids: Optional[List[str]] = None, caller_project_ids: Optional[List[str]] = None,
+        caller_can_write: bool = False,
         include_history: bool = False,
     ) -> List[DataProductApi]:
-        """List ODPS v1.0.0 data products.
-
-        For non-admin callers, results are filtered by the ownership cascade
-        described on ``DataProductsRepository.get_multi``: a product is
-        visible if it matches the caller's project membership, team
-        membership, or creator (``draft_owner_id``).
-
-        Back-compat: existing call sites that pass only ``is_admin`` (or
-        nothing) continue to compile. Non-admin calls with no scope inputs
-        intentionally return an empty list — fail-closed.
-
-        Args:
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            project_id: Optional project ID to filter by (ignored if is_admin=True)
-            is_admin: If True, return all products regardless of scope
-            caller_email: Caller email — matched against ``draft_owner_id``
-            caller_team_ids: Caller team memberships — matched against ``owner_team_id``
-            caller_project_ids: Caller's accessible projects — matched against ``project_id``
-
-        Returns:
-            List of DataProduct API models
-        """
         try:
             products_db = self._repo.get_multi(
-                db=self._db,
-                skip=skip,
-                limit=limit,
-                project_id=project_id,
-                is_admin=is_admin,
-                caller_email=caller_email,
-                caller_team_ids=caller_team_ids,
-                caller_project_ids=caller_project_ids,
+                db=self._db, skip=skip, limit=limit, project_id=project_id,
+                is_admin=is_admin, caller_email=caller_email,
+                caller_team_ids=caller_team_ids, caller_project_ids=caller_project_ids,
             )
 
-            # Role-aware visibility collapse (PRD #442). Elevation for
-            # products is broader than for contracts because we have a
-            # subscriptions table — subscribers see in-flight versions
-            # of families they consume.
             from src.common.version_visibility import (
-                collapse_by_family,
-                family_counts as compute_family_counts,
-                is_admin_only_status,
-                is_visible_consumer,
+                collapse_by_family, family_counts as compute_family_counts,
+                is_admin_only_status, is_visible_consumer,
             )
-            # Import here to avoid widening the module-level import graph;
-            # this branch only fires during list_products which is also
-            # the only place we need the subscription join.
-            from src.db_models.data_products import DataProductSubscriptionDb
 
             elevated_families: Set[str] = set()
             if not is_admin:
-                team_set = set(caller_team_ids or [])
-                project_set = set(caller_project_ids or [])
-                for p in products_db:
-                    fid = getattr(p, "version_family_id", None) or p.id
-                    if fid in elevated_families:
-                        continue
-                    if caller_email and p.draft_owner_id == caller_email:
-                        elevated_families.add(fid)
-                        continue
-                    if p.owner_team_id and p.owner_team_id in team_set:
-                        elevated_families.add(fid)
-                        continue
-                    if p.project_id and p.project_id in project_set:
-                        elevated_families.add(fid)
-                # Subscription-based elevation: query once for the caller's
-                # subscribed product ids, then map back to families. The
-                # query is bounded by the set we already loaded so this
-                # stays O(rows_loaded) regardless of total subscriptions.
-                if caller_email:
-                    try:
-                        product_ids = [p.id for p in products_db]
-                        if product_ids:
-                            subs = (
-                                self._db.query(DataProductSubscriptionDb.product_id)
-                                .filter(
-                                    DataProductSubscriptionDb.subscriber_email == caller_email,
-                                    DataProductSubscriptionDb.product_id.in_(product_ids),
-                                )
-                                .all()
-                            )
-                            subbed_pids = {row.product_id for row in subs}
-                            for p in products_db:
-                                if p.id in subbed_pids:
-                                    fid = getattr(p, "version_family_id", None) or p.id
-                                    elevated_families.add(fid)
-                    except Exception:
-                        # Subscriptions are a soft elevation signal — a
-                        # failure here downgrades the caller to ownership-
-                        # only elevation, which is still safer than
-                        # over-disclosing.
-                        logger.exception(
-                            f"Subscription lookup failed for {caller_email}; "
-                            "falling back to ownership-only elevation"
-                        )
+                if caller_can_write:
+                    # Producer: elevate via draft ownership OR team ownership
+                    # only — explicitly NOT project membership.
+                    team_set = set(caller_team_ids or [])
+                    for p in products_db:
+                        fid = getattr(p, "version_family_id", None) or p.id
+                        if fid in elevated_families:
+                            continue
+                        if caller_email and p.draft_owner_id == caller_email:
+                            elevated_families.add(fid)
+                            continue
+                        if p.owner_team_id and p.owner_team_id in team_set:
+                            elevated_families.add(fid)
+                # Consumer (caller_can_write=False): no ownership-based
+                # elevation at all — published-status visibility only.
 
-                # Pre-filter for the expanded view too so a consumer who
-                # flips "Show all versions" doesn't see drafts of families
-                # they don't own (PRD #442 consumer-visibility rule).
                 products_db = [
-                    p
-                    for p in products_db
+                    p for p in products_db
                     if (getattr(p, "version_family_id", None) or p.id) in elevated_families
                     or (not is_admin_only_status(p) and is_visible_consumer(p))
                 ]
 
             family_counts = compute_family_counts(products_db)
-
             if not include_history:
                 products_db = collapse_by_family(
-                    products_db,
-                    elevated_family_ids=elevated_families,
-                    is_admin=is_admin,
+                    products_db, elevated_family_ids=elevated_families, is_admin=is_admin,
                 )
+        
 
             # Batch-load domains once for the whole page (avoids N+1: every sibling
             # list path batches via get_domains_for_entities).

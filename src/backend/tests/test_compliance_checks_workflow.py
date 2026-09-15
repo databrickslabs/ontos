@@ -212,12 +212,25 @@ def test_workflow_config_initialization_supports_inline_policy_workspace_client(
     assert settings.DATABRICKS_WAREHOUSE_ID == ""
     assert tempfile.gettempdir() == settings.APP_AUDIT_LOG_DIR
 
-    sdk_client = object()
     workspace_client_kwargs = {}
+    verification_calls = []
+    created_sdk_clients = []
 
-    def create_workspace_client(**kwargs):
-        workspace_client_kwargs.update(kwargs)
-        return sdk_client
+    class StubClustersApi:
+        def select_spark_version(self):
+            verification_calls.append("clusters.select_spark_version")
+            return "16.4.x-scala2.12"
+
+    class StubCurrentUserApi:
+        def me(self):
+            raise AssertionError("current_user fallback should not be needed")
+
+    class StubWorkspaceClient:
+        def __init__(self, **kwargs):
+            workspace_client_kwargs.update(kwargs)
+            self.clusters = StubClustersApi()
+            self.current_user = StubCurrentUserApi()
+            created_sdk_clients.append(self)
 
     captured_clients = []
 
@@ -240,12 +253,7 @@ def test_workflow_config_initialization_supports_inline_policy_workspace_client(
             pass
 
     workspace_client_module._CLIENT_CACHE.clear()
-    monkeypatch.setattr(workspace_client_module, "WorkspaceClient", create_workspace_client)
-    monkeypatch.setattr(
-        workspace_client_module,
-        "_verify_workspace_client",
-        lambda client, skip_cluster_check=False: client,
-    )
+    monkeypatch.setattr(workspace_client_module, "WorkspaceClient", StubWorkspaceClient)
     monkeypatch.setattr(
         compliance_manager_module,
         "create_entity_iterator",
@@ -264,7 +272,11 @@ def test_workflow_config_initialization_supports_inline_policy_workspace_client(
 
     assert run.status == "succeeded"
     assert workspace_client_kwargs["host"] == settings.DATABRICKS_HOST
-    assert captured_clients[0]._client is sdk_client
+    assert verification_calls == ["clusters.select_spark_version"]
+    assert isinstance(captured_clients[0], workspace_client_module.CachingWorkspaceClient)
+    assert captured_clients[0]._client is created_sdk_clients[0]
+    assert len(created_sdk_clients) == 1
+    assert workspace_client_module._CLIENT_CACHE["implicit_auth"][0] is captured_clients[0]
 
 
 def test_backend_source_directory_is_added_without_extraction(tmp_path):

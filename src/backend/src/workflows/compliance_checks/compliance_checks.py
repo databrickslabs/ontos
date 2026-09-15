@@ -63,6 +63,13 @@ def _add_backend_source_path(backend_source_path: Optional[str]) -> Optional[str
             with source_path.open("rb") as archive_file:
                 archive_bytes = archive_file.read()
             with ZipFile(BytesIO(archive_bytes)) as archive:
+                root = Path(extracted_path).resolve()
+                for member in archive.infolist():
+                    member_dest = (root / member.filename).resolve()
+                    if not member_dest.is_relative_to(root):
+                        raise RuntimeError(
+                            f"unsafe zip member escapes extraction root: {member.filename}"
+                        )
                 archive.extractall(extracted_path)
             if not (Path(extracted_path) / "src" / "__init__.py").is_file():
                 raise RuntimeError("archive does not contain the src package")

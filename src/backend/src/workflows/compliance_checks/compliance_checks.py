@@ -41,6 +41,19 @@ from databricks.sdk import WorkspaceClient
 _extracted_backend_sources: Dict[str, str] = {}
 
 
+def _initialize_application_config(ws_client: WorkspaceClient) -> None:
+    from src.common.config import init_config
+
+    workspace_host = os.getenv("DATABRICKS_HOST") or ws_client.config.host
+    if not workspace_host:
+        raise RuntimeError("Databricks workspace host is unavailable")
+
+    os.environ["DATABRICKS_HOST"] = workspace_host
+    os.environ.setdefault("DATABRICKS_WAREHOUSE_ID", "")
+    os.environ.setdefault("APP_AUDIT_LOG_DIR", tempfile.gettempdir())
+    init_config()
+
+
 def _add_backend_source_path(backend_source_path: Optional[str]) -> Optional[str]:
     if not backend_source_path:
         return None
@@ -390,6 +403,10 @@ def main() -> None:
     print("\nInitializing workspace client...")
     ws = WorkspaceClient(product=args.product_name, product_version=args.product_version)
     print("  ✓ Workspace client initialized")
+
+    print("\nInitializing application settings...")
+    _initialize_application_config(ws)
+    print("  ✓ Application settings initialized")
 
     # Connect to database
     print("\nConnecting to database...")

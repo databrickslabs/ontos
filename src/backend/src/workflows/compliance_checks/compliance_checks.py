@@ -9,19 +9,106 @@ import os
 import sys
 import json
 import argparse
+import shutil
+import tempfile
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from uuid import uuid4
 from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
-# Add parent directory to path to enable imports from src.*
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Bootstrap the backend package parent for local and file-based execution. The
+# serverless runner may execute this source without binding ``__file__``; main()
+# handles that case using the deployed backend source archive path.
+_entry_file = globals().get("__file__")
+if _entry_file is not None:
+    try:
+        sys.path.insert(0, str(Path(_entry_file).parent.parent.parent.parent))
+    except Exception as _exc:  # pragma: no cover - defensive; must never abort import
+        # Narrowly guarded so a surprising failure is diagnosable but never
+        # crashes module load. Use print because the logging stack isn't wired
+        # up at this point (matches the rest of this script's stdout logging).
+        print(f"WARNING: compliance_checks sys.path bootstrap failed: {_exc}", file=sys.stderr)
 
 from sqlalchemy import text, create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from databricks.sdk import WorkspaceClient
+
+
+_extracted_backend_sources: Dict[str, str] = {}
+
+
+def _initialize_application_config(ws_client: WorkspaceClient) -> None:
+    from src.common.config import init_config
+
+    # Preserve an explicitly configured host; use the ambient client's resolved host
+    # only as fallback.
+    workspace_host = os.getenv("DATABRICKS_HOST") or ws_client.config.host
+    if not workspace_host:
+        raise RuntimeError("Databricks workspace host is unavailable")
+
+    os.environ["DATABRICKS_HOST"] = workspace_host
+    # Compliance checks use Unity Catalog REST APIs and Postgres, not a SQL warehouse.
+    # Keep DATABRICKS_HTTP_PATH intentionally unset unless the job supplies a real
+    # warehouse ID; setdefault preserves that environment-provided value.
+    os.environ.setdefault("DATABRICKS_WAREHOUSE_ID", "")
+    os.environ.setdefault("APP_AUDIT_LOG_DIR", tempfile.gettempdir())
+    init_config()
+
+
+def _add_backend_source_path(backend_source_path: Optional[str]) -> Optional[str]:
+    if not backend_source_path:
+        return None
+
+    source_path = Path(backend_source_path)
+    cached_path = _extracted_backend_sources.get(str(source_path))
+    if cached_path and Path(cached_path).is_dir():
+        import_path = cached_path
+        source_description = f"cached extraction of {source_path}"
+    elif source_path.is_dir():
+        import_path = str(source_path)
+        source_description = "source directory"
+    elif source_path.suffix.lower() == ".zip":
+        if not source_path.is_file():
+            print(f"WARNING: backend source archive not found: {source_path}", file=sys.stderr)
+            return None
+
+        extracted_path = tempfile.mkdtemp(prefix="ontos-compliance-backend-")
+        try:
+            with source_path.open("rb") as archive_file:
+                archive_bytes = archive_file.read()
+            with ZipFile(BytesIO(archive_bytes)) as archive:
+                root = Path(extracted_path).resolve()
+                for member in archive.infolist():
+                    member_dest = (root / member.filename).resolve()
+                    if not member_dest.is_relative_to(root):
+                        raise RuntimeError(
+                            f"unsafe zip member escapes extraction root: {member.filename}"
+                        )
+                archive.extractall(extracted_path)
+            if not (Path(extracted_path) / "src" / "__init__.py").is_file():
+                raise RuntimeError("archive does not contain the src package")
+        except (BadZipFile, OSError, RuntimeError) as exc:
+            shutil.rmtree(extracted_path, ignore_errors=True)
+            raise RuntimeError(
+                f"Failed to extract backend source archive {source_path}: {exc}"
+            ) from exc
+
+        import_path = extracted_path
+        _extracted_backend_sources[str(source_path)] = import_path
+        source_description = f"local extraction of {source_path}"
+    else:
+        print(f"WARNING: unsupported backend source path: {source_path}", file=sys.stderr)
+        return None
+
+    while import_path in sys.path:
+        sys.path.remove(import_path)
+    sys.path.insert(0, import_path)
+    print(f"Backend source added to sys.path: {import_path} ({source_description})")
+    return import_path
 
 
 # ============================================================================
@@ -269,6 +356,7 @@ def main() -> None:
     parser.add_argument("--policy_severities", type=str, default=None)  # JSON array of severities
     parser.add_argument("--entity_limit", type=str, default=None)  # Limit entities checked per policy
     parser.add_argument("--verbose", type=str, default="false")
+    parser.add_argument("--backend_source_path", type=str, default=None)
 
     # Database connection parameters
     parser.add_argument("--lakebase_instance_name", type=str, required=True)
@@ -281,6 +369,8 @@ def main() -> None:
     parser.add_argument("--product_version", type=str, default="0.0.0")
 
     args, _ = parser.parse_known_args()
+
+    _add_backend_source_path(args.backend_source_path)
 
     # Parse arguments
     policy_filter = args.policy_filter
@@ -318,6 +408,10 @@ def main() -> None:
     print("\nInitializing workspace client...")
     ws = WorkspaceClient(product=args.product_name, product_version=args.product_version)
     print("  ✓ Workspace client initialized")
+
+    print("\nInitializing application settings...")
+    _initialize_application_config(ws)
+    print("  ✓ Application settings initialized")
 
     # Connect to database
     print("\nConnecting to database...")

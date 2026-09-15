@@ -80,6 +80,7 @@ class PowerBIConnector(AssetConnector):
     connector_type = "powerbi"
     display_name = "Microsoft Power BI"
     description = "Connector for Microsoft Power BI Service (not yet implemented)"
+    is_selectable = False  # Stub: hide from the Add Connection dropdown
     
     def __init__(self, config: Optional[PowerBIConnectorConfig] = None):
         """Initialize the PowerBI connector."""

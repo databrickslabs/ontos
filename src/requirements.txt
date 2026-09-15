@@ -601,9 +601,9 @@ databricks-sdk==0.110.0 \
     #   -r src/backend/requirements.in
     #   mlflow-skinny
     #   mlflow-tracing
-databricks-sql-connector==4.4.0 \
-    --hash=sha256:6d9111dce577b954fa4684e5cf81484aaa810171d852d472c3c67ec4892bbb74 \
-    --hash=sha256:97d20b5e12e4aa50d16fe5fea3914f19319a207f2f4912a395a08497c25cb16f
+databricks-sql-connector==4.5.0 \
+    --hash=sha256:2b73a5e3688621873cec90ef27ca367ad30a28a8c03c65472638003440a5408c \
+    --hash=sha256:69f7ac2cc35f77f78c62ffb1aa09dda3aeec3c5037b9d7eddca78ee2e81f046e
     # via
     #   -r src/backend/requirements.in
     #   databricks-sqlalchemy

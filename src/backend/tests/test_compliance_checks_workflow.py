@@ -2,6 +2,7 @@
 
 import base64
 import sys
+import tempfile
 import types
 from pathlib import Path
 from types import SimpleNamespace
@@ -128,7 +129,10 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
         extracted_path.mkdir()
         return str(extracted_path)
 
-    module_globals["tempfile"] = SimpleNamespace(mkdtemp=make_extract_dir)
+    module_globals["tempfile"] = SimpleNamespace(
+        gettempdir=tempfile.gettempdir,
+        mkdtemp=make_extract_dir,
+    )
 
     class FakeSession:
         def get(self, model, policy_id):
@@ -138,7 +142,9 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
             pass
 
     fake_session = FakeSession()
-    module_globals["WorkspaceClient"] = lambda **kwargs: object()
+    module_globals["WorkspaceClient"] = lambda **kwargs: SimpleNamespace(
+        config=SimpleNamespace(host="https://serverless-workspace.databricks.com")
+    )
     module_globals["create_engine_from_params"] = lambda **kwargs: object()
     module_globals["sessionmaker"] = lambda **kwargs: lambda: fake_session
     module_globals["load_policies"] = lambda *args, **kwargs: [
@@ -176,6 +182,101 @@ def test_serverless_main_imports_backend_modules_from_deployed_archive(
     assert compliance_manager_file.is_relative_to(extracted_path)
     assert compliance_model_file.is_relative_to(extracted_path)
     assert module_globals["_add_backend_source_path"](str(archive_path)) == str(extracted_path)
+
+
+def test_workflow_config_initialization_supports_inline_policy_workspace_client(
+    monkeypatch, tmp_path
+):
+    module_globals = {"__name__": "not_main", "__file__": str(_MODULE_PATH)}
+    exec(  # noqa: S102 - intentionally executes the workflow entry source
+        compile(_read_source(), str(_MODULE_PATH), "exec"),
+        module_globals,
+    )
+
+    class BootstrapWorkspaceClient:
+        config = SimpleNamespace(host="https://serverless-workspace.databricks.com")
+
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+    monkeypatch.delenv("DATABRICKS_WAREHOUSE_ID", raising=False)
+    monkeypatch.delenv("APP_AUDIT_LOG_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    module_globals["_initialize_application_config"](BootstrapWorkspaceClient())
+
+    from src.common import workspace_client as workspace_client_module
+    from src.common.config import get_settings
+    from src.controller import compliance_manager as compliance_manager_module
+
+    settings = get_settings()
+    assert settings.DATABRICKS_HOST == "https://serverless-workspace.databricks.com"
+    assert settings.DATABRICKS_WAREHOUSE_ID == ""
+    assert tempfile.gettempdir() == settings.APP_AUDIT_LOG_DIR
+
+    workspace_client_kwargs = {}
+    verification_calls = []
+    created_sdk_clients = []
+
+    class StubClustersApi:
+        def select_spark_version(self):
+            verification_calls.append("clusters.select_spark_version")
+            return "16.4.x-scala2.12"
+
+    class StubCurrentUserApi:
+        def me(self):
+            raise AssertionError("current_user fallback should not be needed")
+
+    class StubWorkspaceClient:
+        def __init__(self, **kwargs):
+            workspace_client_kwargs.update(kwargs)
+            self.clusters = StubClustersApi()
+            self.current_user = StubCurrentUserApi()
+            created_sdk_clients.append(self)
+
+    captured_clients = []
+
+    class EmptyEntityIterator:
+        def iterate(self, entity_filter, limit=None):
+            return iter(())
+
+    def create_entity_iterator(*, db, workspace_client):
+        captured_clients.append(workspace_client)
+        return EmptyEntityIterator()
+
+    class FakeSession:
+        def add(self, value):
+            pass
+
+        def commit(self):
+            pass
+
+        def refresh(self, value):
+            pass
+
+    workspace_client_module._CLIENT_CACHE.clear()
+    monkeypatch.setattr(workspace_client_module, "WorkspaceClient", StubWorkspaceClient)
+    monkeypatch.setattr(
+        compliance_manager_module,
+        "create_entity_iterator",
+        create_entity_iterator,
+    )
+
+    policy = SimpleNamespace(
+        id="policy-1",
+        name="Serverless settings policy",
+        rule="MATCH (table:Table) ASSERT true",
+    )
+    run = compliance_manager_module.ComplianceManager().run_policy_inline(
+        FakeSession(),
+        policy=policy,
+    )
+
+    assert run.status == "succeeded"
+    assert workspace_client_kwargs["host"] == settings.DATABRICKS_HOST
+    assert verification_calls == ["clusters.select_spark_version"]
+    assert isinstance(captured_clients[0], workspace_client_module.CachingWorkspaceClient)
+    assert captured_clients[0]._client is created_sdk_clients[0]
+    assert len(created_sdk_clients) == 1
+    assert workspace_client_module._CLIENT_CACHE["implicit_auth"][0] is captured_clients[0]
 
 
 def test_backend_source_directory_is_added_without_extraction(tmp_path):

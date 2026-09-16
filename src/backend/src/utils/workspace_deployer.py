@@ -4,9 +4,10 @@ This utility handles deploying local workflow code to the Databricks workspace
 for use by job tasks. This is necessary for containerized Databricks Apps where
 job clusters cannot access the container filesystem.
 """
-from pathlib import Path
-from typing import Optional, Set
 import base64
+from io import BytesIO
+from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service import workspace
@@ -19,7 +20,7 @@ logger = get_logger(__name__)
 class WorkspaceDeployer:
     """Deploy workflow code to Databricks workspace."""
 
-    def __init__(self, ws_client: WorkspaceClient, deployment_path: Optional[str] = None):
+    def __init__(self, ws_client: WorkspaceClient, deployment_path: str | None = None):
         """Initialize the deployer.
 
         Args:
@@ -28,9 +29,15 @@ class WorkspaceDeployer:
         """
         self._client = ws_client
         self._deployment_path = deployment_path
-        self._deployed_workflows: Set[str] = set()  # Track deployed workflow IDs
+        self._deployed_workflows: set[str] = set()  # Track deployed workflow IDs
 
-    def deploy_workflow(self, workflow_id: str, workflow_dir: Path) -> str:
+    def deploy_workflow(
+        self,
+        workflow_id: str,
+        workflow_dir: Path,
+        *,
+        python_package_dir: Path | None = None,
+    ) -> str:
         """Deploy a workflow folder to the workspace.
 
         Copies all files from the local workflow directory to the workspace deployment path.
@@ -39,6 +46,7 @@ class WorkspaceDeployer:
         Args:
             workflow_id: Unique workflow identifier
             workflow_dir: Local path to workflow directory
+            python_package_dir: Optional Python package directory to archive beside the workflow
 
         Returns:
             Workspace path where workflow was deployed
@@ -78,6 +86,13 @@ class WorkspaceDeployer:
                 elif file_path.is_dir():
                     # Recursively upload subdirectories
                     self._upload_directory(file_path, f"{target_path}/{file_path.name}")
+
+            if python_package_dir is not None:
+                self._upload_content(
+                    self._build_python_package_archive(python_package_dir),
+                    f"{target_path}/backend_src.zip",
+                    workspace.ImportFormat.RAW,
+                )
 
             # Track successful deployment
             self._deployed_workflows.add(workflow_id)
@@ -121,32 +136,43 @@ class WorkspaceDeployer:
             workspace_path: Target workspace path
         """
         try:
-            # Read file content
-            with open(local_path, 'rb') as f:
-                content = f.read()
-
-            # Encode content as base64
-            encoded_content = base64.b64encode(content).decode('utf-8')
-
-            # Determine format based on file extension
-            if local_path.suffix in ['.py', '.yaml', '.yml', '.txt', '.json', '.md']:
-                format_type = workspace.ImportFormat.AUTO
-            else:
-                format_type = workspace.ImportFormat.AUTO
-
-            # Upload using workspace import API
-            self._client.workspace.import_(
-                path=workspace_path,
-                content=encoded_content,
-                format=format_type,
-                overwrite=True
-            )
+            self._upload_content(local_path.read_bytes(), workspace_path, workspace.ImportFormat.AUTO)
 
             logger.debug(f"Uploaded file: {local_path.name} -> {workspace_path}")
 
         except Exception as e:
             logger.error(f"Failed to upload file {local_path}: {e}")
             raise
+
+    def _upload_content(
+        self,
+        content: bytes,
+        workspace_path: str,
+        format_type: workspace.ImportFormat,
+    ) -> None:
+        encoded_content = base64.b64encode(content).decode("utf-8")
+        self._client.workspace.import_(
+            path=workspace_path,
+            content=encoded_content,
+            format=format_type,
+            overwrite=True,
+        )
+
+    @staticmethod
+    def _build_python_package_archive(package_dir: Path) -> bytes:
+        if not package_dir.exists() or not package_dir.is_dir():
+            raise ValueError(f"Python package directory does not exist: {package_dir}")
+
+        archive_buffer = BytesIO()
+        with ZipFile(archive_buffer, "w", ZIP_DEFLATED) as archive:
+            for file_path in package_dir.rglob("*"):
+                if not file_path.is_file():
+                    continue
+                relative_path = file_path.relative_to(package_dir)
+                if "__pycache__" in relative_path.parts or file_path.suffix in {".pyc", ".pyo"}:
+                    continue
+                archive.write(file_path, Path("src") / relative_path)
+        return archive_buffer.getvalue()
 
     def _upload_directory(self, local_dir: Path, workspace_path: str) -> None:
         """Recursively upload a directory to the workspace.

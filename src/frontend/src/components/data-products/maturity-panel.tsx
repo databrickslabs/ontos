@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ const API_PREFIX: Record<string, string> = {
 };
 
 export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const [report, setReport] = useState<MaturityReport | null>(null);
   const [history, setHistory] = useState<MaturitySnapshot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,7 +106,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
             />
             <Button variant="ghost" size="icon" className="h-7 w-7"
               onClick={() => { fetchReport(true); fetchHistory(); }}
-              title="Re-evaluate maturity">
+              title={t('data-products:maturity.reevaluate')}>
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -169,7 +171,7 @@ export function MaturityPanel({ entityType, entityId }: MaturityPanelProps) {
         {/* History mini-chart */}
         {history.length > 1 && (
           <div className="pt-2 border-t">
-            <p className="text-xs text-muted-foreground mb-2">Maturity over time</p>
+            <p className="text-xs text-muted-foreground mb-2">{t('data-products:maturity.overTime')}</p>
             <div className="flex items-end gap-0.5 h-8">
               {history.slice().reverse().map((snap, i) => {
                 const maxLevel = snap.total_levels || 5;

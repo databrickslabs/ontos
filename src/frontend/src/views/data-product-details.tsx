@@ -313,6 +313,7 @@ const checkApiResponse: CheckApiResponseFn = (response, name) => {
  * and provides a button to link new assets.
  */
 function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portName: string; canEdit: boolean }) {
+  const { t } = useTranslation(['data-products', 'common']);
   const [relationships, setRelationships] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
@@ -362,10 +363,10 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
         if (!res.ok) throw new Error(`Failed to link asset: ${res.statusText}`);
         linkedCount += 1;
       }
-      toast({ title: 'Assets linked', description: `${linkedCount} asset(s) linked to ${portName}` });
+      toast({ title: t('data-products:details.deliverables.assetsLinkedTitle'), description: t('data-products:details.deliverables.assetsLinked', { count: linkedCount, portName }) });
       fetchRelationships();
     } catch (error: any) {
-      toast({ title: 'Error', description: error?.message || 'Failed to link assets', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: error?.message || t('data-products:details.deliverables.linkAssetsFailed'), variant: 'destructive' });
     }
   };
 
@@ -373,10 +374,10 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
     try {
       const res = await fetch(`/api/entity-relationships/${relId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to unlink asset');
-      toast({ title: 'Asset unlinked' });
+      toast({ title: t('data-products:details.deliverables.assetUnlinked') });
       fetchRelationships();
     } catch (error: any) {
-      toast({ title: 'Error', description: error?.message || 'Failed to unlink asset', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: error?.message || t('data-products:details.deliverables.unlinkAssetFailed'), variant: 'destructive' });
     }
   };
 
@@ -430,10 +431,10 @@ function PortLinkedAssets({ portId, portName, canEdit }: { portId: string; portN
             isOpen={isAssetSelectorOpen}
             onOpenChange={setIsAssetSelectorOpen}
             onConfirm={handleLinkAssets}
-            relationshipLabel="linked to port"
+            relationshipLabel={t('data-products:details.deliverables.linkedToPort')}
             targetAssetTypes={PORT_DELIVERABLE_ASSET_TYPES}
-            title={`Link Assets to "${portName}"`}
-            description="Only deliverable asset types (Table, View, Dataset, API Endpoint, ML Model) can be linked to an output port."
+            title={t('data-products:details.deliverables.linkAssetsTitle', { portName })}
+            description={t('data-products:details.deliverables.linkAssetsDescription')}
           />
         </>
       )}
@@ -594,21 +595,21 @@ export default function DataProductDetails() {
 
   const fetchProductDetails = async () => {
     if (!productId) {
-      setError(t('navigation.missingId'));
+      setError(t('data-products:navigation.missingId'));
       setDynamicTitle(null);
       setLoading(false);
       return;
     }
     if (!canRead && !permissionsLoading) {
-      setError(t('permissions.noView'));
-      setDynamicTitle(t('permissions.denied'));
+      setError(t('data-products:permissions.noView'));
+      setDynamicTitle(t('data-products:permissions.denied'));
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
-    setStaticSegments([{ label: t('title'), path: listPath }]);
-    setDynamicTitle(t('details.loading'));
+    setStaticSegments([{ label: t('data-products:title'), path: listPath }]);
+    setDynamicTitle(t('data-products:details.loading'));
 
     try {
       const [productResp, linksResp, qualityResp] = await Promise.all([
@@ -645,13 +646,13 @@ export default function DataProductDetails() {
       }
 
       // ODPS v1.0.0: name is at root level
-      setDynamicTitle(productData.name || 'Unnamed Product');
+      setDynamicTitle(productData.name || t('data-products:details.unnamedProduct'));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
       setError(errorMessage);
       setProduct(null);
-      setDynamicTitle('Error');
-      toast({ title: 'Error', description: `Failed to load data: ${errorMessage}`, variant: 'destructive' });
+      setDynamicTitle(t('common:toast.error'));
+      toast({ title: t('common:toast.error'), description: t('data-products:details.toasts.loadError', { error: errorMessage }), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -667,12 +668,12 @@ export default function DataProductDetails() {
       if (response.error) {
         throw new Error(typeof response.error === 'string' ? response.error : 'Certify failed');
       }
-      toast({ title: 'Certified', description: 'Certification level has been applied.' });
+      toast({ title: t('data-products:details.toasts.certifyTitle'), description: t('data-products:details.toasts.certifySuccess') });
       setCertifyDialogOpen(false);
       await fetchProductDetails();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to certify';
-      toast({ title: 'Error', description: msg, variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: msg, variant: 'destructive' });
     } finally {
       setLifecycleActionSubmitting(false);
     }
@@ -688,12 +689,12 @@ export default function DataProductDetails() {
       if (response.error) {
         throw new Error(typeof response.error === 'string' ? response.error : 'Publish scope update failed');
       }
-      toast({ title: 'Publication updated', description: 'Publication scope has been saved.' });
+      toast({ title: t('data-products:details.toasts.publishTitle'), description: t('data-products:details.toasts.publishSuccess') });
       setPublishDialogOpen(false);
       await fetchProductDetails();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to set publication scope';
-      toast({ title: 'Error', description: msg, variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: msg, variant: 'destructive' });
     } finally {
       setLifecycleActionSubmitting(false);
     }
@@ -723,7 +724,7 @@ export default function DataProductDetails() {
 
   const handleEdit = () => {
     if (!canWrite) {
-      toast({ title: 'Permission Denied', description: 'You do not have permission to edit.', variant: 'destructive' });
+      toast({ title: t('data-products:permissions.denied'), description: t('data-products:permissions.noEdit'), variant: 'destructive' });
       return;
     }
     setIsEditDialogOpen(true);
@@ -731,15 +732,15 @@ export default function DataProductDetails() {
 
   const handleDelete = async () => {
     if (!canAdmin || !productId || !product) return;
-    if (!confirm(`Delete data product "${product.name}"?`)) return;
+    if (!confirm(t('data-products:details.confirms.deleteProduct', { name: product.name }))) return;
 
     try {
       await deleteApi(`/api/data-products/${productId}`);
-      toast({ title: 'Success', description: 'Data product deleted successfully.' });
+      toast({ title: t('common:toast.success'), description: t('data-products:details.deleteSuccess') });
       navigate(listPath);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product';
-      toast({ title: 'Error', description: `Failed to delete: ${errorMessage}`, variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: t('data-products:details.toasts.deleteError', { error: errorMessage }), variant: 'destructive' });
     }
   };
 
@@ -753,13 +754,13 @@ export default function DataProductDetails() {
         throw new Error(response.error);
       }
       if (response.data) {
-        toast({ title: 'Draft Created', description: 'Personal draft created. You can now edit it.' });
+        toast({ title: t('data-products:details.toasts.draftCreatedTitle'), description: t('data-products:details.toasts.draftCreatedMessage') });
         // Navigate to the new draft
         navigate(`${listPath}/${response.data.id}`);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create draft';
-      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: errorMessage, variant: 'destructive' });
     } finally {
       setIsCloning(false);
     }
@@ -768,11 +769,11 @@ export default function DataProductDetails() {
   // Discard personal draft
   const handleDiscardDraft = async () => {
     if (!canWrite || !productId || !product) return;
-    if (!confirm(`Discard this draft? This action cannot be undone.`)) return;
+    if (!confirm(t('data-products:details.confirms.discardDraft'))) return;
     setIsDiscarding(true);
     try {
       await deleteApi(`/api/data-products/${productId}/discard`);
-      toast({ title: 'Draft Discarded', description: 'Personal draft has been discarded.' });
+      toast({ title: t('data-products:details.toasts.draftDiscardedTitle'), description: t('data-products:details.toasts.draftDiscardedMessage') });
       // Navigate back to products list or parent product
       if (product.parentProductId) {
         navigate(`${listPath}/${product.parentProductId}`);
@@ -781,7 +782,7 @@ export default function DataProductDetails() {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to discard draft';
-      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: errorMessage, variant: 'destructive' });
     } finally {
       setIsDiscarding(false);
     }
@@ -796,8 +797,8 @@ export default function DataProductDetails() {
       setSubscriptionWizardOpen(true);
     } else {
       toast({
-        title: 'Approval workflow not configured',
-        description: 'Subscribing directly. Load default workflows in Settings to use the approval flow.',
+        title: t('data-products:details.toasts.approvalNotConfiguredTitle'),
+        description: t('data-products:details.toasts.approvalNotConfiguredMessage'),
         variant: 'default',
       });
       await handleSubscribeDirect();
@@ -811,7 +812,7 @@ export default function DataProductDetails() {
       const response = await post<SubscriptionResponse>(`/api/data-products/${productId}/subscribe`, {});
       if (response.data) {
         setSubscriptionStatus(response.data);
-        toast({ title: 'Subscribed', description: 'You will now receive notifications about this product.' });
+        toast({ title: t('data-products:details.toasts.subscribedTitle'), description: t('data-products:details.toasts.subscribedMessage') });
         if (canWrite || canAdmin) {
           const subscribersResp = await get<SubscribersListResponse>(`/api/data-products/${productId}/subscribers`);
           if (subscribersResp.data) setSubscribers(subscribersResp.data);
@@ -819,7 +820,7 @@ export default function DataProductDetails() {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to subscribe';
-      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: errorMessage, variant: 'destructive' });
     } finally {
       setSubscriptionLoading(false);
     }
@@ -828,7 +829,7 @@ export default function DataProductDetails() {
   const handleSubscriptionWizardComplete = async () => {
     setSubscriptionWizardOpen(false);
     setSubscriptionWorkflowId(null);
-    toast({ title: 'Subscribed', description: 'You will now receive notifications about this product.' });
+    toast({ title: t('data-products:details.toasts.subscribedTitle'), description: t('data-products:details.toasts.subscribedMessage') });
     if (!productId) return;
     try {
       const subscriptionResp = await get<SubscriptionResponse>(`/api/data-products/${productId}/subscription`);
@@ -853,7 +854,7 @@ export default function DataProductDetails() {
           ? response.data 
           : { subscribed: false };
         setSubscriptionStatus(subscriptionData);
-        toast({ title: 'Unsubscribed', description: 'You will no longer receive notifications about this product.' });
+        toast({ title: t('data-products:details.toasts.unsubscribedTitle'), description: t('data-products:details.toasts.unsubscribedMessage') });
         // Refresh subscribers count
         if (canWrite || canAdmin) {
           const subscribersResp = await get<SubscribersListResponse>(`/api/data-products/${productId}/subscribers`);
@@ -864,7 +865,7 @@ export default function DataProductDetails() {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to unsubscribe';
-      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: errorMessage, variant: 'destructive' });
     } finally {
       setSubscriptionLoading(false);
     }
@@ -915,9 +916,9 @@ export default function DataProductDetails() {
       setIsVersioningDialogOpen(false);
       setPendingUpdate(null);
       setVersioningAnalysis(null);
-      toast({ title: 'Updated', description: 'Product updated successfully.' });
+      toast({ title: t('data-products:details.toasts.updatedTitle'), description: t('data-products:details.toasts.updatedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to update', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to update', variant: 'destructive' });
     }
   };
 
@@ -928,8 +929,8 @@ export default function DataProductDetails() {
     setIsVersionDialogOpen(true);
     // The pending update will be discarded - user needs to apply it to the new version
     toast({
-      title: 'Create New Version',
-      description: 'Creating a new version will clone this product. Apply your changes to the new version after creation.'
+      title: t('data-products:details.toasts.createNewVersionTitle'),
+      description: t('data-products:details.toasts.createNewVersionMessage'),
     });
   };
 
@@ -963,16 +964,16 @@ export default function DataProductDetails() {
       if (!res.ok) throw new Error(`Failed to update consumable (${res.status})`);
       await fetchProductDetails();
       setEditingInputPortIndex(null);
-      toast({ title: 'Consumable Updated', description: 'Consumable updated successfully.' });
+      toast({ title: t('data-products:details.toasts.consumableUpdatedTitle'), description: t('data-products:details.toasts.consumableUpdatedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to update consumable', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to update consumable', variant: 'destructive' });
       throw e;
     }
   };
 
   const handleDeleteInputPort = async (index: number) => {
     if (!productId || !product) return;
-    if (!confirm('Delete this consumable?')) return;
+    if (!confirm(t('data-products:details.confirms.deleteConsumable'))) return;
     try {
       const updatedPorts = (product.inputPorts || []).filter((_, i) => i !== index);
       const res = await fetch(`/api/data-products/${productId}`, {
@@ -982,9 +983,9 @@ export default function DataProductDetails() {
       });
       if (!res.ok) throw new Error(`Failed to delete consumable (${res.status})`);
       await fetchProductDetails();
-      toast({ title: 'Consumable Deleted', description: 'Consumable deleted successfully.' });
+      toast({ title: t('data-products:details.toasts.consumableDeletedTitle'), description: t('data-products:details.toasts.consumableDeletedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to delete consumable', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete consumable', variant: 'destructive' });
     }
   };
 
@@ -1017,16 +1018,16 @@ export default function DataProductDetails() {
       if (!res.ok) throw new Error(`Failed to update deliverable (${res.status})`);
       await fetchProductDetails();
       setEditingOutputPortIndex(null);
-      toast({ title: 'Deliverable Updated', description: 'Deliverable updated successfully.' });
+      toast({ title: t('data-products:details.toasts.deliverableUpdatedTitle'), description: t('data-products:details.toasts.deliverableUpdatedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to update deliverable', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to update deliverable', variant: 'destructive' });
       throw e;
     }
   };
 
   const handleDeleteOutputPort = async (index: number) => {
     if (!productId || !product) return;
-    if (!confirm('Delete this deliverable?')) return;
+    if (!confirm(t('data-products:details.confirms.deleteDeliverable'))) return;
     try {
       const updatedPorts = (product.outputPorts || []).filter((_, i) => i !== index);
       const res = await fetch(`/api/data-products/${productId}`, {
@@ -1036,9 +1037,9 @@ export default function DataProductDetails() {
       });
       if (!res.ok) throw new Error(`Failed to delete deliverable (${res.status})`);
       await fetchProductDetails();
-      toast({ title: 'Deliverable Deleted', description: 'Deliverable deleted successfully.' });
+      toast({ title: t('data-products:details.toasts.deliverableDeletedTitle'), description: t('data-products:details.toasts.deliverableDeletedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to delete deliverable', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete deliverable', variant: 'destructive' });
     }
   };
 
@@ -1071,16 +1072,16 @@ export default function DataProductDetails() {
       if (!res.ok) throw new Error(`Failed to update management port (${res.status})`);
       await fetchProductDetails();
       setEditingManagementPortIndex(null);
-      toast({ title: 'Management Port Updated', description: 'Management port updated successfully.' });
+      toast({ title: t('data-products:details.toasts.managementPortUpdatedTitle'), description: t('data-products:details.toasts.managementPortUpdatedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to update management port', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to update management port', variant: 'destructive' });
       throw e;
     }
   };
 
   const handleDeleteManagementPort = async (index: number) => {
     if (!productId || !product) return;
-    if (!confirm('Delete this management port?')) return;
+    if (!confirm(t('data-products:details.confirms.deleteManagementPort'))) return;
     try {
       const updatedPorts = (product.managementPorts || []).filter((_, i) => i !== index);
       const res = await fetch(`/api/data-products/${productId}`, {
@@ -1090,9 +1091,9 @@ export default function DataProductDetails() {
       });
       if (!res.ok) throw new Error(`Failed to delete management port (${res.status})`);
       await fetchProductDetails();
-      toast({ title: 'Management Port Deleted', description: 'Management port deleted successfully.' });
+      toast({ title: t('data-products:details.toasts.managementPortDeletedTitle'), description: t('data-products:details.toasts.managementPortDeletedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to delete management port', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete management port', variant: 'destructive' });
     }
   };
 
@@ -1109,12 +1110,12 @@ export default function DataProductDetails() {
       if (!res.ok) throw new Error(`Failed to add team member (${res.status})`);
       await fetchProductDetails();
       toast({
-        title: 'Team Member Added',
-        description: 'Team member added successfully.',
+        title: t('data-products:details.toasts.teamMemberAddedTitle'),
+        description: t('data-products:details.toasts.teamMemberAddedMessage'),
       });
     } catch (e: any) {
       toast({
-        title: 'Error',
+        title: t('common:toast.error'),
         description: e?.message || 'Failed to add team member',
         variant: 'destructive',
       });
@@ -1137,12 +1138,12 @@ export default function DataProductDetails() {
       await fetchProductDetails();
       setEditingTeamMemberIndex(null);
       toast({
-        title: 'Team Member Updated',
-        description: 'Team member updated successfully.',
+        title: t('data-products:details.toasts.teamMemberUpdatedTitle'),
+        description: t('data-products:details.toasts.teamMemberUpdatedMessage'),
       });
     } catch (e: any) {
       toast({
-        title: 'Error',
+        title: t('common:toast.error'),
         description: e?.message || 'Failed to update team member',
         variant: 'destructive',
       });
@@ -1179,16 +1180,16 @@ export default function DataProductDetails() {
       if (!res.ok) throw new Error(`Failed to update support channel (${res.status})`);
       await fetchProductDetails();
       setEditingSupportChannelIndex(null);
-      toast({ title: 'Support Channel Updated', description: 'Support channel updated successfully.' });
+      toast({ title: t('data-products:details.toasts.supportChannelUpdatedTitle'), description: t('data-products:details.toasts.supportChannelUpdatedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to update support channel', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to update support channel', variant: 'destructive' });
       throw e;
     }
   };
 
   const handleDeleteSupportChannel = async (index: number) => {
     if (!productId || !product) return;
-    if (!confirm('Delete this support channel?')) return;
+    if (!confirm(t('data-products:details.confirms.deleteSupportChannel'))) return;
     try {
       const updatedChannels = (product.support || []).filter((_, i) => i !== index);
       const res = await fetch(`/api/data-products/${productId}`, {
@@ -1198,9 +1199,9 @@ export default function DataProductDetails() {
       });
       if (!res.ok) throw new Error(`Failed to delete support channel (${res.status})`);
       await fetchProductDetails();
-      toast({ title: 'Support Channel Deleted', description: 'Support channel deleted successfully.' });
+      toast({ title: t('data-products:details.toasts.supportChannelDeletedTitle'), description: t('data-products:details.toasts.supportChannelDeletedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to delete support channel', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e?.message || 'Failed to delete support channel', variant: 'destructive' });
     }
   };
 
@@ -1211,7 +1212,7 @@ export default function DataProductDetails() {
 
   const handleUnlinkContract = async (portIndex: number) => {
     if (!productId || !product) return;
-    if (!confirm('Unlink contract from this deliverable?')) return;
+    if (!confirm(t('data-products:details.confirms.unlinkContract'))) return;
     
     try {
       const updatedPorts = [...(product.outputPorts || [])];
@@ -1236,12 +1237,12 @@ export default function DataProductDetails() {
       
       await fetchProductDetails();
       toast({
-        title: 'Contract Unlinked',
-        description: 'Contract successfully unlinked from deliverable',
+        title: t('data-products:details.toasts.contractUnlinkedTitle'),
+        description: t('data-products:details.toasts.contractUnlinkedMessage'),
       });
     } catch (e: any) {
       toast({
-        title: 'Error',
+        title: t('common:toast.error'),
         description: e?.message || 'Failed to unlink contract',
         variant: 'destructive',
       });
@@ -1259,9 +1260,9 @@ export default function DataProductDetails() {
       if (res.error) throw new Error(res.error);
       await fetchProductDetails();
       setIriDialogOpen(false);
-      toast({ title: 'Linked', description: 'IRI linked to data product.' });
+      toast({ title: t('data-products:details.toasts.iriLinkedTitle'), description: t('data-products:details.toasts.iriLinkedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to link IRI', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e.message || 'Failed to link IRI', variant: 'destructive' });
     }
   };
 
@@ -1270,25 +1271,25 @@ export default function DataProductDetails() {
       const res = await fetch(`/api/semantic-links/${linkId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to remove link');
       await fetchProductDetails();
-      toast({ title: 'Removed', description: 'IRI link removed.' });
+      toast({ title: t('data-products:details.toasts.iriRemovedTitle'), description: t('data-products:details.toasts.iriRemovedMessage') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to remove link', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e.message || 'Failed to remove link', variant: 'destructive' });
     }
   };
 
   const handleCreateGenieSpace = async () => {
     if (!canWrite || !productId || !product) return;
-    if (!confirm(`Create a Genie Space for "${product.name}"?`)) return;
+    if (!confirm(t('data-products:details.confirms.createGenieSpace', { name: product.name }))) return;
 
-    toast({ title: 'Initiating Genie Space', description: `Requesting Genie Space creation...` });
+    toast({ title: t('data-products:genie.initiating'), description: t('data-products:details.toasts.genieSpaceRequesting') });
 
     try {
       const response = await post('/api/data-products/genie-space', { product_ids: [productId] });
       if (response.error) throw new Error(response.error);
-      toast({ title: 'Request Submitted', description: `Genie Space creation initiated.` });
+      toast({ title: t('data-products:genie.requestSubmitted'), description: t('data-products:details.toasts.genieSpaceInitiated') });
       refreshNotifications();
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message || 'Failed to start Genie Space creation.', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: err.message || t('data-products:genie.creationError'), variant: 'destructive' });
     }
   };
 
@@ -1299,17 +1300,17 @@ export default function DataProductDetails() {
 
   const submitNewVersion = async (newVersionString: string) => {
     if (!productId) return;
-    toast({ title: 'Creating New Version', description: `Creating version ${newVersionString}...` });
+    toast({ title: t('data-products:details.toasts.creatingVersionTitle'), description: t('data-products:details.toasts.creatingVersionMessage', { version: newVersionString }) });
 
     try {
       const response = await post<DataProduct>(`/api/data-products/${productId}/versions`, { new_version: newVersionString.trim() });
       const newProduct = response.data;
       if (!newProduct || !newProduct.id) throw new Error('Invalid response when creating version.');
 
-      toast({ title: 'Success', description: `Version ${newVersionString} created!` });
+      toast({ title: t('common:toast.success'), description: t('data-products:details.toasts.versionCreatedMessage', { version: newVersionString }) });
       navigate(`${listPath}/${newProduct.id}`);
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message || 'Failed to create version.', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: err.message || 'Failed to create version.', variant: 'destructive' });
     }
   };
 
@@ -1357,7 +1358,7 @@ export default function DataProductDetails() {
   if (!product) {
     return (
       <Alert>
-        <AlertDescription>Data product not found.</AlertDescription>
+        <AlertDescription>{t('data-products:details.notFound')}</AlertDescription>
       </Alert>
     );
   }
@@ -1374,7 +1375,7 @@ export default function DataProductDetails() {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => navigate(listPath)} size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to List
+            {t('data-products:details.backToList')}
           </Button>
 
           {/* Version Navigation — unified across contracts and products (PRD #442). */}
@@ -1415,7 +1416,7 @@ export default function DataProductDetails() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm">
-            <KeyRound className="mr-2 h-4 w-4" /> Request...
+            <KeyRound className="mr-2 h-4 w-4" /> {t('data-products:details.actions.requestAccess')}
           </Button>
           {isProductActive(product.status) && canApproveProductLifecycle && (
             <Button
@@ -1427,7 +1428,7 @@ export default function DataProductDetails() {
                 setCertifyDialogOpen(true);
               }}
             >
-              <ShieldCheck className="mr-2 h-4 w-4" /> Certify
+              <ShieldCheck className="mr-2 h-4 w-4" /> {t('data-products:details.actions.certify')}
             </Button>
           )}
           {isProductActive(product.status) && canWrite && (
@@ -1440,7 +1441,7 @@ export default function DataProductDetails() {
                 setPublishDialogOpen(true);
               }}
             >
-              <Globe className="mr-2 h-4 w-4" /> Publish
+              <Globe className="mr-2 h-4 w-4" /> {t('data-products:details.publish')}
             </Button>
           )}
           <CommentSidebar
@@ -1451,7 +1452,7 @@ export default function DataProductDetails() {
             className="h-8"
           />
           <Button variant="outline" onClick={handleCreateGenieSpace} disabled={!canModify} size="sm">
-            <Sparkles className="mr-2 h-4 w-4" /> Create Genie Space
+            <Sparkles className="mr-2 h-4 w-4" /> {t('data-products:details.actions.createGenieSpace')}
           </Button>
           {/* Clone for Editing - shown when product is read-only */}
           {isReadOnly && canWrite && (
@@ -1461,13 +1462,13 @@ export default function DataProductDetails() {
               ) : (
                 <CopyPlus className="mr-2 h-4 w-4" />
               )}
-              Clone for Editing
+              {t('data-products:details.actions.cloneForEditing')}
             </Button>
           )}
           {/* Commit Draft - shown when this is a personal draft */}
           {isPersonalDraft && canWrite && (
             <Button variant="default" onClick={() => setIsCommitDraftDialogOpen(true)} size="sm">
-              <FileText className="mr-2 h-4 w-4" /> Commit Changes
+              <FileText className="mr-2 h-4 w-4" /> {t('data-products:details.actions.commitChanges')}
             </Button>
           )}
           {/* Discard Draft - shown when this is a personal draft */}
@@ -1478,17 +1479,17 @@ export default function DataProductDetails() {
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
               )}
-              Discard Draft
+              {t('data-products:details.actions.discardDraft')}
             </Button>
           )}
           {/* New Version - only for editable products */}
           {!isReadOnly && (
             <Button variant="outline" onClick={handleCreateNewVersion} disabled={!canModify} size="sm">
-              <CopyPlus className="mr-2 h-4 w-4" /> New Version
+              <CopyPlus className="mr-2 h-4 w-4" /> {t('data-products:details.actions.newVersion')}
             </Button>
           )}
           <Button variant="outline" onClick={() => setIsImportExportDialogOpen(true)} size="sm">
-            <Download className="mr-2 h-4 w-4" /> Export ODPS
+            <Download className="mr-2 h-4 w-4" /> {t('data-products:details.actions.exportODPS')}
           </Button>
           {/* Subscribe/Unsubscribe Button */}
           {isSubscribable && (
@@ -1504,7 +1505,7 @@ export default function DataProductDetails() {
                 ) : (
                   <BellOff className="mr-2 h-4 w-4" />
                 )}
-                Unsubscribe
+                {t('data-products:details.unsubscribe')}
               </Button>
             ) : (
               <Button
@@ -1518,18 +1519,18 @@ export default function DataProductDetails() {
                 ) : (
                   <Bell className="mr-2 h-4 w-4" />
                 )}
-                Subscribe
+                {t('data-products:details.subscribe')}
               </Button>
             )
           )}
           {/* Edit - only enabled for editable products */}
           {canModify && (
             <Button variant="outline" onClick={handleEdit} size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+              <Pencil className="mr-2 h-4 w-4" /> {t('data-products:details.edit')}
             </Button>
           )}
           <Button variant="destructive" onClick={handleDelete} disabled={!canAdmin} size="sm">
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {t('data-products:details.delete')}
           </Button>
         </div>
       </div>
@@ -1539,7 +1540,7 @@ export default function DataProductDetails() {
         <Alert className="bg-blue-50 border-blue-300 dark:bg-blue-950 dark:border-blue-800">
           <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           <AlertDescription className="text-blue-800 dark:text-blue-200">
-            <strong>Personal Draft</strong> - This is your personal draft. Only you can see it. Commit changes to share with your team.
+            <strong>{t('data-products:details.banners.personalDraftTitle')}</strong> - {t('data-products:details.banners.personalDraftMessage')}
           </AlertDescription>
         </Alert>
       )}
@@ -1549,7 +1550,7 @@ export default function DataProductDetails() {
         <Alert className="bg-yellow-50 border-yellow-300 dark:bg-yellow-950 dark:border-yellow-800">
           <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
           <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-            <strong>Read-Only</strong> - This product is {product?.status?.toLowerCase()}. Clone to create a personal draft for editing.
+            <strong>{t('data-products:details.banners.readOnlyTitle')}</strong> - {t('data-products:details.banners.readOnlyMessage', { status: product?.status?.toLowerCase() })}
           </AlertDescription>
         </Alert>
       )}
@@ -1563,10 +1564,10 @@ export default function DataProductDetails() {
               <div className="min-w-0 flex-1">
                 <CardTitle className="text-2xl font-bold flex items-center">
                   <Package className="mr-3 h-7 w-7 text-primary shrink-0" />
-                  <span className="truncate">{product.name || 'Unnamed Product'}</span>
+                  <span className="truncate">{product.name || t('data-products:details.unnamedProduct')}</span>
                 </CardTitle>
                 <CardDescription className="pt-1">
-                  {product.description?.purpose || 'No description provided'}
+                  {product.description?.purpose || t('data-products:details.noDescription')}
                 </CardDescription>
               </div>
               <div className="flex items-end gap-5 shrink-0">
@@ -1574,7 +1575,7 @@ export default function DataProductDetails() {
                   <Badge variant={getStatusColor(product.status)}>
                     {product.status || '—'}
                   </Badge>
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</span>
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('data-products:details.coreMetadata.status')}</span>
                 </div>
                 {qualitySummary && qualitySummary.items_count > 0 && (
                   <div className="flex flex-col items-center gap-1">
@@ -1591,7 +1592,7 @@ export default function DataProductDetails() {
                     >
                       {Math.round(qualitySummary.overall_score_percent)}%
                     </span>
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Quality</span>
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('data-products:details.coreMetadata.quality')}</span>
                   </div>
                 )}
                 {productId && (
@@ -1603,7 +1604,7 @@ export default function DataProductDetails() {
           <CardContent className="space-y-3">
             <div className="grid md:grid-cols-3 gap-x-6 gap-y-2">
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Version:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.version')}:</Label>
                 {product.version ? (
                   <Badge variant="outline" className="text-xs">{product.version}</Badge>
                 ) : (
@@ -1611,7 +1612,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Domain:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.domain')}:</Label>
                 {product.domain && getDomainIdByName(domainLabel) ? (
                   <span
                     className="text-xs cursor-pointer text-primary hover:underline truncate"
@@ -1626,7 +1627,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Project:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.project')}:</Label>
                 {(product as any).project_id && product.project_name ? (
                   <span
                     className="text-xs cursor-pointer text-primary hover:underline truncate"
@@ -1640,7 +1641,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.tenant')}:</Label>
                 {product.tenant ? (
                   <span className="text-xs text-muted-foreground truncate">{product.tenant}</span>
                 ) : (
@@ -1648,7 +1649,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Team:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.ownerTeam')}:</Label>
                 {product.owner_team_id && product.owner_team_name ? (
                   <span
                     className="text-xs cursor-pointer text-primary hover:underline truncate"
@@ -1662,7 +1663,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">API Ver:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.apiVersion')}:</Label>
                 {product.apiVersion ? (
                   <Badge variant="outline" className="text-xs">{product.apiVersion}</Badge>
                 ) : (
@@ -1670,7 +1671,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Created:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.created')}:</Label>
                 {product.created_at ? (
                   <span className="text-xs text-muted-foreground truncate">{formatDate(product.created_at)}</span>
                 ) : (
@@ -1678,7 +1679,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Updated:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.updated')}:</Label>
                 {product.updated_at ? (
                   <span className="text-xs text-muted-foreground truncate">{formatDate(product.updated_at)}</span>
                 ) : (
@@ -1686,7 +1687,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Cert:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.certification')}:</Label>
                 {(product.certification_level || product.inherited_certification_level) ? (
                   <CertificationBadge
                     certificationLevel={product.certification_level}
@@ -1701,7 +1702,7 @@ export default function DataProductDetails() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground min-w-[4rem]">Published:</Label>
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-products:details.coreMetadata.publishedLabel')}:</Label>
                 {product.publication_scope && product.publication_scope !== 'none' ? (
                   <PublicationScopeBadge
                     scope={product.publication_scope as PublicationScope}
@@ -1718,23 +1719,23 @@ export default function DataProductDetails() {
             <div className="pt-2 border-t">
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1 min-w-0">
-                  <Label className="text-xs text-muted-foreground mb-1.5 block">Tags:</Label>
+                  <Label className="text-xs text-muted-foreground mb-1.5 block">{t('data-products:details.coreMetadata.tags')}:</Label>
                   <div className="flex flex-wrap gap-1">
                     {(product.tags || []).length > 0 ? (
                       (product.tags || []).map((tag, index) => (
                         <TagChip key={index} tag={tag} size="sm" />
                       ))
                     ) : (
-                      <span className="text-xs text-muted-foreground">No tags</span>
+                      <span className="text-xs text-muted-foreground">{t('data-products:details.coreMetadata.noTags')}</span>
                     )}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <Label className="text-xs text-muted-foreground mb-1.5 block">Linked Business Concepts:</Label>
+                  <Label className="text-xs text-muted-foreground mb-1.5 block">{t('data-products:details.coreMetadata.linkedConcepts')}:</Label>
                   <LinkedConceptChips
                     links={links}
                     onRemove={canModify ? removeLink : undefined}
-                    trailing={canModify ? <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">Add</Button> : undefined}
+                    trailing={canModify ? <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">{t('common:actions.add')}</Button> : undefined}
                   />
                 </div>
               </div>
@@ -1761,12 +1762,12 @@ export default function DataProductDetails() {
             return (
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Contacts</CardTitle>
+                  <CardTitle className="text-sm font-medium">{t('data-products:details.contacts.title')}</CardTitle>
                   {contactSource === 'imported' && (
-                    <p className="text-[11px] text-muted-foreground italic">From imported data</p>
+                    <p className="text-[11px] text-muted-foreground italic">{t('data-products:details.contacts.fromImportedData')}</p>
                   )}
                   {contactSource === 'team_only' && (
-                    <p className="text-[11px] text-muted-foreground italic">Team assignment only</p>
+                    <p className="text-[11px] text-muted-foreground italic">{t('data-products:details.contacts.teamAssignmentOnly')}</p>
                   )}
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1784,7 +1785,7 @@ export default function DataProductDetails() {
                       </Avatar>
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate">{owner.user_name || owner.user_email}</div>
-                        <div className="text-xs text-muted-foreground">{owner.role_name || 'Owner'}</div>
+                        <div className="text-xs text-muted-foreground">{owner.role_name || t('data-products:details.contacts.defaultRole')}</div>
                       </div>
                     </div>
                   ))}
@@ -1815,12 +1816,12 @@ export default function DataProductDetails() {
                       </Avatar>
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate">{product.owner_team_name}</div>
-                        <div className="text-xs text-muted-foreground">Team</div>
+                        <div className="text-xs text-muted-foreground">{t('data-products:details.contacts.teamRole')}</div>
                       </div>
                     </div>
                   )}
                   {contactSource === 'none' && (
-                    <span className="text-xs text-muted-foreground">No contacts assigned</span>
+                    <span className="text-xs text-muted-foreground">{t('data-products:details.contacts.noContactsAssigned')}</span>
                   )}
                 </CardContent>
               </Card>
@@ -1833,11 +1834,11 @@ export default function DataProductDetails() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Deliverables ({product.outputPorts?.length || 0})</span>
-            {canModify && <Button size="sm" onClick={() => setIsOutputPortDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Deliverable</Button>}
+            <span>{t('data-products:details.deliverables.titleWithCount', { count: product.outputPorts?.length || 0 })}</span>
+            {canModify && <Button size="sm" onClick={() => setIsOutputPortDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />{t('data-products:details.deliverables.addDeliverable')}</Button>}
           </CardTitle>
           <CardDescription>
-            Define deliverables and their delivery methods. Link assets and contracts to each deliverable.
+            {t('data-products:details.deliverables.subtitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1871,7 +1872,7 @@ export default function DataProductDetails() {
                             Contract: {port.contractName || port.contractId}
                           </Badge>
                           {canModify && (
-                            <Button size="sm" variant="ghost" className="h-6 px-1" onClick={() => handleUnlinkContract(idx)} title="Unlink contract">
+                            <Button size="sm" variant="ghost" className="h-6 px-1" onClick={() => handleUnlinkContract(idx)} title={t('common:tooltips.unlinkContract')}>
                               <Unlink className="h-3 w-3" />
                             </Button>
                           )}
@@ -1884,7 +1885,7 @@ export default function DataProductDetails() {
                           onClick={() => handleLinkContract(idx)}
                         >
                           <Link2 className="mr-1 h-3 w-3" />
-                          Link contract
+                          {t('common:tooltips.linkContract')}
                         </Button>
                       )}
 
@@ -1906,7 +1907,7 @@ export default function DataProductDetails() {
                             setEditingOutputPortIndex(idx);
                             setIsOutputPortDialogOpen(true);
                           }}
-                          title="Edit deliverable"
+                          title={t('data-products:details.deliverables.editTitle')}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -1915,7 +1916,7 @@ export default function DataProductDetails() {
                           variant="ghost"
                           onClick={() => handleDeleteOutputPort(idx)}
                           className="text-destructive hover:text-destructive"
-                          title="Delete deliverable"
+                          title={t('data-products:details.deliverables.deleteTitle')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -1927,7 +1928,9 @@ export default function DataProductDetails() {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No deliverables defined.{canModify ? ' Add deliverables and link assets when ready.' : ''}
+              {canModify
+                ? t('data-products:details.deliverables.noDeliverablesWithEdit')
+                : t('data-products:details.deliverables.noDeliverables')}
             </p>
           )}
         </CardContent>
@@ -1940,7 +1943,7 @@ export default function DataProductDetails() {
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center">
                 <FileText className="mr-2 h-5 w-5" />
-                Description
+                {t('data-products:details.sections.description')}
               </span>
               {canModify && <Button size="sm" variant="outline" onClick={handleEdit}><Pencil className="h-4 w-4" /></Button>}
             </CardTitle>
@@ -1948,19 +1951,19 @@ export default function DataProductDetails() {
           <CardContent className="space-y-4">
             {product.description.purpose && (
               <div>
-                <Label>Purpose:</Label>
+                <Label>{t('data-products:details.description.purposeLabel')}:</Label>
                 <p className="text-sm mt-1">{product.description.purpose}</p>
               </div>
             )}
             {product.description.limitations && (
               <div>
-                <Label>Limitations:</Label>
+                <Label>{t('data-products:details.description.limitationsLabel')}:</Label>
                 <p className="text-sm mt-1">{product.description.limitations}</p>
               </div>
             )}
             {product.description.usage && (
               <div>
-                <Label>Usage:</Label>
+                <Label>{t('data-products:details.description.usageLabel')}:</Label>
                 <p className="text-sm mt-1">{product.description.usage}</p>
               </div>
             )}
@@ -1975,11 +1978,11 @@ export default function DataProductDetails() {
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <GitBranch className="h-4 w-4" />
-                Business Lineage
+                {t('data-products:details.lineage.businessLineageTitle')}
               </span>
               {canModify && (
                 <Button size="sm" variant="outline" onClick={() => setIsLineageEditorOpen(true)}>
-                  <GitBranch className="mr-2 h-3.5 w-3.5" /> Manage Lineage
+                  <GitBranch className="mr-2 h-3.5 w-3.5" /> {t('data-products:details.actions.manageLineage')}
                 </Button>
               )}
             </CardTitle>
@@ -1999,8 +2002,8 @@ export default function DataProductDetails() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Consumables ({product.inputPorts?.length || 0})</span>
-              {canModify && <Button size="sm" onClick={() => setIsInputPortDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Consumable</Button>}
+              <span>{t('data-products:details.consumables.titleWithCount', { count: product.inputPorts?.length || 0 })}</span>
+              {canModify && <Button size="sm" onClick={() => setIsInputPortDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />{t('data-products:details.consumables.addConsumable')}</Button>}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -2010,7 +2013,7 @@ export default function DataProductDetails() {
                   <div key={idx} className="flex items-start justify-between border rounded p-3">
                     <div className="flex-1">
                       <div className="font-medium">{port.name} (v{port.version})</div>
-                      <div className="text-sm text-muted-foreground">Contract: {port.contractId}</div>
+                      <div className="text-sm text-muted-foreground">{t('data-products:details.consumables.contractLabel', { contractId: port.contractId })}</div>
                     </div>
                     {canModify && (
                       <div className="flex gap-2 ml-3">
@@ -2038,7 +2041,7 @@ export default function DataProductDetails() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No consumables defined</p>
+              <p className="text-sm text-muted-foreground">{t('data-products:details.consumables.noConsumables')}</p>
             )}
           </CardContent>
         </Card>
@@ -2049,10 +2052,10 @@ export default function DataProductDetails() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Management Ports ({product.managementPorts?.length || 0})</span>
-            {canModify && <Button size="sm" onClick={() => setIsManagementPortDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Management Port</Button>}
+            <span>{t('data-products:details.managementPorts.titleWithCount', { count: product.managementPorts?.length || 0 })}</span>
+            {canModify && <Button size="sm" onClick={() => setIsManagementPortDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />{t('data-products:details.managementPorts.addManagementPort')}</Button>}
           </CardTitle>
-          <CardDescription>Observability, control, and discoverability endpoints</CardDescription>
+          <CardDescription>{t('data-products:details.managementPorts.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           {product.managementPorts && product.managementPorts.length > 0 ? (
@@ -2061,8 +2064,8 @@ export default function DataProductDetails() {
                 <div key={idx} className="flex items-start justify-between border rounded p-3">
                   <div className="flex-1">
                     <div className="font-medium">{port.name}</div>
-                    <div className="text-sm">Content: {port.content}</div>
-                    {port.url && <div className="text-sm text-muted-foreground">URL: {port.url}</div>}
+                    <div className="text-sm">{t('data-products:details.managementPorts.contentLabel')}: {port.content}</div>
+                    {port.url && <div className="text-sm text-muted-foreground">{t('data-products:details.managementPorts.urlLabel')}: {port.url}</div>}
                   </div>
                   {canModify && (
                     <div className="flex gap-2 ml-3">
@@ -2090,7 +2093,7 @@ export default function DataProductDetails() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No management ports defined</p>
+            <p className="text-sm text-muted-foreground">{t('data-products:details.managementPorts.noManagementPorts')}</p>
           )}
         </CardContent>
       </Card>
@@ -2101,15 +2104,15 @@ export default function DataProductDetails() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>ODPS Team Metadata ({product.team.members.length} members)</span>
+            <span>{t('data-products:details.teamMetadata.titleWithCount', { count: product.team.members.length })}</span>
           </CardTitle>
-          <p className="text-sm text-muted-foreground">Read-only provenance from imported product YAML. Manage ownership via the Owners panel above.</p>
+          <p className="text-sm text-muted-foreground">{t('data-products:details.teamMetadata.subtitle')}</p>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
             {product.team.members.map((member, idx) => (
               <div key={idx} className="flex items-center gap-3 p-3 border rounded-lg">
-                <Badge variant="outline">{member.role || 'Member'}</Badge>
+                <Badge variant="outline">{member.role || t('data-products:details.teamMetadata.defaultRole')}</Badge>
                 <span className="text-sm">{member.name || member.username}</span>
               </div>
             ))}
@@ -2123,8 +2126,8 @@ export default function DataProductDetails() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Support Channels ({product.support?.length || 0})</span>
-            {canModify && <Button size="sm" onClick={() => setIsSupportChannelDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Channel</Button>}
+            <span>{t('data-products:details.supportChannels.titleWithCount', { count: product.support?.length || 0 })}</span>
+            {canModify && <Button size="sm" onClick={() => setIsSupportChannelDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />{t('data-products:details.supportChannels.addChannel')}</Button>}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -2134,8 +2137,8 @@ export default function DataProductDetails() {
                 <div key={idx} className="flex items-start justify-between border rounded p-3">
                   <div className="flex-1">
                     <div className="font-medium">{channel.channel}</div>
-                    <div className="text-sm">URL: <a href={channel.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{channel.url}</a></div>
-                    {channel.tool && <div className="text-sm text-muted-foreground">Tool: {channel.tool}</div>}
+                    <div className="text-sm">{t('data-products:details.managementPorts.urlLabel')}: <a href={channel.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{channel.url}</a></div>
+                    {channel.tool && <div className="text-sm text-muted-foreground">{t('data-products:details.supportChannels.toolLabel')}: {channel.tool}</div>}
                   </div>
                   {canModify && (
                     <div className="flex gap-2 ml-3">
@@ -2163,7 +2166,7 @@ export default function DataProductDetails() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No support channels defined</p>
+            <p className="text-sm text-muted-foreground">{t('data-products:details.supportChannels.noChannels')}</p>
           )}
         </CardContent>
       </Card>
@@ -2175,10 +2178,10 @@ export default function DataProductDetails() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              <span>Subscribers ({subscribers.subscriber_count})</span>
+              <span>{t('data-products:details.subscribers.titleWithCount', { count: subscribers.subscriber_count })}</span>
             </CardTitle>
             <CardDescription>
-              Users subscribed to this product will receive notifications about status changes, compliance issues, and new versions.
+              {t('data-products:details.subscribers.notificationSubtitle')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -2202,7 +2205,7 @@ export default function DataProductDetails() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No subscribers yet</p>
+              <p className="text-sm text-muted-foreground">{t('data-products:details.subscribers.noSubscribers')}</p>
             )}
           </CardContent>
         </Card>
@@ -2231,7 +2234,7 @@ export default function DataProductDetails() {
             role: m.role,
             description: m.description,
           }))}
-          importedContactsLabel="Imported Contacts"
+          importedContactsLabel={t('data-products:details.contacts.importedContactsLabel')}
           ownerTeamId={product.owner_team_id}
           ownerTeamName={product.owner_team_name}
         />
@@ -2242,7 +2245,7 @@ export default function DataProductDetails() {
         <EntityTreePanel
           entityType="DataProduct"
           entityId={productId!}
-          title="Related Entities"
+          title={t('data-products:details.relatedEntities.title')}
           canEdit={canModify}
         />
       )}
@@ -2257,7 +2260,7 @@ export default function DataProductDetails() {
         <RatingPanel
           entityType="data_product"
           entityId={productId!}
-          title={t('details.ratings.title', 'Ratings & Reviews')}
+          title={t('data-products:details.ratings.title')}
           showDistribution
           allowSubmit={canRead}
         />

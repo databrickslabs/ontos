@@ -616,7 +616,7 @@ export default function DataProducts() {
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant={getStatusColor(row.original.status)}>{row.original.status}</Badge>
             {row.original.draftOwnerId && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">Personal Draft</Badge>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">{t('data-products:status.personalDraft')}</Badge>
             )}
             <CertificationBadge
               certificationLevel={row.original.certification_level}
@@ -679,7 +679,7 @@ export default function DataProducts() {
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); setPreviewProductId(product.id ?? null); setPreviewProductTitle(product.name ?? ''); }}
-                title="Preview Metadata"
+                title={t('data-products:table.previewMetadata')}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -751,7 +751,7 @@ export default function DataProducts() {
                 onClick={() => setError(null)}
                 title={t('common:tooltips.dismiss')}
               >
-                <span className="sr-only">Dismiss</span>
+                <span className="sr-only">{t('common:actions.dismiss')}</span>
                 ×
               </Button>
             </Alert>

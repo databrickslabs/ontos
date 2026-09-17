@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,13 +16,14 @@ const STATUS_CONFIG = {
   warn: { icon: AlertTriangle, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/30' },
 };
 
-const OVERALL_CONFIG: Record<string, { label: string; variant: 'default' | 'destructive' | 'secondary' }> = {
-  ready: { label: 'Ready', variant: 'default' },
-  not_ready: { label: 'Not Ready', variant: 'destructive' },
-  partial: { label: 'Partially Ready', variant: 'secondary' },
+const OVERALL_CONFIG: Record<string, { labelKey: string; variant: 'default' | 'destructive' | 'secondary' }> = {
+  ready: { labelKey: 'ready', variant: 'default' },
+  not_ready: { labelKey: 'notReady', variant: 'destructive' },
+  partial: { labelKey: 'partial', variant: 'secondary' },
 };
 
 export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const [report, setReport] = useState<ReadinessReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +36,11 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       setReport(await res.json());
     } catch (e: any) {
-      setError(e.message || 'Failed to load readiness report');
+      setError(e.message || t('data-products:readiness.loadError'));
     } finally {
       setIsLoading(false);
     }
-  }, [productId]);
+  }, [productId, t]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
@@ -47,7 +49,7 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
       <Card>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">Checking readiness...</span>
+          <span className="ml-2 text-sm text-muted-foreground">{t('data-products:readiness.checking')}</span>
         </CardContent>
       </Card>
     );
@@ -57,9 +59,9 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
     return (
       <Card>
         <CardContent className="py-6 text-center">
-          <p className="text-sm text-destructive">{error || 'Unable to load readiness report'}</p>
+          <p className="text-sm text-destructive">{error || t('data-products:readiness.loadFallbackError')}</p>
           <Button variant="outline" size="sm" className="mt-2" onClick={fetchReport}>
-            <RefreshCw className="mr-2 h-3.5 w-3.5" /> Retry
+            <RefreshCw className="mr-2 h-3.5 w-3.5" /> {t('data-products:readiness.retry')}
           </Button>
         </CardContent>
       </Card>
@@ -75,13 +77,13 @@ export function ReadinessChecklist({ productId }: ReadinessChecklistProps) {
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
             <ClipboardCheck className="h-4 w-4" />
-            Production Readiness
+            {t('data-products:readiness.title')}
           </span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-normal text-muted-foreground">
-              {passCount}/{report.checks.length} passed
+              {t('data-products:readiness.passCount', { passed: passCount, total: report.checks.length })}
             </span>
-            <Badge variant={overall.variant}>{overall.label}</Badge>
+            <Badge variant={overall.variant}>{t(`data-products:readiness.status.${overall.labelKey}`)}</Badge>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={fetchReport}>
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>

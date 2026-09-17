@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ export default function CommitDraftDialog({
   productName,
   onSuccess,
 }: CommitDraftDialogProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
   
@@ -159,7 +161,7 @@ export default function CommitDraftDialog({
               {/* Change Analysis Summary */}
               {diffAnalysis && (
                 <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
-                  <AlertTitle className="text-blue-800 dark:text-blue-200">Change Analysis</AlertTitle>
+                  <AlertTitle className="text-blue-800 dark:text-blue-200">{t('data-products:commitDraft.changeAnalysisTitle')}</AlertTitle>
                   <AlertDescription className="text-blue-700 dark:text-blue-300">
                     Based on your changes, we recommend a <strong>{diffAnalysis.suggested_bump}</strong> version bump.
                     {diffAnalysis.analysis?.summary && (
@@ -171,7 +173,7 @@ export default function CommitDraftDialog({
 
               {/* Version Selection */}
               <div className="space-y-3">
-                <Label>Select Version</Label>
+                <Label>{t('data-products:commitDraft.selectVersion')}</Label>
                 <RadioGroup
                   value={selectedVersionBump}
                   onValueChange={(v) => setSelectedVersionBump(v as typeof selectedVersionBump)}
@@ -199,7 +201,7 @@ export default function CommitDraftDialog({
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="custom" id="custom" />
-                    <Label htmlFor="custom" className="font-normal">Custom version</Label>
+                    <Label htmlFor="custom" className="font-normal">{t('data-products:commitDraft.customVersion')}</Label>
                   </div>
                 </RadioGroup>
                 
@@ -207,7 +209,7 @@ export default function CommitDraftDialog({
                   <Input
                     value={customVersion}
                     onChange={(e) => setCustomVersion(e.target.value)}
-                    placeholder="e.g., 2.0.0"
+                    placeholder={t('data-products:commitDraft.customVersionPlaceholder')}
                     className="mt-2"
                   />
                 )}
@@ -220,7 +222,7 @@ export default function CommitDraftDialog({
                   id="change-summary"
                   value={changeSummary}
                   onChange={(e) => setChangeSummary(e.target.value)}
-                  placeholder="Describe the changes made in this version..."
+                  placeholder={t('data-products:commitDraft.changeSummaryPlaceholder')}
                   className="min-h-[100px] resize-none"
                   disabled={isCommitting}
                 />

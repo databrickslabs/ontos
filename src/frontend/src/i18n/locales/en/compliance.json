@@ -34,7 +34,8 @@
     "security": "Security",
     "dataQuality": "Data Quality",
     "privacy": "Privacy",
-    "governance": "Governance"
+    "governance": "Governance",
+    "maturity": "Maturity"
   },
   "errors": {
     "loadingPolicies": "Error Loading Policies",
@@ -102,4 +103,3 @@
     }
   }
 }
-

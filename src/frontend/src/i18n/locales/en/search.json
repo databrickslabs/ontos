@@ -62,7 +62,8 @@
     "resourcesWithLabel": "Resources with rdfs:label",
     "subjectsAndTypes": "Subjects and their types",
     "topPredicates": "Top predicates by frequency",
-    "mostLinkedSeeAlso": "Most linked via rdfs:seeAlso"
+    "mostLinkedSeeAlso": "Most linked via rdfs:seeAlso",
+    "resourceDetail": "Resource detail"
   },
   "index": {
     "title": "Index Search",
@@ -135,7 +136,10 @@
       "property": "Property",
       "selectProperty": "Select property...",
       "browseUCColumn": "Browse UC table and select column...",
-      "ucColumnTitle": "Select UC Column"
+      "ucColumnTitle": "Select UC Column",
+      "asset": "Asset",
+      "noColumnAssets": "No Column or Logical Attribute assets found",
+      "selectAsset": "Select asset"
     },
     "messages": {
       "selectPropertyTarget": "Please select a contract, schema, and property.",
@@ -190,7 +194,7 @@
     "scopeGeneral": "Ontos (general)",
     "scopeThisPage": "This page",
     "inputPlaceholder": "Ask {{shortName}} anything...",
-    "messageSendFailed": "Failed to send message"
+    "messageSendFailed": "Failed to send message",
+    "resizeHandle": "Resize Ask Ontos panel"
   }
 }
-

@@ -21,7 +21,9 @@
     },
     "submit": "Send Request",
     "submitting": "Sending Request...",
-    "success": "Your access request has been submitted and you will be notified of the decision."
+    "success": "Your access request has been submitted and you will be notified of the decision.",
+    "cancel": "Cancel",
+    "error": "Failed to submit access request"
   },
   "panel": {
     "title": "Access Grants",
@@ -38,7 +40,14 @@
     "revoke": "Revoke",
     "revokeConfirm": "Are you sure you want to revoke access for {{user}}?",
     "revokeSuccess": "Access revoked successfully",
-    "handle": "Handle Request"
+    "handle": "Handle Request",
+    "columns": {
+      "actions": "Actions",
+      "expires": "Expires",
+      "granted": "Granted",
+      "permission": "Permission Level",
+      "user": "User"
+    }
   },
   "handle": {
     "title": "Handle Access Request",
@@ -58,4 +67,3 @@
     "data_contract": "data contract"
   }
 }
-

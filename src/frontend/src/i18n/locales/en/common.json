@@ -119,7 +119,8 @@
     "securableId": "Securable ID",
     "securableType": "Securable Type",
     "permission": "Permission",
-    "editDescription": "Make changes to {{name}}"
+    "editDescription": "Make changes to {{name}}",
+    "workflows": "Workflows"
   },
   "placeholders": {
     "search": "Search...",
@@ -174,7 +175,8 @@
   },
   "terms": {
     "concepts": "concepts",
-    "properties": "properties"
+    "properties": "properties",
+    "viewGraph": "View Graph"
   },
   "toast": {
     "success": "Success",
@@ -372,5 +374,33 @@
       "grant_permissions": "Grant Permissions",
       "on_behalf_of": "On Behalf Of"
     }
-  }
+  },
+  "assignOwner": {
+    "title": "Assign Owner",
+    "description": "Assign a business owner with a specific role.",
+    "emailLabel": "User",
+    "emailPlaceholder": "user@example.com",
+    "nameLabel": "Display Name (optional)",
+    "namePlaceholder": "Jane Doe",
+    "roleLabel": "Role",
+    "rolePlaceholder": "Select a role...",
+    "assignedSuccess": "Owner assigned successfully.",
+    "errorAssigning": "Error assigning owner",
+    "ownerUserAria": "Owner user"
+  },
+  "versionFamily": {
+    "countBadge_one": "{{count}} version",
+    "countBadge_other": "{{count}} versions"
+  },
+  "cancel": "Cancel",
+  "copied": "Copied",
+  "copy": "Copy",
+  "create": "Create",
+  "delete": "Delete",
+  "edit": "Edit",
+  "error": "Error",
+  "home": "Home",
+  "refresh": "Refresh",
+  "retry": "Retry",
+  "save": "Save"
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,7 @@ export default function StatusTransitionDialog({
   onTransition,
   productName,
 }: StatusTransitionDialogProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [notes, setNotes] = useState('');
@@ -86,7 +88,7 @@ export default function StatusTransitionDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Change Product Status</DialogTitle>
+          <DialogTitle>{t('data-products:statusTransition.title')}</DialogTitle>
           <DialogDescription>
             Transition the lifecycle status of {productName || 'this data product'} (ODPS v1.0.0)
           </DialogDescription>
@@ -116,7 +118,7 @@ export default function StatusTransitionDialog({
           {/* Target Status Selection */}
           {allowedTransitions.length > 0 ? (
             <div className="space-y-3">
-              <Label className="text-base">Select Target Status <span className="text-destructive">*</span></Label>
+              <Label className="text-base">{t('data-products:statusTransition.selectTargetStatus')} <span className="text-destructive">*</span></Label>
               <RadioGroup value={selectedStatus} onValueChange={setSelectedStatus}>
                 {allowedTransitions.map((status) => {
                   const config = getStatusConfig(status);
@@ -156,7 +158,7 @@ export default function StatusTransitionDialog({
                 id="notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add notes about why this status change is being made..."
+                placeholder={t('data-products:statusTransition.notesPlaceholder')}
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">

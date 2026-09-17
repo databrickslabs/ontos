@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,34 +54,35 @@ interface RequestProductActionDialogProps {
   defaultRequestType?: RequestType;
 }
 
-// ODPS lifecycle transitions
+// ODPS lifecycle transitions — label values are i18n key suffixes under
+// data-products:requestAction.transitions.*; rendered via t() at the call site.
 const ALLOWED_TRANSITIONS: Record<string, { target: string; label: string }[]> = {
   'draft': [
-    { target: 'sandbox', label: 'Move to Sandbox' },
-    { target: 'proposed', label: 'Submit for Review' },
+    { target: 'sandbox', label: 'moveToSandbox' },
+    { target: 'proposed', label: 'submitForReview' },
   ],
   'sandbox': [
-    { target: 'draft', label: 'Return to Draft' },
-    { target: 'proposed', label: 'Submit for Review' },
+    { target: 'draft', label: 'returnToDraft' },
+    { target: 'proposed', label: 'submitForReview' },
   ],
   'proposed': [
-    { target: 'draft', label: 'Return to Draft' },
-    { target: 'under_review', label: 'Start Review' },
+    { target: 'draft', label: 'returnToDraft' },
+    { target: 'under_review', label: 'startReview' },
   ],
   'under_review': [
-    { target: 'approved', label: 'Approve' },
-    { target: 'draft', label: 'Reject (Return to Draft)' },
+    { target: 'approved', label: 'approve' },
+    { target: 'draft', label: 'rejectReturnToDraft' },
   ],
   'approved': [
-    { target: 'active', label: 'Publish/Activate' },
-    { target: 'draft', label: 'Return to Draft' },
+    { target: 'active', label: 'publishActivate' },
+    { target: 'draft', label: 'returnToDraft' },
   ],
   'active': [
-    { target: 'deprecated', label: 'Deprecate' },
+    { target: 'deprecated', label: 'deprecate' },
   ],
   'deprecated': [
-    { target: 'retired', label: 'Retire' },
-    { target: 'active', label: 'Reactivate' },
+    { target: 'retired', label: 'retire' },
+    { target: 'active', label: 'reactivate' },
   ],
   'retired': [],
 };
@@ -99,6 +101,7 @@ export default function RequestProductActionDialog({
   canDirectStatusChange = false,
   defaultRequestType = 'access'
 }: RequestProductActionDialogProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { post, get } = useApi();
   const { toast } = useToast();
   const { lookupWorkflowId } = useApprovalWizardTrigger();
@@ -540,10 +543,10 @@ export default function RequestProductActionDialog({
         <div className="space-y-4 py-4">
           {/* Request Type Selector */}
           <div className="space-y-2">
-            <Label htmlFor="request-type">Request Type</Label>
+            <Label htmlFor="request-type">{t('data-products:requestAction.labels.requestType')}</Label>
             <Select value={requestType} onValueChange={(value) => setRequestType(value as RequestType)}>
               <SelectTrigger id="request-type">
-                <SelectValue placeholder="Select request type" />
+                <SelectValue placeholder={t('data-products:requestAction.placeholders.selectRequestType')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="status_change">
@@ -589,8 +592,9 @@ export default function RequestProductActionDialog({
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                A multi-step wizard is configured for this request. Click
-                {' '}<strong>Continue</strong>{' '}to begin.
+                {t('data-products:requestAction.wizard.noticeBefore')}
+                {' '}<strong>{t('data-products:requestAction.buttons.continue')}</strong>{' '}
+                {t('data-products:requestAction.wizard.noticeAfter')}
               </AlertDescription>
             </Alert>
           )}
@@ -603,12 +607,12 @@ export default function RequestProductActionDialog({
                 <Label htmlFor="target-status">Target Status *</Label>
                 <Select value={targetStatus} onValueChange={setTargetStatus} disabled={submitting}>
                   <SelectTrigger id="target-status">
-                    <SelectValue placeholder="Select target status" />
+                    <SelectValue placeholder={t('data-products:requestAction.placeholders.selectTargetStatus')} />
                   </SelectTrigger>
                   <SelectContent>
                     {allowedTransitions.map((transition) => (
                       <SelectItem key={transition.target} value={transition.target}>
-                        {transition.label}
+                        {t(`data-products:requestAction.transitions.${transition.label}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -628,7 +632,7 @@ export default function RequestProductActionDialog({
                     id="status-justification"
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
-                    placeholder="Explain why this status change is needed and any relevant context..."
+                    placeholder={t('data-products:requestAction.placeholders.justification')}
                     className="min-h-[100px] resize-none"
                     disabled={submitting}
                   />
@@ -660,7 +664,7 @@ export default function RequestProductActionDialog({
                 id="review-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Add any notes for the reviewer..."
+                placeholder={t('data-products:requestAction.placeholders.reviewMessage')}
                 className="min-h-[80px] resize-none"
                 disabled={submitting}
               />
@@ -677,9 +681,9 @@ export default function RequestProductActionDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="domain">Domain</SelectItem>
-                    <SelectItem value="organization">Organization</SelectItem>
-                    <SelectItem value="external">External</SelectItem>
+                    <SelectItem value="domain">{t('common:labels.domain')}</SelectItem>
+                    <SelectItem value="organization">{t('data-products:requestAction.scopes.organization')}</SelectItem>
+                    <SelectItem value="external">{t('data-products:requestAction.scopes.external')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -689,7 +693,7 @@ export default function RequestProductActionDialog({
                   id="publish-justification"
                   value={justification}
                   onChange={(e) => setJustification(e.target.value)}
-                  placeholder="Why should this product be published?"
+                  placeholder={t('data-products:requestAction.placeholders.publishJustification')}
                   className="min-h-[80px] resize-none"
                   rows={3}
                   disabled={submitting}
@@ -708,7 +712,7 @@ export default function RequestProductActionDialog({
                   disabled={submitting}
                 >
                   <SelectTrigger id="cert-level">
-                    <SelectValue placeholder="Select certification level" />
+                    <SelectValue placeholder={t('data-products:requestAction.placeholders.selectCertLevel')} />
                   </SelectTrigger>
                   <SelectContent>
                     {certificationLevels.map((l) => (
@@ -725,7 +729,7 @@ export default function RequestProductActionDialog({
                   id="cert-message"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Why should this product be certified?"
+                  placeholder={t('data-products:requestAction.placeholders.certMessage')}
                   rows={3}
                   className="min-h-[80px] resize-none"
                   disabled={submitting}

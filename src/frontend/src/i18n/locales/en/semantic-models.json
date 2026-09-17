@@ -54,7 +54,8 @@
     "groupByDomain": "Group by Domain",
     "allTypes": "All Types",
     "allScopes": "All Scopes",
-    "allCollections": "All Collections"
+    "allCollections": "All Collections",
+    "labelLanguage": "Label Language"
   },
   "groupBy": {
     "collection": "By Collection",
@@ -134,7 +135,8 @@
     "childConcepts": "Child Concepts",
     "scope": "Scope",
     "concepts": "Concepts",
-    "source": "Source"
+    "source": "Source",
+    "sourceUrl": "Source URL"
   },
   "form": {
     "createTitle": "Create Term",
@@ -159,7 +161,8 @@
   },
   "badges": {
     "imported": "Imported",
-    "custom": "Custom"
+    "custom": "Custom",
+    "readonly": "Read-only"
   },
   "links": {
     "outgoing": "Outgoing Links",
@@ -217,5 +220,93 @@
       "appEntities": "App Entities",
       "demoGraph": "Demo business concepts"
     }
+  },
+  "import": {
+    "chooseFile": "Choose file…",
+    "file": "File",
+    "noEditableCollections": "No editable collections available. Create one first.",
+    "selectCollection": "Select a collection…",
+    "submit": "Import",
+    "success": "Import successful",
+    "supportedFormats": "Supported: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "targetCollection": "Target Collection",
+    "title": "Import Concepts"
+  },
+  "propertyTypes": {
+    "object": "Object Property",
+    "datatype": "Datatype Property",
+    "annotation": "Annotation Property"
+  },
+  "conceptEditor": {
+    "editTitle": "Edit Concept",
+    "createDescription": "Create a new term or concept in the collection.",
+    "collectionLabel": "Collection",
+    "selectCollectionPlaceholder": "Select collection...",
+    "selectTypePlaceholder": "Select type...",
+    "label": "Label",
+    "labelPlaceholder": "e.g., Revenue",
+    "definitionPlaceholder": "A clear, concise definition...",
+    "propertyConfiguration": "Property Configuration",
+    "propertyType": "Property Type",
+    "selectPropertyTypePlaceholder": "Select property type...",
+    "domainPlaceholder": "e.g., schema:Person or IRI...",
+    "domainHelp": "The class or type this property applies to (subject)",
+    "rangeDatatypePlaceholder": "e.g., xsd:string, xsd:integer...",
+    "rangeObjectPlaceholder": "e.g., schema:Organization or IRI...",
+    "rangeDatatypeHelp": "The datatype of the property value",
+    "rangeObjectHelp": "The class or type of the property value (object)",
+    "addSynonymPlaceholder": "Add synonym...",
+    "addExamplePlaceholder": "Add example...",
+    "certified": "Certified",
+    "expires": "Expires",
+    "promotedFrom": "Promoted from",
+    "migratedFrom": "Migrated from",
+    "history": "History",
+    "submitForReview": "Submit for Review",
+    "typeDescriptions": {
+      "concept": "A general term or notion (SKOS Concept)",
+      "class": "A category or type (RDFS/OWL Class)",
+      "property": "A relationship or attribute (RDF Property)",
+      "individual": "A specific instance (OWL Individual)",
+      "term": "A business glossary term"
+    },
+    "propertyTypeDescriptions": {
+      "object": "Relates to other concepts",
+      "datatype": "Relates to literal values",
+      "annotation": "Metadata annotation"
+    }
+  },
+  "collectionEditor": {
+    "editTitle": "Edit Collection",
+    "createDescription": "Create a new glossary, taxonomy, or ontology collection.",
+    "editDescription": "Update collection settings.",
+    "namePlaceholder": "e.g., Finance Glossary",
+    "descriptionPlaceholder": "Optional description...",
+    "parentCollection": "Parent Collection",
+    "noneRootCollection": "None (root collection)",
+    "editable": "Editable",
+    "editableHelp": "Allow creating and editing concepts in this collection"
+  },
+  "promotion": {
+    "promoteConcept": "Promote Concept",
+    "demoteConcept": "Demote Concept",
+    "migrateConcept": "Migrate Concept",
+    "move": "Move",
+    "toDifferentCollection": "to a different collection",
+    "actionLabel": "Action",
+    "promote": "Promote",
+    "migrate": "Migrate",
+    "currentLocation": "Current Location",
+    "selectTargetPlaceholder": "Select target collection...",
+    "newIri": "New IRI",
+    "sourceConcept": "Source Concept",
+    "deprecateOriginal": "Deprecate original (recommended)",
+    "deleteOriginal": "Delete original",
+    "deleteHelp": "Only draft concepts can be deleted. Published concepts will be deprecated.",
+    "promoteWarning": "Promoted concepts require re-approval at the new scope level."
+  },
+  "collectionTree": {
+    "readOnly": "Read-only collection",
+    "noCollectionsYet": "No collections yet"
   }
 }

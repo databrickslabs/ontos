@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -20,6 +21,7 @@ export default function DqxSchemaSelectDialog({
   contract,
   onConfirm
 }: DqxSchemaSelectDialogProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const [selectedSchemas, setSelectedSchemas] = useState<Set<string>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -45,7 +47,7 @@ export default function DqxSchemaSelectDialog({
 
   const handleConfirm = async () => {
     if (selectedSchemas.size === 0) return
-    
+
     setIsSubmitting(true)
     try {
       await onConfirm(Array.from(selectedSchemas))
@@ -69,10 +71,10 @@ export default function DqxSchemaSelectDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            Profile Schemas with DQX
+            {t('data-contracts:dqx.title', 'Profile Schemas with DQX')}
           </DialogTitle>
           <DialogDescription>
-            Select schemas to profile using Databricks DQX. The profiler will analyze your data and generate quality check suggestions.
+            {t('data-contracts:dqx.description', 'Select schemas to profile using Databricks DQX. The profiler will analyze your data and generate quality check suggestions.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -81,20 +83,20 @@ export default function DqxSchemaSelectDialog({
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                No schemas defined in this contract. Add schemas first before profiling.
+                {t('data-contracts:dqx.noSchemas', 'No schemas defined in this contract. Add schemas first before profiling.')}
               </AlertDescription>
             </Alert>
           ) : (
             <>
               <div className="flex items-center justify-between border-b pb-2">
-                <Label className="font-semibold">Available Schemas</Label>
+                <Label className="font-semibold">{t('data-contracts:dqx.availableSchemas', 'Available Schemas')}</Label>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={handleSelectAll}
                 >
-                  {selectedSchemas.size === schemas.length ? 'Deselect All' : 'Select All'}
+                  {selectedSchemas.size === schemas.length ? t('data-contracts:dqx.deselectAll', 'Deselect All') : t('data-contracts:dqx.selectAll', 'Select All')}
                 </Button>
               </div>
 
@@ -124,7 +126,7 @@ export default function DqxSchemaSelectDialog({
                           </div>
                         )}
                         <div className="text-xs text-muted-foreground mt-1">
-                          {columnCount} {columnCount === 1 ? 'column' : 'columns'}
+                          {t('data-contracts:dqx.columnCount', { count: columnCount, defaultValue: '{{count}} columns' })}
                         </div>
                       </div>
                     </div>
@@ -137,17 +139,16 @@ export default function DqxSchemaSelectDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={selectedSchemas.size === 0 || isSubmitting}
           >
-            {isSubmitting ? 'Starting...' : `Profile ${selectedSchemas.size} ${selectedSchemas.size === 1 ? 'Schema' : 'Schemas'}`}
+            {isSubmitting ? t('data-contracts:dqx.starting', 'Starting...') : t('data-contracts:dqx.profileButton', { count: selectedSchemas.size, defaultValue: 'Profile {{count}} Schemas' })}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
-

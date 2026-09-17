@@ -23,6 +23,7 @@
  *    what the user sees in the checkbox rows.
  */
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
@@ -86,6 +87,7 @@ export function EntityTypeMultiselect({
   onChange,
   supportedEntityTypes,
 }: EntityTypeMultiselectProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   // Auto-default: if there is exactly one supported entity type and the
   // user hasn't picked anything, prefill it. Keeps the picker visible so
   // the choice is auditable, but spares the user a redundant click.
@@ -101,9 +103,9 @@ export function EntityTypeMultiselect({
   if (supportedEntityTypes.length === 0) {
     return (
       <div className="space-y-1">
-        <Label>{ENTITY_TYPE_MULTISELECT_LABEL}</Label>
+        <Label>{t('workflows:entityTypeSelect.label', ENTITY_TYPE_MULTISELECT_LABEL)}</Label>
         <p className="text-xs text-muted-foreground">
-          This trigger fires regardless of entity type.
+          {t('workflows:entityTypeSelect.firesRegardless')}
         </p>
       </div>
     );
@@ -119,9 +121,9 @@ export function EntityTypeMultiselect({
 
   return (
     <div className="space-y-1">
-      <Label>{ENTITY_TYPE_MULTISELECT_LABEL}</Label>
+      <Label>{t('workflows:entityTypeSelect.label', ENTITY_TYPE_MULTISELECT_LABEL)}</Label>
       <p className="text-xs text-muted-foreground">
-        {ENTITY_TYPE_MULTISELECT_HELPER}
+        {t('workflows:entityTypeSelect.helper', ENTITY_TYPE_MULTISELECT_HELPER)}
       </p>
       <div className="flex flex-col gap-1 rounded-md border p-2">
         {supportedEntityTypes.map((et) => {

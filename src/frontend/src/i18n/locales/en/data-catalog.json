@@ -7,21 +7,19 @@
   "noTablesAccessible": "No tables accessible in Unity Catalog",
   "showingColumns": "Showing {{count}} columns",
   "matchingSearch": "matching",
-  
   "columns": {
     "label": "Label",
     "description": "Description",
     "columnName": "Column Name",
     "type": "Type",
-    "tableName": "Table"
+    "tableName": "Table",
+    "businessTerms": "Business Terms"
   },
-  
   "tabs": {
     "overview": "Overview",
     "dataDetails": "Data Details",
     "lineage": "Lineage"
   },
-  
   "overview": {
     "basicInfo": "Basic Information",
     "catalog": "Catalog",
@@ -39,16 +37,13 @@
     "description": "Description",
     "tags": "Tags"
   },
-  
   "dataDetails": {
     "title": "Columns",
-    "description": "Column definitions and metadata",
+    "description": "Description",
     "columnName": "Column Name",
     "type": "Type",
-    "nullable": "Nullable",
-    "description": "Description"
+    "nullable": "Nullable"
   },
-  
   "lineage": {
     "title": "Data Lineage",
     "description": "Visualize upstream and downstream dependencies",
@@ -62,10 +57,8 @@
     "impactWarning": "Changes to this table may affect:",
     "notifyOwners": "Owners to notify"
   },
-  
   "errors": {
     "fetchFailed": "Failed to fetch data",
     "tableNotFound": "Table not found"
   }
 }
-

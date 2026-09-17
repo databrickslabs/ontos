@@ -28,7 +28,13 @@ defaults:
 jobs:
   build:
     name: Build Docusaurus site
-    runs-on: ubuntu-latest
+    # Must run on the protected runner group: the databrickslabs org has an IP
+    # allow list, and stock GitHub-hosted runner IPs are not on it, so any
+    # GitHub API call from ubuntu-latest fails with "your IP address is not
+    # permitted to access this resource".
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -54,7 +60,11 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    runs-on: ubuntu-latest
+    # Protected runner group required here too: actions/deploy-pages calls the
+    # GitHub Pages API, which the org IP allow list blocks from ubuntu-latest.
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

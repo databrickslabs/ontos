@@ -404,7 +404,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     const fetchAndCompileSchema = async () => {
       if (!isOpen || dataProductSchema || !ajv.current) return; // Only fetch if open and not already loaded
       setIsSchemaLoading(true);
-      setValidationStatusMessage("Loading schema...");
+      setValidationStatusMessage(t('data-products:form.validation.loadingSchema'));
       setSchemaValidationErrors(null);
       try {
         const response = await get<object>(`/api/metadata/schemas/${schemaName}`);
@@ -412,17 +412,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         setDataProductSchema(schema);
         const validate = ajv.current.compile(schema);
         setSchemaValidator(() => validate);
-        setValidationStatusMessage("Schema ready.");
+        setValidationStatusMessage(t('data-products:form.validation.schemaReady'));
       } catch (err: any) {
         console.error("Error fetching or compiling schema:", err);
-        setValidationStatusMessage(`Error loading schema: ${err.message}`);
-        toast({ title: 'Schema Error', description: `Could not load schema: ${err.message}`, variant: 'destructive' });
+        setValidationStatusMessage(t('data-products:form.messages.couldNotLoadSchema', { message: err.message }));
+        toast({ title: t('data-products:form.validation.schemaError'), description: t('data-products:form.messages.couldNotLoadSchema', { message: err.message }), variant: 'destructive' });
       } finally {
         setIsSchemaLoading(false);
       }
     };
     fetchAndCompileSchema();
-  }, [isOpen, get, dataProductSchema, toast]); // Add toast to dependencies
+  }, [isOpen, get, dataProductSchema, toast, t]); // Add toast to dependencies
 
   // Effect to load product data when dialog opens in edit mode
   useEffect(() => {
@@ -480,8 +480,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
         } catch (err: any) {
           console.error('Error loading product for editing:', err);
-          setFormError(`Failed to load product details: ${err.message}`);
-          toast({ title: "Error Loading Data", description: `Could not fetch details. ${err.message}`, variant: "destructive" });
+          setFormError(t('data-products:form.messages.failedToLoadDetails', { message: err.message }));
+          toast({ title: t('data-products:form.messages.errorLoadingData'), description: t('data-products:form.messages.couldNotFetchDetails', { message: err.message }), variant: "destructive" });
           // Maybe close the dialog if loading fails critically?
           // onOpenChange(false);
         } finally {
@@ -507,7 +507,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
     loadProductForEdit();
 
-  }, [isOpen, isEditMode, initialProduct, get, reset, toast, schemaValidator, fetchUserProjects]); // Dependencies
+  }, [isOpen, isEditMode, initialProduct, get, reset, toast, schemaValidator, fetchUserProjects, t]); // Dependencies
 
   // Set default project when creating new product and currentProject is available
   useEffect(() => {
@@ -574,7 +574,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   // Validate product object against schema
   const validateProductObject = (data: any): boolean => {
     if (!schemaValidator) {
-      setValidationStatusMessage("Schema not ready.");
+      setValidationStatusMessage(t('data-products:form.validation.schemaNotReady'));
       setIsJsonValid(false); // Assume invalid if no validator
       setSchemaValidationErrors(null);
       return false;
@@ -585,7 +585,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
     const isValid = schemaValidator(data);
     if (isValid) {
-       setValidationStatusMessage("Schema Valid");
+       setValidationStatusMessage(t('data-products:form.validation.schemaValid'));
        setIsJsonValid(true);
        setSchemaValidationErrors(null);
     } else {
@@ -593,7 +593,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
        const errors = schemaValidator.errors ?? [];
        setSchemaValidationErrors(errors);
        const errorCount = errors.length;
-       setValidationStatusMessage(`${errorCount} schema validation error(s)`); 
+       setValidationStatusMessage(t('data-products:form.validation.schemaErrors', { count: errorCount }));
     }
     return isValid;
   };
@@ -614,7 +614,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     } catch (error: any) {
       setIsJsonValid(false);
       setJsonParseError(error.message); // Set specific parse error
-      setValidationStatusMessage("Invalid JSON syntax");
+      setValidationStatusMessage(t('data-products:form.validation.invalidJsonSyntax'));
       setSchemaValidationErrors(null); // Clear schema errors if syntax is wrong
     }
   };
@@ -648,8 +648,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
            setActiveTab('json');
          } catch (err: any) {
            console.error("Error preparing JSON from UI state:", err);
-           setJsonParseError("Failed to serialize UI state to JSON.");
-           toast({ title: "Sync Error", description: "Could not sync UI state to JSON editor.", variant: "destructive" });
+           setJsonParseError(t('data-products:form.messages.failedToSerialize'));
+           toast({ title: t('data-products:form.messages.syncError'), description: t('data-products:form.messages.couldNotSyncUiToJson'), variant: "destructive" });
          }
       })(); // Immediately invoke handleSubmit
 
@@ -662,9 +662,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
          
          // Validate before attempting to reset the form
          if (!validateProductObject(parsedData)) {
-             toast({ 
-                 title: "Invalid JSON", 
-                 description: "Cannot switch to UI editor. Please fix schema validation errors first.",
+             toast({
+                 title: t('data-products:form.messages.invalidJson'),
+                 description: t('data-products:form.messages.invalidJsonDescription'),
                  variant: "destructive"
              });
              return; // Prevent switching tabs
@@ -720,9 +720,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
        } catch (error: any) {
           setIsJsonValid(false);
-          setJsonParseError(`Invalid JSON: ${error.message}`);
-          setValidationStatusMessage("Invalid JSON syntax");
-          toast({ title: "Sync Error", description: `Could not parse JSON: ${error.message}`, variant: "destructive" });
+          setJsonParseError(t('data-products:form.messages.invalidJsonError', { message: error.message }));
+          setValidationStatusMessage(t('data-products:form.validation.invalidJsonSyntax'));
+          toast({ title: t('data-products:form.messages.syncError'), description: t('data-products:form.messages.couldNotParseJson', { message: error.message }), variant: "destructive" });
        }
     }
   };
@@ -746,8 +746,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
     // Re-validate the cleaned payload before submitting
     if (!validateProductObject(payload)) {
-        setFormError("Data failed schema validation. Please check the highlighted fields or the JSON editor.");
-        toast({ title: "Validation Error", description: "Please fix validation errors before saving.", variant: "destructive" });
+        setFormError(t('data-products:form.validation.dataFailedValidation'));
+        toast({ title: t('data-products:form.messages.validationError'), description: t('data-products:form.messages.pleaseFixValidation'), variant: "destructive" });
         setActiveTab('json'); // Switch to JSON tab to show errors easily
         // Update jsonString state to reflect the *cleaned* payload causing validation errors
         setJsonString(JSON.stringify(payload, null, 2));
@@ -780,15 +780,15 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
             result = checkApiResponse(response, 'Create Product');
         }
 
-        toast({ title: 'Success', description: `Data product ${isEditMode ? 'updated' : 'created'}.` });
+        toast({ title: t('data-products:messages.success'), description: isEditMode ? t('data-products:form.updateSuccess') : t('data-products:form.createSuccess') });
         onSubmitSuccess(result); // Call the success callback from parent
         onOpenChange(false); // Close dialog on success
 
     } catch (err: any) {
         console.error('Error submitting product form:', err);
-        const errorMsg = err.message || 'An unexpected error occurred.';
+        const errorMsg = err.message || t('data-products:form.messages.unexpectedError');
         setFormError(errorMsg);
-        toast({ title: 'Save Error', description: errorMsg, variant: 'destructive' });
+        toast({ title: t('data-products:form.messages.saveError'), description: errorMsg, variant: 'destructive' });
     }
   };
 
@@ -806,8 +806,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
       const parsedData = JSON.parse(jsonString);
       // Validate structure first
       if (!validateProductObject(parsedData)) {
-        toast({ title: "Validation Error", description: "JSON data failed schema validation. Cannot save.", variant: "destructive" });
-        return; 
+        toast({ title: t('data-products:form.messages.validationError'), description: t('data-products:form.messages.jsonDataFailedValidation'), variant: "destructive" });
+        return;
       }
       // Pass the parsed and validated JSON data to the submit logic
       await performSubmit(parsedData); 
@@ -815,10 +815,10 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     } catch (error: any) {
       console.error("Error submitting JSON:", error);
       setIsJsonValid(false);
-      const errorMsg = `Invalid JSON: ${error.message}`;
+      const errorMsg = t('data-products:form.messages.invalidJsonError', { message: error.message });
       setJsonParseError(errorMsg);
       setFormError(errorMsg); // Show error in form area too
-      toast({ title: "Save Error", description: errorMsg, variant: "destructive" });
+      toast({ title: t('data-products:form.messages.saveError'), description: errorMsg, variant: "destructive" });
     }
   };
 
@@ -826,7 +826,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   const handleCloseDialog = (open: boolean) => {
      if (!open) {
        if (isDirty) { // Check if form has unsaved changes
-          if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+          if (!confirm(t('data-products:form.confirmUnsavedClose'))) {
              return; // Prevent closing
           }
        }
@@ -856,17 +856,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {isEditMode ? 'Edit Data Product' : 'Create Data Product'}
+            {isEditMode ? t('data-products:form.editTitle') : t('data-products:form.createTitle')}
           </DialogTitle>
           <DialogDescription>
-              Fill in the details for the data product. Use the tabs to switch between UI and JSON editors.
+              {t('data-products:form.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
         
         {isLoadingProduct ? (
             <div className="flex justify-center items-center h-[60vh]">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Loading product details...</p>
+              <p className="ml-2">{t('data-products:form.loadingDetails')}</p>
             </div>
          ) : (
             <Tabs 
@@ -887,11 +887,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* ID and Spec Version */} 
                           <div className="grid grid-cols-2 gap-4">
                               <div>
-                                <Label htmlFor="productId">ID (unique identifier)</Label>
-                                <Input 
-                                  id="productId" 
-                                  {...register("id")} 
-                                  placeholder={isEditMode ? "(System ID)" : "e.g., my-unique-product (optional)"}
+                                <Label htmlFor="productId">{t('data-products:form.fields.id')}</Label>
+                                <Input
+                                  id="productId"
+                                  {...register("id")}
+                                  placeholder={isEditMode ? t('data-products:form.placeholders.systemId') : t('data-products:form.placeholders.productIdOptional')}
                                   disabled={isEditMode} // Disable ID editing for existing products
                                   className={isEditMode ? "bg-muted" : ""}
                                 />
@@ -922,27 +922,27 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                             <CardContent className="space-y-4">
                               <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="info.title">Title *</Label>
-                                    <Input id="info.title" {...register("info.title", { required: "Title is required" })} />
+                                    <Label htmlFor="info.title">{t('data-products:form.fields.title')}</Label>
+                                    <Input id="info.title" {...register("info.title", { required: t('data-products:form.validation.titleRequired') })} />
                                     {errors.info?.title && <p className="text-sm text-red-600 mt-1">{errors.info.title.message}</p>}
                                   </div>
                                   <div>
-                                    <Label htmlFor="info.owner">Owner *</Label>
-                                      {/* TODO: Consider using a Select if owners prop is populated and meant for dropdown */} 
-                                      <Input 
-                                        id="info.owner" 
-                                        {...register("info.owner", { required: "Owner is required" })} 
+                                    <Label htmlFor="info.owner">{t('data-products:form.fields.owner')}</Label>
+                                      {/* TODO: Consider using a Select if owners prop is populated and meant for dropdown */}
+                                      <Input
+                                        id="info.owner"
+                                        {...register("info.owner", { required: t('data-products:form.validation.ownerRequired') })}
                                       />
                                     {errors.info?.owner && <p className="text-sm text-red-600 mt-1">{errors.info.owner.message}</p>}
                                   </div>
                               </div>
                               {/* Product Type Field */} 
                               <div>
-                                  <Label htmlFor="productType">Product Type *</Label>
+                                  <Label htmlFor="productType">{t('data-products:form.fields.productType')}</Label>
                                   <Controller
                                       name="productType"
                                       control={control}
-                                      rules={{ required: "Product Type is required" }}
+                                      rules={{ required: t('data-products:form.validation.productTypeRequired') }}
                                       render={({ field }) => (
                                           <Select 
                                               onValueChange={(value) => field.onChange(value === '' ? undefined : value)} 
@@ -975,7 +975,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                   <SelectItem value="_none">{t('common:states.none')}</SelectItem>
                                                   {availableProjects.map(project => (
                                                       <SelectItem key={project.id} value={project.id}>
-                                                          {project.name} ({project.team_count} teams)
+                                                          {project.name} {t('data-products:form.projectTeamCount', { count: project.team_count })}
                                                       </SelectItem>
                                                   ))}
                                               </SelectContent>
@@ -983,7 +983,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       )}
                                   />
                                   <p className="text-xs text-muted-foreground mt-1">
-                                      You can only select projects you are a member of
+                                      {t('data-products:form.projectMemberHint')}
                                   </p>
                               </div>
                               <div className="grid grid-cols-2 gap-4">
@@ -1058,22 +1058,22 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       <div className="space-y-3">
                                         <div className="grid grid-cols-2 gap-4">
                                           <div>
-                                            <Label htmlFor={`inputPorts.${index}.id`}>Consumable ID *</Label>
-                                            <Input {...register(`inputPorts.${index}.id`, { required: "Consumable ID is required" })} />
+                                            <Label htmlFor={`inputPorts.${index}.id`}>{t('data-products:form.consumable.idLabel')}</Label>
+                                            <Input {...register(`inputPorts.${index}.id`, { required: t('data-products:form.consumable.idRequired') })} />
                                             {errors.inputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].id?.message}</p>}
                                           </div>
                                           <div>
-                                              <Label htmlFor={`inputPorts.${index}.name`}>Consumable Name *</Label>
-                                              <Input {...register(`inputPorts.${index}.name`, { required: "Consumable Name is required" })} />
+                                              <Label htmlFor={`inputPorts.${index}.name`}>{t('data-products:form.consumable.nameLabel')}</Label>
+                                              <Input {...register(`inputPorts.${index}.name`, { required: t('data-products:form.consumable.nameRequired') })} />
                                               {errors.inputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].name?.message}</p>}
                                           </div>
                                         </div>
                                         <div>
-                                          <Label htmlFor={`inputPorts.${index}.sourceSystemId`}>Source Table (Metastore) *</Label>
+                                          <Label htmlFor={`inputPorts.${index}.sourceSystemId`}>{t('data-products:form.consumable.sourceTableLabel')}</Label>
                                           <Controller
                                               name={`inputPorts.${index}.sourceSystemId`}
                                               control={control}
-                                              rules={{ required: "Source Table is required" }}
+                                              rules={{ required: t('data-products:form.consumable.sourceTableRequired') }}
                                               render={({ field: controllerField }) => (
                                                 <Popover open={isComboboxOpen[field.id] ?? false} onOpenChange={(open) => handleComboboxOpenChange(open, field.id)}>
                                                   <PopoverTrigger asChild>
@@ -1083,7 +1083,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                         aria-expanded={isComboboxOpen[field.id] ?? false}
                                                         className="w-full justify-between font-normal"
                                                       >
-                                                        {controllerField.value || "Select source table..."}
+                                                        {controllerField.value || t('data-products:form.consumable.selectSourceTable')}
                                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                       </Button>
                                                     </PopoverTrigger>
@@ -1096,7 +1096,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                           />
                                                           <CommandList>
                                                             <CommandEmpty>
-                                                                {isSearchingTables ? "Searching..." : "No tables found."}
+                                                                {isSearchingTables ? t('data-products:form.consumable.searching') : t('data-products:form.consumable.noTablesFound')}
                                                             </CommandEmpty>
                                                             <CommandGroup>
                                                               {tableSearchResults.map((table) => (
@@ -1159,7 +1159,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                     type="button" variant="outline" 
                                     onClick={() => appendInputPort({ 
                                         id: `input-${inputPortFields.length + 1}`,
-                                        name: 'New Consumable',
+                                        name: t('data-products:form.consumable.defaultName'),
                                         version: '1.0.0', // Required ODPS field
                                         contractId: '', // Required ODPS field
                                         sourceSystemId: '',
@@ -1187,13 +1187,13 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                        <div className="space-y-3">
                                           <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                              <Label htmlFor={`outputPorts.${index}.id`}>Deliverable ID *</Label>
-                                              <Input {...register(`outputPorts.${index}.id`, { required: "Deliverable ID is required" })} />
+                                              <Label htmlFor={`outputPorts.${index}.id`}>{t('data-products:form.deliverable.idLabel')}</Label>
+                                              <Input {...register(`outputPorts.${index}.id`, { required: t('data-products:form.deliverable.idRequired') })} />
                                               {errors.outputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].id?.message}</p>}
                                             </div>
                                             <div>
-                                                <Label htmlFor={`outputPorts.${index}.name`}>Deliverable Name *</Label>
-                                                <Input {...register(`outputPorts.${index}.name`, { required: "Deliverable Name is required" })} />
+                                                <Label htmlFor={`outputPorts.${index}.name`}>{t('data-products:form.deliverable.nameLabel')}</Label>
+                                                <Input {...register(`outputPorts.${index}.name`, { required: t('data-products:form.deliverable.nameRequired') })} />
                                                 {errors.outputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].name?.message}</p>}
                                             </div>
                                           </div>
@@ -1232,7 +1232,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                   type="button" variant="outline" 
                                   onClick={() => appendOutputPort({ 
                                       id: `output-${outputPortFields.length + 1}`,
-                                      name: 'New Deliverable',
+                                      name: t('data-products:form.deliverable.defaultName'),
                                       version: '1.0.0', // Required ODPS field
                                       description: '',
                                       type: 'table', 
@@ -1271,7 +1271,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                             <CardHeader>
                               <CardTitle>{t('data-products:form.sections.consumerGroups')}</CardTitle>
                               <CardDescription>
-                                Workspace groups that represent the expected consumers of this product. Each entry is stored as a typed principal <code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>; surfaced to subscribe webhooks via <code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
+                                {t('data-products:form.sections.consumerGroupsDescriptionPart1')}<code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>{t('data-products:form.sections.consumerGroupsDescriptionPart2')}<code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
                               </CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -1399,7 +1399,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                       disabled={isSubmitting || isLoadingProduct}
                     >
                       {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                      {isSubmitting ? "Saving..." : (isEditMode ? 'Update Product' : 'Create Product')}
+                      {isSubmitting ? t('data-products:form.saving') : (isEditMode ? t('data-products:form.buttons.updateProduct') : t('data-products:form.buttons.createProduct'))}
                     </Button>
                   </DialogFooter>
                 </TabsContent>
@@ -1433,10 +1433,10 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                        {/* Status/Error Display Area */} 
                        <div className="text-sm min-h-[40px]"> 
                           {jsonParseError ? (
-                              <p className="text-destructive">Syntax Error: {jsonParseError}</p>
+                              <p className="text-destructive">{t('data-products:form.syntaxErrorLabel')} {jsonParseError}</p>
                           ) : validationStatusMessage && (
                               <p className={cn(isJsonValid ? "text-green-600" : "text-destructive")}>
-                                Validation Status: {validationStatusMessage}
+                                {t('data-products:form.validationStatusLabel')} {validationStatusMessage}
                               </p>
                           )}
                        </div>
@@ -1445,7 +1445,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                            <Accordion type="single" collapsible className="w-full border-t pt-2 pb-2"> {/* Add pb-2 for spacing before footer */} 
                              <AccordionItem value="item-1" className="border-b-0">
                                <AccordionTrigger className="text-sm text-destructive hover:no-underline py-1">
-                                   Show {schemaValidationErrors.length} validation details
+                                   {t('data-products:form.showValidationDetails', { count: schemaValidationErrors.length })}
                                </AccordionTrigger>
                                <AccordionContent>
                                  <ScrollArea className="max-h-[150px] w-full rounded-md border bg-muted">
@@ -1468,7 +1468,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                         disabled={isSubmitting || isLoadingProduct || !isJsonValid || !!jsonParseError}
                       >
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                        {isSubmitting ? "Saving..." : (isEditMode ? 'Update via JSON' : 'Create via JSON')}
+                        {isSubmitting ? t('data-products:form.saving') : (isEditMode ? t('data-products:form.buttons.updateViaJson') : t('data-products:form.buttons.createViaJson'))}
                     </Button>
                   </DialogFooter>
                 </TabsContent>

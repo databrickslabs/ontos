@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -44,10 +45,13 @@ import { useProjectContext } from '@/stores/project-store';
 
 const productTypes = ['source', 'source-aligned', 'aggregate', 'consumer-aligned', 'sink'] as const;
 
-const dataProductCreateSchema = z.object({
-  name: z.string().min(1, 'Product name is required'),
-  version: z.string().min(1, 'Version is required'),
-  status: z.string().min(1, 'Status is required'),
+// Schema factory so zod validation messages can be translated. The message
+// strings are the only i18n-dependent part; the shape (and thus the inferred
+// FormData type) is identical regardless of the passed t().
+const buildDataProductCreateSchema = (t: TFunction) => z.object({
+  name: z.string().min(1, t('data-products:createDialog.validation.nameRequired')),
+  version: z.string().min(1, t('data-products:createDialog.validation.versionRequired')),
+  status: z.string().min(1, t('data-products:createDialog.validation.statusRequired')),
   productType: z.enum(productTypes).optional(),
   ownerTeamId: z.string().optional(),
   projectId: z.string().optional(),
@@ -63,7 +67,7 @@ const dataProductCreateSchema = z.object({
     .optional(),
 });
 
-type FormData = z.infer<typeof dataProductCreateSchema>;
+type FormData = z.infer<ReturnType<typeof buildDataProductCreateSchema>>;
 
 interface DataProductCreateDialogProps {
   open: boolean;
@@ -86,6 +90,8 @@ export default function DataProductCreateDialog({
   const { currentProject, availableProjects, isLoading: projectsLoading, fetchUserProjects } = useProjectContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  const dataProductCreateSchema = useMemo(() => buildDataProductCreateSchema(t), [t]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(dataProductCreateSchema),
@@ -231,7 +237,7 @@ export default function DataProductCreateDialog({
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.detail || 'Failed to update data product');
+          throw new Error(error.detail || t('data-products:form.updateError'));
         }
 
         const updatedProduct: DataProduct = await response.json();
@@ -299,7 +305,7 @@ export default function DataProductCreateDialog({
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.detail || 'Failed to create data product');
+          throw new Error(error.detail || t('data-products:form.createError'));
         }
 
         const createdProduct: DataProduct = await response.json();
@@ -566,7 +572,7 @@ export default function DataProductCreateDialog({
           <div className="space-y-2 border-t pt-4">
             <Label>{t('data-products:createDialog.consumerGroupsLabel')}</Label>
             <p className="text-xs text-muted-foreground">
-              Workspace groups that represent the expected consumers of this product. Each entry is stored as a typed principal <code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>; surfaced to subscribe webhooks via <code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
+              {t('data-products:form.sections.consumerGroupsDescriptionPart1')}<code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>{t('data-products:form.sections.consumerGroupsDescriptionPart2')}<code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
             </p>
             <Controller
               name="consumer_principals"

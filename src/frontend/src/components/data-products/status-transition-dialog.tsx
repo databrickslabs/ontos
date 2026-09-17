@@ -43,8 +43,8 @@ export default function StatusTransitionDialog({
   const handleSubmit = async () => {
     if (!selectedStatus) {
       toast({
-        title: 'Validation Error',
-        description: 'Please select a target status',
+        title: t('data-products:statusTransition.toast.validationError'),
+        description: t('data-products:statusTransition.toast.selectTargetStatus'),
         variant: 'destructive',
       });
       return;
@@ -54,7 +54,7 @@ export default function StatusTransitionDialog({
     const validation = validateTransition(currentStatus, selectedStatus);
     if (!validation.valid) {
       toast({
-        title: 'Invalid Transition',
+        title: t('data-products:statusTransition.toast.invalidTransition'),
         description: validation.error,
         variant: 'destructive',
       });
@@ -69,8 +69,8 @@ export default function StatusTransitionDialog({
       setNotes('');
     } catch (error: any) {
       toast({
-        title: 'Transition Failed',
-        description: error?.message || 'Failed to update product status',
+        title: t('data-products:statusTransition.toast.transitionFailed'),
+        description: error?.message || t('data-products:statusTransition.toast.failedToUpdate'),
         variant: 'destructive',
       });
     } finally {
@@ -90,7 +90,7 @@ export default function StatusTransitionDialog({
         <DialogHeader>
           <DialogTitle>{t('data-products:statusTransition.title')}</DialogTitle>
           <DialogDescription>
-            Transition the lifecycle status of {productName || 'this data product'} (ODPS v1.0.0)
+            {t('data-products:statusTransition.description', { name: productName || t('data-products:statusTransition.thisProduct') })}
           </DialogDescription>
         </DialogHeader>
 
@@ -98,7 +98,7 @@ export default function StatusTransitionDialog({
           {/* Current Status */}
           <div className="rounded-lg border bg-muted/50 p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Label className="text-base font-semibold">Current Status:</Label>
+              <Label className="text-base font-semibold">{t('data-products:statusTransition.currentStatus')}</Label>
               <span className="text-2xl">{currentConfig.icon}</span>
               <span className="font-medium">{currentConfig.label}</span>
             </div>
@@ -110,7 +110,7 @@ export default function StatusTransitionDialog({
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                <strong>Recommended:</strong> {recommendedAction}
+                <strong>{t('data-products:statusTransition.recommended')}</strong> {recommendedAction}
               </AlertDescription>
             </Alert>
           )}
@@ -144,8 +144,7 @@ export default function StatusTransitionDialog({
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <strong>Terminal State:</strong> No transitions available from {currentConfig.label} status.
-                This product cannot be changed to any other status.
+                <strong>{t('data-products:statusTransition.terminalState')}</strong> {t('data-products:statusTransition.terminalDesc', { statusLabel: currentConfig.label })}
               </AlertDescription>
             </Alert>
           )}
@@ -153,7 +152,7 @@ export default function StatusTransitionDialog({
           {/* Transition Notes */}
           {allowedTransitions.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="notes">Transition Notes (Optional)</Label>
+              <Label htmlFor="notes">{t('data-products:statusTransition.notesLabel')}</Label>
               <Textarea
                 id="notes"
                 value={notes}
@@ -162,14 +161,14 @@ export default function StatusTransitionDialog({
                 rows={3}
               />
               <p className="text-xs text-muted-foreground">
-                These notes will be logged for audit purposes
+                {t('data-products:statusTransition.notesHint')}
               </p>
             </div>
           )}
 
           {/* Lifecycle Diagram */}
           <div className="rounded-lg border p-4 bg-muted/20">
-            <Label className="text-sm font-semibold mb-2 block">ODPS v1.0.0 Lifecycle Flow:</Label>
+            <Label className="text-sm font-semibold mb-2 block">{t('data-products:statusTransition.lifecycleTitle')}</Label>
             <div className="flex items-center gap-2 text-sm font-mono flex-wrap">
               <span className={currentStatus.toLowerCase() === 'proposed' ? 'font-bold text-primary' : ''}>proposed</span>
               <span>→</span>
@@ -182,20 +181,20 @@ export default function StatusTransitionDialog({
               <span className={currentStatus.toLowerCase() === 'retired' ? 'font-bold text-primary' : ''}>retired</span>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Current status is highlighted. Emergency deprecation is allowed from any status.
+              {t('data-products:statusTransition.lifecycleHint')}
             </p>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isSubmitting || !selectedStatus || allowedTransitions.length === 0}
           >
-            {isSubmitting ? 'Updating...' : 'Update Status'}
+            {isSubmitting ? t('data-products:statusTransition.buttons.updating') : t('data-products:statusTransition.buttons.updateStatus')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -2,16 +2,23 @@
   "request": {
     "title": "Request Access",
     "description": "Request permission to view and use this {{entityType}}.",
+    "dialogTitle": "Request Time-Limited Access",
+    "dialogDescription": "Submit a request for temporary access to this {{entityType}}. Select how long you need access and provide a reason.",
+    "permissionLabel": "Permission Level",
     "reason": {
       "label": "Reason for Access",
+      "fullLabel": "Reason for Access Request",
       "placeholder": "Explain why you need access to this {{entityType}}...",
+      "detailedPlaceholder": "Please explain why you need access to this resource. Include details about your intended use case, project requirements, or business justification...",
       "required": "Please provide a reason for requesting access",
-      "minLength": "Please provide a more detailed reason (at least 10 characters)"
+      "minLength": "Please provide a more detailed reason (at least 10 characters)",
+      "help": "Minimum 10 characters required. This information will be reviewed by administrators."
     },
     "duration": {
       "label": "Access Duration",
       "placeholder": "Select duration",
       "helpText": "Access will expire after the selected duration. You can request renewal before expiry.",
+      "help": "Your access will automatically expire after this period.",
       "days": "{{count}} day",
       "days_plural": "{{count}} days",
       "months": "{{count}} month",
@@ -21,7 +28,11 @@
     },
     "submit": "Send Request",
     "submitting": "Sending Request...",
+    "submitButtonWithDuration": "Request {{duration}} Access",
     "success": "Your access request has been submitted and you will be notified of the decision.",
+    "submittedTitle": "Request Submitted",
+    "submittedDescription_one": "Your access request for {{count}} day has been submitted. You will be notified of the decision.",
+    "submittedDescription_other": "Your access request for {{count}} days has been submitted. You will be notified of the decision.",
     "cancel": "Cancel",
     "error": "Failed to submit access request"
   },
@@ -33,37 +44,120 @@
     "requestButton": "Request Access",
     "refresh": "Refresh",
     "activeGrants": "Active Grants",
+    "activeGrantsCount": "Active Grants ({{count}})",
     "pendingRequests": "Pending Requests",
+    "pendingRequestsCount": "Pending Requests ({{count}})",
     "expiresAt": "Expires",
     "grantedAt": "Granted",
     "requestedAt": "Requested",
     "revoke": "Revoke",
     "revokeConfirm": "Are you sure you want to revoke access for {{user}}?",
+    "revokeConfirmDetailed": "Are you sure you want to revoke access for <bold>{{user}}</bold>? This action cannot be undone.",
+    "revokeTitle": "Revoke Access",
     "revokeSuccess": "Access revoked successfully",
+    "revokedTitle": "Access Revoked",
+    "revokedDescription": "Access for {{user}} has been revoked.",
+    "revokeError": "Failed to revoke access",
+    "review": "Review",
+    "expiringBadge": "{{count}} expiring",
+    "expiringSoonTooltip_one": "{{count}} grant expiring soon",
+    "expiringSoonTooltip_other": "{{count}} grants expiring soon",
+    "durationDays_one": "{{count}} day",
+    "durationDays_other": "{{count}} days",
+    "expiresTooltip": "Expires: {{date}}",
     "handle": "Handle Request",
     "columns": {
       "actions": "Actions",
       "expires": "Expires",
       "granted": "Granted",
+      "grantedBy": "Granted By",
       "permission": "Permission Level",
-      "user": "User"
+      "user": "User",
+      "requester": "Requester",
+      "duration": "Duration"
+    },
+    "expiry": {
+      "unknown": "Unknown",
+      "expired": "Expired",
+      "today": "Today",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "weeks_one": "{{count}} week",
+      "weeks_other": "{{count}} weeks",
+      "months_one": "{{count}} month",
+      "months_other": "{{count}} months"
     }
   },
   "handle": {
     "title": "Handle Access Request",
+    "description": "Review this access request and approve or deny it.",
     "approve": "Approve",
+    "approveWithDuration": "Approve ({{duration}})",
     "deny": "Deny",
     "clarify": "Request Clarification",
     "grantDuration": "Grant Duration",
+    "durationToGrant": "Duration to Grant",
+    "permissionToGrant": "Permission Level to Grant",
+    "requestedSuffix": " (requested)",
     "response": "Response Message",
     "responsePlaceholder": "Provide feedback or additional information...",
+    "messageLabel": "Message to Requester (Optional)",
+    "messagePlaceholder": "Add a message for the requester (e.g., approval conditions, denial reason)...",
+    "adjustNote": "If approving, you can adjust the granted access:",
+    "approvedTitle": "Request Approved",
+    "deniedTitle": "Request Denied",
+    "approvedDescription": "Access granted for {{duration}}.",
+    "deniedDescription": "The requester has been notified.",
+    "error": "Failed to process decision",
     "approveSuccess": "Access request approved",
     "denySuccess": "Access request denied",
-    "clarifySuccess": "Clarification requested"
+    "clarifySuccess": "Clarification requested",
+    "fields": {
+      "requester": "Requester:",
+      "resource": "Resource:",
+      "requestedDuration": "Requested Duration:",
+      "requestedPermission": "Requested Permission:",
+      "submitted": "Submitted:",
+      "reason": "Reason:"
+    }
   },
   "entityTypes": {
     "data_product": "data product",
     "dataset": "dataset",
     "data_contract": "data contract"
+  },
+  "entityTypeLabels": {
+    "data_product": "Data Product",
+    "data_contract": "Data Contract",
+    "table": "Table",
+    "schema": "Schema",
+    "catalog": "Catalog"
+  },
+  "permissionLevels": {
+    "READ": "Read",
+    "WRITE": "Write",
+    "MANAGE": "Manage"
+  },
+  "permissionOptions": {
+    "READ": "Read Only",
+    "WRITE": "Read & Write",
+    "MANAGE": "Full Access (Manage)"
+  },
+  "permissionSelectPlaceholder": "Select permission level",
+  "statuses": {
+    "active": "Active",
+    "expired": "Expired",
+    "revoked": "Revoked",
+    "pending": "Pending"
+  },
+  "resource": "resource",
+  "resourceCapitalized": "Resource",
+  "duration": {
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "months_one": "{{count}} month",
+    "months_other": "{{count}} months",
+    "years_one": "{{count}} year",
+    "years_other": "{{count}} years"
   }
 }

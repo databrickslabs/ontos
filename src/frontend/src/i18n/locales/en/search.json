@@ -63,7 +63,17 @@
     "subjectsAndTypes": "Subjects and their types",
     "topPredicates": "Top predicates by frequency",
     "mostLinkedSeeAlso": "Most linked via rdfs:seeAlso",
-    "resourceDetail": "Resource detail"
+    "resourceDetail": "Resource detail",
+    "prefixPlaceholder": "e.g., example.org/banking",
+    "resourceLoading": "Loading…",
+    "noTriples": "No triples for this resource.",
+    "blankNodeExpanded": "(blank node, expanded below)",
+    "hover": {
+      "type": "Type: {{type}}",
+      "id": "ID: {{id}}",
+      "owner": "Owner: {{owner}}",
+      "status": "Status: {{status}}"
+    }
   },
   "index": {
     "title": "Index Search",
@@ -181,6 +191,31 @@
       "loadSessionFailed": "Failed to load session",
       "deleteSessionFailed": "Failed to delete session",
       "loadFailed": "Failed to load LLM search. Please try again later."
+    },
+    "debug": {
+      "title": "Debug",
+      "toolCallCount_one": "{{count}} tool call",
+      "toolCallCount_other": "{{count}} tool calls",
+      "priorResults": "({{count}} prior)",
+      "followUp": "Follow-up: LLM has {{messages}} prior messages ({{results}} tool results) in conversation history",
+      "queryClassification": "Query Classification",
+      "query": "Query:",
+      "categories": "Categories:",
+      "toolsProvided": "Tools provided:",
+      "model": "Model:",
+      "iterations": "Iterations:",
+      "total": "total",
+      "toolExecutions": "Tool Executions",
+      "llmIterations": "LLM Iterations",
+      "messagesSent": "{{count}} msgs",
+      "toolCallsShort": "{{count}} tool call(s)",
+      "args": "Args:",
+      "showResult": "Show result",
+      "hideResult": "Hide result",
+      "modeEnabled": "Debug mode enabled",
+      "modeDisabled": "Debug mode disabled",
+      "modeEnabledDesc": "LLM intermediate steps will be shown",
+      "clickToDisable": "Click to disable debug mode"
     }
   },
   "copilot": {

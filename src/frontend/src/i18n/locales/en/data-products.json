@@ -103,7 +103,11 @@
     "success": "Success",
     "error": "Error",
     "validationErrors": "{{count}} validation error(s) occurred",
-    "validationTitle": "Validation Error"
+    "validationTitle": "Validation Error",
+    "loadInitialError": "Failed to load initial data",
+    "refreshError": "Failed to refresh products list",
+    "unknownError": "Unknown error",
+    "unknownErrorFormat": "Unknown error format"
   },
   "status": {
     "draft": "Draft",
@@ -514,8 +518,11 @@
       "couldNotFetchDetails": "Could not fetch details. {{message}}",
       "failedToLoadDetails": "Failed to load product details: {{message}}",
       "invalidJsonError": "Invalid JSON: {{message}}",
-      "couldNotLoadSchema": "Could not load schema: {{message}}"
-    }
+      "couldNotLoadSchema": "Could not load schema: {{message}}",
+      "failedToSerialize": "Failed to serialize UI state to JSON.",
+      "unexpectedError": "An unexpected error occurred."
+    },
+    "syntaxErrorLabel": "Syntax Error:"
   },
   "import": {
     "title": "Import Data Product",
@@ -969,7 +976,8 @@
     "gates": "{{passed}}/{{total}} gates",
     "required": "Required",
     "advisory": "Advisory",
-    "overTime": "Maturity over time"
+    "overTime": "Maturity over time",
+    "retry": "Retry"
   },
   "createDialog": {
     "editTitle": "Edit Data Product Metadata",
@@ -1008,6 +1016,11 @@
     "discardChanges": "Discard Changes",
     "messages": {
       "createSuccessDesc": "Data product created successfully. Add ports and team in the details view."
+    },
+    "validation": {
+      "nameRequired": "Product name is required",
+      "versionRequired": "Version is required",
+      "statusRequired": "Status is required"
     }
   },
   "createFromContract": {
@@ -1111,5 +1124,29 @@
     "subscriptionFailed": "Subscription Failed",
     "failedToSubscribe": "Failed to subscribe",
     "subscribing": "Subscribing..."
+  },
+  "myProductsView": {
+    "retry": "Retry",
+    "untitled": "Untitled",
+    "productsAvailable_one": "{{count}} product available",
+    "productsAvailable_other": "{{count}} products available"
+  },
+  "ownerConsumers": {
+    "breadcrumb": "Consumers",
+    "totalProducts": "Total Products",
+    "activeProducts": "Active Products",
+    "totalSubscribers": "Total Subscribers",
+    "products": "Products",
+    "noProducts": "No products found",
+    "noDomain": "No domain",
+    "subscribersFor": "Subscribers — {{name}}",
+    "selectProduct": "Select a product",
+    "filterPlaceholder": "Filter subscribers...",
+    "selectProductHint": "Select a product to view its subscribers",
+    "noSubscribersMatch": "No subscribers match your filter",
+    "noSubscribers": "No subscribers yet",
+    "colSubscriber": "Subscriber",
+    "colSubscribed": "Subscribed",
+    "colReason": "Reason"
   }
 }

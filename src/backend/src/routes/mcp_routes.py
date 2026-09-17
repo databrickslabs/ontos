@@ -394,9 +394,52 @@ def validate_api_key(
     """Validate the API key and return token info if valid."""
     if not x_api_key:
         return None
-    
+
     token_manager = MCPTokensManager(db=db)
     return token_manager.validate_token(x_api_key)
+
+
+def _forwarded_email(request: Request) -> Optional[str]:
+    """
+    Extract the caller's Databricks identity from the app-proxy forwarded headers.
+
+    These headers are injected by the Databricks Apps OAuth2 proxy after it
+    authenticates the user, so their presence means the request has already
+    cleared the app-gate. Header-trust only — no OBO/SDK round-trip — matching
+    the trust level the regular HTTP API places in the same headers.
+    """
+    return request.headers.get("X-Forwarded-Email") or request.headers.get("X-Forwarded-User")
+
+
+def resolve_mcp_principal(
+    db: Session,
+    x_api_key: Optional[str],
+    request: Request
+) -> Optional[MCPTokenInfo]:
+    """
+    Resolve the caller of an MCP request to a token principal, or None to reject.
+
+    Two paths:
+    - A request carrying an ``X-API-Key`` is validated exactly as before; the
+      keyless default is never consulted.
+    - A request with no key but a forwarded Databricks identity (i.e. it cleared
+      the app-gate) is resolved to the active keyless default token, if one exists,
+      stamped with the caller's forwarded email for audit attribution. This is the
+      opt-in keyless path: it is inert unless an admin has designated an active
+      default token.
+
+    Returns None (reject) when no key is present and either keyless access is not
+    enabled or the request carries no forwarded identity.
+    """
+    if x_api_key:
+        return validate_api_key(db, x_api_key)
+
+    email = _forwarded_email(request)
+    if not email:
+        return None
+
+    token_manager = MCPTokensManager(db=db)
+    return token_manager.resolve_keyless_default(email)
 
 
 async def sse_event_generator(
@@ -475,14 +518,15 @@ async def mcp_sse_stream(
             detail="GET requires Accept: text/event-stream header"
         )
     
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key"
         )
-    
+
     # Get or create session
     session_id = mcp_session_id
     if session_id and session_id not in _sessions:
@@ -580,8 +624,9 @@ async def mcp_handler(
         return Response(status_code=202,
                         headers={"MCP-Session-Id": session_id} if session_id else {})
     
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         audit_manager.log_action(
             db=db,
@@ -661,8 +706,9 @@ async def mcp_delete_session(
     
     Clients should call this when they no longer need the session.
     """
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         audit_manager.log_action(
             db=db,

@@ -97,7 +97,7 @@ export default function DataDomainsView() {
         toast({ variant: "destructive", title: t('messages.errorFetchingDomains'), description: response.error });
       }
     } catch (err: any) {
-      setComponentError(err.message || 'Failed to load data domains');
+      setComponentError(err.message || t('messages.failedLoadDomains'));
       setDomains([]);
       toast({ variant: "destructive", title: t('messages.errorFetchingDomains'), description: err.message });
     }
@@ -161,13 +161,13 @@ export default function DataDomainsView() {
                 errorMessage = (detail as { message: string }).message;
             }
         }
-        throw new Error(errorMessage || 'Failed to delete domain.');
+        throw new Error(errorMessage || t('messages.failedDeleteDomain'));
       }
       toast({ title: t('messages.domainDeleted'), description: t('messages.domainDeletedSuccess') });
       fetchDataDomains();
     } catch (err: any) {
-       toast({ variant: "destructive", title: t('messages.errorDeletingDomain'), description: err.message || 'Failed to delete domain.' });
-       setComponentError(err.message || 'Failed to delete domain.');
+       toast({ variant: "destructive", title: t('messages.errorDeletingDomain'), description: err.message || t('messages.failedDeleteDomain') });
+       setComponentError(err.message || t('messages.failedDeleteDomain'));
     } finally {
        setIsDeleteDialogOpen(false);
        setDeletingDomainId(null);
@@ -272,7 +272,7 @@ export default function DataDomainsView() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
+                <span className="sr-only">{t('openMenu')}</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -282,7 +282,7 @@ export default function DataDomainsView() {
                 {t('viewDetails')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => { setPreviewDomainId(domain.id ?? null); setPreviewDomainTitle(domain.name ?? ''); }}>
-                <Eye className="mr-2 h-4 w-4" /> Preview metadata
+                <Eye className="mr-2 h-4 w-4" /> {t('previewMetadata')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleOpenEditDialog(domain)} disabled={!canWrite}>
                 {t('editDomain')}
@@ -382,20 +382,20 @@ export default function DataDomainsView() {
           </AlertDialogHeader>
           {deletionImpact && !deletionImpact.deletable && (
             <div className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-300">
-              <p className="font-medium">This domain can't be deleted.</p>
+              <p className="font-medium">{t('deleteDialog.cannotDelete')}</p>
               <p className="mt-1">
-                It is the primary domain for {deletionImpact.primary_assignments.length} entity assignment(s):
+                {t('deleteDialog.primaryForAssignments', { count: deletionImpact.primary_assignments.length })}
               </p>
               <ul className="mt-1 list-disc list-inside">
                 {Object.entries(deletionImpact.assignment_counts)
                   .filter(([, counts]) => counts.primary > 0)
                   .map(([entityType, counts]) => (
                     <li key={entityType}>
-                      {counts.primary} {entityType.replace(/_/g, ' ')}(s)
+                      {t('deleteDialog.assignmentCount', { count: counts.primary, type: entityType.replace(/_/g, ' ') })}
                     </li>
                   ))}
               </ul>
-              <p className="mt-1">Reassign those to a different primary domain first.</p>
+              <p className="mt-1">{t('deleteDialog.reassignFirst')}</p>
             </div>
           )}
           <AlertDialogFooter>

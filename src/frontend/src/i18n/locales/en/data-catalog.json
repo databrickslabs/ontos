@@ -7,13 +7,36 @@
   "noTablesAccessible": "No tables accessible in Unity Catalog",
   "showingColumns": "Showing {{count}} columns",
   "matchingSearch": "matching",
+  "tableCountBadge": "({{count}} Tables)",
   "columns": {
     "label": "Label",
     "description": "Description",
     "columnName": "Column Name",
     "type": "Type",
     "tableName": "Table",
-    "businessTerms": "Business Terms"
+    "businessTerms": "Business Terms",
+    "source": "Source"
+  },
+  "filters": {
+    "assetType": "Asset Type",
+    "allTypes": "All Types",
+    "system": "System",
+    "allSystems": "All Systems",
+    "catalog": "Catalog",
+    "allCatalogs": "All Catalogs",
+    "schema": "Schema",
+    "allSchemas": "All Schemas"
+  },
+  "sourceBadges": {
+    "both": "Both",
+    "asset": "Asset",
+    "contract": "Contract"
+  },
+  "pagination": {
+    "showing": "Showing {{from}}–{{to}} of {{total}} columns",
+    "matching": " matching \"{{query}}\"",
+    "perPage": "Per page:",
+    "pageOf": "Page {{current}} of {{total}}"
   },
   "tabs": {
     "overview": "Overview",
@@ -37,28 +60,114 @@
     "description": "Description",
     "tags": "Tags"
   },
+  "details": {
+    "backToList": "Back to List",
+    "by": "by {{user}}",
+    "fallbackTitle": "Details"
+  },
   "dataDetails": {
     "title": "Columns",
     "description": "Description",
     "columnName": "Column Name",
     "type": "Type",
-    "nullable": "Nullable"
+    "nullable": "Nullable",
+    "partition": "Partition {{index}}",
+    "yes": "Yes",
+    "no": "No"
   },
   "lineage": {
     "title": "Data Lineage",
     "description": "Visualize upstream and downstream dependencies",
     "noLineage": "No lineage information available",
     "noLineageHint": "This table may not have any upstream or downstream dependencies",
+    "noDataAvailable": "No lineage data available",
+    "loadingLineage": "Loading lineage…",
     "both": "Both Directions",
     "upstream": "Upstream Only",
     "downstream": "Downstream Only",
     "legend": "Legend",
     "impactSummary": "Impact Summary",
     "impactWarning": "Changes to this table may affect:",
-    "notifyOwners": "Owners to notify"
+    "notifyOwners": "Owners to notify",
+    "impactedTables_one": "{{count}} table",
+    "impactedTables_other": "{{count}} tables",
+    "impactedViews_one": "{{count}} view",
+    "impactedViews_other": "{{count}} views",
+    "impactedExternal_one": "{{count}} external",
+    "impactedExternal_other": "{{count}} external",
+    "toolbar": {
+      "upstream": "Upstream",
+      "both": "Both",
+      "downstream": "Downstream",
+      "breadth": "Breadth:",
+      "nesting": "Nesting:",
+      "entitiesEdges": "{{nodes}} entities · {{edges}} edges"
+    },
+    "legendPanel": {
+      "entityTypes": "Entity Types",
+      "edgeStyles": "Edge Styles",
+      "dataFlow": "Data flow",
+      "containment": "Containment",
+      "governance": "Governance",
+      "semantic": "Semantic"
+    },
+    "dev": {
+      "entityTypeLabel": "Entity Type:",
+      "entityTypePlaceholder": "e.g. DataProduct",
+      "entityIdLabel": "Entity ID:",
+      "entityIdPlaceholder": "e.g. uuid",
+      "load": "Load",
+      "emptyHint": "Enter an entity type and ID above, then click Load"
+    }
+  },
+  "hierarchy": {
+    "browserTitle": "Hierarchy Browser",
+    "browserSubtitle": "Navigate data hierarchies from systems and domains down to tables and columns",
+    "browse": "Browse",
+    "filterPlaceholder": "Filter...",
+    "noMatches": "No matches found",
+    "noRoots": "No root entities found",
+    "rootsLoadFailed": "Failed to load hierarchy roots",
+    "permissionDenied": "Permission Denied",
+    "noAccess": "You don't have access to browse the hierarchy.",
+    "selectEntity": "Select an entity",
+    "selectEntityHint": "Click on any item in the tree to view its hierarchy",
+    "childCount_one": "{{count}} child",
+    "childCount_other": "{{count}} children",
+    "maxDepthTooltip": "Max hierarchy depth",
+    "treeView": "Tree view",
+    "graphView": "Graph view",
+    "viewDetail": "View Detail",
+    "viewDetails": "View details",
+    "show": "Show:",
+    "showAll": "Show all",
+    "heading": "Hierarchy",
+    "noChildren": "No children in the hierarchy",
+    "noChildrenFound": "No children found",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "levelsOption": "{{count}} levels",
+    "allLevels": "All",
+    "rootType": {
+      "domain": "Domain",
+      "product": "Product"
+    }
+  },
+  "preview": {
+    "title": "Preview",
+    "notAvailable": "Preview not available for this file.",
+    "fetchFailed": "Failed to fetch preview content.",
+    "loadImageFailed": "Failed to load image",
+    "pdfNotSupported": "PDF preview not supported.",
+    "textPreviewTitle": "Text preview",
+    "noInlinePreview": "No inline preview for this file type.",
+    "noPreviewUrl": "No preview URL available. Filename: {{filename}} • Path: {{path}}"
   },
   "errors": {
     "fetchFailed": "Failed to fetch data",
-    "tableNotFound": "Table not found"
+    "tableNotFound": "Table not found",
+    "fetchTableFailed": "Failed to fetch table: {{status}}",
+    "fetchLineageFailed": "Failed to fetch lineage",
+    "loadLineageFailed": "Failed to load lineage"
   }
 }

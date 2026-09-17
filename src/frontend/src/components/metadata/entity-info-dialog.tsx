@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
@@ -94,6 +95,7 @@ export default function EntityInfoDialog({
   contractIds,
   maxLevelInheritance = 99,
 }: Props) {
+  const { t } = useTranslation(['metadata', 'common']);
   // Use merged metadata when contractIds are provided (for DP/DS with inheritance)
   const directMetadata = useEntityMetadata(entityType, entityId || undefined);
   const mergedMetadata = useMergedMetadata(
@@ -199,11 +201,11 @@ export default function EntityInfoDialog({
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
-            <span className="font-semibold">{title || 'Entity Information'}</span>
+            <span className="font-semibold">{title || t('metadata:info.entityInformation')}</span>
             {isSubscribed && (
               <span className="inline-flex items-center gap-1 text-xs font-normal bg-primary/10 text-primary px-2 py-1 rounded-full">
                 <Bell className="h-3 w-3" />
-                Subscribed
+                {t('metadata:info.subscribed')}
               </span>
             )}
           </DialogTitle>
@@ -213,7 +215,7 @@ export default function EntityInfoDialog({
           {loading ? (
             <div className="flex items-center justify-center h-32 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              Loading...
+              {t('common:actions.loading')}
             </div>
           ) : error ? (
             <div className="text-destructive p-4">{error}</div>
@@ -221,7 +223,7 @@ export default function EntityInfoDialog({
             <div className="space-y-6 pb-6 [&>*:first-child]:mt-0">
               {toc.length > 0 && (
                 <div className="rounded-lg border bg-muted/20 p-4">
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Table of contents</div>
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t('metadata:info.tableOfContents')}</div>
                   <ul className="text-sm space-y-1">
                     {toc.map((h, idx) => (
                       <li key={idx}>
@@ -237,23 +239,23 @@ export default function EntityInfoDialog({
                   <MarkdownViewer markdown={concatenatedMarkdown} />
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">No notes available.</div>
+                <div className="text-sm text-muted-foreground">{t('metadata:info.noNotesAvailable')}</div>
               )}
 
               <Separator />
 
               <div>
-                <div className="text-base font-medium mb-2">Related Links</div>
+                <div className="text-base font-medium mb-2">{t('metadata:links.title')}</div>
                 {links.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No links.</div>
+                  <div className="text-sm text-muted-foreground">{t('metadata:info.noLinks')}</div>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
                         <tr className="text-left">
-                          <th className="py-2 px-3">Title</th>
-                          <th className="py-2 px-3">URL</th>
-                          <th className="py-2 px-3">Description</th>
+                          <th className="py-2 px-3">{t('metadata:links.table.title')}</th>
+                          <th className="py-2 px-3">{t('metadata:links.table.url')}</th>
+                          <th className="py-2 px-3">{t('metadata:links.table.description')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -266,8 +268,8 @@ export default function EntityInfoDialog({
                               <td className="py-2 px-3 whitespace-nowrap">
                                 <span className="flex items-center gap-2">
                                   {l.title}
-                                  {isFromContract && <Badge variant="outline" className="text-xs">Inherited</Badge>}
-                                  {isShared && <Badge variant="secondary" className="text-xs"><Share2 className="h-3 w-3 mr-1" />Shared</Badge>}
+                                  {isFromContract && <Badge variant="outline" className="text-xs">{t('metadata:info.inherited')}</Badge>}
+                                  {isShared && <Badge variant="secondary" className="text-xs"><Share2 className="h-3 w-3 mr-1" />{t('metadata:info.shared')}</Badge>}
                                 </span>
                               </td>
                               <td className="py-2 px-3 max-w-[420px] truncate"><a className="text-primary hover:underline" href={l.url} target="_blank" rel="noreferrer">{l.url}</a></td>
@@ -287,12 +289,12 @@ export default function EntityInfoDialog({
               <div>
                 <div className="text-base font-medium mb-3 flex items-center gap-2">
                   <Star className="h-5 w-5 text-amber-500" />
-                  Ratings & Reviews
+                  {t('metadata:info.ratingsAndReviews')}
                 </div>
-                
+
                 {ratingsLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Loading ratings...
+                    <Loader2 className="h-4 w-4 animate-spin" /> {t('metadata:info.loadingRatings')}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -305,7 +307,7 @@ export default function EntityInfoDialog({
                     
                     {/* User Rating Input */}
                     <div className="border rounded-lg p-4 bg-muted/30">
-                      <div className="text-sm font-medium mb-2">Your Rating</div>
+                      <div className="text-sm font-medium mb-2">{t('metadata:info.yourRating')}</div>
                       <div className="flex items-center gap-4 mb-3">
                         <StarRatingInput
                           value={selectedRating}
@@ -315,17 +317,17 @@ export default function EntityInfoDialog({
                         />
                         {selectedRating > 0 && (
                           <span className="text-sm text-muted-foreground">
-                            {selectedRating === 1 && 'Poor'}
-                            {selectedRating === 2 && 'Fair'}
-                            {selectedRating === 3 && 'Good'}
-                            {selectedRating === 4 && 'Very Good'}
-                            {selectedRating === 5 && 'Excellent'}
+                            {selectedRating === 1 && t('metadata:ratings.labels.poor')}
+                            {selectedRating === 2 && t('metadata:ratings.labels.fair')}
+                            {selectedRating === 3 && t('metadata:ratings.labels.good')}
+                            {selectedRating === 4 && t('metadata:ratings.labels.veryGood')}
+                            {selectedRating === 5 && t('metadata:ratings.labels.excellent')}
                           </span>
                         )}
                       </div>
                       <div className="mb-3">
                         <Textarea
-                          placeholder="Add a review (optional)..."
+                          placeholder={t('metadata:info.addReviewPlaceholder')}
                           value={reviewText}
                           onChange={(e) => setReviewText(e.target.value)}
                           rows={2}
@@ -339,9 +341,9 @@ export default function EntityInfoDialog({
                         onClick={handleSubmitRating}
                       >
                         {submittingRating ? (
-                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...</>
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('metadata:ratings.submitting')}</>
                         ) : (
-                          'Submit Rating'
+                          t('metadata:ratings.submitRating')
                         )}
                       </Button>
                     </div>
@@ -358,7 +360,7 @@ export default function EntityInfoDialog({
               variant="outline"
               onClick={() => onOpenChange(false)}
             >
-              Close
+              {t('common:actions.close')}
             </Button>
             {onGoToDetails && (
               <Button
@@ -366,14 +368,14 @@ export default function EntityInfoDialog({
                 onClick={onGoToDetails}
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
-                Go to Details
+                {t('metadata:info.goToDetails')}
               </Button>
             )}
             {showSubscribeFooter && (
               isSubscribed ? (
                 <Button variant="secondary" disabled>
                   <Check className="mr-2 h-4 w-4" />
-                  Already Subscribed
+                  {t('metadata:info.alreadySubscribed')}
                 </Button>
               ) : (
                 <Button
@@ -383,12 +385,12 @@ export default function EntityInfoDialog({
                   {subscriptionLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Loading...
+                      {t('common:actions.loading')}
                     </>
                   ) : (
                     <>
                       <Bell className="mr-2 h-4 w-4" />
-                      Subscribe
+                      {t('metadata:info.subscribe')}
                     </>
                   )}
                 </Button>

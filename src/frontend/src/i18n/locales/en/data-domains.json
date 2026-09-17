@@ -6,6 +6,8 @@
   "editDomain": "Edit Domain",
   "deleteDomain": "Delete Domain",
   "noDomainsYet": "No data domains yet.",
+  "openMenu": "Open menu",
+  "previewMetadata": "Preview metadata",
   "table": {
     "name": "Name",
     "description": "Description",
@@ -28,12 +30,133 @@
     "domainDeletedSuccess": "The data domain was successfully deleted.",
     "errorFetchingDomains": "Error fetching domains",
     "errorDeletingDomain": "Error Deleting Domain",
-    "errorLoadingData": "Error Loading Data"
+    "errorLoadingData": "Error Loading Data",
+    "failedLoadDomains": "Failed to load data domains",
+    "failedDeleteDomain": "Failed to delete domain."
   },
   "deleteDialog": {
     "title": "Are you absolutely sure?",
     "description": "This action cannot be undone. This will permanently delete the data domain.",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "cannotDelete": "This domain can't be deleted.",
+    "primaryForAssignments_one": "It is the primary domain for {{count}} entity assignment:",
+    "primaryForAssignments_other": "It is the primary domain for {{count}} entity assignments:",
+    "assignmentCount": "{{count}} {{type}}(s)",
+    "reassignFirst": "Reassign those to a different primary domain first."
+  },
+  "form": {
+    "editTitle": "Edit Data Domain",
+    "createTitle": "Create New Data Domain",
+    "editDescription": "Make changes to the existing data domain.",
+    "createDescription": "Add a new data domain to the system.",
+    "createSubmit": "Create Domain",
+    "nameLabel": "Name *",
+    "namePlaceholder": "e.g., Sales Analytics",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Describe the purpose of this domain...",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "Search and select tags for this data domain...",
+    "parentLabel": "Parent Domain",
+    "parentPlaceholder": "Select a parent domain (optional)",
+    "noParent": "No Parent",
+    "validation": {
+      "nameMin": "Name must be at least 2 characters.",
+      "descriptionMax": "Description must not exceed 500 characters."
+    },
+    "discardDescription": "You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?",
+    "continueEditing": "Continue Editing",
+    "discardChanges": "Discard Changes",
+    "toasts": {
+      "updated": "Domain Updated",
+      "created": "Domain Created",
+      "saveSuccess": "Successfully saved '{{name}}'.",
+      "saveError": "Error Saving Domain"
+    }
+  },
+  "details": {
+    "backToList": "Back to List",
+    "backToDataDomains": "Back to Data Domains",
+    "edit": "Edit",
+    "notFound": "Data domain not found or could not be loaded.",
+    "noDomainIdProvided": "No Domain ID provided.",
+    "invalidDomain": "Invalid Domain",
+    "relatedEntities": "Related Entities",
+    "addConcept": "Add Concept",
+    "hierarchyContext": "Domain Hierarchy Context",
+    "info": {
+      "id": "ID",
+      "parentDomain": "Parent Domain",
+      "childrenCount": "Children Count",
+      "tags": "Tags",
+      "createdBy": "Created By",
+      "createdAt": "Created At",
+      "lastUpdatedAt": "Last Updated At",
+      "linkedBusinessConcepts": "Linked Business Concepts"
+    },
+    "childDomains": {
+      "title": "Child Data Domains ({{count}})",
+      "description": "Directly nested data domains.",
+      "empty": "No child domains found",
+      "columns": {
+        "name": "Name",
+        "id": "ID"
+      }
+    },
+    "teams": {
+      "title": "Domain Teams",
+      "countBadge_one": "{{count}} team",
+      "countBadge_other": "{{count}} teams",
+      "create": "Create Team",
+      "description": "Teams assigned to this data domain. Teams inherit domain-specific permissions and responsibilities.",
+      "empty": "No teams assigned",
+      "emptyHint": "Create a team to assign it to this data domain.",
+      "createFirst": "Create First Team",
+      "columns": {
+        "name": "Team Name",
+        "title": "Title",
+        "noTitle": "No title",
+        "members": "Members",
+        "memberCount_one": "{{count}} member",
+        "memberCount_other": "{{count}} members",
+        "actions": "Actions",
+        "edit": "Edit"
+      }
+    },
+    "assignedEntities": {
+      "title": "Assigned Entities",
+      "description": "Data products, contracts, and assets assigned to this domain (primary or additional).",
+      "dataProducts": "Data Products",
+      "dataContracts": "Data Contracts",
+      "assets": "Assets",
+      "primaryDomain": "Primary domain",
+      "additionalDomain": "Additional domain",
+      "noneAssigned": "None assigned."
+    },
+    "linkedAssets": {
+      "title": "Linked Assets",
+      "description": "Assets (data products, contracts, etc.) linked to this data domain through semantic relationships.",
+      "empty": "No linked assets found",
+      "countBadge": "{{count}} total",
+      "columns": {
+        "name": "Asset Name",
+        "type": "Type",
+        "unknownType": "Unknown",
+        "path": "Path",
+        "domain": "Domain"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "Business concept linked to data domain.",
+    "conceptUnlinked": "Business concept unlinked from data domain.",
+    "linkConceptError": "Failed to link business concept",
+    "unlinkConceptError": "Failed to unlink business concept",
+    "errorFetchingDomain": "Error Fetching Domain",
+    "couldNotLoadDomain": "Could not load domain details.",
+    "failedFetchDomain": "Failed to fetch domain details.",
+    "metadataLoadFailed": "Metadata load failed",
+    "couldNotLoadMetadata": "Could not load metadata.",
+    "editTeamLoadError": "Failed to load team details for editing."
   }
 }

@@ -40,7 +40,67 @@
   "errors": {
     "loadingPolicies": "Error Loading Policies",
     "savingPolicy": "Error Saving Policy",
-    "deletingPolicy": "Error Deleting Policy"
+    "deletingPolicy": "Error Deleting Policy",
+    "loadPolicyFailed": "Failed to load policy",
+    "loadFailed": "Failed to load",
+    "savePolicyFailed": "Failed to save policy",
+    "deletePolicyFailed": "Failed to delete policy",
+    "noDataReceived": "No data received from compliance policies endpoint.",
+    "saveNoDataReturned": "Failed to save policy: No data returned",
+    "loadPoliciesFailed": "Failed to load compliance policies",
+    "loadRunResultsFailed": "Failed to load run results",
+    "policyNotFound": "Compliance policy not found.",
+    "runNotFound": "Run not found."
+  },
+  "results": {
+    "passed": "Passed",
+    "failed": "Failed",
+    "showFailed": "Show Failed",
+    "showAll": "Show All",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Back to List",
+    "run": "Run",
+    "id": "ID",
+    "examples": "Examples",
+    "shouldPass": "Should Pass",
+    "shouldFail": "Should Fail",
+    "noExamples": "No examples",
+    "runSummary": {
+      "title": "Run Summary",
+      "lastRunStarted": "Last run started {{date}}",
+      "statusLabel": "Status:",
+      "score": "Score",
+      "passed": "Passed",
+      "failed": "Failed",
+      "passedExamples": "Passed examples",
+      "failedExamples": "Failed examples",
+      "noPassedExamples": "No passed examples in this run",
+      "noFailures": "No failures in this run"
+    },
+    "runsList": {
+      "title": "Runs",
+      "mostRecentFirst": "Most recent first",
+      "noRuns": "No runs yet",
+      "scoreLabel": "Score:",
+      "scoreDetail": "{{passed}} passed / {{failed}} failed",
+      "openRunDetails": "Open run details"
+    },
+    "resultsCard": {
+      "title": "Results",
+      "filteredFailed": "Filtered to failed only — latest run {{date}}",
+      "filteredAll": "Filtered to all — latest run {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Run {{id}}",
+    "viewPolicy": "View Policy",
+    "statusLabel": "Status:",
+    "scoreLabel": "Score:",
+    "passedLabel": "Passed:",
+    "failedLabel": "Failed:",
+    "startedLabel": "Started: {{date}}"
   },
   "toast": {
     "policySaved": "Policy '{{name}}' saved successfully",

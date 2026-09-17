@@ -13,6 +13,12 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    # hatchling 1.32 changed the readme-path validation and breaks our CI
+    # build (see #755). Pin below 1.32 until we ship a project-local readme
+    # and can uncap. Revisit once the readme-path fix lands.
+    ignore:
+      - dependency-name: "hatchling"
+        versions: [">=1.32"]
 
   - package-ecosystem: "pip"
     directory: "/src/backend"

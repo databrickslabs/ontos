@@ -86,8 +86,18 @@ class AuthoritativeDefinition(BaseModel):
 class CustomProperty(BaseModel):
     """ODPS v1.0.0 Custom Property"""
     property: str = Field(..., description="Property name in camelCase")
-    value: Any = Field(..., description="Property value (can be any type)")
+    value: Any = Field(None, description="Property value (can be any type, including null)")
     description: Optional[str] = Field(None, description="Optional description")
+
+    # Normalize the legacy literal string "null" back to None. Older writes
+    # persisted a null value via json.dumps(None) == "null" (fixed on the write
+    # side), so this keeps values read from those rows presenting as real nulls
+    # instead of the four-character string.
+    @field_validator('value', mode='before')
+    def normalize_null_value(cls, v):
+        if v == "null":
+            return None
+        return v
 
     model_config = {"from_attributes": True}
 

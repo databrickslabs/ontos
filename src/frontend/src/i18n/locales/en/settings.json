@@ -410,7 +410,8 @@
       "actions": "Actions",
       "never": "Never",
       "moreScopes": "+{{count}} more",
-      "createdBy": "by {{name}}"
+      "createdBy": "by {{name}}",
+      "keylessDefault": "Keyless default"
     },
     "status": {
       "active": "Active",
@@ -418,7 +419,10 @@
       "expired": "Expired"
     },
     "tooltips": {
-      "revokeToken": "Revoke token"
+      "revokeToken": "Revoke token",
+      "setKeylessDefault": "Make this the keyless default token",
+      "clearKeylessDefault": "Clear keyless default (disables keyless access)",
+      "keylessDefaultBadge": "App-gate-authenticated MCP requests with no X-API-Key resolve to this token's scopes, attributed to the calling user. Its scopes apply to any authenticated app user."
     },
     "info": {
       "title": "Using MCP Tokens",
@@ -434,6 +438,9 @@
       "tokenNameHelp": "A descriptive name to identify this token",
       "expiration": "Expiration (days)",
       "expirationHelp": "Leave empty for no expiration",
+      "keylessDefault": "Use as keyless default",
+      "keylessDefaultHelp": "Resolve app-gate-authenticated MCP requests that carry no X-API-Key to this token. Supersedes any existing default.",
+      "keylessDefaultWarning": "This token's scopes will apply to ANY app user who reaches /api/mcp without a key. Global search bypasses per-user access controls, so grant read-only scopes only (no writes, SPARQL, or full access).",
       "scopes": "Scopes",
       "scopesHelp": "Select the permissions this token should have",
       "selectedScopes": "Selected:",
@@ -466,7 +473,10 @@
       "createError": "Failed to create token",
       "copied": "Token copied to clipboard",
       "revoked": "Token \"{{name}}\" has been revoked",
-      "revokeError": "Failed to revoke token"
+      "revokeError": "Failed to revoke token",
+      "keylessDefaultSet": "\"{{name}}\" is now the keyless default token",
+      "keylessDefaultCleared": "Keyless default cleared — keyless access is disabled",
+      "keylessDefaultError": "Failed to update keyless default"
     }
   },
   "uiCustomization": {

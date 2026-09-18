@@ -103,6 +103,21 @@ async def get_run(
     return run
 
 
+@router.get("/contexts")
+async def list_selectable_contexts(
+    request: Request,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+) -> List[dict]:
+    """Concept-scheme contexts selectable as mapping sources in the run dialog.
+
+    Returns ``[{context, label, concept_count}]`` for every selectable scheme in
+    the graph (authored/imported schemes AND uploaded RDF sources) — the same set
+    the engine defaults to. The dialog reads THIS instead of the semantic_models
+    table, so Explore/Define-authored ontologies are offered too.
+    """
+    return _get_manager(request).list_selectable_contexts()
+
+
 # ------------------------------------------------------------------
 # Suggestion queue
 # ------------------------------------------------------------------

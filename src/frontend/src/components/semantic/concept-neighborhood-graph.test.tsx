@@ -144,7 +144,7 @@ describe('ConceptNeighborhoodGraph', () => {
   })
 
   it('renders 5 nodes (1 parent + current + 3 children) and 4 edges', async () => {
-    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={() => {}} />)
+    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={() => {}} view="graph" />)
 
     await waitFor(() => {
       const nodesContainer = screen.getByTestId('rf-nodes')
@@ -171,7 +171,7 @@ describe('ConceptNeighborhoodGraph', () => {
 
   it('fires onNavigate with the child IRI when a child node is clicked', async () => {
     const onNavigate = vi.fn()
-    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={onNavigate} />)
+    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={onNavigate} view="graph" />)
 
     await waitFor(() => {
       expect(
@@ -188,8 +188,15 @@ describe('ConceptNeighborhoodGraph', () => {
 
   it('renders empty state when there are no related concepts', async () => {
     mockGet.mockImplementation(async () => ({ data: [] }))
-    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={() => {}} />)
+    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={() => {}} view="graph" />)
     expect(await screen.findByText('No related concepts.')).toBeInTheDocument()
     expect(screen.queryByTestId('rf-canvas')).not.toBeInTheDocument()
+  })
+
+  it('renders a list (not the graph) by default', async () => {
+    render(<ConceptNeighborhoodGraph concept={concept} onNavigate={() => {}} />)
+    expect(await screen.findByTestId('concept-neighborhood-list')).toBeInTheDocument()
+    // Graph canvas is not mounted in list view.
+    expect(screen.queryByTestId('rf-nodes')).not.toBeInTheDocument()
   })
 })

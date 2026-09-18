@@ -4,7 +4,7 @@ This table stores all RDF triples from ontologies, taxonomies, and semantic link
 making the database the source of truth for the knowledge graph.
 """
 import uuid
-from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, Index, UniqueConstraint
+from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, Index, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 
@@ -41,17 +41,48 @@ class RdfTripleDb(Base):
     # Source tracking
     source_type = Column(String(20), nullable=True)  # file, upload, demo, link
     source_identifier = Column(Text, nullable=True)  # filename, model_id, entity info
+
+    # Concept-versioning ownership (P0-1). Which concept-version owns this triple.
+    # Ownership is determined by the SUBJECT IRI; blank-node closures follow the
+    # IRI subject they hang off. NULL for triples whose subject is not a concept
+    # IRI (e.g. scheme headers, semantic-link edges). FK added by migration
+    # m1_concept_versioning.
+    concept_version_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("concept_version.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     
     # Audit fields
     created_by = Column(String, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
 
     # Unique constraint required for ON CONFLICT DO NOTHING in rdf_triples_repository.
+    # Includes concept_version_id (migration m4_rdf_triple_version_uq) so per-version
+    # snapshot rows (same triple owned by different versions) coexist, while
+    # NULLS NOT DISTINCT keeps NULL-owned (unversioned/metadata) triples deduped.
     __table_args__ = (
         UniqueConstraint(
             'subject_uri', 'predicate_uri', 'object_value',
-            'object_language', 'object_datatype', 'context_name',
+            'object_language', 'object_datatype', 'context_name', 'concept_version_id',
             name='uq_rdf_triple',
+            postgresql_nulls_not_distinct=True,
+        ),
+        # Partial unique index for UNVERSIONED triples (concept_version_id IS
+        # NULL) on the natural key. The uq_rdf_triple constraint above already
+        # dedups these on Postgres via NULLS NOT DISTINCT, but that clause is a
+        # no-op on SQLite (unit tests) where NULLs are DISTINCT — so imports/bulk
+        # inserts (always unversioned) target THIS index instead, which dedups
+        # identically on both dialects. See rdf_triples_repository
+        # _NULL_VERSION_CONFLICT_COLS. Prod migration: m5_rdf_triple_null_version_uq.
+        Index(
+            'uq_rdf_triple_null_version',
+            'subject_uri', 'predicate_uri', 'object_value',
+            'object_language', 'object_datatype', 'context_name',
+            unique=True,
+            sqlite_where=concept_version_id.is_(None),
+            postgresql_where=concept_version_id.is_(None),
         ),
         # Composite index for SPO lookups
         Index('ix_rdf_triples_spo', 'subject_uri', 'predicate_uri', 'object_value'),

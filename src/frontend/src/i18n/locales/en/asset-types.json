@@ -4,6 +4,8 @@
   "addNew": "Add Asset Type",
   "editAssetType": "Edit Asset Type",
   "deleteAssetType": "Delete Asset Type",
+  "systemBadge": "System",
+  "openMenu": "Open menu",
   "table": {
     "name": "Name",
     "description": "Description",
@@ -33,6 +35,7 @@
   },
   "messages": {
     "errorFetching": "Error fetching asset types",
+    "loadFailed": "Failed to load asset types",
     "errorDeleting": "Error deleting asset type",
     "deleted": "Asset Type Deleted",
     "deletedSuccess": "The asset type was successfully deleted.",

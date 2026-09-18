@@ -392,6 +392,30 @@
     "countBadge_one": "{{count}} version",
     "countBadge_other": "{{count}} versions"
   },
+  "viewMode": {
+    "tableView": "Table View",
+    "graphView": "Graph View"
+  },
+  "maturity": {
+    "label": "Maturity",
+    "labelWithLevel": "Maturity: {{level}}",
+    "notAssessed": "Not assessed",
+    "reEvaluate": "Re-evaluate maturity",
+    "evaluatedTitle": "Maturity evaluated",
+    "evaluatedDescription": "{{level}} — {{passed}}/{{total}} gates passed",
+    "evaluationFailed": "Evaluation failed",
+    "serverReturned": "Server returned {{status}}",
+    "gatesCount": "{{passed}}/{{total}} gates",
+    "evaluatedAt": "Evaluated {{date}}"
+  },
+  "tagChip": {
+    "removeAria": "Remove {{name}} tag",
+    "value": "Value:",
+    "status": "Status:",
+    "namespace": "Namespace:",
+    "by": "By:",
+    "clickToSearch": "Click to search"
+  },
   "cancel": "Cancel",
   "copied": "Copied",
   "copy": "Copy",

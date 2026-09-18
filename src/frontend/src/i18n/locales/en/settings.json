@@ -1254,5 +1254,67 @@
       "formatTitle": "CSV format",
       "formatBody": "Required columns: <code>type</code>, <code>id</code>, <code>display_name</code>. The <code>sub_label</code> column is optional. <code>type</code> must be <code>user</code> or <code>group</code>."
     }
+  },
+  "semanticModels": {
+    "page": {
+      "title": "RDF Sources",
+      "description": "Upload and manage RDF ontology and taxonomy files (RDFS, SKOS, OWL)."
+    },
+    "actions": {
+      "industryLibrary": "Industry Library",
+      "uploading": "Uploading...",
+      "refreshListTooltip": "Refresh list"
+    },
+    "table": {
+      "sourceHeader": "Source",
+      "sizeHeader": "Size",
+      "sizeKb": "{{value}} KB",
+      "enabledHeader": "Enabled",
+      "alwaysOn": "Always On",
+      "viewContentTooltip": "View content",
+      "deleteModelTooltip": "Delete model"
+    },
+    "source": {
+      "unknown": "Unknown",
+      "system": "System",
+      "file": "File",
+      "schema": "Schema",
+      "upload": "Upload"
+    },
+    "deleteDialog": {
+      "title": "Delete RDF Source",
+      "description": "Are you sure you want to delete <strong>{{name}}</strong>? This action cannot be undone and will remove the model from the semantic graph."
+    },
+    "viewDialog": {
+      "titleFallback": "View Ontology",
+      "loadingContent": "Loading content...",
+      "noContent": "No content available.",
+      "loadContentFailed": "Failed to load content.",
+      "copied": "Copied!",
+      "copyToClipboard": "Copy to Clipboard"
+    },
+    "messages": {
+      "loadModelsError": "Failed to load models",
+      "graphRefreshed": "Knowledge graph refreshed successfully",
+      "graphRefreshError": "Failed to refresh knowledge graph",
+      "uploadFailedTitle": "Upload Failed",
+      "modelUploaded": "Semantic model uploaded successfully",
+      "uploadErrorTitle": "Upload Error",
+      "uploadFileError": "Failed to upload file",
+      "modelToggled": "Model {{state}} successfully",
+      "enabledState": "enabled",
+      "disabledState": "disabled",
+      "updateModelError": "Failed to update model",
+      "loadContentError": "Failed to load content",
+      "copyClipboardError": "Failed to copy to clipboard",
+      "deleteFailedTitle": "Delete Failed",
+      "modelDeleted": "Semantic model deleted successfully",
+      "deleteErrorTitle": "Delete Error",
+      "deleteModelError": "Failed to delete model",
+      "updateTitleError": "Failed to update title",
+      "saveError": "Failed to save",
+      "clearTitleError": "Failed to clear title",
+      "clearError": "Failed to clear"
+    }
   }
 }

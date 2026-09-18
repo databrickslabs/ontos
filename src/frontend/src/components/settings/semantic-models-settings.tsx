@@ -69,7 +69,7 @@ function semanticModelSerializationLabel(m: SemanticModel, tr: (key: string) => 
 }
 
 export default function SemanticModelsSettings() {
-  const { t } = useTranslation(['semantic-models', 'common']);
+  const { t } = useTranslation(['semantic-models', 'settings', 'common']);
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const canWriteSemantic = !permissionsLoading && hasPermission('semantic-models', FeatureAccessLevel.READ_WRITE);
   const { get, post, delete: deleteApi } = useApi();

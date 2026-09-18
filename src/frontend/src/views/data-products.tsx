@@ -419,7 +419,9 @@ export default function DataProducts() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const response = await post<{ count: number }>('/api/data-products/upload', formData);
+      // The upload endpoint returns the created products as a list, not a
+      // { count } object; read the count off the array length.
+      const response = await post<DataProduct[]>('/api/data-products/upload', formData);
 
       if (response.error) {
         // Extract meaningful message from potentially complex error object
@@ -439,7 +441,7 @@ export default function DataProducts() {
         throw new Error(errorMsg);
       }
 
-      const count = response.data?.count ?? 0;
+      const count = response.data?.length ?? 0;
       toast({
         title: t('upload.success'),
         description: t('upload.successMessage', { filename: file.name, count }),

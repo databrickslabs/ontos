@@ -120,7 +120,7 @@ export function shouldShowSectionForViewMode(viewMode: ViewMode, section: string
     case 'minimal':
       return ['deliverables', 'description', 'hierarchy'].includes(section);
     case 'medium':
-      return !['management-ports', 'support-channels', 'metadata-panel', 'ratings', 'costs', 'quality'].includes(section);
+      return !['management-ports', 'support-channels', 'metadata-panel', 'ratings', 'costs', 'quality', 'authoritative-definitions', 'custom-properties'].includes(section);
     case 'large':
       return true;
     default:
@@ -2165,6 +2165,65 @@ export default function DataProductDetails() {
           ) : (
             <p className="text-sm text-muted-foreground">No support channels defined</p>
           )}
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Authoritative Definitions (read-only provenance from imported product YAML).
+          Large-view only, mirroring the contract detail view. */}
+      {shouldShowSection('authoritative-definitions') && product.authoritativeDefinitions && product.authoritativeDefinitions.length > 0 && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Authoritative Definitions ({product.authoritativeDefinitions.length})</span>
+          </CardTitle>
+          <CardDescription>ODPS authoritative sources for this product</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {product.authoritativeDefinitions.map((def, idx) => (
+              <div key={idx} className="border rounded p-3">
+                <Badge variant="outline">{def.type}</Badge>
+                <div className="text-sm mt-1">
+                  <a href={def.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{def.url}</a>
+                </div>
+                {def.description && <div className="text-sm text-muted-foreground mt-1">{def.description}</div>}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Custom Properties (read-only provenance from imported product YAML).
+          Large-view only, mirroring the contract detail view. The ODPS API
+          returns customProperties as an array of {property, value}; null values
+          may arrive as the literal string "null" from the importer, so treat
+          both null and "null" as empty. */}
+      {shouldShowSection('custom-properties') && product.customProperties && product.customProperties.length > 0 && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Custom Properties ({product.customProperties.length})</span>
+          </CardTitle>
+          <CardDescription>Additional metadata from the imported product profile</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {product.customProperties.map((prop, idx) => {
+              const v = prop.value;
+              const isEmpty = v === null || v === undefined || v === '' || v === 'null';
+              const display = isEmpty ? null : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+              return (
+                <div key={idx} className="flex items-start justify-between gap-3 border rounded p-3">
+                  <div className="font-medium text-sm break-all">{prop.property}</div>
+                  {isEmpty
+                    ? <span className="text-sm text-muted-foreground italic">null</span>
+                    : <span className="text-sm font-mono break-all text-right">{display}</span>}
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
       )}

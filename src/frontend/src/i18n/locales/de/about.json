@@ -27,10 +27,10 @@
     }
   },
   "userGuide": {
-    "title": "__TODO__ User Guide",
-    "tableOfContents": "__TODO__ Table of Contents",
-    "loadError": "__TODO__ Failed to load user guide: {{statusText}}",
-    "loadErrorGeneric": "__TODO__ Failed to load user guide"
+    "title": "Benutzerhandbuch",
+    "tableOfContents": "Inhaltsverzeichnis",
+    "loadError": "Benutzerhandbuch konnte nicht geladen werden: {{statusText}}",
+    "loadErrorGeneric": "Benutzerhandbuch konnte nicht geladen werden"
   },
   "learnMore": "Beitragen & mehr erfahren",
   "cta": {

@@ -1,17 +1,17 @@
 {
   "categories": {
-    "getting_started": "__TODO__ Getting Started",
+    "getting_started": "はじめに",
     "explore": "探索・発見",
     "build": "構築・作成",
     "govern": "ガバナンス・コンプライアンス",
     "operate": "運用・デプロイ"
   },
   "questions": {
-    "gs_create_first_product": "__TODO__ How do I create my first data product?",
-    "gs_setup_domains": "__TODO__ How do I set up data domains?",
-    "gs_assign_roles": "__TODO__ How do I assign roles to my team?",
-    "gs_what_is_ontos": "__TODO__ What is Ontos and what can I do with it?",
-    "gs_concepts_overview": "__TODO__ Explain the core concepts: data products, contracts, and domains.",
+    "gs_create_first_product": "最初のデータプロダクトを作成するにはどうすればよいですか？",
+    "gs_setup_domains": "データドメインを設定するにはどうすればよいですか？",
+    "gs_assign_roles": "チームにロールを割り当てるにはどうすればよいですか？",
+    "gs_what_is_ontos": "Ontos とは何ですか？何ができますか？",
+    "gs_concepts_overview": "中核となる概念（データプロダクト、契約、ドメイン）について説明してください。",
     "global_find_customer_data": "顧客データはどこにありますか？",
     "global_business_terms_sales": "営業に関連するビジネス用語は何ですか？",
     "global_what_domains_exist": "組織で定義されているデータドメインは何ですか？",

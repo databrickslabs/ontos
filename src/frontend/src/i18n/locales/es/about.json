@@ -27,10 +27,10 @@
     }
   },
   "userGuide": {
-    "title": "__TODO__ User Guide",
-    "tableOfContents": "__TODO__ Table of Contents",
-    "loadError": "__TODO__ Failed to load user guide: {{statusText}}",
-    "loadErrorGeneric": "__TODO__ Failed to load user guide"
+    "title": "Guía del usuario",
+    "tableOfContents": "Tabla de contenidos",
+    "loadError": "No se pudo cargar la guía del usuario: {{statusText}}",
+    "loadErrorGeneric": "No se pudo cargar la guía del usuario"
   },
   "learnMore": "Contribuye y aprende más",
   "cta": {

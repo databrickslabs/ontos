@@ -1,7 +1,7 @@
 {
   "title": "チーム",
   "subtitle": "組織全体のチームとそのメンバーを管理します。",
-  "openMenu": "__TODO__ Open menu",
+  "openMenu": "メニューを開く",
   "addNewTeam": "新しいチームを追加",
   "editTeam": "チームを編集",
   "deleteTeam": "チームを削除",

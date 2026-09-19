@@ -1,65 +1,65 @@
 {
-  "title": "__TODO__ Business Owners",
-  "subtitle": "__TODO__ Ownership assignments tracking who is responsible for what.",
-  "addNew": "__TODO__ Assign Owner",
-  "editOwner": "__TODO__ Edit Assignment",
-  "removeOwner": "__TODO__ Remove Owner",
+  "title": "Business Owner",
+  "subtitle": "Assegnazioni di proprietà che tracciano chi è responsabile di cosa.",
+  "addNew": "Assegna proprietario",
+  "editOwner": "Modifica assegnazione",
+  "removeOwner": "Rimuovi proprietario",
   "table": {
-    "object": "__TODO__ Object",
-    "objectType": "__TODO__ Object Type",
-    "owner": "__TODO__ Owner",
-    "role": "__TODO__ Role",
-    "status": "__TODO__ Status",
-    "assignedAt": "__TODO__ Assigned",
-    "removedAt": "__TODO__ Removed",
-    "actions": "__TODO__ Actions"
+    "object": "Oggetto",
+    "objectType": "Tipo di oggetto",
+    "owner": "Proprietario",
+    "role": "Ruolo",
+    "status": "Stato",
+    "assignedAt": "Assegnato",
+    "removedAt": "Rimosso",
+    "actions": "Azioni"
   },
   "objectTypes": {
-    "data_product": "__TODO__ Data Product",
-    "data_contract": "__TODO__ Data Contract",
-    "dataset": "__TODO__ Dataset",
-    "data_domain": "__TODO__ Data Domain",
-    "business_term": "__TODO__ Business Term",
-    "policy": "__TODO__ Policy",
-    "asset": "__TODO__ Asset",
-    "tag": "__TODO__ Tag"
+    "data_product": "Prodotto dati",
+    "data_contract": "Contratto dati",
+    "dataset": "Dataset",
+    "data_domain": "Dominio dati",
+    "business_term": "Termine di business",
+    "policy": "Policy",
+    "asset": "Asset",
+    "tag": "Tag"
   },
   "statusLabels": {
-    "active": "__TODO__ Active",
-    "inactive": "__TODO__ Inactive"
+    "active": "Attivo",
+    "inactive": "Inattivo"
   },
   "permissions": {
-    "deniedView": "__TODO__ You do not have permission to view business owners.",
-    "deniedCreate": "__TODO__ You do not have permission to assign owners.",
-    "deniedEdit": "__TODO__ You do not have permission to edit owner assignments.",
-    "deniedDelete": "__TODO__ You do not have permission to remove owners.",
-    "permissionDenied": "__TODO__ Permission Denied"
+    "deniedView": "Non hai l'autorizzazione per visualizzare i business owner.",
+    "deniedCreate": "Non hai l'autorizzazione per assegnare proprietari.",
+    "deniedEdit": "Non hai l'autorizzazione per modificare le assegnazioni dei proprietari.",
+    "deniedDelete": "Non hai l'autorizzazione per rimuovere proprietari.",
+    "permissionDenied": "Autorizzazione negata"
   },
   "messages": {
-    "errorFetching": "__TODO__ Error fetching business owners",
-    "errorRemoving": "__TODO__ Error removing business owner",
-    "removed": "__TODO__ Owner Removed",
-    "removedSuccess": "__TODO__ The ownership assignment was successfully removed.",
-    "errorLoadingData": "__TODO__ Error Loading Data"
+    "errorFetching": "Errore nel recupero dei business owner",
+    "errorRemoving": "Errore nella rimozione del business owner",
+    "removed": "Proprietario rimosso",
+    "removedSuccess": "L'assegnazione di proprietà è stata rimossa con successo.",
+    "errorLoadingData": "Errore nel caricamento dei dati"
   },
   "removeDialog": {
-    "title": "__TODO__ Remove Owner?",
-    "description": "__TODO__ This will deactivate the ownership assignment. The history will be preserved.",
-    "reasonLabel": "__TODO__ Reason (optional)",
-    "reasonPlaceholder": "__TODO__ Enter reason for removal...",
-    "cancel": "__TODO__ Cancel",
-    "remove": "__TODO__ Remove"
+    "title": "Rimuovere il proprietario?",
+    "description": "Questo disattiverà l'assegnazione di proprietà. La cronologia verrà conservata.",
+    "reasonLabel": "Motivo (facoltativo)",
+    "reasonPlaceholder": "Inserisci il motivo della rimozione...",
+    "cancel": "Annulla",
+    "remove": "Rimuovi"
   },
   "emptyState": {
-    "title": "__TODO__ No ownership assignments yet",
-    "description": "__TODO__ Assign business owners to data products, contracts, and other objects."
+    "title": "Nessuna assegnazione di proprietà ancora presente",
+    "description": "Assegna business owner a prodotti dati, contratti e altri oggetti."
   },
   "panel": {
-    "title": "__TODO__ Owners",
-    "currentOwners": "__TODO__ Current Owners",
-    "previousOwners": "__TODO__ Previous Owners",
-    "noOwners": "__TODO__ No owners assigned",
-    "assignOwner": "__TODO__ Assign Owner",
-    "history": "__TODO__ Show History"
+    "title": "Proprietari",
+    "currentOwners": "Proprietari attuali",
+    "previousOwners": "Proprietari precedenti",
+    "noOwners": "Nessun proprietario assegnato",
+    "assignOwner": "Assegna proprietario",
+    "history": "Mostra cronologia"
   }
 }

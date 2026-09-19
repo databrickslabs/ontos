@@ -1,75 +1,75 @@
 {
-  "title": "__TODO__ Delivery Methods",
-  "subtitle": "__TODO__ Define how data is delivered to consumers via deliverables (e.g., Table Access, Serving Endpoint).",
-  "addNew": "__TODO__ Add Method",
-  "editMethod": "__TODO__ Edit Method",
-  "deleteMethod": "__TODO__ Delete Method",
-  "systemBadge": "__TODO__ System",
-  "openMenu": "__TODO__ Open menu",
+  "title": "Metodi di distribuzione",
+  "subtitle": "Definisci come i dati vengono distribuiti ai consumatori tramite i deliverable (ad es. accesso a tabella, endpoint di serving).",
+  "addNew": "Aggiungi metodo",
+  "editMethod": "Modifica metodo",
+  "deleteMethod": "Elimina metodo",
+  "systemBadge": "Sistema",
+  "openMenu": "Apri menu",
   "table": {
-    "name": "__TODO__ Name",
-    "description": "__TODO__ Description",
-    "category": "__TODO__ Category",
-    "status": "__TODO__ Status",
-    "system": "__TODO__ System",
-    "lastUpdated": "__TODO__ Last Updated",
-    "actions": "__TODO__ Actions"
+    "name": "Nome",
+    "description": "Descrizione",
+    "category": "Categoria",
+    "status": "Stato",
+    "system": "Sistema",
+    "lastUpdated": "Ultimo aggiornamento",
+    "actions": "Azioni"
   },
   "categories": {
-    "access": "__TODO__ Access",
-    "endpoint": "__TODO__ Endpoint",
-    "export": "__TODO__ Export",
-    "streaming": "__TODO__ Streaming"
+    "access": "Accesso",
+    "endpoint": "Endpoint",
+    "export": "Esporta",
+    "streaming": "Streaming"
   },
   "statuses": {
-    "active": "__TODO__ Active",
-    "deprecated": "__TODO__ Deprecated"
+    "active": "Attivo",
+    "deprecated": "Deprecato"
   },
   "permissions": {
-    "deniedView": "__TODO__ You do not have permission to view delivery methods.",
-    "deniedCreate": "__TODO__ You do not have permission to create delivery methods.",
-    "deniedEdit": "__TODO__ You do not have permission to edit delivery methods.",
-    "deniedDelete": "__TODO__ You do not have permission to delete delivery methods.",
-    "permissionDenied": "__TODO__ Permission Denied"
+    "deniedView": "Non hai l'autorizzazione per visualizzare i metodi di distribuzione.",
+    "deniedCreate": "Non hai l'autorizzazione per creare metodi di distribuzione.",
+    "deniedEdit": "Non hai l'autorizzazione per modificare metodi di distribuzione.",
+    "deniedDelete": "Non hai l'autorizzazione per eliminare metodi di distribuzione.",
+    "permissionDenied": "Autorizzazione negata"
   },
   "messages": {
-    "errorFetching": "__TODO__ Error fetching delivery methods",
-    "loadFailed": "__TODO__ Failed to load delivery methods",
-    "errorDeleting": "__TODO__ Error deleting delivery method",
-    "deleted": "__TODO__ Delivery Method Deleted",
-    "deletedSuccess": "__TODO__ The delivery method was successfully deleted.",
-    "errorLoadingData": "__TODO__ Error Loading Data"
+    "errorFetching": "Errore nel recupero dei metodi di distribuzione",
+    "loadFailed": "Impossibile caricare i metodi di distribuzione",
+    "errorDeleting": "Errore nell'eliminazione del metodo di distribuzione",
+    "deleted": "Metodo di distribuzione eliminato",
+    "deletedSuccess": "Il metodo di distribuzione è stato eliminato con successo.",
+    "errorLoadingData": "Errore nel caricamento dei dati"
   },
   "deleteDialog": {
-    "title": "__TODO__ Delete Delivery Method?",
-    "description": "__TODO__ This action cannot be undone. Existing deliverables using this method may become orphaned.",
-    "cancel": "__TODO__ Cancel",
-    "delete": "__TODO__ Delete"
+    "title": "Eliminare il metodo di distribuzione?",
+    "description": "Questa azione non può essere annullata. I deliverable esistenti che utilizzano questo metodo potrebbero rimanere orfani.",
+    "cancel": "Annulla",
+    "delete": "Elimina"
   },
   "emptyState": {
-    "title": "__TODO__ No delivery methods defined yet",
-    "description": "__TODO__ Create your first delivery method (e.g., Table Access, Serving Endpoint, File Export)."
+    "title": "Nessun metodo di distribuzione ancora definito",
+    "description": "Crea il tuo primo metodo di distribuzione (ad es. accesso a tabella, endpoint di serving, esportazione file)."
   },
   "form": {
-    "createTitle": "__TODO__ Create Delivery Method",
-    "createDescription": "__TODO__ Add a new delivery method for data distribution.",
-    "editTitle": "__TODO__ Edit Delivery Method",
-    "editDescription": "__TODO__ Update the details of this delivery method.",
-    "create": "__TODO__ Create",
-    "update": "__TODO__ Save Changes",
-    "noCategory": "__TODO__ No category",
+    "createTitle": "Crea metodo di distribuzione",
+    "createDescription": "Aggiungi un nuovo metodo di distribuzione dei dati.",
+    "editTitle": "Modifica metodo di distribuzione",
+    "editDescription": "Aggiorna i dettagli di questo metodo di distribuzione.",
+    "create": "Crea",
+    "update": "Salva le modifiche",
+    "noCategory": "Nessuna categoria",
     "placeholders": {
-      "name": "__TODO__ e.g., Table Access",
-      "description": "__TODO__ Describe how data is delivered...",
-      "category": "__TODO__ Select a category"
+      "name": "ad es. accesso a tabella",
+      "description": "Descrivi come vengono distribuiti i dati...",
+      "category": "Seleziona una categoria"
     },
     "toasts": {
-      "created": "__TODO__ Delivery Method Created",
-      "createdDescription": "__TODO__ \"{{name}}\" has been created.",
-      "updated": "__TODO__ Delivery Method Updated",
-      "updatedDescription": "__TODO__ \"{{name}}\" has been updated.",
-      "createFailed": "__TODO__ Failed to Create",
-      "updateFailed": "__TODO__ Failed to Update"
+      "created": "Metodo di distribuzione creato",
+      "createdDescription": "\"{{name}}\" è stato creato.",
+      "updated": "Metodo di distribuzione aggiornato",
+      "updatedDescription": "\"{{name}}\" è stato aggiornato.",
+      "createFailed": "Creazione non riuscita",
+      "updateFailed": "Aggiornamento non riuscito"
     }
   }
 }

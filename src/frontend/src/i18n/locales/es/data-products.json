@@ -25,7 +25,7 @@
     "noDelete": "No tienes permiso para eliminar productos de datos.",
     "noBulkDelete": "No tienes permiso para eliminación masiva.",
     "noGenieSpace": "No tienes permiso para crear Genie Spaces.",
-    "noUpload": "__TODO__ You do not have permission to upload data products."
+    "noUpload": "No tiene permiso para cargar productos de datos."
   },
   "bulk": {
     "deleteConfirm": "¿Estás seguro de que quieres eliminar {{count}} producto(s) seleccionado(s)?",
@@ -56,7 +56,7 @@
     "tooltipTitle": "Subir Producto de Datos (formato ODPS)",
     "tooltipDescription": "Acepta archivos YAML o JSON siguiendo el esquema ODPS (Open Data Product Standard).",
     "tooltipHint": "Para Contratos de Datos (ODCS), usa la página de Contratos de Datos.",
-    "odcsHint": "__TODO__ Hint: This page is for Data Products (ODPS format). If you're trying to upload a Data Contract (ODCS format), please use the Data Contracts page instead."
+    "odcsHint": "Sugerencia: Esta página es para productos de datos (formato ODPS). Si intenta cargar un contrato de datos (formato ODCS), use la página de contratos de datos en su lugar."
   },
   "genie": {
     "noSelection": "Sin Selección",
@@ -88,10 +88,10 @@
     "editProduct": "Editar producto",
     "deleteProduct": "Eliminar producto",
     "subscribed": "Suscrito",
-    "unnamedProduct": "__TODO__ Unnamed Product",
-    "previewMetadata": "__TODO__ Preview Metadata",
-    "editDenied": "__TODO__ Edit (Permission Denied)",
-    "deleteDenied": "__TODO__ Delete (Permission Denied)"
+    "unnamedProduct": "Producto sin nombre",
+    "previewMetadata": "Previsualizar metadatos",
+    "editDenied": "Editar (permiso denegado)",
+    "deleteDenied": "Eliminar (permiso denegado)"
   },
   "messages": {
     "deleteConfirm": "¿Estás seguro de que quieres eliminar este producto de datos?",
@@ -102,12 +102,12 @@
     "importError": "Error al importar el producto de datos",
     "success": "Éxito",
     "error": "Error",
-    "validationErrors": "__TODO__ {{count}} validation error(s) occurred",
-    "validationTitle": "__TODO__ Validation Error",
-    "loadInitialError": "__TODO__ Failed to load initial data",
-    "refreshError": "__TODO__ Failed to refresh products list",
-    "unknownError": "__TODO__ Unknown error",
-    "unknownErrorFormat": "__TODO__ Unknown error format"
+    "validationErrors": "Se produjeron {{count}} error(es) de validación",
+    "validationTitle": "Error de validación",
+    "loadInitialError": "No se pudieron cargar los datos iniciales",
+    "refreshError": "No se pudo actualizar la lista de productos",
+    "unknownError": "Error desconocido",
+    "unknownErrorFormat": "Formato de error desconocido"
   },
   "status": {
     "draft": "Borrador",
@@ -121,7 +121,7 @@
     "deprecated": "Obsoleto",
     "retired": "Retirado",
     "published": "Publicado",
-    "personalDraft": "__TODO__ Personal Draft"
+    "personalDraft": "Borrador personal"
   },
   "viewMode": {
     "table": "Tabla",
@@ -149,14 +149,14 @@
       "tags": "Etiquetas",
       "noTags": "Sin etiquetas",
       "notAssigned": "No asignado",
-      "project": "__TODO__ Project",
-      "tenant": "__TODO__ Tenant",
-      "ownerTeam": "__TODO__ Team",
-      "apiVersion": "__TODO__ API Ver",
-      "certification": "__TODO__ Cert",
-      "publishedLabel": "__TODO__ Published",
-      "quality": "__TODO__ Quality",
-      "linkedConcepts": "__TODO__ Linked Business Concepts"
+      "project": "Proyecto",
+      "tenant": "Inquilino",
+      "ownerTeam": "Equipo",
+      "apiVersion": "Ver. API",
+      "certification": "Cert",
+      "publishedLabel": "Publicado",
+      "quality": "Calidad",
+      "linkedConcepts": "Conceptos de negocio vinculados"
     },
     "sections": {
       "overview": "Resumen",
@@ -194,8 +194,8 @@
         "subscribed": "Suscrito",
         "reason": "Motivo"
       },
-      "titleWithCount": "__TODO__ Subscribers ({{count}})",
-      "notificationSubtitle": "__TODO__ Users subscribed to this product will receive notifications about status changes, compliance issues, and new versions."
+      "titleWithCount": "Suscriptores ({{count}})",
+      "notificationSubtitle": "Los usuarios suscritos a este producto recibirán notificaciones sobre cambios de estado, problemas de cumplimiento y nuevas versiones."
     },
     "subscription": {
       "subscribed": "Suscrito",
@@ -207,153 +207,153 @@
     "deleteConfirm": "¿Estás seguro de que quieres eliminar \"{{name}}\"?",
     "deleteSuccess": "Producto de datos eliminado exitosamente",
     "deleteError": "Error al eliminar el producto de datos",
-    "unnamedProduct": "__TODO__ Unnamed Product",
+    "unnamedProduct": "Producto sin nombre",
     "ratings": {
-      "title": "__TODO__ Ratings & Reviews"
+      "title": "Valoraciones y reseñas"
     },
     "actions": {
-      "requestAccess": "__TODO__ Request...",
-      "certify": "__TODO__ Certify",
-      "createGenieSpace": "__TODO__ Create Genie Space",
-      "cloneForEditing": "__TODO__ Clone for Editing",
-      "commitChanges": "__TODO__ Commit Changes",
-      "discardDraft": "__TODO__ Discard Draft",
-      "newVersion": "__TODO__ New Version",
-      "exportODPS": "__TODO__ Export ODPS",
-      "manageLineage": "__TODO__ Manage Lineage"
+      "requestAccess": "Solicitar...",
+      "certify": "Certificar",
+      "createGenieSpace": "Crear Genie Space",
+      "cloneForEditing": "Clonar para editar",
+      "commitChanges": "Confirmar cambios",
+      "discardDraft": "Descartar borrador",
+      "newVersion": "Nueva versión",
+      "exportODPS": "Exportar ODPS",
+      "manageLineage": "Gestionar linaje"
     },
     "banners": {
-      "personalDraftTitle": "__TODO__ Personal Draft",
-      "personalDraftMessage": "__TODO__ This is your personal draft. Only you can see it. Commit changes to share with your team.",
-      "readOnlyTitle": "__TODO__ Read-Only",
-      "readOnlyMessage": "__TODO__ This product is {{status}}. Clone to create a personal draft for editing."
+      "personalDraftTitle": "Borrador personal",
+      "personalDraftMessage": "Este es su borrador personal. Solo usted puede verlo. Confirme los cambios para compartirlo con su equipo.",
+      "readOnlyTitle": "Solo lectura",
+      "readOnlyMessage": "Este producto está {{status}}. Clónelo para crear un borrador personal y editarlo."
     },
     "contacts": {
-      "title": "__TODO__ Contacts",
-      "fromImportedData": "__TODO__ From imported data",
-      "teamAssignmentOnly": "__TODO__ Team assignment only",
-      "defaultRole": "__TODO__ Owner",
-      "teamRole": "__TODO__ Team",
-      "importedContactsLabel": "__TODO__ Imported Contacts",
-      "noContactsAssigned": "__TODO__ No contacts assigned"
+      "title": "Contactos",
+      "fromImportedData": "De datos importados",
+      "teamAssignmentOnly": "Solo asignación de equipo",
+      "defaultRole": "Propietario",
+      "teamRole": "Equipo",
+      "importedContactsLabel": "Contactos importados",
+      "noContactsAssigned": "No hay contactos asignados"
     },
     "deliverables": {
-      "titleWithCount": "__TODO__ Deliverables ({{count}})",
-      "addDeliverable": "__TODO__ Add Deliverable",
-      "subtitle": "__TODO__ Define deliverables and their delivery methods. Link assets and contracts to each deliverable.",
-      "noDeliverables": "__TODO__ No deliverables defined.",
-      "noDeliverablesWithEdit": "__TODO__ No deliverables defined. Add deliverables and link assets when ready.",
-      "contractLabel": "__TODO__ Contract: {{name}}",
-      "editTitle": "__TODO__ Edit deliverable",
-      "deleteTitle": "__TODO__ Delete deliverable",
-      "linkAsset": "__TODO__ Link Asset",
-      "linkAssetsTitle": "__TODO__ Link Assets to \"{{portName}}\"",
-      "linkAssetsDescription": "__TODO__ Only deliverable asset types (Table, View, Dataset, API Endpoint, ML Model) can be linked to an output port.",
-      "linkedToPort": "__TODO__ linked to port",
-      "assetsLinkedTitle": "__TODO__ Assets linked",
-      "assetsLinked": "__TODO__ {{count}} asset(s) linked to {{portName}}",
-      "assetUnlinked": "__TODO__ Asset unlinked",
-      "linkAssetsFailed": "__TODO__ Failed to link assets",
-      "unlinkAssetFailed": "__TODO__ Failed to unlink asset"
+      "titleWithCount": "Entregables ({{count}})",
+      "addDeliverable": "Agregar entregable",
+      "subtitle": "Defina los entregables y sus métodos de entrega. Vincule activos y contratos a cada entregable.",
+      "noDeliverables": "No hay entregables definidos.",
+      "noDeliverablesWithEdit": "No hay entregables definidos. Agregue entregables y vincule activos cuando esté listo.",
+      "contractLabel": "Contrato: {{name}}",
+      "editTitle": "Editar entregable",
+      "deleteTitle": "Eliminar entregable",
+      "linkAsset": "Vincular activo",
+      "linkAssetsTitle": "Vincular activos a \"{{portName}}\"",
+      "linkAssetsDescription": "Solo los tipos de activo entregables (Tabla, Vista, Conjunto de datos, API Endpoint, ML Model) se pueden vincular a un puerto de salida.",
+      "linkedToPort": "vinculado(s) al puerto",
+      "assetsLinkedTitle": "Activos vinculados",
+      "assetsLinked": "{{count}} activo(s) vinculado(s) a {{portName}}",
+      "assetUnlinked": "Activo desvinculado",
+      "linkAssetsFailed": "No se pudieron vincular los activos",
+      "unlinkAssetFailed": "No se pudo desvincular el activo"
     },
     "description": {
-      "purposeLabel": "__TODO__ Purpose",
-      "limitationsLabel": "__TODO__ Limitations",
-      "usageLabel": "__TODO__ Usage"
+      "purposeLabel": "Propósito",
+      "limitationsLabel": "Limitaciones",
+      "usageLabel": "Uso"
     },
     "lineage": {
-      "businessLineageTitle": "__TODO__ Business Lineage"
+      "businessLineageTitle": "Linaje de negocio"
     },
     "consumables": {
-      "titleWithCount": "__TODO__ Consumables ({{count}})",
-      "addConsumable": "__TODO__ Add Consumable",
-      "contractLabel": "__TODO__ Contract: {{contractId}}",
-      "noConsumables": "__TODO__ No consumables defined"
+      "titleWithCount": "Consumibles ({{count}})",
+      "addConsumable": "Agregar consumible",
+      "contractLabel": "Contrato: {{contractId}}",
+      "noConsumables": "No hay consumibles definidos"
     },
     "managementPorts": {
-      "titleWithCount": "__TODO__ Management Ports ({{count}})",
-      "addManagementPort": "__TODO__ Add Management Port",
-      "subtitle": "__TODO__ Observability, control, and discoverability endpoints",
-      "contentLabel": "__TODO__ Content",
-      "urlLabel": "__TODO__ URL",
-      "noManagementPorts": "__TODO__ No management ports defined"
+      "titleWithCount": "Puertos de gestión ({{count}})",
+      "addManagementPort": "Agregar puerto de gestión",
+      "subtitle": "Endpoints de observabilidad, control y descubrimiento",
+      "contentLabel": "Contenido",
+      "urlLabel": "URL",
+      "noManagementPorts": "No hay puertos de gestión definidos"
     },
     "teamMetadata": {
-      "titleWithCount": "__TODO__ ODPS Team Metadata ({{count}} members)",
-      "subtitle": "__TODO__ Read-only provenance from imported product YAML. Manage ownership via the Owners panel above.",
-      "defaultRole": "__TODO__ Member"
+      "titleWithCount": "Metadatos del equipo ODPS ({{count}} miembros)",
+      "subtitle": "Procedencia de solo lectura del YAML del producto importado. Gestione la propiedad mediante el panel de propietarios de arriba.",
+      "defaultRole": "Miembro"
     },
     "supportChannels": {
-      "titleWithCount": "__TODO__ Support Channels ({{count}})",
-      "addChannel": "__TODO__ Add Channel",
-      "toolLabel": "__TODO__ Tool",
-      "noChannels": "__TODO__ No support channels defined"
+      "titleWithCount": "Canales de soporte ({{count}})",
+      "addChannel": "Agregar canal",
+      "toolLabel": "Herramienta",
+      "noChannels": "No hay canales de soporte definidos"
     },
     "relatedEntities": {
-      "title": "__TODO__ Related Entities"
+      "title": "Entidades relacionadas"
     },
     "toasts": {
-      "loadError": "__TODO__ Failed to load data: {{error}}",
-      "certifyTitle": "__TODO__ Certified",
-      "certifySuccess": "__TODO__ Certification level has been applied.",
-      "publishTitle": "__TODO__ Publication updated",
-      "publishSuccess": "__TODO__ Publication scope has been saved.",
-      "deleteError": "__TODO__ Failed to delete: {{error}}",
-      "draftCreatedTitle": "__TODO__ Draft Created",
-      "draftCreatedMessage": "__TODO__ Personal draft created. You can now edit it.",
-      "draftDiscardedTitle": "__TODO__ Draft Discarded",
-      "draftDiscardedMessage": "__TODO__ Personal draft has been discarded.",
-      "approvalNotConfiguredTitle": "__TODO__ Approval workflow not configured",
-      "approvalNotConfiguredMessage": "__TODO__ Subscribing directly. Load default workflows in Settings to use the approval flow.",
-      "subscribedTitle": "__TODO__ Subscribed",
-      "subscribedMessage": "__TODO__ You will now receive notifications about this product.",
-      "unsubscribedTitle": "__TODO__ Unsubscribed",
-      "unsubscribedMessage": "__TODO__ You will no longer receive notifications about this product.",
-      "updatedTitle": "__TODO__ Updated",
-      "updatedMessage": "__TODO__ Product updated successfully.",
-      "createNewVersionTitle": "__TODO__ Create New Version",
-      "createNewVersionMessage": "__TODO__ Creating a new version will clone this product. Apply your changes to the new version after creation.",
-      "creatingVersionTitle": "__TODO__ Creating New Version",
-      "creatingVersionMessage": "__TODO__ Creating version {{version}}...",
-      "versionCreatedMessage": "__TODO__ Version {{version}} created!",
-      "consumableUpdatedTitle": "__TODO__ Consumable Updated",
-      "consumableUpdatedMessage": "__TODO__ Consumable updated successfully.",
-      "consumableDeletedTitle": "__TODO__ Consumable Deleted",
-      "consumableDeletedMessage": "__TODO__ Consumable deleted successfully.",
-      "deliverableUpdatedTitle": "__TODO__ Deliverable Updated",
-      "deliverableUpdatedMessage": "__TODO__ Deliverable updated successfully.",
-      "deliverableDeletedTitle": "__TODO__ Deliverable Deleted",
-      "deliverableDeletedMessage": "__TODO__ Deliverable deleted successfully.",
-      "managementPortUpdatedTitle": "__TODO__ Management Port Updated",
-      "managementPortUpdatedMessage": "__TODO__ Management port updated successfully.",
-      "managementPortDeletedTitle": "__TODO__ Management Port Deleted",
-      "managementPortDeletedMessage": "__TODO__ Management port deleted successfully.",
-      "teamMemberAddedTitle": "__TODO__ Team Member Added",
-      "teamMemberAddedMessage": "__TODO__ Team member added successfully.",
-      "teamMemberUpdatedTitle": "__TODO__ Team Member Updated",
-      "teamMemberUpdatedMessage": "__TODO__ Team member updated successfully.",
-      "supportChannelUpdatedTitle": "__TODO__ Support Channel Updated",
-      "supportChannelUpdatedMessage": "__TODO__ Support channel updated successfully.",
-      "supportChannelDeletedTitle": "__TODO__ Support Channel Deleted",
-      "supportChannelDeletedMessage": "__TODO__ Support channel deleted successfully.",
-      "contractUnlinkedTitle": "__TODO__ Contract Unlinked",
-      "contractUnlinkedMessage": "__TODO__ Contract successfully unlinked from deliverable",
-      "iriLinkedTitle": "__TODO__ Linked",
-      "iriLinkedMessage": "__TODO__ IRI linked to data product.",
-      "iriRemovedTitle": "__TODO__ Removed",
-      "iriRemovedMessage": "__TODO__ IRI link removed.",
-      "genieSpaceRequesting": "__TODO__ Requesting Genie Space creation...",
-      "genieSpaceInitiated": "__TODO__ Genie Space creation initiated."
+      "loadError": "No se pudieron cargar los datos: {{error}}",
+      "certifyTitle": "Certificado",
+      "certifySuccess": "Se ha aplicado el nivel de certificación.",
+      "publishTitle": "Publicación actualizada",
+      "publishSuccess": "Se ha guardado el ámbito de publicación.",
+      "deleteError": "No se pudo eliminar: {{error}}",
+      "draftCreatedTitle": "Borrador creado",
+      "draftCreatedMessage": "Borrador personal creado. Ahora puede editarlo.",
+      "draftDiscardedTitle": "Borrador descartado",
+      "draftDiscardedMessage": "Se ha descartado el borrador personal.",
+      "approvalNotConfiguredTitle": "Flujo de trabajo de aprobación no configurado",
+      "approvalNotConfiguredMessage": "Suscribiéndose directamente. Cargue los flujos de trabajo predeterminados en Configuración para usar el flujo de aprobación.",
+      "subscribedTitle": "Suscrito",
+      "subscribedMessage": "Ahora recibirá notificaciones sobre este producto.",
+      "unsubscribedTitle": "Suscripción cancelada",
+      "unsubscribedMessage": "Ya no recibirá notificaciones sobre este producto.",
+      "updatedTitle": "Actualizado",
+      "updatedMessage": "Producto actualizado correctamente.",
+      "createNewVersionTitle": "Crear nueva versión",
+      "createNewVersionMessage": "Crear una nueva versión clonará este producto. Aplique sus cambios a la nueva versión después de crearla.",
+      "creatingVersionTitle": "Creando nueva versión",
+      "creatingVersionMessage": "Creando la versión {{version}}...",
+      "versionCreatedMessage": "¡Versión {{version}} creada!",
+      "consumableUpdatedTitle": "Consumible actualizado",
+      "consumableUpdatedMessage": "Consumible actualizado correctamente.",
+      "consumableDeletedTitle": "Consumible eliminado",
+      "consumableDeletedMessage": "Consumible eliminado correctamente.",
+      "deliverableUpdatedTitle": "Entregable actualizado",
+      "deliverableUpdatedMessage": "Entregable actualizado correctamente.",
+      "deliverableDeletedTitle": "Entregable eliminado",
+      "deliverableDeletedMessage": "Entregable eliminado correctamente.",
+      "managementPortUpdatedTitle": "Puerto de gestión actualizado",
+      "managementPortUpdatedMessage": "Puerto de gestión actualizado correctamente.",
+      "managementPortDeletedTitle": "Puerto de gestión eliminado",
+      "managementPortDeletedMessage": "Puerto de gestión eliminado correctamente.",
+      "teamMemberAddedTitle": "Miembro del equipo agregado",
+      "teamMemberAddedMessage": "Miembro del equipo agregado correctamente.",
+      "teamMemberUpdatedTitle": "Miembro del equipo actualizado",
+      "teamMemberUpdatedMessage": "Miembro del equipo actualizado correctamente.",
+      "supportChannelUpdatedTitle": "Canal de soporte actualizado",
+      "supportChannelUpdatedMessage": "Canal de soporte actualizado correctamente.",
+      "supportChannelDeletedTitle": "Canal de soporte eliminado",
+      "supportChannelDeletedMessage": "Canal de soporte eliminado correctamente.",
+      "contractUnlinkedTitle": "Contrato desvinculado",
+      "contractUnlinkedMessage": "Contrato desvinculado correctamente del entregable",
+      "iriLinkedTitle": "Vinculado",
+      "iriLinkedMessage": "IRI vinculado al producto de datos.",
+      "iriRemovedTitle": "Quitado",
+      "iriRemovedMessage": "Vínculo de IRI eliminado.",
+      "genieSpaceRequesting": "Solicitando la creación del Genie Space...",
+      "genieSpaceInitiated": "Creación del Genie Space iniciada."
     },
     "confirms": {
-      "deleteProduct": "__TODO__ Delete data product \"{{name}}\"?",
-      "discardDraft": "__TODO__ Discard this draft? This action cannot be undone.",
-      "deleteConsumable": "__TODO__ Delete this consumable?",
-      "deleteDeliverable": "__TODO__ Delete this deliverable?",
-      "deleteManagementPort": "__TODO__ Delete this management port?",
-      "deleteSupportChannel": "__TODO__ Delete this support channel?",
-      "unlinkContract": "__TODO__ Unlink contract from this deliverable?",
-      "createGenieSpace": "__TODO__ Create a Genie Space for \"{{name}}\"?"
+      "deleteProduct": "¿Eliminar el producto de datos \"{{name}}\"?",
+      "discardDraft": "¿Descartar este borrador? Esta acción no se puede deshacer.",
+      "deleteConsumable": "¿Eliminar este consumible?",
+      "deleteDeliverable": "¿Eliminar este entregable?",
+      "deleteManagementPort": "¿Eliminar este puerto de gestión?",
+      "deleteSupportChannel": "¿Eliminar este canal de soporte?",
+      "unlinkContract": "¿Desvincular el contrato de este entregable?",
+      "createGenieSpace": "¿Crear un Genie Space para \"{{name}}\"?"
     }
   },
   "form": {
@@ -386,143 +386,143 @@
     "updateSuccess": "Producto de datos actualizado exitosamente",
     "createError": "Error al crear el producto de datos",
     "updateError": "Error al actualizar el producto de datos",
-    "dialogDescription": "__TODO__ Fill in the details for the data product. Use the tabs to switch between UI and JSON editors.",
-    "loadingDetails": "__TODO__ Loading product details...",
+    "dialogDescription": "Complete los detalles del producto de datos. Use las pestañas para alternar entre los editores de interfaz y JSON.",
+    "loadingDetails": "Cargando los detalles del producto...",
     "tabs": {
-      "uiEditor": "__TODO__ UI Editor",
-      "jsonEditor": "__TODO__ JSON Editor"
+      "uiEditor": "Editor de interfaz",
+      "jsonEditor": "Editor JSON"
     },
     "fields": {
-      "id": "__TODO__ ID (unique identifier)",
-      "title": "__TODO__ Title *",
-      "owner": "__TODO__ Owner *",
-      "productType": "__TODO__ Product Type *",
-      "project": "__TODO__ Project",
-      "domains": "__TODO__ Domains",
-      "archetype": "__TODO__ Archetype"
+      "id": "ID (identificador único)",
+      "title": "Título *",
+      "owner": "Propietario *",
+      "productType": "Tipo de producto *",
+      "project": "Proyecto",
+      "domains": "Dominios",
+      "archetype": "Arquetipo"
     },
     "placeholders": {
-      "systemId": "__TODO__ (System ID)",
-      "productIdOptional": "__TODO__ e.g., my-unique-product (optional)",
-      "selectProductType": "__TODO__ Select product type",
-      "selectProject": "__TODO__ Select project (optional)",
-      "selectDomains": "__TODO__ Select domains...",
-      "selectArchetype": "__TODO__ Select archetype",
-      "selectStatus": "__TODO__ Select status"
+      "systemId": "(ID del sistema)",
+      "productIdOptional": "p. ej., my-unique-product (opcional)",
+      "selectProductType": "Seleccione el tipo de producto",
+      "selectProject": "Seleccione un proyecto (opcional)",
+      "selectDomains": "Seleccione dominios...",
+      "selectArchetype": "Seleccione un arquetipo",
+      "selectStatus": "Seleccione un estado"
     },
-    "projectTeamCount": "__TODO__ ({{count}} teams)",
-    "projectMemberHint": "__TODO__ You can only select projects you are a member of",
+    "projectTeamCount": "({{count}} equipos)",
+    "projectMemberHint": "Solo puede seleccionar proyectos de los que sea miembro",
     "sections": {
-      "info": "__TODO__ Info",
-      "infoDescription": "__TODO__ Basic information about the data product.",
-      "consumables": "__TODO__ Consumables",
-      "consumablesDescription": "__TODO__ Sources feeding this product. Select tables from the metastore.",
-      "deliverables": "__TODO__ Deliverables",
-      "deliverablesDescription": "__TODO__ Outputs provided by this data product.",
-      "tagsDescription": "__TODO__ Add relevant tags (comma-separated).",
-      "consumerGroups": "__TODO__ Consumer Groups",
-      "consumerGroupsDescriptionPart1": "__TODO__ Workspace groups that represent the expected consumers of this product. Each entry is stored as a typed principal ",
-      "consumerGroupsDescriptionPart2": "__TODO__ ; surfaced to subscribe webhooks via ",
-      "links": "__TODO__ Links",
-      "linksDescription": "__TODO__ Add relevant links (e.g., documentation, dashboards).",
-      "customProperties": "__TODO__ Custom Properties",
-      "customPropertiesDescription": "__TODO__ Add custom key-value metadata."
+      "info": "Información",
+      "infoDescription": "Información básica sobre el producto de datos.",
+      "consumables": "Consumibles",
+      "consumablesDescription": "Fuentes que alimentan este producto. Seleccione tablas del metastore.",
+      "deliverables": "Entregables",
+      "deliverablesDescription": "Salidas proporcionadas por este producto de datos.",
+      "tagsDescription": "Agregue etiquetas relevantes (separadas por comas).",
+      "consumerGroups": "Grupos de consumidores",
+      "consumerGroupsDescriptionPart1": "Grupos del espacio de trabajo que representan los consumidores esperados de este producto. Cada entrada se almacena como un principal tipado ",
+      "consumerGroupsDescriptionPart2": "; expuesto a los webhooks de suscripción mediante ",
+      "links": "Enlaces",
+      "linksDescription": "Agregue enlaces relevantes (p. ej., documentación, paneles).",
+      "customProperties": "Propiedades personalizadas",
+      "customPropertiesDescription": "Agregue metadatos personalizados de clave-valor."
     },
     "validation": {
-      "titleRequired": "__TODO__ Title is required",
-      "ownerRequired": "__TODO__ Owner is required",
-      "productTypeRequired": "__TODO__ Product Type is required",
-      "loadingSchema": "__TODO__ Loading schema...",
-      "schemaReady": "__TODO__ Schema ready.",
-      "schemaError": "__TODO__ Schema Error",
-      "schemaNotReady": "__TODO__ Schema not ready.",
-      "schemaValid": "__TODO__ Schema Valid",
-      "schemaErrors": "__TODO__ {{count}} schema validation error(s)",
-      "invalidJsonSyntax": "__TODO__ Invalid JSON syntax",
-      "dataFailedValidation": "__TODO__ Data failed schema validation. Please check the highlighted fields or the JSON editor."
+      "titleRequired": "El título es obligatorio",
+      "ownerRequired": "El propietario es obligatorio",
+      "productTypeRequired": "El tipo de producto es obligatorio",
+      "loadingSchema": "Cargando esquema...",
+      "schemaReady": "Esquema listo.",
+      "schemaError": "Error de esquema",
+      "schemaNotReady": "Esquema no listo.",
+      "schemaValid": "Esquema válido",
+      "schemaErrors": "{{count}} error(es) de validación de esquema",
+      "invalidJsonSyntax": "Sintaxis JSON no válida",
+      "dataFailedValidation": "Los datos no superaron la validación de esquema. Revise los campos resaltados o el editor JSON."
     },
     "consumable": {
-      "idLabel": "__TODO__ Consumable ID *",
-      "idRequired": "__TODO__ Consumable ID is required",
-      "nameLabel": "__TODO__ Consumable Name *",
-      "nameRequired": "__TODO__ Consumable Name is required",
-      "sourceTableLabel": "__TODO__ Source Table (Metastore) *",
-      "sourceTableRequired": "__TODO__ Source Table is required",
-      "selectSourceTable": "__TODO__ Select source table...",
-      "searchMetastore": "__TODO__ Search metastore tables...",
-      "searching": "__TODO__ Searching...",
-      "noTablesFound": "__TODO__ No tables found.",
-      "tagsPlaceholder": "__TODO__ Search and select tags for this consumable...",
-      "defaultName": "__TODO__ New Consumable",
-      "add": "__TODO__ Add Consumable",
-      "removeTitle": "__TODO__ Remove Consumable"
+      "idLabel": "ID del consumible *",
+      "idRequired": "El ID del consumible es obligatorio",
+      "nameLabel": "Nombre del consumible *",
+      "nameRequired": "El nombre del consumible es obligatorio",
+      "sourceTableLabel": "Tabla de origen (Metastore) *",
+      "sourceTableRequired": "La tabla de origen es obligatoria",
+      "selectSourceTable": "Seleccione la tabla de origen...",
+      "searchMetastore": "Buscar tablas del metastore...",
+      "searching": "Buscando...",
+      "noTablesFound": "No se encontraron tablas.",
+      "tagsPlaceholder": "Busque y seleccione etiquetas para este consumible...",
+      "defaultName": "Nuevo consumible",
+      "add": "Agregar consumible",
+      "removeTitle": "Quitar consumible"
     },
     "deliverable": {
-      "idLabel": "__TODO__ Deliverable ID *",
-      "idRequired": "__TODO__ Deliverable ID is required",
-      "nameLabel": "__TODO__ Deliverable Name *",
-      "nameRequired": "__TODO__ Deliverable Name is required",
-      "tagsPlaceholder": "__TODO__ Search and select tags for this deliverable...",
-      "defaultName": "__TODO__ New Deliverable",
-      "add": "__TODO__ Add Deliverable",
-      "removeTitle": "__TODO__ Remove Deliverable"
+      "idLabel": "ID del entregable *",
+      "idRequired": "El ID del entregable es obligatorio",
+      "nameLabel": "Nombre del entregable *",
+      "nameRequired": "El nombre del entregable es obligatorio",
+      "tagsPlaceholder": "Busque y seleccione etiquetas para este entregable...",
+      "defaultName": "Nuevo entregable",
+      "add": "Agregar entregable",
+      "removeTitle": "Quitar entregable"
     },
-    "tagsProductPlaceholder": "__TODO__ Search and select tags for this data product...",
+    "tagsProductPlaceholder": "Busque y seleccione etiquetas para este producto de datos...",
     "links": {
-      "keyPlaceholder": "__TODO__ Link Key (e.g., docs)",
-      "urlPlaceholder": "__TODO__ URL *",
-      "descriptionPlaceholder": "__TODO__ Description",
-      "removeTitle": "__TODO__ Remove Link",
-      "add": "__TODO__ Add Link"
+      "keyPlaceholder": "Clave del enlace (p. ej., docs)",
+      "urlPlaceholder": "URL *",
+      "descriptionPlaceholder": "Descripción",
+      "removeTitle": "Quitar enlace",
+      "add": "Agregar enlace"
     },
     "customProps": {
-      "keyPlaceholder": "__TODO__ Property Key",
-      "valuePlaceholder": "__TODO__ Property Value (string)",
-      "removeTitle": "__TODO__ Remove Property",
-      "add": "__TODO__ Add Custom Property"
+      "keyPlaceholder": "Clave de propiedad",
+      "valuePlaceholder": "Valor de propiedad (cadena)",
+      "removeTitle": "Quitar propiedad",
+      "add": "Agregar propiedad personalizada"
     },
     "portEditor": {
-      "portLinks": "__TODO__ Port Links",
-      "linkKey": "__TODO__ Link Key",
-      "url": "__TODO__ URL",
-      "removeLink": "__TODO__ Remove Link",
-      "addLink": "__TODO__ Add Link",
-      "portCustomProperties": "__TODO__ Port Custom Properties",
-      "propertyKey": "__TODO__ Property Key",
-      "propertyValue": "__TODO__ Property Value",
-      "removeProperty": "__TODO__ Remove Property",
-      "addCustomProperty": "__TODO__ Add Custom Property"
+      "portLinks": "Enlaces del puerto",
+      "linkKey": "Clave del enlace",
+      "url": "URL",
+      "removeLink": "Quitar enlace",
+      "addLink": "Agregar enlace",
+      "portCustomProperties": "Propiedades personalizadas del puerto",
+      "propertyKey": "Clave de propiedad",
+      "propertyValue": "Valor de propiedad",
+      "removeProperty": "Quitar propiedad",
+      "addCustomProperty": "Agregar propiedad personalizada"
     },
     "buttons": {
-      "updateProduct": "__TODO__ Update Product",
-      "createProduct": "__TODO__ Create Product",
-      "updateViaJson": "__TODO__ Update via JSON",
-      "createViaJson": "__TODO__ Create via JSON"
+      "updateProduct": "Actualizar producto",
+      "createProduct": "Crear producto",
+      "updateViaJson": "Actualizar mediante JSON",
+      "createViaJson": "Crear mediante JSON"
     },
-    "jsonPayloadLabel": "__TODO__ JSON Payload",
-    "jsonPlaceholder": "__TODO__ Enter or edit the Data Product JSON...",
-    "validationStatusLabel": "__TODO__ Validation Status:",
-    "showValidationDetails": "__TODO__ Show {{count}} validation details",
-    "confirmUnsavedClose": "__TODO__ You have unsaved changes. Are you sure you want to close?",
+    "jsonPayloadLabel": "Carga JSON",
+    "jsonPlaceholder": "Ingrese o edite el JSON del producto de datos...",
+    "validationStatusLabel": "Estado de validación:",
+    "showValidationDetails": "Mostrar {{count}} detalles de validación",
+    "confirmUnsavedClose": "Tiene cambios sin guardar. ¿Seguro que desea cerrar?",
     "messages": {
-      "syncError": "__TODO__ Sync Error",
-      "couldNotSyncUiToJson": "__TODO__ Could not sync UI state to JSON editor.",
-      "invalidJson": "__TODO__ Invalid JSON",
-      "invalidJsonDescription": "__TODO__ Cannot switch to UI editor. Please fix schema validation errors first.",
-      "couldNotParseJson": "__TODO__ Could not parse JSON: {{message}}",
-      "validationError": "__TODO__ Validation Error",
-      "pleaseFixValidation": "__TODO__ Please fix validation errors before saving.",
-      "jsonDataFailedValidation": "__TODO__ JSON data failed schema validation. Cannot save.",
-      "saveError": "__TODO__ Save Error",
-      "errorLoadingData": "__TODO__ Error Loading Data",
-      "couldNotFetchDetails": "__TODO__ Could not fetch details. {{message}}",
-      "failedToLoadDetails": "__TODO__ Failed to load product details: {{message}}",
-      "invalidJsonError": "__TODO__ Invalid JSON: {{message}}",
-      "couldNotLoadSchema": "__TODO__ Could not load schema: {{message}}",
-      "failedToSerialize": "__TODO__ Failed to serialize UI state to JSON.",
-      "unexpectedError": "__TODO__ An unexpected error occurred."
+      "syncError": "Error de sincronización",
+      "couldNotSyncUiToJson": "No se pudo sincronizar el estado de la interfaz con el editor JSON.",
+      "invalidJson": "JSON no válido",
+      "invalidJsonDescription": "No se puede cambiar al editor de interfaz. Corrija primero los errores de validación de esquema.",
+      "couldNotParseJson": "No se pudo analizar el JSON: {{message}}",
+      "validationError": "Error de validación",
+      "pleaseFixValidation": "Corrija los errores de validación antes de guardar.",
+      "jsonDataFailedValidation": "Los datos JSON no superaron la validación de esquema. No se puede guardar.",
+      "saveError": "Error al guardar",
+      "errorLoadingData": "Error al cargar los datos",
+      "couldNotFetchDetails": "No se pudieron obtener los detalles. {{message}}",
+      "failedToLoadDetails": "No se pudieron cargar los detalles del producto: {{message}}",
+      "invalidJsonError": "JSON no válido: {{message}}",
+      "couldNotLoadSchema": "No se pudo cargar el esquema: {{message}}",
+      "failedToSerialize": "No se pudo serializar el estado de la interfaz a JSON.",
+      "unexpectedError": "Se produjo un error inesperado."
     },
-    "syntaxErrorLabel": "__TODO__ Syntax Error:"
+    "syntaxErrorLabel": "Error de sintaxis:"
   },
   "import": {
     "title": "Importar Producto de Datos",
@@ -534,619 +534,619 @@
     "importing": "Importando..."
   },
   "versionFamily": {
-    "showAllVersions": "__TODO__ Show all versions"
+    "showAllVersions": "Mostrar todas las versiones"
   },
   "authoritativeDefinitionForm": {
-    "editTitle": "__TODO__ Edit Authoritative Definition",
-    "addTitle": "__TODO__ Add Authoritative Definition",
-    "dialogDescription": "__TODO__ Link to authoritative sources like business definitions, implementations, or tutorials (ODPS v1.0.0).",
-    "typeLabel": "__TODO__ Type",
-    "typeHint": "__TODO__ Type of authoritative source",
-    "urlLabel": "__TODO__ URL",
-    "urlPlaceholder": "__TODO__ https://docs.example.com/definitions/customer",
-    "urlHint": "__TODO__ Full URL to the authoritative source",
-    "descriptionPlaceholder": "__TODO__ Describe what information this source provides",
-    "addButton": "__TODO__ Add Definition",
-    "validationTypeRequired": "__TODO__ Type is required",
-    "validationUrlRequired": "__TODO__ URL is required",
-    "validationUrlInvalid": "__TODO__ Please enter a valid URL",
-    "successAdded": "__TODO__ Authoritative definition added",
-    "successUpdated": "__TODO__ Authoritative definition updated",
-    "saveError": "__TODO__ Failed to save authoritative definition"
+    "editTitle": "Editar definición autoritativa",
+    "addTitle": "Agregar definición autoritativa",
+    "dialogDescription": "Enlace a fuentes autoritativas como definiciones de negocio, implementaciones o tutoriales (ODPS v1.0.0).",
+    "typeLabel": "Tipo",
+    "typeHint": "Tipo de fuente autoritativa",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://docs.example.com/definitions/customer",
+    "urlHint": "URL completa de la fuente autoritativa",
+    "descriptionPlaceholder": "Describa qué información proporciona esta fuente",
+    "addButton": "Agregar definición",
+    "validationTypeRequired": "El tipo es obligatorio",
+    "validationUrlRequired": "La URL es obligatoria",
+    "validationUrlInvalid": "Ingrese una URL válida",
+    "successAdded": "Definición autoritativa agregada",
+    "successUpdated": "Definición autoritativa actualizada",
+    "saveError": "No se pudo guardar la definición autoritativa"
   },
   "consumerGroups": {
-    "searchPlaceholder": "__TODO__ Search workspace groups…",
-    "removeAriaLabel": "__TODO__ Remove {{name}}",
-    "loadError": "__TODO__ Could not load workspace groups ({{error}}). You can still add groups by typing the name and pressing Enter."
+    "searchPlaceholder": "Buscar grupos del espacio de trabajo…",
+    "removeAriaLabel": "Quitar {{name}}",
+    "loadError": "No se pudieron cargar los grupos del espacio de trabajo ({{error}}). Aún puede agregar grupos escribiendo el nombre y presionando Entrar."
   },
   "customProperty": {
-    "editTitle": "__TODO__ Edit Custom Property",
-    "addTitle": "__TODO__ Add Custom Property",
-    "dialogDescription": "__TODO__ Add custom metadata to extend the ODPS v1.0.0 data product schema.",
-    "propertyNameLabel": "__TODO__ Property Name",
-    "propertyNamePlaceholder": "__TODO__ e.g., internalId, deploymentRegion",
-    "propertyNameHint": "__TODO__ Must be in camelCase (ODPS requirement)",
-    "propertyValueLabel": "__TODO__ Property Value",
-    "propertyValuePlaceholder": "__TODO__ Simple text or JSON: {\"key\": \"value\"}",
-    "propertyValueHint": "__TODO__ Can be any type: string, number, boolean, object, or array. JSON values will be parsed automatically.",
-    "descriptionPlaceholder": "__TODO__ Explain the purpose of this custom property",
-    "addButton": "__TODO__ Add Property",
-    "validationNameRequired": "__TODO__ Property name is required",
-    "validationValueRequired": "__TODO__ Property value is required",
-    "validationCamelCase": "__TODO__ Property name must be in camelCase (start with lowercase letter)",
-    "successAdded": "__TODO__ Custom property added",
-    "successUpdated": "__TODO__ Custom property updated",
-    "saveError": "__TODO__ Failed to save custom property"
+    "editTitle": "Editar propiedad personalizada",
+    "addTitle": "Agregar propiedad personalizada",
+    "dialogDescription": "Agregue metadatos personalizados para extender el esquema del producto de datos ODPS v1.0.0.",
+    "propertyNameLabel": "Nombre de propiedad",
+    "propertyNamePlaceholder": "p. ej., internalId, deploymentRegion",
+    "propertyNameHint": "Debe estar en camelCase (requisito de ODPS)",
+    "propertyValueLabel": "Valor de propiedad",
+    "propertyValuePlaceholder": "Texto simple o JSON: {\"key\": \"value\"}",
+    "propertyValueHint": "Puede ser de cualquier tipo: cadena, número, booleano, objeto o arreglo. Los valores JSON se analizarán automáticamente.",
+    "descriptionPlaceholder": "Explique el propósito de esta propiedad personalizada",
+    "addButton": "Agregar propiedad",
+    "validationNameRequired": "El nombre de la propiedad es obligatorio",
+    "validationValueRequired": "El valor de la propiedad es obligatorio",
+    "validationCamelCase": "El nombre de la propiedad debe estar en camelCase (empezar con letra minúscula)",
+    "successAdded": "Propiedad personalizada agregada",
+    "successUpdated": "Propiedad personalizada actualizada",
+    "saveError": "No se pudo guardar la propiedad personalizada"
   },
   "teamMemberForm": {
-    "editTitle": "__TODO__ Edit Team Member",
-    "addTitle": "__TODO__ Add Team Member",
-    "dialogDescription": "__TODO__ Add a team member responsible for this data product (ODPS v1.0.0).",
-    "usernameLabel": "__TODO__ Username",
-    "usernamePlaceholder": "__TODO__ e.g., user@example.com or username",
-    "usernameHint": "__TODO__ User's username or email address (REQUIRED in ODPS)",
-    "fullNameLabel": "__TODO__ Full Name",
-    "fullNamePlaceholder": "__TODO__ Full name (optional)",
-    "roleLabel": "__TODO__ Role",
-    "rolePlaceholder": "__TODO__ e.g., owner, data steward, contributor",
-    "roleHint": "__TODO__ User's role in the team (e.g., owner, data steward, contributor)",
-    "descriptionPlaceholder": "__TODO__ Additional information about this team member",
-    "dateJoinedLabel": "__TODO__ Date Joined",
-    "dateLeftLabel": "__TODO__ Date Left",
-    "addButton": "__TODO__ Add Member",
-    "validationUsernameRequired": "__TODO__ Username is required",
-    "successAdded": "__TODO__ Team member added",
-    "successUpdated": "__TODO__ Team member updated",
-    "saveError": "__TODO__ Failed to save team member"
+    "editTitle": "Editar miembro del equipo",
+    "addTitle": "Agregar miembro del equipo",
+    "dialogDescription": "Agregue un miembro del equipo responsable de este producto de datos (ODPS v1.0.0).",
+    "usernameLabel": "Nombre de usuario",
+    "usernamePlaceholder": "p. ej., user@example.com o nombre de usuario",
+    "usernameHint": "Nombre de usuario o dirección de correo del usuario (OBLIGATORIO en ODPS)",
+    "fullNameLabel": "Nombre completo",
+    "fullNamePlaceholder": "Nombre completo (opcional)",
+    "roleLabel": "Rol",
+    "rolePlaceholder": "p. ej., propietario, administrador de datos, colaborador",
+    "roleHint": "Rol del usuario en el equipo (p. ej., propietario, administrador de datos, colaborador)",
+    "descriptionPlaceholder": "Información adicional sobre este miembro del equipo",
+    "dateJoinedLabel": "Fecha de incorporación",
+    "dateLeftLabel": "Fecha de salida",
+    "addButton": "Agregar miembro",
+    "validationUsernameRequired": "El nombre de usuario es obligatorio",
+    "successAdded": "Miembro del equipo agregado",
+    "successUpdated": "Miembro del equipo actualizado",
+    "saveError": "No se pudo guardar el miembro del equipo"
   },
   "readiness": {
-    "title": "__TODO__ Production Readiness",
-    "checking": "__TODO__ Checking readiness...",
-    "loadError": "__TODO__ Failed to load readiness report",
-    "loadFallbackError": "__TODO__ Unable to load readiness report",
-    "passCount": "__TODO__ {{passed}}/{{total}} passed",
-    "retry": "__TODO__ Retry",
+    "title": "Preparación para producción",
+    "checking": "Comprobando la preparación...",
+    "loadError": "No se pudo cargar el informe de preparación",
+    "loadFallbackError": "No se puede cargar el informe de preparación",
+    "passCount": "{{passed}}/{{total}} superados",
+    "retry": "Reintentar",
     "status": {
-      "ready": "__TODO__ Ready",
-      "notReady": "__TODO__ Not Ready",
-      "partial": "__TODO__ Partially Ready"
+      "ready": "Listo",
+      "notReady": "No listo",
+      "partial": "Parcialmente listo"
     }
   },
   "requestAction": {
     "types": {
       "access": {
-        "title": "__TODO__ Request Access to Product",
-        "description": "__TODO__ Request permission to view and use this data product."
+        "title": "Solicitar acceso al producto",
+        "description": "Solicite permiso para ver y usar este producto de datos."
       },
       "review": {
-        "title": "__TODO__ Request Data Steward Review",
-        "description": "__TODO__ Submit this product for review by a data steward (transitions to PROPOSED status)."
+        "title": "Solicitar revisión de administrador de datos",
+        "description": "Envíe este producto para su revisión por un administrador de datos (pasa al estado PROPOSED)."
       },
       "publish": {
-        "title": "__TODO__ Request Publish to Marketplace",
-        "description": "__TODO__ Request to publish this approved product to the organization-wide marketplace."
+        "title": "Solicitar publicación en el marketplace",
+        "description": "Solicite publicar este producto aprobado en el marketplace de toda la organización."
       },
       "certify": {
-        "title": "__TODO__ Request Certification",
-        "description": "__TODO__ Request that this product be certified at a specific level."
+        "title": "Solicitar certificación",
+        "description": "Solicite que este producto se certifique a un nivel específico."
       },
       "statusChange": {
-        "titleDirect": "__TODO__ Change Status",
-        "titleRequest": "__TODO__ Request Status Change",
-        "descriptionDirect": "__TODO__ Directly change the lifecycle status of this product.",
-        "descriptionRequest": "__TODO__ Request approval to change the lifecycle status of this product."
+        "titleDirect": "Cambiar estado",
+        "titleRequest": "Solicitar cambio de estado",
+        "descriptionDirect": "Cambie directamente el estado del ciclo de vida de este producto.",
+        "descriptionRequest": "Solicite aprobación para cambiar el estado del ciclo de vida de este producto."
       }
     },
     "transitions": {
-      "moveToSandbox": "__TODO__ Move to Sandbox",
-      "submitForReview": "__TODO__ Submit for Review",
-      "returnToDraft": "__TODO__ Return to Draft",
-      "startReview": "__TODO__ Start Review",
-      "approve": "__TODO__ Approve",
-      "rejectReturnToDraft": "__TODO__ Reject (Return to Draft)",
-      "publishActivate": "__TODO__ Publish/Activate",
-      "deprecate": "__TODO__ Deprecate",
-      "retire": "__TODO__ Retire",
-      "reactivate": "__TODO__ Reactivate"
+      "moveToSandbox": "Mover al sandbox",
+      "submitForReview": "Enviar para revisión",
+      "returnToDraft": "Volver a borrador",
+      "startReview": "Iniciar revisión",
+      "approve": "Aprobar",
+      "rejectReturnToDraft": "Rechazar (volver a borrador)",
+      "publishActivate": "Publicar/Activar",
+      "deprecate": "Marcar como obsoleto",
+      "retire": "Retirar",
+      "reactivate": "Reactivar"
     },
     "validation": {
-      "reasonRequired": "__TODO__ Please provide a reason for requesting access",
-      "reasonTooShort": "__TODO__ Please provide a more detailed reason (at least 10 characters)",
-      "targetStatusRequired": "__TODO__ Please select a target status",
-      "justificationRequired": "__TODO__ Please provide a justification for the status change",
-      "justificationTooShort": "__TODO__ Please provide a more detailed justification (at least 20 characters)",
-      "certLevelRequired": "__TODO__ Please select a certification level"
+      "reasonRequired": "Indique un motivo para solicitar el acceso",
+      "reasonTooShort": "Indique un motivo más detallado (al menos 10 caracteres)",
+      "targetStatusRequired": "Seleccione un estado de destino",
+      "justificationRequired": "Indique una justificación para el cambio de estado",
+      "justificationTooShort": "Indique una justificación más detallada (al menos 20 caracteres)",
+      "certLevelRequired": "Seleccione un nivel de certificación"
     },
     "errors": {
-      "cannotRequest": "__TODO__ Cannot request {{requestType}} for a product with status '{{productStatus}}'",
-      "failedToSubmit": "__TODO__ Failed to submit request"
+      "cannotRequest": "No se puede solicitar {{requestType}} para un producto con el estado '{{productStatus}}'",
+      "failedToSubmit": "No se pudo enviar la solicitud"
     },
     "toast": {
-      "statusChanged": "__TODO__ Status Changed",
-      "statusChangedDesc": "__TODO__ Product status changed from \"{{fromStatus}}\" to \"{{toStatus}}\".",
-      "requestSubmitted": "__TODO__ Request Submitted",
-      "requestSubmittedDesc": "__TODO__ Your {{type}} request has been submitted and you will be notified of the decision."
+      "statusChanged": "Estado cambiado",
+      "statusChangedDesc": "El estado del producto cambió de \"{{fromStatus}}\" a \"{{toStatus}}\".",
+      "requestSubmitted": "Solicitud enviada",
+      "requestSubmittedDesc": "Su solicitud de {{type}} se ha enviado y se le notificará la decisión."
     },
     "labels": {
-      "requestType": "__TODO__ Request Type",
-      "targetStatus": "__TODO__ Target Status",
-      "justification": "__TODO__ Justification",
-      "justificationOptional": "__TODO__ Justification (optional)",
-      "messageOptional": "__TODO__ Message (optional)",
-      "publicationScope": "__TODO__ Publication Scope",
-      "certLevel": "__TODO__ Certification Level"
+      "requestType": "Tipo de solicitud",
+      "targetStatus": "Estado de destino",
+      "justification": "Justificación",
+      "justificationOptional": "Justificación (opcional)",
+      "messageOptional": "Mensaje (opcional)",
+      "publicationScope": "Ámbito de publicación",
+      "certLevel": "Nivel de certificación"
     },
     "placeholders": {
-      "selectRequestType": "__TODO__ Select request type",
-      "selectTargetStatus": "__TODO__ Select target status",
-      "justification": "__TODO__ Explain why this status change is needed and any relevant context...",
-      "reviewMessage": "__TODO__ Add any notes for the reviewer...",
-      "publishJustification": "__TODO__ Why should this product be published?",
-      "certMessage": "__TODO__ Why should this product be certified?",
-      "selectCertLevel": "__TODO__ Select certification level"
+      "selectRequestType": "Seleccione el tipo de solicitud",
+      "selectTargetStatus": "Seleccione el estado de destino",
+      "justification": "Explique por qué es necesario este cambio de estado y cualquier contexto relevante...",
+      "reviewMessage": "Agregue notas para el revisor...",
+      "publishJustification": "¿Por qué debería publicarse este producto?",
+      "certMessage": "¿Por qué debería certificarse este producto?",
+      "selectCertLevel": "Seleccione el nivel de certificación"
     },
     "selectItems": {
-      "review": "__TODO__ Request Review",
-      "publish": "__TODO__ Request Publish",
-      "certify": "__TODO__ Request Certification",
-      "access": "__TODO__ Request Access"
+      "review": "Solicitar revisión",
+      "publish": "Solicitar publicación",
+      "certify": "Solicitar certificación",
+      "access": "Solicitar acceso"
     },
     "scopes": {
-      "organization": "__TODO__ Organization",
-      "external": "__TODO__ External"
+      "organization": "Organización",
+      "external": "Externo"
     },
     "wizard": {
-      "noticeBefore": "__TODO__ A multi-step wizard is configured for this request. Click",
-      "noticeAfter": "__TODO__ to begin."
+      "noticeBefore": "Se ha configurado un asistente de varios pasos para esta solicitud. Haga clic en",
+      "noticeAfter": "para comenzar."
     },
     "hints": {
-      "noTransitionsAvailable": "__TODO__ No status transitions available from current status.",
-      "justificationMinChars": "__TODO__ Minimum 20 characters required. This will be reviewed by an admin."
+      "noTransitionsAvailable": "No hay transiciones de estado disponibles desde el estado actual.",
+      "justificationMinChars": "Se requieren al menos 20 caracteres. Un administrador revisará esto."
     },
     "buttons": {
-      "changingStatus": "__TODO__ Changing Status...",
-      "opening": "__TODO__ Opening...",
-      "sendingRequest": "__TODO__ Sending Request...",
-      "continue": "__TODO__ Continue",
-      "sendRequest": "__TODO__ Send Request"
+      "changingStatus": "Cambiando el estado...",
+      "opening": "Abriendo...",
+      "sendingRequest": "Enviando la solicitud...",
+      "continue": "Continuar",
+      "sendRequest": "Enviar solicitud"
     }
   },
   "statusTransition": {
-    "title": "__TODO__ Change Product Status",
-    "description": "__TODO__ Transition the lifecycle status of {{name}} (ODPS v1.0.0)",
-    "thisProduct": "__TODO__ this data product",
-    "currentStatus": "__TODO__ Current Status:",
-    "recommended": "__TODO__ Recommended:",
-    "selectTargetStatus": "__TODO__ Select Target Status",
-    "terminalState": "__TODO__ Terminal State:",
-    "terminalDesc": "__TODO__ No transitions available from {{statusLabel}} status. This product cannot be changed to any other status.",
-    "notesLabel": "__TODO__ Transition Notes (Optional)",
-    "notesPlaceholder": "__TODO__ Add notes about why this status change is being made...",
-    "notesHint": "__TODO__ These notes will be logged for audit purposes",
-    "lifecycleTitle": "__TODO__ ODPS v1.0.0 Lifecycle Flow:",
-    "lifecycleHint": "__TODO__ Current status is highlighted. Emergency deprecation is allowed from any status.",
+    "title": "Cambiar el estado del producto",
+    "description": "Cambie el estado del ciclo de vida de {{name}} (ODPS v1.0.0)",
+    "thisProduct": "este producto de datos",
+    "currentStatus": "Estado actual:",
+    "recommended": "Recomendado:",
+    "selectTargetStatus": "Seleccionar estado de destino",
+    "terminalState": "Estado terminal:",
+    "terminalDesc": "No hay transiciones disponibles desde el estado {{statusLabel}}. Este producto no se puede cambiar a ningún otro estado.",
+    "notesLabel": "Notas de transición (opcional)",
+    "notesPlaceholder": "Agregue notas sobre por qué se realiza este cambio de estado...",
+    "notesHint": "Estas notas se registrarán con fines de auditoría",
+    "lifecycleTitle": "Flujo del ciclo de vida de ODPS v1.0.0:",
+    "lifecycleHint": "El estado actual está resaltado. La marca de obsolescencia de emergencia se permite desde cualquier estado.",
     "toast": {
-      "validationError": "__TODO__ Validation Error",
-      "selectTargetStatus": "__TODO__ Please select a target status",
-      "invalidTransition": "__TODO__ Invalid Transition",
-      "transitionFailed": "__TODO__ Transition Failed",
-      "failedToUpdate": "__TODO__ Failed to update product status"
+      "validationError": "Error de validación",
+      "selectTargetStatus": "Seleccione un estado de destino",
+      "invalidTransition": "Transición no válida",
+      "transitionFailed": "Error en la transición",
+      "failedToUpdate": "No se pudo actualizar el estado del producto"
     },
     "buttons": {
-      "updating": "__TODO__ Updating...",
-      "updateStatus": "__TODO__ Update Status"
+      "updating": "Actualizando...",
+      "updateStatus": "Actualizar estado"
     }
   },
   "outputPortForm": {
-    "addTitle": "__TODO__ Add Deliverable",
-    "editTitle": "__TODO__ Edit Deliverable",
-    "description": "__TODO__ Define a deliverable for this data product. Assets can be linked after creation.",
+    "addTitle": "Agregar entregable",
+    "editTitle": "Editar entregable",
+    "description": "Defina un entregable para este producto de datos. Los activos se pueden vincular después de crearlo.",
     "labels": {
-      "deliveryMethod": "__TODO__ Delivery Method",
-      "contractAssignment": "__TODO__ Contract Assignment",
-      "accessAndPrivacy": "__TODO__ Access & Privacy",
-      "containsPii": "__TODO__ Contains PII",
-      "autoApprove": "__TODO__ Auto Approve"
+      "deliveryMethod": "Método de entrega",
+      "contractAssignment": "Asignación de contrato",
+      "accessAndPrivacy": "Acceso y privacidad",
+      "containsPii": "Contiene PII",
+      "autoApprove": "Aprobación automática"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., Daily Churn Rate",
-      "deliveryMethod": "__TODO__ Select delivery method...",
-      "description": "__TODO__ Describe what this deliverable provides",
-      "type": "__TODO__ e.g., table, api, stream",
-      "status": "__TODO__ e.g., active, draft",
-      "chooseContract": "__TODO__ Choose a contract..."
+      "name": "p. ej., Tasa de abandono diaria",
+      "deliveryMethod": "Seleccione el método de entrega...",
+      "description": "Describa qué proporciona este entregable",
+      "type": "p. ej., table, api, stream",
+      "status": "p. ej., active, draft",
+      "chooseContract": "Elija un contrato..."
     },
     "contractOptions": {
-      "noContract": "__TODO__ No Contract",
-      "selectExisting": "__TODO__ Select Existing Contract",
-      "createNew": "__TODO__ Create New Contract"
+      "noContract": "Sin contrato",
+      "selectExisting": "Seleccionar contrato existente",
+      "createNew": "Crear nuevo contrato"
     },
     "hints": {
-      "deliveryMethodHint": "__TODO__ How this deliverable serves data to consumers (e.g., Table Access, Serving Endpoint)",
-      "onlyActiveContracts": "__TODO__ Only showing active/approved/certified contracts",
-      "containsPiiHint": "__TODO__ Does this deliverable contain personally identifiable information?",
-      "autoApproveHint": "__TODO__ Automatically approve access requests for this deliverable?",
-      "afterCreation": "__TODO__ After creating this deliverable, you can link assets (tables, views, datasets, etc.) to it from the detail page."
+      "deliveryMethodHint": "Cómo este entregable sirve datos a los consumidores (p. ej., Acceso a tablas, Endpoint de servicio)",
+      "onlyActiveContracts": "Mostrando solo contratos activos/aprobados/certificados",
+      "containsPiiHint": "¿Este entregable contiene información de identificación personal?",
+      "autoApproveHint": "¿Aprobar automáticamente las solicitudes de acceso para este entregable?",
+      "afterCreation": "Después de crear este entregable, puede vincularle activos (tablas, vistas, conjuntos de datos, etc.) desde la página de detalles."
     },
     "messages": {
-      "noActiveContracts": "__TODO__ No active/approved contracts available",
-      "contractCreated": "__TODO__ Contract created:",
-      "deliverableAdded": "__TODO__ Deliverable added",
-      "deliverableUpdated": "__TODO__ Deliverable updated"
+      "noActiveContracts": "No hay contratos activos/aprobados disponibles",
+      "contractCreated": "Contrato creado:",
+      "deliverableAdded": "Entregable agregado",
+      "deliverableUpdated": "Entregable actualizado"
     },
     "validation": {
-      "error": "__TODO__ Validation Error",
-      "nameRequired": "__TODO__ Name is required",
-      "versionRequired": "__TODO__ Version is required"
+      "error": "Error de validación",
+      "nameRequired": "El nombre es obligatorio",
+      "versionRequired": "La versión es obligatoria"
     },
     "errors": {
-      "failedToLoadContracts": "__TODO__ Failed to load contracts",
-      "failedToSaveDeliverable": "__TODO__ Failed to save deliverable"
+      "failedToLoadContracts": "No se pudieron cargar los contratos",
+      "failedToSaveDeliverable": "No se pudo guardar el entregable"
     },
     "actions": {
-      "addDeliverable": "__TODO__ Add Deliverable"
+      "addDeliverable": "Agregar entregable"
     },
     "warnings": {
-      "couldNotLoadDeliveryMethods": "__TODO__ Could not load delivery methods"
+      "couldNotLoadDeliveryMethods": "No se pudieron cargar los métodos de entrega"
     }
   },
   "inputPortForm": {
-    "addTitle": "__TODO__ Add Consumable",
-    "editTitle": "__TODO__ Edit Consumable",
-    "description": "__TODO__ Define an input data dependency for this data product (ODPS v1.0.0).",
+    "addTitle": "Agregar consumible",
+    "editTitle": "Editar consumible",
+    "description": "Defina una dependencia de datos de entrada para este producto de datos (ODPS v1.0.0).",
     "labels": {
-      "consumableName": "__TODO__ Consumable Name",
-      "contractId": "__TODO__ Contract ID",
-      "databricksExtensions": "__TODO__ Databricks Extensions (Optional)",
-      "assetType": "__TODO__ Asset Type",
-      "assetIdentifier": "__TODO__ Asset Identifier"
+      "consumableName": "Nombre del consumible",
+      "contractId": "ID del contrato",
+      "databricksExtensions": "Extensiones de Databricks (opcional)",
+      "assetType": "Tipo de activo",
+      "assetIdentifier": "Identificador del activo"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., customer-data-input",
-      "contractId": "__TODO__ e.g., customer-data-contract-v1",
-      "assetType": "__TODO__ e.g., table, notebook, job",
-      "assetIdentifier": "__TODO__ e.g., catalog.schema.table, /path/to/notebook"
+      "name": "p. ej., customer-data-input",
+      "contractId": "p. ej., customer-data-contract-v1",
+      "assetType": "p. ej., table, notebook, job",
+      "assetIdentifier": "p. ej., catalog.schema.table, /path/to/notebook"
     },
     "hints": {
-      "versionHint": "__TODO__ Version of this consumable (e.g., 1.0.0, 2.1.3)",
-      "contractIdHint": "__TODO__ Reference to the data contract ID (REQUIRED in ODPS v1.0.0)",
-      "assetTypeHint": "__TODO__ Type of Databricks asset",
-      "assetIdentifierHint": "__TODO__ Unique identifier for the Databricks asset"
+      "versionHint": "Versión de este consumible (p. ej., 1.0.0, 2.1.3)",
+      "contractIdHint": "Referencia al ID del contrato de datos (OBLIGATORIO en ODPS v1.0.0)",
+      "assetTypeHint": "Tipo de activo de Databricks",
+      "assetIdentifierHint": "Identificador único del activo de Databricks"
     },
     "messages": {
-      "consumableAdded": "__TODO__ Consumable added",
-      "consumableUpdated": "__TODO__ Consumable updated"
+      "consumableAdded": "Consumible agregado",
+      "consumableUpdated": "Consumible actualizado"
     },
     "validation": {
-      "error": "__TODO__ Validation Error",
-      "portNameRequired": "__TODO__ Port name is required",
-      "portVersionRequired": "__TODO__ Port version is required",
-      "contractIdRequired": "__TODO__ Contract ID is required (ODPS v1.0.0 requirement)"
+      "error": "Error de validación",
+      "portNameRequired": "El nombre del puerto es obligatorio",
+      "portVersionRequired": "La versión del puerto es obligatoria",
+      "contractIdRequired": "El ID del contrato es obligatorio (requisito de ODPS v1.0.0)"
     },
     "errors": {
-      "failedToSaveConsumable": "__TODO__ Failed to save consumable"
+      "failedToSaveConsumable": "No se pudo guardar el consumible"
     },
     "actions": {
-      "addConsumable": "__TODO__ Add Consumable"
+      "addConsumable": "Agregar consumible"
     }
   },
   "managementPortForm": {
-    "addTitle": "__TODO__ Add Management Port",
-    "editTitle": "__TODO__ Edit Management Port",
-    "description": "__TODO__ Management ports provide access to observability, control, discoverability, and data dictionary endpoints (ODPS v1.0.0).",
+    "addTitle": "Agregar puerto de gestión",
+    "editTitle": "Editar puerto de gestión",
+    "description": "Los puertos de gestión proporcionan acceso a endpoints de observabilidad, control, descubrimiento y diccionario de datos (ODPS v1.0.0).",
     "labels": {
-      "portName": "__TODO__ Port Name",
-      "contentType": "__TODO__ Content Type",
-      "portType": "__TODO__ Port Type",
-      "url": "__TODO__ URL",
-      "channel": "__TODO__ Channel"
+      "portName": "Nombre del puerto",
+      "contentType": "Tipo de contenido",
+      "portType": "Tipo de puerto",
+      "url": "URL",
+      "channel": "Canal"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., observability-endpoint, data-dictionary",
-      "url": "__TODO__ https://observability.example.com/metrics",
-      "channel": "__TODO__ e.g., prometheus-metrics, openapi-spec",
-      "description": "__TODO__ Describe the purpose and usage of this management port"
+      "name": "p. ej., observability-endpoint, data-dictionary",
+      "url": "https://observability.example.com/metrics",
+      "channel": "p. ej., prometheus-metrics, openapi-spec",
+      "description": "Describa el propósito y el uso de este puerto de gestión"
     },
     "hints": {
-      "contentTypeHint": "__TODO__ Purpose of this management port",
-      "urlHint": "__TODO__ Access URL for this management port",
-      "channelHint": "__TODO__ Communication channel identifier"
+      "contentTypeHint": "Propósito de este puerto de gestión",
+      "urlHint": "URL de acceso para este puerto de gestión",
+      "channelHint": "Identificador del canal de comunicación"
     },
     "messages": {
-      "portAdded": "__TODO__ Management port added",
-      "portUpdated": "__TODO__ Management port updated"
+      "portAdded": "Puerto de gestión agregado",
+      "portUpdated": "Puerto de gestión actualizado"
     },
     "validation": {
-      "error": "__TODO__ Validation Error",
-      "portNameRequired": "__TODO__ Port name is required",
-      "contentTypeRequired": "__TODO__ Content type is required",
-      "invalidUrl": "__TODO__ Please enter a valid URL"
+      "error": "Error de validación",
+      "portNameRequired": "El nombre del puerto es obligatorio",
+      "contentTypeRequired": "El tipo de contenido es obligatorio",
+      "invalidUrl": "Ingrese una URL válida"
     },
     "errors": {
-      "failedToSave": "__TODO__ Failed to save management port"
+      "failedToSave": "No se pudo guardar el puerto de gestión"
     },
     "actions": {
-      "addPort": "__TODO__ Add Port"
+      "addPort": "Agregar puerto"
     }
   },
   "linkContract": {
-    "title": "__TODO__ Link Contract to Deliverable",
-    "descriptionPrefix": "__TODO__ Select an existing contract or create a new one to link to",
-    "thisDeliverable": "__TODO__ this deliverable",
+    "title": "Vincular contrato al entregable",
+    "descriptionPrefix": "Seleccione un contrato existente o cree uno nuevo para vincular a",
+    "thisDeliverable": "este entregable",
     "labels": {
-      "deliverable": "__TODO__ Deliverable",
-      "selectContract": "__TODO__ Select Contract",
-      "or": "__TODO__ OR"
+      "deliverable": "Entregable",
+      "selectContract": "Seleccionar contrato",
+      "or": "O"
     },
     "placeholders": {
-      "chooseContract": "__TODO__ Choose a contract…"
+      "chooseContract": "Elija un contrato…"
     },
     "hints": {
-      "contractFilter": "__TODO__ Only showing contracts with 'active', 'approved', or 'certified' status. Pick a specific version — same-named contracts now show their version inline."
+      "contractFilter": "Mostrando solo contratos con estado 'active', 'approved' o 'certified'. Elija una versión específica: los contratos con el mismo nombre ahora muestran su versión en línea."
     },
     "messages": {
-      "contractLinked": "__TODO__ Contract Linked",
-      "contractLinkedDescription": "__TODO__ Contract successfully linked to deliverable"
+      "contractLinked": "Contrato vinculado",
+      "contractLinkedDescription": "Contrato vinculado correctamente al entregable"
     },
     "validation": {
-      "error": "__TODO__ Validation Error",
-      "selectContract": "__TODO__ Please select a contract"
+      "error": "Error de validación",
+      "selectContract": "Seleccione un contrato"
     },
     "errors": {
-      "failedToLink": "__TODO__ Failed to link contract"
+      "failedToLink": "No se pudo vincular el contrato"
     },
     "actions": {
-      "createNewContract": "__TODO__ Create New Contract",
-      "linkContract": "__TODO__ Link Contract",
-      "linking": "__TODO__ Linking..."
+      "createNewContract": "Crear nuevo contrato",
+      "linkContract": "Vincular contrato",
+      "linking": "Vinculando..."
     }
   },
   "hierarchy": {
-    "title": "__TODO__ Data Hierarchy",
-    "loadFailed": "__TODO__ Failed to load hierarchy",
-    "noDatasets": "__TODO__ No datasets linked to this data product yet.",
-    "noTablesOrViews": "__TODO__ No tables or views linked",
-    "contract": "__TODO__ Contract",
-    "governedByContract": "__TODO__ Governed by contract {{id}}",
-    "objectCount_one": "__TODO__ {{count}} object",
-    "objectCount_other": "__TODO__ {{count}} objects",
-    "datasetCount_one": "__TODO__ {{count}} dataset",
-    "datasetCount_other": "__TODO__ {{count}} datasets",
-    "colCount_one": "__TODO__ {{count}} col",
-    "colCount_other": "__TODO__ {{count}} cols"
+    "title": "Jerarquía de datos",
+    "loadFailed": "No se pudo cargar la jerarquía",
+    "noDatasets": "Aún no hay conjuntos de datos vinculados a este producto de datos.",
+    "noTablesOrViews": "No hay tablas ni vistas vinculadas",
+    "contract": "Contrato",
+    "governedByContract": "Gobernado por el contrato {{id}}",
+    "objectCount_one": "{{count}} objeto",
+    "objectCount_other": "{{count}} objetos",
+    "datasetCount_one": "{{count}} conjunto de datos",
+    "datasetCount_other": "{{count}} conjuntos de datos",
+    "colCount_one": "{{count}} col",
+    "colCount_other": "{{count}} cols"
   },
   "commitDraft": {
-    "title": "__TODO__ Commit Draft Changes",
-    "description": "__TODO__ Commit your personal draft to make it visible to your team.",
-    "analyzing": "__TODO__ Analyzing changes...",
-    "changeAnalysisTitle": "__TODO__ Change Analysis",
-    "changeAnalysisDescription": "__TODO__ Based on your changes, we recommend a {{bump}} version bump.",
-    "selectVersion": "__TODO__ Select Version",
-    "patch": "__TODO__ Patch",
-    "patchDescription": "__TODO__ Bug fixes",
-    "minor": "__TODO__ Minor",
-    "minorDescription": "__TODO__ New features",
-    "major": "__TODO__ Major",
-    "majorDescription": "__TODO__ Breaking changes",
-    "customVersion": "__TODO__ Custom version",
-    "customVersionPlaceholder": "__TODO__ e.g., 2.0.0",
-    "changeSummaryLabel": "__TODO__ Change Summary *",
-    "changeSummaryPlaceholder": "__TODO__ Describe the changes made in this version...",
-    "validationInvalidVersion": "__TODO__ Please enter a valid version number (e.g., 1.0.0)",
-    "validationNoSummary": "__TODO__ Please provide a summary of changes",
-    "errorAnalyze": "__TODO__ Failed to analyze changes",
-    "errorCommit": "__TODO__ Failed to commit draft",
-    "toastCommittedTitle": "__TODO__ Draft Committed",
-    "toastCommittedDescription": "__TODO__ Product version {{version}} is now visible to your team.",
-    "committing": "__TODO__ Committing...",
-    "commitButton": "__TODO__ Commit Draft"
+    "title": "Confirmar los cambios del borrador",
+    "description": "Confirme su borrador personal para hacerlo visible a su equipo.",
+    "analyzing": "Analizando los cambios...",
+    "changeAnalysisTitle": "Análisis de cambios",
+    "changeAnalysisDescription": "Según sus cambios, recomendamos un incremento de versión {{bump}}.",
+    "selectVersion": "Seleccionar versión",
+    "patch": "Parche",
+    "patchDescription": "Correcciones de errores",
+    "minor": "Menor",
+    "minorDescription": "Nuevas funciones",
+    "major": "Mayor",
+    "majorDescription": "Cambios incompatibles",
+    "customVersion": "Versión personalizada",
+    "customVersionPlaceholder": "p. ej., 2.0.0",
+    "changeSummaryLabel": "Resumen de cambios *",
+    "changeSummaryPlaceholder": "Describa los cambios realizados en esta versión...",
+    "validationInvalidVersion": "Ingrese un número de versión válido (p. ej., 1.0.0)",
+    "validationNoSummary": "Indique un resumen de los cambios",
+    "errorAnalyze": "No se pudieron analizar los cambios",
+    "errorCommit": "No se pudo confirmar el borrador",
+    "toastCommittedTitle": "Borrador confirmado",
+    "toastCommittedDescription": "La versión {{version}} del producto ahora es visible para su equipo.",
+    "committing": "Confirmando...",
+    "commitButton": "Confirmar borrador"
   },
   "supportChannelForm": {
-    "titleAdd": "__TODO__ Add Support Channel",
-    "titleEdit": "__TODO__ Edit Support Channel",
-    "description": "__TODO__ Define a support channel for users of this data product (ODPS v1.0.0).",
-    "channelName": "__TODO__ Channel Name",
-    "channelNamePlaceholder": "__TODO__ e.g., data-product-support",
-    "accessUrl": "__TODO__ Access URL",
-    "accessUrlPlaceholder": "__TODO__ https://slack.com/channels/data-product-support",
-    "accessUrlHint": "__TODO__ URL to access this support channel",
-    "tool": "__TODO__ Tool",
-    "scope": "__TODO__ Scope",
-    "invitationUrl": "__TODO__ Invitation URL",
-    "invitationUrlPlaceholder": "__TODO__ https://slack.com/invite/...",
-    "invitationUrlHint": "__TODO__ Optional invitation link for new members",
-    "descriptionPlaceholder": "__TODO__ Describe how users should use this support channel",
-    "addChannel": "__TODO__ Add Channel",
-    "validationErrorTitle": "__TODO__ Validation Error",
-    "channelRequired": "__TODO__ Channel name is required",
-    "urlRequired": "__TODO__ URL is required",
-    "invalidUrl": "__TODO__ Please enter a valid URL",
-    "invalidInvitationUrl": "__TODO__ Please enter a valid invitation URL",
-    "successUpdated": "__TODO__ Support channel updated",
-    "successAdded": "__TODO__ Support channel added",
-    "errorSave": "__TODO__ Failed to save support channel"
+    "titleAdd": "Agregar canal de soporte",
+    "titleEdit": "Editar canal de soporte",
+    "description": "Defina un canal de soporte para los usuarios de este producto de datos (ODPS v1.0.0).",
+    "channelName": "Nombre del canal",
+    "channelNamePlaceholder": "p. ej., data-product-support",
+    "accessUrl": "URL de acceso",
+    "accessUrlPlaceholder": "https://slack.com/channels/data-product-support",
+    "accessUrlHint": "URL para acceder a este canal de soporte",
+    "tool": "Herramienta",
+    "scope": "Ámbito",
+    "invitationUrl": "URL de invitación",
+    "invitationUrlPlaceholder": "https://slack.com/invite/...",
+    "invitationUrlHint": "Enlace de invitación opcional para nuevos miembros",
+    "descriptionPlaceholder": "Describa cómo deben usar los usuarios este canal de soporte",
+    "addChannel": "Agregar canal",
+    "validationErrorTitle": "Error de validación",
+    "channelRequired": "El nombre del canal es obligatorio",
+    "urlRequired": "La URL es obligatoria",
+    "invalidUrl": "Ingrese una URL válida",
+    "invalidInvitationUrl": "Ingrese una URL de invitación válida",
+    "successUpdated": "Canal de soporte actualizado",
+    "successAdded": "Canal de soporte agregado",
+    "errorSave": "No se pudo guardar el canal de soporte"
   },
   "maturity": {
-    "title": "__TODO__ Maturity",
-    "evaluating": "__TODO__ Evaluating maturity...",
-    "loadFailed": "__TODO__ Failed to load maturity report",
-    "unableToLoad": "__TODO__ Unable to load maturity report",
-    "gatesPassed": "__TODO__ {{passed}}/{{total}} gates passed",
-    "reevaluate": "__TODO__ Re-evaluate maturity",
-    "gates": "__TODO__ {{passed}}/{{total}} gates",
-    "required": "__TODO__ Required",
-    "advisory": "__TODO__ Advisory",
-    "overTime": "__TODO__ Maturity over time",
-    "retry": "__TODO__ Retry"
+    "title": "Madurez",
+    "evaluating": "Evaluando la madurez...",
+    "loadFailed": "No se pudo cargar el informe de madurez",
+    "unableToLoad": "No se puede cargar el informe de madurez",
+    "gatesPassed": "{{passed}}/{{total}} controles superados",
+    "reevaluate": "Reevaluar la madurez",
+    "gates": "{{passed}}/{{total}} controles",
+    "required": "Obligatorio",
+    "advisory": "Recomendación",
+    "overTime": "Madurez a lo largo del tiempo",
+    "retry": "Reintentar"
   },
   "createDialog": {
-    "editTitle": "__TODO__ Edit Data Product Metadata",
-    "createTitle": "__TODO__ Create Data Product (ODPS v1.0.0)",
-    "editDescription": "__TODO__ Update the core metadata for this data product.",
-    "createDescription": "__TODO__ Create a new data product with essential information. You can add ports, team members, and support channels in the details view.",
-    "productNameLabel": "__TODO__ Product Name",
-    "productNamePlaceholder": "__TODO__ e.g., Customer Analytics Data",
-    "versionPlaceholder": "__TODO__ 0.0.1",
-    "productTypeLabel": "__TODO__ Product Type",
-    "productTypePlaceholder": "__TODO__ Select product type...",
-    "productTypeHint": "__TODO__ Position in the data value chain",
-    "selectTeamPlaceholder": "__TODO__ Select team...",
-    "loadingTeams": "__TODO__ Loading teams...",
-    "ownerTeamHint": "__TODO__ Team responsible for this product",
-    "projectLabel": "__TODO__ Project",
-    "selectProjectPlaceholder": "__TODO__ Select project (optional)",
-    "projectOption_one": "__TODO__ {{name}} ({{count}} team)",
-    "projectOption_other": "__TODO__ {{name}} ({{count}} teams)",
-    "projectMemberHint": "__TODO__ You can only select projects you are a member of",
-    "domainsLabel": "__TODO__ Domains",
-    "domainsPlaceholder": "__TODO__ Select domains...",
-    "tenantLabel": "__TODO__ Tenant/Organization",
-    "tenantPlaceholder": "__TODO__ e.g., acme-corp",
-    "descriptionSectionTitle": "__TODO__ Description (ODPS Structured)",
-    "purposePlaceholder": "__TODO__ What is the intended purpose of this data?",
-    "limitationsLabel": "__TODO__ Limitations",
-    "limitationsPlaceholder": "__TODO__ Technical, compliance, and legal limitations",
-    "usagePlaceholder": "__TODO__ Recommended usage of this data",
-    "tagsPlaceholder": "__TODO__ Search and select tags for this data product...",
-    "tagsHint": "__TODO__ Add tags to categorize and organize this data product",
-    "consumerGroupsLabel": "__TODO__ Consumer Groups",
-    "createProductButton": "__TODO__ Create Product",
-    "discardDescription": "__TODO__ You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?",
-    "continueEditing": "__TODO__ Continue Editing",
-    "discardChanges": "__TODO__ Discard Changes",
+    "editTitle": "Editar metadatos del producto de datos",
+    "createTitle": "Crear producto de datos (ODPS v1.0.0)",
+    "editDescription": "Actualice los metadatos principales de este producto de datos.",
+    "createDescription": "Cree un nuevo producto de datos con la información esencial. Puede agregar puertos, miembros del equipo y canales de soporte en la vista de detalles.",
+    "productNameLabel": "Nombre del producto",
+    "productNamePlaceholder": "p. ej., Datos de análisis de clientes",
+    "versionPlaceholder": "0.0.1",
+    "productTypeLabel": "Tipo de producto",
+    "productTypePlaceholder": "Seleccione el tipo de producto...",
+    "productTypeHint": "Posición en la cadena de valor de los datos",
+    "selectTeamPlaceholder": "Seleccione un equipo...",
+    "loadingTeams": "Cargando equipos...",
+    "ownerTeamHint": "Equipo responsable de este producto",
+    "projectLabel": "Proyecto",
+    "selectProjectPlaceholder": "Seleccione un proyecto (opcional)",
+    "projectOption_one": "{{name}} ({{count}} equipo)",
+    "projectOption_other": "{{name}} ({{count}} equipos)",
+    "projectMemberHint": "Solo puede seleccionar proyectos de los que sea miembro",
+    "domainsLabel": "Dominios",
+    "domainsPlaceholder": "Seleccione dominios...",
+    "tenantLabel": "Inquilino/Organización",
+    "tenantPlaceholder": "p. ej., acme-corp",
+    "descriptionSectionTitle": "Descripción (estructurada ODPS)",
+    "purposePlaceholder": "¿Cuál es el propósito previsto de estos datos?",
+    "limitationsLabel": "Limitaciones",
+    "limitationsPlaceholder": "Limitaciones técnicas, de cumplimiento y legales",
+    "usagePlaceholder": "Uso recomendado de estos datos",
+    "tagsPlaceholder": "Busque y seleccione etiquetas para este producto de datos...",
+    "tagsHint": "Agregue etiquetas para categorizar y organizar este producto de datos",
+    "consumerGroupsLabel": "Grupos de consumidores",
+    "createProductButton": "Crear producto",
+    "discardDescription": "Tiene cambios sin guardar que se perderán si cierra este cuadro de diálogo. ¿Seguro que desea descartarlos?",
+    "continueEditing": "Seguir editando",
+    "discardChanges": "Descartar cambios",
     "messages": {
-      "createSuccessDesc": "__TODO__ Data product created successfully. Add ports and team in the details view."
+      "createSuccessDesc": "Producto de datos creado correctamente. Agregue puertos y equipo en la vista de detalles."
     },
     "validation": {
-      "nameRequired": "__TODO__ Product name is required",
-      "versionRequired": "__TODO__ Version is required",
-      "statusRequired": "__TODO__ Status is required"
+      "nameRequired": "El nombre del producto es obligatorio",
+      "versionRequired": "La versión es obligatoria",
+      "statusRequired": "El estado es obligatorio"
     }
   },
   "createFromContract": {
-    "title": "__TODO__ Create Data Product from Contract",
-    "description": "__TODO__ Create a new Data Product that uses this contract to govern one deliverable. The product will inherit the contract's domain, owner team, and project.",
-    "contractLabel": "__TODO__ Contract:",
-    "productNameLabel": "__TODO__ Product Name *",
-    "productNamePlaceholder": "__TODO__ e.g., Customer Analytics Product",
-    "productTypeLabel": "__TODO__ Product Type *",
-    "productTypePlaceholder": "__TODO__ Select product type",
-    "versionLabel": "__TODO__ Version *",
-    "versionPlaceholder": "__TODO__ e.g., v1.0.0",
-    "deliverableNameLabel": "__TODO__ Deliverable Name (Optional)",
-    "deliverableNamePlaceholder": "__TODO__ Defaults to: {{contractName}}",
-    "deliverableNameHint": "__TODO__ If not specified, the deliverable will use the contract name",
-    "creating": "__TODO__ Creating...",
-    "createButton": "__TODO__ Create Product",
+    "title": "Crear producto de datos a partir de un contrato",
+    "description": "Cree un nuevo producto de datos que use este contrato para gobernar un entregable. El producto heredará el dominio, el equipo propietario y el proyecto del contrato.",
+    "contractLabel": "Contrato:",
+    "productNameLabel": "Nombre del producto *",
+    "productNamePlaceholder": "p. ej., Producto de análisis de clientes",
+    "productTypeLabel": "Tipo de producto *",
+    "productTypePlaceholder": "Seleccione el tipo de producto",
+    "versionLabel": "Versión *",
+    "versionPlaceholder": "p. ej., v1.0.0",
+    "deliverableNameLabel": "Nombre del entregable (opcional)",
+    "deliverableNamePlaceholder": "Predeterminado: {{contractName}}",
+    "deliverableNameHint": "Si no se especifica, el entregable usará el nombre del contrato",
+    "creating": "Creando...",
+    "createButton": "Crear producto",
     "errors": {
-      "nameRequired": "__TODO__ Product name is required",
-      "versionRequired": "__TODO__ Version is required",
-      "typeRequired": "__TODO__ Product type is required",
-      "createError": "__TODO__ Failed to create product from contract"
+      "nameRequired": "El nombre del producto es obligatorio",
+      "versionRequired": "La versión es obligatoria",
+      "typeRequired": "El tipo de producto es obligatorio",
+      "createError": "No se pudo crear el producto a partir del contrato"
     },
     "messages": {
-      "productCreated": "__TODO__ Product Created",
-      "productCreatedDesc": "__TODO__ Data Product \"{{productName}}\" created successfully from contract."
+      "productCreated": "Producto creado",
+      "productCreatedDesc": "Producto de datos \"{{productName}}\" creado correctamente a partir del contrato."
     }
   },
   "createVersion": {
-    "title": "__TODO__ Create New Version",
-    "description": "__TODO__ Enter the new version identifier for data product \"{{productTitle}}\". It's often helpful to increment based on the current version ({{currentVersion}}).",
-    "versionLabel": "__TODO__ New Version String",
-    "versionPlaceholder": "__TODO__ e.g., v1.1, v2.0-beta",
-    "createButton": "__TODO__ Create Version",
+    "title": "Crear nueva versión",
+    "description": "Ingrese el nuevo identificador de versión para el producto de datos \"{{productTitle}}\". Suele ser útil incrementarlo a partir de la versión actual ({{currentVersion}}).",
+    "versionLabel": "Cadena de la nueva versión",
+    "versionPlaceholder": "p. ej., v1.1, v2.0-beta",
+    "createButton": "Crear versión",
     "errors": {
-      "versionEmpty": "__TODO__ Version string cannot be empty."
+      "versionEmpty": "La cadena de versión no puede estar vacía."
     }
   },
   "graphView": {
-    "unnamedProduct": "__TODO__ Unnamed Product",
-    "switchToTableView": "__TODO__ Switch to Table View",
-    "switchToGraphView": "__TODO__ Switch to Graph View",
-    "inputPortLabel": "__TODO__ {{name}} (Consumable)",
-    "outputPortLabel": "__TODO__ {{name}} (Deliverable)",
+    "unnamedProduct": "Producto sin nombre",
+    "switchToTableView": "Cambiar a vista de tabla",
+    "switchToGraphView": "Cambiar a vista de grafo",
+    "inputPortLabel": "{{name}} (Consumible)",
+    "outputPortLabel": "{{name}} (Entregable)",
     "labels": {
-      "contract": "__TODO__ Contract"
+      "contract": "Contrato"
     }
   },
   "importExport": {
-    "title": "__TODO__ ODPS v1.0.0 Import/Export",
-    "description": "__TODO__ Import or export data products in Open Data Product Standard v1.0.0 JSON format",
-    "pasteLabel": "__TODO__ Paste ODPS v1.0.0 JSON",
-    "validationErrors": "__TODO__ Validation Errors:",
-    "validate": "__TODO__ Validate",
-    "validationFailed": "__TODO__ Validation Failed",
-    "errorsFound_one": "__TODO__ Found {{count}} error",
-    "errorsFound_other": "__TODO__ Found {{count}} errors",
-    "validationPassed": "__TODO__ Validation Passed",
-    "validationPassedDesc": "__TODO__ JSON is valid ODPS v1.0.0 format",
-    "invalidJson": "__TODO__ Invalid JSON",
-    "cannotImportErrors_one": "__TODO__ Cannot import: {{count}} error found",
-    "cannotImportErrors_other": "__TODO__ Cannot import: {{count}} errors found",
-    "importSuccessful": "__TODO__ Import Successful",
-    "importSuccessfulDesc": "__TODO__ Data product \"{{name}}\" imported successfully",
-    "importFailed": "__TODO__ Import Failed",
-    "noProductSelected": "__TODO__ No Product Selected",
-    "noProductSelectedDesc": "__TODO__ Cannot export without a product",
-    "exportSuccessful": "__TODO__ Export Successful",
-    "exportSuccessfulDesc": "__TODO__ Downloaded {{filename}}",
-    "exportFailed": "__TODO__ Export Failed",
-    "exportFailedDesc": "__TODO__ Failed to export data product",
-    "exportDescription": "__TODO__ Clicking \"Export\" will download this product as an ODPS v1.0.0 compliant JSON file. Audit fields (created_at, updated_at) will be excluded for portability.",
-    "exportAsJson": "__TODO__ Export as JSON",
-    "currentProduct": "__TODO__ Current Product",
-    "unnamed": "__TODO__ Unnamed",
-    "noProductDesc": "__TODO__ No product selected. Open this dialog from a product details page to export."
+    "title": "Importación/Exportación ODPS v1.0.0",
+    "description": "Importe o exporte productos de datos en formato JSON de Open Data Product Standard v1.0.0",
+    "pasteLabel": "Pegue el JSON de ODPS v1.0.0",
+    "validationErrors": "Errores de validación:",
+    "validate": "Validar",
+    "validationFailed": "Error de validación",
+    "errorsFound_one": "Se encontró {{count}} error",
+    "errorsFound_other": "Se encontraron {{count}} errores",
+    "validationPassed": "Validación superada",
+    "validationPassedDesc": "El JSON tiene un formato ODPS v1.0.0 válido",
+    "invalidJson": "JSON no válido",
+    "cannotImportErrors_one": "No se puede importar: se encontró {{count}} error",
+    "cannotImportErrors_other": "No se puede importar: se encontraron {{count}} errores",
+    "importSuccessful": "Importación correcta",
+    "importSuccessfulDesc": "Producto de datos \"{{name}}\" importado correctamente",
+    "importFailed": "Error de importación",
+    "noProductSelected": "Ningún producto seleccionado",
+    "noProductSelectedDesc": "No se puede exportar sin un producto",
+    "exportSuccessful": "Exportación correcta",
+    "exportSuccessfulDesc": "Se descargó {{filename}}",
+    "exportFailed": "Error de exportación",
+    "exportFailedDesc": "No se pudo exportar el producto de datos",
+    "exportDescription": "Al hacer clic en \"Exportar\" se descargará este producto como un archivo JSON compatible con ODPS v1.0.0. Los campos de auditoría (created_at, updated_at) se excluirán por portabilidad.",
+    "exportAsJson": "Exportar como JSON",
+    "currentProduct": "Producto actual",
+    "unnamed": "Sin nombre",
+    "noProductDesc": "Ningún producto seleccionado. Abra este cuadro de diálogo desde una página de detalles de producto para exportar."
   },
   "subscribeDialog": {
-    "title": "__TODO__ Subscribe to Data Product",
-    "descriptionPre": "__TODO__ Subscribe to",
-    "descriptionPost": "__TODO__ to receive notifications about updates, changes, and compliance status.",
-    "subscribeAs": "__TODO__ Subscribe as",
-    "forMyself": "__TODO__ For myself",
-    "forMyGroup": "__TODO__ For a group I'm part of",
-    "noGroupsAvailable": "__TODO__ (no groups available)",
-    "selectGroup": "__TODO__ Select one of your groups",
-    "otherGroupOrSP": "__TODO__ Other group or service principal",
-    "groupDisplayName": "__TODO__ Group (display name)",
-    "spDisplayName": "__TODO__ Service principal (display name or applicationId)",
-    "groupPlaceholder": "__TODO__ e.g., sales_consumers",
-    "spPlaceholder": "__TODO__ e.g., 11111111-2222-3333-4444-555555555555",
-    "validationNote": "__TODO__ Will be validated against the workspace directory before the request is recorded.",
-    "reasonLabel": "__TODO__ Why are you subscribing?",
-    "optional": "__TODO__ (optional)",
-    "reasonPlaceholder": "__TODO__ E.g., Need this data for quarterly reporting, building a dashboard, etc.",
-    "reasonHint": "__TODO__ This helps data owners understand how their products are being used.",
-    "subscribedTitle": "__TODO__ Subscribed!",
-    "subscribedDesc": "__TODO__ You are now subscribed to \"{{productName}}\". You'll receive notifications about updates and changes.",
-    "subscribedOnBehalfGroup": "__TODO__ You are now subscribed to \"{{productName}}\" on behalf of group \"{{value}}\".",
-    "subscribedOnBehalfSP": "__TODO__ You are now subscribed to \"{{productName}}\" on behalf of service principal \"{{value}}\".",
-    "subscriptionFailed": "__TODO__ Subscription Failed",
-    "failedToSubscribe": "__TODO__ Failed to subscribe",
-    "subscribing": "__TODO__ Subscribing..."
+    "title": "Suscribirse al producto de datos",
+    "descriptionPre": "Suscribirse a",
+    "descriptionPost": "para recibir notificaciones sobre actualizaciones, cambios y estado de cumplimiento.",
+    "subscribeAs": "Suscribirse como",
+    "forMyself": "Para mí",
+    "forMyGroup": "Para un grupo del que formo parte",
+    "noGroupsAvailable": "(no hay grupos disponibles)",
+    "selectGroup": "Seleccione uno de sus grupos",
+    "otherGroupOrSP": "Otro grupo o principal de servicio",
+    "groupDisplayName": "Grupo (nombre para mostrar)",
+    "spDisplayName": "Principal de servicio (nombre para mostrar o applicationId)",
+    "groupPlaceholder": "p. ej., sales_consumers",
+    "spPlaceholder": "p. ej., 11111111-2222-3333-4444-555555555555",
+    "validationNote": "Se validará contra el directorio del espacio de trabajo antes de registrar la solicitud.",
+    "reasonLabel": "¿Por qué se suscribe?",
+    "optional": "(opcional)",
+    "reasonPlaceholder": "P. ej., Necesito estos datos para los informes trimestrales, para crear un panel, etc.",
+    "reasonHint": "Esto ayuda a los propietarios de datos a entender cómo se usan sus productos.",
+    "subscribedTitle": "¡Suscrito!",
+    "subscribedDesc": "Ahora está suscrito a \"{{productName}}\". Recibirá notificaciones sobre actualizaciones y cambios.",
+    "subscribedOnBehalfGroup": "Ahora está suscrito a \"{{productName}}\" en nombre del grupo \"{{value}}\".",
+    "subscribedOnBehalfSP": "Ahora está suscrito a \"{{productName}}\" en nombre del principal de servicio \"{{value}}\".",
+    "subscriptionFailed": "Error de suscripción",
+    "failedToSubscribe": "No se pudo suscribir",
+    "subscribing": "Suscribiendo..."
   },
   "myProductsView": {
-    "retry": "__TODO__ Retry",
-    "untitled": "__TODO__ Untitled",
-    "productsAvailable_one": "__TODO__ {{count}} product available",
-    "productsAvailable_other": "__TODO__ {{count}} products available"
+    "retry": "Reintentar",
+    "untitled": "Sin título",
+    "productsAvailable_one": "{{count}} producto disponible",
+    "productsAvailable_other": "{{count}} productos disponibles"
   },
   "ownerConsumers": {
-    "breadcrumb": "__TODO__ Consumers",
-    "totalProducts": "__TODO__ Total Products",
-    "activeProducts": "__TODO__ Active Products",
-    "totalSubscribers": "__TODO__ Total Subscribers",
-    "products": "__TODO__ Products",
-    "noProducts": "__TODO__ No products found",
-    "noDomain": "__TODO__ No domain",
-    "subscribersFor": "__TODO__ Subscribers — {{name}}",
-    "selectProduct": "__TODO__ Select a product",
-    "filterPlaceholder": "__TODO__ Filter subscribers...",
-    "selectProductHint": "__TODO__ Select a product to view its subscribers",
-    "noSubscribersMatch": "__TODO__ No subscribers match your filter",
-    "noSubscribers": "__TODO__ No subscribers yet",
-    "colSubscriber": "__TODO__ Subscriber",
-    "colSubscribed": "__TODO__ Subscribed",
-    "colReason": "__TODO__ Reason"
+    "breadcrumb": "Consumidores",
+    "totalProducts": "Total de productos",
+    "activeProducts": "Productos activos",
+    "totalSubscribers": "Total de suscriptores",
+    "products": "Productos",
+    "noProducts": "No se encontraron productos",
+    "noDomain": "Sin dominio",
+    "subscribersFor": "Suscriptores — {{name}}",
+    "selectProduct": "Seleccione un producto",
+    "filterPlaceholder": "Filtrar suscriptores...",
+    "selectProductHint": "Seleccione un producto para ver sus suscriptores",
+    "noSubscribersMatch": "Ningún suscriptor coincide con su filtro",
+    "noSubscribers": "Aún no hay suscriptores",
+    "colSubscriber": "Suscriptor",
+    "colSubscribed": "Suscrito",
+    "colReason": "Motivo"
   }
 }

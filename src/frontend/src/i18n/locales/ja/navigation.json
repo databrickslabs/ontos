@@ -7,23 +7,23 @@
     "deploy": "デプロイ"
   },
   "dbDown": {
-    "title": "__TODO__ Database unavailable",
-    "body": "__TODO__ The application cannot reach its metadata database. Most features will return errors until the connection is restored.",
-    "retrying": "__TODO__ Retrying…",
-    "retryConnection": "__TODO__ Retry connection",
-    "retryFailed": "__TODO__ Retry failed",
-    "autoRetrying": "__TODO__ Auto-retrying every {{seconds}} seconds",
-    "pausedTitle": "__TODO__ Application paused",
-    "pausedBodyBefore": "__TODO__ The metadata database is unreachable, so navigation and data views are disabled to avoid showing inconsistent state. Use",
-    "pausedBodyAfter": "__TODO__ above (or wait for the next auto-retry) to resume."
+    "title": "データベースを利用できません",
+    "body": "アプリケーションがメタデータデータベースに接続できません。接続が復旧するまで、ほとんどの機能はエラーを返します。",
+    "retrying": "再試行中…",
+    "retryConnection": "接続を再試行",
+    "retryFailed": "再試行に失敗しました",
+    "autoRetrying": "{{seconds}} 秒ごとに自動再試行しています",
+    "pausedTitle": "アプリケーションを一時停止しました",
+    "pausedBodyBefore": "メタデータデータベースに接続できないため、不整合な状態の表示を避けるためにナビゲーションとデータビューを無効にしています。再開するには",
+    "pausedBodyAfter": "上のボタンを使用してください（または次の自動再試行をお待ちください）。"
   },
   "warning": {
-    "title": "__TODO__ System Warning",
-    "workspaceFailed": "__TODO__ Databricks workspace connection failed. Some features may be unavailable."
+    "title": "システム警告",
+    "workspaceFailed": "Databricks ワークスペースへの接続に失敗しました。一部の機能を利用できない場合があります。"
   },
   "routeError": {
-    "title": "__TODO__ Something went wrong",
-    "body": "__TODO__ An unexpected error occurred while rendering this page. You can try again or go back to the home page.",
-    "goHome": "__TODO__ Go Home"
+    "title": "問題が発生しました",
+    "body": "このページの表示中に予期しないエラーが発生しました。もう一度お試しいただくか、ホームページに戻ってください。",
+    "goHome": "ホームに戻る"
   }
 }

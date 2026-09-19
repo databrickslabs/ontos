@@ -1,65 +1,65 @@
 {
-  "title": "__TODO__ Business Owners",
-  "subtitle": "__TODO__ Ownership assignments tracking who is responsible for what.",
-  "addNew": "__TODO__ Assign Owner",
-  "editOwner": "__TODO__ Edit Assignment",
-  "removeOwner": "__TODO__ Remove Owner",
+  "title": "Business Owner",
+  "subtitle": "Zuständigkeitszuweisungen, die festhalten, wer wofür verantwortlich ist.",
+  "addNew": "Owner zuweisen",
+  "editOwner": "Zuweisung bearbeiten",
+  "removeOwner": "Owner entfernen",
   "table": {
-    "object": "__TODO__ Object",
-    "objectType": "__TODO__ Object Type",
-    "owner": "__TODO__ Owner",
-    "role": "__TODO__ Role",
-    "status": "__TODO__ Status",
-    "assignedAt": "__TODO__ Assigned",
-    "removedAt": "__TODO__ Removed",
-    "actions": "__TODO__ Actions"
+    "object": "Objekt",
+    "objectType": "Objekttyp",
+    "owner": "Owner",
+    "role": "Rolle",
+    "status": "Status",
+    "assignedAt": "Zugewiesen",
+    "removedAt": "Entfernt",
+    "actions": "Aktionen"
   },
   "objectTypes": {
-    "data_product": "__TODO__ Data Product",
-    "data_contract": "__TODO__ Data Contract",
-    "dataset": "__TODO__ Dataset",
-    "data_domain": "__TODO__ Data Domain",
-    "business_term": "__TODO__ Business Term",
-    "policy": "__TODO__ Policy",
-    "asset": "__TODO__ Asset",
-    "tag": "__TODO__ Tag"
+    "data_product": "Data Product",
+    "data_contract": "Data Contract",
+    "dataset": "Datensatz",
+    "data_domain": "Data Domain",
+    "business_term": "Geschäftsbegriff",
+    "policy": "Richtlinie",
+    "asset": "Asset",
+    "tag": "Tag"
   },
   "statusLabels": {
-    "active": "__TODO__ Active",
-    "inactive": "__TODO__ Inactive"
+    "active": "Aktiv",
+    "inactive": "Inaktiv"
   },
   "permissions": {
-    "deniedView": "__TODO__ You do not have permission to view business owners.",
-    "deniedCreate": "__TODO__ You do not have permission to assign owners.",
-    "deniedEdit": "__TODO__ You do not have permission to edit owner assignments.",
-    "deniedDelete": "__TODO__ You do not have permission to remove owners.",
-    "permissionDenied": "__TODO__ Permission Denied"
+    "deniedView": "Sie haben keine Berechtigung, Business Owner anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Owner zuzuweisen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Owner-Zuweisungen zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Owner zu entfernen.",
+    "permissionDenied": "Zugriff verweigert"
   },
   "messages": {
-    "errorFetching": "__TODO__ Error fetching business owners",
-    "errorRemoving": "__TODO__ Error removing business owner",
-    "removed": "__TODO__ Owner Removed",
-    "removedSuccess": "__TODO__ The ownership assignment was successfully removed.",
-    "errorLoadingData": "__TODO__ Error Loading Data"
+    "errorFetching": "Fehler beim Abrufen der Business Owner",
+    "errorRemoving": "Fehler beim Entfernen des Business Owners",
+    "removed": "Owner entfernt",
+    "removedSuccess": "Die Zuständigkeitszuweisung wurde erfolgreich entfernt.",
+    "errorLoadingData": "Fehler beim Laden der Daten"
   },
   "removeDialog": {
-    "title": "__TODO__ Remove Owner?",
-    "description": "__TODO__ This will deactivate the ownership assignment. The history will be preserved.",
-    "reasonLabel": "__TODO__ Reason (optional)",
-    "reasonPlaceholder": "__TODO__ Enter reason for removal...",
-    "cancel": "__TODO__ Cancel",
-    "remove": "__TODO__ Remove"
+    "title": "Owner entfernen?",
+    "description": "Dadurch wird die Zuständigkeitszuweisung deaktiviert. Der Verlauf bleibt erhalten.",
+    "reasonLabel": "Grund (optional)",
+    "reasonPlaceholder": "Grund für die Entfernung eingeben...",
+    "cancel": "Abbrechen",
+    "remove": "Entfernen"
   },
   "emptyState": {
-    "title": "__TODO__ No ownership assignments yet",
-    "description": "__TODO__ Assign business owners to data products, contracts, and other objects."
+    "title": "Noch keine Zuständigkeitszuweisungen",
+    "description": "Weisen Sie Business Owner zu Data Products, Contracts und anderen Objekten zu."
   },
   "panel": {
-    "title": "__TODO__ Owners",
-    "currentOwners": "__TODO__ Current Owners",
-    "previousOwners": "__TODO__ Previous Owners",
-    "noOwners": "__TODO__ No owners assigned",
-    "assignOwner": "__TODO__ Assign Owner",
-    "history": "__TODO__ Show History"
+    "title": "Owner",
+    "currentOwners": "Aktuelle Owner",
+    "previousOwners": "Frühere Owner",
+    "noOwners": "Keine Owner zugewiesen",
+    "assignOwner": "Owner zuweisen",
+    "history": "Verlauf anzeigen"
   }
 }

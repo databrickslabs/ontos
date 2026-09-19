@@ -44,9 +44,9 @@
     "confirmOperation": "操作の確認",
     "selectedItems": "選択された項目: {{items}}",
     "noItemsSelected": "項目が選択されていません",
-    "noResponse": "__TODO__ No response",
-    "tableNotFound": "__TODO__ Table \"{{name}}\" not found in {{schema}}",
-    "failedToNavigate": "__TODO__ Failed to navigate to {{path}}"
+    "noResponse": "応答がありません",
+    "tableNotFound": "テーブル「{{name}}」が {{schema}} 内に見つかりません",
+    "failedToNavigate": "{{path}} への移動に失敗しました"
   },
   "askPanel": {
     "title": "{{shortName}}に質問",
@@ -68,6 +68,6 @@
   "errors": {
     "error": "エラー",
     "failedToSendMessage": "メッセージの送信に失敗しました",
-    "chatRequestFailed": "__TODO__ Chat request failed"
+    "chatRequestFailed": "チャットリクエストに失敗しました"
   }
 }

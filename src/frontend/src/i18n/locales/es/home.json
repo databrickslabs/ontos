@@ -64,8 +64,8 @@
     "moreRoles": "Y {{count}} roles más disponibles..."
   },
   "myActions": {
-    "title": "__TODO__ My Actions",
-    "approvals": "__TODO__ Approvals"
+    "title": "Mis acciones",
+    "approvals": "Aprobaciones"
   },
   "quickActions": {
     "title": "Acciones rápidas",
@@ -116,12 +116,12 @@
     "status": "N/D",
     "untitled": "Sin título",
     "info": "Info",
-    "manage": "__TODO__ Manage",
-    "mySubscriptions": "__TODO__ My Subscriptions",
-    "subscribe": "__TODO__ Subscribe",
-    "subscribed": "__TODO__ Subscribed",
-    "unknownProduct": "__TODO__ Unknown product",
-    "viewAllSubscribed": "__TODO__ View all subscribed"
+    "manage": "Gestionar",
+    "mySubscriptions": "Mis suscripciones",
+    "subscribe": "Suscribirse",
+    "subscribed": "Suscrito",
+    "unknownProduct": "Producto desconocido",
+    "viewAllSubscribed": "Ver todas las suscripciones"
   },
   "dataCurationSection": {
     "title": "Curación de datos",
@@ -162,25 +162,25 @@
     "markReadButton": "Marcar como leído",
     "readLabel": "Leído",
     "alertMessage": "Esta lista muestra solo las notificaciones que requieren acción asignadas a tu(s) rol(es).",
-    "loadError": "__TODO__ Failed to load approvals",
-    "unknownUser": "__TODO__ Unknown user",
-    "unknownRole": "__TODO__ Unknown role",
-    "approvalRequest": "__TODO__ Approval request",
+    "loadError": "No se pudieron cargar las aprobaciones",
+    "unknownUser": "Usuario desconocido",
+    "unknownRole": "Rol desconocido",
+    "approvalRequest": "Solicitud de aprobación",
     "badges": {
-      "roleRequest": "__TODO__ Role Request",
-      "contract": "__TODO__ Contract",
-      "product": "__TODO__ Product",
-      "approval": "__TODO__ Approval"
+      "roleRequest": "Solicitud de rol",
+      "contract": "Contrato",
+      "product": "Producto",
+      "approval": "Aprobación"
     },
     "table": {
-      "type": "__TODO__ Type",
-      "requesterName": "__TODO__ Requester / Name",
-      "roleStatusReason": "__TODO__ Role / Status / Reason",
-      "date": "__TODO__ Date",
-      "actions": "__TODO__ Actions"
+      "type": "Tipo",
+      "requesterName": "Solicitante / Nombre",
+      "roleStatusReason": "Rol / Estado / Motivo",
+      "date": "Fecha",
+      "actions": "Acciones"
     },
-    "approveDenyRequest": "__TODO__ Approve/Deny request",
-    "approveDenyWorkflow": "__TODO__ Approve/Deny workflow request"
+    "approveDenyRequest": "Aprobar/Denegar solicitud",
+    "approveDenyWorkflow": "Aprobar/Denegar solicitud de flujo de trabajo"
   },
   "marketplace": {
     "welcome": "Hola",
@@ -212,8 +212,8 @@
       "exploreProducts": "Explorar Productos de Datos",
       "owner": "Propietario",
       "unknown": "Desconocido",
-      "unknownProduct": "__TODO__ Unknown product",
-      "untitled": "__TODO__ Untitled"
+      "unknownProduct": "Producto desconocido",
+      "untitled": "Sin título"
     },
     "datasets": {
       "available": "{{count}} dataset disponible",
@@ -250,46 +250,46 @@
       "four": "4 por fila"
     },
     "scopeFilter": {
-      "placeholder": "__TODO__ Scope",
-      "all": "__TODO__ All Scopes"
+      "placeholder": "Ámbito",
+      "all": "Todos los ámbitos"
     },
     "openInDetails": "Abrir en vista de detalles",
-    "loadError": "__TODO__ Failed to load products"
+    "loadError": "No se pudieron cargar los productos"
   },
   "myProducts": {
-    "title": "__TODO__ My Products",
-    "description": "__TODO__ Data products you have subscribed to.",
-    "loading": "__TODO__ Loading your products...",
-    "empty": "__TODO__ You haven't subscribed to any data products yet.",
-    "browseMarketplace": "__TODO__ Browse Marketplace"
+    "title": "Mis productos",
+    "description": "Productos de datos a los que se ha suscrito.",
+    "loading": "Cargando sus productos...",
+    "empty": "Aún no se ha suscrito a ningún producto de datos.",
+    "browseMarketplace": "Explorar el marketplace"
   },
   "myRequests": {
-    "title": "__TODO__ My Requests",
-    "description": "__TODO__ Requests you have created that require approval (including access and subscriptions).",
-    "loading": "__TODO__ Loading your requests...",
-    "empty": "__TODO__ You have not created any requests.",
-    "entity": "__TODO__ Entity",
-    "type": "__TODO__ Type",
-    "status": "__TODO__ Status",
-    "requestedAt": "__TODO__ Requested",
-    "handledAt": "__TODO__ Resolved",
-    "cancel": "__TODO__ Cancel",
-    "cancelSuccess": "__TODO__ Request cancelled",
-    "statusPending": "__TODO__ Pending",
-    "statusApproved": "__TODO__ Approved",
-    "statusDenied": "__TODO__ Denied",
-    "statusCancelled": "__TODO__ Cancelled",
-    "statusExpired": "__TODO__ Expired",
-    "statusInProgress": "__TODO__ In progress",
-    "statusCompleted": "__TODO__ Completed",
-    "statusAbandoned": "__TODO__ Abandoned",
-    "typeAccess": "__TODO__ Access",
-    "typeSubscription": "__TODO__ Subscription",
-    "typeApproval": "__TODO__ Approval",
-    "entityType": "__TODO__ Entity type",
-    "name": "__TODO__ Name",
-    "entityTypeDataProduct": "__TODO__ Data product",
-    "entityTypeDataset": "__TODO__ Dataset",
-    "entityTypeDataContract": "__TODO__ Data contract"
+    "title": "Mis solicitudes",
+    "description": "Solicitudes que ha creado y que requieren aprobación (incluidos acceso y suscripciones).",
+    "loading": "Cargando sus solicitudes...",
+    "empty": "No ha creado ninguna solicitud.",
+    "entity": "Entidad",
+    "type": "Tipo",
+    "status": "Estado",
+    "requestedAt": "Solicitado",
+    "handledAt": "Resuelto",
+    "cancel": "Cancelar",
+    "cancelSuccess": "Solicitud cancelada",
+    "statusPending": "Pendiente",
+    "statusApproved": "Aprobado",
+    "statusDenied": "Denegado",
+    "statusCancelled": "Cancelado",
+    "statusExpired": "Caducado",
+    "statusInProgress": "En curso",
+    "statusCompleted": "Completado",
+    "statusAbandoned": "Abandonado",
+    "typeAccess": "Acceso",
+    "typeSubscription": "Suscripción",
+    "typeApproval": "Aprobación",
+    "entityType": "Tipo de entidad",
+    "name": "Nombre",
+    "entityTypeDataProduct": "Producto de datos",
+    "entityTypeDataset": "Conjunto de datos",
+    "entityTypeDataContract": "Contrato de datos"
   }
 }

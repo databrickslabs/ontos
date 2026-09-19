@@ -64,8 +64,8 @@
     "moreRoles": "Und {{count}} weitere Rollen verfügbar..."
   },
   "myActions": {
-    "title": "__TODO__ My Actions",
-    "approvals": "__TODO__ Approvals"
+    "title": "Meine Aktionen",
+    "approvals": "Genehmigungen"
   },
   "quickActions": {
     "title": "Schnellzugriff",
@@ -116,12 +116,12 @@
     "status": "N/V",
     "untitled": "Ohne Titel",
     "info": "Info",
-    "manage": "__TODO__ Manage",
-    "mySubscriptions": "__TODO__ My Subscriptions",
-    "subscribe": "__TODO__ Subscribe",
-    "subscribed": "__TODO__ Subscribed",
-    "unknownProduct": "__TODO__ Unknown product",
-    "viewAllSubscribed": "__TODO__ View all subscribed"
+    "manage": "Verwalten",
+    "mySubscriptions": "Meine Abonnements",
+    "subscribe": "Abonnieren",
+    "subscribed": "Abonniert",
+    "unknownProduct": "Unbekanntes Produkt",
+    "viewAllSubscribed": "Alle Abonnements anzeigen"
   },
   "dataCurationSection": {
     "title": "Datenkuration",
@@ -162,25 +162,25 @@
     "markReadButton": "Als gelesen markieren",
     "readLabel": "Gelesen",
     "alertMessage": "Diese Liste zeigt nur aktionserforderliche Benachrichtigungen, die Ihrer/Ihren Rolle(n) zugeordnet sind.",
-    "loadError": "__TODO__ Failed to load approvals",
-    "unknownUser": "__TODO__ Unknown user",
-    "unknownRole": "__TODO__ Unknown role",
-    "approvalRequest": "__TODO__ Approval request",
+    "loadError": "Genehmigungen konnten nicht geladen werden",
+    "unknownUser": "Unbekannter Benutzer",
+    "unknownRole": "Unbekannte Rolle",
+    "approvalRequest": "Genehmigungsanfrage",
     "badges": {
-      "roleRequest": "__TODO__ Role Request",
-      "contract": "__TODO__ Contract",
-      "product": "__TODO__ Product",
-      "approval": "__TODO__ Approval"
+      "roleRequest": "Rollenanfrage",
+      "contract": "Vertrag",
+      "product": "Produkt",
+      "approval": "Genehmigung"
     },
     "table": {
-      "type": "__TODO__ Type",
-      "requesterName": "__TODO__ Requester / Name",
-      "roleStatusReason": "__TODO__ Role / Status / Reason",
-      "date": "__TODO__ Date",
-      "actions": "__TODO__ Actions"
+      "type": "Typ",
+      "requesterName": "Antragsteller / Name",
+      "roleStatusReason": "Rolle / Status / Grund",
+      "date": "Datum",
+      "actions": "Aktionen"
     },
-    "approveDenyRequest": "__TODO__ Approve/Deny request",
-    "approveDenyWorkflow": "__TODO__ Approve/Deny workflow request"
+    "approveDenyRequest": "Anfrage genehmigen/ablehnen",
+    "approveDenyWorkflow": "Workflow-Anfrage genehmigen/ablehnen"
   },
   "marketplace": {
     "welcome": "Hallo",
@@ -212,8 +212,8 @@
       "exploreProducts": "Datenprodukte erkunden",
       "owner": "Eigentümer",
       "unknown": "Unbekannt",
-      "unknownProduct": "__TODO__ Unknown product",
-      "untitled": "__TODO__ Untitled"
+      "unknownProduct": "Unbekanntes Produkt",
+      "untitled": "Ohne Titel"
     },
     "datasets": {
       "available": "{{count}} Datensatz verfügbar",
@@ -250,46 +250,46 @@
       "four": "4 pro Zeile"
     },
     "scopeFilter": {
-      "placeholder": "__TODO__ Scope",
-      "all": "__TODO__ All Scopes"
+      "placeholder": "Geltungsbereich",
+      "all": "Alle Geltungsbereiche"
     },
     "openInDetails": "In Detailansicht öffnen",
-    "loadError": "__TODO__ Failed to load products"
+    "loadError": "Produkte konnten nicht geladen werden"
   },
   "myProducts": {
-    "title": "__TODO__ My Products",
-    "description": "__TODO__ Data products you have subscribed to.",
-    "loading": "__TODO__ Loading your products...",
-    "empty": "__TODO__ You haven't subscribed to any data products yet.",
-    "browseMarketplace": "__TODO__ Browse Marketplace"
+    "title": "Meine Produkte",
+    "description": "Datenprodukte, die Sie abonniert haben.",
+    "loading": "Ihre Produkte werden geladen...",
+    "empty": "Sie haben noch keine Datenprodukte abonniert.",
+    "browseMarketplace": "Marktplatz durchsuchen"
   },
   "myRequests": {
-    "title": "__TODO__ My Requests",
-    "description": "__TODO__ Requests you have created that require approval (including access and subscriptions).",
-    "loading": "__TODO__ Loading your requests...",
-    "empty": "__TODO__ You have not created any requests.",
-    "entity": "__TODO__ Entity",
-    "type": "__TODO__ Type",
-    "status": "__TODO__ Status",
-    "requestedAt": "__TODO__ Requested",
-    "handledAt": "__TODO__ Resolved",
-    "cancel": "__TODO__ Cancel",
-    "cancelSuccess": "__TODO__ Request cancelled",
-    "statusPending": "__TODO__ Pending",
-    "statusApproved": "__TODO__ Approved",
-    "statusDenied": "__TODO__ Denied",
-    "statusCancelled": "__TODO__ Cancelled",
-    "statusExpired": "__TODO__ Expired",
-    "statusInProgress": "__TODO__ In progress",
-    "statusCompleted": "__TODO__ Completed",
-    "statusAbandoned": "__TODO__ Abandoned",
-    "typeAccess": "__TODO__ Access",
-    "typeSubscription": "__TODO__ Subscription",
-    "typeApproval": "__TODO__ Approval",
-    "entityType": "__TODO__ Entity type",
-    "name": "__TODO__ Name",
-    "entityTypeDataProduct": "__TODO__ Data product",
-    "entityTypeDataset": "__TODO__ Dataset",
-    "entityTypeDataContract": "__TODO__ Data contract"
+    "title": "Meine Anfragen",
+    "description": "Von Ihnen erstellte Anfragen, die eine Genehmigung erfordern (einschließlich Zugriff und Abonnements).",
+    "loading": "Ihre Anfragen werden geladen...",
+    "empty": "Sie haben noch keine Anfragen erstellt.",
+    "entity": "Entität",
+    "type": "Typ",
+    "status": "Status",
+    "requestedAt": "Angefragt",
+    "handledAt": "Erledigt",
+    "cancel": "Abbrechen",
+    "cancelSuccess": "Anfrage abgebrochen",
+    "statusPending": "Ausstehend",
+    "statusApproved": "Genehmigt",
+    "statusDenied": "Abgelehnt",
+    "statusCancelled": "Abgebrochen",
+    "statusExpired": "Abgelaufen",
+    "statusInProgress": "In Bearbeitung",
+    "statusCompleted": "Abgeschlossen",
+    "statusAbandoned": "Verworfen",
+    "typeAccess": "Zugriff",
+    "typeSubscription": "Abonnement",
+    "typeApproval": "Genehmigung",
+    "entityType": "Entitätstyp",
+    "name": "Name",
+    "entityTypeDataProduct": "Datenprodukt",
+    "entityTypeDataset": "Datensatz",
+    "entityTypeDataContract": "Datenvertrag"
   }
 }

@@ -7,23 +7,23 @@
     "deploy": "Bereitstellen"
   },
   "dbDown": {
-    "title": "__TODO__ Database unavailable",
-    "body": "__TODO__ The application cannot reach its metadata database. Most features will return errors until the connection is restored.",
-    "retrying": "__TODO__ Retrying…",
-    "retryConnection": "__TODO__ Retry connection",
-    "retryFailed": "__TODO__ Retry failed",
-    "autoRetrying": "__TODO__ Auto-retrying every {{seconds}} seconds",
-    "pausedTitle": "__TODO__ Application paused",
-    "pausedBodyBefore": "__TODO__ The metadata database is unreachable, so navigation and data views are disabled to avoid showing inconsistent state. Use",
-    "pausedBodyAfter": "__TODO__ above (or wait for the next auto-retry) to resume."
+    "title": "Datenbank nicht verfügbar",
+    "body": "Die Anwendung kann ihre Metadaten-Datenbank nicht erreichen. Die meisten Funktionen geben Fehler zurück, bis die Verbindung wiederhergestellt ist.",
+    "retrying": "Erneuter Versuch…",
+    "retryConnection": "Verbindung erneut versuchen",
+    "retryFailed": "Erneuter Versuch fehlgeschlagen",
+    "autoRetrying": "Automatischer erneuter Versuch alle {{seconds}} Sekunden",
+    "pausedTitle": "Anwendung pausiert",
+    "pausedBodyBefore": "Die Metadaten-Datenbank ist nicht erreichbar, daher sind Navigation und Datenansichten deaktiviert, um einen inkonsistenten Zustand zu vermeiden. Verwenden Sie",
+    "pausedBodyAfter": "oben (oder warten Sie auf den nächsten automatischen Versuch), um fortzufahren."
   },
   "warning": {
-    "title": "__TODO__ System Warning",
-    "workspaceFailed": "__TODO__ Databricks workspace connection failed. Some features may be unavailable."
+    "title": "Systemwarnung",
+    "workspaceFailed": "Verbindung zum Databricks-Workspace fehlgeschlagen. Einige Funktionen sind möglicherweise nicht verfügbar."
   },
   "routeError": {
-    "title": "__TODO__ Something went wrong",
-    "body": "__TODO__ An unexpected error occurred while rendering this page. You can try again or go back to the home page.",
-    "goHome": "__TODO__ Go Home"
+    "title": "Etwas ist schiefgelaufen",
+    "body": "Beim Rendern dieser Seite ist ein unerwarteter Fehler aufgetreten. Sie können es erneut versuchen oder zur Startseite zurückkehren.",
+    "goHome": "Zur Startseite"
   }
 }

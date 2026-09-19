@@ -35,72 +35,72 @@
     "dataQuality": "Calidad de Datos",
     "privacy": "Privacidad",
     "governance": "Gobernanza",
-    "maturity": "__TODO__ Maturity"
+    "maturity": "Madurez"
   },
   "errors": {
     "loadingPolicies": "Error al Cargar Políticas",
     "savingPolicy": "Error al Guardar Política",
     "deletingPolicy": "Error al Eliminar Política",
-    "loadPolicyFailed": "__TODO__ Failed to load policy",
-    "loadFailed": "__TODO__ Failed to load",
-    "savePolicyFailed": "__TODO__ Failed to save policy",
-    "deletePolicyFailed": "__TODO__ Failed to delete policy",
-    "noDataReceived": "__TODO__ No data received from compliance policies endpoint.",
-    "saveNoDataReturned": "__TODO__ Failed to save policy: No data returned",
-    "loadPoliciesFailed": "__TODO__ Failed to load compliance policies",
-    "loadRunResultsFailed": "__TODO__ Failed to load run results",
-    "policyNotFound": "__TODO__ Compliance policy not found.",
-    "runNotFound": "__TODO__ Run not found."
+    "loadPolicyFailed": "No se pudo cargar la política",
+    "loadFailed": "No se pudo cargar",
+    "savePolicyFailed": "No se pudo guardar la política",
+    "deletePolicyFailed": "No se pudo eliminar la política",
+    "noDataReceived": "No se recibieron datos del endpoint de políticas de cumplimiento.",
+    "saveNoDataReturned": "No se pudo guardar la política: no se devolvieron datos",
+    "loadPoliciesFailed": "No se pudieron cargar las políticas de cumplimiento",
+    "loadRunResultsFailed": "No se pudieron cargar los resultados de la ejecución",
+    "policyNotFound": "Política de cumplimiento no encontrada.",
+    "runNotFound": "Ejecución no encontrada."
   },
   "results": {
-    "passed": "__TODO__ Passed",
-    "failed": "__TODO__ Failed",
-    "showFailed": "__TODO__ Show Failed",
-    "showAll": "__TODO__ Show All",
-    "empty": "__TODO__ -"
+    "passed": "Aprobado",
+    "failed": "Fallido",
+    "showFailed": "Mostrar fallidos",
+    "showAll": "Mostrar todo",
+    "empty": "-"
   },
   "policyDetails": {
-    "backToList": "__TODO__ Back to List",
-    "run": "__TODO__ Run",
-    "id": "__TODO__ ID",
-    "examples": "__TODO__ Examples",
-    "shouldPass": "__TODO__ Should Pass",
-    "shouldFail": "__TODO__ Should Fail",
-    "noExamples": "__TODO__ No examples",
+    "backToList": "Volver a la lista",
+    "run": "Ejecutar",
+    "id": "ID",
+    "examples": "Ejemplos",
+    "shouldPass": "Debería aprobar",
+    "shouldFail": "Debería fallar",
+    "noExamples": "Sin ejemplos",
     "runSummary": {
-      "title": "__TODO__ Run Summary",
-      "lastRunStarted": "__TODO__ Last run started {{date}}",
-      "statusLabel": "__TODO__ Status:",
-      "score": "__TODO__ Score",
-      "passed": "__TODO__ Passed",
-      "failed": "__TODO__ Failed",
-      "passedExamples": "__TODO__ Passed examples",
-      "failedExamples": "__TODO__ Failed examples",
-      "noPassedExamples": "__TODO__ No passed examples in this run",
-      "noFailures": "__TODO__ No failures in this run"
+      "title": "Resumen de la ejecución",
+      "lastRunStarted": "Última ejecución iniciada {{date}}",
+      "statusLabel": "Estado:",
+      "score": "Puntuación",
+      "passed": "Aprobado",
+      "failed": "Fallido",
+      "passedExamples": "Ejemplos aprobados",
+      "failedExamples": "Ejemplos fallidos",
+      "noPassedExamples": "No hay ejemplos aprobados en esta ejecución",
+      "noFailures": "No hay fallos en esta ejecución"
     },
     "runsList": {
-      "title": "__TODO__ Runs",
-      "mostRecentFirst": "__TODO__ Most recent first",
-      "noRuns": "__TODO__ No runs yet",
-      "scoreLabel": "__TODO__ Score:",
-      "scoreDetail": "__TODO__ {{passed}} passed / {{failed}} failed",
-      "openRunDetails": "__TODO__ Open run details"
+      "title": "Ejecuciones",
+      "mostRecentFirst": "Más recientes primero",
+      "noRuns": "Aún no hay ejecuciones",
+      "scoreLabel": "Puntuación:",
+      "scoreDetail": "{{passed}} aprobados / {{failed}} fallidos",
+      "openRunDetails": "Abrir detalles de la ejecución"
     },
     "resultsCard": {
-      "title": "__TODO__ Results",
-      "filteredFailed": "__TODO__ Filtered to failed only — latest run {{date}}",
-      "filteredAll": "__TODO__ Filtered to all — latest run {{date}}"
+      "title": "Resultados",
+      "filteredFailed": "Filtrado solo por fallidos — última ejecución {{date}}",
+      "filteredAll": "Filtrado por todos — última ejecución {{date}}"
     }
   },
   "runDetails": {
-    "runTitle": "__TODO__ Run {{id}}",
-    "viewPolicy": "__TODO__ View Policy",
-    "statusLabel": "__TODO__ Status:",
-    "scoreLabel": "__TODO__ Score:",
-    "passedLabel": "__TODO__ Passed:",
-    "failedLabel": "__TODO__ Failed:",
-    "startedLabel": "__TODO__ Started: {{date}}"
+    "runTitle": "Ejecución {{id}}",
+    "viewPolicy": "Ver política",
+    "statusLabel": "Estado:",
+    "scoreLabel": "Puntuación:",
+    "passedLabel": "Aprobados:",
+    "failedLabel": "Fallidos:",
+    "startedLabel": "Iniciada: {{date}}"
   },
   "toast": {
     "policySaved": "Política '{{name}}' guardada correctamente",

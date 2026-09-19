@@ -7,23 +7,23 @@
     "deploy": "Distribuisci"
   },
   "dbDown": {
-    "title": "__TODO__ Database unavailable",
-    "body": "__TODO__ The application cannot reach its metadata database. Most features will return errors until the connection is restored.",
-    "retrying": "__TODO__ Retrying…",
-    "retryConnection": "__TODO__ Retry connection",
-    "retryFailed": "__TODO__ Retry failed",
-    "autoRetrying": "__TODO__ Auto-retrying every {{seconds}} seconds",
-    "pausedTitle": "__TODO__ Application paused",
-    "pausedBodyBefore": "__TODO__ The metadata database is unreachable, so navigation and data views are disabled to avoid showing inconsistent state. Use",
-    "pausedBodyAfter": "__TODO__ above (or wait for the next auto-retry) to resume."
+    "title": "Database non disponibile",
+    "body": "L'applicazione non riesce a raggiungere il suo database dei metadati. La maggior parte delle funzionalità restituirà errori finché la connessione non viene ripristinata.",
+    "retrying": "Nuovo tentativo…",
+    "retryConnection": "Riprova connessione",
+    "retryFailed": "Tentativo non riuscito",
+    "autoRetrying": "Nuovo tentativo automatico ogni {{seconds}} secondi",
+    "pausedTitle": "Applicazione in pausa",
+    "pausedBodyBefore": "Il database dei metadati è irraggiungibile, quindi la navigazione e le viste dati sono disabilitate per evitare di mostrare uno stato incoerente. Usa",
+    "pausedBodyAfter": "sopra (oppure attendi il prossimo tentativo automatico) per riprendere."
   },
   "warning": {
-    "title": "__TODO__ System Warning",
-    "workspaceFailed": "__TODO__ Databricks workspace connection failed. Some features may be unavailable."
+    "title": "Avviso di sistema",
+    "workspaceFailed": "Connessione al workspace Databricks non riuscita. Alcune funzionalità potrebbero non essere disponibili."
   },
   "routeError": {
-    "title": "__TODO__ Something went wrong",
-    "body": "__TODO__ An unexpected error occurred while rendering this page. You can try again or go back to the home page.",
-    "goHome": "__TODO__ Go Home"
+    "title": "Si è verificato un problema",
+    "body": "Si è verificato un errore imprevisto durante il rendering di questa pagina. Puoi riprovare oppure tornare alla pagina iniziale.",
+    "goHome": "Vai alla home"
   }
 }

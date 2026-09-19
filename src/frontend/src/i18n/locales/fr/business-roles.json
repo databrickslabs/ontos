@@ -1,78 +1,78 @@
 {
-  "title": "__TODO__ Business Roles",
-  "subtitle": "__TODO__ Named roles that can be assigned to users as owners of various objects.",
-  "addNew": "__TODO__ Add Role",
-  "editRole": "__TODO__ Edit Role",
-  "deleteRole": "__TODO__ Delete Role",
-  "systemBadge": "__TODO__ System",
-  "openMenu": "__TODO__ Open menu",
+  "title": "Rôles métier",
+  "subtitle": "Rôles nommés pouvant être attribués aux utilisateurs en tant que propriétaires de divers objets.",
+  "addNew": "Ajouter un rôle",
+  "editRole": "Modifier le rôle",
+  "deleteRole": "Supprimer le rôle",
+  "systemBadge": "Système",
+  "openMenu": "Ouvrir le menu",
   "table": {
-    "name": "__TODO__ Name",
-    "description": "__TODO__ Description",
-    "category": "__TODO__ Category",
-    "status": "__TODO__ Status",
-    "system": "__TODO__ System",
-    "lastUpdated": "__TODO__ Last Updated",
-    "actions": "__TODO__ Actions"
+    "name": "Nom",
+    "description": "Description",
+    "category": "Catégorie",
+    "status": "Statut",
+    "system": "Système",
+    "lastUpdated": "Dernière mise à jour",
+    "actions": "Actions"
   },
   "categories": {
-    "governance": "__TODO__ Governance",
-    "technical": "__TODO__ Technical",
-    "business": "__TODO__ Business",
-    "operational": "__TODO__ Operational"
+    "governance": "Gouvernance",
+    "technical": "Technique",
+    "business": "Métier",
+    "operational": "Opérationnel"
   },
   "statuses": {
-    "active": "__TODO__ Active",
-    "deprecated": "__TODO__ Deprecated"
+    "active": "Actif",
+    "deprecated": "Déprécié"
   },
   "permissions": {
-    "deniedView": "__TODO__ You do not have permission to view business roles.",
-    "deniedCreate": "__TODO__ You do not have permission to create business roles.",
-    "deniedEdit": "__TODO__ You do not have permission to edit business roles.",
-    "deniedDelete": "__TODO__ You do not have permission to delete business roles.",
-    "permissionDenied": "__TODO__ Permission Denied"
+    "deniedView": "Vous n'avez pas la permission de voir les rôles métier.",
+    "deniedCreate": "Vous n'avez pas la permission de créer des rôles métier.",
+    "deniedEdit": "Vous n'avez pas la permission de modifier les rôles métier.",
+    "deniedDelete": "Vous n'avez pas la permission de supprimer les rôles métier.",
+    "permissionDenied": "Permission refusée"
   },
   "messages": {
-    "errorFetching": "__TODO__ Error fetching business roles",
-    "loadFailed": "__TODO__ Failed to load business roles",
-    "errorDeleting": "__TODO__ Error deleting business role",
-    "deleted": "__TODO__ Business Role Deleted",
-    "deletedSuccess": "__TODO__ The business role was successfully deleted.",
-    "errorLoadingData": "__TODO__ Error Loading Data"
+    "errorFetching": "Erreur lors de la récupération des rôles métier",
+    "loadFailed": "Échec du chargement des rôles métier",
+    "errorDeleting": "Erreur lors de la suppression du rôle métier",
+    "deleted": "Rôle métier supprimé",
+    "deletedSuccess": "Le rôle métier a été supprimé avec succès.",
+    "errorLoadingData": "Erreur lors du chargement des données"
   },
   "deleteDialog": {
-    "title": "__TODO__ Delete Business Role?",
-    "description": "__TODO__ This action cannot be undone. Existing owner assignments using this role may become orphaned.",
-    "cancel": "__TODO__ Cancel",
-    "delete": "__TODO__ Delete"
+    "title": "Supprimer le rôle métier ?",
+    "description": "Cette action ne peut pas être annulée. Les attributions de propriétaire existantes utilisant ce rôle peuvent devenir orphelines.",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
   },
   "emptyState": {
-    "title": "__TODO__ No business roles defined yet",
-    "description": "__TODO__ Create your first business role (e.g., Data Owner, Domain Owner)."
+    "title": "Aucun rôle métier défini pour le moment",
+    "description": "Créez votre premier rôle métier (par ex. Propriétaire de données, Propriétaire de domaine)."
   },
   "form": {
-    "createTitle": "__TODO__ Create Business Role",
-    "createDescription": "__TODO__ Add a new business role that can be assigned to users.",
-    "editTitle": "__TODO__ Edit Business Role",
-    "editDescription": "__TODO__ Update the details of this business role.",
-    "create": "__TODO__ Create",
-    "update": "__TODO__ Save Changes",
-    "noCategory": "__TODO__ No category",
-    "isApprover": "__TODO__ Workflow Approver",
-    "isApproverDescription": "__TODO__ Show this role in workflow approver and notification recipient dropdowns.",
-    "isApproverInUse": "__TODO__ Cannot disable — used in {{count}} workflow(s): {{workflows}}.",
+    "createTitle": "Créer un rôle métier",
+    "createDescription": "Ajouter un nouveau rôle métier pouvant être attribué aux utilisateurs.",
+    "editTitle": "Modifier le rôle métier",
+    "editDescription": "Mettre à jour les détails de ce rôle métier.",
+    "create": "Créer",
+    "update": "Enregistrer les modifications",
+    "noCategory": "Aucune catégorie",
+    "isApprover": "Approbateur de workflow",
+    "isApproverDescription": "Afficher ce rôle dans les listes déroulantes des approbateurs de workflow et des destinataires de notifications.",
+    "isApproverInUse": "Impossible de désactiver — utilisé dans {{count}} workflow(s) : {{workflows}}.",
     "placeholders": {
-      "name": "__TODO__ e.g., Data Owner",
-      "description": "__TODO__ Describe the responsibilities of this role...",
-      "category": "__TODO__ Select a category"
+      "name": "par ex. Propriétaire de données",
+      "description": "Décrivez les responsabilités de ce rôle...",
+      "category": "Sélectionner une catégorie"
     },
     "toasts": {
-      "created": "__TODO__ Business Role Created",
-      "createdDescription": "__TODO__ \"{{name}}\" has been created.",
-      "updated": "__TODO__ Business Role Updated",
-      "updatedDescription": "__TODO__ \"{{name}}\" has been updated.",
-      "createFailed": "__TODO__ Failed to Create",
-      "updateFailed": "__TODO__ Failed to Update"
+      "created": "Rôle métier créé",
+      "createdDescription": "« {{name}} » a été créé.",
+      "updated": "Rôle métier mis à jour",
+      "updatedDescription": "« {{name}} » a été mis à jour.",
+      "createFailed": "Échec de la création",
+      "updateFailed": "Échec de la mise à jour"
     }
   }
 }

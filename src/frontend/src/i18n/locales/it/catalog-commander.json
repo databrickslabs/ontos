@@ -44,9 +44,9 @@
     "confirmOperation": "Conferma Operazione",
     "selectedItems": "Elementi selezionati: {{items}}",
     "noItemsSelected": "Nessun elemento selezionato",
-    "noResponse": "__TODO__ No response",
-    "tableNotFound": "__TODO__ Table \"{{name}}\" not found in {{schema}}",
-    "failedToNavigate": "__TODO__ Failed to navigate to {{path}}"
+    "noResponse": "Nessuna risposta",
+    "tableNotFound": "Tabella \"{{name}}\" non trovata in {{schema}}",
+    "failedToNavigate": "Impossibile navigare verso {{path}}"
   },
   "askPanel": {
     "title": "Chiedi a {{shortName}}",
@@ -68,6 +68,6 @@
   "errors": {
     "error": "Errore",
     "failedToSendMessage": "Invio messaggio fallito",
-    "chatRequestFailed": "__TODO__ Chat request failed"
+    "chatRequestFailed": "Richiesta di chat non riuscita"
   }
 }

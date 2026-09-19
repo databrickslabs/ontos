@@ -41,10 +41,10 @@
     "enableSync": "Sync Inschakelen",
     "cancel": "Annuleren",
     "save": "Opslaan",
-    "namePlaceholder": "__TODO__ e.g., US Production Workspace",
-    "descriptionPlaceholder": "__TODO__ e.g., Primary production environment for US region",
-    "workspaceUrlPlaceholder": "__TODO__ e.g., https://myworkspace.cloud.databricks.com",
-    "metastoreNamePlaceholder": "__TODO__ e.g., primary_prod_metastore"
+    "namePlaceholder": "bijv. US Production Workspace",
+    "descriptionPlaceholder": "bijv. Primaire productieomgeving voor regio VS",
+    "workspaceUrlPlaceholder": "bijv. https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "bijv. primary_prod_metastore"
   },
   "connectionTypes": {
     "deltaShare": "Delta Share",
@@ -63,13 +63,13 @@
     "status": "Status",
     "assets": "Assets",
     "actions": "Acties",
-    "neverSynced": "__TODO__ Never Synced",
-    "openMenu": "__TODO__ Open menu",
+    "neverSynced": "Nooit gesynchroniseerd",
+    "openMenu": "Menu openen",
     "syncTooltip": {
-      "status": "__TODO__ Status: {{status}}",
-      "time": "__TODO__ Time: {{time}}",
-      "error": "__TODO__ Error: {{error}}",
-      "inProgress": "__TODO__ Sync in progress or queued..."
+      "status": "Status: {{status}}",
+      "time": "Tijd: {{time}}",
+      "error": "Fout: {{error}}",
+      "inProgress": "Sync bezig of in wachtrij..."
     }
   },
   "filters": {
@@ -98,46 +98,46 @@
     "viewDetails": "Details Bekijken",
     "notFound": "Estate niet gevonden",
     "loading": "Laden...",
-    "pageTitle": "__TODO__ Estate Details",
-    "backToEstateManager": "__TODO__ Back to Estate Manager",
-    "backToListButton": "__TODO__ Back to List",
-    "configureSyncJob": "__TODO__ Configure Sync Job",
-    "editNotImplemented": "__TODO__ Edit Estate functionality to be implemented",
-    "syncEnabled": "__TODO__ Sync Enabled",
-    "syncDisabled": "__TODO__ Sync Disabled",
-    "never": "__TODO__ Never",
-    "notFoundOrLoad": "__TODO__ Estate not found or could not be loaded.",
+    "pageTitle": "Estate-details",
+    "backToEstateManager": "Terug naar Estate Manager",
+    "backToListButton": "Terug naar lijst",
+    "configureSyncJob": "Sync-taak configureren",
+    "editNotImplemented": "Functionaliteit voor het bewerken van estates wordt nog geïmplementeerd",
+    "syncEnabled": "Sync ingeschakeld",
+    "syncDisabled": "Sync uitgeschakeld",
+    "never": "Nooit",
+    "notFoundOrLoad": "Estate niet gevonden of kon niet worden geladen.",
     "labels": {
-      "cloudProvider": "__TODO__ Cloud Provider",
-      "lastSyncTime": "__TODO__ Last Sync Time",
-      "lastSyncStatus": "__TODO__ Last Sync Status",
-      "lastSyncError": "__TODO__ Last Sync Error",
-      "lastUpdatedAt": "__TODO__ Last Updated At"
+      "cloudProvider": "Cloud provider",
+      "lastSyncTime": "Laatste synctijd",
+      "lastSyncStatus": "Laatste syncstatus",
+      "lastSyncError": "Laatste syncfout",
+      "lastUpdatedAt": "Laatst bijgewerkt op"
     },
     "errors": {
-      "fetchTitle": "__TODO__ Error Fetching Estate",
-      "fetchFailed": "__TODO__ Failed to fetch estate details.",
-      "couldNotLoad": "__TODO__ Could not load estate details.",
-      "noEstateData": "__TODO__ Estate data is not available to add a policy."
+      "fetchTitle": "Fout bij ophalen van estate",
+      "fetchFailed": "Ophalen van estate-details mislukt.",
+      "couldNotLoad": "Kon estate-details niet laden.",
+      "noEstateData": "Estate-gegevens zijn niet beschikbaar om een beleid toe te voegen."
     },
     "policies": {
-      "title": "__TODO__ Sharing Policies",
-      "add": "__TODO__ Add Policy",
-      "sectionDescription": "__TODO__ Define rules to share specific Data Products or Semantic Model terms with this estate. Shared resources will be accessible via the configured connection type.",
-      "resourceTypeLabel": "__TODO__ Resource Type:",
-      "rulesLabel": "__TODO__ Rules ({{count}}):",
-      "filterBy": "__TODO__ Filter by",
-      "whereValue": "__TODO__ where value",
-      "noRules": "__TODO__ No rules defined for this policy.",
-      "emptyTitle": "__TODO__ No sharing policies defined for this estate.",
-      "emptyHint": "__TODO__ Click \"Add Policy\" to start sharing resources.",
-      "editPolicyAlert": "__TODO__ Edit policy: {{name}}",
-      "deletePolicyAlert": "__TODO__ Delete policy: {{name}}",
-      "addedTitle": "__TODO__ Policy Added",
-      "addedDescription": "__TODO__ Sharing policy \"{{name}}\" has been successfully added.",
-      "addErrorTitle": "__TODO__ Error Adding Policy",
-      "addErrorDescription": "__TODO__ Could not save the new sharing policy. Please try again.",
-      "saveFailedNoData": "__TODO__ Failed to save policy. Server returned no data."
+      "title": "Deelbeleid",
+      "add": "Beleid toevoegen",
+      "sectionDescription": "Definieer regels om specifieke dataproducten of semantische modeltermen te delen met deze estate. Gedeelde resources zijn toegankelijk via het geconfigureerde verbindingstype.",
+      "resourceTypeLabel": "Resourcetype:",
+      "rulesLabel": "Regels ({{count}}):",
+      "filterBy": "Filteren op",
+      "whereValue": "waar waarde",
+      "noRules": "Geen regels gedefinieerd voor dit beleid.",
+      "emptyTitle": "Geen deelbeleid gedefinieerd voor deze estate.",
+      "emptyHint": "Klik op \"Beleid toevoegen\" om te beginnen met het delen van resources.",
+      "editPolicyAlert": "Beleid bewerken: {{name}}",
+      "deletePolicyAlert": "Beleid verwijderen: {{name}}",
+      "addedTitle": "Beleid toegevoegd",
+      "addedDescription": "Deelbeleid \"{{name}}\" is succesvol toegevoegd.",
+      "addErrorTitle": "Fout bij toevoegen van beleid",
+      "addErrorDescription": "Kon het nieuwe deelbeleid niet opslaan. Probeer het opnieuw.",
+      "saveFailedNoData": "Opslaan van beleid mislukt. De server gaf geen gegevens terug."
     },
     "overview": {
       "title": "Estate Overzicht",
@@ -158,39 +158,39 @@
     }
   },
   "sharingPolicy": {
-    "dialogTitle": "__TODO__ Add New Sharing Policy",
-    "dialogDescription": "__TODO__ Define a new policy to share resources from or with this estate.",
-    "submit": "__TODO__ Add Policy",
-    "addRule": "__TODO__ Add Rule",
-    "rulesHeading": "__TODO__ Rules",
-    "ruleLabel": "__TODO__ Rule {{number}}",
+    "dialogTitle": "Nieuw deelbeleid toevoegen",
+    "dialogDescription": "Definieer een nieuw beleid om resources van of met deze estate te delen.",
+    "submit": "Beleid toevoegen",
+    "addRule": "Regel toevoegen",
+    "rulesHeading": "Regels",
+    "ruleLabel": "Regel {{number}}",
     "fields": {
-      "name": "__TODO__ Policy Name",
-      "description": "__TODO__ Description (Optional)",
-      "resourceType": "__TODO__ Resource Type",
-      "enablePolicy": "__TODO__ Enable Policy",
-      "filterType": "__TODO__ Filter Type",
-      "operator": "__TODO__ Operator",
-      "value": "__TODO__ Value"
+      "name": "Beleidsnaam",
+      "description": "Beschrijving (optioneel)",
+      "resourceType": "Resourcetype",
+      "enablePolicy": "Beleid inschakelen",
+      "filterType": "Filtertype",
+      "operator": "Operator",
+      "value": "Waarde"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., Share Production Data Products",
-      "description": "__TODO__ Detailed description of the policy's purpose...",
-      "resourceType": "__TODO__ Select resource type",
-      "operator": "__TODO__ Select operator",
-      "filterType": "__TODO__ e.g., tag, domain, status",
-      "value": "__TODO__ e.g., finance, Active"
+      "name": "bijv. Productiedataproducten delen",
+      "description": "Gedetailleerde beschrijving van het doel van het beleid...",
+      "resourceType": "Selecteer resourcetype",
+      "operator": "Selecteer operator",
+      "filterType": "bijv. tag, domein, status",
+      "value": "bijv. finance, Actief"
     },
     "validation": {
-      "nameMin": "__TODO__ Policy name must be at least 3 characters",
-      "filterTypeRequired": "__TODO__ Filter type is required",
-      "filterValueRequired": "__TODO__ Filter value is required",
-      "rulesMin": "__TODO__ At least one rule is required"
+      "nameMin": "Beleidsnaam moet minimaal 3 tekens bevatten",
+      "filterTypeRequired": "Filtertype is vereist",
+      "filterValueRequired": "Filterwaarde is vereist",
+      "rulesMin": "Er is minimaal één regel vereist"
     },
     "toast": {
-      "submittedTitle": "__TODO__ Policy Submitted",
-      "submittedDescription": "__TODO__ Sharing policy \"{{name}}\" is being processed.",
-      "addErrorDescription": "__TODO__ Failed to add sharing policy. Check console for details."
+      "submittedTitle": "Beleid ingediend",
+      "submittedDescription": "Deelbeleid \"{{name}}\" wordt verwerkt.",
+      "addErrorDescription": "Toevoegen van deelbeleid mislukt. Controleer de console voor details."
     }
   }
 }

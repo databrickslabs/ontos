@@ -1,78 +1,78 @@
 {
-  "title": "__TODO__ Business Roles",
-  "subtitle": "__TODO__ Named roles that can be assigned to users as owners of various objects.",
-  "addNew": "__TODO__ Add Role",
-  "editRole": "__TODO__ Edit Role",
-  "deleteRole": "__TODO__ Delete Role",
-  "systemBadge": "__TODO__ System",
-  "openMenu": "__TODO__ Open menu",
+  "title": "Roles de negocio",
+  "subtitle": "Roles con nombre que se pueden asignar a los usuarios como propietarios de diversos objetos.",
+  "addNew": "Añadir rol",
+  "editRole": "Editar rol",
+  "deleteRole": "Eliminar rol",
+  "systemBadge": "Sistema",
+  "openMenu": "Abrir menú",
   "table": {
-    "name": "__TODO__ Name",
-    "description": "__TODO__ Description",
-    "category": "__TODO__ Category",
-    "status": "__TODO__ Status",
-    "system": "__TODO__ System",
-    "lastUpdated": "__TODO__ Last Updated",
-    "actions": "__TODO__ Actions"
+    "name": "Nombre",
+    "description": "Descripción",
+    "category": "Categoría",
+    "status": "Estado",
+    "system": "Sistema",
+    "lastUpdated": "Última actualización",
+    "actions": "Acciones"
   },
   "categories": {
-    "governance": "__TODO__ Governance",
-    "technical": "__TODO__ Technical",
-    "business": "__TODO__ Business",
-    "operational": "__TODO__ Operational"
+    "governance": "Gobernanza",
+    "technical": "Técnico",
+    "business": "Negocio",
+    "operational": "Operativo"
   },
   "statuses": {
-    "active": "__TODO__ Active",
-    "deprecated": "__TODO__ Deprecated"
+    "active": "Activo",
+    "deprecated": "Obsoleto"
   },
   "permissions": {
-    "deniedView": "__TODO__ You do not have permission to view business roles.",
-    "deniedCreate": "__TODO__ You do not have permission to create business roles.",
-    "deniedEdit": "__TODO__ You do not have permission to edit business roles.",
-    "deniedDelete": "__TODO__ You do not have permission to delete business roles.",
-    "permissionDenied": "__TODO__ Permission Denied"
+    "deniedView": "No tienes permiso para ver los roles de negocio.",
+    "deniedCreate": "No tienes permiso para crear roles de negocio.",
+    "deniedEdit": "No tienes permiso para editar roles de negocio.",
+    "deniedDelete": "No tienes permiso para eliminar roles de negocio.",
+    "permissionDenied": "Permiso denegado"
   },
   "messages": {
-    "errorFetching": "__TODO__ Error fetching business roles",
-    "loadFailed": "__TODO__ Failed to load business roles",
-    "errorDeleting": "__TODO__ Error deleting business role",
-    "deleted": "__TODO__ Business Role Deleted",
-    "deletedSuccess": "__TODO__ The business role was successfully deleted.",
-    "errorLoadingData": "__TODO__ Error Loading Data"
+    "errorFetching": "Error al obtener los roles de negocio",
+    "loadFailed": "No se pudieron cargar los roles de negocio",
+    "errorDeleting": "Error al eliminar el rol de negocio",
+    "deleted": "Rol de negocio eliminado",
+    "deletedSuccess": "El rol de negocio se eliminó correctamente.",
+    "errorLoadingData": "Error al cargar los datos"
   },
   "deleteDialog": {
-    "title": "__TODO__ Delete Business Role?",
-    "description": "__TODO__ This action cannot be undone. Existing owner assignments using this role may become orphaned.",
-    "cancel": "__TODO__ Cancel",
-    "delete": "__TODO__ Delete"
+    "title": "¿Eliminar el rol de negocio?",
+    "description": "Esta acción no se puede deshacer. Las asignaciones de propietario existentes que usan este rol pueden quedar huérfanas.",
+    "cancel": "Cancelar",
+    "delete": "Eliminar"
   },
   "emptyState": {
-    "title": "__TODO__ No business roles defined yet",
-    "description": "__TODO__ Create your first business role (e.g., Data Owner, Domain Owner)."
+    "title": "Aún no hay roles de negocio definidos",
+    "description": "Crea tu primer rol de negocio (p. ej., propietario de datos, propietario de dominio)."
   },
   "form": {
-    "createTitle": "__TODO__ Create Business Role",
-    "createDescription": "__TODO__ Add a new business role that can be assigned to users.",
-    "editTitle": "__TODO__ Edit Business Role",
-    "editDescription": "__TODO__ Update the details of this business role.",
-    "create": "__TODO__ Create",
-    "update": "__TODO__ Save Changes",
-    "noCategory": "__TODO__ No category",
-    "isApprover": "__TODO__ Workflow Approver",
-    "isApproverDescription": "__TODO__ Show this role in workflow approver and notification recipient dropdowns.",
-    "isApproverInUse": "__TODO__ Cannot disable — used in {{count}} workflow(s): {{workflows}}.",
+    "createTitle": "Crear rol de negocio",
+    "createDescription": "Añade un nuevo rol de negocio que se pueda asignar a los usuarios.",
+    "editTitle": "Editar rol de negocio",
+    "editDescription": "Actualiza los detalles de este rol de negocio.",
+    "create": "Crear",
+    "update": "Guardar cambios",
+    "noCategory": "Sin categoría",
+    "isApprover": "Aprobador de flujo de trabajo",
+    "isApproverDescription": "Mostrar este rol en los menús desplegables de aprobador de flujo de trabajo y destinatario de notificaciones.",
+    "isApproverInUse": "No se puede deshabilitar — se usa en {{count}} flujo(s) de trabajo: {{workflows}}.",
     "placeholders": {
-      "name": "__TODO__ e.g., Data Owner",
-      "description": "__TODO__ Describe the responsibilities of this role...",
-      "category": "__TODO__ Select a category"
+      "name": "p. ej., propietario de datos",
+      "description": "Describe las responsabilidades de este rol...",
+      "category": "Selecciona una categoría"
     },
     "toasts": {
-      "created": "__TODO__ Business Role Created",
-      "createdDescription": "__TODO__ \"{{name}}\" has been created.",
-      "updated": "__TODO__ Business Role Updated",
-      "updatedDescription": "__TODO__ \"{{name}}\" has been updated.",
-      "createFailed": "__TODO__ Failed to Create",
-      "updateFailed": "__TODO__ Failed to Update"
+      "created": "Rol de negocio creado",
+      "createdDescription": "\"{{name}}\" se ha creado.",
+      "updated": "Rol de negocio actualizado",
+      "updatedDescription": "\"{{name}}\" se ha actualizado.",
+      "createFailed": "No se pudo crear",
+      "updateFailed": "No se pudo actualizar"
     }
   }
 }

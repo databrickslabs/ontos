@@ -114,11 +114,11 @@
     "noSharedNotes": "Geen gedeelde notities beschikbaar",
     "noSharedLinks": "Geen gedeelde links beschikbaar",
     "noSharedDocuments": "Geen gedeelde documenten beschikbaar",
-    "loading": "__TODO__ Loading shared assets...",
-    "attach": "__TODO__ Attach",
-    "levelInfo": "__TODO__ Level: {{level}}",
-    "inheritable": "__TODO__ Inheritable",
-    "notInheritable": "__TODO__ Not inheritable"
+    "loading": "Gedeelde assets laden...",
+    "attach": "Bijvoegen",
+    "levelInfo": "Niveau: {{level}}",
+    "inheritable": "Overerfbaar",
+    "notInheritable": "Niet overerfbaar"
   },
   "messages": {
     "loadFailed": "Metadata laden mislukt",
@@ -140,116 +140,116 @@
     }
   },
   "costs": {
-    "title": "__TODO__ Cost Management",
-    "total": "__TODO__ Total",
-    "breakdown": "__TODO__ Breakdown",
-    "noItems": "__TODO__ No items",
-    "addExpense": "__TODO__ Add expense",
-    "editExpense": "__TODO__ Edit expense",
-    "loading": "__TODO__ Loading",
-    "noItemsForMonth": "__TODO__ No cost items for this month.",
-    "donutAria": "__TODO__ Cost breakdown",
+    "title": "Kostenbeheer",
+    "total": "Totaal",
+    "breakdown": "Uitsplitsing",
+    "noItems": "Geen items",
+    "addExpense": "Uitgave toevoegen",
+    "editExpense": "Uitgave bewerken",
+    "loading": "Laden",
+    "noItemsForMonth": "Geen kostenposten voor deze maand.",
+    "donutAria": "Kostenuitsplitsing",
     "table": {
-      "title": "__TODO__ Title",
-      "center": "__TODO__ Center",
-      "monthRange": "__TODO__ Month Range",
-      "amountMonth": "__TODO__ Amount/Month"
+      "title": "Titel",
+      "center": "Kostenplaats",
+      "monthRange": "Maandbereik",
+      "amountMonth": "Bedrag/maand"
     },
     "form": {
-      "title": "__TODO__ Title",
-      "center": "__TODO__ Center",
-      "customCenter": "__TODO__ Custom center",
-      "amountCents": "__TODO__ Amount (cents)",
-      "currency": "__TODO__ Currency",
-      "startMonth": "__TODO__ Start month (YYYY-MM)",
-      "endMonth": "__TODO__ End month (YYYY-MM)",
-      "monthPlaceholder": "__TODO__ YYYY-MM"
+      "title": "Titel",
+      "center": "Kostenplaats",
+      "customCenter": "Aangepaste kostenplaats",
+      "amountCents": "Bedrag (centen)",
+      "currency": "Valuta",
+      "startMonth": "Startmaand (JJJJ-MM)",
+      "endMonth": "Eindmaand (JJJJ-MM)",
+      "monthPlaceholder": "JJJJ-MM"
     },
     "validation": {
-      "required": "__TODO__ Required"
+      "required": "Vereist"
     },
     "messages": {
-      "loadFailed": "__TODO__ Failed to load costs",
-      "missingFields": "__TODO__ Missing required fields",
-      "missingFieldsDescription": "__TODO__ Please fill all mandatory fields.",
-      "added": "__TODO__ Cost added",
-      "updated": "__TODO__ Cost updated",
-      "deleted": "__TODO__ Cost deleted",
-      "deleteFailed": "__TODO__ Delete failed",
-      "saveFailed": "__TODO__ Save failed"
+      "loadFailed": "Laden van kosten mislukt",
+      "missingFields": "Ontbrekende vereiste velden",
+      "missingFieldsDescription": "Vul alstublieft alle verplichte velden in.",
+      "added": "Kosten toegevoegd",
+      "updated": "Kosten bijgewerkt",
+      "deleted": "Kosten verwijderd",
+      "deleteFailed": "Verwijderen mislukt",
+      "saveFailed": "Opslaan mislukt"
     }
   },
   "quality": {
-    "title": "__TODO__ Data Quality",
-    "overallScore": "__TODO__ Overall Score",
-    "byDimension": "__TODO__ By Dimension",
-    "noMeasurements": "__TODO__ No measurements",
-    "addMeasurement": "__TODO__ Add measurement",
-    "editMeasurement": "__TODO__ Edit measurement",
-    "lastMeasured": "__TODO__ Last measured {{date}}",
-    "loading": "__TODO__ Loading",
-    "noMeasurementsRecorded": "__TODO__ No quality measurements recorded.",
-    "gaugeAria": "__TODO__ Quality score",
+    "title": "Datakwaliteit",
+    "overallScore": "Totaalscore",
+    "byDimension": "Per dimensie",
+    "noMeasurements": "Geen metingen",
+    "addMeasurement": "Meting toevoegen",
+    "editMeasurement": "Meting bewerken",
+    "lastMeasured": "Laatst gemeten {{date}}",
+    "loading": "Laden",
+    "noMeasurementsRecorded": "Geen kwaliteitsmetingen geregistreerd.",
+    "gaugeAria": "Kwaliteitsscore",
     "table": {
-      "title": "__TODO__ Title",
-      "dimension": "__TODO__ Dimension",
-      "source": "__TODO__ Source",
-      "score": "__TODO__ Score",
-      "measured": "__TODO__ Measured"
+      "title": "Titel",
+      "dimension": "Dimensie",
+      "source": "Bron",
+      "score": "Score",
+      "measured": "Gemeten"
     },
     "form": {
-      "title": "__TODO__ Title",
-      "dimension": "__TODO__ Dimension",
-      "source": "__TODO__ Source",
-      "score": "__TODO__ Score (%)",
-      "checksPassed": "__TODO__ Checks Passed",
-      "checksTotal": "__TODO__ Checks Total"
+      "title": "Titel",
+      "dimension": "Dimensie",
+      "source": "Bron",
+      "score": "Score (%)",
+      "checksPassed": "Geslaagde controles",
+      "checksTotal": "Totaal aantal controles"
     },
     "validation": {
-      "required": "__TODO__ Required",
-      "range": "__TODO__ 0-100"
+      "required": "Vereist",
+      "range": "0-100"
     },
     "messages": {
-      "loadFailed": "__TODO__ Failed to load quality data",
-      "missingFields": "__TODO__ Missing required fields",
-      "added": "__TODO__ Measurement added",
-      "updated": "__TODO__ Measurement updated",
-      "deleted": "__TODO__ Measurement deleted",
-      "deleteFailed": "__TODO__ Delete failed",
-      "saveFailed": "__TODO__ Save failed"
+      "loadFailed": "Laden van kwaliteitsgegevens mislukt",
+      "missingFields": "Ontbrekende vereiste velden",
+      "added": "Meting toegevoegd",
+      "updated": "Meting bijgewerkt",
+      "deleted": "Meting verwijderd",
+      "deleteFailed": "Verwijderen mislukt",
+      "saveFailed": "Opslaan mislukt"
     }
   },
   "ratings": {
-    "title": "__TODO__ Ratings",
-    "youRated": "__TODO__ You rated: {{rating}}★",
-    "updateYourRating": "__TODO__ Update your rating",
-    "rateThisItem": "__TODO__ Rate this item",
-    "addReviewOptional": "__TODO__ Add a review (optional)",
-    "reviewPlaceholder": "__TODO__ Share your experience...",
-    "submitting": "__TODO__ Submitting...",
-    "submitRating": "__TODO__ Submit Rating",
+    "title": "Beoordelingen",
+    "youRated": "U beoordeelde: {{rating}}★",
+    "updateYourRating": "Uw beoordeling bijwerken",
+    "rateThisItem": "Beoordeel dit item",
+    "addReviewOptional": "Voeg een recensie toe (optioneel)",
+    "reviewPlaceholder": "Deel uw ervaring...",
+    "submitting": "Verzenden...",
+    "submitRating": "Beoordeling verzenden",
     "labels": {
-      "poor": "__TODO__ Poor",
-      "fair": "__TODO__ Fair",
-      "good": "__TODO__ Good",
-      "veryGood": "__TODO__ Very Good",
-      "excellent": "__TODO__ Excellent"
+      "poor": "Slecht",
+      "fair": "Matig",
+      "good": "Goed",
+      "veryGood": "Zeer goed",
+      "excellent": "Uitstekend"
     }
   },
   "info": {
-    "entityInformation": "__TODO__ Entity Information",
-    "subscribed": "__TODO__ Subscribed",
-    "tableOfContents": "__TODO__ Table of contents",
-    "noNotesAvailable": "__TODO__ No notes available.",
-    "noLinks": "__TODO__ No links.",
-    "inherited": "__TODO__ Inherited",
-    "shared": "__TODO__ Shared",
-    "ratingsAndReviews": "__TODO__ Ratings & Reviews",
-    "loadingRatings": "__TODO__ Loading ratings...",
-    "yourRating": "__TODO__ Your Rating",
-    "addReviewPlaceholder": "__TODO__ Add a review (optional)...",
-    "goToDetails": "__TODO__ Go to Details",
-    "alreadySubscribed": "__TODO__ Already Subscribed",
-    "subscribe": "__TODO__ Subscribe"
+    "entityInformation": "Entiteitsinformatie",
+    "subscribed": "Geabonneerd",
+    "tableOfContents": "Inhoudsopgave",
+    "noNotesAvailable": "Geen notities beschikbaar.",
+    "noLinks": "Geen links.",
+    "inherited": "Overgeërfd",
+    "shared": "Gedeeld",
+    "ratingsAndReviews": "Beoordelingen en recensies",
+    "loadingRatings": "Beoordelingen laden...",
+    "yourRating": "Uw beoordeling",
+    "addReviewPlaceholder": "Voeg een recensie toe (optioneel)...",
+    "goToDetails": "Ga naar details",
+    "alreadySubscribed": "Al geabonneerd",
+    "subscribe": "Abonneren"
   }
 }

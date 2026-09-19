@@ -458,10 +458,13 @@ export default function DataDomainDetailsView() {
 
   const fetchMetadata = useCallback(async (id: string) => {
     try {
+      // Metadata endpoints take the entity id as a query param (?entity_id=),
+      // not a path segment.
+      const eid = encodeURIComponent(id);
       const [rtResp, liResp, docResp] = await Promise.all([
-        get<RichTextItem[]>(`/api/entities/${entityType}/${id}/rich-texts`),
-        get<LinkItem[]>(`/api/entities/${entityType}/${id}/links`),
-        get<DocumentItem[]>(`/api/entities/${entityType}/${id}/documents`),
+        get<RichTextItem[]>(`/api/entities/${entityType}/rich-texts?entity_id=${eid}`),
+        get<LinkItem[]>(`/api/entities/${entityType}/links?entity_id=${eid}`),
+        get<DocumentItem[]>(`/api/entities/${entityType}/documents?entity_id=${eid}`),
       ]);
       setRichTexts(checkApiResponse(rtResp, 'Rich Texts'));
       setLinks(checkApiResponse(liResp, 'Links'));

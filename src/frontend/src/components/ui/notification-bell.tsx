@@ -171,7 +171,7 @@ export default function NotificationBell() {
     setIsAccessGrantDialogOpen(false);
   };
 
-  const getIcon = (type: NotificationType) => {
+  const getIcon = (type: NotificationType, data?: Record<string, unknown> | null) => {
     switch (type) {
       case 'info':
         return <Info className="h-4 w-4 text-blue-500" />;
@@ -183,8 +183,19 @@ export default function NotificationBell() {
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       case 'action_required':
         return <AlertCircle className="h-4 w-4 text-orange-500" />;
-      case 'job_progress':
+      case 'job_progress': {
+        // A job_progress notification carries its terminal outcome in data.status
+        // (the notification type can't be changed after creation). Only spin
+        // while it's actually running; show the outcome icon once it's done.
+        const status = String((data as { status?: unknown } | null | undefined)?.status ?? 'running');
+        if (status === 'completed')
+          return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        if (status === 'failed')
+          return <AlertCircle className="h-4 w-4 text-red-500" />;
+        if (status === 'cancelled')
+          return <X className="h-4 w-4 text-muted-foreground" />;
         return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+      }
       default:
         return <Info className="h-4 w-4" />;
     }
@@ -249,7 +260,7 @@ export default function NotificationBell() {
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    {getIcon(notification.type)}
+                    {getIcon(notification.type, notification.data || notification.action_payload)}
                     <p className="text-sm font-medium">{notification.title}</p>
                   </div>
                   {notification.subtitle && (

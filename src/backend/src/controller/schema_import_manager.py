@@ -34,8 +34,19 @@ from src.models.schema_import import (
 from src.db_models.entity_relationships import EntityRelationshipDb
 from src.repositories.assets_repository import asset_repo, asset_type_repo
 from src.repositories.connections_repository import connections_repo
+from src.repositories.app_settings_repository import app_settings_repo
 
 logger = get_logger(__name__)
+
+# Persisted app_settings key (and bounds) for the per-path child fetch limit.
+# The bounds mirror the connector contract (ListAssetsOptions: 1..10000).
+# The default matches Settings.SCHEMA_IMPORT_CHILD_LIMIT and preserves the
+# historic hardcoded value; the runtime source of truth is the persisted
+# app_settings row (written by SettingsManager), read here per request.
+_CHILD_LIMIT_SETTING_KEY = "SCHEMA_IMPORT_CHILD_LIMIT"
+_CHILD_LIMIT_DEFAULT = 500
+_CHILD_LIMIT_MIN = 1
+_CHILD_LIMIT_MAX = 10000
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +131,27 @@ class SchemaImportManager:
         self._connections = connections_manager
         self._assets = assets_manager
 
+    def _child_limit(self, db: Session) -> int:
+        """Resolve the per-path child fetch limit.
+
+        Precedence: persisted General Setting (SCHEMA_IMPORT_CHILD_LIMIT) →
+        module default (500, matching Settings.SCHEMA_IMPORT_CHILD_LIMIT). The
+        value is clamped to the connector contract's 1..10000 range so a
+        stale/invalid persisted value can never violate ListAssetsOptions.
+        """
+        raw = app_settings_repo.get_by_key(db, _CHILD_LIMIT_SETTING_KEY)
+        if raw is None:
+            limit = _CHILD_LIMIT_DEFAULT
+        else:
+            try:
+                limit = int(raw)
+            except (ValueError, TypeError):
+                logger.warning(
+                    f"Invalid {_CHILD_LIMIT_SETTING_KEY} value '{raw}'; falling back to {_CHILD_LIMIT_DEFAULT}"
+                )
+                limit = _CHILD_LIMIT_DEFAULT
+        return max(_CHILD_LIMIT_MIN, min(_CHILD_LIMIT_MAX, limit))
+
     # ------------------------------------------------------------------
     # Browse
     # ------------------------------------------------------------------
@@ -159,9 +191,15 @@ class SchemaImportManager:
             ))
 
         # Also list leaf assets at this path
+        child_limit = self._child_limit(db)
+        truncated = False
         try:
-            options = ListAssetsOptions(path=path or "", limit=500)
+            options = ListAssetsOptions(path=path or "", limit=child_limit)
             assets = connector.list_assets(options=options)
+            # A full page back from the connector means there may be more
+            # assets than the configured limit; signal truncation to the UI.
+            if len(assets) >= child_limit:
+                truncated = True
             container_paths = {n.path for n in nodes}
             for asset in assets:
                 if asset.identifier in container_paths:
@@ -211,6 +249,8 @@ class SchemaImportManager:
             nodes=nodes,
             error=browse_error,
             error_detail=browse_error_detail,
+            truncated=truncated,
+            truncated_at=child_limit if truncated else None,
         )
 
     # ------------------------------------------------------------------
@@ -695,7 +735,7 @@ class SchemaImportManager:
 
         if should_recurse:
             try:
-                options = ListAssetsOptions(path=path, limit=500)
+                options = ListAssetsOptions(path=path, limit=self._child_limit(db))
                 children = connector.list_assets(options=options)
                 for child in children:
                     if child.identifier in seen_paths or child.identifier == path:

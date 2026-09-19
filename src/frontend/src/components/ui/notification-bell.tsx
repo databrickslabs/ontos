@@ -415,7 +415,11 @@ export default function NotificationBell() {
                     )}
                   {(notification.type === 'job_progress' || notification.action_type === 'job_progress') && (notification.data || notification.action_payload) && (
                     <div className="mt-2">
-                      <Progress value={Number((notification.data || notification.action_payload)?.progress ?? 0)} />
+                      {!['completed', 'failed', 'cancelled'].includes(
+                        String((notification.data || notification.action_payload)?.status ?? 'running')
+                      ) && (
+                        <Progress value={Number((notification.data || notification.action_payload)?.progress ?? 0)} />
+                      )}
                       {((notification.data || notification.action_payload)?.status) && (
                         <p className="text-xs text-muted-foreground mt-1">
                           Status: {String((notification.data || notification.action_payload)?.status)}

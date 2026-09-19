@@ -147,3 +147,33 @@ class TestKeylessDisabled:
         payload = resp.json()
         assert payload.get("error"), payload
         assert payload["error"]["code"] == -32001
+
+
+class TestProtocolNegotiation:
+    """initialize must echo the client's requested protocolVersion when supported.
+
+    A strict client (e.g. the Databricks AI Gateway) aborts with "unsupported
+    protocol version" if the server answers with an older revision than it asked
+    for, so the server must not force a single hardcoded version.
+    """
+
+    def _initialize(self, client, version):
+        return _rpc(
+            client,
+            "initialize",
+            params={"protocolVersion": version, "clientInfo": {"name": "test"}, "capabilities": {}},
+            headers={FWD_EMAIL_HEADER: CALLER},
+        ).json()
+
+    def test_newer_version_echoed(self, mcp_client, keyless_default_token):
+        payload = self._initialize(mcp_client, "2025-06-18")
+        assert payload["result"]["protocolVersion"] == "2025-06-18"
+
+    def test_legacy_version_echoed(self, mcp_client, keyless_default_token):
+        payload = self._initialize(mcp_client, "2024-11-05")
+        assert payload["result"]["protocolVersion"] == "2024-11-05"
+
+    def test_unsupported_version_falls_back_to_latest(self, mcp_client, keyless_default_token):
+        from src.routes.mcp_routes import MCP_PROTOCOL_VERSION
+        payload = self._initialize(mcp_client, "1999-01-01")
+        assert payload["result"]["protocolVersion"] == MCP_PROTOCOL_VERSION

@@ -48,7 +48,17 @@ MCP_AUTH_FAILED = -32001
 MCP_AUTH_MISSING_SCOPE = -32002
 
 # MCP Protocol Version
-MCP_PROTOCOL_VERSION = "2024-11-05"
+# MCP protocol revisions this server is compatible with, newest first. Per the
+# MCP spec's initialize negotiation, the server echoes back the client's
+# requested protocolVersion when it's one of these, otherwise it responds with
+# its newest. Our JSON-RPC surface (initialize / tools.list / tools.call / ping
+# / notifications) is stable across these revisions and uses no version-specific
+# features, so declaring support for all of them is safe. Clients that speak a
+# newer revision (e.g. the Databricks AI Gateway MCP client) reject a server
+# that answers with an older version than they requested, so a single hardcoded
+# version breaks them — hence the echo-with-fallback below.
+SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"]
+MCP_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 # Feature ID for audit logging
 MCP_FEATURE_ID = "mcp"
@@ -205,7 +215,18 @@ class MCPHandler:
         if self._session_id and self._session_id in _sessions:
             _sessions[self._session_id]["client_info"] = client_info
             _sessions[self._session_id]["initialized"] = True
-        
+
+        # Protocol version negotiation: echo the client's requested version when
+        # we support it, otherwise fall back to our newest. Answering with an
+        # older version than the client asked for makes strict clients (e.g. the
+        # Databricks AI Gateway) abort with "unsupported protocol version".
+        requested_version = params.get("protocolVersion")
+        negotiated_version = (
+            requested_version
+            if requested_version in SUPPORTED_PROTOCOL_VERSIONS
+            else MCP_PROTOCOL_VERSION
+        )
+
         self._audit(
             action="SESSION_CREATE",
             success=True,
@@ -213,11 +234,13 @@ class MCPHandler:
                 "session_id": self._session_id,
                 "token_name": self._token_info.name,
                 "client_info": client_info,
+                "requested_protocol_version": requested_version,
+                "negotiated_protocol_version": negotiated_version,
             },
         )
-        
+
         return {
-            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "protocolVersion": negotiated_version,
             "serverInfo": {
                 "name": "ontos-mcp-server",
                 "version": "1.0.0"
@@ -763,4 +786,5 @@ async def mcp_health():
         "server": "ontos-mcp-server",
         "version": "1.0.0",
         "protocol_version": MCP_PROTOCOL_VERSION,
+        "supported_protocol_versions": SUPPORTED_PROTOCOL_VERSIONS,
     }

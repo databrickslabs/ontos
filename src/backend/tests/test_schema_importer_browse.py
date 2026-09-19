@@ -209,6 +209,78 @@ def _table_metadata(path: str, columns: List[ColumnInfo]) -> AssetMetadata:
     )
 
 
+class TestSchemaImporterBrowseSorting:
+    """Browse nodes must be alphabetically ordered within each group so long
+    lists are scannable regardless of connector/API return order."""
+
+    def test_containers_sorted_case_insensitively(self):
+        stub = _StubConnector(
+            containers_by_path={"": [
+                {"name": "beta", "type": "schema", "path": "beta", "has_children": True},
+                {"name": "Alpha", "type": "schema", "path": "Alpha", "has_children": True},
+                {"name": "charlie", "type": "schema", "path": "charlie", "has_children": True},
+            ]},
+        )
+        manager = _make_manager_with_stub_connector(stub)
+
+        response = manager.browse(db=MagicMock(), connection_id=uuid4(), path=None)
+
+        assert [n.name for n in response.nodes] == ["Alpha", "beta", "charlie"]
+
+    def test_leaf_assets_sorted_case_insensitively(self):
+        path = "cat.sch"
+        assets = [
+            AssetInfo(identifier=f"{path}.Zebra", name="Zebra",
+                      asset_type=UnifiedAssetType.UC_TABLE, connector_type="stub"),
+            AssetInfo(identifier=f"{path}.apple", name="apple",
+                      asset_type=UnifiedAssetType.UC_TABLE, connector_type="stub"),
+            AssetInfo(identifier=f"{path}.Mango", name="Mango",
+                      asset_type=UnifiedAssetType.UC_TABLE, connector_type="stub"),
+        ]
+        stub = _StubConnector(assets_by_path={path: assets})
+        manager = _make_manager_with_stub_connector(stub)
+
+        response = manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        leaf_names = [n.name for n in response.nodes if n.node_type != "column"]
+        assert leaf_names == ["apple", "Mango", "Zebra"]
+
+    def test_containers_sort_before_leaf_assets(self):
+        """Containers stay grouped first; leaf assets follow, each group sorted."""
+        path = "cat"
+        stub = _StubConnector(
+            containers_by_path={path: [
+                {"name": "sch_b", "type": "schema", "path": "cat.sch_b", "has_children": True},
+                {"name": "sch_a", "type": "schema", "path": "cat.sch_a", "has_children": True},
+            ]},
+            assets_by_path={path: [
+                AssetInfo(identifier="cat.tbl_b", name="tbl_b",
+                          asset_type=UnifiedAssetType.UC_TABLE, connector_type="stub"),
+                AssetInfo(identifier="cat.tbl_a", name="tbl_a",
+                          asset_type=UnifiedAssetType.UC_TABLE, connector_type="stub"),
+            ]},
+        )
+        manager = _make_manager_with_stub_connector(stub)
+
+        response = manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        assert [n.name for n in response.nodes] == ["sch_a", "sch_b", "tbl_a", "tbl_b"]
+
+    def test_sort_is_stable_across_calls(self):
+        path = "cat.sch"
+        assets = [
+            AssetInfo(identifier=f"{path}.t{i}", name=name,
+                      asset_type=UnifiedAssetType.UC_TABLE, connector_type="stub")
+            for i, name in enumerate(["delta", "alpha", "delta", "bravo"])
+        ]
+        stub = _StubConnector(assets_by_path={path: assets})
+        manager = _make_manager_with_stub_connector(stub)
+
+        first = [n.path for n in manager.browse(db=MagicMock(), connection_id=uuid4(), path=path).nodes]
+        second = [n.path for n in manager.browse(db=MagicMock(), connection_id=uuid4(), path=path).nodes]
+        assert first == second
+
+
 class TestSchemaImporterBrowseColumnEnrichment:
     """The browse layer must expose columns under a leaf asset path so the UI
     tree shows columns instead of nothing (or, before the fix, schema siblings)."""

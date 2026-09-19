@@ -55,3 +55,32 @@ export interface ImportResult {
   items: ImportResultItem[];
   system_asset_id: string | null;
 }
+
+export type SchemaImportRunStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface StartImportRunResponse {
+  run_id: string;
+  status: SchemaImportRunStatus;
+}
+
+export interface SchemaImportRunDetail {
+  id: string;
+  status: SchemaImportRunStatus;
+  progress_message?: string | null;
+  error?: string | null;
+  connection_id?: string | null;
+  total_items?: number | null;
+  processed_items: number;
+  created_count: number;
+  skipped_count: number;
+  error_count: number;
+  result?: ImportResult | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  completed_at?: string | null;
+}

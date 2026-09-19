@@ -99,6 +99,10 @@ class Settings(BaseSettings):
     # Interval in seconds between job run polling cycles
     # Lower values = more responsive updates but higher API load
     JOB_POLLING_INTERVAL_SECONDS: int = Field(300, env='JOB_POLLING_INTERVAL_SECONDS')
+    # Schema Importer: at or above this many previewed items, the UI offers a
+    # background (async) import instead of a blocking synchronous one.
+    # Overridable at runtime via General Settings (SCHEMA_IMPORT_ASYNC_THRESHOLD).
+    SCHEMA_IMPORT_ASYNC_THRESHOLD: int = Field(200, env='SCHEMA_IMPORT_ASYNC_THRESHOLD')
     sync_enabled: bool = False
     sync_repository: Optional[str] = None
     enabled_jobs: List[str] = Field(default_factory=list)

@@ -43,6 +43,8 @@ import type {
   ImportRequest,
   ImportResult,
   ImportDepth,
+  StartImportRunResponse,
+  SchemaImportRunDetail,
 } from '@/types/schema-import';
 
 // ---------------------------------------------------------------------------
@@ -145,7 +147,7 @@ export default function ImportPreviewDialog({
   selectedPaths,
   depth,
 }: ImportPreviewDialogProps) {
-  const { post: apiPost } = useApi();
+  const { post: apiPost, get: apiGet } = useApi();
   const { toast } = useToast();
 
   const [previewItems, setPreviewItems] = useState<ImportPreviewItem[]>([]);
@@ -154,6 +156,11 @@ export default function ImportPreviewDialog({
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Async (background) import state
+  const [asyncThreshold, setAsyncThreshold] = useState<number>(200);
+  const [isStartingAsync, setIsStartingAsync] = useState(false);
+  const [asyncRun, setAsyncRun] = useState<SchemaImportRunDetail | null>(null);
 
   // Toggle / map-to-existing state
   const [excludedPaths, setExcludedPaths] = useState<Set<string>>(new Set());
@@ -214,6 +221,96 @@ export default function ImportPreviewDialog({
     }
   };
 
+  const startAsyncImport = async () => {
+    setIsStartingAsync(true);
+    try {
+      const mappingsForApi: Record<string, string> = {};
+      for (const [path, asset] of Object.entries(pathMappings)) {
+        mappingsForApi[path] = asset.id;
+      }
+      const payload: ImportRequest = {
+        connection_id: connectionId,
+        selected_paths: selectedPaths,
+        depth,
+        excluded_paths: Array.from(excludedPaths),
+        path_mappings: Object.keys(mappingsForApi).length > 0 ? mappingsForApi : undefined,
+      };
+      const resp = await apiPost<StartImportRunResponse>('/api/schema-import/import-async', payload);
+      if (resp.data) {
+        setAsyncRun({
+          id: resp.data.run_id,
+          status: resp.data.status,
+          processed_items: 0,
+          created_count: 0,
+          skipped_count: 0,
+          error_count: 0,
+        });
+        toast({
+          title: 'Import started',
+          description: 'Running in the background — progress appears here and in your notifications.',
+        });
+      }
+    } catch (err) {
+      console.error('Async import failed to start:', err);
+      toast({ title: 'Could not start background import', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsStartingAsync(false);
+    }
+  };
+
+  const cancelAsyncImport = async () => {
+    if (!asyncRun) return;
+    try {
+      await apiPost(`/api/schema-import/runs/${asyncRun.id}/cancel`, {});
+    } catch (err) {
+      console.error('Cancel failed:', err);
+    }
+  };
+
+  // Poll the background run until it reaches a terminal state.
+  useEffect(() => {
+    if (!asyncRun || (asyncRun.status !== 'pending' && asyncRun.status !== 'running')) {
+      return;
+    }
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const resp = await apiGet<SchemaImportRunDetail>(`/api/schema-import/runs/${asyncRun.id}`);
+        if (cancelled || !resp.data) return;
+        setAsyncRun(resp.data);
+        if (resp.data.status === 'completed' || resp.data.status === 'failed' || resp.data.status === 'cancelled') {
+          if (resp.data.result) setImportResult(resp.data.result);
+          if (resp.data.status === 'completed') {
+            toast({
+              title: 'Import complete',
+              description: `Created ${resp.data.created_count}, skipped ${resp.data.skipped_count}, errors ${resp.data.error_count}`,
+            });
+          } else if (resp.data.status === 'failed') {
+            toast({ title: 'Import failed', description: resp.data.error || 'See run details', variant: 'destructive' });
+          }
+        }
+      } catch (err) {
+        console.error('Run poll failed:', err);
+      }
+    }, 2000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [asyncRun?.id, asyncRun?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch the async threshold once when the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const resp = await apiGet<{ schema_import_async_threshold?: number }>('/api/settings');
+        if (resp.data?.schema_import_async_threshold) {
+          setAsyncThreshold(resp.data.schema_import_async_threshold);
+        }
+      } catch {
+        /* keep default */
+      }
+    })();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setPreviewItems([]);
@@ -223,6 +320,7 @@ export default function ImportPreviewDialog({
       setExcludedPaths(new Set());
       setPathMappings({});
       setSelectorOpenForPath(null);
+      setAsyncRun(null);
     }
     onOpenChange(nextOpen);
   };
@@ -531,19 +629,62 @@ export default function ImportPreviewDialog({
             </ScrollArea>
           )}
 
+          {/* Background-run progress (while an async import is in flight) */}
+          {asyncRun && !importResult && (
+            <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+              <div className="flex items-center gap-2">
+                {(asyncRun.status === 'pending' || asyncRun.status === 'running') && (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+                <span className="font-medium capitalize">{asyncRun.status}</span>
+                {asyncRun.total_items ? (
+                  <span className="text-muted-foreground">
+                    — {asyncRun.processed_items}/{asyncRun.total_items} processed
+                    ({asyncRun.created_count} created, {asyncRun.skipped_count} skipped
+                    {asyncRun.error_count ? `, ${asyncRun.error_count} errors` : ''})
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">{asyncRun.progress_message || 'Starting…'}</span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                You can close this dialog — the import keeps running and completion is reported in your notifications.
+              </p>
+            </div>
+          )}
+
           <DialogFooter>
             {importResult ? (
               <Button variant="outline" onClick={() => handleOpenChange(false)}>
                 Close
               </Button>
+            ) : asyncRun && (asyncRun.status === 'pending' || asyncRun.status === 'running') ? (
+              <>
+                <Button variant="outline" onClick={cancelAsyncImport}>
+                  Cancel import
+                </Button>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                  Close (keep running)
+                </Button>
+              </>
             ) : (
               <>
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   Cancel
                 </Button>
+                {toCreate >= asyncThreshold && (
+                  <Button
+                    variant="secondary"
+                    onClick={startAsyncImport}
+                    disabled={isStartingAsync || isImporting || toCreate === 0}
+                  >
+                    {isStartingAsync && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Run in background
+                  </Button>
+                )}
                 <Button
                   onClick={executeImport}
-                  disabled={isImporting || toCreate === 0}
+                  disabled={isImporting || isStartingAsync || toCreate === 0}
                 >
                   {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Import {toCreate} asset{toCreate !== 1 ? 's' : ''}

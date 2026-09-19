@@ -41,10 +41,10 @@
     "enableSync": "Habilitar Sincronización",
     "cancel": "Cancelar",
     "save": "Guardar",
-    "namePlaceholder": "__TODO__ e.g., US Production Workspace",
-    "descriptionPlaceholder": "__TODO__ e.g., Primary production environment for US region",
-    "workspaceUrlPlaceholder": "__TODO__ e.g., https://myworkspace.cloud.databricks.com",
-    "metastoreNamePlaceholder": "__TODO__ e.g., primary_prod_metastore"
+    "namePlaceholder": "p. ej., Workspace de Producción EE. UU.",
+    "descriptionPlaceholder": "p. ej., Entorno de producción principal para la región de EE. UU.",
+    "workspaceUrlPlaceholder": "p. ej., https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "p. ej., primary_prod_metastore"
   },
   "connectionTypes": {
     "deltaShare": "Delta Share",
@@ -63,13 +63,13 @@
     "status": "Estado",
     "assets": "Activos",
     "actions": "Acciones",
-    "neverSynced": "__TODO__ Never Synced",
-    "openMenu": "__TODO__ Open menu",
+    "neverSynced": "Nunca sincronizado",
+    "openMenu": "Abrir menú",
     "syncTooltip": {
-      "status": "__TODO__ Status: {{status}}",
-      "time": "__TODO__ Time: {{time}}",
-      "error": "__TODO__ Error: {{error}}",
-      "inProgress": "__TODO__ Sync in progress or queued..."
+      "status": "Estado: {{status}}",
+      "time": "Hora: {{time}}",
+      "error": "Error: {{error}}",
+      "inProgress": "Sincronización en curso o en cola..."
     }
   },
   "filters": {
@@ -98,46 +98,46 @@
     "viewDetails": "Ver Detalles",
     "notFound": "Estate no encontrado",
     "loading": "Cargando...",
-    "pageTitle": "__TODO__ Estate Details",
-    "backToEstateManager": "__TODO__ Back to Estate Manager",
-    "backToListButton": "__TODO__ Back to List",
-    "configureSyncJob": "__TODO__ Configure Sync Job",
-    "editNotImplemented": "__TODO__ Edit Estate functionality to be implemented",
-    "syncEnabled": "__TODO__ Sync Enabled",
-    "syncDisabled": "__TODO__ Sync Disabled",
-    "never": "__TODO__ Never",
-    "notFoundOrLoad": "__TODO__ Estate not found or could not be loaded.",
+    "pageTitle": "Detalles del estate",
+    "backToEstateManager": "Volver al Gestor de Estates",
+    "backToListButton": "Volver a la lista",
+    "configureSyncJob": "Configurar tarea de sincronización",
+    "editNotImplemented": "La funcionalidad de edición de estates está pendiente de implementar",
+    "syncEnabled": "Sincronización habilitada",
+    "syncDisabled": "Sincronización deshabilitada",
+    "never": "Nunca",
+    "notFoundOrLoad": "No se encontró el estate o no se pudo cargar.",
     "labels": {
-      "cloudProvider": "__TODO__ Cloud Provider",
-      "lastSyncTime": "__TODO__ Last Sync Time",
-      "lastSyncStatus": "__TODO__ Last Sync Status",
-      "lastSyncError": "__TODO__ Last Sync Error",
-      "lastUpdatedAt": "__TODO__ Last Updated At"
+      "cloudProvider": "Proveedor de nube",
+      "lastSyncTime": "Hora de la última sincronización",
+      "lastSyncStatus": "Estado de la última sincronización",
+      "lastSyncError": "Error de la última sincronización",
+      "lastUpdatedAt": "Última actualización"
     },
     "errors": {
-      "fetchTitle": "__TODO__ Error Fetching Estate",
-      "fetchFailed": "__TODO__ Failed to fetch estate details.",
-      "couldNotLoad": "__TODO__ Could not load estate details.",
-      "noEstateData": "__TODO__ Estate data is not available to add a policy."
+      "fetchTitle": "Error al obtener el estate",
+      "fetchFailed": "Error al obtener los detalles del estate.",
+      "couldNotLoad": "No se pudieron cargar los detalles del estate.",
+      "noEstateData": "No hay datos del estate disponibles para añadir una política."
     },
     "policies": {
-      "title": "__TODO__ Sharing Policies",
-      "add": "__TODO__ Add Policy",
-      "sectionDescription": "__TODO__ Define rules to share specific Data Products or Semantic Model terms with this estate. Shared resources will be accessible via the configured connection type.",
-      "resourceTypeLabel": "__TODO__ Resource Type:",
-      "rulesLabel": "__TODO__ Rules ({{count}}):",
-      "filterBy": "__TODO__ Filter by",
-      "whereValue": "__TODO__ where value",
-      "noRules": "__TODO__ No rules defined for this policy.",
-      "emptyTitle": "__TODO__ No sharing policies defined for this estate.",
-      "emptyHint": "__TODO__ Click \"Add Policy\" to start sharing resources.",
-      "editPolicyAlert": "__TODO__ Edit policy: {{name}}",
-      "deletePolicyAlert": "__TODO__ Delete policy: {{name}}",
-      "addedTitle": "__TODO__ Policy Added",
-      "addedDescription": "__TODO__ Sharing policy \"{{name}}\" has been successfully added.",
-      "addErrorTitle": "__TODO__ Error Adding Policy",
-      "addErrorDescription": "__TODO__ Could not save the new sharing policy. Please try again.",
-      "saveFailedNoData": "__TODO__ Failed to save policy. Server returned no data."
+      "title": "Políticas de uso compartido",
+      "add": "Añadir política",
+      "sectionDescription": "Define reglas para compartir Productos de Datos o términos de Modelos Semánticos específicos con este estate. Los recursos compartidos serán accesibles a través del tipo de conexión configurado.",
+      "resourceTypeLabel": "Tipo de recurso:",
+      "rulesLabel": "Reglas ({{count}}):",
+      "filterBy": "Filtrar por",
+      "whereValue": "donde el valor",
+      "noRules": "No hay reglas definidas para esta política.",
+      "emptyTitle": "No hay políticas de uso compartido definidas para este estate.",
+      "emptyHint": "Haz clic en «Añadir política» para empezar a compartir recursos.",
+      "editPolicyAlert": "Editar política: {{name}}",
+      "deletePolicyAlert": "Eliminar política: {{name}}",
+      "addedTitle": "Política añadida",
+      "addedDescription": "La política de uso compartido \"{{name}}\" se ha añadido correctamente.",
+      "addErrorTitle": "Error al añadir la política",
+      "addErrorDescription": "No se pudo guardar la nueva política de uso compartido. Inténtalo de nuevo.",
+      "saveFailedNoData": "Error al guardar la política. El servidor no devolvió datos."
     },
     "overview": {
       "title": "Resumen del Estate",
@@ -158,39 +158,39 @@
     }
   },
   "sharingPolicy": {
-    "dialogTitle": "__TODO__ Add New Sharing Policy",
-    "dialogDescription": "__TODO__ Define a new policy to share resources from or with this estate.",
-    "submit": "__TODO__ Add Policy",
-    "addRule": "__TODO__ Add Rule",
-    "rulesHeading": "__TODO__ Rules",
-    "ruleLabel": "__TODO__ Rule {{number}}",
+    "dialogTitle": "Añadir nueva política de uso compartido",
+    "dialogDescription": "Define una nueva política para compartir recursos desde o con este estate.",
+    "submit": "Añadir política",
+    "addRule": "Añadir regla",
+    "rulesHeading": "Reglas",
+    "ruleLabel": "Regla {{number}}",
     "fields": {
-      "name": "__TODO__ Policy Name",
-      "description": "__TODO__ Description (Optional)",
-      "resourceType": "__TODO__ Resource Type",
-      "enablePolicy": "__TODO__ Enable Policy",
-      "filterType": "__TODO__ Filter Type",
-      "operator": "__TODO__ Operator",
-      "value": "__TODO__ Value"
+      "name": "Nombre de la política",
+      "description": "Descripción (opcional)",
+      "resourceType": "Tipo de recurso",
+      "enablePolicy": "Habilitar política",
+      "filterType": "Tipo de filtro",
+      "operator": "Operador",
+      "value": "Valor"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., Share Production Data Products",
-      "description": "__TODO__ Detailed description of the policy's purpose...",
-      "resourceType": "__TODO__ Select resource type",
-      "operator": "__TODO__ Select operator",
-      "filterType": "__TODO__ e.g., tag, domain, status",
-      "value": "__TODO__ e.g., finance, Active"
+      "name": "p. ej., Compartir Productos de Datos de Producción",
+      "description": "Descripción detallada del propósito de la política...",
+      "resourceType": "Selecciona el tipo de recurso",
+      "operator": "Selecciona el operador",
+      "filterType": "p. ej., etiqueta, dominio, estado",
+      "value": "p. ej., finanzas, Activo"
     },
     "validation": {
-      "nameMin": "__TODO__ Policy name must be at least 3 characters",
-      "filterTypeRequired": "__TODO__ Filter type is required",
-      "filterValueRequired": "__TODO__ Filter value is required",
-      "rulesMin": "__TODO__ At least one rule is required"
+      "nameMin": "El nombre de la política debe tener al menos 3 caracteres",
+      "filterTypeRequired": "El tipo de filtro es obligatorio",
+      "filterValueRequired": "El valor del filtro es obligatorio",
+      "rulesMin": "Se requiere al menos una regla"
     },
     "toast": {
-      "submittedTitle": "__TODO__ Policy Submitted",
-      "submittedDescription": "__TODO__ Sharing policy \"{{name}}\" is being processed.",
-      "addErrorDescription": "__TODO__ Failed to add sharing policy. Check console for details."
+      "submittedTitle": "Política enviada",
+      "submittedDescription": "La política de uso compartido \"{{name}}\" se está procesando.",
+      "addErrorDescription": "Error al añadir la política de uso compartido. Consulta la consola para más detalles."
     }
   }
 }

@@ -1,73 +1,73 @@
 {
   "trigger": {
-    "button": "__TODO__ Comments"
+    "button": "Commenti"
   },
   "timeline": {
-    "heading": "__TODO__ Activity Timeline",
-    "edited": "__TODO__ (edited)",
-    "loadError": "__TODO__ Failed to load timeline: {{error}}"
+    "heading": "Cronologia Attività",
+    "edited": "(modificato)",
+    "loadError": "Impossibile caricare la cronologia: {{error}}"
   },
   "project": {
-    "label": "__TODO__ Project: {{name}}",
-    "noContext": "__TODO__ No project context (global)"
+    "label": "Progetto: {{name}}",
+    "noContext": "Nessun contesto di progetto (globale)"
   },
   "filter": {
-    "label": "__TODO__ Filter:",
-    "comments": "__TODO__ Comments",
-    "changes": "__TODO__ Changes"
+    "label": "Filtro:",
+    "comments": "Commenti",
+    "changes": "Modifiche"
   },
   "actions": {
-    "addComment": "__TODO__ Add Comment"
+    "addComment": "Aggiungi Commento"
   },
   "form": {
-    "titleLabel": "__TODO__ Title (Optional)",
-    "titlePlaceholder": "__TODO__ Add a title for this comment...",
-    "commentLabel": "__TODO__ Comment",
-    "commentPlaceholder": "__TODO__ Write your comment...",
-    "postInProject": "__TODO__ Post in project",
-    "projectOverrideTooltip": "__TODO__ You're posting under a different project than the main view. The timeline list is unaffected.",
-    "globalNoProject": "__TODO__ Global (no project)",
-    "audienceHelp": "__TODO__ Target specific teams or roles (optional). Leave empty for visibility to all project members.",
-    "teamsLabel": "__TODO__ Teams",
-    "noTeams": "__TODO__ No teams available in current project",
-    "appRolesLabel": "__TODO__ App Roles",
-    "usersGroupsLabel": "__TODO__ Users & groups",
-    "principalsPlaceholder": "__TODO__ Add users or groups…",
-    "principalsAria": "__TODO__ Audience users and groups",
-    "post": "__TODO__ Post"
+    "titleLabel": "Titolo (Facoltativo)",
+    "titlePlaceholder": "Aggiungi un titolo per questo commento...",
+    "commentLabel": "Commento",
+    "commentPlaceholder": "Scrivi il tuo commento...",
+    "postInProject": "Pubblica nel progetto",
+    "projectOverrideTooltip": "Stai pubblicando in un progetto diverso da quello della vista principale. L'elenco della cronologia non ne è influenzato.",
+    "globalNoProject": "Globale (nessun progetto)",
+    "audienceHelp": "Rivolgiti a team o ruoli specifici (facoltativo). Lascia vuoto per rendere visibile a tutti i membri del progetto.",
+    "teamsLabel": "Team",
+    "noTeams": "Nessun team disponibile nel progetto corrente",
+    "appRolesLabel": "Ruoli dell'App",
+    "usersGroupsLabel": "Utenti e gruppi",
+    "principalsPlaceholder": "Aggiungi utenti o gruppi…",
+    "principalsAria": "Utenti e gruppi destinatari",
+    "post": "Pubblica"
   },
   "badge": {
-    "team": "__TODO__ Team: {{name}}",
-    "role": "__TODO__ Role: {{name}}"
+    "team": "Team: {{name}}",
+    "role": "Ruolo: {{name}}"
   },
   "change": {
-    "requesterLabel": "__TODO__ Requester:",
-    "decisionLabel": "__TODO__ Decision:",
-    "messageLabel": "__TODO__ Message:",
-    "iriLabel": "__TODO__ Iri:",
-    "linkIdLabel": "__TODO__ Link Id:",
-    "operationLabel": "__TODO__ Operation:",
-    "operationLinked": "__TODO__ linked",
-    "operationUnlinked": "__TODO__ unlinked"
+    "requesterLabel": "Richiedente:",
+    "decisionLabel": "Decisione:",
+    "messageLabel": "Messaggio:",
+    "iriLabel": "Iri:",
+    "linkIdLabel": "ID Collegamento:",
+    "operationLabel": "Operazione:",
+    "operationLinked": "collegato",
+    "operationUnlinked": "scollegato"
   },
   "validation": {
-    "commentRequired": "__TODO__ Comment content is required"
+    "commentRequired": "Il contenuto del commento è obbligatorio"
   },
-  "confirmDelete": "__TODO__ Are you sure you want to delete this comment?",
+  "confirmDelete": "Sei sicuro di voler eliminare questo commento?",
   "toast": {
-    "createSuccess": "__TODO__ Comment created successfully",
-    "createError": "__TODO__ Failed to create comment: {{error}}",
-    "updateSuccess": "__TODO__ Comment updated successfully",
-    "updateError": "__TODO__ Failed to update comment: {{error}}",
-    "deleteSuccess": "__TODO__ Comment deleted successfully",
-    "deleteError": "__TODO__ Failed to delete comment: {{error}}"
+    "createSuccess": "Commento creato con successo",
+    "createError": "Impossibile creare il commento: {{error}}",
+    "updateSuccess": "Commento aggiornato con successo",
+    "updateError": "Impossibile aggiornare il commento: {{error}}",
+    "deleteSuccess": "Commento eliminato con successo",
+    "deleteError": "Impossibile eliminare il commento: {{error}}"
   },
   "empty": {
-    "commentsTitle": "__TODO__ No comments yet",
-    "commentsSubtitle": "__TODO__ Be the first to add a comment!",
-    "changesTitle": "__TODO__ No changes recorded",
-    "changesSubtitle": "__TODO__ Changes will appear here when they occur",
-    "allTitle": "__TODO__ No activity yet",
-    "allSubtitle": "__TODO__ Comments and changes will appear here"
+    "commentsTitle": "Ancora nessun commento",
+    "commentsSubtitle": "Sii il primo ad aggiungere un commento!",
+    "changesTitle": "Nessuna modifica registrata",
+    "changesSubtitle": "Le modifiche appariranno qui quando si verificheranno",
+    "allTitle": "Ancora nessuna attività",
+    "allSubtitle": "Commenti e modifiche appariranno qui"
   }
 }

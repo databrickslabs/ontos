@@ -114,11 +114,11 @@
     "noSharedNotes": "利用可能な共有メモがありません",
     "noSharedLinks": "利用可能な共有リンクがありません",
     "noSharedDocuments": "利用可能な共有ドキュメントがありません",
-    "loading": "__TODO__ Loading shared assets...",
-    "attach": "__TODO__ Attach",
-    "levelInfo": "__TODO__ Level: {{level}}",
-    "inheritable": "__TODO__ Inheritable",
-    "notInheritable": "__TODO__ Not inheritable"
+    "loading": "共有アセットを読み込み中...",
+    "attach": "添付",
+    "levelInfo": "レベル: {{level}}",
+    "inheritable": "継承可能",
+    "notInheritable": "継承不可"
   },
   "messages": {
     "loadFailed": "メタデータの読み込みに失敗しました",
@@ -140,116 +140,116 @@
     }
   },
   "costs": {
-    "title": "__TODO__ Cost Management",
-    "total": "__TODO__ Total",
-    "breakdown": "__TODO__ Breakdown",
-    "noItems": "__TODO__ No items",
-    "addExpense": "__TODO__ Add expense",
-    "editExpense": "__TODO__ Edit expense",
-    "loading": "__TODO__ Loading",
-    "noItemsForMonth": "__TODO__ No cost items for this month.",
-    "donutAria": "__TODO__ Cost breakdown",
+    "title": "コスト管理",
+    "total": "合計",
+    "breakdown": "内訳",
+    "noItems": "項目がありません",
+    "addExpense": "費用を追加",
+    "editExpense": "費用を編集",
+    "loading": "読み込み中",
+    "noItemsForMonth": "今月のコスト項目はありません。",
+    "donutAria": "コストの内訳",
     "table": {
-      "title": "__TODO__ Title",
-      "center": "__TODO__ Center",
-      "monthRange": "__TODO__ Month Range",
-      "amountMonth": "__TODO__ Amount/Month"
+      "title": "タイトル",
+      "center": "コストセンター",
+      "monthRange": "対象月の範囲",
+      "amountMonth": "月額"
     },
     "form": {
-      "title": "__TODO__ Title",
-      "center": "__TODO__ Center",
-      "customCenter": "__TODO__ Custom center",
-      "amountCents": "__TODO__ Amount (cents)",
-      "currency": "__TODO__ Currency",
-      "startMonth": "__TODO__ Start month (YYYY-MM)",
-      "endMonth": "__TODO__ End month (YYYY-MM)",
-      "monthPlaceholder": "__TODO__ YYYY-MM"
+      "title": "タイトル",
+      "center": "コストセンター",
+      "customCenter": "カスタムコストセンター",
+      "amountCents": "金額（セント）",
+      "currency": "通貨",
+      "startMonth": "開始月（YYYY-MM）",
+      "endMonth": "終了月（YYYY-MM）",
+      "monthPlaceholder": "YYYY-MM"
     },
     "validation": {
-      "required": "__TODO__ Required"
+      "required": "必須"
     },
     "messages": {
-      "loadFailed": "__TODO__ Failed to load costs",
-      "missingFields": "__TODO__ Missing required fields",
-      "missingFieldsDescription": "__TODO__ Please fill all mandatory fields.",
-      "added": "__TODO__ Cost added",
-      "updated": "__TODO__ Cost updated",
-      "deleted": "__TODO__ Cost deleted",
-      "deleteFailed": "__TODO__ Delete failed",
-      "saveFailed": "__TODO__ Save failed"
+      "loadFailed": "コストの読み込みに失敗しました",
+      "missingFields": "必須フィールドが未入力です",
+      "missingFieldsDescription": "すべての必須フィールドを入力してください。",
+      "added": "コストを追加しました",
+      "updated": "コストを更新しました",
+      "deleted": "コストを削除しました",
+      "deleteFailed": "削除に失敗しました",
+      "saveFailed": "保存に失敗しました"
     }
   },
   "quality": {
-    "title": "__TODO__ Data Quality",
-    "overallScore": "__TODO__ Overall Score",
-    "byDimension": "__TODO__ By Dimension",
-    "noMeasurements": "__TODO__ No measurements",
-    "addMeasurement": "__TODO__ Add measurement",
-    "editMeasurement": "__TODO__ Edit measurement",
-    "lastMeasured": "__TODO__ Last measured {{date}}",
-    "loading": "__TODO__ Loading",
-    "noMeasurementsRecorded": "__TODO__ No quality measurements recorded.",
-    "gaugeAria": "__TODO__ Quality score",
+    "title": "データ品質",
+    "overallScore": "総合スコア",
+    "byDimension": "ディメンション別",
+    "noMeasurements": "測定値がありません",
+    "addMeasurement": "測定値を追加",
+    "editMeasurement": "測定値を編集",
+    "lastMeasured": "最終測定 {{date}}",
+    "loading": "読み込み中",
+    "noMeasurementsRecorded": "記録された品質測定値はありません。",
+    "gaugeAria": "品質スコア",
     "table": {
-      "title": "__TODO__ Title",
-      "dimension": "__TODO__ Dimension",
-      "source": "__TODO__ Source",
-      "score": "__TODO__ Score",
-      "measured": "__TODO__ Measured"
+      "title": "タイトル",
+      "dimension": "ディメンション",
+      "source": "ソース",
+      "score": "スコア",
+      "measured": "測定日"
     },
     "form": {
-      "title": "__TODO__ Title",
-      "dimension": "__TODO__ Dimension",
-      "source": "__TODO__ Source",
-      "score": "__TODO__ Score (%)",
-      "checksPassed": "__TODO__ Checks Passed",
-      "checksTotal": "__TODO__ Checks Total"
+      "title": "タイトル",
+      "dimension": "ディメンション",
+      "source": "ソース",
+      "score": "スコア（%）",
+      "checksPassed": "合格したチェック",
+      "checksTotal": "チェック総数"
     },
     "validation": {
-      "required": "__TODO__ Required",
-      "range": "__TODO__ 0-100"
+      "required": "必須",
+      "range": "0〜100"
     },
     "messages": {
-      "loadFailed": "__TODO__ Failed to load quality data",
-      "missingFields": "__TODO__ Missing required fields",
-      "added": "__TODO__ Measurement added",
-      "updated": "__TODO__ Measurement updated",
-      "deleted": "__TODO__ Measurement deleted",
-      "deleteFailed": "__TODO__ Delete failed",
-      "saveFailed": "__TODO__ Save failed"
+      "loadFailed": "品質データの読み込みに失敗しました",
+      "missingFields": "必須フィールドが未入力です",
+      "added": "測定値を追加しました",
+      "updated": "測定値を更新しました",
+      "deleted": "測定値を削除しました",
+      "deleteFailed": "削除に失敗しました",
+      "saveFailed": "保存に失敗しました"
     }
   },
   "ratings": {
-    "title": "__TODO__ Ratings",
-    "youRated": "__TODO__ You rated: {{rating}}★",
-    "updateYourRating": "__TODO__ Update your rating",
-    "rateThisItem": "__TODO__ Rate this item",
-    "addReviewOptional": "__TODO__ Add a review (optional)",
-    "reviewPlaceholder": "__TODO__ Share your experience...",
-    "submitting": "__TODO__ Submitting...",
-    "submitRating": "__TODO__ Submit Rating",
+    "title": "評価",
+    "youRated": "評価しました: {{rating}}★",
+    "updateYourRating": "評価を更新",
+    "rateThisItem": "この項目を評価",
+    "addReviewOptional": "レビューを追加（任意）",
+    "reviewPlaceholder": "感想を共有してください...",
+    "submitting": "送信中...",
+    "submitRating": "評価を送信",
     "labels": {
-      "poor": "__TODO__ Poor",
-      "fair": "__TODO__ Fair",
-      "good": "__TODO__ Good",
-      "veryGood": "__TODO__ Very Good",
-      "excellent": "__TODO__ Excellent"
+      "poor": "不満",
+      "fair": "やや不満",
+      "good": "良い",
+      "veryGood": "とても良い",
+      "excellent": "非常に良い"
     }
   },
   "info": {
-    "entityInformation": "__TODO__ Entity Information",
-    "subscribed": "__TODO__ Subscribed",
-    "tableOfContents": "__TODO__ Table of contents",
-    "noNotesAvailable": "__TODO__ No notes available.",
-    "noLinks": "__TODO__ No links.",
-    "inherited": "__TODO__ Inherited",
-    "shared": "__TODO__ Shared",
-    "ratingsAndReviews": "__TODO__ Ratings & Reviews",
-    "loadingRatings": "__TODO__ Loading ratings...",
-    "yourRating": "__TODO__ Your Rating",
-    "addReviewPlaceholder": "__TODO__ Add a review (optional)...",
-    "goToDetails": "__TODO__ Go to Details",
-    "alreadySubscribed": "__TODO__ Already Subscribed",
-    "subscribe": "__TODO__ Subscribe"
+    "entityInformation": "エンティティ情報",
+    "subscribed": "登録済み",
+    "tableOfContents": "目次",
+    "noNotesAvailable": "利用可能なメモはありません。",
+    "noLinks": "リンクはありません。",
+    "inherited": "継承済み",
+    "shared": "共有済み",
+    "ratingsAndReviews": "評価とレビュー",
+    "loadingRatings": "評価を読み込み中...",
+    "yourRating": "あなたの評価",
+    "addReviewPlaceholder": "レビューを追加（任意）...",
+    "goToDetails": "詳細へ移動",
+    "alreadySubscribed": "登録済み",
+    "subscribe": "登録"
   }
 }

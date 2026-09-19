@@ -41,10 +41,10 @@
     "enableSync": "Synchronisierung aktivieren",
     "cancel": "Abbrechen",
     "save": "Speichern",
-    "namePlaceholder": "__TODO__ e.g., US Production Workspace",
-    "descriptionPlaceholder": "__TODO__ e.g., Primary production environment for US region",
-    "workspaceUrlPlaceholder": "__TODO__ e.g., https://myworkspace.cloud.databricks.com",
-    "metastoreNamePlaceholder": "__TODO__ e.g., primary_prod_metastore"
+    "namePlaceholder": "z. B. US Production Workspace",
+    "descriptionPlaceholder": "z. B. Primäre Produktionsumgebung für die Region US",
+    "workspaceUrlPlaceholder": "z. B. https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "z. B. primary_prod_metastore"
   },
   "connectionTypes": {
     "deltaShare": "Delta Share",
@@ -63,13 +63,13 @@
     "status": "Status",
     "assets": "Assets",
     "actions": "Aktionen",
-    "neverSynced": "__TODO__ Never Synced",
-    "openMenu": "__TODO__ Open menu",
+    "neverSynced": "Nie synchronisiert",
+    "openMenu": "Menü öffnen",
     "syncTooltip": {
-      "status": "__TODO__ Status: {{status}}",
-      "time": "__TODO__ Time: {{time}}",
-      "error": "__TODO__ Error: {{error}}",
-      "inProgress": "__TODO__ Sync in progress or queued..."
+      "status": "Status: {{status}}",
+      "time": "Zeit: {{time}}",
+      "error": "Fehler: {{error}}",
+      "inProgress": "Synchronisierung läuft oder in Warteschlange..."
     }
   },
   "filters": {
@@ -98,46 +98,46 @@
     "viewDetails": "Details anzeigen",
     "notFound": "Estate nicht gefunden",
     "loading": "Wird geladen...",
-    "pageTitle": "__TODO__ Estate Details",
-    "backToEstateManager": "__TODO__ Back to Estate Manager",
-    "backToListButton": "__TODO__ Back to List",
-    "configureSyncJob": "__TODO__ Configure Sync Job",
-    "editNotImplemented": "__TODO__ Edit Estate functionality to be implemented",
-    "syncEnabled": "__TODO__ Sync Enabled",
-    "syncDisabled": "__TODO__ Sync Disabled",
-    "never": "__TODO__ Never",
-    "notFoundOrLoad": "__TODO__ Estate not found or could not be loaded.",
+    "pageTitle": "Estate-Details",
+    "backToEstateManager": "Zurück zum Estate-Manager",
+    "backToListButton": "Zurück zur Liste",
+    "configureSyncJob": "Synchronisierungsjob konfigurieren",
+    "editNotImplemented": "Funktion zum Bearbeiten von Estates wird noch implementiert",
+    "syncEnabled": "Synchronisierung aktiviert",
+    "syncDisabled": "Synchronisierung deaktiviert",
+    "never": "Nie",
+    "notFoundOrLoad": "Estate nicht gefunden oder konnte nicht geladen werden.",
     "labels": {
-      "cloudProvider": "__TODO__ Cloud Provider",
-      "lastSyncTime": "__TODO__ Last Sync Time",
-      "lastSyncStatus": "__TODO__ Last Sync Status",
-      "lastSyncError": "__TODO__ Last Sync Error",
-      "lastUpdatedAt": "__TODO__ Last Updated At"
+      "cloudProvider": "Cloud-Anbieter",
+      "lastSyncTime": "Letzte Synchronisierungszeit",
+      "lastSyncStatus": "Letzter Synchronisierungsstatus",
+      "lastSyncError": "Letzter Synchronisierungsfehler",
+      "lastUpdatedAt": "Zuletzt aktualisiert am"
     },
     "errors": {
-      "fetchTitle": "__TODO__ Error Fetching Estate",
-      "fetchFailed": "__TODO__ Failed to fetch estate details.",
-      "couldNotLoad": "__TODO__ Could not load estate details.",
-      "noEstateData": "__TODO__ Estate data is not available to add a policy."
+      "fetchTitle": "Fehler beim Abrufen des Estates",
+      "fetchFailed": "Estate-Details konnten nicht abgerufen werden.",
+      "couldNotLoad": "Estate-Details konnten nicht geladen werden.",
+      "noEstateData": "Estate-Daten sind nicht verfügbar, um eine Richtlinie hinzuzufügen."
     },
     "policies": {
-      "title": "__TODO__ Sharing Policies",
-      "add": "__TODO__ Add Policy",
-      "sectionDescription": "__TODO__ Define rules to share specific Data Products or Semantic Model terms with this estate. Shared resources will be accessible via the configured connection type.",
-      "resourceTypeLabel": "__TODO__ Resource Type:",
-      "rulesLabel": "__TODO__ Rules ({{count}}):",
-      "filterBy": "__TODO__ Filter by",
-      "whereValue": "__TODO__ where value",
-      "noRules": "__TODO__ No rules defined for this policy.",
-      "emptyTitle": "__TODO__ No sharing policies defined for this estate.",
-      "emptyHint": "__TODO__ Click \"Add Policy\" to start sharing resources.",
-      "editPolicyAlert": "__TODO__ Edit policy: {{name}}",
-      "deletePolicyAlert": "__TODO__ Delete policy: {{name}}",
-      "addedTitle": "__TODO__ Policy Added",
-      "addedDescription": "__TODO__ Sharing policy \"{{name}}\" has been successfully added.",
-      "addErrorTitle": "__TODO__ Error Adding Policy",
-      "addErrorDescription": "__TODO__ Could not save the new sharing policy. Please try again.",
-      "saveFailedNoData": "__TODO__ Failed to save policy. Server returned no data."
+      "title": "Freigaberichtlinien",
+      "add": "Richtlinie hinzufügen",
+      "sectionDescription": "Definieren Sie Regeln, um bestimmte Datenprodukte oder Begriffe aus semantischen Modellen für dieses Estate freizugeben. Freigegebene Ressourcen sind über den konfigurierten Verbindungstyp zugänglich.",
+      "resourceTypeLabel": "Ressourcentyp:",
+      "rulesLabel": "Regeln ({{count}}):",
+      "filterBy": "Filtern nach",
+      "whereValue": "wobei Wert",
+      "noRules": "Für diese Richtlinie sind keine Regeln definiert.",
+      "emptyTitle": "Für dieses Estate sind keine Freigaberichtlinien definiert.",
+      "emptyHint": "Klicken Sie auf \"Richtlinie hinzufügen\", um mit der Freigabe von Ressourcen zu beginnen.",
+      "editPolicyAlert": "Richtlinie bearbeiten: {{name}}",
+      "deletePolicyAlert": "Richtlinie löschen: {{name}}",
+      "addedTitle": "Richtlinie hinzugefügt",
+      "addedDescription": "Freigaberichtlinie \"{{name}}\" wurde erfolgreich hinzugefügt.",
+      "addErrorTitle": "Fehler beim Hinzufügen der Richtlinie",
+      "addErrorDescription": "Die neue Freigaberichtlinie konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+      "saveFailedNoData": "Richtlinie konnte nicht gespeichert werden. Server hat keine Daten zurückgegeben."
     },
     "overview": {
       "title": "Estate-Übersicht",
@@ -158,39 +158,39 @@
     }
   },
   "sharingPolicy": {
-    "dialogTitle": "__TODO__ Add New Sharing Policy",
-    "dialogDescription": "__TODO__ Define a new policy to share resources from or with this estate.",
-    "submit": "__TODO__ Add Policy",
-    "addRule": "__TODO__ Add Rule",
-    "rulesHeading": "__TODO__ Rules",
-    "ruleLabel": "__TODO__ Rule {{number}}",
+    "dialogTitle": "Neue Freigaberichtlinie hinzufügen",
+    "dialogDescription": "Definieren Sie eine neue Richtlinie, um Ressourcen von oder mit diesem Estate freizugeben.",
+    "submit": "Richtlinie hinzufügen",
+    "addRule": "Regel hinzufügen",
+    "rulesHeading": "Regeln",
+    "ruleLabel": "Regel {{number}}",
     "fields": {
-      "name": "__TODO__ Policy Name",
-      "description": "__TODO__ Description (Optional)",
-      "resourceType": "__TODO__ Resource Type",
-      "enablePolicy": "__TODO__ Enable Policy",
-      "filterType": "__TODO__ Filter Type",
-      "operator": "__TODO__ Operator",
-      "value": "__TODO__ Value"
+      "name": "Richtlinienname",
+      "description": "Beschreibung (optional)",
+      "resourceType": "Ressourcentyp",
+      "enablePolicy": "Richtlinie aktivieren",
+      "filterType": "Filtertyp",
+      "operator": "Operator",
+      "value": "Wert"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., Share Production Data Products",
-      "description": "__TODO__ Detailed description of the policy's purpose...",
-      "resourceType": "__TODO__ Select resource type",
-      "operator": "__TODO__ Select operator",
-      "filterType": "__TODO__ e.g., tag, domain, status",
-      "value": "__TODO__ e.g., finance, Active"
+      "name": "z. B. Produktions-Datenprodukte freigeben",
+      "description": "Ausführliche Beschreibung des Zwecks der Richtlinie...",
+      "resourceType": "Ressourcentyp auswählen",
+      "operator": "Operator auswählen",
+      "filterType": "z. B. Tag, Domäne, Status",
+      "value": "z. B. finance, Active"
     },
     "validation": {
-      "nameMin": "__TODO__ Policy name must be at least 3 characters",
-      "filterTypeRequired": "__TODO__ Filter type is required",
-      "filterValueRequired": "__TODO__ Filter value is required",
-      "rulesMin": "__TODO__ At least one rule is required"
+      "nameMin": "Der Richtlinienname muss mindestens 3 Zeichen lang sein",
+      "filterTypeRequired": "Filtertyp ist erforderlich",
+      "filterValueRequired": "Filterwert ist erforderlich",
+      "rulesMin": "Mindestens eine Regel ist erforderlich"
     },
     "toast": {
-      "submittedTitle": "__TODO__ Policy Submitted",
-      "submittedDescription": "__TODO__ Sharing policy \"{{name}}\" is being processed.",
-      "addErrorDescription": "__TODO__ Failed to add sharing policy. Check console for details."
+      "submittedTitle": "Richtlinie eingereicht",
+      "submittedDescription": "Freigaberichtlinie \"{{name}}\" wird verarbeitet.",
+      "addErrorDescription": "Freigaberichtlinie konnte nicht hinzugefügt werden. Details finden Sie in der Konsole."
     }
   }
 }

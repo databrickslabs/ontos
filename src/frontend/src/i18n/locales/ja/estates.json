@@ -41,10 +41,10 @@
     "enableSync": "同期を有効化",
     "cancel": "キャンセル",
     "save": "保存",
-    "namePlaceholder": "__TODO__ e.g., US Production Workspace",
-    "descriptionPlaceholder": "__TODO__ e.g., Primary production environment for US region",
-    "workspaceUrlPlaceholder": "__TODO__ e.g., https://myworkspace.cloud.databricks.com",
-    "metastoreNamePlaceholder": "__TODO__ e.g., primary_prod_metastore"
+    "namePlaceholder": "例: US Production Workspace",
+    "descriptionPlaceholder": "例: US リージョンの主要な本番環境",
+    "workspaceUrlPlaceholder": "例: https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "例: primary_prod_metastore"
   },
   "connectionTypes": {
     "deltaShare": "Delta Share",
@@ -63,13 +63,13 @@
     "status": "ステータス",
     "assets": "アセット",
     "actions": "アクション",
-    "neverSynced": "__TODO__ Never Synced",
-    "openMenu": "__TODO__ Open menu",
+    "neverSynced": "未同期",
+    "openMenu": "メニューを開く",
     "syncTooltip": {
-      "status": "__TODO__ Status: {{status}}",
-      "time": "__TODO__ Time: {{time}}",
-      "error": "__TODO__ Error: {{error}}",
-      "inProgress": "__TODO__ Sync in progress or queued..."
+      "status": "ステータス: {{status}}",
+      "time": "時刻: {{time}}",
+      "error": "エラー: {{error}}",
+      "inProgress": "同期を実行中またはキュー待機中..."
     }
   },
   "filters": {
@@ -98,46 +98,46 @@
     "viewDetails": "詳細を表示",
     "notFound": "エステートが見つかりません",
     "loading": "読み込み中...",
-    "pageTitle": "__TODO__ Estate Details",
-    "backToEstateManager": "__TODO__ Back to Estate Manager",
-    "backToListButton": "__TODO__ Back to List",
-    "configureSyncJob": "__TODO__ Configure Sync Job",
-    "editNotImplemented": "__TODO__ Edit Estate functionality to be implemented",
-    "syncEnabled": "__TODO__ Sync Enabled",
-    "syncDisabled": "__TODO__ Sync Disabled",
-    "never": "__TODO__ Never",
-    "notFoundOrLoad": "__TODO__ Estate not found or could not be loaded.",
+    "pageTitle": "エステートの詳細",
+    "backToEstateManager": "エステートマネージャーに戻る",
+    "backToListButton": "一覧に戻る",
+    "configureSyncJob": "同期ジョブを構成",
+    "editNotImplemented": "エステート編集機能は今後実装されます",
+    "syncEnabled": "同期が有効",
+    "syncDisabled": "同期が無効",
+    "never": "なし",
+    "notFoundOrLoad": "エステートが見つからないか、読み込めませんでした。",
     "labels": {
-      "cloudProvider": "__TODO__ Cloud Provider",
-      "lastSyncTime": "__TODO__ Last Sync Time",
-      "lastSyncStatus": "__TODO__ Last Sync Status",
-      "lastSyncError": "__TODO__ Last Sync Error",
-      "lastUpdatedAt": "__TODO__ Last Updated At"
+      "cloudProvider": "クラウドプロバイダー",
+      "lastSyncTime": "最終同期時刻",
+      "lastSyncStatus": "最終同期ステータス",
+      "lastSyncError": "最終同期エラー",
+      "lastUpdatedAt": "最終更新日時"
     },
     "errors": {
-      "fetchTitle": "__TODO__ Error Fetching Estate",
-      "fetchFailed": "__TODO__ Failed to fetch estate details.",
-      "couldNotLoad": "__TODO__ Could not load estate details.",
-      "noEstateData": "__TODO__ Estate data is not available to add a policy."
+      "fetchTitle": "エステートの取得中にエラーが発生しました",
+      "fetchFailed": "エステートの詳細の取得に失敗しました。",
+      "couldNotLoad": "エステートの詳細を読み込めませんでした。",
+      "noEstateData": "ポリシーを追加するためのエステートデータがありません。"
     },
     "policies": {
-      "title": "__TODO__ Sharing Policies",
-      "add": "__TODO__ Add Policy",
-      "sectionDescription": "__TODO__ Define rules to share specific Data Products or Semantic Model terms with this estate. Shared resources will be accessible via the configured connection type.",
-      "resourceTypeLabel": "__TODO__ Resource Type:",
-      "rulesLabel": "__TODO__ Rules ({{count}}):",
-      "filterBy": "__TODO__ Filter by",
-      "whereValue": "__TODO__ where value",
-      "noRules": "__TODO__ No rules defined for this policy.",
-      "emptyTitle": "__TODO__ No sharing policies defined for this estate.",
-      "emptyHint": "__TODO__ Click \"Add Policy\" to start sharing resources.",
-      "editPolicyAlert": "__TODO__ Edit policy: {{name}}",
-      "deletePolicyAlert": "__TODO__ Delete policy: {{name}}",
-      "addedTitle": "__TODO__ Policy Added",
-      "addedDescription": "__TODO__ Sharing policy \"{{name}}\" has been successfully added.",
-      "addErrorTitle": "__TODO__ Error Adding Policy",
-      "addErrorDescription": "__TODO__ Could not save the new sharing policy. Please try again.",
-      "saveFailedNoData": "__TODO__ Failed to save policy. Server returned no data."
+      "title": "共有ポリシー",
+      "add": "ポリシーを追加",
+      "sectionDescription": "このエステートと特定のデータプロダクトまたはセマンティックモデルの用語を共有するルールを定義します。共有されたリソースは、構成された接続タイプ経由でアクセスできます。",
+      "resourceTypeLabel": "リソースタイプ:",
+      "rulesLabel": "ルール（{{count}}）:",
+      "filterBy": "フィルタ条件",
+      "whereValue": "値の条件",
+      "noRules": "このポリシーにはルールが定義されていません。",
+      "emptyTitle": "このエステートには共有ポリシーが定義されていません。",
+      "emptyHint": "「ポリシーを追加」をクリックしてリソースの共有を開始してください。",
+      "editPolicyAlert": "ポリシーを編集: {{name}}",
+      "deletePolicyAlert": "ポリシーを削除: {{name}}",
+      "addedTitle": "ポリシーを追加しました",
+      "addedDescription": "共有ポリシー「{{name}}」が正常に追加されました。",
+      "addErrorTitle": "ポリシーの追加中にエラーが発生しました",
+      "addErrorDescription": "新しい共有ポリシーを保存できませんでした。もう一度お試しください。",
+      "saveFailedNoData": "ポリシーの保存に失敗しました。サーバーからデータが返されませんでした。"
     },
     "overview": {
       "title": "エステート概要",
@@ -158,39 +158,39 @@
     }
   },
   "sharingPolicy": {
-    "dialogTitle": "__TODO__ Add New Sharing Policy",
-    "dialogDescription": "__TODO__ Define a new policy to share resources from or with this estate.",
-    "submit": "__TODO__ Add Policy",
-    "addRule": "__TODO__ Add Rule",
-    "rulesHeading": "__TODO__ Rules",
-    "ruleLabel": "__TODO__ Rule {{number}}",
+    "dialogTitle": "新しい共有ポリシーを追加",
+    "dialogDescription": "このエステートとの間でリソースを共有する新しいポリシーを定義します。",
+    "submit": "ポリシーを追加",
+    "addRule": "ルールを追加",
+    "rulesHeading": "ルール",
+    "ruleLabel": "ルール {{number}}",
     "fields": {
-      "name": "__TODO__ Policy Name",
-      "description": "__TODO__ Description (Optional)",
-      "resourceType": "__TODO__ Resource Type",
-      "enablePolicy": "__TODO__ Enable Policy",
-      "filterType": "__TODO__ Filter Type",
-      "operator": "__TODO__ Operator",
-      "value": "__TODO__ Value"
+      "name": "ポリシー名",
+      "description": "説明（任意）",
+      "resourceType": "リソースタイプ",
+      "enablePolicy": "ポリシーを有効化",
+      "filterType": "フィルタタイプ",
+      "operator": "演算子",
+      "value": "値"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., Share Production Data Products",
-      "description": "__TODO__ Detailed description of the policy's purpose...",
-      "resourceType": "__TODO__ Select resource type",
-      "operator": "__TODO__ Select operator",
-      "filterType": "__TODO__ e.g., tag, domain, status",
-      "value": "__TODO__ e.g., finance, Active"
+      "name": "例: 本番データプロダクトを共有",
+      "description": "ポリシーの目的の詳細な説明...",
+      "resourceType": "リソースタイプを選択",
+      "operator": "演算子を選択",
+      "filterType": "例: tag、domain、status",
+      "value": "例: finance、Active"
     },
     "validation": {
-      "nameMin": "__TODO__ Policy name must be at least 3 characters",
-      "filterTypeRequired": "__TODO__ Filter type is required",
-      "filterValueRequired": "__TODO__ Filter value is required",
-      "rulesMin": "__TODO__ At least one rule is required"
+      "nameMin": "ポリシー名は3文字以上である必要があります",
+      "filterTypeRequired": "フィルタタイプは必須です",
+      "filterValueRequired": "フィルタ値は必須です",
+      "rulesMin": "少なくとも1つのルールが必要です"
     },
     "toast": {
-      "submittedTitle": "__TODO__ Policy Submitted",
-      "submittedDescription": "__TODO__ Sharing policy \"{{name}}\" is being processed.",
-      "addErrorDescription": "__TODO__ Failed to add sharing policy. Check console for details."
+      "submittedTitle": "ポリシーを送信しました",
+      "submittedDescription": "共有ポリシー「{{name}}」を処理中です。",
+      "addErrorDescription": "共有ポリシーの追加に失敗しました。詳細はコンソールを確認してください。"
     }
   }
 }

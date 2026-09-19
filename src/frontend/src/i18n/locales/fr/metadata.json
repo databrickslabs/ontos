@@ -114,11 +114,11 @@
     "noSharedNotes": "Aucune note partagée disponible",
     "noSharedLinks": "Aucun lien partagé disponible",
     "noSharedDocuments": "Aucun document partagé disponible",
-    "loading": "__TODO__ Loading shared assets...",
-    "attach": "__TODO__ Attach",
-    "levelInfo": "__TODO__ Level: {{level}}",
-    "inheritable": "__TODO__ Inheritable",
-    "notInheritable": "__TODO__ Not inheritable"
+    "loading": "Chargement des assets partagés...",
+    "attach": "Joindre",
+    "levelInfo": "Niveau : {{level}}",
+    "inheritable": "Héritable",
+    "notInheritable": "Non héritable"
   },
   "messages": {
     "loadFailed": "Échec du chargement des métadonnées",
@@ -140,116 +140,116 @@
     }
   },
   "costs": {
-    "title": "__TODO__ Cost Management",
-    "total": "__TODO__ Total",
-    "breakdown": "__TODO__ Breakdown",
-    "noItems": "__TODO__ No items",
-    "addExpense": "__TODO__ Add expense",
-    "editExpense": "__TODO__ Edit expense",
-    "loading": "__TODO__ Loading",
-    "noItemsForMonth": "__TODO__ No cost items for this month.",
-    "donutAria": "__TODO__ Cost breakdown",
+    "title": "Gestion des coûts",
+    "total": "Total",
+    "breakdown": "Répartition",
+    "noItems": "Aucun élément",
+    "addExpense": "Ajouter une dépense",
+    "editExpense": "Modifier la dépense",
+    "loading": "Chargement",
+    "noItemsForMonth": "Aucun élément de coût pour ce mois.",
+    "donutAria": "Répartition des coûts",
     "table": {
-      "title": "__TODO__ Title",
-      "center": "__TODO__ Center",
-      "monthRange": "__TODO__ Month Range",
-      "amountMonth": "__TODO__ Amount/Month"
+      "title": "Titre",
+      "center": "Centre",
+      "monthRange": "Plage de mois",
+      "amountMonth": "Montant/Mois"
     },
     "form": {
-      "title": "__TODO__ Title",
-      "center": "__TODO__ Center",
-      "customCenter": "__TODO__ Custom center",
-      "amountCents": "__TODO__ Amount (cents)",
-      "currency": "__TODO__ Currency",
-      "startMonth": "__TODO__ Start month (YYYY-MM)",
-      "endMonth": "__TODO__ End month (YYYY-MM)",
-      "monthPlaceholder": "__TODO__ YYYY-MM"
+      "title": "Titre",
+      "center": "Centre",
+      "customCenter": "Centre personnalisé",
+      "amountCents": "Montant (centimes)",
+      "currency": "Devise",
+      "startMonth": "Mois de début (AAAA-MM)",
+      "endMonth": "Mois de fin (AAAA-MM)",
+      "monthPlaceholder": "AAAA-MM"
     },
     "validation": {
-      "required": "__TODO__ Required"
+      "required": "Obligatoire"
     },
     "messages": {
-      "loadFailed": "__TODO__ Failed to load costs",
-      "missingFields": "__TODO__ Missing required fields",
-      "missingFieldsDescription": "__TODO__ Please fill all mandatory fields.",
-      "added": "__TODO__ Cost added",
-      "updated": "__TODO__ Cost updated",
-      "deleted": "__TODO__ Cost deleted",
-      "deleteFailed": "__TODO__ Delete failed",
-      "saveFailed": "__TODO__ Save failed"
+      "loadFailed": "Échec du chargement des coûts",
+      "missingFields": "Champs obligatoires manquants",
+      "missingFieldsDescription": "Veuillez remplir tous les champs obligatoires.",
+      "added": "Coût ajouté",
+      "updated": "Coût mis à jour",
+      "deleted": "Coût supprimé",
+      "deleteFailed": "Échec de la suppression",
+      "saveFailed": "Échec de l'enregistrement"
     }
   },
   "quality": {
-    "title": "__TODO__ Data Quality",
-    "overallScore": "__TODO__ Overall Score",
-    "byDimension": "__TODO__ By Dimension",
-    "noMeasurements": "__TODO__ No measurements",
-    "addMeasurement": "__TODO__ Add measurement",
-    "editMeasurement": "__TODO__ Edit measurement",
-    "lastMeasured": "__TODO__ Last measured {{date}}",
-    "loading": "__TODO__ Loading",
-    "noMeasurementsRecorded": "__TODO__ No quality measurements recorded.",
-    "gaugeAria": "__TODO__ Quality score",
+    "title": "Qualité des données",
+    "overallScore": "Score global",
+    "byDimension": "Par dimension",
+    "noMeasurements": "Aucune mesure",
+    "addMeasurement": "Ajouter une mesure",
+    "editMeasurement": "Modifier la mesure",
+    "lastMeasured": "Dernière mesure {{date}}",
+    "loading": "Chargement",
+    "noMeasurementsRecorded": "Aucune mesure de qualité enregistrée.",
+    "gaugeAria": "Score de qualité",
     "table": {
-      "title": "__TODO__ Title",
-      "dimension": "__TODO__ Dimension",
-      "source": "__TODO__ Source",
-      "score": "__TODO__ Score",
-      "measured": "__TODO__ Measured"
+      "title": "Titre",
+      "dimension": "Dimension",
+      "source": "Source",
+      "score": "Score",
+      "measured": "Mesuré"
     },
     "form": {
-      "title": "__TODO__ Title",
-      "dimension": "__TODO__ Dimension",
-      "source": "__TODO__ Source",
-      "score": "__TODO__ Score (%)",
-      "checksPassed": "__TODO__ Checks Passed",
-      "checksTotal": "__TODO__ Checks Total"
+      "title": "Titre",
+      "dimension": "Dimension",
+      "source": "Source",
+      "score": "Score (%)",
+      "checksPassed": "Contrôles réussis",
+      "checksTotal": "Total des contrôles"
     },
     "validation": {
-      "required": "__TODO__ Required",
-      "range": "__TODO__ 0-100"
+      "required": "Obligatoire",
+      "range": "0-100"
     },
     "messages": {
-      "loadFailed": "__TODO__ Failed to load quality data",
-      "missingFields": "__TODO__ Missing required fields",
-      "added": "__TODO__ Measurement added",
-      "updated": "__TODO__ Measurement updated",
-      "deleted": "__TODO__ Measurement deleted",
-      "deleteFailed": "__TODO__ Delete failed",
-      "saveFailed": "__TODO__ Save failed"
+      "loadFailed": "Échec du chargement des données de qualité",
+      "missingFields": "Champs obligatoires manquants",
+      "added": "Mesure ajoutée",
+      "updated": "Mesure mise à jour",
+      "deleted": "Mesure supprimée",
+      "deleteFailed": "Échec de la suppression",
+      "saveFailed": "Échec de l'enregistrement"
     }
   },
   "ratings": {
-    "title": "__TODO__ Ratings",
-    "youRated": "__TODO__ You rated: {{rating}}★",
-    "updateYourRating": "__TODO__ Update your rating",
-    "rateThisItem": "__TODO__ Rate this item",
-    "addReviewOptional": "__TODO__ Add a review (optional)",
-    "reviewPlaceholder": "__TODO__ Share your experience...",
-    "submitting": "__TODO__ Submitting...",
-    "submitRating": "__TODO__ Submit Rating",
+    "title": "Évaluations",
+    "youRated": "Votre note : {{rating}}★",
+    "updateYourRating": "Mettre à jour votre note",
+    "rateThisItem": "Évaluer cet élément",
+    "addReviewOptional": "Ajouter un avis (facultatif)",
+    "reviewPlaceholder": "Partagez votre expérience...",
+    "submitting": "Envoi...",
+    "submitRating": "Envoyer la note",
     "labels": {
-      "poor": "__TODO__ Poor",
-      "fair": "__TODO__ Fair",
-      "good": "__TODO__ Good",
-      "veryGood": "__TODO__ Very Good",
-      "excellent": "__TODO__ Excellent"
+      "poor": "Médiocre",
+      "fair": "Passable",
+      "good": "Bon",
+      "veryGood": "Très bon",
+      "excellent": "Excellent"
     }
   },
   "info": {
-    "entityInformation": "__TODO__ Entity Information",
-    "subscribed": "__TODO__ Subscribed",
-    "tableOfContents": "__TODO__ Table of contents",
-    "noNotesAvailable": "__TODO__ No notes available.",
-    "noLinks": "__TODO__ No links.",
-    "inherited": "__TODO__ Inherited",
-    "shared": "__TODO__ Shared",
-    "ratingsAndReviews": "__TODO__ Ratings & Reviews",
-    "loadingRatings": "__TODO__ Loading ratings...",
-    "yourRating": "__TODO__ Your Rating",
-    "addReviewPlaceholder": "__TODO__ Add a review (optional)...",
-    "goToDetails": "__TODO__ Go to Details",
-    "alreadySubscribed": "__TODO__ Already Subscribed",
-    "subscribe": "__TODO__ Subscribe"
+    "entityInformation": "Informations sur l'entité",
+    "subscribed": "Abonné",
+    "tableOfContents": "Table des matières",
+    "noNotesAvailable": "Aucune note disponible.",
+    "noLinks": "Aucun lien.",
+    "inherited": "Hérité",
+    "shared": "Partagé",
+    "ratingsAndReviews": "Évaluations et avis",
+    "loadingRatings": "Chargement des évaluations...",
+    "yourRating": "Votre note",
+    "addReviewPlaceholder": "Ajoutez un avis (facultatif)...",
+    "goToDetails": "Aller aux détails",
+    "alreadySubscribed": "Déjà abonné",
+    "subscribe": "S'abonner"
   }
 }

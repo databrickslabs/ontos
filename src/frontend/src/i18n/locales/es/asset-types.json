@@ -1,80 +1,80 @@
 {
-  "title": "__TODO__ Asset Types",
-  "subtitle": "__TODO__ Reusable templates that define how different kinds of assets are structured.",
-  "addNew": "__TODO__ Add Asset Type",
-  "editAssetType": "__TODO__ Edit Asset Type",
-  "deleteAssetType": "__TODO__ Delete Asset Type",
-  "systemBadge": "__TODO__ System",
-  "openMenu": "__TODO__ Open menu",
+  "title": "Tipos de activo",
+  "subtitle": "Plantillas reutilizables que definen cómo se estructuran los distintos tipos de activos.",
+  "addNew": "Añadir tipo de activo",
+  "editAssetType": "Editar tipo de activo",
+  "deleteAssetType": "Eliminar tipo de activo",
+  "systemBadge": "Sistema",
+  "openMenu": "Abrir menú",
   "table": {
-    "name": "__TODO__ Name",
-    "description": "__TODO__ Description",
-    "category": "__TODO__ Category",
-    "status": "__TODO__ Status",
-    "assetCount": "__TODO__ Assets",
-    "lastUpdated": "__TODO__ Last Updated",
-    "actions": "__TODO__ Actions"
+    "name": "Nombre",
+    "description": "Descripción",
+    "category": "Categoría",
+    "status": "Estado",
+    "assetCount": "Activos",
+    "lastUpdated": "Última actualización",
+    "actions": "Acciones"
   },
   "categories": {
-    "data": "__TODO__ Data",
-    "analytics": "__TODO__ Analytics",
-    "integration": "__TODO__ Integration",
-    "system": "__TODO__ System",
-    "custom": "__TODO__ Custom"
+    "data": "Datos",
+    "analytics": "Analítica",
+    "integration": "Integración",
+    "system": "Sistema",
+    "custom": "Personalizado"
   },
   "statuses": {
-    "active": "__TODO__ Active",
-    "deprecated": "__TODO__ Deprecated"
+    "active": "Activo",
+    "deprecated": "Obsoleto"
   },
   "permissions": {
-    "deniedView": "__TODO__ You do not have permission to view asset types.",
-    "deniedCreate": "__TODO__ You do not have permission to create asset types.",
-    "deniedEdit": "__TODO__ You do not have permission to edit asset types.",
-    "deniedDelete": "__TODO__ You do not have permission to delete asset types.",
-    "permissionDenied": "__TODO__ Permission Denied"
+    "deniedView": "No tienes permiso para ver los tipos de activo.",
+    "deniedCreate": "No tienes permiso para crear tipos de activo.",
+    "deniedEdit": "No tienes permiso para editar tipos de activo.",
+    "deniedDelete": "No tienes permiso para eliminar tipos de activo.",
+    "permissionDenied": "Permiso denegado"
   },
   "messages": {
-    "errorFetching": "__TODO__ Error fetching asset types",
-    "loadFailed": "__TODO__ Failed to load asset types",
-    "errorDeleting": "__TODO__ Error deleting asset type",
-    "deleted": "__TODO__ Asset Type Deleted",
-    "deletedSuccess": "__TODO__ The asset type was successfully deleted.",
-    "errorLoadingData": "__TODO__ Error Loading Data"
+    "errorFetching": "Error al obtener los tipos de activo",
+    "loadFailed": "Error al cargar los tipos de activo",
+    "errorDeleting": "Error al eliminar el tipo de activo",
+    "deleted": "Tipo de activo eliminado",
+    "deletedSuccess": "El tipo de activo se eliminó correctamente.",
+    "errorLoadingData": "Error al cargar los datos"
   },
   "deleteDialog": {
-    "title": "__TODO__ Delete Asset Type?",
-    "description": "__TODO__ This action cannot be undone. Existing assets of this type may become orphaned.",
-    "cancel": "__TODO__ Cancel",
-    "delete": "__TODO__ Delete"
+    "title": "¿Eliminar el tipo de activo?",
+    "description": "Esta acción no se puede deshacer. Los activos existentes de este tipo podrían quedar huérfanos.",
+    "cancel": "Cancelar",
+    "delete": "Eliminar"
   },
   "emptyState": {
-    "title": "__TODO__ No asset types defined yet",
-    "description": "__TODO__ Create your first asset type to start defining asset templates."
+    "title": "Aún no hay tipos de activo definidos",
+    "description": "Crea tu primer tipo de activo para empezar a definir plantillas de activos."
   },
   "form": {
-    "createTitle": "__TODO__ Create Asset Type",
-    "createDescription": "__TODO__ Add a new asset type template.",
-    "editTitle": "__TODO__ Edit Asset Type",
-    "editDescription": "__TODO__ Update the details of this asset type.",
-    "create": "__TODO__ Create",
-    "update": "__TODO__ Save Changes",
-    "noCategory": "__TODO__ No category",
+    "createTitle": "Crear tipo de activo",
+    "createDescription": "Añade una nueva plantilla de tipo de activo.",
+    "editTitle": "Editar tipo de activo",
+    "editDescription": "Actualiza los detalles de este tipo de activo.",
+    "create": "Crear",
+    "update": "Guardar cambios",
+    "noCategory": "Sin categoría",
     "labels": {
-      "icon": "__TODO__ Icon"
+      "icon": "Icono"
     },
     "placeholders": {
-      "name": "__TODO__ e.g., Dashboard",
-      "description": "__TODO__ Describe this asset type...",
-      "category": "__TODO__ Select a category",
-      "icon": "__TODO__ e.g., BarChart"
+      "name": "p. ej., Panel",
+      "description": "Describe este tipo de activo...",
+      "category": "Selecciona una categoría",
+      "icon": "p. ej., BarChart"
     },
     "toasts": {
-      "created": "__TODO__ Asset Type Created",
-      "createdDescription": "__TODO__ \"{{name}}\" has been created.",
-      "updated": "__TODO__ Asset Type Updated",
-      "updatedDescription": "__TODO__ \"{{name}}\" has been updated.",
-      "createFailed": "__TODO__ Failed to Create",
-      "updateFailed": "__TODO__ Failed to Update"
+      "created": "Tipo de activo creado",
+      "createdDescription": "Se ha creado \"{{name}}\".",
+      "updated": "Tipo de activo actualizado",
+      "updatedDescription": "Se ha actualizado \"{{name}}\".",
+      "createFailed": "Error al crear",
+      "updateFailed": "Error al actualizar"
     }
   }
 }

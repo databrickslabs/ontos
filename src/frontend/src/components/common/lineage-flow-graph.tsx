@@ -14,6 +14,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -300,6 +301,7 @@ export function LineageFlowGraph({
   maxDepth = 3,
 }: LineageFlowGraphProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   const formatLabel = useFormatLabel();
 
@@ -315,14 +317,14 @@ export function LineageFlowGraph({
       const res = await fetch(
         `/api/business-lineage/${entityType}/${entityId}?${params}`
       );
-      if (!res.ok) throw new Error(`Failed to load lineage: ${res.status}`);
+      if (!res.ok) throw new Error(t('common:businessLineage.failedLoadLineage', { status: res.status }));
       setGraphData(await res.json());
     } catch (e: any) {
-      setError(e.message || 'Failed to load lineage');
+      setError(e.message || t('common:lineageFlow.failedLoad'));
     } finally {
       setIsLoading(false);
     }
-  }, [entityType, entityId, maxDepth]);
+  }, [entityType, entityId, maxDepth, t]);
 
   useEffect(() => { fetchGraph(); }, [fetchGraph]);
 
@@ -346,7 +348,7 @@ export function LineageFlowGraph({
     return (
       <div className={`flex items-center justify-center ${className || 'h-64'}`}>
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading lineage...</span>
+        <span className="ml-2 text-sm text-muted-foreground">{t('common:lineageFlow.loadingLineage')}</span>
       </div>
     );
   }
@@ -356,7 +358,7 @@ export function LineageFlowGraph({
       <div className={`flex flex-col items-center justify-center gap-2 ${className || 'h-64'}`}>
         <AlertCircle className="w-6 h-6 text-destructive" />
         <p className="text-sm text-destructive">{error}</p>
-        <Button variant="outline" size="sm" onClick={fetchGraph}>Retry</Button>
+        <Button variant="outline" size="sm" onClick={fetchGraph}>{t('common:retry')}</Button>
       </div>
     );
   }
@@ -364,7 +366,7 @@ export function LineageFlowGraph({
   if (!graphData || graphData.nodes.length === 0) {
     return (
       <div className={`flex items-center justify-center ${className || 'h-64'}`}>
-        <p className="text-sm text-muted-foreground">No lineage data found for this entity.</p>
+        <p className="text-sm text-muted-foreground">{t('common:lineageFlow.noLineageData')}</p>
       </div>
     );
   }
@@ -373,7 +375,7 @@ export function LineageFlowGraph({
     <div className={`flex flex-col ${className || 'h-[500px]'}`}>
       <div className="flex items-center gap-4 px-3 py-2 border-b bg-muted/30">
         <span className="text-xs text-muted-foreground">
-          {graphData.nodes.length} entities, {graphData.edges.length} relationships
+          {t('common:businessLineage.countBadge', { entities: graphData.nodes.length, relationships: graphData.edges.length })}
         </span>
       </div>
 

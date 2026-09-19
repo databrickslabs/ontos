@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -119,7 +119,7 @@ export default function SemanticModelsSettings() {
       const models: SemanticModel[] = Array.isArray(data) ? data : (data?.semantic_models || []);
       setItems(models || []);
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to load models', variant: 'destructive' });
+      toast({ title: t('messages.error'), description: e.message || t('settings:semanticModels.messages.loadModelsError'), variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -132,15 +132,15 @@ export default function SemanticModelsSettings() {
     try {
       const res = await post<{ message: string }>('/api/semantic-models/refresh-graph', {});
       if (res.error) {
-        toast({ title: 'Error', description: res.error, variant: 'destructive' });
+        toast({ title: t('messages.error'), description: res.error, variant: 'destructive' });
       } else {
-        toast({ title: 'Success', description: res.data?.message ?? 'Knowledge graph refreshed successfully' });
+        toast({ title: t('messages.success'), description: res.data?.message ?? t('settings:semanticModels.messages.graphRefreshed') });
         await fetchItems();
         // Notify other Concepts/Graph views that cached data is now stale.
         bumpKnowledgeGraphRefresh('rebuild-graph');
       }
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message ?? 'Failed to refresh knowledge graph', variant: 'destructive' });
+      toast({ title: t('messages.error'), description: e.message ?? t('settings:semanticModels.messages.graphRefreshError'), variant: 'destructive' });
     } finally {
       setIsRefreshingGraph(false);
     }
@@ -158,13 +158,13 @@ export default function SemanticModelsSettings() {
       const res = await post<{ model: SemanticModel; message: string }>('/api/semantic-models/upload', formData);
       
       if (res.error) {
-        toast({ title: 'Upload Failed', description: res.error, variant: 'destructive' });
+        toast({ title: t('settings:semanticModels.messages.uploadFailedTitle'), description: res.error, variant: 'destructive' });
       } else {
-        toast({ title: 'Success', description: res.data.message || 'Semantic model uploaded successfully' });
+        toast({ title: t('messages.success'), description: res.data.message || t('settings:semanticModels.messages.modelUploaded') });
         await fetchItems();
       }
     } catch (e: any) {
-      toast({ title: 'Upload Error', description: e.message || 'Failed to upload file', variant: 'destructive' });
+      toast({ title: t('settings:semanticModels.messages.uploadErrorTitle'), description: e.message || t('settings:semanticModels.messages.uploadFileError'), variant: 'destructive' });
     } finally {
       setUploadingId(null);
       if (fileInputRef.current) {
@@ -184,13 +184,20 @@ export default function SemanticModelsSettings() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to update model');
+        throw new Error(errorData.detail || t('settings:semanticModels.messages.updateModelError'));
       }
 
-      toast({ title: 'Success', description: `Model ${!currentEnabled ? 'enabled' : 'disabled'} successfully` });
+      toast({
+        title: t('messages.success'),
+        description: t('settings:semanticModels.messages.modelToggled', {
+          state: !currentEnabled
+            ? t('settings:semanticModels.messages.enabledState')
+            : t('settings:semanticModels.messages.disabledState'),
+        }),
+      });
       await fetchItems();
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to update model', variant: 'destructive' });
+      toast({ title: t('messages.error'), description: e.message || t('settings:semanticModels.messages.updateModelError'), variant: 'destructive' });
     } finally {
       setUploadingId(null);
     }
@@ -213,14 +220,14 @@ export default function SemanticModelsSettings() {
         `/api/semantic-models/${encodeURIComponent(model.id)}/content`
       );
       if (res.error) {
-        toast({ title: 'Error', description: res.error, variant: 'destructive' });
-        setViewContent('Failed to load content.');
+        toast({ title: t('messages.error'), description: res.error, variant: 'destructive' });
+        setViewContent(t('settings:semanticModels.viewDialog.loadContentFailed'));
       } else {
         setViewContent(res.data.content || '');
       }
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to load content', variant: 'destructive' });
-      setViewContent('Failed to load content.');
+      toast({ title: t('messages.error'), description: e.message || t('settings:semanticModels.messages.loadContentError'), variant: 'destructive' });
+      setViewContent(t('settings:semanticModels.viewDialog.loadContentFailed'));
     } finally {
       setViewLoading(false);
     }
@@ -232,7 +239,7 @@ export default function SemanticModelsSettings() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast({ title: 'Error', description: 'Failed to copy to clipboard', variant: 'destructive' });
+      toast({ title: t('messages.error'), description: t('settings:semanticModels.messages.copyClipboardError'), variant: 'destructive' });
     }
   };
 
@@ -243,13 +250,13 @@ export default function SemanticModelsSettings() {
       const res = await deleteApi(`/api/semantic-models/${modelToDelete.id}`);
       
       if (res.error) {
-        toast({ title: 'Delete Failed', description: res.error, variant: 'destructive' });
+        toast({ title: t('settings:semanticModels.messages.deleteFailedTitle'), description: res.error, variant: 'destructive' });
       } else {
-        toast({ title: 'Success', description: 'Semantic model deleted successfully' });
+        toast({ title: t('messages.success'), description: t('settings:semanticModels.messages.modelDeleted') });
         await fetchItems();
       }
     } catch (e: any) {
-      toast({ title: 'Delete Error', description: e.message || 'Failed to delete model', variant: 'destructive' });
+      toast({ title: t('settings:semanticModels.messages.deleteErrorTitle'), description: e.message || t('settings:semanticModels.messages.deleteModelError'), variant: 'destructive' });
     } finally {
       setDeleteDialogOpen(false);
       setModelToDelete(null);
@@ -319,14 +326,14 @@ export default function SemanticModelsSettings() {
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to update title');
+        throw new Error(err.detail || t('settings:semanticModels.messages.updateTitleError'));
       }
       toast({ title: t('messages.success'), description: t('rdfSources.titleSaved') });
       setTitleDialogOpen(false);
       setTitleEditModel(null);
       await fetchItems();
     } catch (e: any) {
-      toast({ title: t('messages.error'), description: e.message || 'Failed to save', variant: 'destructive' });
+      toast({ title: t('messages.error'), description: e.message || t('settings:semanticModels.messages.saveError'), variant: 'destructive' });
     } finally {
       setTitleSaving(false);
     }
@@ -343,14 +350,14 @@ export default function SemanticModelsSettings() {
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to clear title');
+        throw new Error(err.detail || t('settings:semanticModels.messages.clearTitleError'));
       }
       toast({ title: t('messages.success'), description: t('rdfSources.titleSaved') });
       setTitleDialogOpen(false);
       setTitleEditModel(null);
       await fetchItems();
     } catch (e: any) {
-      toast({ title: t('messages.error'), description: e.message || 'Failed to clear', variant: 'destructive' });
+      toast({ title: t('messages.error'), description: e.message || t('settings:semanticModels.messages.clearError'), variant: 'destructive' });
     } finally {
       setTitleSaving(false);
     }
@@ -383,33 +390,33 @@ export default function SemanticModelsSettings() {
         );
       },
     },
-    { 
+    {
       id: 'source',
-      header: 'Source', 
+      header: t('settings:semanticModels.table.sourceHeader'),
       cell: ({ row }) => {
         const model = row.original;
         const createdBy = model.created_by || '';
-        
-        let label = 'Unknown';
+
+        let label = t('settings:semanticModels.source.unknown');
         let variant: 'default' | 'secondary' | 'outline' = 'secondary';
-        
+
         if (createdBy === 'system@startup') {
-          label = 'System';
+          label = t('settings:semanticModels.source.system');
           variant = 'outline';
         } else if (createdBy === 'system@file') {
-          label = 'File';
+          label = t('settings:semanticModels.source.file');
           variant = 'secondary';
         } else if (createdBy === 'system@schema') {
-          label = 'Schema';
+          label = t('settings:semanticModels.source.schema');
           variant = 'secondary';
         } else if (createdBy.startsWith('system@')) {
-          label = 'System';
+          label = t('settings:semanticModels.source.system');
           variant = 'outline';
         } else if (createdBy && createdBy !== '') {
-          label = 'Upload';
+          label = t('settings:semanticModels.source.upload');
           variant = 'default';
         }
-        
+
         return <Badge variant={variant}>{label}</Badge>;
       }
     },
@@ -421,19 +428,19 @@ export default function SemanticModelsSettings() {
         <Badge variant="secondary">{semanticModelSerializationLabel(row.original, t)}</Badge>
       ),
     },
-    { 
-      accessorKey: 'size_bytes', 
-      header: 'Size', 
+    {
+      accessorKey: 'size_bytes',
+      header: t('settings:semanticModels.table.sizeHeader'),
       cell: ({ row }) => {
         const bytes = row.getValue('size_bytes') as number | undefined | null;
         if (bytes === undefined || bytes === null) return <span>-</span>;
         const kb = (bytes / 1024).toFixed(1);
-        return <span>{kb} KB</span>;
+        return <span>{t('settings:semanticModels.table.sizeKb', { value: kb })}</span>;
       }
     },
     {
       accessorKey: 'enabled',
-      header: 'Enabled',
+      header: t('settings:semanticModels.table.enabledHeader'),
       cell: ({ row }) => {
         const model = row.original;
         const isToggling = uploadingId === model.id;
@@ -444,7 +451,7 @@ export default function SemanticModelsSettings() {
         if (isFileBased || isSystemManaged) {
           return (
             <div data-action-cell="true">
-              <Badge variant="outline" className="text-xs">Always On</Badge>
+              <Badge variant="outline" className="text-xs">{t('settings:semanticModels.table.alwaysOn')}</Badge>
             </div>
           );
         }
@@ -462,7 +469,7 @@ export default function SemanticModelsSettings() {
     },
     {
       id: 'actions',
-      header: () => <div className="text-right">Actions</div>,
+      header: () => <div className="text-right">{t('common:labels.actions')}</div>,
       cell: ({ row }) => {
         const model = row.original;
         const isFileBased = model.id?.startsWith('file-');
@@ -489,7 +496,7 @@ export default function SemanticModelsSettings() {
               size="icon"
               className="h-8 w-8"
               onClick={() => onViewClick(model)}
-              title="View content"
+              title={t('settings:semanticModels.table.viewContentTooltip')}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -499,7 +506,7 @@ export default function SemanticModelsSettings() {
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => onDeleteClick(model)}
-                title="Delete model"
+                title={t('settings:semanticModels.table.deleteModelTooltip')}
               >
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
@@ -516,9 +523,9 @@ export default function SemanticModelsSettings() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <FileCode2 className="w-8 h-8" />
-          RDF Sources
+          {t('settings:semanticModels.page.title')}
         </h1>
-        <p className="text-muted-foreground mt-1">Upload and manage RDF ontology and taxonomy files (RDFS, SKOS, OWL).</p>
+        <p className="text-muted-foreground mt-1">{t('settings:semanticModels.page.description')}</p>
       </div>
 
       <Input ref={fileInputRef} type="file" accept=".ttl,.rdf,.xml,.skos,.rdfs,.owl,.nt,.n3,.trig,.trix,.jsonld,.json" className="hidden" onChange={onUpload} />
@@ -540,7 +547,7 @@ export default function SemanticModelsSettings() {
               onClick={() => setLibraryDialogOpen(true)}
             >
               <Library className="h-4 w-4 mr-2" />
-              Industry Library
+              {t('settings:semanticModels.actions.industryLibrary')}
             </Button>
             <Button 
               variant="outline"
@@ -549,9 +556,9 @@ export default function SemanticModelsSettings() {
               disabled={uploadingId === 'uploading'}
             >
               {uploadingId === 'uploading' ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...</>
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('settings:semanticModels.actions.uploading')}</>
               ) : (
-                <><Upload className="h-4 w-4 mr-2" /> Upload</>
+                <><Upload className="h-4 w-4 mr-2" /> {t('common:actions.upload')}</>
               )}
             </Button>
             <Button
@@ -567,7 +574,7 @@ export default function SemanticModelsSettings() {
                 <><Network className="h-4 w-4 mr-2" /> {t('rebuildGraph')}</>
               )}
             </Button>
-            <Button variant="ghost" className="h-9" onClick={fetchItems} title="Refresh list">
+            <Button variant="ghost" className="h-9" onClick={fetchItems} title={t('settings:semanticModels.actions.refreshListTooltip')}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
@@ -577,17 +584,19 @@ export default function SemanticModelsSettings() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete RDF Source</AlertDialogTitle>
+            <AlertDialogTitle>{t('settings:semanticModels.deleteDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{modelToDelete ? semanticModelDisplayTitle(modelToDelete, t) : ''}</strong>?
-              This action cannot be undone and will remove the model from the semantic graph.
+              <Trans
+                i18nKey="settings:semanticModels.deleteDialog.description"
+                values={{ name: modelToDelete ? semanticModelDisplayTitle(modelToDelete, t) : '' }}
+                components={{ strong: <strong /> }}
+              />
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={onDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
+              {t('common:actions.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -703,7 +712,7 @@ export default function SemanticModelsSettings() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
-              {viewingModel ? semanticModelDisplayTitle(viewingModel, t) : 'View Ontology'}
+              {viewingModel ? semanticModelDisplayTitle(viewingModel, t) : t('settings:semanticModels.viewDialog.titleFallback')}
             </DialogTitle>
             <DialogDescription>
               {viewingModel
@@ -717,12 +726,12 @@ export default function SemanticModelsSettings() {
             {viewLoading ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                Loading content...
+                {t('settings:semanticModels.viewDialog.loadingContent')}
               </div>
             ) : (
               <ScrollArea className="h-full rounded-md border bg-muted/30">
                 <pre className="p-4 text-sm font-mono whitespace-pre-wrap break-words">
-                  {viewContent || 'No content available.'}
+                  {viewContent || t('settings:semanticModels.viewDialog.noContent')}
                 </pre>
               </ScrollArea>
             )}
@@ -734,13 +743,13 @@ export default function SemanticModelsSettings() {
               disabled={viewLoading || !viewContent}
             >
               {copied ? (
-                <><Check className="h-4 w-4 mr-2" /> Copied!</>
+                <><Check className="h-4 w-4 mr-2" /> {t('settings:semanticModels.viewDialog.copied')}</>
               ) : (
-                <><Copy className="h-4 w-4 mr-2" /> Copy to Clipboard</>
+                <><Copy className="h-4 w-4 mr-2" /> {t('settings:semanticModels.viewDialog.copyToClipboard')}</>
               )}
             </Button>
             <Button variant="default" onClick={() => setViewDialogOpen(false)}>
-              Close
+              {t('common:actions.close')}
             </Button>
           </DialogFooter>
         </DialogContent>

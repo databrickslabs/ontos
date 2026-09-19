@@ -63,6 +63,10 @@
     "requestAccess": "Request Access",
     "moreRoles": "And {{count}} more roles available..."
   },
+  "myActions": {
+    "title": "My Actions",
+    "approvals": "Approvals"
+  },
   "quickActions": {
     "title": "Quick Actions",
     "loading": "Loading...",

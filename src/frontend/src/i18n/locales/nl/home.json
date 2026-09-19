@@ -64,8 +64,8 @@
     "moreRoles": "En {{count}} meer rollen beschikbaar..."
   },
   "myActions": {
-    "title": "__TODO__ My Actions",
-    "approvals": "__TODO__ Approvals"
+    "title": "Mijn Acties",
+    "approvals": "Goedkeuringen"
   },
   "quickActions": {
     "title": "Snelle Acties",
@@ -116,12 +116,12 @@
     "status": "N.v.t.",
     "untitled": "Naamloos",
     "info": "Info",
-    "manage": "__TODO__ Manage",
-    "mySubscriptions": "__TODO__ My Subscriptions",
-    "subscribe": "__TODO__ Subscribe",
-    "subscribed": "__TODO__ Subscribed",
-    "unknownProduct": "__TODO__ Unknown product",
-    "viewAllSubscribed": "__TODO__ View all subscribed"
+    "manage": "Beheren",
+    "mySubscriptions": "Mijn Abonnementen",
+    "subscribe": "Abonneren",
+    "subscribed": "Geabonneerd",
+    "unknownProduct": "Onbekend product",
+    "viewAllSubscribed": "Alle abonnementen bekijken"
   },
   "dataCurationSection": {
     "title": "Data Curatie",
@@ -162,25 +162,25 @@
     "markReadButton": "Markeer als gelezen",
     "readLabel": "Gelezen",
     "alertMessage": "Deze lijst toont alleen actie-vereiste notificaties toegewezen aan je rol(len).",
-    "loadError": "__TODO__ Failed to load approvals",
-    "unknownUser": "__TODO__ Unknown user",
-    "unknownRole": "__TODO__ Unknown role",
-    "approvalRequest": "__TODO__ Approval request",
+    "loadError": "Laden van goedkeuringen mislukt",
+    "unknownUser": "Onbekende gebruiker",
+    "unknownRole": "Onbekende rol",
+    "approvalRequest": "Goedkeuringsverzoek",
     "badges": {
-      "roleRequest": "__TODO__ Role Request",
-      "contract": "__TODO__ Contract",
-      "product": "__TODO__ Product",
-      "approval": "__TODO__ Approval"
+      "roleRequest": "Rolverzoek",
+      "contract": "Contract",
+      "product": "Product",
+      "approval": "Goedkeuring"
     },
     "table": {
-      "type": "__TODO__ Type",
-      "requesterName": "__TODO__ Requester / Name",
-      "roleStatusReason": "__TODO__ Role / Status / Reason",
-      "date": "__TODO__ Date",
-      "actions": "__TODO__ Actions"
+      "type": "Type",
+      "requesterName": "Aanvrager / Naam",
+      "roleStatusReason": "Rol / Status / Reden",
+      "date": "Datum",
+      "actions": "Acties"
     },
-    "approveDenyRequest": "__TODO__ Approve/Deny request",
-    "approveDenyWorkflow": "__TODO__ Approve/Deny workflow request"
+    "approveDenyRequest": "Verzoek goedkeuren/afwijzen",
+    "approveDenyWorkflow": "Workflowverzoek goedkeuren/afwijzen"
   },
   "marketplace": {
     "welcome": "Hallo",
@@ -212,8 +212,8 @@
       "exploreProducts": "Verken Dataproducten",
       "owner": "Eigenaar",
       "unknown": "Onbekend",
-      "unknownProduct": "__TODO__ Unknown product",
-      "untitled": "__TODO__ Untitled"
+      "unknownProduct": "Onbekend product",
+      "untitled": "Naamloos"
     },
     "datasets": {
       "available": "{{count}} dataset beschikbaar",
@@ -250,46 +250,46 @@
       "four": "4 per rij"
     },
     "scopeFilter": {
-      "placeholder": "__TODO__ Scope",
-      "all": "__TODO__ All Scopes"
+      "placeholder": "Bereik",
+      "all": "Alle Bereiken"
     },
     "openInDetails": "Openen in detailweergave",
-    "loadError": "__TODO__ Failed to load products"
+    "loadError": "Laden van producten mislukt"
   },
   "myProducts": {
-    "title": "__TODO__ My Products",
-    "description": "__TODO__ Data products you have subscribed to.",
-    "loading": "__TODO__ Loading your products...",
-    "empty": "__TODO__ You haven't subscribed to any data products yet.",
-    "browseMarketplace": "__TODO__ Browse Marketplace"
+    "title": "Mijn Producten",
+    "description": "Dataproducten waarop je geabonneerd bent.",
+    "loading": "Je producten laden...",
+    "empty": "Je hebt je nog niet geabonneerd op dataproducten.",
+    "browseMarketplace": "Blader door Marketplace"
   },
   "myRequests": {
-    "title": "__TODO__ My Requests",
-    "description": "__TODO__ Requests you have created that require approval (including access and subscriptions).",
-    "loading": "__TODO__ Loading your requests...",
-    "empty": "__TODO__ You have not created any requests.",
-    "entity": "__TODO__ Entity",
-    "type": "__TODO__ Type",
-    "status": "__TODO__ Status",
-    "requestedAt": "__TODO__ Requested",
-    "handledAt": "__TODO__ Resolved",
-    "cancel": "__TODO__ Cancel",
-    "cancelSuccess": "__TODO__ Request cancelled",
-    "statusPending": "__TODO__ Pending",
-    "statusApproved": "__TODO__ Approved",
-    "statusDenied": "__TODO__ Denied",
-    "statusCancelled": "__TODO__ Cancelled",
-    "statusExpired": "__TODO__ Expired",
-    "statusInProgress": "__TODO__ In progress",
-    "statusCompleted": "__TODO__ Completed",
-    "statusAbandoned": "__TODO__ Abandoned",
-    "typeAccess": "__TODO__ Access",
-    "typeSubscription": "__TODO__ Subscription",
-    "typeApproval": "__TODO__ Approval",
-    "entityType": "__TODO__ Entity type",
-    "name": "__TODO__ Name",
-    "entityTypeDataProduct": "__TODO__ Data product",
-    "entityTypeDataset": "__TODO__ Dataset",
-    "entityTypeDataContract": "__TODO__ Data contract"
+    "title": "Mijn Verzoeken",
+    "description": "Door jou aangemaakte verzoeken die goedkeuring vereisen (inclusief toegang en abonnementen).",
+    "loading": "Je verzoeken laden...",
+    "empty": "Je hebt geen verzoeken aangemaakt.",
+    "entity": "Entiteit",
+    "type": "Type",
+    "status": "Status",
+    "requestedAt": "Aangevraagd",
+    "handledAt": "Afgehandeld",
+    "cancel": "Annuleren",
+    "cancelSuccess": "Verzoek geannuleerd",
+    "statusPending": "In afwachting",
+    "statusApproved": "Goedgekeurd",
+    "statusDenied": "Afgewezen",
+    "statusCancelled": "Geannuleerd",
+    "statusExpired": "Verlopen",
+    "statusInProgress": "In behandeling",
+    "statusCompleted": "Voltooid",
+    "statusAbandoned": "Afgebroken",
+    "typeAccess": "Toegang",
+    "typeSubscription": "Abonnement",
+    "typeApproval": "Goedkeuring",
+    "entityType": "Entiteitstype",
+    "name": "Naam",
+    "entityTypeDataProduct": "Dataproduct",
+    "entityTypeDataset": "Dataset",
+    "entityTypeDataContract": "Datacontract"
   }
 }

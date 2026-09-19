@@ -35,72 +35,72 @@
     "dataQuality": "Datakwaliteit",
     "privacy": "Privacy",
     "governance": "Governance",
-    "maturity": "__TODO__ Maturity"
+    "maturity": "Volwassenheid"
   },
   "errors": {
     "loadingPolicies": "Fout bij Laden van Beleid",
     "savingPolicy": "Fout bij Opslaan van Beleid",
     "deletingPolicy": "Fout bij Verwijderen van Beleid",
-    "loadPolicyFailed": "__TODO__ Failed to load policy",
-    "loadFailed": "__TODO__ Failed to load",
-    "savePolicyFailed": "__TODO__ Failed to save policy",
-    "deletePolicyFailed": "__TODO__ Failed to delete policy",
-    "noDataReceived": "__TODO__ No data received from compliance policies endpoint.",
-    "saveNoDataReturned": "__TODO__ Failed to save policy: No data returned",
-    "loadPoliciesFailed": "__TODO__ Failed to load compliance policies",
-    "loadRunResultsFailed": "__TODO__ Failed to load run results",
-    "policyNotFound": "__TODO__ Compliance policy not found.",
-    "runNotFound": "__TODO__ Run not found."
+    "loadPolicyFailed": "Kon beleid niet laden",
+    "loadFailed": "Laden mislukt",
+    "savePolicyFailed": "Kon beleid niet opslaan",
+    "deletePolicyFailed": "Kon beleid niet verwijderen",
+    "noDataReceived": "Geen data ontvangen van het compliance-beleid-endpoint.",
+    "saveNoDataReturned": "Kon beleid niet opslaan: geen data teruggegeven",
+    "loadPoliciesFailed": "Kon compliance-beleid niet laden",
+    "loadRunResultsFailed": "Kon uitvoeringsresultaten niet laden",
+    "policyNotFound": "Compliance-beleid niet gevonden.",
+    "runNotFound": "Uitvoering niet gevonden."
   },
   "results": {
-    "passed": "__TODO__ Passed",
-    "failed": "__TODO__ Failed",
-    "showFailed": "__TODO__ Show Failed",
-    "showAll": "__TODO__ Show All",
-    "empty": "__TODO__ -"
+    "passed": "Geslaagd",
+    "failed": "Mislukt",
+    "showFailed": "Mislukte Tonen",
+    "showAll": "Alles Tonen",
+    "empty": "-"
   },
   "policyDetails": {
-    "backToList": "__TODO__ Back to List",
-    "run": "__TODO__ Run",
-    "id": "__TODO__ ID",
-    "examples": "__TODO__ Examples",
-    "shouldPass": "__TODO__ Should Pass",
-    "shouldFail": "__TODO__ Should Fail",
-    "noExamples": "__TODO__ No examples",
+    "backToList": "Terug naar Lijst",
+    "run": "Uitvoeren",
+    "id": "ID",
+    "examples": "Voorbeelden",
+    "shouldPass": "Moet Slagen",
+    "shouldFail": "Moet Falen",
+    "noExamples": "Geen voorbeelden",
     "runSummary": {
-      "title": "__TODO__ Run Summary",
-      "lastRunStarted": "__TODO__ Last run started {{date}}",
-      "statusLabel": "__TODO__ Status:",
-      "score": "__TODO__ Score",
-      "passed": "__TODO__ Passed",
-      "failed": "__TODO__ Failed",
-      "passedExamples": "__TODO__ Passed examples",
-      "failedExamples": "__TODO__ Failed examples",
-      "noPassedExamples": "__TODO__ No passed examples in this run",
-      "noFailures": "__TODO__ No failures in this run"
+      "title": "Uitvoeringsoverzicht",
+      "lastRunStarted": "Laatste uitvoering gestart {{date}}",
+      "statusLabel": "Status:",
+      "score": "Score",
+      "passed": "Geslaagd",
+      "failed": "Mislukt",
+      "passedExamples": "Geslaagde voorbeelden",
+      "failedExamples": "Mislukte voorbeelden",
+      "noPassedExamples": "Geen geslaagde voorbeelden in deze uitvoering",
+      "noFailures": "Geen fouten in deze uitvoering"
     },
     "runsList": {
-      "title": "__TODO__ Runs",
-      "mostRecentFirst": "__TODO__ Most recent first",
-      "noRuns": "__TODO__ No runs yet",
-      "scoreLabel": "__TODO__ Score:",
-      "scoreDetail": "__TODO__ {{passed}} passed / {{failed}} failed",
-      "openRunDetails": "__TODO__ Open run details"
+      "title": "Uitvoeringen",
+      "mostRecentFirst": "Meest recente eerst",
+      "noRuns": "Nog geen uitvoeringen",
+      "scoreLabel": "Score:",
+      "scoreDetail": "{{passed}} geslaagd / {{failed}} mislukt",
+      "openRunDetails": "Uitvoeringsdetails openen"
     },
     "resultsCard": {
-      "title": "__TODO__ Results",
-      "filteredFailed": "__TODO__ Filtered to failed only — latest run {{date}}",
-      "filteredAll": "__TODO__ Filtered to all — latest run {{date}}"
+      "title": "Resultaten",
+      "filteredFailed": "Gefilterd op alleen mislukt — laatste uitvoering {{date}}",
+      "filteredAll": "Gefilterd op alles — laatste uitvoering {{date}}"
     }
   },
   "runDetails": {
-    "runTitle": "__TODO__ Run {{id}}",
-    "viewPolicy": "__TODO__ View Policy",
-    "statusLabel": "__TODO__ Status:",
-    "scoreLabel": "__TODO__ Score:",
-    "passedLabel": "__TODO__ Passed:",
-    "failedLabel": "__TODO__ Failed:",
-    "startedLabel": "__TODO__ Started: {{date}}"
+    "runTitle": "Uitvoering {{id}}",
+    "viewPolicy": "Beleid Bekijken",
+    "statusLabel": "Status:",
+    "scoreLabel": "Score:",
+    "passedLabel": "Geslaagd:",
+    "failedLabel": "Mislukt:",
+    "startedLabel": "Gestart: {{date}}"
   },
   "toast": {
     "policySaved": "Beleid '{{name}}' succesvol opgeslagen",

@@ -7,36 +7,36 @@
   "noTablesAccessible": "Geen tabellen toegankelijk in Unity Catalog",
   "showingColumns": "Toont {{count}} kolommen",
   "matchingSearch": "overeenkomend",
-  "tableCountBadge": "__TODO__ ({{count}} Tables)",
+  "tableCountBadge": " ({{count}} Tabellen)",
   "columns": {
     "label": "Label",
     "description": "Beschrijving",
     "columnName": "Kolomnaam",
     "type": "Type",
     "tableName": "Tabel",
-    "businessTerms": "__TODO__ Business Terms",
-    "source": "__TODO__ Source"
+    "businessTerms": "Bedrijfstermen",
+    "source": "Bron"
   },
   "filters": {
-    "assetType": "__TODO__ Asset Type",
-    "allTypes": "__TODO__ All Types",
-    "system": "__TODO__ System",
-    "allSystems": "__TODO__ All Systems",
-    "catalog": "__TODO__ Catalog",
-    "allCatalogs": "__TODO__ All Catalogs",
-    "schema": "__TODO__ Schema",
-    "allSchemas": "__TODO__ All Schemas"
+    "assetType": "Assettype",
+    "allTypes": "Alle Types",
+    "system": "Systeem",
+    "allSystems": "Alle Systemen",
+    "catalog": "Catalogus",
+    "allCatalogs": "Alle Catalogi",
+    "schema": "Schema",
+    "allSchemas": "Alle Schema's"
   },
   "sourceBadges": {
-    "both": "__TODO__ Both",
-    "asset": "__TODO__ Asset",
-    "contract": "__TODO__ Contract"
+    "both": "Beide",
+    "asset": "Asset",
+    "contract": "Contract"
   },
   "pagination": {
-    "showing": "__TODO__ Showing {{from}}–{{to}} of {{total}} columns",
-    "matching": "__TODO__  matching \"{{query}}\"",
-    "perPage": "__TODO__ Per page:",
-    "pageOf": "__TODO__ Page {{current}} of {{total}}"
+    "showing": "Toont {{from}}–{{to}} van {{total}} kolommen",
+    "matching": " overeenkomend met \"{{query}}\"",
+    "perPage": "Per pagina:",
+    "pageOf": "Pagina {{current}} van {{total}}"
   },
   "tabs": {
     "overview": "Overzicht",
@@ -61,9 +61,9 @@
     "tags": "Tags"
   },
   "details": {
-    "backToList": "__TODO__ Back to List",
-    "by": "__TODO__ by {{user}}",
-    "fallbackTitle": "__TODO__ Details"
+    "backToList": "Terug naar lijst",
+    "by": "door {{user}}",
+    "fallbackTitle": "Details"
   },
   "dataDetails": {
     "title": "Kolommen",
@@ -71,17 +71,17 @@
     "columnName": "Kolomnaam",
     "type": "Type",
     "nullable": "Nullable",
-    "partition": "__TODO__ Partition {{index}}",
-    "yes": "__TODO__ Yes",
-    "no": "__TODO__ No"
+    "partition": "Partitie {{index}}",
+    "yes": "Ja",
+    "no": "Nee"
   },
   "lineage": {
     "title": "Data Lineage",
     "description": "Visualiseer upstream en downstream afhankelijkheden",
     "noLineage": "Geen lineage informatie beschikbaar",
     "noLineageHint": "Deze tabel heeft mogelijk geen upstream of downstream afhankelijkheden",
-    "noDataAvailable": "__TODO__ No lineage data available",
-    "loadingLineage": "__TODO__ Loading lineage…",
+    "noDataAvailable": "Geen lineage data beschikbaar",
+    "loadingLineage": "Lineage laden…",
     "both": "Beide Richtingen",
     "upstream": "Alleen Upstream",
     "downstream": "Alleen Downstream",
@@ -89,85 +89,85 @@
     "impactSummary": "Impact Samenvatting",
     "impactWarning": "Wijzigingen aan deze tabel kunnen beïnvloeden:",
     "notifyOwners": "Te informeren eigenaren",
-    "impactedTables_one": "__TODO__ {{count}} table",
-    "impactedTables_other": "__TODO__ {{count}} tables",
-    "impactedViews_one": "__TODO__ {{count}} view",
-    "impactedViews_other": "__TODO__ {{count}} views",
-    "impactedExternal_one": "__TODO__ {{count}} external",
-    "impactedExternal_other": "__TODO__ {{count}} external",
+    "impactedTables_one": "{{count}} tabel",
+    "impactedTables_other": "{{count}} tabellen",
+    "impactedViews_one": "{{count}} view",
+    "impactedViews_other": "{{count}} views",
+    "impactedExternal_one": "{{count}} extern",
+    "impactedExternal_other": "{{count}} externe",
     "toolbar": {
-      "upstream": "__TODO__ Upstream",
-      "both": "__TODO__ Both",
-      "downstream": "__TODO__ Downstream",
-      "breadth": "__TODO__ Breadth:",
-      "nesting": "__TODO__ Nesting:",
-      "entitiesEdges": "__TODO__ {{nodes}} entities · {{edges}} edges"
+      "upstream": "Upstream",
+      "both": "Beide",
+      "downstream": "Downstream",
+      "breadth": "Breedte:",
+      "nesting": "Nesting:",
+      "entitiesEdges": "{{nodes}} entiteiten · {{edges}} edges"
     },
     "legendPanel": {
-      "entityTypes": "__TODO__ Entity Types",
-      "edgeStyles": "__TODO__ Edge Styles",
-      "dataFlow": "__TODO__ Data flow",
-      "containment": "__TODO__ Containment",
-      "governance": "__TODO__ Governance",
-      "semantic": "__TODO__ Semantic"
+      "entityTypes": "Entiteitstypes",
+      "edgeStyles": "Edge-stijlen",
+      "dataFlow": "Datastroom",
+      "containment": "Bevatting",
+      "governance": "Governance",
+      "semantic": "Semantisch"
     },
     "dev": {
-      "entityTypeLabel": "__TODO__ Entity Type:",
-      "entityTypePlaceholder": "__TODO__ e.g. DataProduct",
-      "entityIdLabel": "__TODO__ Entity ID:",
-      "entityIdPlaceholder": "__TODO__ e.g. uuid",
-      "load": "__TODO__ Load",
-      "emptyHint": "__TODO__ Enter an entity type and ID above, then click Load"
+      "entityTypeLabel": "Entiteitstype:",
+      "entityTypePlaceholder": "bijv. DataProduct",
+      "entityIdLabel": "Entiteit-ID:",
+      "entityIdPlaceholder": "bijv. uuid",
+      "load": "Laden",
+      "emptyHint": "Voer hierboven een entiteitstype en ID in en klik dan op Laden"
     }
   },
   "hierarchy": {
-    "browserTitle": "__TODO__ Hierarchy Browser",
-    "browserSubtitle": "__TODO__ Navigate data hierarchies from systems and domains down to tables and columns",
-    "browse": "__TODO__ Browse",
-    "filterPlaceholder": "__TODO__ Filter...",
-    "noMatches": "__TODO__ No matches found",
-    "noRoots": "__TODO__ No root entities found",
-    "rootsLoadFailed": "__TODO__ Failed to load hierarchy roots",
-    "permissionDenied": "__TODO__ Permission Denied",
-    "noAccess": "__TODO__ You don't have access to browse the hierarchy.",
-    "selectEntity": "__TODO__ Select an entity",
-    "selectEntityHint": "__TODO__ Click on any item in the tree to view its hierarchy",
-    "childCount_one": "__TODO__ {{count}} child",
-    "childCount_other": "__TODO__ {{count}} children",
-    "maxDepthTooltip": "__TODO__ Max hierarchy depth",
-    "treeView": "__TODO__ Tree view",
-    "graphView": "__TODO__ Graph view",
-    "viewDetail": "__TODO__ View Detail",
-    "viewDetails": "__TODO__ View details",
-    "show": "__TODO__ Show:",
-    "showAll": "__TODO__ Show all",
-    "heading": "__TODO__ Hierarchy",
-    "noChildren": "__TODO__ No children in the hierarchy",
-    "noChildrenFound": "__TODO__ No children found",
-    "expand": "__TODO__ Expand",
-    "collapse": "__TODO__ Collapse",
-    "levelsOption": "__TODO__ {{count}} levels",
-    "allLevels": "__TODO__ All",
+    "browserTitle": "Hiërarchiebrowser",
+    "browserSubtitle": "Navigeer datahiërarchieën van systemen en domeinen tot tabellen en kolommen",
+    "browse": "Bladeren",
+    "filterPlaceholder": "Filteren...",
+    "noMatches": "Geen overeenkomsten gevonden",
+    "noRoots": "Geen root-entiteiten gevonden",
+    "rootsLoadFailed": "Laden van hiërarchie-roots mislukt",
+    "permissionDenied": "Geen Toegang",
+    "noAccess": "Je hebt geen toegang om de hiërarchie te bekijken.",
+    "selectEntity": "Selecteer een entiteit",
+    "selectEntityHint": "Klik op een item in de boom om de hiërarchie te bekijken",
+    "childCount_one": "{{count}} onderliggend item",
+    "childCount_other": "{{count}} onderliggende items",
+    "maxDepthTooltip": "Max. hiërarchiediepte",
+    "treeView": "Boomweergave",
+    "graphView": "Grafiekweergave",
+    "viewDetail": "Detail bekijken",
+    "viewDetails": "Details bekijken",
+    "show": "Tonen:",
+    "showAll": "Alles tonen",
+    "heading": "Hiërarchie",
+    "noChildren": "Geen onderliggende items in de hiërarchie",
+    "noChildrenFound": "Geen onderliggende items gevonden",
+    "expand": "Uitklappen",
+    "collapse": "Inklappen",
+    "levelsOption": "{{count}} niveaus",
+    "allLevels": "Alle",
     "rootType": {
-      "domain": "__TODO__ Domain",
-      "product": "__TODO__ Product"
+      "domain": "Domein",
+      "product": "Product"
     }
   },
   "preview": {
-    "title": "__TODO__ Preview",
-    "notAvailable": "__TODO__ Preview not available for this file.",
-    "fetchFailed": "__TODO__ Failed to fetch preview content.",
-    "loadImageFailed": "__TODO__ Failed to load image",
-    "pdfNotSupported": "__TODO__ PDF preview not supported.",
-    "textPreviewTitle": "__TODO__ Text preview",
-    "noInlinePreview": "__TODO__ No inline preview for this file type.",
-    "noPreviewUrl": "__TODO__ No preview URL available. Filename: {{filename}} • Path: {{path}}"
+    "title": "Voorbeeld",
+    "notAvailable": "Voorbeeld niet beschikbaar voor dit bestand.",
+    "fetchFailed": "Ophalen van voorbeeldinhoud mislukt.",
+    "loadImageFailed": "Laden van afbeelding mislukt",
+    "pdfNotSupported": "PDF-voorbeeld niet ondersteund.",
+    "textPreviewTitle": "Tekstvoorbeeld",
+    "noInlinePreview": "Geen inline voorbeeld voor dit bestandstype.",
+    "noPreviewUrl": "Geen voorbeeld-URL beschikbaar. Bestandsnaam: {{filename}} • Pad: {{path}}"
   },
   "errors": {
     "fetchFailed": "Kon data niet ophalen",
     "tableNotFound": "Tabel niet gevonden",
-    "fetchTableFailed": "__TODO__ Failed to fetch table: {{status}}",
-    "fetchLineageFailed": "__TODO__ Failed to fetch lineage",
-    "loadLineageFailed": "__TODO__ Failed to load lineage"
+    "fetchTableFailed": "Ophalen van tabel mislukt: {{status}}",
+    "fetchLineageFailed": "Ophalen van lineage mislukt",
+    "loadLineageFailed": "Laden van lineage mislukt"
   }
 }

@@ -44,9 +44,9 @@
     "confirmOperation": "Bevestig Bewerking",
     "selectedItems": "Geselecteerde items: {{items}}",
     "noItemsSelected": "Geen items geselecteerd",
-    "noResponse": "__TODO__ No response",
-    "tableNotFound": "__TODO__ Table \"{{name}}\" not found in {{schema}}",
-    "failedToNavigate": "__TODO__ Failed to navigate to {{path}}"
+    "noResponse": "Geen antwoord",
+    "tableNotFound": "Tabel \"{{name}}\" niet gevonden in {{schema}}",
+    "failedToNavigate": "Kon niet navigeren naar {{path}}"
   },
   "askPanel": {
     "title": "Vraag {{shortName}}",
@@ -68,6 +68,6 @@
   "errors": {
     "error": "Fout",
     "failedToSendMessage": "Kon bericht niet verzenden",
-    "chatRequestFailed": "__TODO__ Chat request failed"
+    "chatRequestFailed": "Chatverzoek mislukt"
   }
 }

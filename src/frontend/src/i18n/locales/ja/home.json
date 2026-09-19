@@ -64,8 +64,8 @@
     "moreRoles": "他に{{count}}個のロールが利用可能..."
   },
   "myActions": {
-    "title": "__TODO__ My Actions",
-    "approvals": "__TODO__ Approvals"
+    "title": "マイアクション",
+    "approvals": "承認"
   },
   "quickActions": {
     "title": "クイックアクション",
@@ -116,12 +116,12 @@
     "status": "N/A",
     "untitled": "無題",
     "info": "情報",
-    "manage": "__TODO__ Manage",
-    "mySubscriptions": "__TODO__ My Subscriptions",
-    "subscribe": "__TODO__ Subscribe",
-    "subscribed": "__TODO__ Subscribed",
-    "unknownProduct": "__TODO__ Unknown product",
-    "viewAllSubscribed": "__TODO__ View all subscribed"
+    "manage": "管理",
+    "mySubscriptions": "マイ購読",
+    "subscribe": "購読",
+    "subscribed": "購読済み",
+    "unknownProduct": "不明な製品",
+    "viewAllSubscribed": "購読済みをすべて表示"
   },
   "dataCurationSection": {
     "title": "データキュレーション",
@@ -162,25 +162,25 @@
     "markReadButton": "既読にする",
     "readLabel": "既読",
     "alertMessage": "このリストには、あなたのロールに割り当てられたアクション必須の通知のみが表示されます。",
-    "loadError": "__TODO__ Failed to load approvals",
-    "unknownUser": "__TODO__ Unknown user",
-    "unknownRole": "__TODO__ Unknown role",
-    "approvalRequest": "__TODO__ Approval request",
+    "loadError": "承認の読み込みに失敗しました",
+    "unknownUser": "不明なユーザー",
+    "unknownRole": "不明なロール",
+    "approvalRequest": "承認リクエスト",
     "badges": {
-      "roleRequest": "__TODO__ Role Request",
-      "contract": "__TODO__ Contract",
-      "product": "__TODO__ Product",
-      "approval": "__TODO__ Approval"
+      "roleRequest": "ロールリクエスト",
+      "contract": "コントラクト",
+      "product": "製品",
+      "approval": "承認"
     },
     "table": {
-      "type": "__TODO__ Type",
-      "requesterName": "__TODO__ Requester / Name",
-      "roleStatusReason": "__TODO__ Role / Status / Reason",
-      "date": "__TODO__ Date",
-      "actions": "__TODO__ Actions"
+      "type": "種別",
+      "requesterName": "リクエスト元 / 名前",
+      "roleStatusReason": "ロール / ステータス / 理由",
+      "date": "日付",
+      "actions": "アクション"
     },
-    "approveDenyRequest": "__TODO__ Approve/Deny request",
-    "approveDenyWorkflow": "__TODO__ Approve/Deny workflow request"
+    "approveDenyRequest": "リクエストを承認／却下",
+    "approveDenyWorkflow": "ワークフローリクエストを承認／却下"
   },
   "marketplace": {
     "welcome": "こんにちは",
@@ -212,8 +212,8 @@
       "exploreProducts": "データ製品を探索",
       "owner": "所有者",
       "unknown": "不明",
-      "unknownProduct": "__TODO__ Unknown product",
-      "untitled": "__TODO__ Untitled"
+      "unknownProduct": "不明な製品",
+      "untitled": "無題"
     },
     "datasets": {
       "available": "{{count}}個のデータセットが利用可能",
@@ -250,46 +250,46 @@
       "four": "4列"
     },
     "scopeFilter": {
-      "placeholder": "__TODO__ Scope",
-      "all": "__TODO__ All Scopes"
+      "placeholder": "スコープ",
+      "all": "すべてのスコープ"
     },
     "openInDetails": "詳細ビューで開く",
-    "loadError": "__TODO__ Failed to load products"
+    "loadError": "製品の読み込みに失敗しました"
   },
   "myProducts": {
-    "title": "__TODO__ My Products",
-    "description": "__TODO__ Data products you have subscribed to.",
-    "loading": "__TODO__ Loading your products...",
-    "empty": "__TODO__ You haven't subscribed to any data products yet.",
-    "browseMarketplace": "__TODO__ Browse Marketplace"
+    "title": "マイ製品",
+    "description": "あなたが購読しているデータ製品です。",
+    "loading": "製品を読み込み中...",
+    "empty": "まだデータ製品を購読していません。",
+    "browseMarketplace": "マーケットプレイスを参照"
   },
   "myRequests": {
-    "title": "__TODO__ My Requests",
-    "description": "__TODO__ Requests you have created that require approval (including access and subscriptions).",
-    "loading": "__TODO__ Loading your requests...",
-    "empty": "__TODO__ You have not created any requests.",
-    "entity": "__TODO__ Entity",
-    "type": "__TODO__ Type",
-    "status": "__TODO__ Status",
-    "requestedAt": "__TODO__ Requested",
-    "handledAt": "__TODO__ Resolved",
-    "cancel": "__TODO__ Cancel",
-    "cancelSuccess": "__TODO__ Request cancelled",
-    "statusPending": "__TODO__ Pending",
-    "statusApproved": "__TODO__ Approved",
-    "statusDenied": "__TODO__ Denied",
-    "statusCancelled": "__TODO__ Cancelled",
-    "statusExpired": "__TODO__ Expired",
-    "statusInProgress": "__TODO__ In progress",
-    "statusCompleted": "__TODO__ Completed",
-    "statusAbandoned": "__TODO__ Abandoned",
-    "typeAccess": "__TODO__ Access",
-    "typeSubscription": "__TODO__ Subscription",
-    "typeApproval": "__TODO__ Approval",
-    "entityType": "__TODO__ Entity type",
-    "name": "__TODO__ Name",
-    "entityTypeDataProduct": "__TODO__ Data product",
-    "entityTypeDataset": "__TODO__ Dataset",
-    "entityTypeDataContract": "__TODO__ Data contract"
+    "title": "マイリクエスト",
+    "description": "あなたが作成した承認が必要なリクエスト（アクセスおよび購読を含む）です。",
+    "loading": "リクエストを読み込み中...",
+    "empty": "リクエストを作成していません。",
+    "entity": "エンティティ",
+    "type": "種別",
+    "status": "ステータス",
+    "requestedAt": "リクエスト日",
+    "handledAt": "解決日",
+    "cancel": "キャンセル",
+    "cancelSuccess": "リクエストをキャンセルしました",
+    "statusPending": "保留中",
+    "statusApproved": "承認済み",
+    "statusDenied": "却下",
+    "statusCancelled": "キャンセル済み",
+    "statusExpired": "期限切れ",
+    "statusInProgress": "進行中",
+    "statusCompleted": "完了",
+    "statusAbandoned": "中止",
+    "typeAccess": "アクセス",
+    "typeSubscription": "購読",
+    "typeApproval": "承認",
+    "entityType": "エンティティ種別",
+    "name": "名前",
+    "entityTypeDataProduct": "データ製品",
+    "entityTypeDataset": "データセット",
+    "entityTypeDataContract": "データコントラクト"
   }
 }

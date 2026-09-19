@@ -333,5 +333,9 @@ class SchemaImportRunsManager:
                 ),
                 db=db,
             )
+            # update_notification flushes but does not commit; the background
+            # thread owns the session, so commit here or db.close() discards it.
+            db.commit()
         except Exception as exc:
             logger.debug("Terminal notification update failed: %s", exc)
+            db.rollback()

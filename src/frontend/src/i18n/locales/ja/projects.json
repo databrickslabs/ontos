@@ -1,6 +1,7 @@
 {
   "title": "プロジェクト",
   "subtitle": "チームの整理とワークスペースの分離のためにプロジェクトを作成・管理します。",
+  "openMenu": "__TODO__ Open menu",
   "addNewProject": "新しいプロジェクトを追加",
   "editProject": "プロジェクトを編集",
   "deleteProject": "プロジェクトを削除",

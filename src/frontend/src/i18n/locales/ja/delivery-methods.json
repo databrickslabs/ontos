@@ -1,0 +1,75 @@
+{
+  "title": "__TODO__ Delivery Methods",
+  "subtitle": "__TODO__ Define how data is delivered to consumers via deliverables (e.g., Table Access, Serving Endpoint).",
+  "addNew": "__TODO__ Add Method",
+  "editMethod": "__TODO__ Edit Method",
+  "deleteMethod": "__TODO__ Delete Method",
+  "systemBadge": "__TODO__ System",
+  "openMenu": "__TODO__ Open menu",
+  "table": {
+    "name": "__TODO__ Name",
+    "description": "__TODO__ Description",
+    "category": "__TODO__ Category",
+    "status": "__TODO__ Status",
+    "system": "__TODO__ System",
+    "lastUpdated": "__TODO__ Last Updated",
+    "actions": "__TODO__ Actions"
+  },
+  "categories": {
+    "access": "__TODO__ Access",
+    "endpoint": "__TODO__ Endpoint",
+    "export": "__TODO__ Export",
+    "streaming": "__TODO__ Streaming"
+  },
+  "statuses": {
+    "active": "__TODO__ Active",
+    "deprecated": "__TODO__ Deprecated"
+  },
+  "permissions": {
+    "deniedView": "__TODO__ You do not have permission to view delivery methods.",
+    "deniedCreate": "__TODO__ You do not have permission to create delivery methods.",
+    "deniedEdit": "__TODO__ You do not have permission to edit delivery methods.",
+    "deniedDelete": "__TODO__ You do not have permission to delete delivery methods.",
+    "permissionDenied": "__TODO__ Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "__TODO__ Error fetching delivery methods",
+    "loadFailed": "__TODO__ Failed to load delivery methods",
+    "errorDeleting": "__TODO__ Error deleting delivery method",
+    "deleted": "__TODO__ Delivery Method Deleted",
+    "deletedSuccess": "__TODO__ The delivery method was successfully deleted.",
+    "errorLoadingData": "__TODO__ Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "__TODO__ Delete Delivery Method?",
+    "description": "__TODO__ This action cannot be undone. Existing deliverables using this method may become orphaned.",
+    "cancel": "__TODO__ Cancel",
+    "delete": "__TODO__ Delete"
+  },
+  "emptyState": {
+    "title": "__TODO__ No delivery methods defined yet",
+    "description": "__TODO__ Create your first delivery method (e.g., Table Access, Serving Endpoint, File Export)."
+  },
+  "form": {
+    "createTitle": "__TODO__ Create Delivery Method",
+    "createDescription": "__TODO__ Add a new delivery method for data distribution.",
+    "editTitle": "__TODO__ Edit Delivery Method",
+    "editDescription": "__TODO__ Update the details of this delivery method.",
+    "create": "__TODO__ Create",
+    "update": "__TODO__ Save Changes",
+    "noCategory": "__TODO__ No category",
+    "placeholders": {
+      "name": "__TODO__ e.g., Table Access",
+      "description": "__TODO__ Describe how data is delivered...",
+      "category": "__TODO__ Select a category"
+    },
+    "toasts": {
+      "created": "__TODO__ Delivery Method Created",
+      "createdDescription": "__TODO__ \"{{name}}\" has been created.",
+      "updated": "__TODO__ Delivery Method Updated",
+      "updatedDescription": "__TODO__ \"{{name}}\" has been updated.",
+      "createFailed": "__TODO__ Failed to Create",
+      "updateFailed": "__TODO__ Failed to Update"
+    }
+  }
+}

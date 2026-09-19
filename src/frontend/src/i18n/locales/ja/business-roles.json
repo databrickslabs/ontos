@@ -1,0 +1,78 @@
+{
+  "title": "__TODO__ Business Roles",
+  "subtitle": "__TODO__ Named roles that can be assigned to users as owners of various objects.",
+  "addNew": "__TODO__ Add Role",
+  "editRole": "__TODO__ Edit Role",
+  "deleteRole": "__TODO__ Delete Role",
+  "systemBadge": "__TODO__ System",
+  "openMenu": "__TODO__ Open menu",
+  "table": {
+    "name": "__TODO__ Name",
+    "description": "__TODO__ Description",
+    "category": "__TODO__ Category",
+    "status": "__TODO__ Status",
+    "system": "__TODO__ System",
+    "lastUpdated": "__TODO__ Last Updated",
+    "actions": "__TODO__ Actions"
+  },
+  "categories": {
+    "governance": "__TODO__ Governance",
+    "technical": "__TODO__ Technical",
+    "business": "__TODO__ Business",
+    "operational": "__TODO__ Operational"
+  },
+  "statuses": {
+    "active": "__TODO__ Active",
+    "deprecated": "__TODO__ Deprecated"
+  },
+  "permissions": {
+    "deniedView": "__TODO__ You do not have permission to view business roles.",
+    "deniedCreate": "__TODO__ You do not have permission to create business roles.",
+    "deniedEdit": "__TODO__ You do not have permission to edit business roles.",
+    "deniedDelete": "__TODO__ You do not have permission to delete business roles.",
+    "permissionDenied": "__TODO__ Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "__TODO__ Error fetching business roles",
+    "loadFailed": "__TODO__ Failed to load business roles",
+    "errorDeleting": "__TODO__ Error deleting business role",
+    "deleted": "__TODO__ Business Role Deleted",
+    "deletedSuccess": "__TODO__ The business role was successfully deleted.",
+    "errorLoadingData": "__TODO__ Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "__TODO__ Delete Business Role?",
+    "description": "__TODO__ This action cannot be undone. Existing owner assignments using this role may become orphaned.",
+    "cancel": "__TODO__ Cancel",
+    "delete": "__TODO__ Delete"
+  },
+  "emptyState": {
+    "title": "__TODO__ No business roles defined yet",
+    "description": "__TODO__ Create your first business role (e.g., Data Owner, Domain Owner)."
+  },
+  "form": {
+    "createTitle": "__TODO__ Create Business Role",
+    "createDescription": "__TODO__ Add a new business role that can be assigned to users.",
+    "editTitle": "__TODO__ Edit Business Role",
+    "editDescription": "__TODO__ Update the details of this business role.",
+    "create": "__TODO__ Create",
+    "update": "__TODO__ Save Changes",
+    "noCategory": "__TODO__ No category",
+    "isApprover": "__TODO__ Workflow Approver",
+    "isApproverDescription": "__TODO__ Show this role in workflow approver and notification recipient dropdowns.",
+    "isApproverInUse": "__TODO__ Cannot disable — used in {{count}} workflow(s): {{workflows}}.",
+    "placeholders": {
+      "name": "__TODO__ e.g., Data Owner",
+      "description": "__TODO__ Describe the responsibilities of this role...",
+      "category": "__TODO__ Select a category"
+    },
+    "toasts": {
+      "created": "__TODO__ Business Role Created",
+      "createdDescription": "__TODO__ \"{{name}}\" has been created.",
+      "updated": "__TODO__ Business Role Updated",
+      "updatedDescription": "__TODO__ \"{{name}}\" has been updated.",
+      "createFailed": "__TODO__ Failed to Create",
+      "updateFailed": "__TODO__ Failed to Update"
+    }
+  }
+}

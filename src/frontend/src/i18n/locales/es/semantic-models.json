@@ -8,6 +8,18 @@
   "newTerm": "Nuevo Término",
   "searchPlaceholder": "Buscar términos...",
   "loading": "Cargando modelos semánticos...",
+  "tabs": {
+    "collections": "__TODO__ Collections",
+    "concepts": "__TODO__ Concepts",
+    "graph": "__TODO__ Graph"
+  },
+  "types": {
+    "concept": "__TODO__ Concept",
+    "class": "__TODO__ Class",
+    "property": "__TODO__ Property",
+    "individual": "__TODO__ Individual",
+    "term": "__TODO__ Term"
+  },
   "linkedObjects": {
     "title": "Entidades vinculadas",
     "assign": "Asignar entidad",
@@ -17,13 +29,6 @@
     "removeFailed": "No se pudo eliminar el vínculo.",
     "removeAria": "Eliminar entidad vinculada"
   },
-  "relations": {
-    "title": "Relaciones",
-    "loading": "Cargando relaciones...",
-    "empty": "No se encontraron relaciones.",
-    "outgoingTooltip": "Este concepto → destino",
-    "incomingTooltip": "Origen → este concepto"
-  },
   "neighborhood": {
     "title": "Vecindario del concepto",
     "loading": "Cargando vecindario...",
@@ -31,13 +36,39 @@
     "moreParents": "+{{count}} más",
     "moreChildren": "+{{count}} más"
   },
+  "relations": {
+    "title": "Relaciones",
+    "loading": "Cargando relaciones...",
+    "empty": "No se encontraron relaciones.",
+    "outgoingTooltip": "Este concepto → destino",
+    "incomingTooltip": "Origen → este concepto"
+  },
   "filters": {
     "allGlossaries": "Todos los Glosarios",
     "allStatus": "Todos los Estados",
     "bySource": "Filtrar por Fuente",
     "all": "Todos",
     "none": "Ninguno",
-    "groupBySource": "Agrupar por Fuente"
+    "groupBySource": "Agrupar por Fuente",
+    "showProperties": "__TODO__ Show Properties",
+    "groupByDomain": "__TODO__ Group by Domain",
+    "allTypes": "__TODO__ All Types",
+    "allScopes": "__TODO__ All Scopes",
+    "allCollections": "__TODO__ All Collections",
+    "labelLanguage": "__TODO__ Label Language"
+  },
+  "groupBy": {
+    "collection": "__TODO__ By Collection",
+    "type": "__TODO__ By Type",
+    "flat": "__TODO__ Flat List"
+  },
+  "scopes": {
+    "enterprise": "__TODO__ Enterprise",
+    "domain": "__TODO__ Domain",
+    "department": "__TODO__ Department",
+    "team": "__TODO__ Team",
+    "project": "__TODO__ Project",
+    "external": "__TODO__ External"
   },
   "table": {
     "name": "Nombre",
@@ -52,7 +83,25 @@
     "error": "Error",
     "deleteConfirm": "¿Estás seguro de que quieres eliminar este término?",
     "deleteSuccess": "Término eliminado exitosamente",
-    "deleteError": "Error al eliminar el término"
+    "deleteError": "Error al eliminar el término",
+    "collectionCreated": "__TODO__ Collection created successfully",
+    "collectionUpdated": "__TODO__ Collection updated successfully",
+    "collectionDeleted": "__TODO__ Collection deleted successfully",
+    "confirmDeleteCollection": "__TODO__ Are you sure you want to delete the collection \"{{name}}\"? This will delete all concepts in it.",
+    "conceptCreated": "__TODO__ Concept created successfully",
+    "conceptUpdated": "__TODO__ Concept updated successfully",
+    "conceptDeleted": "__TODO__ Concept deleted successfully",
+    "submittedForReview": "__TODO__ Concept submitted for review",
+    "enterReviewerEmail": "__TODO__ Enter reviewer email address:",
+    "conceptPromoted": "__TODO__ Concept promoted successfully",
+    "conceptMigrated": "__TODO__ Concept migrated successfully",
+    "noCollections": "__TODO__ No collections found",
+    "noConceptsFound": "__TODO__ No concepts found",
+    "selectConcept": "__TODO__ Select a concept to view details",
+    "linkAdded": "__TODO__ Link added successfully",
+    "linkRemoved": "__TODO__ Link removed successfully",
+    "saveFailed": "__TODO__ Failed to save concept",
+    "deleteConceptFailed": "__TODO__ Failed to delete concept"
   },
   "status": {
     "draft": "Borrador",
@@ -61,8 +110,10 @@
     "under_review": "En revisión",
     "active": "Activo",
     "approved": "Aprobado",
+    "published": "__TODO__ Published",
     "certified": "Certificado",
     "deprecated": "Obsoleto",
+    "archived": "__TODO__ Archived",
     "retired": "Retirado"
   },
   "details": {
@@ -71,9 +122,27 @@
     "delete": "Eliminar",
     "notFound": "Concepto no encontrado",
     "loading": "Cargando...",
+    "loadError": "__TODO__ Failed to load concept",
+    "created": "__TODO__ Created",
+    "refreshing": "__TODO__ Refreshing...",
+    "openIriAria": "__TODO__ Open IRI",
     "linkedAssets": "Activos Vinculados",
     "synonyms": "Sinónimos",
     "relatedTerms": "Términos Relacionados"
+  },
+  "fields": {
+    "definition": "__TODO__ Definition",
+    "domain": "__TODO__ Domain",
+    "range": "__TODO__ Range",
+    "synonyms": "__TODO__ Synonyms",
+    "examples": "__TODO__ Examples",
+    "businessOwners": "__TODO__ Business Owners",
+    "parentConcepts": "__TODO__ Parent Concepts",
+    "childConcepts": "__TODO__ Child Concepts",
+    "scope": "__TODO__ Scope",
+    "concepts": "__TODO__ Concepts",
+    "source": "__TODO__ Source",
+    "sourceUrl": "__TODO__ Source URL"
   },
   "form": {
     "createTitle": "Crear Término",
@@ -85,6 +154,309 @@
     "status": "Estado",
     "cancel": "Cancelar",
     "save": "Guardar"
+  },
+  "collections": {
+    "title": "__TODO__ Collections",
+    "glossary": "__TODO__ Glossary",
+    "taxonomy": "__TODO__ Taxonomy",
+    "ontology": "__TODO__ Ontology"
+  },
+  "actions": {
+    "createConcept": "__TODO__ Create Concept",
+    "createCollection": "__TODO__ Create Collection"
+  },
+  "badges": {
+    "imported": "__TODO__ Imported",
+    "custom": "__TODO__ Custom",
+    "readonly": "__TODO__ Read-only"
+  },
+  "links": {
+    "outgoing": "__TODO__ Outgoing Links",
+    "incoming": "__TODO__ Incoming Links",
+    "noOutgoing": "__TODO__ No outgoing links",
+    "noIncoming": "__TODO__ No incoming links",
+    "source": "__TODO__ Source",
+    "target": "__TODO__ Target",
+    "relationshipType": "__TODO__ Relationship Type",
+    "selectTarget": "__TODO__ Select Target",
+    "typeToSearch": "__TODO__ Type to search for concepts",
+    "createLink": "__TODO__ Create Link"
+  },
+  "graph": {
+    "legend": "__TODO__ Legend",
+    "layout": "__TODO__ Layout",
+    "hierarchical": "__TODO__ Hierarchical",
+    "force": "__TODO__ Force",
+    "circular": "__TODO__ Circular"
+  },
+  "dialogs": {
+    "deleteConcept": {
+      "title": "__TODO__ Delete Concept",
+      "description": "__TODO__ Are you sure you want to delete \"{{label}}\"? This action cannot be undone. Only draft concepts can be deleted."
+    },
+    "linkEditor": {
+      "title": "__TODO__ Create Link",
+      "description": "__TODO__ Define a relationship between two concepts"
+    }
+  },
+  "rdfSources": {
+    "syntaxColumn": "__TODO__ Syntax",
+    "serializationUnknown": "__TODO__ —",
+    "serializationTurtle": "__TODO__ Turtle",
+    "serializationRdfXml": "__TODO__ RDF/XML",
+    "serializationJsonLd": "__TODO__ JSON-LD",
+    "serializationNTriples": "__TODO__ N-Triples",
+    "serializationTriG": "__TODO__ TriG",
+    "viewRawDescription": "__TODO__ Raw RDF content ({{syntax}}).",
+    "viewRawDescriptionFallback": "__TODO__ Raw RDF content.",
+    "nameColumn": "__TODO__ Name",
+    "editDisplayTitle": "__TODO__ Edit display title",
+    "titleDialog": "__TODO__ RDF source title",
+    "titleDialogDescription": "__TODO__ Pick a label from the ontology header or enter a custom title. The file name remains the internal graph key.",
+    "suggestedFromFile": "__TODO__ Suggested from file",
+    "customTitle": "__TODO__ Custom title",
+    "useFilename": "__TODO__ Use file name",
+    "titleSaved": "__TODO__ Display title updated",
+    "loadSuggestionsFailed": "__TODO__ Failed to load title suggestions",
+    "fileBackedReadOnly": "__TODO__ Built-in file sources use the file name as the title.",
+    "systemNamespaces": {
+      "metaSources": "__TODO__ Source registry metadata",
+      "semanticLinks": "__TODO__ Semantic links",
+      "rdflibDefault": "__TODO__ Default graph",
+      "appEntities": "__TODO__ App Entities",
+      "demoGraph": "__TODO__ Demo business concepts"
+    }
+  },
+  "import": {
+    "chooseFile": "__TODO__ Choose file…",
+    "file": "__TODO__ File",
+    "noEditableCollections": "__TODO__ No editable collections available. Create one first.",
+    "selectCollection": "__TODO__ Select a collection…",
+    "submit": "__TODO__ Import",
+    "success": "__TODO__ Import successful",
+    "supportedFormats": "__TODO__ Supported: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "targetCollection": "__TODO__ Target Collection",
+    "title": "__TODO__ Import Concepts"
+  },
+  "propertyTypes": {
+    "object": "__TODO__ Object Property",
+    "datatype": "__TODO__ Datatype Property",
+    "annotation": "__TODO__ Annotation Property"
+  },
+  "conceptEditor": {
+    "editTitle": "__TODO__ Edit Concept",
+    "createDescription": "__TODO__ Create a new term or concept in the collection.",
+    "collectionLabel": "__TODO__ Collection",
+    "selectCollectionPlaceholder": "__TODO__ Select collection...",
+    "selectTypePlaceholder": "__TODO__ Select type...",
+    "label": "__TODO__ Label",
+    "labelPlaceholder": "__TODO__ e.g., Revenue",
+    "definitionPlaceholder": "__TODO__ A clear, concise definition...",
+    "propertyConfiguration": "__TODO__ Property Configuration",
+    "propertyType": "__TODO__ Property Type",
+    "selectPropertyTypePlaceholder": "__TODO__ Select property type...",
+    "domainPlaceholder": "__TODO__ e.g., schema:Person or IRI...",
+    "domainHelp": "__TODO__ The class or type this property applies to (subject)",
+    "rangeDatatypePlaceholder": "__TODO__ e.g., xsd:string, xsd:integer...",
+    "rangeObjectPlaceholder": "__TODO__ e.g., schema:Organization or IRI...",
+    "rangeDatatypeHelp": "__TODO__ The datatype of the property value",
+    "rangeObjectHelp": "__TODO__ The class or type of the property value (object)",
+    "addSynonymPlaceholder": "__TODO__ Add synonym...",
+    "addExamplePlaceholder": "__TODO__ Add example...",
+    "certified": "__TODO__ Certified",
+    "expires": "__TODO__ Expires",
+    "promotedFrom": "__TODO__ Promoted from",
+    "migratedFrom": "__TODO__ Migrated from",
+    "history": "__TODO__ History",
+    "submitForReview": "__TODO__ Submit for Review",
+    "typeDescriptions": {
+      "concept": "__TODO__ A general term or notion (SKOS Concept)",
+      "class": "__TODO__ A category or type (RDFS/OWL Class)",
+      "property": "__TODO__ A relationship or attribute (RDF Property)",
+      "individual": "__TODO__ A specific instance (OWL Individual)",
+      "term": "__TODO__ A business glossary term"
+    },
+    "propertyTypeDescriptions": {
+      "object": "__TODO__ Relates to other concepts",
+      "datatype": "__TODO__ Relates to literal values",
+      "annotation": "__TODO__ Metadata annotation"
+    }
+  },
+  "collectionEditor": {
+    "editTitle": "__TODO__ Edit Collection",
+    "createDescription": "__TODO__ Create a new glossary, taxonomy, or ontology collection.",
+    "editDescription": "__TODO__ Update collection settings.",
+    "namePlaceholder": "__TODO__ e.g., Finance Glossary",
+    "descriptionPlaceholder": "__TODO__ Optional description...",
+    "parentCollection": "__TODO__ Parent Collection",
+    "noneRootCollection": "__TODO__ None (root collection)",
+    "editable": "__TODO__ Editable",
+    "editableHelp": "__TODO__ Allow creating and editing concepts in this collection"
+  },
+  "promotion": {
+    "promoteConcept": "__TODO__ Promote Concept",
+    "demoteConcept": "__TODO__ Demote Concept",
+    "migrateConcept": "__TODO__ Migrate Concept",
+    "move": "__TODO__ Move",
+    "toDifferentCollection": "__TODO__ to a different collection",
+    "actionLabel": "__TODO__ Action",
+    "promote": "__TODO__ Promote",
+    "migrate": "__TODO__ Migrate",
+    "currentLocation": "__TODO__ Current Location",
+    "selectTargetPlaceholder": "__TODO__ Select target collection...",
+    "newIri": "__TODO__ New IRI",
+    "sourceConcept": "__TODO__ Source Concept",
+    "deprecateOriginal": "__TODO__ Deprecate original (recommended)",
+    "deleteOriginal": "__TODO__ Delete original",
+    "deleteHelp": "__TODO__ Only draft concepts can be deleted. Published concepts will be deprecated.",
+    "promoteWarning": "__TODO__ Promoted concepts require re-approval at the new scope level."
+  },
+  "collectionTree": {
+    "readOnly": "__TODO__ Read-only collection",
+    "noCollectionsYet": "__TODO__ No collections yet"
+  },
+  "knowledgeGraph": {
+    "rootFilter": {
+      "show_one": "__TODO__ Show {{label}} ({{count}} concept)",
+      "show_other": "__TODO__ Show {{label}} ({{count}} concepts)",
+      "hide_one": "__TODO__ Hide {{label}} ({{count}} concept)",
+      "hide_other": "__TODO__ Hide {{label}} ({{count}} concepts)",
+      "sourcesVisible": "__TODO__ {{visible}} of {{total}} sources visible",
+      "filterSources": "__TODO__ Filter Sources",
+      "showAll": "__TODO__ Show All",
+      "hideAll": "__TODO__ Hide All",
+      "toggleHint": "__TODO__ Click legend items to toggle visibility"
+    },
+    "layout": {
+      "placeholder": "__TODO__ Layout"
+    },
+    "layouts": {
+      "circular": "__TODO__ Circular",
+      "forceDirected": "__TODO__ Force-Directed",
+      "grid": "__TODO__ Grid",
+      "hierarchical": "__TODO__ Hierarchical",
+      "concentric": "__TODO__ Concentric"
+    },
+    "toolbar": {
+      "showDomainGroups": "__TODO__ Show domain groups",
+      "hideDomainGroups": "__TODO__ Hide domain groups",
+      "groups": "__TODO__ Groups",
+      "showNodeLabels": "__TODO__ Show node labels",
+      "hideNodeLabels": "__TODO__ Hide node labels",
+      "nodeLabels": "__TODO__ Node labels",
+      "showEdgeLabels": "__TODO__ Show edge labels",
+      "hideEdgeLabels": "__TODO__ Hide edge labels",
+      "edgeLabels": "__TODO__ Edge labels",
+      "size": "__TODO__ Size",
+      "nodeSize": "__TODO__ Node size",
+      "spacing": "__TODO__ Spacing",
+      "nodeSpacing": "__TODO__ Node spacing",
+      "spacingHint": "__TODO__ Re-runs layout. Affects edge length and node repulsion.",
+      "conceptCount_one": "__TODO__ {{count}} concept",
+      "conceptCount_other": "__TODO__ {{count}} concepts"
+    },
+    "fullscreen": {
+      "description": "__TODO__ Fullscreen view of the concept graph visualization",
+      "hint": "__TODO__ Click on nodes to select concepts. Use scroll to zoom, drag to pan."
+    }
+  },
+  "linkedConcepts": {
+    "empty": "__TODO__ No business concepts linked",
+    "removeAria": "__TODO__ Remove concept link"
+  },
+  "ontologyGenerator": {
+    "title": "__TODO__ Ontology Generator",
+    "subtitle": "__TODO__ Browse a remote system, select tables, and generate an OWL ontology from their schemas.",
+    "connectionDescription": "__TODO__ Select a data platform connection",
+    "noConnections": "__TODO__ No connections configured. Add one in Settings > Connectors.",
+    "chooseConnection": "__TODO__ Choose connection...",
+    "generationOptions": "__TODO__ Generation Options",
+    "generationOptionsDescription": "__TODO__ Customize the ontology generation",
+    "guidelines": "__TODO__ Guidelines",
+    "guidelinesPlaceholder": "__TODO__ E.g., Create a domain ontology for e-commerce data...",
+    "baseUri": "__TODO__ Base URI",
+    "dataProperties": "__TODO__ Data properties",
+    "relationships": "__TODO__ Relationships",
+    "inheritance": "__TODO__ Inheritance",
+    "cancelGeneration": "__TODO__ Cancel Generation",
+    "generateOntology": "__TODO__ Generate Ontology ({{count}} selected)",
+    "recentRuns": "__TODO__ Recent Runs",
+    "noRuns": "__TODO__ No runs yet",
+    "direct": "__TODO__ Direct",
+    "directGeneration": "__TODO__ Direct generation",
+    "deleteRun": "__TODO__ Delete run",
+    "paths": "__TODO__ Paths",
+    "steps": "__TODO__ Steps",
+    "started": "__TODO__ Started",
+    "finished": "__TODO__ Finished",
+    "resources": "__TODO__ Resources",
+    "resourcesWithName": "__TODO__ {{name}} — Resources",
+    "resourcesDescription": "__TODO__ Select the catalogs, schemas, or tables to generate an ontology from",
+    "selectedCount": "__TODO__ {{count}} selected",
+    "agentProgress": "__TODO__ Agent Progress",
+    "generatedTurtle": "__TODO__ Generated Turtle",
+    "saveToCollection": "__TODO__ Save to Collection",
+    "empty": "__TODO__ (empty)",
+    "agentExecutionLog": "__TODO__ Agent Execution Log",
+    "agentLogSummary": "__TODO__ {{iterations}} iteration(s) · {{promptTokens}} prompt tokens · {{completionTokens}} completion tokens",
+    "noClasses": "__TODO__ No classes generated",
+    "noProperties": "__TODO__ No properties generated",
+    "noAgentSteps": "__TODO__ No agent steps recorded",
+    "runStatus": {
+      "pending": "__TODO__ Pending",
+      "running": "__TODO__ Running",
+      "completed": "__TODO__ Completed",
+      "failed": "__TODO__ Failed",
+      "cancelled": "__TODO__ Cancelled"
+    },
+    "progress": {
+      "starting": "__TODO__ Starting...",
+      "working": "__TODO__ Working..."
+    },
+    "tabs": {
+      "classes": "__TODO__ Classes ({{count}})",
+      "properties": "__TODO__ Properties ({{count}})",
+      "turtle": "__TODO__ Turtle",
+      "agentLog": "__TODO__ Agent Log"
+    },
+    "table": {
+      "class": "__TODO__ Class",
+      "parent": "__TODO__ Parent",
+      "attributes": "__TODO__ Attributes",
+      "none": "__TODO__ none",
+      "property": "__TODO__ Property",
+      "range": "__TODO__ Range",
+      "objectType": "__TODO__ Object",
+      "dataType": "__TODO__ Data"
+    },
+    "toasts": {
+      "generatedTitle": "__TODO__ Ontology generated",
+      "generatedDescription": "__TODO__ {{classes}} classes, {{properties}} properties.",
+      "generatedFallback": "__TODO__ Generation completed.",
+      "cancelledTitle": "__TODO__ Generation cancelled",
+      "failedTitle": "__TODO__ Generation failed",
+      "unknownError": "__TODO__ Unknown error",
+      "startFailed": "__TODO__ Failed to start generation",
+      "startedTitle": "__TODO__ Generation started",
+      "startedDescription": "__TODO__ The LLM agent is working in the background.",
+      "cancelFailed": "__TODO__ Cancel failed",
+      "noResultTitle": "__TODO__ No result",
+      "noResultDescription": "__TODO__ This run has no result data.",
+      "deleteFailed": "__TODO__ Delete failed",
+      "turtleCopied": "__TODO__ Turtle content copied to clipboard.",
+      "saveFailed": "__TODO__ Save failed",
+      "savedTitle": "__TODO__ Saved to collection",
+      "savedDescription_one": "__TODO__ {{count}} triple imported into \"{{name}}\".",
+      "savedDescription_other": "__TODO__ {{count}} triples imported into \"{{name}}\"."
+    },
+    "saveDialog": {
+      "title": "__TODO__ Save to Concept Collection",
+      "description": "__TODO__ Create a new ontology collection and import the generated triples into the knowledge graph.",
+      "nameLabel": "__TODO__ Collection Name",
+      "namePlaceholder": "__TODO__ e.g., Customer Domain Ontology",
+      "descriptionLabel": "__TODO__ Description (optional)",
+      "descriptionPlaceholder": "__TODO__ Describe the purpose of this ontology collection...",
+      "importSummary": "__TODO__ {{classes}} classes and {{properties}} properties will be imported."
+    }
   }
 }
-

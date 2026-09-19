@@ -2,16 +2,23 @@
   "request": {
     "title": "Toegang Aanvragen",
     "description": "Vraag toestemming aan om deze {{entityType}} te bekijken en gebruiken.",
+    "dialogTitle": "__TODO__ Request Time-Limited Access",
+    "dialogDescription": "__TODO__ Submit a request for temporary access to this {{entityType}}. Select how long you need access and provide a reason.",
+    "permissionLabel": "__TODO__ Permission Level",
     "reason": {
       "label": "Reden voor Toegang",
+      "fullLabel": "__TODO__ Reason for Access Request",
       "placeholder": "Leg uit waarom je toegang nodig hebt tot deze {{entityType}}...",
+      "detailedPlaceholder": "__TODO__ Please explain why you need access to this resource. Include details about your intended use case, project requirements, or business justification...",
       "required": "Geef alstublieft een reden op voor het aanvragen van toegang",
-      "minLength": "Geef alstublieft een meer gedetailleerde reden op (minimaal 10 tekens)"
+      "minLength": "Geef alstublieft een meer gedetailleerde reden op (minimaal 10 tekens)",
+      "help": "__TODO__ Minimum 10 characters required. This information will be reviewed by administrators."
     },
     "duration": {
       "label": "Toegangsduur",
       "placeholder": "Selecteer duur",
       "helpText": "Toegang verloopt na de geselecteerde duur. Je kunt verlenging aanvragen voordat het verloopt.",
+      "help": "__TODO__ Your access will automatically expire after this period.",
       "days": "{{count}} dag",
       "days_plural": "{{count}} dagen",
       "months": "{{count}} maand",
@@ -21,7 +28,13 @@
     },
     "submit": "Verzoek Verzenden",
     "submitting": "Verzoek Verzenden...",
-    "success": "Je toegangsverzoek is ingediend en je wordt op de hoogte gebracht van de beslissing."
+    "submitButtonWithDuration": "__TODO__ Request {{duration}} Access",
+    "success": "Je toegangsverzoek is ingediend en je wordt op de hoogte gebracht van de beslissing.",
+    "submittedTitle": "__TODO__ Request Submitted",
+    "submittedDescription_one": "__TODO__ Your access request for {{count}} day has been submitted. You will be notified of the decision.",
+    "submittedDescription_other": "__TODO__ Your access request for {{count}} days has been submitted. You will be notified of the decision.",
+    "cancel": "__TODO__ Cancel",
+    "error": "__TODO__ Failed to submit access request"
   },
   "panel": {
     "title": "Toegangsrechten",
@@ -31,31 +44,120 @@
     "requestButton": "Toegang Aanvragen",
     "refresh": "Vernieuwen",
     "activeGrants": "Actieve Rechten",
+    "activeGrantsCount": "__TODO__ Active Grants ({{count}})",
     "pendingRequests": "Openstaande Verzoeken",
+    "pendingRequestsCount": "__TODO__ Pending Requests ({{count}})",
     "expiresAt": "Verloopt",
     "grantedAt": "Verleend",
     "requestedAt": "Aangevraagd",
     "revoke": "Intrekken",
     "revokeConfirm": "Weet je zeker dat je de toegang voor {{user}} wilt intrekken?",
+    "revokeConfirmDetailed": "__TODO__ Are you sure you want to revoke access for <bold>{{user}}</bold>? This action cannot be undone.",
+    "revokeTitle": "__TODO__ Revoke Access",
     "revokeSuccess": "Toegang succesvol ingetrokken",
-    "handle": "Verzoek Behandelen"
+    "revokedTitle": "__TODO__ Access Revoked",
+    "revokedDescription": "__TODO__ Access for {{user}} has been revoked.",
+    "revokeError": "__TODO__ Failed to revoke access",
+    "review": "__TODO__ Review",
+    "expiringBadge": "__TODO__ {{count}} expiring",
+    "expiringSoonTooltip_one": "__TODO__ {{count}} grant expiring soon",
+    "expiringSoonTooltip_other": "__TODO__ {{count}} grants expiring soon",
+    "durationDays_one": "__TODO__ {{count}} day",
+    "durationDays_other": "__TODO__ {{count}} days",
+    "expiresTooltip": "__TODO__ Expires: {{date}}",
+    "handle": "Verzoek Behandelen",
+    "columns": {
+      "actions": "__TODO__ Actions",
+      "expires": "__TODO__ Expires",
+      "granted": "__TODO__ Granted",
+      "grantedBy": "__TODO__ Granted By",
+      "permission": "__TODO__ Permission Level",
+      "user": "__TODO__ User",
+      "requester": "__TODO__ Requester",
+      "duration": "__TODO__ Duration"
+    },
+    "expiry": {
+      "unknown": "__TODO__ Unknown",
+      "expired": "__TODO__ Expired",
+      "today": "__TODO__ Today",
+      "days_one": "__TODO__ {{count}} day",
+      "days_other": "__TODO__ {{count}} days",
+      "weeks_one": "__TODO__ {{count}} week",
+      "weeks_other": "__TODO__ {{count}} weeks",
+      "months_one": "__TODO__ {{count}} month",
+      "months_other": "__TODO__ {{count}} months"
+    }
   },
   "handle": {
     "title": "Toegangsverzoek Behandelen",
+    "description": "__TODO__ Review this access request and approve or deny it.",
     "approve": "Goedkeuren",
+    "approveWithDuration": "__TODO__ Approve ({{duration}})",
     "deny": "Afwijzen",
     "clarify": "Verduidelijking Vragen",
     "grantDuration": "Toegangsduur",
+    "durationToGrant": "__TODO__ Duration to Grant",
+    "permissionToGrant": "__TODO__ Permission Level to Grant",
+    "requestedSuffix": "__TODO__  (requested)",
     "response": "Reactie Bericht",
     "responsePlaceholder": "Geef feedback of aanvullende informatie...",
+    "messageLabel": "__TODO__ Message to Requester (Optional)",
+    "messagePlaceholder": "__TODO__ Add a message for the requester (e.g., approval conditions, denial reason)...",
+    "adjustNote": "__TODO__ If approving, you can adjust the granted access:",
+    "approvedTitle": "__TODO__ Request Approved",
+    "deniedTitle": "__TODO__ Request Denied",
+    "approvedDescription": "__TODO__ Access granted for {{duration}}.",
+    "deniedDescription": "__TODO__ The requester has been notified.",
+    "error": "__TODO__ Failed to process decision",
     "approveSuccess": "Toegangsverzoek goedgekeurd",
     "denySuccess": "Toegangsverzoek afgewezen",
-    "clarifySuccess": "Verduidelijking gevraagd"
+    "clarifySuccess": "Verduidelijking gevraagd",
+    "fields": {
+      "requester": "__TODO__ Requester:",
+      "resource": "__TODO__ Resource:",
+      "requestedDuration": "__TODO__ Requested Duration:",
+      "requestedPermission": "__TODO__ Requested Permission:",
+      "submitted": "__TODO__ Submitted:",
+      "reason": "__TODO__ Reason:"
+    }
   },
   "entityTypes": {
     "data_product": "dataproduct",
     "dataset": "dataset",
     "data_contract": "datacontract"
+  },
+  "entityTypeLabels": {
+    "data_product": "__TODO__ Data Product",
+    "data_contract": "__TODO__ Data Contract",
+    "table": "__TODO__ Table",
+    "schema": "__TODO__ Schema",
+    "catalog": "__TODO__ Catalog"
+  },
+  "permissionLevels": {
+    "READ": "__TODO__ Read",
+    "WRITE": "__TODO__ Write",
+    "MANAGE": "__TODO__ Manage"
+  },
+  "permissionOptions": {
+    "READ": "__TODO__ Read Only",
+    "WRITE": "__TODO__ Read & Write",
+    "MANAGE": "__TODO__ Full Access (Manage)"
+  },
+  "permissionSelectPlaceholder": "__TODO__ Select permission level",
+  "statuses": {
+    "active": "__TODO__ Active",
+    "expired": "__TODO__ Expired",
+    "revoked": "__TODO__ Revoked",
+    "pending": "__TODO__ Pending"
+  },
+  "resource": "__TODO__ resource",
+  "resourceCapitalized": "__TODO__ Resource",
+  "duration": {
+    "days_one": "__TODO__ {{count}} day",
+    "days_other": "__TODO__ {{count}} days",
+    "months_one": "__TODO__ {{count}} month",
+    "months_other": "__TODO__ {{count}} months",
+    "years_one": "__TODO__ {{count}} year",
+    "years_other": "__TODO__ {{count}} years"
   }
 }
-

@@ -9,10 +9,28 @@
   "noFeatures": "Aucune fonctionnalité disponible pour les aperçus de fonctionnalités sélectionnés.",
   "techStack": "Stack technologique",
   "stack": {
-    "frontend": { "title": "Frontend", "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite" },
-    "backend": { "title": "Backend", "desc": "Python, FastAPI" },
-    "database": { "title": "Base de données", "desc": "PostgreSQL" },
-    "platform": { "title": "Plateforme", "desc": "Databricks Apps" }
+    "frontend": {
+      "title": "Frontend",
+      "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite"
+    },
+    "backend": {
+      "title": "Backend",
+      "desc": "Python, FastAPI"
+    },
+    "database": {
+      "title": "Base de données",
+      "desc": "PostgreSQL"
+    },
+    "platform": {
+      "title": "Plateforme",
+      "desc": "Databricks Apps"
+    }
+  },
+  "userGuide": {
+    "title": "__TODO__ User Guide",
+    "tableOfContents": "__TODO__ Table of Contents",
+    "loadError": "__TODO__ Failed to load user guide: {{statusText}}",
+    "loadErrorGeneric": "__TODO__ Failed to load user guide"
   },
   "learnMore": "Contribuer et en savoir plus",
   "cta": {
@@ -21,57 +39,57 @@
   },
   "details": {
     "data-domains": [
-      "• Définir et gérer les domaines de données, sous-domaines et structures de propriété.",
-      "• Visualiser les relations entre les domaines et les produits de données dépendants.",
-      "• Attribuer des actifs et des produits aux domaines pour une responsabilité plus claire.",
-      "• Suit le standard BITOL Open Data Domain Standard (ODDS)."
+      "• Define and manage data domains, subdomains, and ownership structures.",
+      "• Visualize relationships between domains and dependent data products.",
+      "• Assign assets and products to domains for clearer accountability.",
+      "• Follows the BITOL Open Data Domain Standard (ODDS)."
     ],
     "data-contracts": [
-      "• Instrumenter les produits de données avec des métadonnées techniques basées sur l'Open Data Contract Standard (ODCS).",
-      "• Validation de schéma, contrôles de qualité, vérification du contrôle d'accès, affichage de données d'exemple.",
-      "• Les contrats peuvent être textuels (par ex., JSON/YAML) ; supporte le schéma JSON BITOL ODCS."
+      "• Instrument Data Products with technical metadata based on the Open Data Contract Standard (ODCS).",
+      "• Schema validation, quality checks, access control verification, sample data display.",
+      "• Contracts can be text-based (e.g., JSON/YAML); supports BITOL ODCS JSON schema."
     ],
     "data-products": [
-      "• Regrouper les actifs Databricks (tables, vues, fonctions, modèles, tableaux de bord, jobs, notebooks).",
-      "• Utiliser des tags (par ex., data-product-name, data-product-domain)."
+      "• Group Databricks assets (tables, views, functions, models, dashboards, jobs, notebooks).",
+      "• Use tags (e.g., data-product-name, data-product-domain)."
     ],
     "business-glossary": [
-      "• Glossaires hiérarchiques par unité organisationnelle (entreprise, LOB, département, équipe, projet).",
-      "• Fusionnés de bas en haut pour les utilisateurs, permettant des remplacements.",
-      "• Les termes ont des tags, descriptions markdown, statut du cycle de vie, actifs assignés."
+      "• Hierarchical glossaries per org unit (company, LOB, department, team, project).",
+      "• Merged bottom-up for users, allowing overrides.",
+      "• Terms have tags, markdown descriptions, lifecycle status, assigned assets."
     ],
     "master-data": [
-      "• Intégration avec Zingg.ai pour les capacités MDM."
+      "• Integrates with Zingg.ai for MDM capabilities."
     ],
     "compliance": [
-      "• Définir et vérifier les règles de conformité.",
-      "• Calculer un score de conformité global."
+      "• Define and verify compliance rules.",
+      "• Calculate an overall compliance score."
     ],
     "estate-manager": [
-      "• Vue centralisée de plusieurs workspaces.",
-      "• Surveiller l'utilisation des ressources et les coûts.",
-      "• Gérer les configurations entre les estates."
+      "• Central view of multiple workspaces.",
+      "• Monitor resource usage and costs.",
+      "• Manage configurations across estates."
     ],
     "security": [
-      "• Activer les fonctionnalités de sécurité avancées (par ex., confidentialité différentielle) sur les actifs."
+      "• Enable advanced security features (e.g., differential privacy) on assets."
     ],
     "entitlements": [
-      "• Définir des personas réutilisables (par ex., Analyste, Ingénieur).",
-      "• Attribuer des personas aux groupes Databricks.",
-      "• Simplifier la gestion des privilèges à grande échelle."
+      "• Define reusable personas (e.g., Analyst, Engineer).",
+      "• Assign personas to Databricks groups.",
+      "• Simplify privilege management at scale."
     ],
     "entitlements-sync": [
-      "• Maintenir les droits alignés avec les systèmes externes (par ex., IDP).",
-      "• Détecter et résoudre les conflits de synchronisation.",
-      "• Maintenir les journaux d'audit de tous les changements."
+      "• Keep entitlements aligned with external systems (e.g., IDP).",
+      "• Detect and resolve synchronization conflicts.",
+      "• Maintain audit logs of all changes."
     ],
     "catalog-commander": [
-      "• Explorateur à deux panneaux inspiré de Norton Commander pour gérer les actifs du catalogue.",
-      "• Copier/déplacer facilement les tables et schémas."
+      "• Norton Commander-inspired dual-pane explorer for managing catalog assets.",
+      "• Copy/move tables and schemas easily."
     ],
     "data-asset-reviews": [
-      "• Flux de travail pour examiner et approuver les actifs (tables, vues, fonctions).",
-      "• Inclut des notifications pour les réviseurs et les demandeurs."
+      "• Workflow for reviewing and approving assets (tables, views, functions).",
+      "• Includes notifications for reviewers and requesters."
     ]
   }
 }

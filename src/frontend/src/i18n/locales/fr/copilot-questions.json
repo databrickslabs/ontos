@@ -1,11 +1,17 @@
 {
   "categories": {
+    "getting_started": "__TODO__ Getting Started",
     "explore": "Explorer & Découvrir",
     "build": "Construire & Créer",
     "govern": "Gouvernance & Conformité",
     "operate": "Exploiter & Déployer"
   },
   "questions": {
+    "gs_create_first_product": "__TODO__ How do I create my first data product?",
+    "gs_setup_domains": "__TODO__ How do I set up data domains?",
+    "gs_assign_roles": "__TODO__ How do I assign roles to my team?",
+    "gs_what_is_ontos": "__TODO__ What is Ontos and what can I do with it?",
+    "gs_concepts_overview": "__TODO__ Explain the core concepts: data products, contracts, and domains.",
     "global_find_customer_data": "Où puis-je trouver les données clients ?",
     "global_business_terms_sales": "Quels termes métier sont liés aux ventes ?",
     "global_what_domains_exist": "Quels domaines de données sont définis dans l'organisation ?",

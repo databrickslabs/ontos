@@ -1,0 +1,65 @@
+{
+  "title": "__TODO__ Business Owners",
+  "subtitle": "__TODO__ Ownership assignments tracking who is responsible for what.",
+  "addNew": "__TODO__ Assign Owner",
+  "editOwner": "__TODO__ Edit Assignment",
+  "removeOwner": "__TODO__ Remove Owner",
+  "table": {
+    "object": "__TODO__ Object",
+    "objectType": "__TODO__ Object Type",
+    "owner": "__TODO__ Owner",
+    "role": "__TODO__ Role",
+    "status": "__TODO__ Status",
+    "assignedAt": "__TODO__ Assigned",
+    "removedAt": "__TODO__ Removed",
+    "actions": "__TODO__ Actions"
+  },
+  "objectTypes": {
+    "data_product": "__TODO__ Data Product",
+    "data_contract": "__TODO__ Data Contract",
+    "dataset": "__TODO__ Dataset",
+    "data_domain": "__TODO__ Data Domain",
+    "business_term": "__TODO__ Business Term",
+    "policy": "__TODO__ Policy",
+    "asset": "__TODO__ Asset",
+    "tag": "__TODO__ Tag"
+  },
+  "statusLabels": {
+    "active": "__TODO__ Active",
+    "inactive": "__TODO__ Inactive"
+  },
+  "permissions": {
+    "deniedView": "__TODO__ You do not have permission to view business owners.",
+    "deniedCreate": "__TODO__ You do not have permission to assign owners.",
+    "deniedEdit": "__TODO__ You do not have permission to edit owner assignments.",
+    "deniedDelete": "__TODO__ You do not have permission to remove owners.",
+    "permissionDenied": "__TODO__ Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "__TODO__ Error fetching business owners",
+    "errorRemoving": "__TODO__ Error removing business owner",
+    "removed": "__TODO__ Owner Removed",
+    "removedSuccess": "__TODO__ The ownership assignment was successfully removed.",
+    "errorLoadingData": "__TODO__ Error Loading Data"
+  },
+  "removeDialog": {
+    "title": "__TODO__ Remove Owner?",
+    "description": "__TODO__ This will deactivate the ownership assignment. The history will be preserved.",
+    "reasonLabel": "__TODO__ Reason (optional)",
+    "reasonPlaceholder": "__TODO__ Enter reason for removal...",
+    "cancel": "__TODO__ Cancel",
+    "remove": "__TODO__ Remove"
+  },
+  "emptyState": {
+    "title": "__TODO__ No ownership assignments yet",
+    "description": "__TODO__ Assign business owners to data products, contracts, and other objects."
+  },
+  "panel": {
+    "title": "__TODO__ Owners",
+    "currentOwners": "__TODO__ Current Owners",
+    "previousOwners": "__TODO__ Previous Owners",
+    "noOwners": "__TODO__ No owners assigned",
+    "assignOwner": "__TODO__ Assign Owner",
+    "history": "__TODO__ Show History"
+  }
+}

@@ -4,11 +4,16 @@
   "tabs": {
     "askOntos": "{{shortName}} fragen",
     "indexSearch": "Index-Suche",
+    "searchConcepts": "__TODO__ Search Concepts",
     "viewGraph": "Graph anzeigen",
     "searchGraph": "Graph durchsuchen",
     "concepts": "Konzepte",
     "properties": "Eigenschaften",
     "knowledgeGraph": "Wissensgraph"
+  },
+  "subtitles": {
+    "searchConcepts": "__TODO__ Search and browse ontology concepts and properties",
+    "searchGraph": "__TODO__ Query and explore the knowledge graph using SPARQL"
   },
   "noResults": "Keine Ergebnisse gefunden",
   "noResultsHint": "Versuchen Sie, Ihre Suchbegriffe oder Filter anzupassen",
@@ -57,7 +62,18 @@
     "resourcesWithLabel": "Ressourcen mit rdfs:label",
     "subjectsAndTypes": "Subjekte und ihre Typen",
     "topPredicates": "Top-Prädikate nach Häufigkeit",
-    "mostLinkedSeeAlso": "Am häufigsten verlinkt via rdfs:seeAlso"
+    "mostLinkedSeeAlso": "Am häufigsten verlinkt via rdfs:seeAlso",
+    "resourceDetail": "__TODO__ Resource detail",
+    "prefixPlaceholder": "__TODO__ e.g., example.org/banking",
+    "resourceLoading": "__TODO__ Loading…",
+    "noTriples": "__TODO__ No triples for this resource.",
+    "blankNodeExpanded": "__TODO__ (blank node, expanded below)",
+    "hover": {
+      "type": "__TODO__ Type: {{type}}",
+      "id": "__TODO__ ID: {{id}}",
+      "owner": "__TODO__ Owner: {{owner}}",
+      "status": "__TODO__ Status: {{status}}"
+    }
   },
   "index": {
     "title": "Index-Suche",
@@ -130,7 +146,10 @@
       "property": "Eigenschaft",
       "selectProperty": "Eigenschaft auswählen...",
       "browseUCColumn": "UC-Tabelle durchsuchen und Spalte wählen...",
-      "ucColumnTitle": "UC-Spalte auswählen"
+      "ucColumnTitle": "UC-Spalte auswählen",
+      "asset": "__TODO__ Asset",
+      "noColumnAssets": "__TODO__ No Column or Logical Attribute assets found",
+      "selectAsset": "__TODO__ Select asset"
     },
     "messages": {
       "selectPropertyTarget": "Bitte wählen Sie Vertrag, Schema und Eigenschaft.",
@@ -160,7 +179,11 @@
       "findCustomerData": "Wo finde ich Kundendaten?",
       "dataProductsCost": "Wie viel kosten alle Datenprodukte?",
       "businessTermsSales": "Welche Geschäftsbegriffe beziehen sich auf Verkauf?",
-      "showDataProducts": "Zeige mir Datenprodukte in der Kundendomäne"
+      "showDataProducts": "Zeige mir Datenprodukte in der Kundendomäne",
+      "howToCreateProduct": "__TODO__ How do I create my first data product?",
+      "howToSetupDomains": "__TODO__ How do I set up data domains?",
+      "whatIsOntos": "__TODO__ What is Ontos and what can I do with it?",
+      "coreConcepts": "__TODO__ Explain the core concepts: data products, contracts, and domains."
     },
     "messages": {
       "sessionDeleted": "Sitzung gelöscht",
@@ -168,11 +191,45 @@
       "loadSessionFailed": "Sitzung konnte nicht geladen werden",
       "deleteSessionFailed": "Sitzung konnte nicht gelöscht werden",
       "loadFailed": "LLM-Suche konnte nicht geladen werden. Bitte versuchen Sie es später erneut."
+    },
+    "debug": {
+      "title": "__TODO__ Debug",
+      "toolCallCount_one": "__TODO__ {{count}} tool call",
+      "toolCallCount_other": "__TODO__ {{count}} tool calls",
+      "priorResults": "__TODO__ ({{count}} prior)",
+      "followUp": "__TODO__ Follow-up: LLM has {{messages}} prior messages ({{results}} tool results) in conversation history",
+      "queryClassification": "__TODO__ Query Classification",
+      "query": "__TODO__ Query:",
+      "categories": "__TODO__ Categories:",
+      "toolsProvided": "__TODO__ Tools provided:",
+      "model": "__TODO__ Model:",
+      "iterations": "__TODO__ Iterations:",
+      "total": "__TODO__ total",
+      "toolExecutions": "__TODO__ Tool Executions",
+      "llmIterations": "__TODO__ LLM Iterations",
+      "messagesSent": "__TODO__ {{count}} msgs",
+      "toolCallsShort": "__TODO__ {{count}} tool call(s)",
+      "args": "__TODO__ Args:",
+      "showResult": "__TODO__ Show result",
+      "hideResult": "__TODO__ Hide result",
+      "modeEnabled": "__TODO__ Debug mode enabled",
+      "modeDisabled": "__TODO__ Debug mode disabled",
+      "modeEnabledDesc": "__TODO__ LLM intermediate steps will be shown",
+      "clickToDisable": "__TODO__ Click to disable debug mode"
     }
   },
   "copilot": {
+    "title": "__TODO__ Ask {{shortName}}",
+    "subtitle": "__TODO__ AI-powered assistant",
+    "button": "__TODO__ Ask {{shortName}}",
+    "welcome": "__TODO__ Welcome to Ask {{shortName}}!",
+    "welcomeDescription": "__TODO__ Get help with modeling, mappings, product creation, and health insights. Try one of the suggested prompts below or type your own question.",
+    "askingAbout": "__TODO__ Asking about:",
     "scopePageSpecific": "Seitenspezifisch",
     "scopeGeneral": "Ontos (allgemein)",
-    "scopeThisPage": "Diese Seite"
+    "scopeThisPage": "Diese Seite",
+    "inputPlaceholder": "__TODO__ Ask {{shortName}} anything...",
+    "messageSendFailed": "__TODO__ Failed to send message",
+    "resizeHandle": "__TODO__ Resize Ask Ontos panel"
   }
 }

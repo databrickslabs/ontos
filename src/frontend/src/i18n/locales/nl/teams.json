@@ -1,6 +1,7 @@
 {
   "title": "Teams",
   "subtitle": "Beheer teams en hun leden binnen uw organisatie.",
+  "openMenu": "__TODO__ Open menu",
   "addNewTeam": "Nieuw Team Toevoegen",
   "editTeam": "Team Bewerken",
   "deleteTeam": "Team Verwijderen",
@@ -87,4 +88,3 @@
     "delete": "Verwijderen"
   }
 }
-

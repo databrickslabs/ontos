@@ -63,6 +63,10 @@
     "requestAccess": "Demander l'Accès",
     "moreRoles": "Et {{count}} autres rôles disponibles..."
   },
+  "myActions": {
+    "title": "__TODO__ My Actions",
+    "approvals": "__TODO__ Approvals"
+  },
   "quickActions": {
     "title": "Actions rapides",
     "loading": "Chargement...",
@@ -111,7 +115,13 @@
     "unknown": "Inconnu",
     "status": "N/D",
     "untitled": "Sans titre",
-    "info": "Info"
+    "info": "Info",
+    "manage": "__TODO__ Manage",
+    "mySubscriptions": "__TODO__ My Subscriptions",
+    "subscribe": "__TODO__ Subscribe",
+    "subscribed": "__TODO__ Subscribed",
+    "unknownProduct": "__TODO__ Unknown product",
+    "viewAllSubscribed": "__TODO__ View all subscribed"
   },
   "dataCurationSection": {
     "title": "Curation de données",
@@ -151,7 +161,26 @@
     "openButton": "Ouvrir",
     "markReadButton": "Marquer comme lu",
     "readLabel": "Lu",
-    "alertMessage": "Cette liste affiche uniquement les notifications nécessitant une action assignées à votre/vos rôle(s)."
+    "alertMessage": "Cette liste affiche uniquement les notifications nécessitant une action assignées à votre/vos rôle(s).",
+    "loadError": "__TODO__ Failed to load approvals",
+    "unknownUser": "__TODO__ Unknown user",
+    "unknownRole": "__TODO__ Unknown role",
+    "approvalRequest": "__TODO__ Approval request",
+    "badges": {
+      "roleRequest": "__TODO__ Role Request",
+      "contract": "__TODO__ Contract",
+      "product": "__TODO__ Product",
+      "approval": "__TODO__ Approval"
+    },
+    "table": {
+      "type": "__TODO__ Type",
+      "requesterName": "__TODO__ Requester / Name",
+      "roleStatusReason": "__TODO__ Role / Status / Reason",
+      "date": "__TODO__ Date",
+      "actions": "__TODO__ Actions"
+    },
+    "approveDenyRequest": "__TODO__ Approve/Deny request",
+    "approveDenyWorkflow": "__TODO__ Approve/Deny workflow request"
   },
   "marketplace": {
     "welcome": "Bonjour",
@@ -182,7 +211,9 @@
       "browseToSubscribe": "Parcourez l'onglet Explorer pour trouver des produits auxquels vous abonner.",
       "exploreProducts": "Explorer les Produits de Données",
       "owner": "Propriétaire",
-      "unknown": "Inconnu"
+      "unknown": "Inconnu",
+      "unknownProduct": "__TODO__ Unknown product",
+      "untitled": "__TODO__ Untitled"
     },
     "datasets": {
       "available": "{{count}} dataset disponible",
@@ -218,6 +249,47 @@
       "three": "3 par ligne",
       "four": "4 par ligne"
     },
-    "openInDetails": "Ouvrir dans la vue détaillée"
+    "scopeFilter": {
+      "placeholder": "__TODO__ Scope",
+      "all": "__TODO__ All Scopes"
+    },
+    "openInDetails": "Ouvrir dans la vue détaillée",
+    "loadError": "__TODO__ Failed to load products"
+  },
+  "myProducts": {
+    "title": "__TODO__ My Products",
+    "description": "__TODO__ Data products you have subscribed to.",
+    "loading": "__TODO__ Loading your products...",
+    "empty": "__TODO__ You haven't subscribed to any data products yet.",
+    "browseMarketplace": "__TODO__ Browse Marketplace"
+  },
+  "myRequests": {
+    "title": "__TODO__ My Requests",
+    "description": "__TODO__ Requests you have created that require approval (including access and subscriptions).",
+    "loading": "__TODO__ Loading your requests...",
+    "empty": "__TODO__ You have not created any requests.",
+    "entity": "__TODO__ Entity",
+    "type": "__TODO__ Type",
+    "status": "__TODO__ Status",
+    "requestedAt": "__TODO__ Requested",
+    "handledAt": "__TODO__ Resolved",
+    "cancel": "__TODO__ Cancel",
+    "cancelSuccess": "__TODO__ Request cancelled",
+    "statusPending": "__TODO__ Pending",
+    "statusApproved": "__TODO__ Approved",
+    "statusDenied": "__TODO__ Denied",
+    "statusCancelled": "__TODO__ Cancelled",
+    "statusExpired": "__TODO__ Expired",
+    "statusInProgress": "__TODO__ In progress",
+    "statusCompleted": "__TODO__ Completed",
+    "statusAbandoned": "__TODO__ Abandoned",
+    "typeAccess": "__TODO__ Access",
+    "typeSubscription": "__TODO__ Subscription",
+    "typeApproval": "__TODO__ Approval",
+    "entityType": "__TODO__ Entity type",
+    "name": "__TODO__ Name",
+    "entityTypeDataProduct": "__TODO__ Data product",
+    "entityTypeDataset": "__TODO__ Dataset",
+    "entityTypeDataContract": "__TODO__ Data contract"
   }
 }

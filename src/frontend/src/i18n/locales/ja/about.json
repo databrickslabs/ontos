@@ -9,10 +9,28 @@
   "noFeatures": "選択された機能プレビューには利用可能な機能がありません。",
   "techStack": "技術スタック",
   "stack": {
-    "frontend": { "title": "フロントエンド", "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite" },
-    "backend": { "title": "バックエンド", "desc": "Python, FastAPI" },
-    "database": { "title": "データベース", "desc": "PostgreSQL" },
-    "platform": { "title": "プラットフォーム", "desc": "Databricks Apps" }
+    "frontend": {
+      "title": "フロントエンド",
+      "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite"
+    },
+    "backend": {
+      "title": "バックエンド",
+      "desc": "Python, FastAPI"
+    },
+    "database": {
+      "title": "データベース",
+      "desc": "PostgreSQL"
+    },
+    "platform": {
+      "title": "プラットフォーム",
+      "desc": "Databricks Apps"
+    }
+  },
+  "userGuide": {
+    "title": "__TODO__ User Guide",
+    "tableOfContents": "__TODO__ Table of Contents",
+    "loadError": "__TODO__ Failed to load user guide: {{statusText}}",
+    "loadErrorGeneric": "__TODO__ Failed to load user guide"
   },
   "learnMore": "貢献と詳細",
   "cta": {
@@ -21,58 +39,57 @@
   },
   "details": {
     "data-domains": [
-      "• データドメイン、サブドメイン、責任範囲を定義・管理します。",
-      "• ドメインと依存するデータ製品の関係を可視化します。",
-      "• アセットや製品をドメインに割り当て、責任を明確化します。",
-      "• BITOL Open Data Domain Standard (ODDS) に準拠。"
+      "• Define and manage data domains, subdomains, and ownership structures.",
+      "• Visualize relationships between domains and dependent data products.",
+      "• Assign assets and products to domains for clearer accountability.",
+      "• Follows the BITOL Open Data Domain Standard (ODDS)."
     ],
     "data-contracts": [
-      "• Open Data Contract Standard (ODCS) に基づく技術メタデータでデータ製品を計測します。",
-      "• スキーマ検証、品質チェック、アクセス制御検証、サンプルデータ表示。",
-      "• 文字ベースの契約（JSON/YAML など）に対応。BITOL ODCS JSON スキーマをサポート。"
+      "• Instrument Data Products with technical metadata based on the Open Data Contract Standard (ODCS).",
+      "• Schema validation, quality checks, access control verification, sample data display.",
+      "• Contracts can be text-based (e.g., JSON/YAML); supports BITOL ODCS JSON schema."
     ],
     "data-products": [
-      "• Databricks のアセット（テーブル、ビュー、関数、モデル、ダッシュボード、ジョブ、ノートブック）をグループ化。",
-      "• タグ（例: data-product-name, data-product-domain）を活用。"
+      "• Group Databricks assets (tables, views, functions, models, dashboards, jobs, notebooks).",
+      "• Use tags (e.g., data-product-name, data-product-domain)."
     ],
     "business-glossary": [
-      "• 組織単位（会社、LOB、部門、チーム、プロジェクト）ごとの階層的な用語集。",
-      "• ユーザー向けにボトムアップで統合し、上書きを許可。",
-      "• 用語にはタグ、Markdown 説明、ライフサイクル、割り当てアセットがあります。"
+      "• Hierarchical glossaries per org unit (company, LOB, department, team, project).",
+      "• Merged bottom-up for users, allowing overrides.",
+      "• Terms have tags, markdown descriptions, lifecycle status, assigned assets."
     ],
     "master-data": [
-      "• Zingg.ai と連携し、MDM 機能を提供します。"
+      "• Integrates with Zingg.ai for MDM capabilities."
     ],
     "compliance": [
-      "• コンプライアンスルールを定義・検証します。",
-      "• 総合コンプライアンススコアを算出します。"
+      "• Define and verify compliance rules.",
+      "• Calculate an overall compliance score."
     ],
     "estate-manager": [
-      "• 複数ワークスペースの集中ビュー。",
-      "• リソース使用状況とコストを監視。",
-      "• エステート全体の設定を管理。"
+      "• Central view of multiple workspaces.",
+      "• Monitor resource usage and costs.",
+      "• Manage configurations across estates."
     ],
     "security": [
-      "• 資産に対して（差分プライバシーなどの）高度なセキュリティ機能を有効化。"
+      "• Enable advanced security features (e.g., differential privacy) on assets."
     ],
     "entitlements": [
-      "• 再利用可能なペルソナ（例: アナリスト、エンジニア）を定義。",
-      "• ペルソナを Databricks グループに割り当て。",
-      "• 大規模な権限管理を簡素化。"
+      "• Define reusable personas (e.g., Analyst, Engineer).",
+      "• Assign personas to Databricks groups.",
+      "• Simplify privilege management at scale."
     ],
     "entitlements-sync": [
-      "• エンタイトルメントを外部システム（例: IDP）と整合。",
-      "• 同期の競合を検出して解決。",
-      "• すべての変更の監査ログを保持。"
+      "• Keep entitlements aligned with external systems (e.g., IDP).",
+      "• Detect and resolve synchronization conflicts.",
+      "• Maintain audit logs of all changes."
     ],
     "catalog-commander": [
-      "• Norton Commander 風の二画面カタログエクスプローラー。",
-      "• テーブルやスキーマのコピー/移動を容易に。"
+      "• Norton Commander-inspired dual-pane explorer for managing catalog assets.",
+      "• Copy/move tables and schemas easily."
     ],
     "data-asset-reviews": [
-      "• アセット（テーブル、ビュー、関数）のレビューと承認のワークフロー。",
-      "• レビュアーと申請者への通知を含む。"
+      "• Workflow for reviewing and approving assets (tables, views, functions).",
+      "• Includes notifications for reviewers and requesters."
     ]
   }
 }
-

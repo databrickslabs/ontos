@@ -6,7 +6,6 @@
   "basicInformation": "基本情報",
   "commentsAndActivity": "コメントとアクティビティ",
   "askOntos": "{{shortName}}に質問",
-  
   "actions": {
     "viewData": "データを表示",
     "move": "移動",
@@ -20,7 +19,6 @@
     "cancel": "キャンセル",
     "confirm": "確認"
   },
-  
   "tooltips": {
     "copyToTarget": "ターゲットにコピー",
     "moveToTarget": "ターゲットに移動",
@@ -28,7 +26,6 @@
     "refresh": "更新（Shiftキーで強制更新）",
     "dragToResize": "ドラッグしてサイズ変更"
   },
-  
   "labels": {
     "metastore": "メタストア",
     "filterCatalogs": "カタログをフィルター...",
@@ -38,7 +35,6 @@
     "fullPath": "フルパス：",
     "actions": "アクション："
   },
-  
   "messages": {
     "selectObjectToViewInfo": "オブジェクトを選択して情報を表示",
     "selectObjectToViewComments": "オブジェクトを選択してコメントを表示",
@@ -47,9 +43,11 @@
     "datasetView": "データセットビュー: {{name}}",
     "confirmOperation": "操作の確認",
     "selectedItems": "選択された項目: {{items}}",
-    "noItemsSelected": "項目が選択されていません"
+    "noItemsSelected": "項目が選択されていません",
+    "noResponse": "__TODO__ No response",
+    "tableNotFound": "__TODO__ Table \"{{name}}\" not found in {{schema}}",
+    "failedToNavigate": "__TODO__ Failed to navigate to {{path}}"
   },
-  
   "askPanel": {
     "title": "{{shortName}}に質問",
     "askAboutItem": "このカタログ項目について質問する",
@@ -67,10 +65,9 @@
       "usage": "どのように使用されていますか？"
     }
   },
-  
   "errors": {
     "error": "エラー",
-    "failedToSendMessage": "メッセージの送信に失敗しました"
+    "failedToSendMessage": "メッセージの送信に失敗しました",
+    "chatRequestFailed": "__TODO__ Chat request failed"
   }
 }
-

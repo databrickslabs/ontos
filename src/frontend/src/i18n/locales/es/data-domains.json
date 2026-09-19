@@ -6,6 +6,8 @@
   "editDomain": "Editar dominio",
   "deleteDomain": "Eliminar dominio",
   "noDomainsYet": "Aún no hay dominios de datos.",
+  "openMenu": "__TODO__ Open menu",
+  "previewMetadata": "__TODO__ Preview metadata",
   "table": {
     "name": "Nombre",
     "description": "Descripción",
@@ -28,12 +30,133 @@
     "domainDeletedSuccess": "El dominio de datos se eliminó correctamente.",
     "errorFetchingDomains": "Error al obtener dominios",
     "errorDeletingDomain": "Error al eliminar dominio",
-    "errorLoadingData": "Error al cargar datos"
+    "errorLoadingData": "Error al cargar datos",
+    "failedLoadDomains": "__TODO__ Failed to load data domains",
+    "failedDeleteDomain": "__TODO__ Failed to delete domain."
   },
   "deleteDialog": {
     "title": "¿Estás absolutamente seguro?",
     "description": "Esta acción no se puede deshacer. Esto eliminará permanentemente el dominio de datos.",
     "cancel": "Cancelar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "cannotDelete": "__TODO__ This domain can't be deleted.",
+    "primaryForAssignments_one": "__TODO__ It is the primary domain for {{count}} entity assignment:",
+    "primaryForAssignments_other": "__TODO__ It is the primary domain for {{count}} entity assignments:",
+    "assignmentCount": "__TODO__ {{count}} {{type}}(s)",
+    "reassignFirst": "__TODO__ Reassign those to a different primary domain first."
+  },
+  "form": {
+    "editTitle": "__TODO__ Edit Data Domain",
+    "createTitle": "__TODO__ Create New Data Domain",
+    "editDescription": "__TODO__ Make changes to the existing data domain.",
+    "createDescription": "__TODO__ Add a new data domain to the system.",
+    "createSubmit": "__TODO__ Create Domain",
+    "nameLabel": "__TODO__ Name *",
+    "namePlaceholder": "__TODO__ e.g., Sales Analytics",
+    "descriptionLabel": "__TODO__ Description",
+    "descriptionPlaceholder": "__TODO__ Describe the purpose of this domain...",
+    "tagsLabel": "__TODO__ Tags",
+    "tagsPlaceholder": "__TODO__ Search and select tags for this data domain...",
+    "parentLabel": "__TODO__ Parent Domain",
+    "parentPlaceholder": "__TODO__ Select a parent domain (optional)",
+    "noParent": "__TODO__ No Parent",
+    "validation": {
+      "nameMin": "__TODO__ Name must be at least 2 characters.",
+      "descriptionMax": "__TODO__ Description must not exceed 500 characters."
+    },
+    "discardDescription": "__TODO__ You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?",
+    "continueEditing": "__TODO__ Continue Editing",
+    "discardChanges": "__TODO__ Discard Changes",
+    "toasts": {
+      "updated": "__TODO__ Domain Updated",
+      "created": "__TODO__ Domain Created",
+      "saveSuccess": "__TODO__ Successfully saved '{{name}}'.",
+      "saveError": "__TODO__ Error Saving Domain"
+    }
+  },
+  "details": {
+    "backToList": "__TODO__ Back to List",
+    "backToDataDomains": "__TODO__ Back to Data Domains",
+    "edit": "__TODO__ Edit",
+    "notFound": "__TODO__ Data domain not found or could not be loaded.",
+    "noDomainIdProvided": "__TODO__ No Domain ID provided.",
+    "invalidDomain": "__TODO__ Invalid Domain",
+    "relatedEntities": "__TODO__ Related Entities",
+    "addConcept": "__TODO__ Add Concept",
+    "hierarchyContext": "__TODO__ Domain Hierarchy Context",
+    "info": {
+      "id": "__TODO__ ID",
+      "parentDomain": "__TODO__ Parent Domain",
+      "childrenCount": "__TODO__ Children Count",
+      "tags": "__TODO__ Tags",
+      "createdBy": "__TODO__ Created By",
+      "createdAt": "__TODO__ Created At",
+      "lastUpdatedAt": "__TODO__ Last Updated At",
+      "linkedBusinessConcepts": "__TODO__ Linked Business Concepts"
+    },
+    "childDomains": {
+      "title": "__TODO__ Child Data Domains ({{count}})",
+      "description": "__TODO__ Directly nested data domains.",
+      "empty": "__TODO__ No child domains found",
+      "columns": {
+        "name": "__TODO__ Name",
+        "id": "__TODO__ ID"
+      }
+    },
+    "teams": {
+      "title": "__TODO__ Domain Teams",
+      "countBadge_one": "__TODO__ {{count}} team",
+      "countBadge_other": "__TODO__ {{count}} teams",
+      "create": "__TODO__ Create Team",
+      "description": "__TODO__ Teams assigned to this data domain. Teams inherit domain-specific permissions and responsibilities.",
+      "empty": "__TODO__ No teams assigned",
+      "emptyHint": "__TODO__ Create a team to assign it to this data domain.",
+      "createFirst": "__TODO__ Create First Team",
+      "columns": {
+        "name": "__TODO__ Team Name",
+        "title": "__TODO__ Title",
+        "noTitle": "__TODO__ No title",
+        "members": "__TODO__ Members",
+        "memberCount_one": "__TODO__ {{count}} member",
+        "memberCount_other": "__TODO__ {{count}} members",
+        "actions": "__TODO__ Actions",
+        "edit": "__TODO__ Edit"
+      }
+    },
+    "assignedEntities": {
+      "title": "__TODO__ Assigned Entities",
+      "description": "__TODO__ Data products, contracts, and assets assigned to this domain (primary or additional).",
+      "dataProducts": "__TODO__ Data Products",
+      "dataContracts": "__TODO__ Data Contracts",
+      "assets": "__TODO__ Assets",
+      "primaryDomain": "__TODO__ Primary domain",
+      "additionalDomain": "__TODO__ Additional domain",
+      "noneAssigned": "__TODO__ None assigned."
+    },
+    "linkedAssets": {
+      "title": "__TODO__ Linked Assets",
+      "description": "__TODO__ Assets (data products, contracts, etc.) linked to this data domain through semantic relationships.",
+      "empty": "__TODO__ No linked assets found",
+      "countBadge": "__TODO__ {{count}} total",
+      "columns": {
+        "name": "__TODO__ Asset Name",
+        "type": "__TODO__ Type",
+        "unknownType": "__TODO__ Unknown",
+        "path": "__TODO__ Path",
+        "domain": "__TODO__ Domain"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "__TODO__ Business concept linked to data domain.",
+    "conceptUnlinked": "__TODO__ Business concept unlinked from data domain.",
+    "linkConceptError": "__TODO__ Failed to link business concept",
+    "unlinkConceptError": "__TODO__ Failed to unlink business concept",
+    "errorFetchingDomain": "__TODO__ Error Fetching Domain",
+    "couldNotLoadDomain": "__TODO__ Could not load domain details.",
+    "failedFetchDomain": "__TODO__ Failed to fetch domain details.",
+    "metadataLoadFailed": "__TODO__ Metadata load failed",
+    "couldNotLoadMetadata": "__TODO__ Could not load metadata.",
+    "editTeamLoadError": "__TODO__ Failed to load team details for editing."
   }
 }

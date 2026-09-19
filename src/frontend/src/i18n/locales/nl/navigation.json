@@ -5,5 +5,25 @@
     "build": "Bouwen",
     "govern": "Besturen",
     "deploy": "Uitrollen"
+  },
+  "dbDown": {
+    "title": "__TODO__ Database unavailable",
+    "body": "__TODO__ The application cannot reach its metadata database. Most features will return errors until the connection is restored.",
+    "retrying": "__TODO__ Retrying…",
+    "retryConnection": "__TODO__ Retry connection",
+    "retryFailed": "__TODO__ Retry failed",
+    "autoRetrying": "__TODO__ Auto-retrying every {{seconds}} seconds",
+    "pausedTitle": "__TODO__ Application paused",
+    "pausedBodyBefore": "__TODO__ The metadata database is unreachable, so navigation and data views are disabled to avoid showing inconsistent state. Use",
+    "pausedBodyAfter": "__TODO__ above (or wait for the next auto-retry) to resume."
+  },
+  "warning": {
+    "title": "__TODO__ System Warning",
+    "workspaceFailed": "__TODO__ Databricks workspace connection failed. Some features may be unavailable."
+  },
+  "routeError": {
+    "title": "__TODO__ Something went wrong",
+    "body": "__TODO__ An unexpected error occurred while rendering this page. You can try again or go back to the home page.",
+    "goHome": "__TODO__ Go Home"
   }
 }

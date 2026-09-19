@@ -1,0 +1,651 @@
+{
+  "designer": {
+    "newWorkflow": "__TODO__ New Workflow",
+    "newStepName": "__TODO__ New {{type}} Step",
+    "deleteConnection": "__TODO__ Delete connection",
+    "actions": {
+      "done": "__TODO__ Done"
+    },
+    "keyValue": {
+      "keyRequired": "__TODO__ Key required",
+      "keyExistsAdd": "__TODO__ Key already exists — edit the existing entry",
+      "keyExistsEdit": "__TODO__ Key already exists — choose a different name",
+      "addEntry": "__TODO__ Add entry",
+      "noEntries": "__TODO__ No entries.",
+      "checkTemplate": "__TODO__ Check template",
+      "keyPlaceholder": "__TODO__ key",
+      "valuePlaceholder": "__TODO__ value",
+      "newEntryKeyAria": "__TODO__ New entry key",
+      "newEntryValueAria": "__TODO__ New entry value",
+      "editEntryKeyAria": "__TODO__ Edit entry key",
+      "editEntryValueAria": "__TODO__ Edit entry value",
+      "saveEditAria": "__TODO__ Save edit",
+      "cancelEditAria": "__TODO__ Cancel edit",
+      "editRowAria": "__TODO__ Edit row",
+      "removeRowAria": "__TODO__ Remove row"
+    },
+    "schema": {
+      "noProperties": "__TODO__ No configurable properties for this step type."
+    },
+    "roles": {
+      "special": "__TODO__ Special",
+      "requesterOriginalUser": "__TODO__ Requester (Original User)",
+      "ownerEntityOwner": "__TODO__ Owner (Entity Owner)",
+      "appRoles": "__TODO__ App Roles",
+      "businessRoles": "__TODO__ Business Roles",
+      "noGroups": "__TODO__ No groups"
+    },
+    "messages": {
+      "loadWorkflowFailed": "__TODO__ Failed to load workflow",
+      "validationError": "__TODO__ Validation Error",
+      "selectWorkflowType": "__TODO__ Please select a workflow type",
+      "nameRequired": "__TODO__ Workflow name is required",
+      "createdSuccess": "__TODO__ Workflow created successfully",
+      "updatedSuccess": "__TODO__ Workflow updated successfully",
+      "createFailed": "__TODO__ Failed to create workflow: {{error}}",
+      "updateFailed": "__TODO__ Failed to update workflow: {{error}}"
+    },
+    "badges": {
+      "default": "__TODO__ Default",
+      "approval": "__TODO__ Approval",
+      "process": "__TODO__ Process",
+      "unsavedChanges": "__TODO__ Unsaved changes"
+    },
+    "placeholders": {
+      "workflowName": "__TODO__ Workflow name"
+    },
+    "preview": {
+      "saveToPreview": "__TODO__ Save changes to preview the latest version",
+      "dryRunTitle": "__TODO__ Run the wizard in dry-run mode",
+      "previewWizard": "__TODO__ Preview wizard"
+    },
+    "typeChooser": {
+      "title": "__TODO__ What type of workflow?",
+      "subtitle": "__TODO__ Choose the type based on how this workflow will be used.",
+      "processTitle": "__TODO__ Process Workflow",
+      "processDescription": "__TODO__ Background automation triggered by events — validate, notify, tag, run scripts.",
+      "approvalTitle": "__TODO__ Approval Workflow",
+      "approvalDescription": "__TODO__ Interactive wizard before user actions — collect consent, terms, acknowledgements."
+    },
+    "palette": {
+      "addStep": "__TODO__ Add Step",
+      "soonSuffix": "__TODO__  (soon)",
+      "policy_check": "__TODO__ Policy Check",
+      "validation": "__TODO__ Validation",
+      "approval": "__TODO__ Request Approval",
+      "entity_action": "__TODO__ Entity Action",
+      "notification": "__TODO__ Notification",
+      "assign_tag": "__TODO__ Assign Tag",
+      "conditional": "__TODO__ Conditional",
+      "script": "__TODO__ Script",
+      "create_asset_review": "__TODO__ Asset Review",
+      "webhook": "__TODO__ Webhook",
+      "grant_permissions": "__TODO__ Grant Permissions",
+      "on_behalf_of": "__TODO__ On Behalf Of",
+      "legal_document": "__TODO__ Legal Document",
+      "acknowledgement_checklist": "__TODO__ Acknowledgement Checklist",
+      "user_action": "__TODO__ User Action",
+      "co_signers": "__TODO__ Co-Signers",
+      "persist_agreement": "__TODO__ Persist Agreement",
+      "generate_pdf": "__TODO__ Generate PDF",
+      "deliver": "__TODO__ Deliver"
+    },
+    "discard": {
+      "description": "__TODO__ You have unsaved changes to this workflow. If you leave now, your changes will be lost.",
+      "stay": "__TODO__ Stay",
+      "confirm": "__TODO__ Discard Changes"
+    },
+    "triggerConfig": {
+      "title": "__TODO__ Trigger Configuration",
+      "fromStatus": "__TODO__ From Status",
+      "fromStatusPlaceholder": "__TODO__ e.g. draft",
+      "toStatus": "__TODO__ To Status",
+      "toStatusPlaceholder": "__TODO__ e.g. active",
+      "descriptionPlaceholder": "__TODO__ Workflow description"
+    },
+    "stepConfig": {
+      "title": "__TODO__ Step Configuration",
+      "stepName": "__TODO__ Step Name",
+      "stepType": "__TODO__ Step Type",
+      "deleteStep": "__TODO__ Delete Step"
+    },
+    "entityAction": {
+      "action": "__TODO__ Action",
+      "certify": "__TODO__ Certify",
+      "decertify": "__TODO__ Decertify",
+      "publish": "__TODO__ Publish",
+      "unpublish": "__TODO__ Unpublish",
+      "certLevelSource": "__TODO__ Certification level source",
+      "levelFromRequest": "__TODO__ From request",
+      "levelFixed": "__TODO__ Fixed level",
+      "levelFromApproval": "__TODO__ From approval",
+      "fixedLevel": "__TODO__ Fixed level",
+      "fixedLevelPlaceholder": "__TODO__ e.g. 1",
+      "scopeSource": "__TODO__ Publication scope source",
+      "scopeFromRequest": "__TODO__ From request",
+      "scopeFixed": "__TODO__ Fixed scope",
+      "scopeFromApproval": "__TODO__ From approval",
+      "fixedScope": "__TODO__ Fixed scope",
+      "scopeDomain": "__TODO__ Domain",
+      "scopeOrganization": "__TODO__ Organization",
+      "scopeExternal": "__TODO__ External",
+      "help": "__TODO__ Runs a lifecycle action on the entity that triggered this workflow (after approval when used with request triggers)."
+    },
+    "userAction": {
+      "title": "__TODO__ Title",
+      "titlePlaceholder": "__TODO__ e.g. Enter a reason",
+      "descriptionPlaceholder": "__TODO__ Optional description for the wizard step",
+      "requiresInput": "__TODO__ Requires input",
+      "requiresInputHelp": "__TODO__ When on, user must enter something in the primary field before continuing.",
+      "minInputLength": "__TODO__ Minimum input length",
+      "minInputPlaceholder": "__TODO__ e.g. 10",
+      "minInputHelp": "__TODO__ Minimum characters for the primary field (leave empty for no minimum).",
+      "fieldsHelp": "__TODO__ User Action steps collect input in approval workflows (e.g. reason, acceptances). Add fields above and tick \"Primary\" on the one the user's main input lands in.",
+      "primaryRequiredTooltip": "__TODO__ Pick a primary field above before closing."
+    },
+    "policyCheck": {
+      "label": "__TODO__ Compliance Policy",
+      "placeholder": "__TODO__ Select a compliance policy",
+      "noPolicies": "__TODO__ No active policies found",
+      "help": "__TODO__ This step will evaluate the selected compliance policy's DSL rule at runtime."
+    },
+    "validation": {
+      "dslRule": "__TODO__ DSL Rule",
+      "dslPlaceholder": "__TODO__ MATCH (obj:Object)\nASSERT obj.name MATCHES '^[a-z_]+$'"
+    },
+    "notification": {
+      "recipientsRole": "__TODO__ Recipients (Role)",
+      "recipientsPlaceholder": "__TODO__ Select recipients",
+      "additionalRecipientsAria": "__TODO__ Additional recipients",
+      "template": "__TODO__ Template",
+      "selectTemplate": "__TODO__ Select template",
+      "templates": {
+        "requestSubmitted": "__TODO__ Request Submitted",
+        "requestApproved": "__TODO__ Request Approved",
+        "requestDenied": "__TODO__ Request Denied",
+        "validationFailed": "__TODO__ Validation Failed",
+        "validationPassed": "__TODO__ Validation Passed",
+        "productApproved": "__TODO__ Product Approved",
+        "productRejected": "__TODO__ Product Rejected",
+        "piiDetected": "__TODO__ PII Detected"
+      },
+      "customMessage": "__TODO__ Custom Message",
+      "customMessagePlaceholder": "__TODO__ Override template message. Supports ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}...",
+      "variablesLabel": "__TODO__ Variables:",
+      "channels": "__TODO__ Channels",
+      "channelsHelp": "__TODO__ Defaults to global setting if none selected."
+    },
+    "customPrincipals": {
+      "label": "__TODO__ Custom principals",
+      "help": "__TODO__ Add specific users or groups alongside the role.",
+      "usersGroups": "__TODO__ Users & groups",
+      "addPlaceholder": "__TODO__ Add users or groups…"
+    },
+    "assignTag": {
+      "tagKey": "__TODO__ Tag Key",
+      "tagKeyPlaceholder": "__TODO__ e.g., owner",
+      "valueSource": "__TODO__ Value Source",
+      "selectSource": "__TODO__ Select source",
+      "sourceCurrentUser": "__TODO__ Current User",
+      "sourceProjectName": "__TODO__ Project Name",
+      "sourceTimestamp": "__TODO__ Timestamp"
+    },
+    "approval": {
+      "approversRole": "__TODO__ Approvers (Role)",
+      "selectRole": "__TODO__ Select role",
+      "additionalApproversAria": "__TODO__ Additional approvers",
+      "timeoutDays": "__TODO__ Timeout (days)"
+    },
+    "assetReview": {
+      "reviewerRole": "__TODO__ Reviewer Role",
+      "selectReviewerRole": "__TODO__ Select reviewer role",
+      "reviewerRoleHelp": "__TODO__ The role whose members can review the asset.",
+      "reviewType": "__TODO__ Review Type",
+      "selectReviewType": "__TODO__ Select review type",
+      "typeStandard": "__TODO__ Standard Review",
+      "typeExpedited": "__TODO__ Expedited Review",
+      "typeCompliance": "__TODO__ Compliance Review",
+      "typeSecurity": "__TODO__ Security Review",
+      "notesPlaceholder": "__TODO__ Additional notes for the reviewer..."
+    },
+    "webhook": {
+      "mode": "__TODO__ Mode",
+      "selectMode": "__TODO__ Select mode",
+      "modeConnection": "__TODO__ UC Connection (Recommended)",
+      "modeInline": "__TODO__ Inline URL",
+      "modeHelp": "__TODO__ UC Connections store credentials securely in Unity Catalog.",
+      "httpConnection": "__TODO__ HTTP Connection",
+      "selectConnection": "__TODO__ Select a UC HTTP Connection",
+      "noConnections": "__TODO__ No HTTP connections found",
+      "pathPlaceholder": "__TODO__ /api/now/table/incident",
+      "pathHelp": "__TODO__ Path appended to the connection's base URL.",
+      "url": "__TODO__ URL",
+      "urlPlaceholder": "__TODO__ https://api.example.com/webhook",
+      "inlineWarning": "__TODO__ Warning: Inline credentials are stored in workflow config.",
+      "httpMethod": "__TODO__ HTTP Method",
+      "selectMethod": "__TODO__ Select method",
+      "bodyTemplate": "__TODO__ Body Template",
+      "bodyPlaceholder": "__TODO__ {\n  \"description\": \"Alert for ${entity_name}\",\n  \"entity_type\": \"${entity_type}\"\n}",
+      "bodyHelp": "__TODO__ Use ${variable} for substitution. See the panel for all variables in scope.",
+      "additionalHeaders": "__TODO__ Additional Headers",
+      "additionalHeadersHelp": "__TODO__ Merged into the request headers. Override `headers` on key collision. Values support ${variable} substitution.",
+      "headerKeyPlaceholder": "__TODO__ X-Trace-Id",
+      "headerValuePlaceholder": "__TODO__ ${execution_id}",
+      "additionalQueryParams": "__TODO__ Additional Query Parameters",
+      "additionalQueryParamsHelp": "__TODO__ Appended to the request URL/path as query string. Values support ${variable} substitution and are URL-encoded.",
+      "queryKeyPlaceholder": "__TODO__ caller",
+      "queryValuePlaceholder": "__TODO__ ontos",
+      "pathSuffix": "__TODO__ Path Suffix",
+      "pathSuffixPlaceholder": "__TODO__ /${entity_id}",
+      "pathSuffixHelp": "__TODO__ Appended to Path before the query string. Supports ${variable} substitution.",
+      "timeoutSeconds": "__TODO__ Timeout (seconds)",
+      "retryCount": "__TODO__ Retry Count",
+      "retryHelp": "__TODO__ Number of retries on failure (0-5)."
+    }
+  },
+  "approvalResponse": {
+    "titleFallback": "__TODO__ Approve or reject",
+    "descriptionFallback": "__TODO__ Provide a reason for your approval or rejection decision.",
+    "requestDetails": "__TODO__ Request details",
+    "adjustTerms": "__TODO__ Adjust approval terms",
+    "durationDays": "__TODO__ Duration (days)",
+    "permissionLevel": "__TODO__ Permission level",
+    "reasonLabel": "__TODO__ Reason for approval or rejection",
+    "reasonPlaceholder": "__TODO__ Enter your reason...",
+    "approved": "__TODO__ Approved",
+    "rejected": "__TODO__ Rejected",
+    "requestFallback": "__TODO__ Request",
+    "days_one": "__TODO__ {{count}} day",
+    "days_other": "__TODO__ {{count}} days",
+    "rows": {
+      "onBehalfOf": "__TODO__ On behalf of",
+      "resource": "__TODO__ Resource",
+      "duration": "__TODO__ Duration",
+      "reason": "__TODO__ Reason",
+      "workflow": "__TODO__ Workflow"
+    },
+    "messages": {
+      "reasonRequiredTitle": "__TODO__ Reason required",
+      "reasonRequiredDesc": "__TODO__ Please enter a reason for your decision.",
+      "processFailed": "__TODO__ Failed to process approval.",
+      "processFailedRetry": "__TODO__ Failed to process approval. Please try again.",
+      "entityApproved": "__TODO__ {{name}} has been approved.",
+      "entityRejected": "__TODO__ {{name}} has been rejected."
+    }
+  },
+  "approvalWizard": {
+    "title": "__TODO__ Approval wizard",
+    "previewBadge": "__TODO__ Preview",
+    "referenceDocuments": "__TODO__ Reference documents",
+    "loadingEllipsis": "__TODO__ Loading…",
+    "selectEllipsis": "__TODO__ Select…",
+    "failedToLoadOptions": "__TODO__ Failed to load options",
+    "noOptionsAvailable": "__TODO__ No options available",
+    "dryRunDescription": "__TODO__ Dry run — nothing is persisted and no notifications are sent.",
+    "chooseWorkflow": "__TODO__ Choose an approval workflow to run for this entity.",
+    "stepPrefix": "__TODO__ Step: {{name}}",
+    "completedShort": "__TODO__ Completed.",
+    "progressStep": "__TODO__ Step {{number}}: {{name}}",
+    "completeBefore": "__TODO__ Complete the following before {{action}} to",
+    "proceed": "__TODO__ proceed",
+    "previewCompleteScreen": "__TODO__ Preview complete. No agreement was created and no notifications were sent.",
+    "agreementRecorded": "__TODO__ Agreement recorded.",
+    "agreementId": "__TODO__ Agreement ID: {{id}}",
+    "downloadAgreement": "__TODO__ Download Agreement",
+    "noWorkflowsAvailable": "__TODO__ No approval workflows available. Add them in Settings → Workflows (Approval workflows).",
+    "completeButton": "__TODO__ Complete",
+    "acknowledgeDefault": "__TODO__ I have read and understood the above",
+    "scrollToBottom": "__TODO__ Please scroll to the bottom of the document to continue.",
+    "coSignerPlaceholder": "__TODO__ Enter email or group name",
+    "noDocumentContent": "__TODO__ *No document content provided.*",
+    "preview": {
+      "skipped": "__TODO__ {{action}} — skipped in preview",
+      "wouldSaveAgreement": "__TODO__ Would save agreement",
+      "wouldGenerateDocument": "__TODO__ Would generate document",
+      "wouldSendNotifications": "__TODO__ Would send notifications",
+      "wouldFinalize": "__TODO__ Would finalize"
+    },
+    "progress": {
+      "savingAgreement": "__TODO__ Saving agreement...",
+      "generatingDocument": "__TODO__ Generating document...",
+      "sendingNotifications": "__TODO__ Sending notifications...",
+      "finalizing": "__TODO__ Finalizing..."
+    },
+    "coSigners": {
+      "minRequired_one": "__TODO__ Minimum {{count}} co-signer required.",
+      "minRequired_other": "__TODO__ Minimum {{count}} co-signers required.",
+      "optional": "__TODO__ Co-signers are optional for this step.",
+      "maximum": "__TODO__ Maximum: {{count}}.",
+      "auditNote": "__TODO__ Co-signers are recorded on the agreement for audit purposes."
+    },
+    "obo": {
+      "forMyself": "__TODO__ For myself",
+      "forMyGroup": "__TODO__ For a group I'm part of",
+      "noGroupsAvailable": "__TODO__ (no groups available)",
+      "selectGroup": "__TODO__ Select one of your groups",
+      "otherGroupOrSp": "__TODO__ Other group or service principal",
+      "groupOption": "__TODO__ Group (display name)",
+      "servicePrincipalOption": "__TODO__ Service principal (display name or applicationId)",
+      "groupPlaceholder": "__TODO__ e.g., sales_consumers",
+      "spPlaceholder": "__TODO__ e.g., 11111111-2222-3333-4444-555555555555",
+      "validationNote": "__TODO__ Validated against the workspace directory before the request is recorded.",
+      "justification": "__TODO__ Justification",
+      "justificationPlaceholder": "__TODO__ Why are you requesting access for this principal?"
+    },
+    "validation": {
+      "requiresInput": "__TODO__ This step requires input.",
+      "minLength": "__TODO__ Minimum length: {{min}} characters ({{entered}} entered)."
+    },
+    "messages": {
+      "nothingToPreview": "__TODO__ Nothing to preview",
+      "nothingToPreviewDesc": "__TODO__ Workflow has no steps.",
+      "startSessionFailed": "__TODO__ Failed to start session",
+      "previewComplete": "__TODO__ Preview complete",
+      "previewCompleteDesc": "__TODO__ No agreement was created and no notifications were sent.",
+      "submitStepFailed": "__TODO__ Failed to submit step",
+      "completed": "__TODO__ Completed",
+      "completedDesc": "__TODO__ Approval workflow completed successfully.",
+      "cancelled": "__TODO__ Cancelled",
+      "previewCancelled": "__TODO__ Preview cancelled"
+    }
+  },
+  "entityTypeSelect": {
+    "label": "__TODO__ Applies to",
+    "helper": "__TODO__ Which kinds of objects this fires on",
+    "firesRegardless": "__TODO__ This trigger fires regardless of entity type."
+  },
+  "execution": {
+    "noSteps": "__TODO__ No steps defined",
+    "trigger": "__TODO__ Trigger",
+    "titleFallback": "__TODO__ Workflow Execution",
+    "executionId": "__TODO__ Execution ID: {{id}}...",
+    "stepsProgress": "__TODO__ {{done}}/{{total}} steps",
+    "triggeredBy": "__TODO__ Triggered by: {{user}}",
+    "workflowSteps": "__TODO__ Workflow Steps",
+    "loadDefinitionFailed": "__TODO__ Failed to load workflow definition",
+    "states": {
+      "pending": "__TODO__ Pending",
+      "running": "__TODO__ Running",
+      "completed": "__TODO__ Completed",
+      "failed": "__TODO__ Failed",
+      "skipped": "__TODO__ Skipped",
+      "waiting": "__TODO__ Waiting"
+    },
+    "summary": {
+      "entity": "__TODO__ Entity",
+      "started": "__TODO__ Started",
+      "waitingAt": "__TODO__ Waiting At",
+      "progress": "__TODO__ Progress"
+    }
+  },
+  "nodes": {
+    "checklistTitle": "__TODO__ Checklist",
+    "assetReviewTitle": "__TODO__ Asset Review",
+    "successTitle": "__TODO__ Success",
+    "failureTitle": "__TODO__ Failure",
+    "stepFallback": "__TODO__ Step",
+    "notificationTo": "__TODO__ To: {{recipient}}",
+    "actionLabel": "__TODO__ Action: {{action}}",
+    "noActionSet": "__TODO__ No action set",
+    "itemCount_one": "__TODO__ {{count}} item",
+    "itemCount_other": "__TODO__ {{count}} items",
+    "keyLabel": "__TODO__ Key: {{key}}",
+    "policyLabel": "__TODO__ Policy: {{name}}",
+    "idLabel": "__TODO__ ID: {{id}}",
+    "noPolicySelected": "__TODO__ No policy selected",
+    "reviewerLabel": "__TODO__ Reviewer:",
+    "notSet": "__TODO__ Not set",
+    "connectionLabel": "__TODO__ Connection: {{name}}",
+    "notConfigured": "__TODO__ Not configured",
+    "configureUrlOrConnection": "__TODO__ Configure URL or Connection",
+    "requestApproval": "__TODO__ request approval"
+  },
+  "requiredFields": {
+    "title": "__TODO__ Custom fields",
+    "emptyState": "__TODO__ No custom fields yet. Add fields the requester must fill in before submitting.",
+    "primaryError": "__TODO__ Pick a primary field — the user's main input goes there. Required because \"Requires input\" is on.",
+    "errors": {
+      "idRequired": "__TODO__ ID is required.",
+      "idInvalid": "__TODO__ ID must be lowercase letters, digits, or underscores, starting with a letter.",
+      "idDuplicate": "__TODO__ ID must be unique within this step."
+    },
+    "fieldIdLabel": "__TODO__ Field ID",
+    "fieldIdPlaceholder": "__TODO__ e.g. target_group",
+    "labelLabel": "__TODO__ Label",
+    "labelPlaceholder": "__TODO__ Shown to requester",
+    "typeText": "__TODO__ Text",
+    "typeSelect": "__TODO__ Select",
+    "requiredShort": "__TODO__ Req.",
+    "primaryTooltip": "__TODO__ Mark this row as the step's primary input field",
+    "primary": "__TODO__ Primary",
+    "primaryAriaLabel": "__TODO__ Primary field",
+    "removeFieldAriaLabel": "__TODO__ Remove field",
+    "staticOptions": "__TODO__ Static options",
+    "fromEndpoint": "__TODO__ From endpoint",
+    "optionValuePlaceholder": "__TODO__ value",
+    "optionLabelPlaceholder": "__TODO__ label",
+    "removeOptionAriaLabel": "__TODO__ Remove option",
+    "addOption": "__TODO__ Add option",
+    "optionsEndpoint": "__TODO__ Options endpoint",
+    "endpointPlaceholder": "__TODO__ /api/workspace/groups",
+    "endpointHint": "__TODO__ Backend endpoint returning JSON",
+    "addField": "__TODO__ Add field"
+  },
+  "templateVars": {
+    "copiedToClipboard": "__TODO__ {{placeholder}} copied to clipboard.",
+    "copyFailed": "__TODO__ Copy failed",
+    "copyBlocked": "__TODO__ Browser blocked clipboard access.",
+    "copyPlaceholder": "__TODO__ Copy {{placeholder}}",
+    "sampleLabel": "__TODO__ e.g. {{sample}}",
+    "loadFailed": "__TODO__ Failed to load variables",
+    "pickTriggerBefore": "__TODO__ Pick a trigger and entity type to see the variables available for",
+    "pickTriggerAfter": "__TODO__ substitution.",
+    "loadingVariables": "__TODO__ Loading variables…",
+    "loadFailedWithError": "__TODO__ Failed to load variables: {{error}}",
+    "noDescriptors": "__TODO__ No variable descriptors are registered for this trigger and entity type yet. You can still use the universal placeholders (",
+    "noDescriptorsSuffix": "__TODO__ , etc.).",
+    "availableVariables": "__TODO__ Available variables",
+    "copyHint": "__TODO__ Click the copy icon to grab a placeholder.",
+    "filterPlaceholder": "__TODO__ Filter by name or description…",
+    "searchAriaLabel": "__TODO__ Search template variables",
+    "clearSearchAriaLabel": "__TODO__ Clear search",
+    "matches_one": "__TODO__ {{count}} match",
+    "matches_other": "__TODO__ {{count}} matches",
+    "noMatch": "__TODO__ No variables match"
+  },
+  "triggerPicker": {
+    "label": "__TODO__ Fires on",
+    "helper": "__TODO__ What action makes this workflow run",
+    "placeholder": "__TODO__ Select a trigger…",
+    "noTypes": "__TODO__ No trigger types available.",
+    "availableToAny": "__TODO__ Available to any authenticated user.",
+    "groups": {
+      "lifecycle": "__TODO__ Lifecycle events",
+      "request_flow": "__TODO__ Request flow",
+      "validation_gates": "__TODO__ Validation gates",
+      "system_scheduled": "__TODO__ System & scheduled"
+    },
+    "requiredPermission": {
+      "label": "__TODO__ Required permission:",
+      "prefix": "__TODO__ users need",
+      "suffix": "__TODO__ or higher to see and run this workflow. Set this in Settings → Roles."
+    }
+  },
+  "view": {
+    "subtitle": "__TODO__ Configure automated workflows for validation, approval, and notifications.",
+    "readOnlyAccess": "__TODO__ (Read-only access)",
+    "copyNameSuffix": "__TODO__ {{name}} (Copy)",
+    "approvalWorkflowFallback": "__TODO__ Approval Workflow",
+    "stepLabel": "__TODO__ Step {{number}}",
+    "errorDetails": "__TODO__ Error details",
+    "actions": {
+      "loadDefaults": "__TODO__ Load Defaults",
+      "createWorkflow": "__TODO__ Create Workflow",
+      "previewWizard": "__TODO__ Preview wizard",
+      "duplicate": "__TODO__ Duplicate",
+      "forceApprove": "__TODO__ Force Approve",
+      "forceReject": "__TODO__ Force Reject"
+    },
+    "loadDefaults": {
+      "menuLabel": "__TODO__ Default Workflows",
+      "newOnly": "__TODO__ Load New Only",
+      "reloadAll": "__TODO__ Reload All Defaults"
+    },
+    "badges": {
+      "default": "__TODO__ Default",
+      "approval": "__TODO__ Approval",
+      "process": "__TODO__ Process"
+    },
+    "columns": {
+      "steps": "__TODO__ Steps",
+      "workflow": "__TODO__ Workflow",
+      "entity": "__TODO__ Entity",
+      "currentStep": "__TODO__ Current Step",
+      "started": "__TODO__ Started",
+      "completed": "__TODO__ Completed",
+      "error": "__TODO__ Error"
+    },
+    "help": {
+      "process": "__TODO__ Process: runs after events (notify, tag, validate)",
+      "approval": "__TODO__ Approval: pops up before actions (consent, terms)",
+      "chain": "__TODO__ They chain: approval first, then process"
+    },
+    "stats": {
+      "activeWorkflows": "__TODO__ Active Workflows",
+      "ofTotal": "__TODO__ of {{count}} total",
+      "inactiveCount": "__TODO__ ({{count}} inactive)",
+      "defaultWorkflows": "__TODO__ Default Workflows",
+      "builtInWorkflows": "__TODO__ built-in workflows",
+      "inProgress": "__TODO__ In Progress",
+      "runningOrPaused": "__TODO__ running or paused",
+      "recentFailures": "__TODO__ Recent Failures",
+      "inLast50Runs": "__TODO__ in last 50 runs"
+    },
+    "filter": {
+      "label": "__TODO__ Filtered: {{filter}}",
+      "active": "__TODO__ Active workflows",
+      "inactive": "__TODO__ Inactive workflows",
+      "default": "__TODO__ Default workflows",
+      "running": "__TODO__ Running executions",
+      "failed": "__TODO__ Failed executions",
+      "clear": "__TODO__ Clear filter"
+    },
+    "sections": {
+      "definitionsTitle": "__TODO__ Workflow Definitions",
+      "executionsTitle": "__TODO__ Recent Executions",
+      "executionsDescription": "__TODO__ Monitor workflow executions and their status."
+    },
+    "empty": {
+      "noWorkflows": "__TODO__ No workflows configured yet.",
+      "noWorkflowsHint": "__TODO__ Click \"Load Defaults\" to get started with default workflows.",
+      "noExecutions": "__TODO__ No workflow executions yet.",
+      "noExecutionsHint": "__TODO__ Executions will appear here when workflows are triggered."
+    },
+    "bulk": {
+      "enable": "__TODO__ Enable ({{count}})",
+      "disable": "__TODO__ Disable ({{count}})",
+      "delete": "__TODO__ Delete ({{count}})",
+      "cancel": "__TODO__ Cancel ({{count}})",
+      "retry": "__TODO__ Retry ({{count}})"
+    },
+    "dialogs": {
+      "duplicateTitle": "__TODO__ Duplicate Workflow",
+      "duplicateDescription": "__TODO__ Create a copy of \"{{name}}\" with a new name.",
+      "deleteExecutionTitle": "__TODO__ Delete Execution",
+      "deleteExecutionDescription": "__TODO__ Are you sure you want to delete this workflow execution? This action cannot be undone."
+    },
+    "placeholders": {
+      "newWorkflowName": "__TODO__ New workflow name"
+    },
+    "detail": {
+      "workflow": "__TODO__ Workflow:",
+      "status": "__TODO__ Status:",
+      "entity": "__TODO__ Entity:"
+    },
+    "tooltips": {
+      "clickFullError": "__TODO__ Click to see full error"
+    },
+    "permission": {
+      "denied": "__TODO__ Permission Denied",
+      "modifyWorkflows": "__TODO__ You do not have permission to modify workflows.",
+      "deleteWorkflows": "__TODO__ You do not have permission to delete workflows.",
+      "loadDefaults": "__TODO__ You do not have permission to load default workflows.",
+      "cancelExecutions": "__TODO__ You do not have permission to cancel executions.",
+      "retryExecutions": "__TODO__ You do not have permission to retry executions.",
+      "overrideApprovals": "__TODO__ You do not have permission to override workflow approvals.",
+      "deleteExecutions": "__TODO__ You do not have permission to delete executions."
+    },
+    "confirm": {
+      "deleteWorkflows_one": "__TODO__ Are you sure you want to delete {{count}} workflow?",
+      "deleteWorkflows_other": "__TODO__ Are you sure you want to delete {{count}} workflows?",
+      "deleteWorkflowsSkipped_one": "__TODO__  ({{count}} default workflow will be skipped)",
+      "deleteWorkflowsSkipped_other": "__TODO__  ({{count}} default workflows will be skipped)",
+      "deleteExecutions_one": "__TODO__ Are you sure you want to delete {{count}} execution?",
+      "deleteExecutions_other": "__TODO__ Are you sure you want to delete {{count}} executions?",
+      "deleteExecutionsSkipped_one": "__TODO__  ({{count}} running/paused execution will be skipped)",
+      "deleteExecutionsSkipped_other": "__TODO__  ({{count}} running/paused executions will be skipped)"
+    },
+    "messages": {
+      "loadFailed": "__TODO__ Failed to load workflows",
+      "workflowEnabled": "__TODO__ Workflow enabled",
+      "workflowDisabled": "__TODO__ Workflow disabled",
+      "updateStatusFailed": "__TODO__ Failed to update workflow status",
+      "duplicateSuccess": "__TODO__ Workflow duplicated successfully",
+      "duplicateFailed": "__TODO__ Failed to duplicate workflow",
+      "cannotDelete": "__TODO__ Cannot Delete",
+      "cannotDeleteDefault": "__TODO__ Default workflows cannot be deleted. Disable them instead.",
+      "deleteSuccess": "__TODO__ Workflow deleted",
+      "deleteFailed": "__TODO__ Failed to delete workflow",
+      "loadDefaultsFailed": "__TODO__ Failed to load default workflows",
+      "cancelSuccess": "__TODO__ Execution cancelled successfully",
+      "cancelFailed": "__TODO__ Failed to cancel execution",
+      "retryStarted": "__TODO__ Execution retry started",
+      "retryFailed": "__TODO__ Failed to retry execution",
+      "executionDeleteSuccess": "__TODO__ Execution deleted successfully",
+      "executionDeleteFailed": "__TODO__ Failed to delete execution",
+      "forceApprovedByAdmin": "__TODO__ Force approved by administrator",
+      "forceRejectedByAdmin": "__TODO__ Force rejected by administrator",
+      "approveResumeSuccess": "__TODO__ Workflow approved and resumed",
+      "approveFailed": "__TODO__ Failed to approve workflow",
+      "rejectResumeSuccess": "__TODO__ Workflow rejected and resumed",
+      "rejectFailed": "__TODO__ Failed to reject workflow",
+      "noChanges": "__TODO__ No Changes",
+      "allAlreadyEnabled": "__TODO__ All selected workflows are already enabled.",
+      "allAlreadyDisabled": "__TODO__ All selected workflows are already disabled.",
+      "workflowsEnabled_one": "__TODO__ {{count}} workflow enabled.",
+      "workflowsEnabled_other": "__TODO__ {{count}} workflows enabled.",
+      "workflowsDisabled_one": "__TODO__ {{count}} workflow disabled.",
+      "workflowsDisabled_other": "__TODO__ {{count}} workflows disabled.",
+      "workflowsFailedUpdate_one": "__TODO__ {{count}} workflow failed to update.",
+      "workflowsFailedUpdate_other": "__TODO__ {{count}} workflows failed to update.",
+      "updateWorkflowsFailed": "__TODO__ Failed to update workflows",
+      "allDefaultsCannotDelete": "__TODO__ All selected workflows are defaults and cannot be deleted.",
+      "workflowsDeleted_one": "__TODO__ {{count}} workflow deleted.",
+      "workflowsDeleted_other": "__TODO__ {{count}} workflows deleted.",
+      "workflowsFailedDelete_one": "__TODO__ {{count}} workflow failed to delete.",
+      "workflowsFailedDelete_other": "__TODO__ {{count}} workflows failed to delete.",
+      "deleteWorkflowsFailed": "__TODO__ Failed to delete workflows",
+      "noCancellable": "__TODO__ No Cancellable Executions",
+      "noCancellableDesc": "__TODO__ None of the selected executions can be cancelled.",
+      "executionsCancelled_one": "__TODO__ {{count}} execution cancelled.",
+      "executionsCancelled_other": "__TODO__ {{count}} executions cancelled.",
+      "executionsFailedCancel_one": "__TODO__ {{count}} execution failed to cancel.",
+      "executionsFailedCancel_other": "__TODO__ {{count}} executions failed to cancel.",
+      "cancelExecutionsFailed": "__TODO__ Failed to cancel executions",
+      "noRetriable": "__TODO__ No Retriable Executions",
+      "noRetriableDesc": "__TODO__ None of the selected executions can be retried.",
+      "executionsRetryStarted_one": "__TODO__ {{count}} execution retry started.",
+      "executionsRetryStarted_other": "__TODO__ {{count}} executions retry started.",
+      "executionsFailedRetry_one": "__TODO__ {{count}} execution failed to retry.",
+      "executionsFailedRetry_other": "__TODO__ {{count}} executions failed to retry.",
+      "retryExecutionsFailed": "__TODO__ Failed to retry executions",
+      "runningCannotDelete": "__TODO__ Running or paused executions cannot be deleted.",
+      "executionsDeleted_one": "__TODO__ {{count}} execution deleted.",
+      "executionsDeleted_other": "__TODO__ {{count}} executions deleted.",
+      "executionsFailedDelete_one": "__TODO__ {{count}} execution failed to delete.",
+      "executionsFailedDelete_other": "__TODO__ {{count}} executions failed to delete.",
+      "deleteExecutionsFailed": "__TODO__ Failed to delete executions",
+      "errorCopied": "__TODO__ Error copied to clipboard."
+    }
+  }
+}

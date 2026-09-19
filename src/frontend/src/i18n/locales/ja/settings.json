@@ -1,12 +1,103 @@
 {
+  "personaNav": {
+    "home": "__TODO__ Home",
+    "marketplace": "__TODO__ Marketplace",
+    "dataCatalog": "__TODO__ Data Catalog",
+    "businessGlossary": "__TODO__ Concept Browser",
+    "mySubscriptions": "__TODO__ My Subscriptions",
+    "accessRequests": "__TODO__ Access Requests",
+    "dataProducts": "__TODO__ Data Products",
+    "dataContracts": "__TODO__ Data Contracts",
+    "dataAssets": "__TODO__ Data Assets",
+    "qualityCompliance": "__TODO__ Quality & Compliance",
+    "myConsumers": "__TODO__ My Consumers",
+    "reviewsApprovals": "__TODO__ Reviews & Approvals",
+    "assetExplorer": "__TODO__ Asset Explorer",
+    "compliance": "__TODO__ Compliance",
+    "masterData": "__TODO__ Master Data",
+    "catalogCommander": "__TODO__ Catalog Commander",
+    "domains": "__TODO__ Domains",
+    "teams": "__TODO__ Teams",
+    "ownership": "__TODO__ Ownership",
+    "policies": "__TODO__ Policies",
+    "workflows": "__TODO__ Workflows",
+    "audit": "__TODO__ Audit Trail",
+    "estateManager": "__TODO__ Estate Manager",
+    "searchConcepts": "__TODO__ Search Concepts",
+    "viewGraph": "__TODO__ View Graph",
+    "searchGraph": "__TODO__ Search Graph",
+    "assetTypes": "__TODO__ Asset Types",
+    "tags": "__TODO__ Tags",
+    "entitlements": "__TODO__ Entitlements",
+    "securityFeatures": "__TODO__ Security Features",
+    "entitlementsSync": "__TODO__ Entitlements Sync",
+    "general": "__TODO__ General",
+    "uiCustomization": "__TODO__ UI Customization",
+    "connectors": "__TODO__ Connectors",
+    "schemaImporter": "__TODO__ Schema Importer",
+    "jobs": "__TODO__ Jobs",
+    "deliveryModes": "__TODO__ Delivery Modes",
+    "git": "__TODO__ Git Integration",
+    "appRoles": "__TODO__ Application Roles",
+    "businessRoles": "__TODO__ Business Roles",
+    "businessOwners": "__TODO__ Business Owners",
+    "searchSettings": "__TODO__ Search Settings",
+    "mcpSettings": "__TODO__ MCP Settings",
+    "collections": "__TODO__ Collections",
+    "rdfSources": "__TODO__ RDF Sources",
+    "about": "__TODO__ About",
+    "hierarchyBrowser": "__TODO__ Hierarchy Browser"
+  },
+  "navGroups": {
+    "discover": "__TODO__ Discover",
+    "myData": "__TODO__ My Data",
+    "build": "__TODO__ Build",
+    "monitor": "__TODO__ Monitor",
+    "tasks": "__TODO__ Tasks",
+    "catalog": "__TODO__ Catalog",
+    "govern": "__TODO__ Govern",
+    "tools": "__TODO__ Tools",
+    "organize": "__TODO__ Organize",
+    "standards": "__TODO__ Standards",
+    "oversight": "__TODO__ Oversight",
+    "advanced": "__TODO__ Advanced",
+    "accessControl": "__TODO__ Access Control",
+    "monitoring": "__TODO__ Monitoring",
+    "configuration": "__TODO__ Configuration",
+    "automation": "__TODO__ Automation",
+    "access": "__TODO__ Access",
+    "system": "__TODO__ System"
+  },
+  "personas": {
+    "data_consumer": "__TODO__ Data Consumer",
+    "data_producer": "__TODO__ Data Producer",
+    "data_steward": "__TODO__ Data Steward",
+    "data_governance_officer": "__TODO__ Data Governor",
+    "security_officer": "__TODO__ Security Officer",
+    "administrator": "__TODO__ Administrator"
+  },
+  "personaDescriptions": {
+    "data_consumer": "__TODO__ Browse & subscribe to data products",
+    "data_producer": "__TODO__ Build, publish & monitor data products",
+    "data_steward": "__TODO__ Curate catalog & ensure data quality",
+    "data_governance_officer": "__TODO__ Policies, domains & ownership",
+    "security_officer": "__TODO__ Access control & security",
+    "administrator": "__TODO__ System configuration & management"
+  },
+  "personaSwitcher": {
+    "switchPersona": "__TODO__ Switch Persona",
+    "currentPersona": "__TODO__ Current persona"
+  },
   "title": "設定",
   "tabs": {
     "general": "一般",
     "databricks": "Databricks",
     "git": "Git",
+    "delivery": "__TODO__ Delivery Modes",
     "jobs": "ジョブ",
     "audit": "監査ログ",
     "businessRoles": "ビジネスロール",
+    "deliveryMethods": "__TODO__ Delivery Methods",
     "assetTypes": "アセットタイプ",
     "dataDomains": "ドメイン",
     "teams": "チーム",
@@ -17,7 +108,11 @@
     "search": "検索",
     "mcpTokens": "MCPトークン",
     "workflows": "ワークフロー",
-    "uiCustomization": "UIカスタマイズ"
+    "uiCustomization": "UIカスタマイズ",
+    "connectors": "__TODO__ Connectors",
+    "schemaImporter": "__TODO__ Schema Importer",
+    "certificationLevels": "__TODO__ Certification Levels",
+    "maturityLevels": "__TODO__ Maturity Levels"
   },
   "accessDenied": {
     "title": "アクセス拒否",
@@ -108,13 +203,54 @@
     "labels": {
       "repoUrl": "リポジトリURL",
       "branch": "ブランチ",
-      "token": "トークン"
+      "token": "トークン",
+      "username": "__TODO__ Username"
     },
     "placeholders": {
       "repoUrl": "https://github.com/your-org/your-repo.git",
       "branch": "main",
-      "token": "ghp_... または類似"
-    }
+      "token": "ghp_... または類似",
+      "username": "__TODO__ x-access-token"
+    },
+    "cloneButton": "__TODO__ Clone Repository",
+    "currentCommit": "__TODO__ Commit",
+    "diff": {
+      "collapseAll": "__TODO__ Collapse All",
+      "commitAndPush": "__TODO__ Commit & Push",
+      "commitMessage": "__TODO__ Commit Message (optional)",
+      "expandAll": "__TODO__ Expand All",
+      "fileCount": "__TODO__ {{count}} file(s) changed",
+      "newFile": "__TODO__ New file",
+      "noChanges": "__TODO__ No pending changes",
+      "noDiff": "__TODO__ No diff available",
+      "title": "__TODO__ Pending Changes"
+    },
+    "errorTitle": "__TODO__ Error",
+    "lastSync": "__TODO__ Last Sync",
+    "messages": {
+      "cloneError": "__TODO__ Failed to clone repository",
+      "cloneSuccess": "__TODO__ Repository cloned successfully",
+      "pullError": "__TODO__ Failed to pull changes",
+      "pullSuccess": "__TODO__ Repository updated",
+      "pushError": "__TODO__ Failed to push changes",
+      "pushSuccess": "__TODO__ Changes pushed successfully",
+      "saveError": "__TODO__ Failed to save Git settings",
+      "saveSuccess": "__TODO__ Git settings saved"
+    },
+    "pendingChanges": "__TODO__ Pending Changes",
+    "pullButton": "__TODO__ Pull",
+    "pushButton": "__TODO__ Push",
+    "repoStatus": "__TODO__ Repository Status",
+    "saveButton": "__TODO__ Save Settings",
+    "status": {
+      "cloned": "__TODO__ Cloned",
+      "cloning": "__TODO__ Cloning...",
+      "error": "__TODO__ Error",
+      "notCloned": "__TODO__ Not Cloned",
+      "notConfigured": "__TODO__ Not Configured"
+    },
+    "viewChangesButton": "__TODO__ View Changes",
+    "volumePath": "__TODO__ Volume Path"
   },
   "nav": {
     "groups": {
@@ -146,7 +282,36 @@
     "saveButton": "設定を保存",
     "messages": {
       "saveSuccess": "設定が正常に保存されました",
-      "saveError": "設定の保存に失敗しました"
+      "saveError": "設定の保存に失敗しました",
+      "statusFetchError": "__TODO__ Failed to fetch workflow statuses",
+      "saveFailed": "__TODO__ Failed to save",
+      "startedRun": "__TODO__ Started run",
+      "startFailed": "__TODO__ Failed to start",
+      "stoppedRun": "__TODO__ Stopped run",
+      "stopFailed": "__TODO__ Failed to stop",
+      "pausedSchedule": "__TODO__ Paused schedule",
+      "pauseFailed": "__TODO__ Failed to pause",
+      "resumedSchedule": "__TODO__ Resumed schedule",
+      "resumeFailed": "__TODO__ Failed to resume"
+    },
+    "aria": {
+      "history": "__TODO__ History",
+      "configure": "__TODO__ Configure"
+    },
+    "configureTooltip": "__TODO__ Configure workflow parameters",
+    "table": {
+      "actions": "__TODO__ Actions",
+      "canceled": "__TODO__ Canceled",
+      "description": "__TODO__ Description",
+      "enabled": "__TODO__ Enabled",
+      "failed": "__TODO__ Failed",
+      "idle": "__TODO__ Idle",
+      "name": "__TODO__ Name",
+      "notInstalled": "__TODO__ Not Installed",
+      "running": "__TODO__ Running",
+      "status": "__TODO__ Status",
+      "success": "__TODO__ Success",
+      "timedOut": "__TODO__ Timed Out"
     }
   },
   "jobsActions": {
@@ -176,7 +341,10 @@
       "running": "実行中",
       "pending": "保留",
       "unknown": "不明"
-    }
+    },
+    "expandDetails": "__TODO__ Expand details",
+    "collapseDetails": "__TODO__ Collapse details",
+    "stateMessage": "__TODO__ State Message:"
   },
   "roles": {
     "title": "ロールベースのアクセス制御",
@@ -194,7 +362,8 @@
     "dialog": {
       "createTitle": "ロールを作成",
       "editTitle": "ロールを編集: {{name}}",
-      "description": "ロール名、割り当てられたグループ、機能の権限、承認権限を定義します。"
+      "description": "ロール名、割り当てられたグループ、機能の権限、承認権限を定義します。",
+      "defaultRoleName": "__TODO__ Role"
     },
     "tabs": {
       "general": "一般",
@@ -219,6 +388,15 @@
       "approvalPrivileges": {
         "title": "承認権限",
         "description": "このロールに特定の種類のリクエストを承認する権限を付与します。"
+      },
+      "allowedPersonas": {
+        "title": "__TODO__ Personas this role can access",
+        "description": "__TODO__ Select which persona views users with this role can use in the UI."
+      },
+      "adminRole": {
+        "title": "__TODO__ Admin Role",
+        "description": "__TODO__ Mark this role as the admin role. Only one role should be marked as admin.",
+        "label": "__TODO__ This is the admin role"
       }
     },
     "permissions": {
@@ -233,7 +411,18 @@
         "deploy": "展開",
         "settings": "設定",
         "other": "その他"
-      }
+      },
+      "crossCutting": "__TODO__ Background",
+      "settingsSubGroups": {
+        "referenceData": "__TODO__ Reference Data",
+        "configuration": "__TODO__ Configuration",
+        "integrations": "__TODO__ Integrations",
+        "operations": "__TODO__ Operations",
+        "accessControl": "__TODO__ Access Control"
+      },
+      "selectAccessPlaceholder": "__TODO__ Select access",
+      "noLevels": "__TODO__ No levels",
+      "noFeaturesLoaded": "__TODO__ No features configuration loaded."
     },
     "deployment": {
       "title": "デプロイメントポリシー",
@@ -282,7 +471,55 @@
       "addRole": "ロールを追加",
       "actions": "アクション",
       "editRole": "ロールを編集",
-      "deleteRole": "ロールを削除"
+      "deleteRole": "ロールを削除",
+      "cannotDeleteAdmin": "__TODO__ Cannot delete Admin role"
+    },
+    "messages": {
+      "loadFailed": "__TODO__ Failed to load roles configuration.",
+      "deleteFailed": "__TODO__ Failed to delete role.",
+      "permissionDeniedTitle": "__TODO__ Permission Denied",
+      "cannotEditRoles": "__TODO__ You do not have permission to edit roles.",
+      "cannotDeleteRoles": "__TODO__ You do not have permission to delete roles.",
+      "permissionsUpdatedTitle": "__TODO__ Permissions Updated",
+      "permissionsUpdated": "__TODO__ User permissions and available roles refreshed.",
+      "refreshFailedTitle": "__TODO__ Refresh Failed",
+      "refreshFailed": "__TODO__ Could not refresh permissions/roles: {{error}}",
+      "deleteConfirm": "__TODO__ Are you sure you want to delete the role \"{{name}}\"?",
+      "roleDeleted": "__TODO__ Role \"{{name}}\" deleted.",
+      "roleCreated": "__TODO__ Role \"{{name}}\" created.",
+      "roleUpdated": "__TODO__ Role \"{{name}}\" updated.",
+      "saveErrorTitle": "__TODO__ Save Error",
+      "unexpectedError": "__TODO__ An unexpected error occurred.",
+      "unsavedChangesConfirm": "__TODO__ You have unsaved changes. Are you sure you want to close?"
+    },
+    "confirmRequest": {
+      "title": "__TODO__ Handle Role Access Request",
+      "reviewPrompt": "__TODO__ Review the request from <strong>{{email}}</strong> for the role <strong>{{role}}</strong>.",
+      "requesterReasonLabel": "__TODO__ Requester's Reason",
+      "messageLabel": "__TODO__ Optional Message to Requester",
+      "messagePlaceholder": "__TODO__ Provide a reason for approval or denial (optional)",
+      "deny": "__TODO__ Deny Request",
+      "approve": "__TODO__ Approve Request",
+      "approvedTitle": "__TODO__ Request Approved",
+      "deniedTitle": "__TODO__ Request Denied",
+      "decisionSubmitted": "__TODO__ Decision for {{email}}'s request for role {{role}} submitted.",
+      "submissionFailed": "__TODO__ Submission Failed",
+      "submissionFailedDescription": "__TODO__ Could not submit the decision."
+    },
+    "requestAccess": {
+      "title": "__TODO__ Request Role Access",
+      "description": "__TODO__ Submit a request for access to this application role. Please provide a detailed reason for your request.",
+      "roleLabel": "__TODO__ Role:",
+      "reasonLabel": "__TODO__ Reason for Role Access Request *",
+      "reasonPlaceholder": "__TODO__ Please explain why you need this role. Include details about your responsibilities, project requirements, or business justification...",
+      "reasonHelp": "__TODO__ Minimum 10 characters required. This information will be shared with administrators.",
+      "reasonRequired": "__TODO__ Please provide a reason for requesting this role",
+      "reasonTooShort": "__TODO__ Please provide a more detailed reason (at least 10 characters)",
+      "submittedTitle": "__TODO__ Request Submitted",
+      "submittedDescription": "__TODO__ Your request for the role \"{{role}}\" has been submitted and you will be notified of the decision.",
+      "submitFailed": "__TODO__ Failed to submit role access request",
+      "sending": "__TODO__ Sending Request...",
+      "send": "__TODO__ Send Request"
     }
   },
   "mcpTokens": {
@@ -380,7 +617,8 @@
       "invalidUrl": "有効なHTTPまたはHTTPS URLを入力してください",
       "preview": "プレビュー：",
       "loadError": "画像の読み込みに失敗しました",
-      "openInNewTab": "新しいタブで開く"
+      "openInNewTab": "新しいタブで開く",
+      "previewAlt": "__TODO__ Logo preview"
     },
     "about": {
       "title": "カスタム「About」ページコンテンツ",
@@ -403,6 +641,680 @@
       "saveSuccess": "UIカスタマイズ設定を保存しました",
       "saveError": "設定の保存に失敗しました",
       "reloadRequired": "一部の変更を確認するにはページをリロードしてください。"
+    },
+    "branding": {
+      "help": "__TODO__ The display name overrides the product name in welcome/about/copilot copy and in the browser tab title. The PWA manifest name and the static page title set at build time are not updated by these settings.",
+      "displayNameHelp": "__TODO__ Leave empty to use the default product name ({{defaultName}}). Maximum {{max}} characters.",
+      "shortNamePlaceholder": "__TODO__ e.g. an acronym for compact UI",
+      "shortNameHelp": "__TODO__ Used in tight spaces (e.g. \"Ask {{shortName}}\"). Falls back to the display name when empty. Maximum {{max}} characters.",
+      "displayNameLabel": "__TODO__ Display name",
+      "shortNameLabel": "__TODO__ Short name (optional)",
+      "title": "__TODO__ Branding"
+    },
+    "favicon": {
+      "previewAlt": "__TODO__ Favicon preview",
+      "urlPlaceholder": "__TODO__ https://example.com/favicon.svg",
+      "help": "__TODO__ Applied at runtime to the browser tab. The static <link rel=\"icon\"> in the shipped index.html and the PWA manifest are not updated by this setting.",
+      "invalidUrl": "__TODO__ Please enter a valid HTTP or HTTPS URL",
+      "loadError": "__TODO__ Failed to load image",
+      "openInNewTab": "__TODO__ Open in new tab",
+      "preview": "__TODO__ Preview:",
+      "title": "__TODO__ Browser Favicon",
+      "urlLabel": "__TODO__ Favicon URL"
+    }
+  },
+  "connectors": {
+    "title": "__TODO__ Connections",
+    "description": "__TODO__ Manage connections to external data platforms for asset discovery and metadata retrieval.",
+    "addConnection": "__TODO__ Add Connection",
+    "testConnection": "__TODO__ Test Connection",
+    "editTitle": "__TODO__ Edit Connection",
+    "editDescription": "__TODO__ Update connection settings.",
+    "createTitle": "__TODO__ New Connection",
+    "createDescription": "__TODO__ Configure a new connection to an external data platform.",
+    "deleteTitle": "__TODO__ Delete Connection",
+    "deleteDescription": "__TODO__ Are you sure you want to delete this connection? This action cannot be undone.",
+    "columns": {
+      "name": "__TODO__ Name",
+      "type": "__TODO__ Type",
+      "description": "__TODO__ Description",
+      "status": "__TODO__ Status",
+      "updated": "__TODO__ Updated"
+    },
+    "form": {
+      "connectorType": "__TODO__ Connector Type",
+      "name": "__TODO__ Name",
+      "description": "__TODO__ Description",
+      "enabled": "__TODO__ Enabled",
+      "isDefault": "__TODO__ Default",
+      "systemAssetHelp": "__TODO__ Link to an existing System asset, or leave empty to auto-create one on the first import.",
+      "connectorTypePlaceholder": "__TODO__ Select a connector type...",
+      "namePlaceholder": "__TODO__ e.g. Production BQ - Analytics",
+      "descriptionPlaceholder": "__TODO__ Optional description...",
+      "autoCreateOnImport": "__TODO__ Auto-create on first import",
+      "systemAsset": "__TODO__ Linked System Asset"
+    },
+    "bigquery": {
+      "configTitle": "__TODO__ BigQuery Configuration",
+      "ucConnectionName": "__TODO__ UC Connection Name",
+      "ucConnectionNameHelp": "__TODO__ Optional. Provides GCP Project ID from UC Connection metadata.",
+      "projectId": "__TODO__ GCP Project ID",
+      "projectIdHelp": "__TODO__ Optional. Derived from credentials if not set.",
+      "location": "__TODO__ Location",
+      "locationHelp": "__TODO__ e.g. US, EU, us-central1",
+      "authSectionTitle": "__TODO__ Authentication",
+      "authSectionHelp": "__TODO__ Store the GCP service account key JSON as a Databricks Secret, then reference the scope and key name below.",
+      "secretScope": "__TODO__ Secret Scope",
+      "secretKey": "__TODO__ Secret Key",
+      "credentialsPath": "__TODO__ Credentials File Path",
+      "credentialsPathHelp": "__TODO__ Dev fallback: local path to a service account key JSON file.",
+      "projectIdPlaceholder": "__TODO__ my-gcp-project",
+      "locationPlaceholder": "__TODO__ US",
+      "ucConnectionNamePlaceholder": "__TODO__ my-bigquery-connection",
+      "secretScopePlaceholder": "__TODO__ ontos-connectors",
+      "secretKeyPlaceholder": "__TODO__ bigquery-sa-key",
+      "credentialsPathPlaceholder": "__TODO__ /path/to/service-account-key.json"
+    },
+    "snowflake": {
+      "configTitle": "__TODO__ Snowflake Configuration",
+      "account": "__TODO__ Account Identifier",
+      "accountHelp": "__TODO__ e.g. myorg-myaccount or xy12345.us-east-1",
+      "user": "__TODO__ User",
+      "warehouse": "__TODO__ Warehouse",
+      "role": "__TODO__ Role",
+      "roleHelp": "__TODO__ Optional. Role to assume for queries.",
+      "database": "__TODO__ Default Database",
+      "defaultSchema": "__TODO__ Default Schema",
+      "accountPlaceholder": "__TODO__ myorg-myaccount",
+      "userPlaceholder": "__TODO__ ONTOS_SVC",
+      "warehousePlaceholder": "__TODO__ COMPUTE_WH",
+      "rolePlaceholder": "__TODO__ SYSADMIN",
+      "databasePlaceholder": "__TODO__ ANALYTICS",
+      "defaultSchemaPlaceholder": "__TODO__ PUBLIC"
+    },
+    "databricks": {
+      "systemNote": "__TODO__ This connection is auto-configured from environment variables and cannot be modified."
+    },
+    "messages": {
+      "saveSuccess": "__TODO__ Connection saved",
+      "saveError": "__TODO__ Failed to save connection",
+      "testSuccess": "__TODO__ Connection successful",
+      "testFailed": "__TODO__ Connection failed",
+      "testError": "__TODO__ Connection test error",
+      "deleteSuccess": "__TODO__ Connection deleted",
+      "testSuccessProject": "__TODO__ Project: {{project}}",
+      "deleteFailed": "__TODO__ Delete failed"
+    },
+    "badges": {
+      "system": "__TODO__ System",
+      "default": "__TODO__ Default"
+    }
+  },
+  "schemaImporter": {
+    "title": "__TODO__ Schema Importer",
+    "description": "__TODO__ Browse remote systems and import their structure as {{appName}} assets."
+  },
+  "assetBulk": {
+    "title": "__TODO__ Asset Import / Export",
+    "description": "__TODO__ Export assets to CSV/Excel for offline editing, or import assets from a file.",
+    "exportTab": "__TODO__ Export",
+    "importTab": "__TODO__ Import",
+    "exportSettings": "__TODO__ Export Settings",
+    "format": "__TODO__ Format",
+    "scope": "__TODO__ Scope",
+    "allAssetTypes": "__TODO__ All asset types",
+    "exportAssets": "__TODO__ Export Assets",
+    "exporting": "__TODO__ Exporting...",
+    "downloadTemplate": "__TODO__ Download Template",
+    "exportSuccess": "__TODO__ Export Successful",
+    "exportFailed": "__TODO__ Export Failed",
+    "templateDownloaded": "__TODO__ Template Downloaded",
+    "selectFile": "__TODO__ Select File",
+    "preview": "__TODO__ Preview",
+    "previewFailed": "__TODO__ Preview Failed",
+    "importButton": "__TODO__ Import",
+    "importing": "__TODO__ Importing...",
+    "importAssets": "__TODO__ Import {count} asset(s)",
+    "importSuccess": "__TODO__ Import Successful",
+    "importFailed": "__TODO__ Import Failed",
+    "importWithErrors": "__TODO__ Import Completed with Errors",
+    "importComplete": "__TODO__ Import complete: {created} created, {updated} updated, {errors} errors.",
+    "close": "__TODO__ Close",
+    "row": "__TODO__ Row",
+    "name": "__TODO__ Name",
+    "type": "__TODO__ Type",
+    "action": "__TODO__ Action",
+    "message": "__TODO__ Message",
+    "create": "__TODO__ Create",
+    "update": "__TODO__ Update",
+    "skip": "__TODO__ Skip",
+    "error": "__TODO__ Error",
+    "importExport": "__TODO__ Import / Export",
+    "exportHelp": "__TODO__ The export file includes all fields for each asset. You can edit it offline and re-import.",
+    "templateHelp": "__TODO__ The template provides an empty file with correct headers and an example row."
+  },
+  "workflows": {
+    "actions": {
+      "start": "__TODO__ Start",
+      "stop": "__TODO__ Stop",
+      "pause": "__TODO__ Pause",
+      "unpause": "__TODO__ Unpause"
+    }
+  },
+  "workflowConfig": {
+    "title": "__TODO__ Configure {{name}}",
+    "description": "__TODO__ Set parameters for this workflow. These values will be used when the workflow runs.",
+    "loadError": "__TODO__ Failed to load configuration",
+    "saveError": "__TODO__ Failed to save configuration",
+    "saveSuccess": "__TODO__ Workflow configuration saved successfully",
+    "selectOption": "__TODO__ Select an option",
+    "noParameters": "__TODO__ No configurable parameters for this workflow.",
+    "saveButton": "__TODO__ Save Configuration"
+  },
+  "tags": {
+    "enable": "__TODO__ Enable",
+    "title": "__TODO__ Tags",
+    "description": "__TODO__ Manage tag namespaces, configure display settings, and organize tags across the application.",
+    "columns": {
+      "group": "__TODO__ Group",
+      "accessLevel": "__TODO__ Access Level"
+    },
+    "display": {
+      "title": "__TODO__ Tag Display Settings",
+      "description": "__TODO__ Configure how tags are displayed throughout the application.",
+      "formatLabel": "__TODO__ Display Format:",
+      "formatPlaceholder": "__TODO__ Select format",
+      "short": "__TODO__ Short (tag name only)",
+      "long": "__TODO__ Long (namespace/tag name)",
+      "help": "__TODO__ <strong>Short:</strong> Shows only the tag name (e.g., \"pii\"). <br/> <strong>Long:</strong> Shows namespace and tag name (e.g., \"compliance/pii\")."
+    },
+    "namespaces": {
+      "title": "__TODO__ Tag Namespaces",
+      "description": "__TODO__ Organize tags into logical namespaces for better management and permissions.",
+      "add": "__TODO__ Add Namespace",
+      "activeLabel": "__TODO__ Active Namespace:",
+      "selectPlaceholder": "__TODO__ Select namespace"
+    },
+    "list": {
+      "description": "__TODO__ Manage tags within the selected namespace.",
+      "add": "__TODO__ Add Tag"
+    },
+    "permissions": {
+      "title": "__TODO__ Namespace Permissions",
+      "description": "__TODO__ Control which groups can access and modify tags in this namespace.",
+      "add": "__TODO__ Add Permission"
+    },
+    "namespaceDialog": {
+      "editTitle": "__TODO__ Edit Namespace",
+      "createTitle": "__TODO__ Create Namespace",
+      "editDescription": "__TODO__ Update the namespace details.",
+      "createDescription": "__TODO__ Create a new namespace for organizing tags.",
+      "namePlaceholder": "__TODO__ e.g., finance, marketing, engineering",
+      "descriptionPlaceholder": "__TODO__ Optional description for the namespace"
+    },
+    "tagDialog": {
+      "editTitle": "__TODO__ Edit Tag",
+      "createTitle": "__TODO__ Create Tag",
+      "editDescription": "__TODO__ Update the tag details.",
+      "createDescription": "__TODO__ Create a new tag in the selected namespace.",
+      "namePlaceholder": "__TODO__ e.g., pii, sensitive, public",
+      "descriptionPlaceholder": "__TODO__ Describe what this tag represents",
+      "versionPlaceholder": "__TODO__ e.g., v1.0, 2023.1",
+      "parentLabel": "__TODO__ Parent Tag",
+      "possibleValuesLabel": "__TODO__ Possible Values (JSON Array)",
+      "possibleValuesHelp": "__TODO__ Optional. JSON array of allowed values for this tag when assigned to entities.",
+      "statuses": {
+        "active": "__TODO__ Active",
+        "draft": "__TODO__ Draft",
+        "candidate": "__TODO__ Candidate",
+        "deprecated": "__TODO__ Deprecated",
+        "inactive": "__TODO__ Inactive",
+        "retired": "__TODO__ Retired"
+      }
+    },
+    "permissionDialog": {
+      "editTitle": "__TODO__ Edit Permission",
+      "addTitle": "__TODO__ Add Permission",
+      "editDescription": "__TODO__ Update the permission details.",
+      "addDescription": "__TODO__ Grant access to a group for this namespace.",
+      "groupLabel": "__TODO__ Group",
+      "groupPlaceholder": "__TODO__ e.g., data-engineers, analysts"
+    },
+    "accessLevels": {
+      "readOnly": "__TODO__ Read Only",
+      "readWrite": "__TODO__ Read/Write",
+      "admin": "__TODO__ Admin"
+    },
+    "deleteDialog": {
+      "title": "__TODO__ Delete {{type}}",
+      "description": "__TODO__ Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+      "namespaceWarning": "__TODO__ All tags and permissions in this namespace will also be deleted."
+    },
+    "toasts": {
+      "fetchNamespacesError": "__TODO__ Error fetching namespaces",
+      "fetchTagsError": "__TODO__ Error fetching tags",
+      "fetchPermissionsError": "__TODO__ Error fetching permissions",
+      "displayFormatUpdated": "__TODO__ Tag display format updated",
+      "displayFormatError": "__TODO__ Error saving display format",
+      "namespaceUpdated": "__TODO__ Namespace updated successfully",
+      "namespaceCreated": "__TODO__ Namespace created successfully",
+      "namespaceSaveError": "__TODO__ Error saving namespace",
+      "tagUpdated": "__TODO__ Tag updated successfully",
+      "tagCreated": "__TODO__ Tag created successfully",
+      "tagSaveError": "__TODO__ Error saving tag",
+      "permissionUpdated": "__TODO__ Permission updated successfully",
+      "permissionCreated": "__TODO__ Permission created successfully",
+      "permissionSaveError": "__TODO__ Error saving permission",
+      "deleteSuccess": "__TODO__ {{type}} deleted successfully",
+      "deleteError": "__TODO__ Error deleting item"
+    },
+    "syncConfigs": {
+      "errors": {
+        "empty": "__TODO__ Tag key cannot be empty",
+        "spaces": "__TODO__ Tag key cannot have leading/trailing spaces",
+        "invalidChar": "__TODO__ Tag key cannot contain '{{char}}'"
+      },
+      "introBefore": "__TODO__ Configure which metadata to sync to Unity Catalog tags and customize tag key/value formats. Use",
+      "introAfter": "__TODO__ placeholders for dynamic values.",
+      "invalidCharsBefore": "__TODO__ UC tag keys cannot contain:",
+      "invalidCharsAfter": "__TODO__ or have leading/trailing spaces",
+      "cardDescription": "__TODO__ Configure tag format for {{type}}",
+      "availableVariables": "__TODO__ Available Variables",
+      "keyFormatLabel": "__TODO__ Tag Key Format",
+      "keyFormatPlaceholder": "__TODO__ e.g., ontos_{VARIABLE}",
+      "example": "__TODO__ Example:",
+      "valueFormatLabel": "__TODO__ Tag Value Format",
+      "valueFormatPlaceholder": "__TODO__ e.g., {VARIABLE}",
+      "valueFormatHelp": "__TODO__ The value that will be assigned to the tag",
+      "variables": {
+        "linkIri": "__TODO__ Full IRI of the semantic link",
+        "linkLabel": "__TODO__ Label of the semantic link",
+        "linkSlug": "__TODO__ Slugified IRI (e.g., \"customer\")",
+        "domainId": "__TODO__ Domain UUID",
+        "domainName": "__TODO__ Domain name",
+        "contractId": "__TODO__ Contract UUID",
+        "contractName": "__TODO__ Contract name",
+        "contractVersion": "__TODO__ Contract version",
+        "contractStatus": "__TODO__ Contract status",
+        "productId": "__TODO__ Product UUID",
+        "productName": "__TODO__ Product name",
+        "productVersion": "__TODO__ Product version",
+        "productStatus": "__TODO__ Product status"
+      }
+    },
+    "entityPatterns": {
+      "intro": "__TODO__ Configure tag patterns for discovering and importing entities from Unity Catalog. Use regular expressions to match tag keys and extract entity names.",
+      "discoveryTitle": "__TODO__ {{type}} Discovery",
+      "cardDescription": "__TODO__ Configure patterns to discover {{type}}s from UC tags",
+      "filterPatternOptional": "__TODO__ Filter Pattern (Optional)",
+      "filterHelp": "__TODO__ Optionally filter which objects to consider by matching additional tag patterns",
+      "filterSource": "__TODO__ Filter Source",
+      "tagKey": "__TODO__ Tag Key",
+      "tagValue": "__TODO__ Tag Value",
+      "filterPatternRegex": "__TODO__ Filter Pattern (Regex)",
+      "keyPatternRequired": "__TODO__ Key Pattern (Required)",
+      "keyPatternHelp": "__TODO__ Regex pattern to match tag keys that identify this entity type",
+      "valueExtractionRequired": "__TODO__ Value Extraction (Required)",
+      "valueExtractionHelp": "__TODO__ Extract the {{type}} name from the matched tag",
+      "extractionSource": "__TODO__ Extraction Source",
+      "extractionPatternLabel": "__TODO__ Extraction Pattern (Regex with Capture Group)",
+      "extractionExampleBefore": "__TODO__ Use parentheses () to capture the {{type}} name. Example:",
+      "extractionExampleAfter": "__TODO__ extracts \"ABC\" from \"data-{{type}}-ABC\""
+    }
+  },
+  "search": {
+    "title": "__TODO__ Search Configuration",
+    "description": "__TODO__ Configure how the global search indexes and ranks results across different asset types.",
+    "unsavedChanges": "__TODO__ You have unsaved changes. Save to persist your configuration.",
+    "loadFailedAlert": "__TODO__ Failed to load search configuration. Please refresh the page.",
+    "matchTypes": {
+      "prefix": "__TODO__ Prefix (start of word)",
+      "substring": "__TODO__ Substring (anywhere)",
+      "exact": "__TODO__ Exact match only",
+      "fuzzy": "__TODO__ Fuzzy (allow typos)"
+    },
+    "sortFields": {
+      "matchPriority": "__TODO__ Field Priority (title > description > tags)",
+      "boostScore": "__TODO__ Boost Score (weighted relevance)",
+      "titleAsc": "__TODO__ Title (A → Z)",
+      "titleDesc": "__TODO__ Title (Z → A)"
+    },
+    "assetTypes": {
+      "dataProduct": "__TODO__ Data Products",
+      "dataContract": "__TODO__ Data Contracts",
+      "glossaryTerm": "__TODO__ Glossary Terms",
+      "dataAssetReview": "__TODO__ Asset Reviews",
+      "tag": "__TODO__ Tags",
+      "dataDomain": "__TODO__ Data Domains"
+    },
+    "fieldEditor": {
+      "sourceBadge": "__TODO__ source: {{source}}",
+      "indexed": "__TODO__ Indexed",
+      "matchType": "__TODO__ Match Type",
+      "priorityLabel": "__TODO__ Priority (1-100)",
+      "priorityHelp": "__TODO__ Lower = higher importance",
+      "boostLabel": "__TODO__ Boost (0-10)",
+      "boostHelp": "__TODO__ Score multiplier for ranking"
+    },
+    "tabs": {
+      "defaultFields": "__TODO__ Default Fields",
+      "assetTypes": "__TODO__ Asset Types",
+      "ranking": "__TODO__ Ranking"
+    },
+    "defaults": {
+      "description": "__TODO__ These settings apply to all asset types by default. Individual asset types can override these settings."
+    },
+    "assetTypesTab": {
+      "description": "__TODO__ Configure search behavior for each asset type. Enable/disable indexing and customize extra fields.",
+      "enableIndexing": "__TODO__ Enable indexing",
+      "inheritDefaults": "__TODO__ Inherit default field settings",
+      "extraFieldsTitle": "__TODO__ Extra Fields",
+      "extraFieldsDescription": "__TODO__ Additional fields specific to this asset type.",
+      "extraFieldsBadge": "__TODO__ +{{count}} extra fields"
+    },
+    "ranking": {
+      "description": "__TODO__ Configure how search results are sorted. Results matching higher priority fields appear first.",
+      "primarySort": "__TODO__ Primary Sort",
+      "primarySortHelp": "__TODO__ The main criterion used to order results.",
+      "secondarySort": "__TODO__ Secondary Sort (tie-breaker)",
+      "secondarySortHelp": "__TODO__ Used when primary sort values are equal.",
+      "tertiarySort": "__TODO__ Tertiary Sort",
+      "tertiarySortHelp": "__TODO__ Final tie-breaker for results with equal primary and secondary values."
+    },
+    "buttons": {
+      "rebuildIndex": "__TODO__ Rebuild Search Index",
+      "save": "__TODO__ Save Configuration"
+    },
+    "messages": {
+      "loadErrorTitle": "__TODO__ Error loading configuration",
+      "loadErrorDescription": "__TODO__ Failed to load search configuration. Please try again.",
+      "saveSuccessTitle": "__TODO__ Configuration saved",
+      "saveSuccessDescription": "__TODO__ Search configuration has been updated. Consider rebuilding the index to apply changes.",
+      "saveErrorTitle": "__TODO__ Error saving configuration",
+      "saveErrorDescription": "__TODO__ Failed to save search configuration. Please try again.",
+      "rebuildSuccessTitle": "__TODO__ Index rebuilt",
+      "rebuildSuccessDescription": "__TODO__ Search index rebuilt with {{count}} items.",
+      "rebuildErrorTitle": "__TODO__ Error rebuilding index",
+      "rebuildErrorDescription": "__TODO__ Failed to rebuild search index. Please try again."
+    },
+    "matchType": {
+      "prefix": "__TODO__ Prefix (start of word)",
+      "substring": "__TODO__ Substring (anywhere)",
+      "exact": "__TODO__ Exact match only",
+      "fuzzy": "__TODO__ Fuzzy (allow typos)"
+    },
+    "sortField": {
+      "matchPriority": "__TODO__ Field Priority (title > description > tags)",
+      "boostScore": "__TODO__ Boost Score (weighted relevance)",
+      "titleAsc": "__TODO__ Title (A → Z)",
+      "titleDesc": "__TODO__ Title (Z → A)"
+    },
+    "assetType": {
+      "dataProduct": "__TODO__ Data Products",
+      "dataContract": "__TODO__ Data Contracts",
+      "glossaryTerm": "__TODO__ Glossary Terms",
+      "dataAssetReview": "__TODO__ Asset Reviews",
+      "tag": "__TODO__ Tags",
+      "dataDomain": "__TODO__ Data Domains"
+    }
+  },
+  "ontologyLibrary": {
+    "title": "__TODO__ Industry Ontology Library",
+    "description": "__TODO__ Browse and import industry-standard ontologies organized by vertical.",
+    "verticalsHeading": "__TODO__ Industry Verticals",
+    "ontologiesHeading": "__TODO__ Ontologies",
+    "filterPlaceholder": "__TODO__ Filter...",
+    "noOntologiesFound": "__TODO__ No ontologies found",
+    "selectVertical": "__TODO__ Select a vertical",
+    "foundationBadge": "__TODO__ Foundation",
+    "licenseBadge": "__TODO__ License",
+    "modulesHeading": "__TODO__ Modules",
+    "website": "__TODO__ Website",
+    "selectOntologyPrompt": "__TODO__ Select an ontology to see its modules",
+    "noModulesAvailable": "__TODO__ No modules available",
+    "moduleCount_one": "__TODO__ {{count}} module",
+    "moduleCount_other": "__TODO__ {{count}} modules",
+    "footer": {
+      "selected_one": "__TODO__ Selected: <strong>{{count}}</strong> module",
+      "selected_other": "__TODO__ Selected: <strong>{{count}}</strong> modules",
+      "selectedFrom_one": "__TODO__ Selected: <strong>{{count}}</strong> module from {{ontology}}",
+      "selectedFrom_other": "__TODO__ Selected: <strong>{{count}}</strong> modules from {{ontology}}",
+      "selectPrompt": "__TODO__ Select modules to import"
+    },
+    "license": {
+      "acceptLabel": "__TODO__ I accept the <terms>license terms</terms> for {{name}}{{license}}"
+    },
+    "buttons": {
+      "importing": "__TODO__ Importing...",
+      "import": "__TODO__ Import Selected Modules"
+    },
+    "messages": {
+      "loadVerticalsFailed": "__TODO__ Failed to load industry verticals",
+      "loadOntologiesFailed": "__TODO__ Failed to load ontologies",
+      "loadModulesFailed": "__TODO__ Failed to load modules",
+      "noModulesTitle": "__TODO__ No modules selected",
+      "noModulesDescription": "__TODO__ Please select at least one module to import.",
+      "licenseRequiredTitle": "__TODO__ License agreement required",
+      "licenseRequiredDescription": "__TODO__ Please accept the license terms to continue.",
+      "importFailed": "__TODO__ Import failed",
+      "importSuccessTitle": "__TODO__ Import successful",
+      "importSuccessDescription": "__TODO__ Imported {{count}} triples as \"{{name}}\"",
+      "warningTitle": "__TODO__ Warning",
+      "importErrorTitle": "__TODO__ Import error",
+      "importErrorDescription": "__TODO__ Failed to import ontology"
+    }
+  },
+  "delivery": {
+    "description": "__TODO__ Configure how governance changes are propagated to external systems. Multiple modes can be active simultaneously.",
+    "direct": {
+      "description": "__TODO__ Apply changes directly to Unity Catalog via SDK (GRANTs, tag assignments).",
+      "dryRun": "__TODO__ Dry-run mode (log changes without applying)",
+      "label": "__TODO__ Direct Mode"
+    },
+    "indirect": {
+      "description": "__TODO__ Persist changes as YAML files in a Git repository for CI/CD integration.",
+      "gitInfo": "__TODO__ Configure Git repository in the Git tab. Changes will be exported to the configured UC Volume under /git-export/.",
+      "label": "__TODO__ Indirect Mode"
+    },
+    "manual": {
+      "description": "__TODO__ Generate notifications for admins to apply changes manually in external systems.",
+      "label": "__TODO__ Manual Mode"
+    },
+    "saveButton": "__TODO__ Delivery settings saved successfully",
+    "title": "__TODO__ Delivery Modes"
+  },
+  "certificationLevels": {
+    "title": "__TODO__ Certification Levels",
+    "description": "__TODO__ Define the certification levels available for data products, contracts, and assets.",
+    "addLevel": "__TODO__ Add Level",
+    "table": {
+      "order": "__TODO__ Order",
+      "preview": "__TODO__ Preview"
+    },
+    "emptyState": "__TODO__ No certification levels configured. Click \"Add Level\" to create one.",
+    "dialog": {
+      "editTitle": "__TODO__ Edit Certification Level",
+      "createTitle": "__TODO__ Add Certification Level",
+      "editDescription": "__TODO__ Update the certification level details.",
+      "createDescription": "__TODO__ Create a new certification level."
+    },
+    "form": {
+      "namePlaceholder": "__TODO__ e.g., Gold",
+      "descriptionPlaceholder": "__TODO__ What this level represents...",
+      "colorLabel": "__TODO__ Color",
+      "previewLabel": "__TODO__ Preview",
+      "levelNamePreview": "__TODO__ Level Name"
+    },
+    "delete": {
+      "title": "__TODO__ Delete certification level?",
+      "description": "__TODO__ Are you sure you want to delete \"{{name}}\"? This cannot be undone. If entities are certified at this level, deletion will be blocked."
+    },
+    "messages": {
+      "updated": "__TODO__ Certification level \"{{name}}\" updated.",
+      "created": "__TODO__ Certification level \"{{name}}\" created.",
+      "deleted": "__TODO__ Certification level \"{{name}}\" deleted.",
+      "cannotDeleteTitle": "__TODO__ Cannot delete",
+      "reorderFailed": "__TODO__ Failed to reorder"
+    }
+  },
+  "maturityLevels": {
+    "title": "__TODO__ Maturity Levels",
+    "description": "__TODO__ Define the maturity ladder for data products and contracts. Each level is gated by compliance policies.",
+    "addLevel": "__TODO__ Add Level",
+    "allTypes": "__TODO__ All types",
+    "gateCount_one": "__TODO__ {{count}} gate",
+    "gateCount_other": "__TODO__ {{count}} gates",
+    "complianceGates": "__TODO__ Compliance Policy Gates",
+    "noDescription": "__TODO__ No description",
+    "required": "__TODO__ Required",
+    "advisory": "__TODO__ Advisory",
+    "viewInCompliance": "__TODO__ View in Compliance",
+    "selectPolicyPlaceholder": "__TODO__ Select compliance policy...",
+    "addGate": "__TODO__ Add Gate",
+    "emptyState": "__TODO__ No maturity levels configured. Click \"Add Level\" to create one.",
+    "dialog": {
+      "editTitle": "__TODO__ Edit Maturity Level",
+      "createTitle": "__TODO__ Add Maturity Level",
+      "editDescription": "__TODO__ Update the maturity level details.",
+      "createDescription": "__TODO__ Create a new maturity level."
+    },
+    "form": {
+      "namePlaceholder": "__TODO__ e.g., Trusted",
+      "descriptionPlaceholder": "__TODO__ What this level represents...",
+      "entityTypeLabel": "__TODO__ Entity Type",
+      "iconLabel": "__TODO__ Icon",
+      "colorLabel": "__TODO__ Color",
+      "previewLabel": "__TODO__ Preview",
+      "levelNamePreview": "__TODO__ Level Name"
+    },
+    "entityTypes": {
+      "all": "__TODO__ All Entity Types",
+      "DataProduct": "__TODO__ Data Products",
+      "DataContract": "__TODO__ Data Contracts"
+    },
+    "delete": {
+      "title": "__TODO__ Delete maturity level?",
+      "description": "__TODO__ Are you sure you want to delete \"{{name}}\"? This cannot be undone. If snapshots reference this level, deletion will be blocked."
+    },
+    "messages": {
+      "updated": "__TODO__ Maturity level \"{{name}}\" updated.",
+      "created": "__TODO__ Maturity level \"{{name}}\" created.",
+      "deleted": "__TODO__ Maturity level \"{{name}}\" deleted.",
+      "cannotDeleteTitle": "__TODO__ Cannot delete"
+    }
+  },
+  "directory": {
+    "title": "__TODO__ Directory",
+    "intro": "__TODO__ Connect a principal directory so users and groups can be picked throughout the app. v1 supports Microsoft Entra ID (via a UC HTTP Connection), a Postgres / Lakebase table, or a local CSV file for tests and demos.",
+    "providerLabel": "__TODO__ Provider",
+    "providerPlaceholder": "__TODO__ Select a provider…",
+    "providers": {
+      "entra": "__TODO__ Microsoft Entra ID",
+      "lakebase": "__TODO__ Lakebase table",
+      "file": "__TODO__ CSV file (test / demo)"
+    },
+    "testConnection": "__TODO__ Test connection",
+    "statusLabel": "__TODO__ Status:",
+    "configured": "__TODO__ Configured ({{provider}})",
+    "notConfigured": "__TODO__ Not configured",
+    "messages": {
+      "saveSuccess": "__TODO__ Directory settings saved",
+      "saveFailed": "__TODO__ Failed to save",
+      "testSuccess": "__TODO__ Directory test succeeded",
+      "testFailed": "__TODO__ Directory test failed",
+      "unknownError": "__TODO__ Unknown error",
+      "clearSuccess": "__TODO__ Directory settings cleared",
+      "clearFailed": "__TODO__ Failed to clear"
+    },
+    "entra": {
+      "connectionLabel": "__TODO__ UC HTTP Connection",
+      "loadingConnections": "__TODO__ Loading connections…",
+      "noConnections": "__TODO__ No HTTP connections found",
+      "selectConnection": "__TODO__ Select a connection…",
+      "setupTitle": "__TODO__ Entra ID connection setup",
+      "setupBody": "__TODO__ Create a Unity Catalog HTTP connection against Microsoft Graph with client_credentials. The app's enterprise app must hold at least <code>User.Read.All</code> and <code>GroupMember.Read.All</code> (or <code>Group.Read.All</code>) application scopes.",
+      "helpLabels": {
+        "tokenUrl": "__TODO__ Token URL",
+        "baseUrl": "__TODO__ Base URL",
+        "scope": "__TODO__ Scope",
+        "grantType": "__TODO__ Grant type"
+      }
+    },
+    "lakebase": {
+      "tableLabel": "__TODO__ Lakebase table",
+      "tablePlaceholder": "__TODO__ catalog.schema.table",
+      "tableHelp": "__TODO__ Fully-qualified name of a Postgres table on the app's primary Lakebase database. Identifier segments must contain only letters, digits, and underscores.",
+      "schemaTitle": "__TODO__ Required schema",
+      "schemaBody": "__TODO__ Populate this table from your IdP sync pipeline. Indexes on lower-cased columns are optional but recommended for snappy prefix search."
+    },
+    "file": {
+      "pathLabel": "__TODO__ CSV file path",
+      "pathPlaceholder": "__TODO__ /etc/ontos/principals.csv",
+      "pathHelp": "__TODO__ Absolute path to a CSV file readable by the app process. Re-read automatically when the file's mtime advances; no restart needed.",
+      "formatTitle": "__TODO__ CSV format",
+      "formatBody": "__TODO__ Required columns: <code>type</code>, <code>id</code>, <code>display_name</code>. The <code>sub_label</code> column is optional. <code>type</code> must be <code>user</code> or <code>group</code>."
+    }
+  },
+  "semanticModels": {
+    "page": {
+      "title": "__TODO__ RDF Sources",
+      "description": "__TODO__ Upload and manage RDF ontology and taxonomy files (RDFS, SKOS, OWL)."
+    },
+    "actions": {
+      "industryLibrary": "__TODO__ Industry Library",
+      "uploading": "__TODO__ Uploading...",
+      "refreshListTooltip": "__TODO__ Refresh list"
+    },
+    "table": {
+      "sourceHeader": "__TODO__ Source",
+      "sizeHeader": "__TODO__ Size",
+      "sizeKb": "__TODO__ {{value}} KB",
+      "enabledHeader": "__TODO__ Enabled",
+      "alwaysOn": "__TODO__ Always On",
+      "viewContentTooltip": "__TODO__ View content",
+      "deleteModelTooltip": "__TODO__ Delete model"
+    },
+    "source": {
+      "unknown": "__TODO__ Unknown",
+      "system": "__TODO__ System",
+      "file": "__TODO__ File",
+      "schema": "__TODO__ Schema",
+      "upload": "__TODO__ Upload"
+    },
+    "deleteDialog": {
+      "title": "__TODO__ Delete RDF Source",
+      "description": "__TODO__ Are you sure you want to delete <strong>{{name}}</strong>? This action cannot be undone and will remove the model from the semantic graph."
+    },
+    "viewDialog": {
+      "titleFallback": "__TODO__ View Ontology",
+      "loadingContent": "__TODO__ Loading content...",
+      "noContent": "__TODO__ No content available.",
+      "loadContentFailed": "__TODO__ Failed to load content.",
+      "copied": "__TODO__ Copied!",
+      "copyToClipboard": "__TODO__ Copy to Clipboard"
+    },
+    "messages": {
+      "loadModelsError": "__TODO__ Failed to load models",
+      "graphRefreshed": "__TODO__ Knowledge graph refreshed successfully",
+      "graphRefreshError": "__TODO__ Failed to refresh knowledge graph",
+      "uploadFailedTitle": "__TODO__ Upload Failed",
+      "modelUploaded": "__TODO__ Semantic model uploaded successfully",
+      "uploadErrorTitle": "__TODO__ Upload Error",
+      "uploadFileError": "__TODO__ Failed to upload file",
+      "modelToggled": "__TODO__ Model {{state}} successfully",
+      "enabledState": "__TODO__ enabled",
+      "disabledState": "__TODO__ disabled",
+      "updateModelError": "__TODO__ Failed to update model",
+      "loadContentError": "__TODO__ Failed to load content",
+      "copyClipboardError": "__TODO__ Failed to copy to clipboard",
+      "deleteFailedTitle": "__TODO__ Delete Failed",
+      "modelDeleted": "__TODO__ Semantic model deleted successfully",
+      "deleteErrorTitle": "__TODO__ Delete Error",
+      "deleteModelError": "__TODO__ Failed to delete model",
+      "updateTitleError": "__TODO__ Failed to update title",
+      "saveError": "__TODO__ Failed to save",
+      "clearTitleError": "__TODO__ Failed to clear title",
+      "clearError": "__TODO__ Failed to clear"
     }
   }
 }

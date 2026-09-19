@@ -1,0 +1,80 @@
+{
+  "title": "__TODO__ Asset Types",
+  "subtitle": "__TODO__ Reusable templates that define how different kinds of assets are structured.",
+  "addNew": "__TODO__ Add Asset Type",
+  "editAssetType": "__TODO__ Edit Asset Type",
+  "deleteAssetType": "__TODO__ Delete Asset Type",
+  "systemBadge": "__TODO__ System",
+  "openMenu": "__TODO__ Open menu",
+  "table": {
+    "name": "__TODO__ Name",
+    "description": "__TODO__ Description",
+    "category": "__TODO__ Category",
+    "status": "__TODO__ Status",
+    "assetCount": "__TODO__ Assets",
+    "lastUpdated": "__TODO__ Last Updated",
+    "actions": "__TODO__ Actions"
+  },
+  "categories": {
+    "data": "__TODO__ Data",
+    "analytics": "__TODO__ Analytics",
+    "integration": "__TODO__ Integration",
+    "system": "__TODO__ System",
+    "custom": "__TODO__ Custom"
+  },
+  "statuses": {
+    "active": "__TODO__ Active",
+    "deprecated": "__TODO__ Deprecated"
+  },
+  "permissions": {
+    "deniedView": "__TODO__ You do not have permission to view asset types.",
+    "deniedCreate": "__TODO__ You do not have permission to create asset types.",
+    "deniedEdit": "__TODO__ You do not have permission to edit asset types.",
+    "deniedDelete": "__TODO__ You do not have permission to delete asset types.",
+    "permissionDenied": "__TODO__ Permission Denied"
+  },
+  "messages": {
+    "errorFetching": "__TODO__ Error fetching asset types",
+    "loadFailed": "__TODO__ Failed to load asset types",
+    "errorDeleting": "__TODO__ Error deleting asset type",
+    "deleted": "__TODO__ Asset Type Deleted",
+    "deletedSuccess": "__TODO__ The asset type was successfully deleted.",
+    "errorLoadingData": "__TODO__ Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "__TODO__ Delete Asset Type?",
+    "description": "__TODO__ This action cannot be undone. Existing assets of this type may become orphaned.",
+    "cancel": "__TODO__ Cancel",
+    "delete": "__TODO__ Delete"
+  },
+  "emptyState": {
+    "title": "__TODO__ No asset types defined yet",
+    "description": "__TODO__ Create your first asset type to start defining asset templates."
+  },
+  "form": {
+    "createTitle": "__TODO__ Create Asset Type",
+    "createDescription": "__TODO__ Add a new asset type template.",
+    "editTitle": "__TODO__ Edit Asset Type",
+    "editDescription": "__TODO__ Update the details of this asset type.",
+    "create": "__TODO__ Create",
+    "update": "__TODO__ Save Changes",
+    "noCategory": "__TODO__ No category",
+    "labels": {
+      "icon": "__TODO__ Icon"
+    },
+    "placeholders": {
+      "name": "__TODO__ e.g., Dashboard",
+      "description": "__TODO__ Describe this asset type...",
+      "category": "__TODO__ Select a category",
+      "icon": "__TODO__ e.g., BarChart"
+    },
+    "toasts": {
+      "created": "__TODO__ Asset Type Created",
+      "createdDescription": "__TODO__ \"{{name}}\" has been created.",
+      "updated": "__TODO__ Asset Type Updated",
+      "updatedDescription": "__TODO__ \"{{name}}\" has been updated.",
+      "createFailed": "__TODO__ Failed to Create",
+      "updateFailed": "__TODO__ Failed to Update"
+    }
+  }
+}

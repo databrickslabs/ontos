@@ -126,17 +126,17 @@
     "attachFailed": "Error al adjuntar asset compartido"
   },
   "tags": {
-    "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "title": "Etiquetas",
+    "description": "Aplica etiquetas de gobernanza a este objeto.",
+    "edit": "Editar etiquetas",
+    "refresh": "Actualizar",
+    "placeholder": "Buscar y seleccionar etiquetas...",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "noTags": "No hay etiquetas aplicadas.",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "Etiquetas actualizadas",
+      "saveFailed": "No se pudieron actualizar las etiquetas"
     }
   },
   "costs": {

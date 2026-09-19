@@ -127,16 +127,16 @@
   },
   "tags": {
     "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "description": "Pas governance-tags toe op dit object.",
+    "edit": "Tags bewerken",
+    "refresh": "Vernieuwen",
+    "placeholder": "Tags zoeken en selecteren...",
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "noTags": "Geen tags toegepast.",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "Tags bijgewerkt",
+      "saveFailed": "Tags bijwerken mislukt"
     }
   },
   "costs": {

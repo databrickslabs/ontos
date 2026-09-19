@@ -39,57 +39,57 @@
   },
   "details": {
     "data-domains": [
-      "• Define and manage data domains, subdomains, and ownership structures.",
-      "• Visualize relationships between domains and dependent data products.",
-      "• Assign assets and products to domains for clearer accountability.",
-      "• Follows the BITOL Open Data Domain Standard (ODDS)."
+      "• データドメイン、サブドメイン、および所有権構造を定義・管理します。",
+      "• ドメインと依存するデータ製品との関係を可視化します。",
+      "• 明確な説明責任のために、アセットと製品をドメインに割り当てます。",
+      "• BITOL Open Data Domain Standard (ODDS) に準拠しています。"
     ],
     "data-contracts": [
-      "• Instrument Data Products with technical metadata based on the Open Data Contract Standard (ODCS).",
-      "• Schema validation, quality checks, access control verification, sample data display.",
-      "• Contracts can be text-based (e.g., JSON/YAML); supports BITOL ODCS JSON schema."
+      "• Open Data Contract Standard (ODCS) に基づく技術メタデータをデータ製品に付与します。",
+      "• スキーマ検証、品質チェック、アクセス制御の検証、サンプルデータの表示。",
+      "• コントラクトはテキストベース（例: JSON/YAML）にできます。BITOL ODCS JSON スキーマをサポートします。"
     ],
     "data-products": [
-      "• Group Databricks assets (tables, views, functions, models, dashboards, jobs, notebooks).",
-      "• Use tags (e.g., data-product-name, data-product-domain)."
+      "• Databricks アセット（テーブル、ビュー、関数、モデル、ダッシュボード、ジョブ、ノートブック）をグループ化します。",
+      "• タグ（例: data-product-name、data-product-domain）を使用します。"
     ],
     "business-glossary": [
-      "• Hierarchical glossaries per org unit (company, LOB, department, team, project).",
-      "• Merged bottom-up for users, allowing overrides.",
-      "• Terms have tags, markdown descriptions, lifecycle status, assigned assets."
+      "• 組織単位（会社、LOB、部門、チーム、プロジェクト）ごとの階層的な用語集。",
+      "• ユーザー向けにボトムアップでマージされ、オーバーライドが可能です。",
+      "• 用語にはタグ、markdown 形式の説明、ライフサイクルステータス、割り当てられたアセットがあります。"
     ],
     "master-data": [
-      "• Integrates with Zingg.ai for MDM capabilities."
+      "• MDM 機能のために Zingg.ai と統合します。"
     ],
     "compliance": [
-      "• Define and verify compliance rules.",
-      "• Calculate an overall compliance score."
+      "• コンプライアンスルールを定義・検証します。",
+      "• 全体的なコンプライアンススコアを算出します。"
     ],
     "estate-manager": [
-      "• Central view of multiple workspaces.",
-      "• Monitor resource usage and costs.",
-      "• Manage configurations across estates."
+      "• 複数のワークスペースの一元的なビュー。",
+      "• リソース使用量とコストを監視します。",
+      "• 複数のエステート全体で構成を管理します。"
     ],
     "security": [
-      "• Enable advanced security features (e.g., differential privacy) on assets."
+      "• アセットで高度なセキュリティ機能（例: 差分プライバシー）を有効にします。"
     ],
     "entitlements": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
+      "• 再利用可能なペルソナ（例: アナリスト、エンジニア）を定義します。",
+      "• ペルソナを Databricks グループに割り当てます。",
+      "• 大規模な権限管理を簡素化します。"
     ],
     "entitlements-sync": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
+      "• エンタイトルメントを外部システム（例: IDP）と整合させ続けます。",
+      "• 同期の競合を検出して解決します。",
+      "• すべての変更の監査ログを保持します。"
     ],
     "catalog-commander": [
-      "• Norton Commander-inspired dual-pane explorer for managing catalog assets.",
-      "• Copy/move tables and schemas easily."
+      "• カタログアセットを管理するための Norton Commander にインスパイアされたデュアルペインエクスプローラー。",
+      "• テーブルとスキーマを簡単にコピー／移動できます。"
     ],
     "data-asset-reviews": [
-      "• Workflow for reviewing and approving assets (tables, views, functions).",
-      "• Includes notifications for reviewers and requesters."
+      "• アセット（テーブル、ビュー、関数）をレビュー・承認するためのワークフロー。",
+      "• レビュー担当者と申請者向けの通知を含みます。"
     ]
   }
 }

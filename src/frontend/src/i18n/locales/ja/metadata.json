@@ -126,17 +126,17 @@
     "attachFailed": "共有アセットの添付に失敗しました"
   },
   "tags": {
-    "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "title": "タグ",
+    "description": "このオブジェクトにガバナンスタグを適用します。",
+    "edit": "タグを編集",
+    "refresh": "更新",
+    "placeholder": "タグを検索して選択...",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "noTags": "タグが適用されていません。",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "タグを更新しました",
+      "saveFailed": "タグの更新に失敗しました"
     }
   },
   "costs": {

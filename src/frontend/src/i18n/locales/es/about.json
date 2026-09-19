@@ -39,57 +39,57 @@
   },
   "details": {
     "data-domains": [
-      "• Define and manage data domains, subdomains, and ownership structures.",
-      "• Visualize relationships between domains and dependent data products.",
-      "• Assign assets and products to domains for clearer accountability.",
-      "• Follows the BITOL Open Data Domain Standard (ODDS)."
+      "• Define y gestiona dominios de datos, subdominios y estructuras de propiedad.",
+      "• Visualiza las relaciones entre dominios y productos de datos dependientes.",
+      "• Asigna activos y productos a dominios para una responsabilidad más clara.",
+      "• Sigue el BITOL Open Data Domain Standard (ODDS)."
     ],
     "data-contracts": [
-      "• Instrument Data Products with technical metadata based on the Open Data Contract Standard (ODCS).",
-      "• Schema validation, quality checks, access control verification, sample data display.",
-      "• Contracts can be text-based (e.g., JSON/YAML); supports BITOL ODCS JSON schema."
+      "• Instrumenta productos de datos con metadatos técnicos basados en el Open Data Contract Standard (ODCS).",
+      "• Validación de esquema, comprobaciones de calidad, verificación del control de acceso, visualización de datos de muestra.",
+      "• Los contratos pueden ser basados en texto (p. ej., JSON/YAML); admite el esquema JSON BITOL ODCS."
     ],
     "data-products": [
-      "• Group Databricks assets (tables, views, functions, models, dashboards, jobs, notebooks).",
-      "• Use tags (e.g., data-product-name, data-product-domain)."
+      "• Agrupa activos de Databricks (tablas, vistas, funciones, modelos, dashboards, trabajos, notebooks).",
+      "• Usa etiquetas (p. ej., data-product-name, data-product-domain)."
     ],
     "business-glossary": [
-      "• Hierarchical glossaries per org unit (company, LOB, department, team, project).",
-      "• Merged bottom-up for users, allowing overrides.",
-      "• Terms have tags, markdown descriptions, lifecycle status, assigned assets."
+      "• Glosarios jerárquicos por unidad organizativa (empresa, LOB, departamento, equipo, proyecto).",
+      "• Combinados de abajo hacia arriba para los usuarios, permitiendo anulaciones.",
+      "• Los términos tienen etiquetas, descripciones en markdown, estado del ciclo de vida y activos asignados."
     ],
     "master-data": [
-      "• Integrates with Zingg.ai for MDM capabilities."
+      "• Se integra con Zingg.ai para capacidades de MDM."
     ],
     "compliance": [
-      "• Define and verify compliance rules.",
-      "• Calculate an overall compliance score."
+      "• Define y verifica reglas de cumplimiento.",
+      "• Calcula una puntuación general de cumplimiento."
     ],
     "estate-manager": [
-      "• Central view of multiple workspaces.",
-      "• Monitor resource usage and costs.",
-      "• Manage configurations across estates."
+      "• Vista central de múltiples workspaces.",
+      "• Supervisa el uso de recursos y los costes.",
+      "• Gestiona configuraciones en todos los estates."
     ],
     "security": [
-      "• Enable advanced security features (e.g., differential privacy) on assets."
+      "• Habilita funciones de seguridad avanzadas (p. ej., privacidad diferencial) en los activos."
     ],
     "entitlements": [
-      "• Define reusable personas (e.g., Analyst, Engineer).",
-      "• Assign personas to Databricks groups.",
-      "• Simplify privilege management at scale."
+      "• Define personas reutilizables (p. ej., Analista, Ingeniero).",
+      "• Asigna personas a grupos de Databricks.",
+      "• Simplifica la gestión de privilegios a escala."
     ],
     "entitlements-sync": [
-      "• Keep entitlements aligned with external systems (e.g., IDP).",
-      "• Detect and resolve synchronization conflicts.",
-      "• Maintain audit logs of all changes."
+      "• Mantén los entitlements alineados con sistemas externos (p. ej., IDP).",
+      "• Detecta y resuelve conflictos de sincronización.",
+      "• Mantén registros de auditoría de todos los cambios."
     ],
     "catalog-commander": [
-      "• Norton Commander-inspired dual-pane explorer for managing catalog assets.",
-      "• Copy/move tables and schemas easily."
+      "• Explorador de doble panel inspirado en Norton Commander para gestionar activos del catálogo.",
+      "• Copia/mueve tablas y esquemas fácilmente."
     ],
     "data-asset-reviews": [
-      "• Workflow for reviewing and approving assets (tables, views, functions).",
-      "• Includes notifications for reviewers and requesters."
+      "• Flujo de trabajo para revisar y aprobar activos (tablas, vistas, funciones).",
+      "• Incluye notificaciones para revisores y solicitantes."
     ]
   }
 }

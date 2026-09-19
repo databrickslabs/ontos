@@ -126,17 +126,17 @@
     "attachFailed": "Allegamento asset condiviso fallito"
   },
   "tags": {
-    "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "title": "Tag",
+    "description": "Applica tag di governance a questo oggetto.",
+    "edit": "Modifica tag",
+    "refresh": "Aggiorna",
+    "placeholder": "Cerca e seleziona i tag...",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "noTags": "Nessun tag applicato.",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "Tag aggiornati",
+      "saveFailed": "Impossibile aggiornare i tag"
     }
   },
   "costs": {

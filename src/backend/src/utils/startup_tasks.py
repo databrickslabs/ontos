@@ -381,6 +381,18 @@ def initialize_managers(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize OntologyGeneratorManager: {e}", exc_info=True)
 
+        # --- SchemaImportRunsManager (async/background Schema Importer) ---
+        try:
+            from src.controller.schema_import_runs_manager import SchemaImportRunsManager
+            app.state.schema_import_runs_manager = SchemaImportRunsManager(
+                settings=settings,
+                assets_manager=getattr(app.state, "assets_manager", None),
+                notifications_manager=getattr(app.state, "notifications_manager", None),
+            )
+            logger.info("SchemaImportRunsManager initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize SchemaImportRunsManager: {e}", exc_info=True)
+
         # --- EntityRelationshipsManager ---
         try:
             from src.controller.entity_relationships_manager import EntityRelationshipsManager

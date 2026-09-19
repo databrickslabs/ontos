@@ -3,7 +3,9 @@
     "newWorkflow": "New Workflow",
     "newStepName": "New {{type}} Step",
     "deleteConnection": "Delete connection",
-    "actions": { "done": "Done" },
+    "actions": {
+      "done": "Done"
+    },
     "keyValue": {
       "keyRequired": "Key required",
       "keyExistsAdd": "Key already exists — edit the existing entry",
@@ -22,7 +24,9 @@
       "editRowAria": "Edit row",
       "removeRowAria": "Remove row"
     },
-    "schema": { "noProperties": "No configurable properties for this step type." },
+    "schema": {
+      "noProperties": "No configurable properties for this step type."
+    },
     "roles": {
       "special": "Special",
       "requesterOriginalUser": "Requester (Original User)",
@@ -41,8 +45,15 @@
       "createFailed": "Failed to create workflow: {{error}}",
       "updateFailed": "Failed to update workflow: {{error}}"
     },
-    "badges": { "default": "Default", "approval": "Approval", "process": "Process", "unsavedChanges": "Unsaved changes" },
-    "placeholders": { "workflowName": "Workflow name" },
+    "badges": {
+      "default": "Default",
+      "approval": "Approval",
+      "process": "Process",
+      "unsavedChanges": "Unsaved changes"
+    },
+    "placeholders": {
+      "workflowName": "Workflow name"
+    },
     "preview": {
       "saveToPreview": "Save changes to preview the latest version",
       "dryRunTitle": "Run the wizard in dry-run mode",
@@ -92,7 +103,12 @@
       "toStatusPlaceholder": "e.g. active",
       "descriptionPlaceholder": "Workflow description"
     },
-    "stepConfig": { "title": "Step Configuration", "stepName": "Step Name", "stepType": "Step Type", "deleteStep": "Delete Step" },
+    "stepConfig": {
+      "title": "Step Configuration",
+      "stepName": "Step Name",
+      "stepType": "Step Type",
+      "deleteStep": "Delete Step"
+    },
     "entityAction": {
       "action": "Action",
       "certify": "Certify",
@@ -381,7 +397,8 @@
     "notSet": "Not set",
     "connectionLabel": "Connection: {{name}}",
     "notConfigured": "Not configured",
-    "configureUrlOrConnection": "Configure URL or Connection"
+    "configureUrlOrConnection": "Configure URL or Connection",
+    "requestApproval": "request approval"
   },
   "requiredFields": {
     "title": "Custom fields",

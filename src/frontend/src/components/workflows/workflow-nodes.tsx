@@ -305,7 +305,7 @@ export const ApprovalNode = memo((props: NodeProps<StepNodeData>) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <Badge variant="outline" className="text-xs dark:border-amber-400/50 dark:text-amber-200">request approval</Badge>
+        <Badge variant="outline" className="text-xs dark:border-amber-400/50 dark:text-amber-200">{t('workflows:nodes.requestApproval')}</Badge>
         {approversValue && (
           <div className={nodeTextStyles.description + " mt-1"}>
             {displayName}

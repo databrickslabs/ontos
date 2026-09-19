@@ -196,9 +196,14 @@ class SchemaImportManager:
         try:
             options = ListAssetsOptions(path=path or "", limit=child_limit)
             assets = connector.list_assets(options=options)
-            # A full page back from the connector means there may be more
-            # assets than the configured limit; signal truncation to the UI.
-            if len(assets) >= child_limit:
+            # A full page back from the connector means there may be more leaf
+            # assets than the configured limit — signal truncation to the UI.
+            # Only when this level is a *leaf-asset* level, though: at container
+            # levels (catalogs → schemas) list_containers already returned the
+            # complete, unbounded set and this list_assets call just re-lists the
+            # same containers (deduped below), so a full page here is not real
+            # truncation. Guarding on `not containers` avoids that false positive.
+            if not containers and len(assets) >= child_limit:
                 truncated = True
             container_paths = {n.path for n in nodes}
             for asset in assets:

@@ -336,6 +336,37 @@ class TestSchemaImporterChildLimit:
         assert response.truncated is True
         assert response.truncated_at == 3
 
+    def test_not_truncated_at_container_level_even_when_list_assets_fills_limit(self, monkeypatch):
+        """At a container level (catalogs/schemas) list_containers returns the
+        complete, unbounded set; the redundant list_assets call re-lists the same
+        containers and may hit the cap, but that must NOT be reported as
+        truncation (regression: root with >limit catalogs showed a false
+        'showing first N' notice even though all N were displayed)."""
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: "3")
+
+        # Container level: list_containers returns 4 catalogs (the real, complete
+        # set); list_assets returns the same 4 (>= limit 3) and is deduped away.
+        containers = [
+            {"name": f"cat{i}", "type": "catalog", "path": f"cat{i}", "has_children": True}
+            for i in range(4)
+        ]
+        assets = [
+            AssetInfo(identifier=f"cat{i}", name=f"cat{i}",
+                      asset_type=UnifiedAssetType.UC_CATALOG, connector_type="stub")
+            for i in range(4)
+        ]
+        stub = _StubConnector(containers_by_path={"": containers}, assets_by_path={"": assets})
+        manager = _make_manager_with_stub_connector(stub)
+
+        response = manager.browse(db=MagicMock(), connection_id=uuid4(), path=None)
+
+        # All 4 containers shown; not flagged as truncated.
+        assert len([n for n in response.nodes if n.node_type != "column"]) == 4
+        assert response.truncated is False
+        assert response.truncated_at is None
+
     def test_not_truncated_when_under_limit(self, monkeypatch):
         import src.controller.schema_import_manager as sim
 

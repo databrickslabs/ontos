@@ -135,17 +135,22 @@ interface MappedAsset {
 interface ImportPreviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  connectionId: string;
-  selectedPaths: string[];
-  depth: ImportDepth;
+  connectionId?: string;
+  selectedPaths?: string[];
+  depth?: ImportDepth;
+  // Result-only mode: when provided, the dialog opens straight into the result
+  // view for a completed run (skips preview/import). Used to re-open a finished
+  // background import from its notification.
+  initialResult?: ImportResult | null;
 }
 
 export default function ImportPreviewDialog({
   open,
   onOpenChange,
-  connectionId,
-  selectedPaths,
-  depth,
+  connectionId = '',
+  selectedPaths = [],
+  depth = 'full_recursive',
+  initialResult = null,
 }: ImportPreviewDialogProps) {
   const { post: apiPost, get: apiGet } = useApi();
   const { toast } = useToast();
@@ -327,7 +332,14 @@ export default function ImportPreviewDialog({
 
   useEffect(() => {
     if (open && !hasLoaded && !isLoadingPreview) {
-      loadPreview();
+      // Result-only mode (e.g. reopened from a completed import notification):
+      // show the stored result directly instead of running a fresh preview.
+      if (initialResult) {
+        setImportResult(initialResult);
+        setHasLoaded(true);
+      } else {
+        loadPreview();
+      }
     }
   }, [open, hasLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -272,7 +272,7 @@ class SchemaImportRunsManager:
                 title="Schema import running",
                 subtitle="Infer from Unity Catalog",
                 message="Importing selected objects in the background…",
-                link="/schema-importer",
+                link=f"/schema-importer?runId={run_id}",
                 recipient=user_id,
                 data={"run_id": run_id, "progress": 0, "status": "running"},
                 created_at=datetime.now(timezone.utc),

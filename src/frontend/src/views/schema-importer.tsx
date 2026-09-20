@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Import, Loader2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,15 +17,18 @@ import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/hooks/use-api';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { Connection } from '@/types/connections';
-import type { ImportDepth } from '@/types/schema-import';
+import type { ImportDepth, ImportResult, SchemaImportRunDetail } from '@/types/schema-import';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
 import ImportPreviewDialog from '@/components/schema-importer/import-preview-dialog';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SchemaImporterView() {
   const { t } = useTranslation(['settings', 'common']);
   const appName = useUICustomizationStore((s) => s.getAppName());
   const { get: apiGet } = useApi();
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
@@ -34,6 +38,8 @@ export default function SchemaImporterView() {
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [importDepth, setImportDepth] = useState<ImportDepth>('full_recursive');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  // Result-only view for a completed run reopened from its notification (?runId=).
+  const [runResult, setRunResult] = useState<ImportResult | null>(null);
 
   useEffect(() => {
     setStaticSegments([]);
@@ -65,6 +71,39 @@ export default function SchemaImporterView() {
   useEffect(() => {
     fetchConnections();
   }, [fetchConnections]);
+
+  // Reopen a completed background import's result when deep-linked via ?runId=
+  // (from the completion notification's "Open" button).
+  const runIdParam = searchParams.get('runId');
+  useEffect(() => {
+    if (!runIdParam) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await apiGet<SchemaImportRunDetail>(`/api/schema-import/runs/${runIdParam}`);
+        if (cancelled) return;
+        if (resp.data?.result) {
+          setRunResult(resp.data.result);
+        } else {
+          toast({
+            title: 'Import still running',
+            description: "You'll be notified when it completes.",
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load import run:', err);
+        toast({ title: 'Could not load import result', description: String(err), variant: 'destructive' });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [runIdParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const closeRunResult = () => {
+    setRunResult(null);
+    // Drop ?runId= so a refresh/re-close doesn't reopen the result.
+    searchParams.delete('runId');
+    setSearchParams(searchParams, { replace: true });
+  };
 
   const handleConnectionChange = (id: string) => {
     setSelectedConnectionId(id);
@@ -242,6 +281,15 @@ export default function SchemaImporterView() {
           connectionId={selectedConnectionId}
           selectedPaths={Array.from(selectedPaths)}
           depth={importDepth}
+        />
+      )}
+
+      {/* Result-only view for a completed run reopened from its notification */}
+      {runResult && (
+        <ImportPreviewDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) closeRunResult(); }}
+          initialResult={runResult}
         />
       )}
     </div>

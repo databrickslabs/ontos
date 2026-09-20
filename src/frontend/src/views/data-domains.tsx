@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, AlertCircle, BoxSelect, TableIcon, WorkflowIcon, Loader2, ChevronDown, Eye } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, AlertCircle, BoxSelect, TableIcon, WorkflowIcon, Loader2, ChevronDown, Eye, RefreshCw } from 'lucide-react';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -345,9 +345,19 @@ export default function DataDomainsView() {
                 searchColumn="name"
                 storageKey="data-domains-sort"
                 toolbarActions={
-                  <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading} className="h-9">
-                    <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewDomain')}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate('/domain-sync')}
+                      disabled={permissionsLoading || apiIsLoading}
+                      className="h-9"
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" /> {t('syncWithUC', 'Sync with Unity Catalog')}
+                    </Button>
+                    <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading} className="h-9">
+                      <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewDomain')}
+                    </Button>
+                  </div>
                 }
               />
               <DataDomainFormDialog

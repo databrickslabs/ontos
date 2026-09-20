@@ -652,7 +652,8 @@
       },
       "schemaInferred": {
         "title": "Schema inferito con successo",
-        "description": "Aggiunto {{count}} schema con {{columnCount}} colonne"
+        "description_one": "Aggiunto {{count}} schema con {{columnCount}} colonne",
+        "description_other": "Aggiunti {{count}} schemi con {{columnCount}} colonne"
       },
       "submissionError": {
         "title": "Errore di Invio",

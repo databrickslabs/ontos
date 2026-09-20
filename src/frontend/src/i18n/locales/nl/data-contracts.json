@@ -652,7 +652,8 @@
       },
       "schemaInferred": {
         "title": "Schema succesvol afgeleid",
-        "description": "{{count}} schema toegevoegd met {{columnCount}} kolommen"
+        "description_one": "{{count}} schema toegevoegd met {{columnCount}} kolommen",
+        "description_other": "{{count}} schema's toegevoegd met {{columnCount}} kolommen"
       },
       "submissionError": {
         "title": "Indieningsfout",

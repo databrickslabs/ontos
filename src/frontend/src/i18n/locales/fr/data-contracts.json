@@ -652,7 +652,8 @@
       },
       "schemaInferred": {
         "title": "Schéma inféré avec succès",
-        "description": "{{count}} schéma ajouté avec {{columnCount}} colonnes"
+        "description_one": "{{count}} schéma ajouté avec {{columnCount}} colonnes",
+        "description_other": "{{count}} schémas ajoutés avec {{columnCount}} colonnes"
       },
       "submissionError": {
         "title": "Erreur de soumission",

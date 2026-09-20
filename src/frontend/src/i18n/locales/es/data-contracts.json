@@ -652,7 +652,8 @@
       },
       "schemaInferred": {
         "title": "Esquema inferido correctamente",
-        "description": "Se añadió {{count}} esquema con {{columnCount}} columnas"
+        "description_one": "Se añadió {{count}} esquema con {{columnCount}} columnas",
+        "description_other": "Se añadieron {{count}} esquemas con {{columnCount}} columnas"
       },
       "submissionError": {
         "title": "Error de envío",

@@ -652,7 +652,8 @@
       },
       "schemaInferred": {
         "title": "スキーマを推論しました",
-        "description": "{{count}} 件のスキーマ（{{columnCount}} 列）を追加しました"
+        "description_one": "{{count}} 件のスキーマ（{{columnCount}} 列）を追加しました",
+        "description_other": "{{count}} 件のスキーマ（{{columnCount}} 列）を追加しました"
       },
       "submissionError": {
         "title": "送信エラー",

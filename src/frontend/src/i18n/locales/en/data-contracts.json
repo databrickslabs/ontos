@@ -652,7 +652,8 @@
       },
       "schemaInferred": {
         "title": "Schema inferred successfully",
-        "description": "Added {{count}} schema with {{columnCount}} columns"
+        "description_one": "Added {{count}} schema with {{columnCount}} columns",
+        "description_other": "Added {{count}} schemas with {{columnCount}} columns"
       },
       "submissionError": {
         "title": "Submission Error",

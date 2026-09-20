@@ -652,7 +652,8 @@
       },
       "schemaInferred": {
         "title": "Schema erfolgreich abgeleitet",
-        "description": "{{count}} Schema mit {{columnCount}} Spalten hinzugefügt"
+        "description_one": "{{count}} Schema mit {{columnCount}} Spalten hinzugefügt",
+        "description_other": "{{count}} Schemas mit {{columnCount}} Spalten hinzugefügt"
       },
       "submissionError": {
         "title": "Übermittlungsfehler",

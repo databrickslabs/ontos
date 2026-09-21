@@ -143,7 +143,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 }) => {
     const { post, put } = useApi();
     const { toast } = useToast();
-    const { t } = useTranslation('settings');
+    const { t } = useTranslation(['settings', 'common']);
     const { availableRoles } = usePermissions();
     const isEditMode = !!initialRole;
     const [formError, setFormError] = useState<string | null>(null);
@@ -262,7 +262,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
     const handleCloseDialog = (open: boolean) => {
         if (!open) {
             if (isDirty) {
-                if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+                if (!confirm(t('roles.messages.unsavedChangesConfirm'))) {
                     return; // Prevent closing
                 }
             }
@@ -337,7 +337,12 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             }
 
             const savedRoleData = response.data as AppRole;
-            toast({ title: 'Success', description: `Role "${savedRoleData.name}" ${isEditMode ? 'updated' : 'created'}.` });
+            toast({
+                title: t('common:status.success'),
+                description: isEditMode
+                    ? t('roles.messages.roleUpdated', { name: savedRoleData.name })
+                    : t('roles.messages.roleCreated', { name: savedRoleData.name }),
+            });
             reset(savedRoleData, { keepDirty: false });
             onSubmitSuccess();
             setTimeout(() => {
@@ -346,9 +351,9 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 
         } catch (err: any) {
             console.error('Error submitting role form:', err);
-            const errorMsg = err.message || 'An unexpected error occurred.';
+            const errorMsg = err.message || t('roles.messages.unexpectedError');
             setFormError(errorMsg);
-            toast({ title: 'Save Error', description: errorMsg, variant: 'destructive' });
+            toast({ title: t('roles.messages.saveErrorTitle'), description: errorMsg, variant: 'destructive' });
         }
     };
 
@@ -357,7 +362,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>
-                        {isEditMode ? t('roles.dialog.editTitle', { name: initialRole?.name || 'Role' }) : t('roles.dialog.createTitle')}
+                        {isEditMode ? t('roles.dialog.editTitle', { name: initialRole?.name || t('roles.dialog.defaultRoleName') }) : t('roles.dialog.createTitle')}
                     </DialogTitle>
                     <DialogDescription>
                         {t('roles.dialog.description')}
@@ -595,7 +600,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                                         disabled={allowedLevels.length === 0}
                                                                     >
                                                                         <SelectTrigger id={`permissions-${featureId}`} className="w-[180px]">
-                                                                            <SelectValue placeholder="Select access" />
+                                                                            <SelectValue placeholder={t('roles.permissions.selectAccessPlaceholder')} />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
                                                                             {allowedLevels.length > 0 ? (
@@ -607,7 +612,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                                                         </SelectItem>
                                                                                     ))
                                                                             ) : (
-                                                                                <SelectItem value="none" disabled>No levels</SelectItem>
+                                                                                <SelectItem value="none" disabled>{t('roles.permissions.noLevels')}</SelectItem>
                                                                             )}
                                                                         </SelectContent>
                                                                     </Select>
@@ -715,7 +720,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                             }
 
                                             if (Object.keys(featuresConfig).length === 0) {
-                                                return <p className="text-sm text-muted-foreground">No features configuration loaded.</p>;
+                                                return <p className="text-sm text-muted-foreground">{t('roles.permissions.noFeaturesLoaded')}</p>;
                                             }
                                             return sections;
                                         })()}

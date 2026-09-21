@@ -110,7 +110,9 @@
     "workflows": "Workflows",
     "uiCustomization": "UI Customization",
     "connectors": "Connectors",
-    "schemaImporter": "Schema Importer"
+    "schemaImporter": "Schema Importer",
+    "certificationLevels": "Certification Levels",
+    "maturityLevels": "Maturity Levels"
   },
   "accessDenied": {
     "title": "Access Denied",
@@ -208,13 +210,54 @@
     "labels": {
       "repoUrl": "Repository URL",
       "branch": "Branch",
-      "token": "Token"
+      "token": "Token",
+      "username": "Username"
     },
     "placeholders": {
       "repoUrl": "https://github.com/your-org/your-repo.git",
       "branch": "main",
-      "token": "ghp_... or similar"
-    }
+      "token": "ghp_... or similar",
+      "username": "x-access-token"
+    },
+    "cloneButton": "Clone Repository",
+    "currentCommit": "Commit",
+    "diff": {
+      "collapseAll": "Collapse All",
+      "commitAndPush": "Commit & Push",
+      "commitMessage": "Commit Message (optional)",
+      "expandAll": "Expand All",
+      "fileCount": "{{count}} file(s) changed",
+      "newFile": "New file",
+      "noChanges": "No pending changes",
+      "noDiff": "No diff available",
+      "title": "Pending Changes"
+    },
+    "errorTitle": "Error",
+    "lastSync": "Last Sync",
+    "messages": {
+      "cloneError": "Failed to clone repository",
+      "cloneSuccess": "Repository cloned successfully",
+      "pullError": "Failed to pull changes",
+      "pullSuccess": "Repository updated",
+      "pushError": "Failed to push changes",
+      "pushSuccess": "Changes pushed successfully",
+      "saveError": "Failed to save Git settings",
+      "saveSuccess": "Git settings saved"
+    },
+    "pendingChanges": "Pending Changes",
+    "pullButton": "Pull",
+    "pushButton": "Push",
+    "repoStatus": "Repository Status",
+    "saveButton": "Save Settings",
+    "status": {
+      "cloned": "Cloned",
+      "cloning": "Cloning...",
+      "error": "Error",
+      "notCloned": "Not Cloned",
+      "notConfigured": "Not Configured"
+    },
+    "viewChangesButton": "View Changes",
+    "volumePath": "Volume Path"
   },
   "nav": {
     "groups": {
@@ -246,7 +289,36 @@
     "saveButton": "Save Configuration",
     "messages": {
       "saveSuccess": "Settings saved successfully",
-      "saveError": "Failed to save settings"
+      "saveError": "Failed to save settings",
+      "statusFetchError": "Failed to fetch workflow statuses",
+      "saveFailed": "Failed to save",
+      "startedRun": "Started run",
+      "startFailed": "Failed to start",
+      "stoppedRun": "Stopped run",
+      "stopFailed": "Failed to stop",
+      "pausedSchedule": "Paused schedule",
+      "pauseFailed": "Failed to pause",
+      "resumedSchedule": "Resumed schedule",
+      "resumeFailed": "Failed to resume"
+    },
+    "aria": {
+      "history": "History",
+      "configure": "Configure"
+    },
+    "configureTooltip": "Configure workflow parameters",
+    "table": {
+      "actions": "Actions",
+      "canceled": "Canceled",
+      "description": "Description",
+      "enabled": "Enabled",
+      "failed": "Failed",
+      "idle": "Idle",
+      "name": "Name",
+      "notInstalled": "Not Installed",
+      "running": "Running",
+      "status": "Status",
+      "success": "Success",
+      "timedOut": "Timed Out"
     }
   },
   "jobsActions": {
@@ -276,7 +348,10 @@
       "running": "Running",
       "pending": "Pending",
       "unknown": "Unknown"
-    }
+    },
+    "expandDetails": "Expand details",
+    "collapseDetails": "Collapse details",
+    "stateMessage": "State Message:"
   },
   "roles": {
     "title": "Role Based Access Control",
@@ -294,7 +369,8 @@
     "dialog": {
       "createTitle": "Create Role",
       "editTitle": "Edit Role: {{name}}",
-      "description": "Define the role name, assigned groups, feature permissions, and approval privileges."
+      "description": "Define the role name, assigned groups, feature permissions, and approval privileges.",
+      "defaultRoleName": "Role"
     },
     "tabs": {
       "general": "General",
@@ -323,6 +399,11 @@
       "allowedPersonas": {
         "title": "Personas this role can access",
         "description": "Select which persona views users with this role can use in the UI."
+      },
+      "adminRole": {
+        "title": "Admin Role",
+        "description": "Mark this role as the admin role. Only one role should be marked as admin.",
+        "label": "This is the admin role"
       }
     },
     "permissions": {
@@ -345,7 +426,10 @@
         "integrations": "Integrations",
         "operations": "Operations",
         "accessControl": "Access Control"
-      }
+      },
+      "selectAccessPlaceholder": "Select access",
+      "noLevels": "No levels",
+      "noFeaturesLoaded": "No features configuration loaded."
     },
     "deployment": {
       "title": "Deployment Policy",
@@ -394,7 +478,55 @@
       "addRole": "Add Role",
       "actions": "Actions",
       "editRole": "Edit Role",
-      "deleteRole": "Delete Role"
+      "deleteRole": "Delete Role",
+      "cannotDeleteAdmin": "Cannot delete Admin role"
+    },
+    "messages": {
+      "loadFailed": "Failed to load roles configuration.",
+      "deleteFailed": "Failed to delete role.",
+      "permissionDeniedTitle": "Permission Denied",
+      "cannotEditRoles": "You do not have permission to edit roles.",
+      "cannotDeleteRoles": "You do not have permission to delete roles.",
+      "permissionsUpdatedTitle": "Permissions Updated",
+      "permissionsUpdated": "User permissions and available roles refreshed.",
+      "refreshFailedTitle": "Refresh Failed",
+      "refreshFailed": "Could not refresh permissions/roles: {{error}}",
+      "deleteConfirm": "Are you sure you want to delete the role \"{{name}}\"?",
+      "roleDeleted": "Role \"{{name}}\" deleted.",
+      "roleCreated": "Role \"{{name}}\" created.",
+      "roleUpdated": "Role \"{{name}}\" updated.",
+      "saveErrorTitle": "Save Error",
+      "unexpectedError": "An unexpected error occurred.",
+      "unsavedChangesConfirm": "You have unsaved changes. Are you sure you want to close?"
+    },
+    "confirmRequest": {
+      "title": "Handle Role Access Request",
+      "reviewPrompt": "Review the request from <strong>{{email}}</strong> for the role <strong>{{role}}</strong>.",
+      "requesterReasonLabel": "Requester's Reason",
+      "messageLabel": "Optional Message to Requester",
+      "messagePlaceholder": "Provide a reason for approval or denial (optional)",
+      "deny": "Deny Request",
+      "approve": "Approve Request",
+      "approvedTitle": "Request Approved",
+      "deniedTitle": "Request Denied",
+      "decisionSubmitted": "Decision for {{email}}'s request for role {{role}} submitted.",
+      "submissionFailed": "Submission Failed",
+      "submissionFailedDescription": "Could not submit the decision."
+    },
+    "requestAccess": {
+      "title": "Request Role Access",
+      "description": "Submit a request for access to this application role. Please provide a detailed reason for your request.",
+      "roleLabel": "Role:",
+      "reasonLabel": "Reason for Role Access Request *",
+      "reasonPlaceholder": "Please explain why you need this role. Include details about your responsibilities, project requirements, or business justification...",
+      "reasonHelp": "Minimum 10 characters required. This information will be shared with administrators.",
+      "reasonRequired": "Please provide a reason for requesting this role",
+      "reasonTooShort": "Please provide a more detailed reason (at least 10 characters)",
+      "submittedTitle": "Request Submitted",
+      "submittedDescription": "Your request for the role \"{{role}}\" has been submitted and you will be notified of the decision.",
+      "submitFailed": "Failed to submit role access request",
+      "sending": "Sending Request...",
+      "send": "Send Request"
     }
   },
   "mcpTokens": {
@@ -502,7 +634,8 @@
       "invalidUrl": "Please enter a valid HTTP or HTTPS URL",
       "preview": "Preview:",
       "loadError": "Failed to load image",
-      "openInNewTab": "Open in new tab"
+      "openInNewTab": "Open in new tab",
+      "previewAlt": "Logo preview"
     },
     "about": {
       "title": "Custom About Page Content",
@@ -525,6 +658,26 @@
       "saveSuccess": "UI customization settings saved",
       "saveError": "Failed to save UI customization settings",
       "reloadRequired": "Reload the page to see some changes."
+    },
+    "branding": {
+      "help": "The display name overrides the product name in welcome/about/copilot copy and in the browser tab title. The PWA manifest name and the static page title set at build time are not updated by these settings.",
+      "displayNameHelp": "Leave empty to use the default product name ({{defaultName}}). Maximum {{max}} characters.",
+      "shortNamePlaceholder": "e.g. an acronym for compact UI",
+      "shortNameHelp": "Used in tight spaces (e.g. \"Ask {{shortName}}\"). Falls back to the display name when empty. Maximum {{max}} characters.",
+      "displayNameLabel": "Display name",
+      "shortNameLabel": "Short name (optional)",
+      "title": "Branding"
+    },
+    "favicon": {
+      "previewAlt": "Favicon preview",
+      "urlPlaceholder": "https://example.com/favicon.svg",
+      "help": "Applied at runtime to the browser tab. The static <link rel=\"icon\"> in the shipped index.html and the PWA manifest are not updated by this setting.",
+      "invalidUrl": "Please enter a valid HTTP or HTTPS URL",
+      "loadError": "Failed to load image",
+      "openInNewTab": "Open in new tab",
+      "preview": "Preview:",
+      "title": "Browser Favicon",
+      "urlLabel": "Favicon URL"
     }
   },
   "connectors": {
@@ -550,7 +703,13 @@
       "name": "Name",
       "description": "Description",
       "enabled": "Enabled",
-      "isDefault": "Default"
+      "isDefault": "Default",
+      "systemAssetHelp": "Link to an existing System asset, or leave empty to auto-create one on the first import.",
+      "connectorTypePlaceholder": "Select a connector type...",
+      "namePlaceholder": "e.g. Production BQ - Analytics",
+      "descriptionPlaceholder": "Optional description...",
+      "autoCreateOnImport": "Auto-create on first import",
+      "systemAsset": "Linked System Asset"
     },
     "bigquery": {
       "configTitle": "BigQuery Configuration",
@@ -565,7 +724,13 @@
       "secretScope": "Secret Scope",
       "secretKey": "Secret Key",
       "credentialsPath": "Credentials File Path",
-      "credentialsPathHelp": "Dev fallback: local path to a service account key JSON file."
+      "credentialsPathHelp": "Dev fallback: local path to a service account key JSON file.",
+      "projectIdPlaceholder": "my-gcp-project",
+      "locationPlaceholder": "US",
+      "ucConnectionNamePlaceholder": "my-bigquery-connection",
+      "secretScopePlaceholder": "ontos-connectors",
+      "secretKeyPlaceholder": "bigquery-sa-key",
+      "credentialsPathPlaceholder": "/path/to/service-account-key.json"
     },
     "snowflake": {
       "configTitle": "Snowflake Configuration",
@@ -576,7 +741,13 @@
       "role": "Role",
       "roleHelp": "Optional. Role to assume for queries.",
       "database": "Default Database",
-      "defaultSchema": "Default Schema"
+      "defaultSchema": "Default Schema",
+      "accountPlaceholder": "myorg-myaccount",
+      "userPlaceholder": "ONTOS_SVC",
+      "warehousePlaceholder": "COMPUTE_WH",
+      "rolePlaceholder": "SYSADMIN",
+      "databasePlaceholder": "ANALYTICS",
+      "defaultSchemaPlaceholder": "PUBLIC"
     },
     "databricks": {
       "systemNote": "This connection is auto-configured from environment variables and cannot be modified."
@@ -587,7 +758,13 @@
       "testSuccess": "Connection successful",
       "testFailed": "Connection failed",
       "testError": "Connection test error",
-      "deleteSuccess": "Connection deleted"
+      "deleteSuccess": "Connection deleted",
+      "testSuccessProject": "Project: {{project}}",
+      "deleteFailed": "Delete failed"
+    },
+    "badges": {
+      "system": "System",
+      "default": "Default"
     }
   },
   "schemaImporter": {
@@ -632,5 +809,529 @@
     "importExport": "Import / Export",
     "exportHelp": "The export file includes all fields for each asset. You can edit it offline and re-import.",
     "templateHelp": "The template provides an empty file with correct headers and an example row."
+  },
+  "workflows": {
+    "actions": {
+      "start": "Start",
+      "stop": "Stop",
+      "pause": "Pause",
+      "unpause": "Unpause"
+    }
+  },
+  "workflowConfig": {
+    "title": "Configure {{name}}",
+    "description": "Set parameters for this workflow. These values will be used when the workflow runs.",
+    "loadError": "Failed to load configuration",
+    "saveError": "Failed to save configuration",
+    "saveSuccess": "Workflow configuration saved successfully",
+    "selectOption": "Select an option",
+    "noParameters": "No configurable parameters for this workflow.",
+    "saveButton": "Save Configuration"
+  },
+  "tags": {
+    "enable": "Enable",
+    "title": "Tags",
+    "description": "Manage tag namespaces, configure display settings, and organize tags across the application.",
+    "columns": {
+      "group": "Group",
+      "accessLevel": "Access Level"
+    },
+    "display": {
+      "title": "Tag Display Settings",
+      "description": "Configure how tags are displayed throughout the application.",
+      "formatLabel": "Display Format:",
+      "formatPlaceholder": "Select format",
+      "short": "Short (tag name only)",
+      "long": "Long (namespace/tag name)",
+      "help": "<strong>Short:</strong> Shows only the tag name (e.g., \"pii\"). <br/> <strong>Long:</strong> Shows namespace and tag name (e.g., \"compliance/pii\")."
+    },
+    "namespaces": {
+      "title": "Tag Namespaces",
+      "description": "Organize tags into logical namespaces for better management and permissions.",
+      "add": "Add Namespace",
+      "activeLabel": "Active Namespace:",
+      "selectPlaceholder": "Select namespace"
+    },
+    "list": {
+      "description": "Manage tags within the selected namespace.",
+      "add": "Add Tag"
+    },
+    "permissions": {
+      "title": "Namespace Permissions",
+      "description": "Control which groups can access and modify tags in this namespace.",
+      "add": "Add Permission"
+    },
+    "namespaceDialog": {
+      "editTitle": "Edit Namespace",
+      "createTitle": "Create Namespace",
+      "editDescription": "Update the namespace details.",
+      "createDescription": "Create a new namespace for organizing tags.",
+      "namePlaceholder": "e.g., finance, marketing, engineering",
+      "descriptionPlaceholder": "Optional description for the namespace"
+    },
+    "tagDialog": {
+      "editTitle": "Edit Tag",
+      "createTitle": "Create Tag",
+      "editDescription": "Update the tag details.",
+      "createDescription": "Create a new tag in the selected namespace.",
+      "namePlaceholder": "e.g., pii, sensitive, public",
+      "descriptionPlaceholder": "Describe what this tag represents",
+      "versionPlaceholder": "e.g., v1.0, 2023.1",
+      "parentLabel": "Parent Tag",
+      "possibleValuesLabel": "Possible Values (JSON Array)",
+      "possibleValuesHelp": "Optional. JSON array of allowed values for this tag when assigned to entities.",
+      "statuses": {
+        "active": "Active",
+        "draft": "Draft",
+        "candidate": "Candidate",
+        "deprecated": "Deprecated",
+        "inactive": "Inactive",
+        "retired": "Retired"
+      }
+    },
+    "permissionDialog": {
+      "editTitle": "Edit Permission",
+      "addTitle": "Add Permission",
+      "editDescription": "Update the permission details.",
+      "addDescription": "Grant access to a group for this namespace.",
+      "groupLabel": "Group",
+      "groupPlaceholder": "e.g., data-engineers, analysts"
+    },
+    "accessLevels": {
+      "readOnly": "Read Only",
+      "readWrite": "Read/Write",
+      "admin": "Admin"
+    },
+    "deleteDialog": {
+      "title": "Delete {{type}}",
+      "description": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+      "namespaceWarning": "All tags and permissions in this namespace will also be deleted."
+    },
+    "toasts": {
+      "fetchNamespacesError": "Error fetching namespaces",
+      "fetchTagsError": "Error fetching tags",
+      "fetchPermissionsError": "Error fetching permissions",
+      "displayFormatUpdated": "Tag display format updated",
+      "displayFormatError": "Error saving display format",
+      "namespaceUpdated": "Namespace updated successfully",
+      "namespaceCreated": "Namespace created successfully",
+      "namespaceSaveError": "Error saving namespace",
+      "tagUpdated": "Tag updated successfully",
+      "tagCreated": "Tag created successfully",
+      "tagSaveError": "Error saving tag",
+      "permissionUpdated": "Permission updated successfully",
+      "permissionCreated": "Permission created successfully",
+      "permissionSaveError": "Error saving permission",
+      "deleteSuccess": "{{type}} deleted successfully",
+      "deleteError": "Error deleting item"
+    },
+    "syncConfigs": {
+      "errors": {
+        "empty": "Tag key cannot be empty",
+        "spaces": "Tag key cannot have leading/trailing spaces",
+        "invalidChar": "Tag key cannot contain '{{char}}'"
+      },
+      "introBefore": "Configure which metadata to sync to Unity Catalog tags and customize tag key/value formats. Use",
+      "introAfter": "placeholders for dynamic values.",
+      "invalidCharsBefore": "UC tag keys cannot contain:",
+      "invalidCharsAfter": "or have leading/trailing spaces",
+      "cardDescription": "Configure tag format for {{type}}",
+      "availableVariables": "Available Variables",
+      "keyFormatLabel": "Tag Key Format",
+      "keyFormatPlaceholder": "e.g., ontos_{VARIABLE}",
+      "example": "Example:",
+      "valueFormatLabel": "Tag Value Format",
+      "valueFormatPlaceholder": "e.g., {VARIABLE}",
+      "valueFormatHelp": "The value that will be assigned to the tag",
+      "variables": {
+        "linkIri": "Full IRI of the semantic link",
+        "linkLabel": "Label of the semantic link",
+        "linkSlug": "Slugified IRI (e.g., \"customer\")",
+        "domainId": "Domain UUID",
+        "domainName": "Domain name",
+        "contractId": "Contract UUID",
+        "contractName": "Contract name",
+        "contractVersion": "Contract version",
+        "contractStatus": "Contract status",
+        "productId": "Product UUID",
+        "productName": "Product name",
+        "productVersion": "Product version",
+        "productStatus": "Product status"
+      }
+    },
+    "entityPatterns": {
+      "intro": "Configure tag patterns for discovering and importing entities from Unity Catalog. Use regular expressions to match tag keys and extract entity names.",
+      "discoveryTitle": "{{type}} Discovery",
+      "cardDescription": "Configure patterns to discover {{type}}s from UC tags",
+      "filterPatternOptional": "Filter Pattern (Optional)",
+      "filterHelp": "Optionally filter which objects to consider by matching additional tag patterns",
+      "filterSource": "Filter Source",
+      "tagKey": "Tag Key",
+      "tagValue": "Tag Value",
+      "filterPatternRegex": "Filter Pattern (Regex)",
+      "keyPatternRequired": "Key Pattern (Required)",
+      "keyPatternHelp": "Regex pattern to match tag keys that identify this entity type",
+      "valueExtractionRequired": "Value Extraction (Required)",
+      "valueExtractionHelp": "Extract the {{type}} name from the matched tag",
+      "extractionSource": "Extraction Source",
+      "extractionPatternLabel": "Extraction Pattern (Regex with Capture Group)",
+      "extractionExampleBefore": "Use parentheses () to capture the {{type}} name. Example:",
+      "extractionExampleAfter": "extracts \"ABC\" from \"data-{{type}}-ABC\""
+    }
+  },
+  "search": {
+    "title": "Search Configuration",
+    "description": "Configure how the global search indexes and ranks results across different asset types.",
+    "unsavedChanges": "You have unsaved changes. Save to persist your configuration.",
+    "loadFailedAlert": "Failed to load search configuration. Please refresh the page.",
+    "matchTypes": {
+      "prefix": "Prefix (start of word)",
+      "substring": "Substring (anywhere)",
+      "exact": "Exact match only",
+      "fuzzy": "Fuzzy (allow typos)"
+    },
+    "sortFields": {
+      "matchPriority": "Field Priority (title > description > tags)",
+      "boostScore": "Boost Score (weighted relevance)",
+      "titleAsc": "Title (A → Z)",
+      "titleDesc": "Title (Z → A)"
+    },
+    "assetTypes": {
+      "dataProduct": "Data Products",
+      "dataContract": "Data Contracts",
+      "glossaryTerm": "Glossary Terms",
+      "dataAssetReview": "Asset Reviews",
+      "tag": "Tags",
+      "dataDomain": "Data Domains"
+    },
+    "fieldEditor": {
+      "sourceBadge": "source: {{source}}",
+      "indexed": "Indexed",
+      "matchType": "Match Type",
+      "priorityLabel": "Priority (1-100)",
+      "priorityHelp": "Lower = higher importance",
+      "boostLabel": "Boost (0-10)",
+      "boostHelp": "Score multiplier for ranking"
+    },
+    "tabs": {
+      "defaultFields": "Default Fields",
+      "assetTypes": "Asset Types",
+      "ranking": "Ranking"
+    },
+    "defaults": {
+      "description": "These settings apply to all asset types by default. Individual asset types can override these settings."
+    },
+    "assetTypesTab": {
+      "description": "Configure search behavior for each asset type. Enable/disable indexing and customize extra fields.",
+      "enableIndexing": "Enable indexing",
+      "inheritDefaults": "Inherit default field settings",
+      "extraFieldsTitle": "Extra Fields",
+      "extraFieldsDescription": "Additional fields specific to this asset type.",
+      "extraFieldsBadge": "+{{count}} extra fields"
+    },
+    "ranking": {
+      "description": "Configure how search results are sorted. Results matching higher priority fields appear first.",
+      "primarySort": "Primary Sort",
+      "primarySortHelp": "The main criterion used to order results.",
+      "secondarySort": "Secondary Sort (tie-breaker)",
+      "secondarySortHelp": "Used when primary sort values are equal.",
+      "tertiarySort": "Tertiary Sort",
+      "tertiarySortHelp": "Final tie-breaker for results with equal primary and secondary values."
+    },
+    "buttons": {
+      "rebuildIndex": "Rebuild Search Index",
+      "save": "Save Configuration"
+    },
+    "messages": {
+      "loadErrorTitle": "Error loading configuration",
+      "loadErrorDescription": "Failed to load search configuration. Please try again.",
+      "saveSuccessTitle": "Configuration saved",
+      "saveSuccessDescription": "Search configuration has been updated. Consider rebuilding the index to apply changes.",
+      "saveErrorTitle": "Error saving configuration",
+      "saveErrorDescription": "Failed to save search configuration. Please try again.",
+      "rebuildSuccessTitle": "Index rebuilt",
+      "rebuildSuccessDescription": "Search index rebuilt with {{count}} items.",
+      "rebuildErrorTitle": "Error rebuilding index",
+      "rebuildErrorDescription": "Failed to rebuild search index. Please try again."
+    },
+    "matchType": {
+      "prefix": "Prefix (start of word)",
+      "substring": "Substring (anywhere)",
+      "exact": "Exact match only",
+      "fuzzy": "Fuzzy (allow typos)"
+    },
+    "sortField": {
+      "matchPriority": "Field Priority (title > description > tags)",
+      "boostScore": "Boost Score (weighted relevance)",
+      "titleAsc": "Title (A → Z)",
+      "titleDesc": "Title (Z → A)"
+    },
+    "assetType": {
+      "dataProduct": "Data Products",
+      "dataContract": "Data Contracts",
+      "glossaryTerm": "Glossary Terms",
+      "dataAssetReview": "Asset Reviews",
+      "tag": "Tags",
+      "dataDomain": "Data Domains"
+    }
+  },
+  "ontologyLibrary": {
+    "title": "Industry Ontology Library",
+    "description": "Browse and import industry-standard ontologies organized by vertical.",
+    "verticalsHeading": "Industry Verticals",
+    "ontologiesHeading": "Ontologies",
+    "filterPlaceholder": "Filter...",
+    "noOntologiesFound": "No ontologies found",
+    "selectVertical": "Select a vertical",
+    "foundationBadge": "Foundation",
+    "licenseBadge": "License",
+    "modulesHeading": "Modules",
+    "website": "Website",
+    "selectOntologyPrompt": "Select an ontology to see its modules",
+    "noModulesAvailable": "No modules available",
+    "moduleCount_one": "{{count}} module",
+    "moduleCount_other": "{{count}} modules",
+    "footer": {
+      "selected_one": "Selected: <strong>{{count}}</strong> module",
+      "selected_other": "Selected: <strong>{{count}}</strong> modules",
+      "selectedFrom_one": "Selected: <strong>{{count}}</strong> module from {{ontology}}",
+      "selectedFrom_other": "Selected: <strong>{{count}}</strong> modules from {{ontology}}",
+      "selectPrompt": "Select modules to import"
+    },
+    "license": {
+      "acceptLabel": "I accept the <terms>license terms</terms> for {{name}}{{license}}"
+    },
+    "buttons": {
+      "importing": "Importing...",
+      "import": "Import Selected Modules"
+    },
+    "messages": {
+      "loadVerticalsFailed": "Failed to load industry verticals",
+      "loadOntologiesFailed": "Failed to load ontologies",
+      "loadModulesFailed": "Failed to load modules",
+      "noModulesTitle": "No modules selected",
+      "noModulesDescription": "Please select at least one module to import.",
+      "licenseRequiredTitle": "License agreement required",
+      "licenseRequiredDescription": "Please accept the license terms to continue.",
+      "importFailed": "Import failed",
+      "importSuccessTitle": "Import successful",
+      "importSuccessDescription": "Imported {{count}} triples as \"{{name}}\"",
+      "warningTitle": "Warning",
+      "importErrorTitle": "Import error",
+      "importErrorDescription": "Failed to import ontology"
+    }
+  },
+  "delivery": {
+    "description": "Configure how governance changes are propagated to external systems. Multiple modes can be active simultaneously.",
+    "direct": {
+      "description": "Apply changes directly to Unity Catalog via SDK (GRANTs, tag assignments).",
+      "dryRun": "Dry-run mode (log changes without applying)",
+      "label": "Direct Mode"
+    },
+    "indirect": {
+      "description": "Persist changes as YAML files in a Git repository for CI/CD integration.",
+      "gitInfo": "Configure Git repository in the Git tab. Changes will be exported to the configured UC Volume under /git-export/.",
+      "label": "Indirect Mode"
+    },
+    "manual": {
+      "description": "Generate notifications for admins to apply changes manually in external systems.",
+      "label": "Manual Mode"
+    },
+    "saveButton": "Delivery settings saved successfully",
+    "title": "Delivery Modes"
+  },
+  "certificationLevels": {
+    "title": "Certification Levels",
+    "description": "Define the certification levels available for data products, contracts, and assets.",
+    "addLevel": "Add Level",
+    "table": {
+      "order": "Order",
+      "preview": "Preview"
+    },
+    "emptyState": "No certification levels configured. Click \"Add Level\" to create one.",
+    "dialog": {
+      "editTitle": "Edit Certification Level",
+      "createTitle": "Add Certification Level",
+      "editDescription": "Update the certification level details.",
+      "createDescription": "Create a new certification level."
+    },
+    "form": {
+      "namePlaceholder": "e.g., Gold",
+      "descriptionPlaceholder": "What this level represents...",
+      "colorLabel": "Color",
+      "previewLabel": "Preview",
+      "levelNamePreview": "Level Name"
+    },
+    "delete": {
+      "title": "Delete certification level?",
+      "description": "Are you sure you want to delete \"{{name}}\"? This cannot be undone. If entities are certified at this level, deletion will be blocked."
+    },
+    "messages": {
+      "updated": "Certification level \"{{name}}\" updated.",
+      "created": "Certification level \"{{name}}\" created.",
+      "deleted": "Certification level \"{{name}}\" deleted.",
+      "cannotDeleteTitle": "Cannot delete",
+      "reorderFailed": "Failed to reorder"
+    }
+  },
+  "maturityLevels": {
+    "title": "Maturity Levels",
+    "description": "Define the maturity ladder for data products and contracts. Each level is gated by compliance policies.",
+    "addLevel": "Add Level",
+    "allTypes": "All types",
+    "gateCount_one": "{{count}} gate",
+    "gateCount_other": "{{count}} gates",
+    "complianceGates": "Compliance Policy Gates",
+    "noDescription": "No description",
+    "required": "Required",
+    "advisory": "Advisory",
+    "viewInCompliance": "View in Compliance",
+    "selectPolicyPlaceholder": "Select compliance policy...",
+    "addGate": "Add Gate",
+    "emptyState": "No maturity levels configured. Click \"Add Level\" to create one.",
+    "dialog": {
+      "editTitle": "Edit Maturity Level",
+      "createTitle": "Add Maturity Level",
+      "editDescription": "Update the maturity level details.",
+      "createDescription": "Create a new maturity level."
+    },
+    "form": {
+      "namePlaceholder": "e.g., Trusted",
+      "descriptionPlaceholder": "What this level represents...",
+      "entityTypeLabel": "Entity Type",
+      "iconLabel": "Icon",
+      "colorLabel": "Color",
+      "previewLabel": "Preview",
+      "levelNamePreview": "Level Name"
+    },
+    "entityTypes": {
+      "all": "All Entity Types",
+      "DataProduct": "Data Products",
+      "DataContract": "Data Contracts"
+    },
+    "delete": {
+      "title": "Delete maturity level?",
+      "description": "Are you sure you want to delete \"{{name}}\"? This cannot be undone. If snapshots reference this level, deletion will be blocked."
+    },
+    "messages": {
+      "updated": "Maturity level \"{{name}}\" updated.",
+      "created": "Maturity level \"{{name}}\" created.",
+      "deleted": "Maturity level \"{{name}}\" deleted.",
+      "cannotDeleteTitle": "Cannot delete"
+    }
+  },
+  "directory": {
+    "title": "Directory",
+    "intro": "Connect a principal directory so users and groups can be picked throughout the app. v1 supports Microsoft Entra ID (via a UC HTTP Connection), a Postgres / Lakebase table, or a local CSV file for tests and demos.",
+    "providerLabel": "Provider",
+    "providerPlaceholder": "Select a provider…",
+    "providers": {
+      "entra": "Microsoft Entra ID",
+      "lakebase": "Lakebase table",
+      "file": "CSV file (test / demo)"
+    },
+    "testConnection": "Test connection",
+    "statusLabel": "Status:",
+    "configured": "Configured ({{provider}})",
+    "notConfigured": "Not configured",
+    "messages": {
+      "saveSuccess": "Directory settings saved",
+      "saveFailed": "Failed to save",
+      "testSuccess": "Directory test succeeded",
+      "testFailed": "Directory test failed",
+      "unknownError": "Unknown error",
+      "clearSuccess": "Directory settings cleared",
+      "clearFailed": "Failed to clear"
+    },
+    "entra": {
+      "connectionLabel": "UC HTTP Connection",
+      "loadingConnections": "Loading connections…",
+      "noConnections": "No HTTP connections found",
+      "selectConnection": "Select a connection…",
+      "setupTitle": "Entra ID connection setup",
+      "setupBody": "Create a Unity Catalog HTTP connection against Microsoft Graph with client_credentials. The app's enterprise app must hold at least <code>User.Read.All</code> and <code>GroupMember.Read.All</code> (or <code>Group.Read.All</code>) application scopes.",
+      "helpLabels": {
+        "tokenUrl": "Token URL",
+        "baseUrl": "Base URL",
+        "scope": "Scope",
+        "grantType": "Grant type"
+      }
+    },
+    "lakebase": {
+      "tableLabel": "Lakebase table",
+      "tablePlaceholder": "catalog.schema.table",
+      "tableHelp": "Fully-qualified name of a Postgres table on the app's primary Lakebase database. Identifier segments must contain only letters, digits, and underscores.",
+      "schemaTitle": "Required schema",
+      "schemaBody": "Populate this table from your IdP sync pipeline. Indexes on lower-cased columns are optional but recommended for snappy prefix search."
+    },
+    "file": {
+      "pathLabel": "CSV file path",
+      "pathPlaceholder": "/etc/ontos/principals.csv",
+      "pathHelp": "Absolute path to a CSV file readable by the app process. Re-read automatically when the file's mtime advances; no restart needed.",
+      "formatTitle": "CSV format",
+      "formatBody": "Required columns: <code>type</code>, <code>id</code>, <code>display_name</code>. The <code>sub_label</code> column is optional. <code>type</code> must be <code>user</code> or <code>group</code>."
+    }
+  },
+  "semanticModels": {
+    "page": {
+      "title": "RDF Sources",
+      "description": "Upload and manage RDF ontology and taxonomy files (RDFS, SKOS, OWL)."
+    },
+    "actions": {
+      "industryLibrary": "Industry Library",
+      "uploading": "Uploading...",
+      "refreshListTooltip": "Refresh list"
+    },
+    "table": {
+      "sourceHeader": "Source",
+      "sizeHeader": "Size",
+      "sizeKb": "{{value}} KB",
+      "enabledHeader": "Enabled",
+      "alwaysOn": "Always On",
+      "viewContentTooltip": "View content",
+      "deleteModelTooltip": "Delete model"
+    },
+    "source": {
+      "unknown": "Unknown",
+      "system": "System",
+      "file": "File",
+      "schema": "Schema",
+      "upload": "Upload"
+    },
+    "deleteDialog": {
+      "title": "Delete RDF Source",
+      "description": "Are you sure you want to delete <strong>{{name}}</strong>? This action cannot be undone and will remove the model from the semantic graph."
+    },
+    "viewDialog": {
+      "titleFallback": "View Ontology",
+      "loadingContent": "Loading content...",
+      "noContent": "No content available.",
+      "loadContentFailed": "Failed to load content.",
+      "copied": "Copied!",
+      "copyToClipboard": "Copy to Clipboard"
+    },
+    "messages": {
+      "loadModelsError": "Failed to load models",
+      "graphRefreshed": "Knowledge graph refreshed successfully",
+      "graphRefreshError": "Failed to refresh knowledge graph",
+      "uploadFailedTitle": "Upload Failed",
+      "modelUploaded": "Semantic model uploaded successfully",
+      "uploadErrorTitle": "Upload Error",
+      "uploadFileError": "Failed to upload file",
+      "modelToggled": "Model {{state}} successfully",
+      "enabledState": "enabled",
+      "disabledState": "disabled",
+      "updateModelError": "Failed to update model",
+      "loadContentError": "Failed to load content",
+      "copyClipboardError": "Failed to copy to clipboard",
+      "deleteFailedTitle": "Delete Failed",
+      "modelDeleted": "Semantic model deleted successfully",
+      "deleteErrorTitle": "Delete Error",
+      "deleteModelError": "Failed to delete model",
+      "updateTitleError": "Failed to update title",
+      "saveError": "Failed to save",
+      "clearTitleError": "Failed to clear title",
+      "clearError": "Failed to clear"
+    }
   }
 }

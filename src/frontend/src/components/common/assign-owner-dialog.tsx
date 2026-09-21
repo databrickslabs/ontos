@@ -27,7 +27,7 @@ interface AssignOwnerDialogProps {
 }
 
 export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, onSuccess, initialEmail, initialName }: AssignOwnerDialogProps) {
-  const { t } = useTranslation(['business-owners', 'common']);
+  const { t } = useTranslation('common');
   const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
 
@@ -76,11 +76,11 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
         role_id: roleId,
       });
       if (res.error) throw new Error(res.error);
-      toast({ title: t('panel.assignOwner'), description: t('messages.assignedSuccess', { defaultValue: 'Owner assigned successfully.' }) });
+      toast({ title: t('common:assignOwner.title'), description: t('common:assignOwner.assignedSuccess') });
       onOpenChange(false);
       onSuccess();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: t('messages.errorAssigning', { defaultValue: 'Error assigning owner' }), description: err.message });
+      toast({ variant: 'destructive', title: t('common:assignOwner.errorAssigning'), description: err.message });
     } finally {
       setSubmitting(false);
     }
@@ -92,37 +92,37 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{t('panel.assignOwner')}</DialogTitle>
+          <DialogTitle>{t('common:assignOwner.title')}</DialogTitle>
           <DialogDescription>
-            {t('assignDialog.description', { defaultValue: 'Assign a business owner with a specific role.' })}
+            {t('common:assignOwner.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="owner-email">{t('assignDialog.emailLabel', { defaultValue: 'User' })} *</Label>
+            <Label htmlFor="owner-email">{t('common:assignOwner.emailLabel')} *</Label>
             <PrincipalPicker
               id="owner-email"
               accepts={['user']}
               value={userEmail || null}
               onChange={(next) => setUserEmail(next ?? '')}
-              placeholder={t('assignDialog.emailPlaceholder', { defaultValue: 'user@example.com' })}
-              aria-label="Owner user"
+              placeholder={t('common:assignOwner.emailPlaceholder')}
+              aria-label={t('common:assignOwner.ownerUserAria')}
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="owner-name">{t('assignDialog.nameLabel', { defaultValue: 'Display Name (optional)' })}</Label>
+            <Label htmlFor="owner-name">{t('common:assignOwner.nameLabel')}</Label>
             <Input
               id="owner-name"
-              placeholder={t('assignDialog.namePlaceholder', { defaultValue: 'Jane Doe' })}
+              placeholder={t('common:assignOwner.namePlaceholder')}
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
             />
           </div>
 
           <div className="grid gap-2">
-            <Label>{t('assignDialog.roleLabel', { defaultValue: 'Role' })} *</Label>
+            <Label>{t('common:assignOwner.roleLabel')} *</Label>
             {rolesLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}
@@ -130,7 +130,7 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
             ) : (
               <Select value={roleId} onValueChange={setRoleId}>
                 <SelectTrigger>
-                  <SelectValue placeholder={t('assignDialog.rolePlaceholder', { defaultValue: 'Select a role...' })} />
+                  <SelectValue placeholder={t('common:assignOwner.rolePlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {roles.map((role) => (
@@ -150,7 +150,7 @@ export function AssignOwnerDialog({ open, onOpenChange, objectType, objectId, on
           </Button>
           <Button onClick={handleSubmit} disabled={!isValid || submitting}>
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {t('panel.assignOwner')}
+            {t('common:assignOwner.title')}
           </Button>
         </DialogFooter>
       </DialogContent>

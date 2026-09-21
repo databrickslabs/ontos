@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 export default function MyProducts() {
-  const { t } = useTranslation('home');
+  const { t } = useTranslation(['home', 'data-products', 'common']);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
@@ -209,7 +209,7 @@ export default function MyProducts() {
     return (
       <div className="flex flex-col gap-4 p-4">
         <p className="text-destructive">{error}</p>
-        <Button variant="outline" onClick={loadSubscriptions}>Retry</Button>
+        <Button variant="outline" onClick={loadSubscriptions}>{t('data-products:myProductsView.retry')}</Button>
       </div>
     );
   }
@@ -355,7 +355,7 @@ export default function MyProducts() {
       {filteredProducts.length > 0 && (
         <>
           <div className="text-sm text-muted-foreground">
-            {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} available
+            {t('data-products:myProductsView.productsAvailable', { count: filteredProducts.length })}
           </div>
           <div className={gridClass}>
             {filteredProducts.map((product) => {
@@ -373,7 +373,7 @@ export default function MyProducts() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <Package className="h-4 w-4 text-primary flex-shrink-0" />
-                        <CardTitle className="text-base truncate">{product.name || 'Untitled'}</CardTitle>
+                        <CardTitle className="text-base truncate">{product.name || t('data-products:myProductsView.untitled')}</CardTitle>
                       </div>
                       {product.id && (
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-primary/10" onClick={(e) => handleOpenProduct(e, product.id!)} title={t('marketplace.openInDetails')}>

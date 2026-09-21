@@ -1,12 +1,103 @@
 {
+  "personaNav": {
+    "home": "ホーム",
+    "marketplace": "マーケットプレイス",
+    "dataCatalog": "データカタログ",
+    "businessGlossary": "コンセプトブラウザ",
+    "mySubscriptions": "マイサブスクリプション",
+    "accessRequests": "アクセスリクエスト",
+    "dataProducts": "データプロダクト",
+    "dataContracts": "データ契約",
+    "dataAssets": "データアセット",
+    "qualityCompliance": "品質とコンプライアンス",
+    "myConsumers": "マイコンシューマー",
+    "reviewsApprovals": "レビューと承認",
+    "assetExplorer": "アセットエクスプローラー",
+    "compliance": "コンプライアンス",
+    "masterData": "マスターデータ",
+    "catalogCommander": "カタログコマンダー",
+    "domains": "ドメイン",
+    "teams": "チーム",
+    "ownership": "所有権",
+    "policies": "ポリシー",
+    "workflows": "ワークフロー",
+    "audit": "監査ログ",
+    "estateManager": "エステートマネージャー",
+    "searchConcepts": "コンセプトを検索",
+    "viewGraph": "グラフを表示",
+    "searchGraph": "グラフを検索",
+    "assetTypes": "アセットタイプ",
+    "tags": "タグ",
+    "entitlements": "エンタイトルメント",
+    "securityFeatures": "セキュリティ機能",
+    "entitlementsSync": "エンタイトルメント同期",
+    "general": "一般",
+    "uiCustomization": "UI カスタマイズ",
+    "connectors": "コネクタ",
+    "schemaImporter": "スキーマインポーター",
+    "jobs": "ジョブ",
+    "deliveryModes": "配信モード",
+    "git": "Git 連携",
+    "appRoles": "アプリケーションロール",
+    "businessRoles": "ビジネスロール",
+    "businessOwners": "ビジネスオーナー",
+    "searchSettings": "検索設定",
+    "mcpSettings": "MCP 設定",
+    "collections": "コレクション",
+    "rdfSources": "RDF ソース",
+    "about": "概要",
+    "hierarchyBrowser": "階層ブラウザ"
+  },
+  "navGroups": {
+    "discover": "発見",
+    "myData": "マイデータ",
+    "build": "構築",
+    "monitor": "監視",
+    "tasks": "タスク",
+    "catalog": "カタログ",
+    "govern": "ガバナンス",
+    "tools": "ツール",
+    "organize": "整理",
+    "standards": "標準",
+    "oversight": "監督",
+    "advanced": "詳細",
+    "accessControl": "アクセス制御",
+    "monitoring": "モニタリング",
+    "configuration": "構成",
+    "automation": "自動化",
+    "access": "アクセス",
+    "system": "システム"
+  },
+  "personas": {
+    "data_consumer": "データコンシューマー",
+    "data_producer": "データプロデューサー",
+    "data_steward": "データスチュワード",
+    "data_governance_officer": "データガバナー",
+    "security_officer": "セキュリティ責任者",
+    "administrator": "管理者"
+  },
+  "personaDescriptions": {
+    "data_consumer": "データプロダクトの参照とサブスクライブ",
+    "data_producer": "データプロダクトの構築、公開、監視",
+    "data_steward": "カタログのキュレーションとデータ品質の確保",
+    "data_governance_officer": "ポリシー、ドメイン、所有権",
+    "security_officer": "アクセス制御とセキュリティ",
+    "administrator": "システムの構成と管理"
+  },
+  "personaSwitcher": {
+    "switchPersona": "ペルソナを切り替え",
+    "currentPersona": "現在のペルソナ"
+  },
   "title": "設定",
   "tabs": {
     "general": "一般",
     "databricks": "Databricks",
     "git": "Git",
+    "delivery": "配信モード",
     "jobs": "ジョブ",
     "audit": "監査ログ",
     "businessRoles": "ビジネスロール",
+    "deliveryMethods": "配信方法",
     "assetTypes": "アセットタイプ",
     "dataDomains": "ドメイン",
     "teams": "チーム",
@@ -17,7 +108,11 @@
     "search": "検索",
     "mcpTokens": "MCPトークン",
     "workflows": "ワークフロー",
-    "uiCustomization": "UIカスタマイズ"
+    "uiCustomization": "UIカスタマイズ",
+    "connectors": "コネクタ",
+    "schemaImporter": "スキーマインポーター",
+    "certificationLevels": "認定レベル",
+    "maturityLevels": "成熟度レベル"
   },
   "accessDenied": {
     "title": "アクセス拒否",
@@ -108,13 +203,54 @@
     "labels": {
       "repoUrl": "リポジトリURL",
       "branch": "ブランチ",
-      "token": "トークン"
+      "token": "トークン",
+      "username": "ユーザー名"
     },
     "placeholders": {
       "repoUrl": "https://github.com/your-org/your-repo.git",
       "branch": "main",
-      "token": "ghp_... または類似"
-    }
+      "token": "ghp_... または類似",
+      "username": "x-access-token"
+    },
+    "cloneButton": "リポジトリをクローン",
+    "currentCommit": "コミット",
+    "diff": {
+      "collapseAll": "すべて折りたたむ",
+      "commitAndPush": "コミットしてプッシュ",
+      "commitMessage": "コミットメッセージ（任意）",
+      "expandAll": "すべて展開",
+      "fileCount": "{{count}} 件のファイルが変更されました",
+      "newFile": "新規ファイル",
+      "noChanges": "保留中の変更はありません",
+      "noDiff": "差分がありません",
+      "title": "保留中の変更"
+    },
+    "errorTitle": "エラー",
+    "lastSync": "前回の同期",
+    "messages": {
+      "cloneError": "リポジトリのクローンに失敗しました",
+      "cloneSuccess": "リポジトリを正常にクローンしました",
+      "pullError": "変更のプルに失敗しました",
+      "pullSuccess": "リポジトリを更新しました",
+      "pushError": "変更のプッシュに失敗しました",
+      "pushSuccess": "変更を正常にプッシュしました",
+      "saveError": "Git 設定の保存に失敗しました",
+      "saveSuccess": "Git 設定を保存しました"
+    },
+    "pendingChanges": "保留中の変更",
+    "pullButton": "プル",
+    "pushButton": "プッシュ",
+    "repoStatus": "リポジトリのステータス",
+    "saveButton": "設定を保存",
+    "status": {
+      "cloned": "クローン済み",
+      "cloning": "クローン中...",
+      "error": "エラー",
+      "notCloned": "未クローン",
+      "notConfigured": "未設定"
+    },
+    "viewChangesButton": "変更を表示",
+    "volumePath": "ボリュームパス"
   },
   "nav": {
     "groups": {
@@ -146,7 +282,36 @@
     "saveButton": "設定を保存",
     "messages": {
       "saveSuccess": "設定が正常に保存されました",
-      "saveError": "設定の保存に失敗しました"
+      "saveError": "設定の保存に失敗しました",
+      "statusFetchError": "ワークフローのステータスの取得に失敗しました",
+      "saveFailed": "保存に失敗しました",
+      "startedRun": "実行を開始しました",
+      "startFailed": "開始に失敗しました",
+      "stoppedRun": "実行を停止しました",
+      "stopFailed": "停止に失敗しました",
+      "pausedSchedule": "スケジュールを一時停止しました",
+      "pauseFailed": "一時停止に失敗しました",
+      "resumedSchedule": "スケジュールを再開しました",
+      "resumeFailed": "再開に失敗しました"
+    },
+    "aria": {
+      "history": "履歴",
+      "configure": "設定"
+    },
+    "configureTooltip": "ワークフローのパラメータを設定",
+    "table": {
+      "actions": "アクション",
+      "canceled": "キャンセル",
+      "description": "説明",
+      "enabled": "有効",
+      "failed": "失敗",
+      "idle": "アイドル",
+      "name": "名前",
+      "notInstalled": "未インストール",
+      "running": "実行中",
+      "status": "ステータス",
+      "success": "成功",
+      "timedOut": "タイムアウト"
     }
   },
   "jobsActions": {
@@ -176,7 +341,10 @@
       "running": "実行中",
       "pending": "保留",
       "unknown": "不明"
-    }
+    },
+    "expandDetails": "詳細を展開",
+    "collapseDetails": "詳細を折りたたむ",
+    "stateMessage": "状態メッセージ:"
   },
   "roles": {
     "title": "ロールベースのアクセス制御",
@@ -194,7 +362,8 @@
     "dialog": {
       "createTitle": "ロールを作成",
       "editTitle": "ロールを編集: {{name}}",
-      "description": "ロール名、割り当てられたグループ、機能の権限、承認権限を定義します。"
+      "description": "ロール名、割り当てられたグループ、機能の権限、承認権限を定義します。",
+      "defaultRoleName": "ロール"
     },
     "tabs": {
       "general": "一般",
@@ -219,6 +388,15 @@
       "approvalPrivileges": {
         "title": "承認権限",
         "description": "このロールに特定の種類のリクエストを承認する権限を付与します。"
+      },
+      "allowedPersonas": {
+        "title": "このロールがアクセスできるペルソナ",
+        "description": "このロールを持つユーザーが UI で使用できるペルソナビューを選択します。"
+      },
+      "adminRole": {
+        "title": "管理者ロール",
+        "description": "このロールを管理者ロールとしてマークします。管理者としてマークできるロールは 1 つだけです。",
+        "label": "これは管理者ロールです"
       }
     },
     "permissions": {
@@ -233,7 +411,18 @@
         "deploy": "展開",
         "settings": "設定",
         "other": "その他"
-      }
+      },
+      "crossCutting": "バックグラウンド",
+      "settingsSubGroups": {
+        "referenceData": "参照データ",
+        "configuration": "構成",
+        "integrations": "連携",
+        "operations": "運用",
+        "accessControl": "アクセス制御"
+      },
+      "selectAccessPlaceholder": "アクセスを選択",
+      "noLevels": "レベルなし",
+      "noFeaturesLoaded": "機能設定が読み込まれていません。"
     },
     "deployment": {
       "title": "デプロイメントポリシー",
@@ -282,7 +471,55 @@
       "addRole": "ロールを追加",
       "actions": "アクション",
       "editRole": "ロールを編集",
-      "deleteRole": "ロールを削除"
+      "deleteRole": "ロールを削除",
+      "cannotDeleteAdmin": "管理者ロールは削除できません"
+    },
+    "messages": {
+      "loadFailed": "ロール設定の読み込みに失敗しました。",
+      "deleteFailed": "ロールの削除に失敗しました。",
+      "permissionDeniedTitle": "権限が拒否されました",
+      "cannotEditRoles": "ロールを編集する権限がありません。",
+      "cannotDeleteRoles": "ロールを削除する権限がありません。",
+      "permissionsUpdatedTitle": "権限を更新しました",
+      "permissionsUpdated": "ユーザー権限と利用可能なロールを更新しました。",
+      "refreshFailedTitle": "更新に失敗しました",
+      "refreshFailed": "権限/ロールを更新できませんでした: {{error}}",
+      "deleteConfirm": "ロール「{{name}}」を削除してもよろしいですか？",
+      "roleDeleted": "ロール「{{name}}」を削除しました。",
+      "roleCreated": "ロール「{{name}}」を作成しました。",
+      "roleUpdated": "ロール「{{name}}」を更新しました。",
+      "saveErrorTitle": "保存エラー",
+      "unexpectedError": "予期しないエラーが発生しました。",
+      "unsavedChangesConfirm": "未保存の変更があります。閉じてもよろしいですか？"
+    },
+    "confirmRequest": {
+      "title": "ロールアクセスリクエストの処理",
+      "reviewPrompt": "ロール <strong>{{role}}</strong> に対する <strong>{{email}}</strong> からのリクエストを確認します。",
+      "requesterReasonLabel": "リクエスト者の理由",
+      "messageLabel": "リクエスト者へのメッセージ（任意）",
+      "messagePlaceholder": "承認または却下の理由を入力してください（任意）",
+      "deny": "リクエストを却下",
+      "approve": "リクエストを承認",
+      "approvedTitle": "リクエストを承認しました",
+      "deniedTitle": "リクエストを却下しました",
+      "decisionSubmitted": "ロール {{role}} に対する {{email}} のリクエストへの判断を送信しました。",
+      "submissionFailed": "送信に失敗しました",
+      "submissionFailedDescription": "判断を送信できませんでした。"
+    },
+    "requestAccess": {
+      "title": "ロールアクセスをリクエスト",
+      "description": "このアプリケーションロールへのアクセスリクエストを送信します。リクエストの詳細な理由を入力してください。",
+      "roleLabel": "ロール:",
+      "reasonLabel": "ロールアクセスリクエストの理由 *",
+      "reasonPlaceholder": "このロールが必要な理由を説明してください。あなたの責任、プロジェクトの要件、ビジネス上の正当性の詳細を含めてください...",
+      "reasonHelp": "最低 10 文字が必要です。この情報は管理者と共有されます。",
+      "reasonRequired": "このロールをリクエストする理由を入力してください",
+      "reasonTooShort": "より詳細な理由を入力してください（最低 10 文字）",
+      "submittedTitle": "リクエストを送信しました",
+      "submittedDescription": "ロール「{{role}}」へのリクエストが送信されました。判断についてはあらためて通知されます。",
+      "submitFailed": "ロールアクセスリクエストの送信に失敗しました",
+      "sending": "リクエストを送信中...",
+      "send": "リクエストを送信"
     }
   },
   "mcpTokens": {
@@ -380,7 +617,8 @@
       "invalidUrl": "有効なHTTPまたはHTTPS URLを入力してください",
       "preview": "プレビュー：",
       "loadError": "画像の読み込みに失敗しました",
-      "openInNewTab": "新しいタブで開く"
+      "openInNewTab": "新しいタブで開く",
+      "previewAlt": "ロゴのプレビュー"
     },
     "about": {
       "title": "カスタム「About」ページコンテンツ",
@@ -403,6 +641,680 @@
       "saveSuccess": "UIカスタマイズ設定を保存しました",
       "saveError": "設定の保存に失敗しました",
       "reloadRequired": "一部の変更を確認するにはページをリロードしてください。"
+    },
+    "branding": {
+      "help": "表示名は、ウェルカム/概要/コパイロットの文言およびブラウザのタブタイトルにおいて製品名を上書きします。PWA マニフェスト名と、ビルド時に設定される静的なページタイトルは、これらの設定では更新されません。",
+      "displayNameHelp": "デフォルトの製品名（{{defaultName}}）を使用するには空欄のままにします。最大 {{max}} 文字。",
+      "shortNamePlaceholder": "例: コンパクトな UI 向けの略称",
+      "shortNameHelp": "スペースが限られた箇所で使用されます（例: 「{{shortName}}に聞く」）。空欄の場合は表示名にフォールバックします。最大 {{max}} 文字。",
+      "displayNameLabel": "表示名",
+      "shortNameLabel": "短縮名（任意）",
+      "title": "ブランディング"
+    },
+    "favicon": {
+      "previewAlt": "ファビコンのプレビュー",
+      "urlPlaceholder": "https://example.com/favicon.svg",
+      "help": "ブラウザのタブに実行時に適用されます。同梱の index.html 内の静的な <link rel=\"icon\"> と PWA マニフェストは、この設定では更新されません。",
+      "invalidUrl": "有効な HTTP または HTTPS の URL を入力してください",
+      "loadError": "画像の読み込みに失敗しました",
+      "openInNewTab": "新しいタブで開く",
+      "preview": "プレビュー:",
+      "title": "ブラウザのファビコン",
+      "urlLabel": "ファビコン URL"
+    }
+  },
+  "connectors": {
+    "title": "接続",
+    "description": "アセット検出とメタデータ取得のための外部データプラットフォームへの接続を管理します。",
+    "addConnection": "接続を追加",
+    "testConnection": "接続をテスト",
+    "editTitle": "接続を編集",
+    "editDescription": "接続設定を更新します。",
+    "createTitle": "新規接続",
+    "createDescription": "外部データプラットフォームへの新しい接続を設定します。",
+    "deleteTitle": "接続を削除",
+    "deleteDescription": "この接続を削除してもよろしいですか？この操作は元に戻せません。",
+    "columns": {
+      "name": "名前",
+      "type": "タイプ",
+      "description": "説明",
+      "status": "ステータス",
+      "updated": "更新日"
+    },
+    "form": {
+      "connectorType": "コネクタタイプ",
+      "name": "名前",
+      "description": "説明",
+      "enabled": "有効",
+      "isDefault": "デフォルト",
+      "systemAssetHelp": "既存の System アセットにリンクするか、空欄のままにして最初のインポート時に自動作成します。",
+      "connectorTypePlaceholder": "コネクタタイプを選択...",
+      "namePlaceholder": "例: Production BQ - Analytics",
+      "descriptionPlaceholder": "説明（任意）...",
+      "autoCreateOnImport": "最初のインポート時に自動作成",
+      "systemAsset": "リンクされた System アセット"
+    },
+    "bigquery": {
+      "configTitle": "BigQuery 設定",
+      "ucConnectionName": "UC 接続名",
+      "ucConnectionNameHelp": "任意。UC 接続のメタデータから GCP プロジェクト ID を取得します。",
+      "projectId": "GCP プロジェクト ID",
+      "projectIdHelp": "任意。設定されていない場合は資格情報から導出されます。",
+      "location": "ロケーション",
+      "locationHelp": "例: US、EU、us-central1",
+      "authSectionTitle": "認証",
+      "authSectionHelp": "GCP サービスアカウントキーの JSON を Databricks シークレットとして保存し、以下でスコープとキー名を参照してください。",
+      "secretScope": "シークレットスコープ",
+      "secretKey": "シークレットキー",
+      "credentialsPath": "資格情報ファイルのパス",
+      "credentialsPathHelp": "開発用フォールバック: サービスアカウントキー JSON ファイルへのローカルパス。",
+      "projectIdPlaceholder": "my-gcp-project",
+      "locationPlaceholder": "US",
+      "ucConnectionNamePlaceholder": "my-bigquery-connection",
+      "secretScopePlaceholder": "ontos-connectors",
+      "secretKeyPlaceholder": "bigquery-sa-key",
+      "credentialsPathPlaceholder": "/path/to/service-account-key.json"
+    },
+    "snowflake": {
+      "configTitle": "Snowflake 設定",
+      "account": "アカウント識別子",
+      "accountHelp": "例: myorg-myaccount または xy12345.us-east-1",
+      "user": "ユーザー",
+      "warehouse": "ウェアハウス",
+      "role": "ロール",
+      "roleHelp": "任意。クエリで使用するロール。",
+      "database": "デフォルトデータベース",
+      "defaultSchema": "デフォルトスキーマ",
+      "accountPlaceholder": "myorg-myaccount",
+      "userPlaceholder": "ONTOS_SVC",
+      "warehousePlaceholder": "COMPUTE_WH",
+      "rolePlaceholder": "SYSADMIN",
+      "databasePlaceholder": "ANALYTICS",
+      "defaultSchemaPlaceholder": "PUBLIC"
+    },
+    "databricks": {
+      "systemNote": "この接続は環境変数から自動設定されており、変更できません。"
+    },
+    "messages": {
+      "saveSuccess": "接続を保存しました",
+      "saveError": "接続の保存に失敗しました",
+      "testSuccess": "接続に成功しました",
+      "testFailed": "接続に失敗しました",
+      "testError": "接続テストのエラー",
+      "deleteSuccess": "接続を削除しました",
+      "testSuccessProject": "プロジェクト: {{project}}",
+      "deleteFailed": "削除に失敗しました"
+    },
+    "badges": {
+      "system": "システム",
+      "default": "デフォルト"
+    }
+  },
+  "schemaImporter": {
+    "title": "スキーマインポーター",
+    "description": "リモートシステムを参照し、その構造を {{appName}} のアセットとしてインポートします。"
+  },
+  "assetBulk": {
+    "title": "アセットのインポート / エクスポート",
+    "description": "オフライン編集のためにアセットを CSV/Excel にエクスポートするか、ファイルからアセットをインポートします。",
+    "exportTab": "エクスポート",
+    "importTab": "インポート",
+    "exportSettings": "エクスポート設定",
+    "format": "形式",
+    "scope": "範囲",
+    "allAssetTypes": "すべてのアセットタイプ",
+    "exportAssets": "アセットをエクスポート",
+    "exporting": "エクスポート中...",
+    "downloadTemplate": "テンプレートをダウンロード",
+    "exportSuccess": "エクスポートに成功しました",
+    "exportFailed": "エクスポートに失敗しました",
+    "templateDownloaded": "テンプレートをダウンロードしました",
+    "selectFile": "ファイルを選択",
+    "preview": "プレビュー",
+    "previewFailed": "プレビューに失敗しました",
+    "importButton": "インポート",
+    "importing": "インポート中...",
+    "importAssets": "{count} 件のアセットをインポート",
+    "importSuccess": "インポートに成功しました",
+    "importFailed": "インポートに失敗しました",
+    "importWithErrors": "エラーありでインポートが完了しました",
+    "importComplete": "インポート完了: {created} 件作成、{updated} 件更新、{errors} 件エラー。",
+    "close": "閉じる",
+    "row": "行",
+    "name": "名前",
+    "type": "タイプ",
+    "action": "アクション",
+    "message": "メッセージ",
+    "create": "作成",
+    "update": "更新",
+    "skip": "スキップ",
+    "error": "エラー",
+    "importExport": "インポート / エクスポート",
+    "exportHelp": "エクスポートファイルには各アセットのすべてのフィールドが含まれます。オフラインで編集して再インポートできます。",
+    "templateHelp": "テンプレートは、正しいヘッダーと例の行を含む空のファイルを提供します。"
+  },
+  "workflows": {
+    "actions": {
+      "start": "開始",
+      "stop": "停止",
+      "pause": "一時停止",
+      "unpause": "一時停止を解除"
+    }
+  },
+  "workflowConfig": {
+    "title": "{{name}} を設定",
+    "description": "このワークフローのパラメータを設定します。これらの値はワークフローの実行時に使用されます。",
+    "loadError": "設定の読み込みに失敗しました",
+    "saveError": "設定の保存に失敗しました",
+    "saveSuccess": "ワークフロー設定を正常に保存しました",
+    "selectOption": "オプションを選択",
+    "noParameters": "このワークフローには設定可能なパラメータがありません。",
+    "saveButton": "設定を保存"
+  },
+  "tags": {
+    "enable": "有効化",
+    "title": "タグ",
+    "description": "タグの名前空間を管理し、表示設定を構成し、アプリケーション全体でタグを整理します。",
+    "columns": {
+      "group": "グループ",
+      "accessLevel": "アクセスレベル"
+    },
+    "display": {
+      "title": "タグ表示設定",
+      "description": "アプリケーション全体でタグをどのように表示するかを設定します。",
+      "formatLabel": "表示形式:",
+      "formatPlaceholder": "形式を選択",
+      "short": "短縮（タグ名のみ）",
+      "long": "詳細（名前空間/タグ名）",
+      "help": "<strong>短縮:</strong> タグ名のみを表示します（例: 「pii」）。<br/> <strong>詳細:</strong> 名前空間とタグ名を表示します（例: 「compliance/pii」）。"
+    },
+    "namespaces": {
+      "title": "タグの名前空間",
+      "description": "管理と権限を向上させるために、タグを論理的な名前空間に整理します。",
+      "add": "名前空間を追加",
+      "activeLabel": "有効な名前空間:",
+      "selectPlaceholder": "名前空間を選択"
+    },
+    "list": {
+      "description": "選択した名前空間内のタグを管理します。",
+      "add": "タグを追加"
+    },
+    "permissions": {
+      "title": "名前空間の権限",
+      "description": "この名前空間のタグにアクセスおよび変更できるグループを制御します。",
+      "add": "権限を追加"
+    },
+    "namespaceDialog": {
+      "editTitle": "名前空間を編集",
+      "createTitle": "名前空間を作成",
+      "editDescription": "名前空間の詳細を更新します。",
+      "createDescription": "タグを整理するための新しい名前空間を作成します。",
+      "namePlaceholder": "例: finance, marketing, engineering",
+      "descriptionPlaceholder": "名前空間の説明（任意）"
+    },
+    "tagDialog": {
+      "editTitle": "タグを編集",
+      "createTitle": "タグを作成",
+      "editDescription": "タグの詳細を更新します。",
+      "createDescription": "選択した名前空間に新しいタグを作成します。",
+      "namePlaceholder": "例: pii, sensitive, public",
+      "descriptionPlaceholder": "このタグが表す内容を記述します",
+      "versionPlaceholder": "例: v1.0, 2023.1",
+      "parentLabel": "親タグ",
+      "possibleValuesLabel": "取り得る値（JSON 配列）",
+      "possibleValuesHelp": "任意。このタグをエンティティに割り当てる際に許可される値の JSON 配列。",
+      "statuses": {
+        "active": "有効",
+        "draft": "ドラフト",
+        "candidate": "候補",
+        "deprecated": "非推奨",
+        "inactive": "無効",
+        "retired": "廃止"
+      }
+    },
+    "permissionDialog": {
+      "editTitle": "権限を編集",
+      "addTitle": "権限を追加",
+      "editDescription": "権限の詳細を更新します。",
+      "addDescription": "この名前空間へのアクセスをグループに付与します。",
+      "groupLabel": "グループ",
+      "groupPlaceholder": "例: data-engineers, analysts"
+    },
+    "accessLevels": {
+      "readOnly": "読み取り専用",
+      "readWrite": "読み取り/書き込み",
+      "admin": "管理者"
+    },
+    "deleteDialog": {
+      "title": "{{type}} を削除",
+      "description": "「{{name}}」を削除してもよろしいですか？この操作は元に戻せません。",
+      "namespaceWarning": "この名前空間内のすべてのタグと権限も削除されます。"
+    },
+    "toasts": {
+      "fetchNamespacesError": "名前空間の取得エラー",
+      "fetchTagsError": "タグの取得エラー",
+      "fetchPermissionsError": "権限の取得エラー",
+      "displayFormatUpdated": "タグの表示形式を更新しました",
+      "displayFormatError": "表示形式の保存エラー",
+      "namespaceUpdated": "名前空間を正常に更新しました",
+      "namespaceCreated": "名前空間を正常に作成しました",
+      "namespaceSaveError": "名前空間の保存エラー",
+      "tagUpdated": "タグを正常に更新しました",
+      "tagCreated": "タグを正常に作成しました",
+      "tagSaveError": "タグの保存エラー",
+      "permissionUpdated": "権限を正常に更新しました",
+      "permissionCreated": "権限を正常に作成しました",
+      "permissionSaveError": "権限の保存エラー",
+      "deleteSuccess": "{{type}} を正常に削除しました",
+      "deleteError": "アイテムの削除エラー"
+    },
+    "syncConfigs": {
+      "errors": {
+        "empty": "タグキーを空にすることはできません",
+        "spaces": "タグキーの先頭または末尾に空白を含めることはできません",
+        "invalidChar": "タグキーに '{{char}}' を含めることはできません"
+      },
+      "introBefore": "Unity Catalog タグに同期するメタデータを設定し、タグのキー/値の形式をカスタマイズします。動的な値には",
+      "introAfter": "プレースホルダーを使用します。",
+      "invalidCharsBefore": "UC タグキーには次を含めることはできません:",
+      "invalidCharsAfter": "また、先頭または末尾に空白を含めることもできません",
+      "cardDescription": "{{type}} のタグ形式を設定",
+      "availableVariables": "利用可能な変数",
+      "keyFormatLabel": "タグキーの形式",
+      "keyFormatPlaceholder": "例: ontos_{VARIABLE}",
+      "example": "例:",
+      "valueFormatLabel": "タグ値の形式",
+      "valueFormatPlaceholder": "例: {VARIABLE}",
+      "valueFormatHelp": "タグに割り当てられる値",
+      "variables": {
+        "linkIri": "セマンティックリンクの完全な IRI",
+        "linkLabel": "セマンティックリンクのラベル",
+        "linkSlug": "スラッグ化された IRI（例: 「customer」）",
+        "domainId": "ドメイン UUID",
+        "domainName": "ドメイン名",
+        "contractId": "契約 UUID",
+        "contractName": "契約名",
+        "contractVersion": "契約バージョン",
+        "contractStatus": "契約ステータス",
+        "productId": "プロダクト UUID",
+        "productName": "プロダクト名",
+        "productVersion": "プロダクトバージョン",
+        "productStatus": "プロダクトステータス"
+      }
+    },
+    "entityPatterns": {
+      "intro": "Unity Catalog からエンティティを検出・インポートするためのタグパターンを設定します。正規表現を使用してタグキーをマッチングし、エンティティ名を抽出します。",
+      "discoveryTitle": "{{type}} の検出",
+      "cardDescription": "UC タグから {{type}} を検出するためのパターンを設定",
+      "filterPatternOptional": "フィルターパターン（任意）",
+      "filterHelp": "追加のタグパターンをマッチングすることで、考慮するオブジェクトを任意で絞り込みます",
+      "filterSource": "フィルターソース",
+      "tagKey": "タグキー",
+      "tagValue": "タグ値",
+      "filterPatternRegex": "フィルターパターン（正規表現）",
+      "keyPatternRequired": "キーパターン（必須）",
+      "keyPatternHelp": "このエンティティタイプを識別するタグキーにマッチングする正規表現パターン",
+      "valueExtractionRequired": "値の抽出（必須）",
+      "valueExtractionHelp": "マッチングしたタグから {{type}} 名を抽出します",
+      "extractionSource": "抽出ソース",
+      "extractionPatternLabel": "抽出パターン（キャプチャグループ付き正規表現）",
+      "extractionExampleBefore": "括弧 () を使用して {{type}} 名をキャプチャします。例:",
+      "extractionExampleAfter": "は「data-{{type}}-ABC」から「ABC」を抽出します"
+    }
+  },
+  "search": {
+    "title": "検索設定",
+    "description": "グローバル検索がさまざまなアセットタイプにわたって結果をインデックス化し、ランク付けする方法を設定します。",
+    "unsavedChanges": "未保存の変更があります。設定を保持するには保存してください。",
+    "loadFailedAlert": "検索設定の読み込みに失敗しました。ページを更新してください。",
+    "matchTypes": {
+      "prefix": "前方一致（単語の先頭）",
+      "substring": "部分一致（任意の位置）",
+      "exact": "完全一致のみ",
+      "fuzzy": "あいまい一致（タイプミスを許容）"
+    },
+    "sortFields": {
+      "matchPriority": "フィールド優先度（タイトル > 説明 > タグ）",
+      "boostScore": "ブーストスコア（重み付き関連性）",
+      "titleAsc": "タイトル（A → Z）",
+      "titleDesc": "タイトル（Z → A）"
+    },
+    "assetTypes": {
+      "dataProduct": "データプロダクト",
+      "dataContract": "データ契約",
+      "glossaryTerm": "用語集の用語",
+      "dataAssetReview": "アセットレビュー",
+      "tag": "タグ",
+      "dataDomain": "データドメイン"
+    },
+    "fieldEditor": {
+      "sourceBadge": "ソース: {{source}}",
+      "indexed": "インデックス済み",
+      "matchType": "一致タイプ",
+      "priorityLabel": "優先度（1～100）",
+      "priorityHelp": "低い = 重要度が高い",
+      "boostLabel": "ブースト（0～10）",
+      "boostHelp": "ランク付けのためのスコア乗数"
+    },
+    "tabs": {
+      "defaultFields": "デフォルトフィールド",
+      "assetTypes": "アセットタイプ",
+      "ranking": "ランク付け"
+    },
+    "defaults": {
+      "description": "これらの設定はデフォルトですべてのアセットタイプに適用されます。個々のアセットタイプはこれらの設定を上書きできます。"
+    },
+    "assetTypesTab": {
+      "description": "各アセットタイプの検索動作を設定します。インデックス化の有効/無効を切り替え、追加フィールドをカスタマイズします。",
+      "enableIndexing": "インデックス化を有効化",
+      "inheritDefaults": "デフォルトのフィールド設定を継承",
+      "extraFieldsTitle": "追加フィールド",
+      "extraFieldsDescription": "このアセットタイプに固有の追加フィールド。",
+      "extraFieldsBadge": "追加フィールド +{{count}} 件"
+    },
+    "ranking": {
+      "description": "検索結果のソート方法を設定します。優先度の高いフィールドに一致する結果が先に表示されます。",
+      "primarySort": "第 1 ソート",
+      "primarySortHelp": "結果の並び順に使用される主な基準。",
+      "secondarySort": "第 2 ソート（タイブレーカー）",
+      "secondarySortHelp": "第 1 ソートの値が等しい場合に使用されます。",
+      "tertiarySort": "第 3 ソート",
+      "tertiarySortHelp": "第 1 および第 2 の値が等しい結果に対する最終的なタイブレーカー。"
+    },
+    "buttons": {
+      "rebuildIndex": "検索インデックスを再構築",
+      "save": "設定を保存"
+    },
+    "messages": {
+      "loadErrorTitle": "設定の読み込みエラー",
+      "loadErrorDescription": "検索設定の読み込みに失敗しました。もう一度お試しください。",
+      "saveSuccessTitle": "設定を保存しました",
+      "saveSuccessDescription": "検索設定を更新しました。変更を適用するにはインデックスの再構築を検討してください。",
+      "saveErrorTitle": "設定の保存エラー",
+      "saveErrorDescription": "検索設定の保存に失敗しました。もう一度お試しください。",
+      "rebuildSuccessTitle": "インデックスを再構築しました",
+      "rebuildSuccessDescription": "{{count}} 件のアイテムで検索インデックスを再構築しました。",
+      "rebuildErrorTitle": "インデックスの再構築エラー",
+      "rebuildErrorDescription": "検索インデックスの再構築に失敗しました。もう一度お試しください。"
+    },
+    "matchType": {
+      "prefix": "前方一致（単語の先頭）",
+      "substring": "部分一致（任意の位置）",
+      "exact": "完全一致のみ",
+      "fuzzy": "あいまい一致（タイプミスを許容）"
+    },
+    "sortField": {
+      "matchPriority": "フィールド優先度（タイトル > 説明 > タグ）",
+      "boostScore": "ブーストスコア（重み付き関連性）",
+      "titleAsc": "タイトル（A → Z）",
+      "titleDesc": "タイトル（Z → A）"
+    },
+    "assetType": {
+      "dataProduct": "データプロダクト",
+      "dataContract": "データ契約",
+      "glossaryTerm": "用語集の用語",
+      "dataAssetReview": "アセットレビュー",
+      "tag": "タグ",
+      "dataDomain": "データドメイン"
+    }
+  },
+  "ontologyLibrary": {
+    "title": "業界オントロジーライブラリ",
+    "description": "業種別に整理された業界標準のオントロジーを参照・インポートします。",
+    "verticalsHeading": "業種",
+    "ontologiesHeading": "オントロジー",
+    "filterPlaceholder": "絞り込み...",
+    "noOntologiesFound": "オントロジーが見つかりません",
+    "selectVertical": "業種を選択",
+    "foundationBadge": "基盤",
+    "licenseBadge": "ライセンス",
+    "modulesHeading": "モジュール",
+    "website": "ウェブサイト",
+    "selectOntologyPrompt": "モジュールを表示するにはオントロジーを選択してください",
+    "noModulesAvailable": "利用可能なモジュールがありません",
+    "moduleCount_one": "{{count}} 個のモジュール",
+    "moduleCount_other": "{{count}} 個のモジュール",
+    "footer": {
+      "selected_one": "選択済み: <strong>{{count}}</strong> 個のモジュール",
+      "selected_other": "選択済み: <strong>{{count}}</strong> 個のモジュール",
+      "selectedFrom_one": "選択済み: {{ontology}} から <strong>{{count}}</strong> 個のモジュール",
+      "selectedFrom_other": "選択済み: {{ontology}} から <strong>{{count}}</strong> 個のモジュール",
+      "selectPrompt": "インポートするモジュールを選択してください"
+    },
+    "license": {
+      "acceptLabel": "{{name}}{{license}} の <terms>ライセンス条項</terms>に同意します"
+    },
+    "buttons": {
+      "importing": "インポート中...",
+      "import": "選択したモジュールをインポート"
+    },
+    "messages": {
+      "loadVerticalsFailed": "業種の読み込みに失敗しました",
+      "loadOntologiesFailed": "オントロジーの読み込みに失敗しました",
+      "loadModulesFailed": "モジュールの読み込みに失敗しました",
+      "noModulesTitle": "モジュールが選択されていません",
+      "noModulesDescription": "インポートするモジュールを少なくとも 1 つ選択してください。",
+      "licenseRequiredTitle": "ライセンス契約への同意が必要です",
+      "licenseRequiredDescription": "続行するにはライセンス条項に同意してください。",
+      "importFailed": "インポートに失敗しました",
+      "importSuccessTitle": "インポートに成功しました",
+      "importSuccessDescription": "{{count}} 件のトリプルを「{{name}}」としてインポートしました",
+      "warningTitle": "警告",
+      "importErrorTitle": "インポートエラー",
+      "importErrorDescription": "オントロジーのインポートに失敗しました"
+    }
+  },
+  "delivery": {
+    "description": "ガバナンスの変更を外部システムに伝播する方法を設定します。複数のモードを同時に有効にできます。",
+    "direct": {
+      "description": "SDK 経由で Unity Catalog に変更を直接適用します（GRANT、タグの割り当て）。",
+      "dryRun": "ドライランモード（適用せずに変更をログに記録）",
+      "label": "ダイレクトモード"
+    },
+    "indirect": {
+      "description": "CI/CD 連携のために、変更を Git リポジトリの YAML ファイルとして保存します。",
+      "gitInfo": "Git タブで Git リポジトリを設定してください。変更は設定された UC ボリュームの /git-export/ 配下にエクスポートされます。",
+      "label": "インダイレクトモード"
+    },
+    "manual": {
+      "description": "管理者が外部システムで手動で変更を適用するための通知を生成します。",
+      "label": "手動モード"
+    },
+    "saveButton": "配信設定を正常に保存しました",
+    "title": "配信モード"
+  },
+  "certificationLevels": {
+    "title": "認定レベル",
+    "description": "データプロダクト、契約、アセットで利用可能な認定レベルを定義します。",
+    "addLevel": "レベルを追加",
+    "table": {
+      "order": "順序",
+      "preview": "プレビュー"
+    },
+    "emptyState": "認定レベルが設定されていません。「レベルを追加」をクリックして作成してください。",
+    "dialog": {
+      "editTitle": "認定レベルを編集",
+      "createTitle": "認定レベルを追加",
+      "editDescription": "認定レベルの詳細を更新します。",
+      "createDescription": "新しい認定レベルを作成します。"
+    },
+    "form": {
+      "namePlaceholder": "例: Gold",
+      "descriptionPlaceholder": "このレベルが表す内容...",
+      "colorLabel": "色",
+      "previewLabel": "プレビュー",
+      "levelNamePreview": "レベル名"
+    },
+    "delete": {
+      "title": "認定レベルを削除しますか？",
+      "description": "「{{name}}」を削除してもよろしいですか？この操作は元に戻せません。エンティティがこのレベルで認定されている場合、削除はブロックされます。"
+    },
+    "messages": {
+      "updated": "認定レベル「{{name}}」を更新しました。",
+      "created": "認定レベル「{{name}}」を作成しました。",
+      "deleted": "認定レベル「{{name}}」を削除しました。",
+      "cannotDeleteTitle": "削除できません",
+      "reorderFailed": "並べ替えに失敗しました"
+    }
+  },
+  "maturityLevels": {
+    "title": "成熟度レベル",
+    "description": "データプロダクトと契約の成熟度の段階を定義します。各レベルはコンプライアンスポリシーによってゲートされます。",
+    "addLevel": "レベルを追加",
+    "allTypes": "すべてのタイプ",
+    "gateCount_one": "{{count}} 個のゲート",
+    "gateCount_other": "{{count}} 個のゲート",
+    "complianceGates": "コンプライアンスポリシーゲート",
+    "noDescription": "説明なし",
+    "required": "必須",
+    "advisory": "推奨",
+    "viewInCompliance": "コンプライアンスで表示",
+    "selectPolicyPlaceholder": "コンプライアンスポリシーを選択...",
+    "addGate": "ゲートを追加",
+    "emptyState": "成熟度レベルが設定されていません。「レベルを追加」をクリックして作成してください。",
+    "dialog": {
+      "editTitle": "成熟度レベルを編集",
+      "createTitle": "成熟度レベルを追加",
+      "editDescription": "成熟度レベルの詳細を更新します。",
+      "createDescription": "新しい成熟度レベルを作成します。"
+    },
+    "form": {
+      "namePlaceholder": "例: Trusted",
+      "descriptionPlaceholder": "このレベルが表す内容...",
+      "entityTypeLabel": "エンティティタイプ",
+      "iconLabel": "アイコン",
+      "colorLabel": "色",
+      "previewLabel": "プレビュー",
+      "levelNamePreview": "レベル名"
+    },
+    "entityTypes": {
+      "all": "すべてのエンティティタイプ",
+      "DataProduct": "データプロダクト",
+      "DataContract": "データ契約"
+    },
+    "delete": {
+      "title": "成熟度レベルを削除しますか？",
+      "description": "「{{name}}」を削除してもよろしいですか？この操作は元に戻せません。スナップショットがこのレベルを参照している場合、削除はブロックされます。"
+    },
+    "messages": {
+      "updated": "成熟度レベル「{{name}}」を更新しました。",
+      "created": "成熟度レベル「{{name}}」を作成しました。",
+      "deleted": "成熟度レベル「{{name}}」を削除しました。",
+      "cannotDeleteTitle": "削除できません"
+    }
+  },
+  "directory": {
+    "title": "ディレクトリ",
+    "intro": "プリンシパルディレクトリを接続すると、アプリ全体でユーザーとグループを選択できるようになります。v1 では、Microsoft Entra ID（UC HTTP 接続経由）、Postgres / Lakebase テーブル、またはテストやデモ用のローカル CSV ファイルをサポートしています。",
+    "providerLabel": "プロバイダー",
+    "providerPlaceholder": "プロバイダーを選択…",
+    "providers": {
+      "entra": "Microsoft Entra ID",
+      "lakebase": "Lakebase テーブル",
+      "file": "CSV ファイル（テスト / デモ）"
+    },
+    "testConnection": "接続をテスト",
+    "statusLabel": "ステータス:",
+    "configured": "設定済み（{{provider}}）",
+    "notConfigured": "未設定",
+    "messages": {
+      "saveSuccess": "ディレクトリ設定を保存しました",
+      "saveFailed": "保存に失敗しました",
+      "testSuccess": "ディレクトリのテストに成功しました",
+      "testFailed": "ディレクトリのテストに失敗しました",
+      "unknownError": "不明なエラー",
+      "clearSuccess": "ディレクトリ設定をクリアしました",
+      "clearFailed": "クリアに失敗しました"
+    },
+    "entra": {
+      "connectionLabel": "UC HTTP 接続",
+      "loadingConnections": "接続を読み込み中…",
+      "noConnections": "HTTP 接続が見つかりません",
+      "selectConnection": "接続を選択…",
+      "setupTitle": "Entra ID 接続のセットアップ",
+      "setupBody": "client_credentials を使用して Microsoft Graph に対する Unity Catalog HTTP 接続を作成します。アプリのエンタープライズアプリケーションには、少なくとも <code>User.Read.All</code> と <code>GroupMember.Read.All</code>（または <code>Group.Read.All</code>）のアプリケーションスコープが必要です。",
+      "helpLabels": {
+        "tokenUrl": "トークン URL",
+        "baseUrl": "ベース URL",
+        "scope": "スコープ",
+        "grantType": "グラントタイプ"
+      }
+    },
+    "lakebase": {
+      "tableLabel": "Lakebase テーブル",
+      "tablePlaceholder": "catalog.schema.table",
+      "tableHelp": "アプリのプライマリ Lakebase データベース上の Postgres テーブルの完全修飾名。識別子の各セグメントには、文字、数字、アンダースコアのみを含める必要があります。",
+      "schemaTitle": "必須スキーマ",
+      "schemaBody": "IdP 同期パイプラインからこのテーブルにデータを投入してください。小文字化された列のインデックスは任意ですが、高速な前方一致検索のために推奨されます。"
+    },
+    "file": {
+      "pathLabel": "CSV ファイルパス",
+      "pathPlaceholder": "/etc/ontos/principals.csv",
+      "pathHelp": "アプリプロセスが読み取り可能な CSV ファイルへの絶対パス。ファイルの mtime が進むと自動的に再読み込みされます。再起動は不要です。",
+      "formatTitle": "CSV 形式",
+      "formatBody": "必須列: <code>type</code>、<code>id</code>、<code>display_name</code>。<code>sub_label</code> 列は任意です。<code>type</code> は <code>user</code> または <code>group</code> である必要があります。"
+    }
+  },
+  "semanticModels": {
+    "page": {
+      "title": "RDF ソース",
+      "description": "RDF オントロジーおよびタクソノミーファイル（RDFS、SKOS、OWL）をアップロード・管理します。"
+    },
+    "actions": {
+      "industryLibrary": "業界ライブラリ",
+      "uploading": "アップロード中...",
+      "refreshListTooltip": "一覧を更新"
+    },
+    "table": {
+      "sourceHeader": "ソース",
+      "sizeHeader": "サイズ",
+      "sizeKb": "{{value}} KB",
+      "enabledHeader": "有効",
+      "alwaysOn": "常に有効",
+      "viewContentTooltip": "コンテンツを表示",
+      "deleteModelTooltip": "モデルを削除"
+    },
+    "source": {
+      "unknown": "不明",
+      "system": "システム",
+      "file": "ファイル",
+      "schema": "スキーマ",
+      "upload": "アップロード"
+    },
+    "deleteDialog": {
+      "title": "RDF ソースを削除",
+      "description": "<strong>{{name}}</strong> を削除してもよろしいですか？この操作は元に戻せず、セマンティックグラフからモデルが削除されます。"
+    },
+    "viewDialog": {
+      "titleFallback": "オントロジーを表示",
+      "loadingContent": "コンテンツを読み込み中...",
+      "noContent": "コンテンツがありません。",
+      "loadContentFailed": "コンテンツの読み込みに失敗しました。",
+      "copied": "コピーしました！",
+      "copyToClipboard": "クリップボードにコピー"
+    },
+    "messages": {
+      "loadModelsError": "モデルの読み込みに失敗しました",
+      "graphRefreshed": "ナレッジグラフを正常に更新しました",
+      "graphRefreshError": "ナレッジグラフの更新に失敗しました",
+      "uploadFailedTitle": "アップロードに失敗しました",
+      "modelUploaded": "セマンティックモデルを正常にアップロードしました",
+      "uploadErrorTitle": "アップロードエラー",
+      "uploadFileError": "ファイルのアップロードに失敗しました",
+      "modelToggled": "モデルを正常に{{state}}しました",
+      "enabledState": "有効化",
+      "disabledState": "無効化",
+      "updateModelError": "モデルの更新に失敗しました",
+      "loadContentError": "コンテンツの読み込みに失敗しました",
+      "copyClipboardError": "クリップボードへのコピーに失敗しました",
+      "deleteFailedTitle": "削除に失敗しました",
+      "modelDeleted": "セマンティックモデルを正常に削除しました",
+      "deleteErrorTitle": "削除エラー",
+      "deleteModelError": "モデルの削除に失敗しました",
+      "updateTitleError": "タイトルの更新に失敗しました",
+      "saveError": "保存に失敗しました",
+      "clearTitleError": "タイトルのクリアに失敗しました",
+      "clearError": "クリアに失敗しました"
     }
   }
 }

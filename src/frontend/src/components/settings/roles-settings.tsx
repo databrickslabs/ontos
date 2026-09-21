@@ -25,7 +25,7 @@ import { usePermissions } from '@/stores/permissions-store'; // Import the permi
 export default function RolesSettings() {
     const { get, post: _post, delete: deleteApi } = useApi();
     const { toast } = useToast();
-    const { t } = useTranslation('settings');
+    const { t } = useTranslation(['settings', 'common']);
     const [roles, setRoles] = useState<AppRole[]>([]);
     const [features, setFeatures] = useState<Record<string, FeatureConfig>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -68,10 +68,10 @@ export default function RolesSettings() {
 
         } catch (err: any) {
             console.error("Error fetching roles or features:", err);
-            setError(err.message || 'Failed to load roles configuration.');
+            setError(err.message || t('roles.messages.loadFailed'));
             setRoles([]);
             setFeatures({});
-            toast({ title: 'Error', description: err.message, variant: 'destructive' });
+            toast({ title: t('common:status.error'), description: err.message, variant: 'destructive' });
         } finally {
             setIsLoading(false);
         }
@@ -86,7 +86,7 @@ export default function RolesSettings() {
 
     const handleOpenDialog = (role?: AppRole) => {
         if (!canWrite) {
-            toast({ title: 'Permission Denied', description: 'You do not have permission to edit roles.', variant: 'destructive' });
+            toast({ title: t('roles.messages.permissionDeniedTitle'), description: t('roles.messages.cannotEditRoles'), variant: 'destructive' });
             return;
         }
         setRoleToEdit(role || null);
@@ -97,11 +97,11 @@ export default function RolesSettings() {
         try {
             // Fetching happens in App.tsx now, maybe remove this helper or trigger App fetch?
             // For now, keep local toast feedback
-            await Promise.all([fetchPermissions(), fetchAvailableRoles()]); // Call actions directly 
-            toast({ title: 'Permissions Updated', description: 'User permissions and available roles refreshed.' });
+            await Promise.all([fetchPermissions(), fetchAvailableRoles()]); // Call actions directly
+            toast({ title: t('roles.messages.permissionsUpdatedTitle'), description: t('roles.messages.permissionsUpdated') });
         } catch (err: any) {
             console.error("Error refreshing permissions/roles:", err);
-            toast({ title: 'Refresh Failed', description: `Could not refresh permissions/roles: ${err.message}`, variant: 'destructive' });
+            toast({ title: t('roles.messages.refreshFailedTitle'), description: t('roles.messages.refreshFailed', { error: err.message }), variant: 'destructive' });
         }
     };
 
@@ -111,22 +111,22 @@ export default function RolesSettings() {
     };
 
     const handleDeleteRole = async (roleId: string, roleName: string) => {
-        if (!confirm(`Are you sure you want to delete the role "${roleName}"?`)) return;
+        if (!confirm(t('roles.messages.deleteConfirm', { name: roleName }))) return;
 
         if (!canAdmin) {
-            toast({ title: 'Permission Denied', description: 'You do not have permission to delete roles.', variant: 'destructive' });
+            toast({ title: t('roles.messages.permissionDeniedTitle'), description: t('roles.messages.cannotDeleteRoles'), variant: 'destructive' });
             return;
         }
 
         try {
             await deleteApi(`/api/settings/roles/${roleId}`);
-            toast({ title: 'Success', description: `Role "${roleName}" deleted.` });
+            toast({ title: t('common:status.success'), description: t('roles.messages.roleDeleted', { name: roleName }) });
             fetchData(); // Refresh list
             await refreshPermissionsAndRoles(); // Refresh permissions/roles
         } catch (err: any) {
             console.error("Error deleting role:", err);
-            const errorMsg = err.message || 'Failed to delete role.';
-            toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
+            const errorMsg = err.message || t('roles.messages.deleteFailed');
+            toast({ title: t('common:status.error'), description: errorMsg, variant: 'destructive' });
             setError(errorMsg);
         }
     };
@@ -231,7 +231,7 @@ export default function RolesSettings() {
                             className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                             onClick={() => handleDeleteRole(role.id, role.name)}
                             disabled={isAdminRole || !canAdmin}
-                            title={isAdminRole ? 'Cannot delete Admin role' : t('roles.actions.deleteRole')}
+                            title={isAdminRole ? t('roles.actions.cannotDeleteAdmin') : t('roles.actions.deleteRole')}
                         >
                             <Trash2 className="h-4 w-4" />
                             <span className="sr-only">{t('roles.actions.deleteRole')}</span>

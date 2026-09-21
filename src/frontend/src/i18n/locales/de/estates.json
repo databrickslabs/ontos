@@ -23,13 +23,33 @@
     "syncRequested": "Synchronisierung für das Estate wird angefordert...",
     "syncTriggered": "Synchronisierung erfolgreich ausgelöst. Daten werden aktualisiert..."
   },
+  "form": {
+    "createTitle": "Neues Estate hinzufügen",
+    "editTitle": "Estate bearbeiten",
+    "dialogDescription": "Konfigurieren Sie die Databricks-Estate-Verbindung und Grundeinstellungen. Freigaberichtlinien werden auf der Detailseite verwaltet.",
+    "name": "Name",
+    "description": "Beschreibung",
+    "type": "Typ",
+    "workspaceUrl": "Workspace-URL",
+    "cloud": "Cloud",
+    "selectCloudProvider": "Cloud-Anbieter auswählen",
+    "connectionType": "Verbindungstyp",
+    "selectConnectionType": "Verbindungstyp auswählen",
+    "connectionString": "Verbindungszeichenfolge",
+    "metastoreName": "Metastore-Name",
+    "syncSchedule": "Synchronisierungszeitplan",
+    "enableSync": "Synchronisierung aktivieren",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "namePlaceholder": "z. B. US Production Workspace",
+    "descriptionPlaceholder": "z. B. Primäre Produktionsumgebung für die Region US",
+    "workspaceUrlPlaceholder": "z. B. https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "z. B. primary_prod_metastore"
+  },
   "connectionTypes": {
     "deltaShare": "Delta Share",
     "unityCatalog": "Unity Catalog",
     "database": "Datenbank (zukünftig)"
-  },
-  "filters": {
-    "allStatus": "Alle Status"
   },
   "table": {
     "name": "Name",
@@ -38,11 +58,22 @@
     "connection": "Verbindung",
     "metastore": "Metastore",
     "syncStatus": "Synchronisierungsstatus",
+    "lastSync": "Letzte Synchronisation",
     "type": "Typ",
     "status": "Status",
-    "lastSync": "Letzte Synchronisation",
     "assets": "Assets",
-    "actions": "Aktionen"
+    "actions": "Aktionen",
+    "neverSynced": "Nie synchronisiert",
+    "openMenu": "Menü öffnen",
+    "syncTooltip": {
+      "status": "Status: {{status}}",
+      "time": "Zeit: {{time}}",
+      "error": "Fehler: {{error}}",
+      "inProgress": "Synchronisierung läuft oder in Warteschlange..."
+    }
+  },
+  "filters": {
+    "allStatus": "Alle Status"
   },
   "messages": {
     "success": "Erfolg",
@@ -67,6 +98,47 @@
     "viewDetails": "Details anzeigen",
     "notFound": "Estate nicht gefunden",
     "loading": "Wird geladen...",
+    "pageTitle": "Estate-Details",
+    "backToEstateManager": "Zurück zum Estate-Manager",
+    "backToListButton": "Zurück zur Liste",
+    "configureSyncJob": "Synchronisierungsjob konfigurieren",
+    "editNotImplemented": "Funktion zum Bearbeiten von Estates wird noch implementiert",
+    "syncEnabled": "Synchronisierung aktiviert",
+    "syncDisabled": "Synchronisierung deaktiviert",
+    "never": "Nie",
+    "notFoundOrLoad": "Estate nicht gefunden oder konnte nicht geladen werden.",
+    "labels": {
+      "cloudProvider": "Cloud-Anbieter",
+      "lastSyncTime": "Letzte Synchronisierungszeit",
+      "lastSyncStatus": "Letzter Synchronisierungsstatus",
+      "lastSyncError": "Letzter Synchronisierungsfehler",
+      "lastUpdatedAt": "Zuletzt aktualisiert am"
+    },
+    "errors": {
+      "fetchTitle": "Fehler beim Abrufen des Estates",
+      "fetchFailed": "Estate-Details konnten nicht abgerufen werden.",
+      "couldNotLoad": "Estate-Details konnten nicht geladen werden.",
+      "noEstateData": "Estate-Daten sind nicht verfügbar, um eine Richtlinie hinzuzufügen."
+    },
+    "policies": {
+      "title": "Freigaberichtlinien",
+      "add": "Richtlinie hinzufügen",
+      "sectionDescription": "Definieren Sie Regeln, um bestimmte Datenprodukte oder Begriffe aus semantischen Modellen für dieses Estate freizugeben. Freigegebene Ressourcen sind über den konfigurierten Verbindungstyp zugänglich.",
+      "resourceTypeLabel": "Ressourcentyp:",
+      "rulesLabel": "Regeln ({{count}}):",
+      "filterBy": "Filtern nach",
+      "whereValue": "wobei Wert",
+      "noRules": "Für diese Richtlinie sind keine Regeln definiert.",
+      "emptyTitle": "Für dieses Estate sind keine Freigaberichtlinien definiert.",
+      "emptyHint": "Klicken Sie auf \"Richtlinie hinzufügen\", um mit der Freigabe von Ressourcen zu beginnen.",
+      "editPolicyAlert": "Richtlinie bearbeiten: {{name}}",
+      "deletePolicyAlert": "Richtlinie löschen: {{name}}",
+      "addedTitle": "Richtlinie hinzugefügt",
+      "addedDescription": "Freigaberichtlinie \"{{name}}\" wurde erfolgreich hinzugefügt.",
+      "addErrorTitle": "Fehler beim Hinzufügen der Richtlinie",
+      "addErrorDescription": "Die neue Freigaberichtlinie konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+      "saveFailedNoData": "Richtlinie konnte nicht gespeichert werden. Server hat keine Daten zurückgegeben."
+    },
     "overview": {
       "title": "Estate-Übersicht",
       "type": "Typ",
@@ -85,24 +157,40 @@
       "noHistory": "Kein Synchronisationsverlauf"
     }
   },
-  "form": {
-    "createTitle": "Neues Estate hinzufügen",
-    "editTitle": "Estate bearbeiten",
-    "dialogDescription": "Konfigurieren Sie die Databricks-Estate-Verbindung und Grundeinstellungen. Freigaberichtlinien werden auf der Detailseite verwaltet.",
-    "name": "Name",
-    "description": "Beschreibung",
-    "type": "Typ",
-    "workspaceUrl": "Workspace-URL",
-    "cloud": "Cloud",
-    "selectCloudProvider": "Cloud-Anbieter auswählen",
-    "connectionType": "Verbindungstyp",
-    "selectConnectionType": "Verbindungstyp auswählen",
-    "connectionString": "Verbindungszeichenfolge",
-    "metastoreName": "Metastore-Name",
-    "syncSchedule": "Synchronisierungszeitplan",
-    "enableSync": "Synchronisierung aktivieren",
-    "cancel": "Abbrechen",
-    "save": "Speichern"
+  "sharingPolicy": {
+    "dialogTitle": "Neue Freigaberichtlinie hinzufügen",
+    "dialogDescription": "Definieren Sie eine neue Richtlinie, um Ressourcen von oder mit diesem Estate freizugeben.",
+    "submit": "Richtlinie hinzufügen",
+    "addRule": "Regel hinzufügen",
+    "rulesHeading": "Regeln",
+    "ruleLabel": "Regel {{number}}",
+    "fields": {
+      "name": "Richtlinienname",
+      "description": "Beschreibung (optional)",
+      "resourceType": "Ressourcentyp",
+      "enablePolicy": "Richtlinie aktivieren",
+      "filterType": "Filtertyp",
+      "operator": "Operator",
+      "value": "Wert"
+    },
+    "placeholders": {
+      "name": "z. B. Produktions-Datenprodukte freigeben",
+      "description": "Ausführliche Beschreibung des Zwecks der Richtlinie...",
+      "resourceType": "Ressourcentyp auswählen",
+      "operator": "Operator auswählen",
+      "filterType": "z. B. Tag, Domäne, Status",
+      "value": "z. B. finance, Active"
+    },
+    "validation": {
+      "nameMin": "Der Richtlinienname muss mindestens 3 Zeichen lang sein",
+      "filterTypeRequired": "Filtertyp ist erforderlich",
+      "filterValueRequired": "Filterwert ist erforderlich",
+      "rulesMin": "Mindestens eine Regel ist erforderlich"
+    },
+    "toast": {
+      "submittedTitle": "Richtlinie eingereicht",
+      "submittedDescription": "Freigaberichtlinie \"{{name}}\" wird verarbeitet.",
+      "addErrorDescription": "Freigaberichtlinie konnte nicht hinzugefügt werden. Details finden Sie in der Konsole."
+    }
   }
 }
-

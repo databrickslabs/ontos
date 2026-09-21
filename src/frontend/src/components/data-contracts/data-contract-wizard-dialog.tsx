@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,6 +59,7 @@ const ENVIRONMENTS = ['production', 'staging', 'development', 'test']
 const PHYSICAL_TYPES = ['table', 'view', 'materialized_view', 'external_table', 'managed_table', 'streaming_table']
 
 export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmit, initial }: WizardProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
 
@@ -68,8 +70,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     if (errorMessage.includes('Domain with ID') && errorMessage.includes('not found')) {
       // This is a domain validation error
       toast({
-        title: 'Domain Error',
-        description: 'The selected domain is no longer available. Please select a different domain.',
+        title: t('data-contracts:wizard.toast.domainError.title', 'Domain Error'),
+        description: t('data-contracts:wizard.toast.domainError.description', 'The selected domain is no longer available. Please select a different domain.'),
         variant: 'destructive' as any
       })
 
@@ -81,8 +83,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       try {
         await refetchDomains()
         toast({
-          title: 'Domains Updated',
-          description: 'Available domains have been refreshed. Please select a domain again.',
+          title: t('data-contracts:wizard.toast.domainsUpdated.title', 'Domains Updated'),
+          description: t('data-contracts:wizard.toast.domainsUpdated.description', 'Available domains have been refreshed. Please select a domain again.'),
           variant: 'default' as any
         })
       } catch (refetchError) {
@@ -336,8 +338,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
     const totalCols = schemas.reduce((sum, s) => sum + s.properties.length, 0)
     toast({
-      title: 'Schema inferred successfully',
-      description: `Added ${schemas.length} schema${schemas.length > 1 ? 's' : ''} with ${totalCols} columns`,
+      title: t('data-contracts:wizard.toast.schemaInferred.title', 'Schema inferred successfully'),
+      description: t('data-contracts:wizard.toast.schemaInferred.description', 'Added {{count}} schema with {{columnCount}} columns', { count: schemas.length, columnCount: totalCols }),
     })
 
     setTimeout(() => {
@@ -350,15 +352,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     // Validate Step 1 before proceeding - ODCS required + app required fields
     if (step === 1) {
       if (!name || !name.trim()) {
-        toast({ title: 'Validation Error', description: 'Contract name is required', variant: 'destructive' as any })
+        toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.nameRequired', 'Contract name is required'), variant: 'destructive' as any })
         return
       }
       if (!version || !version.trim()) {
-        toast({ title: 'Validation Error', description: 'Version is required', variant: 'destructive' as any })
+        toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.versionRequired', 'Version is required'), variant: 'destructive' as any })
         return
       }
       if (!status || !status.trim()) {
-        toast({ title: 'Validation Error', description: 'Status is required', variant: 'destructive' as any })
+        toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.statusRequired', 'Status is required'), variant: 'destructive' as any })
         return
       }
     }
@@ -370,15 +372,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const handleSubmit = async () => {
     // Validation - ODCS required + app required fields
     if (!name || !name.trim()) {
-      toast({ title: 'Validation Error', description: 'Contract name is required', variant: 'destructive' as any })
+      toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.nameRequired', 'Contract name is required'), variant: 'destructive' as any })
       return
     }
     if (!version || !version.trim()) {
-      toast({ title: 'Validation Error', description: 'Version is required', variant: 'destructive' as any })
+      toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.versionRequired', 'Version is required'), variant: 'destructive' as any })
       return
     }
     if (!status || !status.trim()) {
-      toast({ title: 'Validation Error', description: 'Status is required', variant: 'destructive' as any })
+      toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.statusRequired', 'Status is required'), variant: 'destructive' as any })
       return
     }
 
@@ -444,8 +446,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       if (!wasDomainError) {
         // Generic error handling for non-domain errors
         toast({
-          title: 'Submission Error',
-          description: 'Failed to save contract. Please try again.',
+          title: t('data-contracts:wizard.toast.submissionError.title', 'Submission Error'),
+          description: t('data-contracts:wizard.toast.submissionError.description', 'Failed to save contract. Please try again.'),
           variant: 'destructive' as any
         })
         console.error('Failed to submit contract:', error)
@@ -458,15 +460,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const handleSaveDraft = async () => {
     // Validate minimum required fields - ODCS required + app required fields for drafts
     if (!name || !name.trim()) {
-      toast({ title: 'Validation Error', description: 'Contract name is required to save a draft', variant: 'destructive' as any })
+      toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.nameRequiredDraft', 'Contract name is required to save a draft'), variant: 'destructive' as any })
       return
     }
     if (!version || !version.trim()) {
-      toast({ title: 'Validation Error', description: 'Version is required to save a draft', variant: 'destructive' as any })
+      toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.versionRequiredDraft', 'Version is required to save a draft'), variant: 'destructive' as any })
       return
     }
     if (!status || !status.trim()) {
-      toast({ title: 'Validation Error', description: 'Status is required to save a draft', variant: 'destructive' as any })
+      toast({ title: t('data-contracts:wizard.validation.title', 'Validation Error'), description: t('data-contracts:wizard.validation.statusRequiredDraft', 'Status is required to save a draft'), variant: 'destructive' as any })
       return
     }
 
@@ -532,8 +534,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       if (!wasDomainError) {
         // Generic error handling for non-domain errors
         toast({
-          title: 'Save Error',
-          description: 'Failed to save draft. Please try again.',
+          title: t('data-contracts:wizard.toast.saveError.title', 'Save Error'),
+          description: t('data-contracts:wizard.toast.saveError.description', 'Failed to save draft. Please try again.'),
           variant: 'destructive' as any
         })
         console.error('Failed to save draft:', error)
@@ -548,19 +550,19 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       <DialogContent className="w-[90vw] h-[90vh] max-w-none max-h-none flex flex-col">
         <DialogHeader className="flex-shrink-0 pb-4 border-b">
           <DialogTitle className="text-2xl">
-            {name ? `Data Contract Wizard: ${name}` : 'Data Contract Wizard'}
+            {name ? t('data-contracts:wizard.titleWithName', 'Data Contract Wizard: {{name}}', { name }) : t('data-contracts:wizard.title', 'Data Contract Wizard')}
           </DialogTitle>
-          <DialogDescription className="text-base">Build a contract incrementally according to ODCS v3.1.0</DialogDescription>
-          
+          <DialogDescription className="text-base">{t('data-contracts:wizard.description', 'Build a contract incrementally according to ODCS v3.1.0')}</DialogDescription>
+
           {/* Progress Indicator */}
           <div className="mt-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
-              <span>Step {step} of {totalSteps}</span>
-              <span>{Math.round((step / totalSteps) * 100)}% Complete</span>
+              <span>{t('data-contracts:wizard.progress.step', 'Step {{step}} of {{total}}', { step, total: totalSteps })}</span>
+              <span>{t('data-contracts:wizard.progress.percentComplete', '{{percent}}% Complete', { percent: Math.round((step / totalSteps) * 100) })}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300 ease-out" 
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
                 style={{ width: `${(step / totalSteps) * 100}%` }}
               />
             </div>
@@ -569,31 +571,31 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                 onClick={() => setStep(1)}
                 className={`cursor-pointer hover:text-primary transition-colors ${step === 1 ? 'text-primary font-medium' : ''}`}
               >
-                Fundamentals
+                {t('data-contracts:wizard.steps.fundamentals.tab', 'Fundamentals')}
               </button>
               <button
                 onClick={() => setStep(2)}
                 className={`cursor-pointer hover:text-primary transition-colors ${step === 2 ? 'text-primary font-medium' : ''}`}
               >
-                Schema
+                {t('data-contracts:wizard.steps.schema.tab', 'Schema')}
               </button>
               <button
                 onClick={() => setStep(3)}
                 className={`cursor-pointer hover:text-primary transition-colors ${step === 3 ? 'text-primary font-medium' : ''}`}
               >
-                Quality
+                {t('data-contracts:wizard.steps.quality.tab', 'Quality')}
               </button>
               <button
                 onClick={() => setStep(4)}
                 className={`cursor-pointer hover:text-primary transition-colors ${step === 4 ? 'text-primary font-medium' : ''}`}
               >
-                Team & Roles
+                {t('data-contracts:wizard.steps.team.tab', 'Team & Roles')}
               </button>
               <button
                 onClick={() => setStep(5)}
                 className={`cursor-pointer hover:text-primary transition-colors ${step === 5 ? 'text-primary font-medium' : ''}`}
               >
-                SLA & Infrastructure
+                {t('data-contracts:wizard.steps.sla.tab', 'SLA & Infrastructure')}
               </button>
             </div>
           </div>
@@ -602,37 +604,37 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         <div className="flex-grow overflow-y-auto p-6">
           {/* Step 1: Fundamentals */}
           <div className={step === 1 ? 'block space-y-6' : 'hidden'}>
-            <div className="text-lg font-semibold text-foreground mb-4">Contract Fundamentals</div>
-            
+            <div className="text-lg font-semibold text-foreground mb-4">{t('data-contracts:wizard.steps.fundamentals.title', 'Contract Fundamentals')}</div>
+
             {/* Basic Information Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="dc-name" className="text-sm font-medium">Contract Name *</Label>
-                  <Input 
-                    id="dc-name" 
-                    value={name} 
-                    onChange={(e) => setName(e.target.value)} 
-                    placeholder="e.g., Customer Data Contract"
+                  <Label htmlFor="dc-name" className="text-sm font-medium">{t('data-contracts:wizard.fields.contractName', 'Contract Name *')}</Label>
+                  <Input
+                    id="dc-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('data-contracts:wizard.fields.contractNamePlaceholder', 'e.g., Customer Data Contract')}
                     className="mt-1"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="dc-version" className="text-sm font-medium">Version *</Label>
-                    <Input 
-                      id="dc-version" 
-                      value={version} 
-                      onChange={(e) => setVersion(e.target.value)} 
-                      placeholder="e.g., v1.0"
+                    <Label htmlFor="dc-version" className="text-sm font-medium">{t('data-contracts:wizard.fields.version', 'Version *')}</Label>
+                    <Input
+                      id="dc-version"
+                      value={version}
+                      onChange={(e) => setVersion(e.target.value)}
+                      placeholder={t('data-contracts:wizard.fields.versionPlaceholder', 'e.g., v1.0')}
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Status *</Label>
+                    <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.status', 'Status *')}</Label>
                     <Select value={status} onValueChange={setStatus}>
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select status" />
+                        <SelectValue placeholder={t('common:placeholders.selectStatus', 'Select status')} />
                       </SelectTrigger>
                       <SelectContent>
                         {statuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -641,15 +643,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="dc-owner" className="text-sm font-medium">Contract Owner</Label>
+                  <Label htmlFor="dc-owner" className="text-sm font-medium">{t('data-contracts:wizard.fields.contractOwner', 'Contract Owner')}</Label>
                   <div className="mt-1">
                     <PrincipalPicker
                       id="dc-owner"
                       accepts={['user']}
                       value={owner || null}
                       onChange={(next) => setOwner(next ?? '')}
-                      placeholder="e.g., data-team@company.com"
-                      aria-label="Contract Owner"
+                      placeholder={t('data-contracts:wizard.fields.contractOwnerPlaceholder', 'e.g., data-team@company.com')}
+                      aria-label={t('data-contracts:wizard.fields.contractOwner', 'Contract Owner')}
                     />
                   </div>
                 </div>
@@ -658,7 +660,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
               {/* Metadata Panel */}
               <div className="space-y-4">
                 <div>
-                  <Label className="text-sm font-medium">Domains</Label>
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.domains', 'Domains')}</Label>
                   <DomainMultiSelector
                     className="mt-1"
                     value={domainIds}
@@ -667,22 +669,22 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                       setDomainIds(nextIds)
                       setPrimaryDomainId(nextPrimary)
                     }}
-                    placeholder="Select data domains"
+                    placeholder={t('data-contracts:wizard.fields.domainsPlaceholder', 'Select data domains')}
                   />
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Tenant</Label>
-                  <Input 
-                    placeholder="e.g., production, staging" 
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.tenant', 'Tenant')}</Label>
+                  <Input
+                    placeholder={t('data-contracts:wizard.fields.tenantPlaceholder', 'e.g., production, staging')}
                     value={tenant}
                     onChange={(e) => setTenant(e.target.value)}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Data Product</Label>
-                  <Input 
-                    placeholder="Associated data product name" 
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.dataProduct', 'Data Product')}</Label>
+                  <Input
+                    placeholder={t('data-contracts:wizard.fields.dataProductPlaceholder', 'Associated data product name')}
                     value={dataProduct}
                     onChange={(e) => setDataProduct(e.target.value)}
                     className="mt-1"
@@ -693,32 +695,32 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
             {/* Description Section */}
             <div className="border-t pt-6">
-              <div className="text-base font-medium mb-4">Contract Description</div>
+              <div className="text-base font-medium mb-4">{t('data-contracts:wizard.steps.fundamentals.descriptionSection', 'Contract Description')}</div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-sm font-medium">Usage</Label>
-                  <Textarea 
-                    value={descriptionUsage} 
-                    onChange={(e) => setDescriptionUsage(e.target.value)} 
-                    placeholder="Describe how this data should be used..."
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.usage', 'Usage')}</Label>
+                  <Textarea
+                    value={descriptionUsage}
+                    onChange={(e) => setDescriptionUsage(e.target.value)}
+                    placeholder={t('data-contracts:wizard.fields.usagePlaceholder', 'Describe how this data should be used...')}
                     className="mt-1 min-h-[100px]"
                   />
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Purpose</Label>
-                  <Textarea 
-                    value={descriptionPurpose} 
-                    onChange={(e) => setDescriptionPurpose(e.target.value)} 
-                    placeholder="Describe the business purpose and goals..."
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.purpose', 'Purpose')}</Label>
+                  <Textarea
+                    value={descriptionPurpose}
+                    onChange={(e) => setDescriptionPurpose(e.target.value)}
+                    placeholder={t('data-contracts:wizard.fields.purposePlaceholder', 'Describe the business purpose and goals...')}
                     className="mt-1 min-h-[100px]"
                   />
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Limitations</Label>
-                  <Textarea 
-                    value={descriptionLimitations} 
-                    onChange={(e) => setDescriptionLimitations(e.target.value)} 
-                    placeholder="Describe any limitations or constraints..."
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.limitations', 'Limitations')}</Label>
+                  <Textarea
+                    value={descriptionLimitations}
+                    onChange={(e) => setDescriptionLimitations(e.target.value)}
+                    placeholder={t('data-contracts:wizard.fields.limitationsPlaceholder', 'Describe any limitations or constraints...')}
                     className="mt-1 min-h-[100px]"
                   />
                 </div>
@@ -728,7 +730,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
             {/* Contract-Level Business Concepts */}
             <div className="border-t pt-6">
               <div className="text-sm text-muted-foreground mb-3">
-                Link business concepts to this data contract for better discoverability and context
+                {t('data-contracts:wizard.fields.businessConceptsHint', 'Link business concepts to this data contract for better discoverability and context')}
               </div>
               <BusinessConceptsDisplay
                 concepts={contractSemanticConcepts}
@@ -743,27 +745,27 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
           {/* Step 2: Schema Definition */}
           <div className={step === 2 ? 'block space-y-4' : 'hidden'}>
-            <div className="text-lg font-semibold text-foreground mb-4">Data Schema Definition</div>
-            
+            <div className="text-lg font-semibold text-foreground mb-4">{t('data-contracts:wizard.steps.schema.title', 'Data Schema Definition')}</div>
+
             <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
               <div>
-                <div className="font-medium">Define your data structure</div>
-                <div className="text-sm text-muted-foreground">Add schema objects that represent tables, views, or data assets</div>
+                <div className="font-medium">{t('data-contracts:wizard.steps.schema.subtitle', 'Define your data structure')}</div>
+                <div className="text-sm text-muted-foreground">{t('data-contracts:wizard.steps.schema.subtitleHint', 'Add schema objects that represent tables, views, or data assets')}</div>
               </div>
               <div className="flex gap-3">
                 <Button type="button" variant="outline" onClick={() => setLookupOpen(true)} className="gap-2">
-                  <span>🔍</span> Infer from Asset
+                  <span>🔍</span> {t('data-contracts:wizard.actions.inferFromAsset', 'Infer from Asset')}
                 </Button>
                 <Button type="button" variant="default" onClick={addObject} className="gap-2">
-                  <span>➕</span> Add Schema Object
+                  <span>➕</span> {t('data-contracts:wizard.actions.addSchemaObject', 'Add Schema Object')}
                 </Button>
               </div>
             </div>
 
             {schemaObjects.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-                <div className="text-muted-foreground mb-2">No schema objects defined yet</div>
-                <div className="text-sm text-muted-foreground">Start by adding a schema object or inferring from an existing asset</div>
+                <div className="text-muted-foreground mb-2">{t('data-contracts:wizard.steps.schema.emptyTitle', 'No schema objects defined yet')}</div>
+                <div className="text-sm text-muted-foreground">{t('data-contracts:wizard.steps.schema.emptyHint', 'Start by adding a schema object or inferring from an existing asset')}</div>
               </div>
             ) : (
               <div className="space-y-6">
@@ -771,33 +773,33 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   <div key={objIndex} id={`schema-object-${objIndex}`} className="border rounded-lg p-6 bg-card">
                     {/* Object Header */}
                     <div className="flex items-center justify-between mb-4">
-                      <div className="text-base font-medium">Schema Object {objIndex + 1}</div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
+                      <div className="text-base font-medium">{t('data-contracts:wizard.steps.schema.objectLabel', 'Schema Object {{index}}', { index: objIndex + 1 })}</div>
+                      <Button
+                        type="button"
+                        variant="ghost"
                         size="sm"
                         onClick={() => removeObject(objIndex)}
                         className="text-destructive hover:text-destructive"
                       >
-                        Remove Object
+                        {t('data-contracts:wizard.actions.removeObject', 'Remove Object')}
                       </Button>
                     </div>
 
                     {/* Object Names */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                       <div>
-                        <Label className="text-sm font-medium">Logical Name *</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.logicalName', 'Logical Name *')}</Label>
                         <Input
-                          placeholder="e.g., customers, orders"
+                          placeholder={t('data-contracts:wizard.fields.logicalNamePlaceholder', 'e.g., customers, orders')}
                           value={obj.name}
                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, name: e.target.value } : x))}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Physical Name (Optional)</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.physicalName', 'Physical Name (Optional)')}</Label>
                         <Input
-                          placeholder="e.g., catalog.schema.table_name"
+                          placeholder={t('data-contracts:wizard.fields.physicalNamePlaceholder', 'e.g., catalog.schema.table_name')}
                           value={obj.physicalName || ''}
                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, physicalName: e.target.value } : x))}
                           className="mt-1"
@@ -808,22 +810,22 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     {/* ODCS v3.1.0 Schema Object Fields */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                       <div>
-                        <Label className="text-sm font-medium">Business Name (ODCS)</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.businessNameOdcs', 'Business Name (ODCS)')}</Label>
                         <Input
-                          placeholder="Business-friendly name"
+                          placeholder={t('data-contracts:wizard.fields.businessNamePlaceholder', 'Business-friendly name')}
                           value={obj.businessName || ''}
                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, businessName: e.target.value } : x))}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Physical Type (ODCS)</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.physicalTypeOdcs', 'Physical Type (ODCS)')}</Label>
                         <Select
                           value={obj.physicalType || 'table'}
                           onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, physicalType: v } : x))}
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select physical type" />
+                            <SelectValue placeholder={t('data-contracts:wizard.fields.selectPhysicalType', 'Select physical type')} />
                           </SelectTrigger>
                           <SelectContent>
                             {PHYSICAL_TYPES.map((t) => (
@@ -836,18 +838,18 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                       <div>
-                        <Label className="text-sm font-medium">Schema Description (ODCS)</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.schemaDescriptionOdcs', 'Schema Description (ODCS)')}</Label>
                         <Textarea
-                          placeholder="Describe this schema object..."
+                          placeholder={t('data-contracts:wizard.fields.schemaDescriptionPlaceholder', 'Describe this schema object...')}
                           value={obj.description || ''}
                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, description: e.target.value } : x))}
                           className="mt-1 min-h-[80px]"
                         />
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Data Granularity Description (ODCS)</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.dataGranularityOdcs', 'Data Granularity Description (ODCS)')}</Label>
                         <Textarea
-                          placeholder="e.g., One row per customer per day"
+                          placeholder={t('data-contracts:wizard.fields.dataGranularityPlaceholder', 'e.g., One row per customer per day')}
                           value={obj.dataGranularityDescription || ''}
                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, dataGranularityDescription: e.target.value } : x))}
                           className="mt-1 min-h-[80px]"
@@ -874,15 +876,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     {/* Columns Section */}
                     <div className="border-t pt-4">
                       <div className="flex justify-between items-center mb-4">
-                        <div className="font-medium text-sm">Columns ({obj.properties.length})</div>
+                        <div className="font-medium text-sm">{t('data-contracts:wizard.fields.columnsCount', 'Columns ({{count}})', { count: obj.properties.length })}</div>
                         <Button type="button" variant="outline" size="sm" onClick={() => addColumn(objIndex)} className="gap-1 h-8 px-2 text-xs">
-                          ➕ Add Column
+                          ➕ {t('data-contracts:wizard.actions.addColumn', 'Add Column')}
                         </Button>
                       </div>
 
                       {obj.properties.length === 0 ? (
                         <div className="text-center py-6 border border-dashed border-muted-foreground/25 rounded">
-                          <div className="text-sm text-muted-foreground">No columns defined</div>
+                          <div className="text-sm text-muted-foreground">{t('data-contracts:wizard.steps.schema.noColumns', 'No columns defined')}</div>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -890,31 +892,31 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             <div key={colIndex} className="space-y-2">
                               <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 border rounded bg-muted/30">
                                 <div className="lg:col-span-3">
-                                  <Label className="text-[11px]">Column Name *</Label>
+                                  <Label className="text-[11px]">{t('data-contracts:wizard.fields.columnName', 'Column Name *')}</Label>
                                   <div className="mt-0.5 flex items-center gap-[3px]">
                                     <span className="text-[11px] text-muted-foreground select-none">#{colIndex + 1}</span>
-                                    <Input 
-                                      placeholder="column_name" 
-                                      value={col.name} 
+                                    <Input
+                                      placeholder={t('data-contracts:wizard.fields.columnNamePlaceholder', 'column_name')}
+                                      value={col.name}
                                       onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, name: e.target.value } : y) } : x))}
                                       className="h-8 text-xs w-full flex-1"
                                     />
                                   </div>
                                 </div>
                                 <div className="lg:col-span-3">
-                                  <Label className="text-[11px]">Physical Type</Label>
-                                  <Input 
-                                    placeholder="e.g., VARCHAR(255), BIGINT" 
+                                  <Label className="text-[11px]">{t('data-contracts:wizard.fields.physicalTypeShort', 'Physical Type')}</Label>
+                                  <Input
+                                    placeholder={t('data-contracts:wizard.fields.columnPhysicalTypePlaceholder', 'e.g., VARCHAR(255), BIGINT')}
                                     value={(col as any).physicalType || ''}
                                     onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, physicalType: e.target.value } : y) } : x))}
                                     className="mt-0.5 h-8 text-xs"
                                   />
                                 </div>
                                 <div className="lg:col-span-3">
-                                  <Label className="text-[11px]">Logical Type *</Label>
+                                  <Label className="text-[11px]">{t('data-contracts:wizard.fields.logicalType', 'Logical Type *')}</Label>
                                   <Select value={(col as any).logicalType} onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, logicalType: v } : y) } : x))}>
                                     <SelectTrigger className="mt-0.5 h-8 text-xs">
-                                      <SelectValue placeholder="Select type" />
+                                      <SelectValue placeholder={t('common:placeholders.selectType', 'Select type')} />
                                     </SelectTrigger>
                                     <SelectContent>
                                       {LOGICAL_TYPES.map((t) => (
@@ -924,9 +926,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                   </Select>
                                 </div>
                                 <div className="lg:col-span-2 flex items-end justify-end">
-                                  <Button 
-                                    type="button" 
-                                    variant="ghost" 
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
                                     size="sm"
                                     onClick={() => removeColumn(objIndex, colIndex)}
                                     className="text-destructive hover:text-destructive p-1 h-8"
@@ -938,10 +940,10 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                 {/* Logical Type Constraints */}
                                 {(col as any).logicalType === 'string' && (
                                   <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
-                                    <div className="text-[11px] font-medium mb-2">String Constraints</div>
+                                    <div className="text-[11px] font-medium mb-2">{t('data-contracts:wizard.constraints.string', 'String Constraints')}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                       <div>
-                                        <Label className="text-[10px]">Min Length</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.minLength', 'Min Length')}</Label>
                                         <Input
                                           type="number"
                                           placeholder="0"
@@ -951,7 +953,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Max Length</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.maxLength', 'Max Length')}</Label>
                                         <Input
                                           type="number"
                                           placeholder="255"
@@ -961,7 +963,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Pattern (Regex)</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.pattern', 'Pattern (Regex)')}</Label>
                                         <Input
                                           placeholder="^[a-zA-Z]+$"
                                           value={(col as any).pattern || ''}
@@ -975,10 +977,10 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                                 {(col as any).logicalType === 'number' && (
                                   <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
-                                    <div className="text-[11px] font-medium mb-2">Number Constraints</div>
+                                    <div className="text-[11px] font-medium mb-2">{t('data-contracts:wizard.constraints.number', 'Number Constraints')}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                                       <div>
-                                        <Label className="text-[10px]">Minimum</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.minimum', 'Minimum')}</Label>
                                         <Input
                                           type="number"
                                           step="any"
@@ -989,7 +991,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Maximum</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.maximum', 'Maximum')}</Label>
                                         <Input
                                           type="number"
                                           step="any"
@@ -1000,7 +1002,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Multiple Of</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.multipleOf', 'Multiple Of')}</Label>
                                         <Input
                                           type="number"
                                           step="any"
@@ -1011,7 +1013,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Precision</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.precision', 'Precision')}</Label>
                                         <Input
                                           type="number"
                                           placeholder="2"
@@ -1026,10 +1028,10 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                                 {(col as any).logicalType === 'integer' && (
                                   <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
-                                    <div className="text-[11px] font-medium mb-2">Integer Constraints</div>
+                                    <div className="text-[11px] font-medium mb-2">{t('data-contracts:wizard.constraints.integer', 'Integer Constraints')}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                       <div>
-                                        <Label className="text-[10px]">Minimum</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.minimum', 'Minimum')}</Label>
                                         <Input
                                           type="number"
                                           placeholder="0"
@@ -1039,7 +1041,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Maximum</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.maximum', 'Maximum')}</Label>
                                         <Input
                                           type="number"
                                           placeholder="100"
@@ -1054,38 +1056,38 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                                 {(col as any).logicalType === 'date' && (
                                   <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
-                                    <div className="text-[11px] font-medium mb-2">Date Constraints</div>
+                                    <div className="text-[11px] font-medium mb-2">{t('data-contracts:wizard.constraints.date', 'Date Constraints')}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                       <div>
-                                        <Label className="text-[10px]">Format</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.format', 'Format')}</Label>
                                         <Select
                                           value={(col as any).format || 'date'}
                                           onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, format: v } : y) } : x))}
                                         >
                                           <SelectTrigger className="mt-0.5 h-7 text-xs">
-                                            <SelectValue placeholder="Select format" />
+                                            <SelectValue placeholder={t('data-contracts:form.selectFormat', 'Select format')} />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            <SelectItem value="date" className="text-xs">YYYY-MM-DD</SelectItem>
-                                            <SelectItem value="date-time" className="text-xs">ISO 8601</SelectItem>
-                                            <SelectItem value="time" className="text-xs">HH:MM:SS</SelectItem>
-                                            <SelectItem value="timestamp" className="text-xs">Unix timestamp</SelectItem>
+                                            <SelectItem value="date" className="text-xs">{t('data-contracts:wizard.constraints.dateFormats.dateYmd', 'YYYY-MM-DD')}</SelectItem>
+                                            <SelectItem value="date-time" className="text-xs">{t('data-contracts:wizard.constraints.dateFormats.iso8601', 'ISO 8601')}</SelectItem>
+                                            <SelectItem value="time" className="text-xs">{t('data-contracts:wizard.constraints.dateFormats.timeHms', 'HH:MM:SS')}</SelectItem>
+                                            <SelectItem value="timestamp" className="text-xs">{t('data-contracts:wizard.constraints.dateFormats.unixTimestamp', 'Unix timestamp')}</SelectItem>
                                           </SelectContent>
                                         </Select>
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Timezone</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.timezone', 'Timezone')}</Label>
                                         <Input
-                                          placeholder="UTC, America/New_York"
+                                          placeholder={t('data-contracts:wizard.constraints.timezonePlaceholder', 'UTC, America/New_York')}
                                           value={(col as any).timezone || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, timezone: e.target.value || undefined } : y) } : x))}
                                           className="mt-0.5 h-7 text-xs"
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Custom Format</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.customFormat', 'Custom Format')}</Label>
                                         <Input
-                                          placeholder="%Y-%m-%d %H:%M:%S"
+                                          placeholder={t('data-contracts:wizard.constraints.customFormatPlaceholder', '%Y-%m-%d %H:%M:%S')}
                                           value={(col as any).customFormat || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, customFormat: e.target.value || undefined } : y) } : x))}
                                           className="mt-0.5 h-7 text-xs"
@@ -1097,16 +1099,16 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                                 {(col as any).logicalType === 'array' && (
                                   <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
-                                    <div className="text-[11px] font-medium mb-2">Array Constraints</div>
+                                    <div className="text-[11px] font-medium mb-2">{t('data-contracts:wizard.constraints.array', 'Array Constraints')}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                       <div>
-                                        <Label className="text-[10px]">Item Type</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.itemType', 'Item Type')}</Label>
                                         <Select
                                           value={(col as any).itemType || 'string'}
                                           onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, itemType: v } : y) } : x))}
                                         >
                                           <SelectTrigger className="mt-0.5 h-7 text-xs">
-                                            <SelectValue placeholder="Select item type" />
+                                            <SelectValue placeholder={t('data-contracts:wizard.constraints.selectItemType', 'Select item type')} />
                                           </SelectTrigger>
                                           <SelectContent>
                                             {LOGICAL_TYPES.filter(t => t !== 'array').map((t) => (
@@ -1116,7 +1118,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         </Select>
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Min Items</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.minItems', 'Min Items')}</Label>
                                         <Input
                                           type="number"
                                           placeholder="0"
@@ -1126,7 +1128,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                         />
                                       </div>
                                       <div>
-                                        <Label className="text-[10px]">Max Items</Label>
+                                        <Label className="text-[10px]">{t('data-contracts:wizard.constraints.maxItems', 'Max Items')}</Label>
                                         <Input
                                           type="number"
                                           placeholder="100"
@@ -1141,10 +1143,10 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                                 {/* Row 2: Description + Flags */}
                                 <div className="lg:col-span-8">
-                                  <Label className="text-[11px]">Description</Label>
-                                  <Input 
-                                    placeholder="Column description..." 
-                                    value={col.description || ''} 
+                                  <Label className="text-[11px]">{t('data-contracts:wizard.fields.columnDescription', 'Description')}</Label>
+                                  <Input
+                                    placeholder={t('data-contracts:wizard.fields.columnDescriptionPlaceholder', 'Column description...')}
+                                    value={col.description || ''}
                                     onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, description: e.target.value } : y) } : x))}
                                     className="mt-0.5 h-8 text-xs"
                                   />
@@ -1156,7 +1158,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                       checked={!!col.required}
                                       onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, required: e.target.checked } : y) } : x))}
                                     />
-                                    Required
+                                    {t('data-contracts:wizard.fields.required', 'Required')}
                                   </label>
                                   <label className="flex items-center gap-1 text-[11px]">
                                     <input
@@ -1164,7 +1166,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                       checked={!!col.unique}
                                       onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, unique: e.target.checked } : y) } : x))}
                                     />
-                                    Unique
+                                    {t('data-contracts:wizard.fields.unique', 'Unique')}
                                   </label>
                                   <label className="flex items-center gap-1 text-[11px]">
                                     <input
@@ -1172,26 +1174,26 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                       checked={!!col.primaryKey}
                                       onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, primaryKey: e.target.checked, primaryKeyPosition: e.target.checked ? j + 1 : -1 } : y) } : x))}
                                     />
-                                    Primary Key
+                                    {t('data-contracts:wizard.fields.primaryKey', 'Primary Key')}
                                   </label>
                                 </div>
 
                                 {/* Row 3: Advanced */}
                                 <div className="lg:col-span-12 col-span-1 pt-1">
                                   <details>
-                                    <summary className="text-[11px] text-muted-foreground cursor-pointer select-none">Advanced</summary>
+                                    <summary className="text-[11px] text-muted-foreground cursor-pointer select-none">{t('data-contracts:wizard.fields.advanced', 'Advanced')}</summary>
                                     <div className="mt-2 grid grid-cols-1 lg:grid-cols-12 gap-2">
                                       <div className="lg:col-span-3">
-                                        <Label className="text-[11px]">Classification</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.classification', 'Classification')}</Label>
                                         <Input
-                                          placeholder="confidential, pii, internal"
+                                          placeholder={t('data-contracts:wizard.fields.classificationPlaceholder', 'confidential, pii, internal')}
                                           value={(col as any).classification || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, classification: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
                                         />
                                       </div>
                                       <div className="lg:col-span-3">
-                                        <Label className="text-[11px]">Partition</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.partition', 'Partition')}</Label>
                                         <div className="mt-0.5">
                                           <label className="flex items-center gap-1 text-[11px]">
                                             <input
@@ -1199,14 +1201,14 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                               checked={!!col.partitioned}
                                               onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, partitioned: e.target.checked, partitionKeyPosition: e.target.checked ? j + 1 : -1 } : y) } : x))}
                                             />
-                                            Partition Key
+                                            {t('data-contracts:wizard.fields.partitionKey', 'Partition Key')}
                                           </label>
                                         </div>
                                       </div>
                                       <div className="lg:col-span-9">
-                                        <Label className="text-[11px]">Examples (comma-separated)</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.examples', 'Examples (comma-separated)')}</Label>
                                         <Input
-                                          placeholder="123, 456, 789"
+                                          placeholder={t('data-contracts:wizard.fields.examplesPlaceholder', '123, 456, 789')}
                                           value={(col as any).examples || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, examples: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
@@ -1215,25 +1217,25 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                                       {/* ODCS v3.1.0 Property Fields */}
                                       <div className="lg:col-span-4">
-                                        <Label className="text-[11px]">Business Name (ODCS)</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.businessNameOdcs', 'Business Name (ODCS)')}</Label>
                                         <Input
-                                          placeholder="Business-friendly name"
+                                          placeholder={t('data-contracts:wizard.fields.businessNamePlaceholder', 'Business-friendly name')}
                                           value={(col as any).businessName || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, businessName: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
                                         />
                                       </div>
                                       <div className="lg:col-span-4">
-                                        <Label className="text-[11px]">Encrypted Name (ODCS)</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.encryptedNameOdcs', 'Encrypted Name (ODCS)')}</Label>
                                         <Input
-                                          placeholder="Encrypted field name"
+                                          placeholder={t('data-contracts:wizard.fields.encryptedNamePlaceholder', 'Encrypted field name')}
                                           value={(col as any).encryptedName || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, encryptedName: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
                                         />
                                       </div>
                                       <div className="lg:col-span-4">
-                                        <Label className="text-[11px]">Critical Data Element</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.criticalDataElement', 'Critical Data Element')}</Label>
                                         <div className="mt-0.5">
                                           <label className="flex items-center gap-1 text-[11px]">
                                             <input
@@ -1241,24 +1243,24 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                               checked={!!(col as any).criticalDataElement}
                                               onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, criticalDataElement: e.target.checked } : y) } : x))}
                                             />
-                                            Is Critical Data Element
+                                            {t('data-contracts:wizard.fields.isCriticalDataElement', 'Is Critical Data Element')}
                                           </label>
                                         </div>
                                       </div>
 
                                       <div className="lg:col-span-6">
-                                        <Label className="text-[11px]">Transform Logic (ODCS)</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.transformLogicOdcs', 'Transform Logic (ODCS)')}</Label>
                                         <Input
-                                          placeholder="Transformation SQL or logic"
+                                          placeholder={t('data-contracts:wizard.fields.transformLogicPlaceholder', 'Transformation SQL or logic')}
                                           value={(col as any).transformLogic || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, transformLogic: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
                                         />
                                       </div>
                                       <div className="lg:col-span-6">
-                                        <Label className="text-[11px]">Transform Source Objects (ODCS)</Label>
+                                        <Label className="text-[11px]">{t('data-contracts:wizard.fields.transformSourceObjectsOdcs', 'Transform Source Objects (ODCS)')}</Label>
                                         <Input
-                                          placeholder="Source table/column references"
+                                          placeholder={t('data-contracts:wizard.fields.transformSourceObjectsPlaceholder', 'Source table/column references')}
                                           value={(col as any).transformSourceObjects || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, transformSourceObjects: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
@@ -1309,29 +1311,29 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
           {/* Step 3: Data Quality */}
           <div className={step === 3 ? 'block space-y-4' : 'hidden'}>
-            <div className="text-lg font-semibold text-foreground mb-4">Data Quality & Validation</div>
+            <div className="text-lg font-semibold text-foreground mb-4">{t('data-contracts:wizard.steps.quality.title', 'Data Quality & Validation')}</div>
 
             <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
               <div>
-                <div className="font-medium">ODCS Quality Framework</div>
-                <div className="text-sm text-muted-foreground">Define quality rules using ODCS v3.1.0 dimensions and types</div>
+                <div className="font-medium">{t('data-contracts:wizard.steps.quality.frameworkTitle', 'ODCS Quality Framework')}</div>
+                <div className="text-sm text-muted-foreground">{t('data-contracts:wizard.steps.quality.frameworkHint', 'Define quality rules using ODCS v3.1.0 dimensions and types')}</div>
               </div>
               <Button type="button" variant="default" onClick={addQualityRule} className="gap-2">
-                <span>➕</span> Add Quality Rule
+                <span>➕</span> {t('data-contracts:wizard.actions.addQualityRule', 'Add Quality Rule')}
               </Button>
             </div>
 
             {qualityRules.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-                <div className="text-muted-foreground mb-2">No quality rules defined yet</div>
-                <div className="text-sm text-muted-foreground">Start by adding quality rules to ensure data integrity</div>
+                <div className="text-muted-foreground mb-2">{t('data-contracts:wizard.steps.quality.emptyTitle', 'No quality rules defined yet')}</div>
+                <div className="text-sm text-muted-foreground">{t('data-contracts:wizard.steps.quality.emptyHint', 'Start by adding quality rules to ensure data integrity')}</div>
               </div>
             ) : (
               <div className="space-y-4">
                 {qualityRules.map((rule, index) => (
                   <div key={index} className="border rounded-lg p-4 bg-card">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="text-base font-medium">Quality Rule {index + 1}</div>
+                      <div className="text-base font-medium">{t('data-contracts:wizard.steps.quality.ruleLabel', 'Quality Rule {{index}}', { index: index + 1 })}</div>
                       <Button
                         type="button"
                         variant="ghost"
@@ -1339,28 +1341,28 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                         onClick={() => removeQualityRule(index)}
                         className="text-destructive hover:text-destructive"
                       >
-                        Remove Rule
+                        {t('data-contracts:wizard.actions.removeRule', 'Remove Rule')}
                       </Button>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div>
-                        <Label className="text-sm font-medium">Rule Name *</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.ruleName', 'Rule Name *')}</Label>
                         <Input
-                          placeholder="e.g., Email Format Validation"
+                          placeholder={t('data-contracts:wizard.fields.ruleNamePlaceholder', 'e.g., Email Format Validation')}
                           value={rule.name}
                           onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, name: e.target.value } : r))}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Quality Dimension *</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.qualityDimension', 'Quality Dimension *')}</Label>
                         <Select
                           value={rule.dimension}
                           onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, dimension: v } : r))}
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select dimension" />
+                            <SelectValue placeholder={t('data-contracts:wizard.fields.selectDimension', 'Select dimension')} />
                           </SelectTrigger>
                           <SelectContent>
                             {QUALITY_DIMENSIONS.map((dim) => (
@@ -1370,13 +1372,13 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Rule Type *</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.ruleType', 'Rule Type *')}</Label>
                         <Select
                           value={rule.type}
                           onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, type: v } : r))}
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select type" />
+                            <SelectValue placeholder={t('common:placeholders.selectType', 'Select type')} />
                           </SelectTrigger>
                           <SelectContent>
                             {QUALITY_TYPES.map((type) => (
@@ -1386,13 +1388,13 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Severity *</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.severity', 'Severity *')}</Label>
                         <Select
                           value={rule.severity}
                           onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, severity: v } : r))}
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select severity" />
+                            <SelectValue placeholder={t('common:placeholders.selectSeverity', 'Select severity')} />
                           </SelectTrigger>
                           <SelectContent>
                             {QUALITY_SEVERITIES.map((sev) => (
@@ -1402,13 +1404,13 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Business Impact *</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.businessImpact', 'Business Impact *')}</Label>
                         <Select
                           value={rule.businessImpact}
                           onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, businessImpact: v } : r))}
                         >
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select impact" />
+                            <SelectValue placeholder={t('data-contracts:wizard.fields.selectImpact', 'Select impact')} />
                           </SelectTrigger>
                           <SelectContent>
                             {BUSINESS_IMPACTS.map((impact) => (
@@ -1418,9 +1420,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Description</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.description', 'Description')}</Label>
                         <Input
-                          placeholder="Describe the quality rule..."
+                          placeholder={t('data-contracts:wizard.fields.ruleDescriptionPlaceholder', 'Describe the quality rule...')}
                           value={rule.description || ''}
                           onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, description: e.target.value } : r))}
                           className="mt-1"
@@ -1431,15 +1433,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     {rule.type === 'library' && (
                       <div className="mt-4 space-y-3">
                         <div>
-                          <Label className="text-sm font-medium">Library Rule *</Label>
+                          <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.libraryRule', 'Library Rule *')}</Label>
                           <Input
-                            placeholder="e.g., not_null, unique, range_check"
+                            placeholder={t('data-contracts:wizard.fields.libraryRulePlaceholder', 'e.g., not_null, unique, range_check')}
                             value={rule.rule || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, rule: e.target.value } : r))}
                             className="mt-1"
                           />
                           <div className="text-xs text-muted-foreground mt-1">
-                            Library-defined rule name or identifier
+                            {t('data-contracts:wizard.fields.libraryRuleHint', 'Library-defined rule name or identifier')}
                           </div>
                         </div>
                       </div>
@@ -1448,15 +1450,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     {rule.type === 'sql' && (
                       <div className="mt-4 space-y-3">
                         <div>
-                          <Label className="text-sm font-medium">SQL Query *</Label>
+                          <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.sqlQuery', 'SQL Query *')}</Label>
                           <Textarea
-                            placeholder="SELECT COUNT(*) FROM table WHERE condition..."
+                            placeholder={t('data-contracts:wizard.fields.sqlQueryPlaceholder', 'SELECT COUNT(*) FROM table WHERE condition...')}
                             value={rule.query || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, query: e.target.value } : r))}
                             className="mt-1 min-h-[80px]"
                           />
                           <div className="text-xs text-muted-foreground mt-1">
-                            SQL query should return a numeric result for validation
+                            {t('data-contracts:wizard.fields.sqlQueryHint', 'SQL query should return a numeric result for validation')}
                           </div>
                         </div>
                       </div>
@@ -1465,27 +1467,27 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     {rule.type === 'custom' && (
                       <div className="mt-4 space-y-3">
                         <div>
-                          <Label className="text-sm font-medium">Engine *</Label>
+                          <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.engine', 'Engine *')}</Label>
                           <Input
-                            placeholder="e.g., great_expectations, deequ, pydantic"
+                            placeholder={t('data-contracts:wizard.fields.enginePlaceholder', 'e.g., great_expectations, deequ, pydantic')}
                             value={rule.engine || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, engine: e.target.value } : r))}
                             className="mt-1"
                           />
                           <div className="text-xs text-muted-foreground mt-1">
-                            Custom quality engine or framework name
+                            {t('data-contracts:wizard.fields.engineHint', 'Custom quality engine or framework name')}
                           </div>
                         </div>
                         <div>
-                          <Label className="text-sm font-medium">Implementation</Label>
+                          <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.implementation', 'Implementation')}</Label>
                           <Textarea
-                            placeholder="Implementation details (JSON config, code, etc.)"
+                            placeholder={t('data-contracts:wizard.fields.implementationPlaceholder', 'Implementation details (JSON config, code, etc.)')}
                             value={rule.implementation || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, implementation: e.target.value } : r))}
                             className="mt-1 min-h-[80px]"
                           />
                           <div className="text-xs text-muted-foreground mt-1">
-                            Engine-specific implementation configuration or code
+                            {t('data-contracts:wizard.fields.implementationHint', 'Engine-specific implementation configuration or code')}
                           </div>
                         </div>
                       </div>
@@ -1493,57 +1495,57 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                     {/* Common comparators for all types */}
                     <div className="mt-4">
-                      <div className="font-medium text-sm mb-3">Validation Criteria (Optional)</div>
+                      <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.fields.validationCriteria', 'Validation Criteria (Optional)')}</div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-sm">Must Be</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.mustBe', 'Must Be')}</Label>
                           <Input
-                            placeholder="Expected value"
+                            placeholder={t('data-contracts:wizard.fields.mustBePlaceholder', 'Expected value')}
                             value={rule.mustBe || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBe: e.target.value } : r))}
                             className="mt-1"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm">Must Not Be</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.mustNotBe', 'Must Not Be')}</Label>
                           <Input
-                            placeholder="Forbidden value"
+                            placeholder={t('data-contracts:wizard.fields.mustNotBePlaceholder', 'Forbidden value')}
                             value={rule.mustNotBe || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustNotBe: e.target.value } : r))}
                             className="mt-1"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm">Must Be Greater Than</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.mustBeGt', 'Must Be Greater Than')}</Label>
                           <Input
-                            placeholder="Minimum value"
+                            placeholder={t('data-contracts:wizard.fields.mustBeGtPlaceholder', 'Minimum value')}
                             value={rule.mustBeGt || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeGt: e.target.value } : r))}
                             className="mt-1"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm">Must Be Less Than</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.mustBeLt', 'Must Be Less Than')}</Label>
                           <Input
-                            placeholder="Maximum value"
+                            placeholder={t('data-contracts:wizard.fields.mustBeLtPlaceholder', 'Maximum value')}
                             value={rule.mustBeLt || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeLt: e.target.value } : r))}
                             className="mt-1"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm">Range Min</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.rangeMin', 'Range Min')}</Label>
                           <Input
-                            placeholder="Range minimum"
+                            placeholder={t('data-contracts:wizard.fields.rangeMinPlaceholder', 'Range minimum')}
                             value={rule.mustBeBetweenMin || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeBetweenMin: e.target.value } : r))}
                             className="mt-1"
                           />
                         </div>
                         <div>
-                          <Label className="text-sm">Range Max</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.rangeMax', 'Range Max')}</Label>
                           <Input
-                            placeholder="Range maximum"
+                            placeholder={t('data-contracts:wizard.fields.rangeMaxPlaceholder', 'Range maximum')}
                             value={rule.mustBeBetweenMax || ''}
                             onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeBetweenMax: e.target.value } : r))}
                             className="mt-1"
@@ -1559,54 +1561,54 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
           {/* Step 4: Team & Roles */}
           <div className={step === 4 ? 'block space-y-6' : 'hidden'}>
-            <div className="text-lg font-semibold text-foreground mb-4">Team & Access Control</div>
-            
+            <div className="text-lg font-semibold text-foreground mb-4">{t('data-contracts:wizard.steps.team.title', 'Team & Access Control')}</div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Team Members */}
               <div className="space-y-4">
-                <div className="font-medium">Team Members</div>
-                
+                <div className="font-medium">{t('data-contracts:wizard.steps.team.teamMembers', 'Team Members')}</div>
+
                 <div className="space-y-3">
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-3">
-                      <div className="font-medium text-sm">Data Stewards</div>
-                      <Button variant="outline" size="sm">+ Add</Button>
+                      <div className="font-medium text-sm">{t('data-contracts:wizard.steps.team.dataStewards', 'Data Stewards')}</div>
+                      <Button variant="outline" size="sm">{t('data-contracts:wizard.actions.add', '+ Add')}</Button>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                        <div className="text-sm">{owner || 'Contract Owner'}</div>
-                        <div className="text-xs text-muted-foreground">Owner</div>
+                        <div className="text-sm">{owner || t('data-contracts:wizard.fields.contractOwner', 'Contract Owner')}</div>
+                        <div className="text-xs text-muted-foreground">{t('data-contracts:wizard.steps.team.ownerBadge', 'Owner')}</div>
                       </div>
                     </div>
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Data Consumers</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.team.dataConsumers', 'Data Consumers')}</div>
                     <PrincipalPicker
                       multiple
                       accepts={['user', 'group']}
                       value={consumers}
                       onChange={setConsumers}
-                      placeholder="consumer-team@company.com"
-                      aria-label="Data Consumers"
+                      placeholder={t('data-contracts:wizard.steps.team.consumersPlaceholder', 'consumer-team@company.com')}
+                      aria-label={t('data-contracts:wizard.steps.team.dataConsumers', 'Data Consumers')}
                     />
                     <div className="text-xs text-muted-foreground mt-2">
-                      Stakeholders who will consume this data.
+                      {t('data-contracts:wizard.steps.team.consumersHint', 'Stakeholders who will consume this data.')}
                     </div>
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Subject Matter Experts</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.team.subjectMatterExperts', 'Subject Matter Experts')}</div>
                     <PrincipalPicker
                       multiple
                       accepts={['user']}
                       value={subjectMatterExperts}
                       onChange={setSubjectMatterExperts}
-                      placeholder="expert@company.com"
-                      aria-label="Subject Matter Experts"
+                      placeholder={t('data-contracts:wizard.steps.team.smePlaceholder', 'expert@company.com')}
+                      aria-label={t('data-contracts:wizard.steps.team.subjectMatterExperts', 'Subject Matter Experts')}
                     />
                     <div className="text-xs text-muted-foreground mt-2">
-                      Domain experts for business context and validation.
+                      {t('data-contracts:wizard.steps.team.smeHint', 'Domain experts for business context and validation.')}
                     </div>
                   </div>
                 </div>
@@ -1614,72 +1616,72 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
               {/* Access Controls */}
               <div className="space-y-4">
-                <div className="font-medium">Access Control & Permissions</div>
-                
+                <div className="font-medium">{t('data-contracts:wizard.steps.team.accessControl', 'Access Control & Permissions')}</div>
+
                 <div className="space-y-3">
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Read Access</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.team.readAccess', 'Read Access')}</div>
                     <PrincipalPicker
                       multiple
                       accepts={['group']}
                       value={readGroups}
                       onChange={setReadGroups}
-                      placeholder="data-consumers-group"
-                      aria-label="Read access groups"
+                      placeholder={t('data-contracts:wizard.steps.team.readGroupsPlaceholder', 'data-consumers-group')}
+                      aria-label={t('data-contracts:wizard.steps.team.readGroupsAria', 'Read access groups')}
                     />
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Write Access</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.team.writeAccess', 'Write Access')}</div>
                     <PrincipalPicker
                       multiple
                       accepts={['group']}
                       value={writeGroups}
                       onChange={setWriteGroups}
-                      placeholder="data-engineers-group"
-                      aria-label="Write access groups"
+                      placeholder={t('data-contracts:wizard.steps.team.writeGroupsPlaceholder', 'data-engineers-group')}
+                      aria-label={t('data-contracts:wizard.steps.team.writeGroupsAria', 'Write access groups')}
                     />
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Admin Access</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.team.adminAccess', 'Admin Access')}</div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                        <div className="text-sm">{owner || 'Contract Owner'}</div>
-                        <div className="text-xs text-muted-foreground">Owner</div>
+                        <div className="text-sm">{owner || t('data-contracts:wizard.fields.contractOwner', 'Contract Owner')}</div>
+                        <div className="text-xs text-muted-foreground">{t('data-contracts:wizard.steps.team.ownerBadge', 'Owner')}</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="border-t pt-4">
-                  <div className="font-medium mb-3">Security Classifications</div>
+                  <div className="font-medium mb-3">{t('data-contracts:wizard.steps.team.securityClassifications', 'Security Classifications')}</div>
                   <div className="space-y-3">
                     <div>
-                      <Label className="text-sm font-medium">Data Classification</Label>
+                      <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.dataClassification', 'Data Classification')}</Label>
                       <Select>
                         <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select classification" />
+                          <SelectValue placeholder={t('data-contracts:wizard.fields.selectClassification', 'Select classification')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="public">Public</SelectItem>
-                          <SelectItem value="internal">Internal</SelectItem>
-                          <SelectItem value="confidential">Confidential</SelectItem>
-                          <SelectItem value="restricted">Restricted</SelectItem>
+                          <SelectItem value="public">{t('data-contracts:wizard.classifications.public', 'Public')}</SelectItem>
+                          <SelectItem value="internal">{t('data-contracts:wizard.classifications.internal', 'Internal')}</SelectItem>
+                          <SelectItem value="confidential">{t('data-contracts:wizard.classifications.confidential', 'Confidential')}</SelectItem>
+                          <SelectItem value="restricted">{t('data-contracts:wizard.classifications.restricted', 'Restricted')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" className="rounded" />
-                      <Label className="text-sm">Contains PII (Personally Identifiable Information)</Label>
+                      <Label className="text-sm">{t('data-contracts:wizard.steps.team.containsPii', 'Contains PII (Personally Identifiable Information)')}</Label>
                     </div>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" className="rounded" />
-                      <Label className="text-sm">Requires encryption at rest</Label>
+                      <Label className="text-sm">{t('data-contracts:wizard.steps.team.requiresEncryption', 'Requires encryption at rest')}</Label>
                     </div>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" className="rounded" />
-                      <Label className="text-sm">Subject to regulatory compliance (GDPR, HIPAA, etc.)</Label>
+                      <Label className="text-sm">{t('data-contracts:wizard.steps.team.regulatoryCompliance', 'Subject to regulatory compliance (GDPR, HIPAA, etc.)')}</Label>
                     </div>
                   </div>
                 </div>
@@ -1688,27 +1690,27 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
             {/* Support & Communication */}
             <div className="border-t pt-6">
-              <div className="font-medium mb-4">Support & Communication Channels</div>
+              <div className="font-medium mb-4">{t('data-contracts:wizard.steps.team.supportChannels', 'Support & Communication Channels')}</div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-sm font-medium">Primary Support Email</Label>
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.primarySupportEmail', 'Primary Support Email')}</Label>
                   <div className="mt-1">
                     <PrincipalPicker
                       accepts={['user']}
                       value={primarySupportEmail || null}
                       onChange={(next) => setPrimarySupportEmail(next ?? '')}
-                      placeholder="data-support@company.com"
-                      aria-label="Primary Support Email"
+                      placeholder={t('data-contracts:wizard.fields.primarySupportEmailPlaceholder', 'data-support@company.com')}
+                      aria-label={t('data-contracts:wizard.fields.primarySupportEmail', 'Primary Support Email')}
                     />
                   </div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Slack Channel</Label>
-                  <Input placeholder="#data-contracts-support" className="mt-1" />
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.slackChannel', 'Slack Channel')}</Label>
+                  <Input placeholder={t('data-contracts:wizard.fields.slackChannelPlaceholder', '#data-contracts-support')} className="mt-1" />
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Documentation URL</Label>
-                  <Input placeholder="https://company.com/data-docs" className="mt-1" />
+                  <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.documentationUrl', 'Documentation URL')}</Label>
+                  <Input placeholder={t('data-contracts:wizard.fields.documentationUrlPlaceholder', 'https://company.com/data-docs')} className="mt-1" />
                 </div>
               </div>
             </div>
@@ -1716,19 +1718,19 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
           {/* Step 5: SLA & Infrastructure */}
           <div className={step === 5 ? 'block space-y-6' : 'hidden'}>
-            <div className="text-lg font-semibold text-foreground mb-4">Service Level Agreement & Infrastructure</div>
-            
+            <div className="text-lg font-semibold text-foreground mb-4">{t('data-contracts:wizard.steps.sla.title', 'Service Level Agreement & Infrastructure')}</div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* SLA Requirements */}
               <div className="space-y-4">
-                <div className="font-medium">Service Level Agreement</div>
-                
+                <div className="font-medium">{t('data-contracts:wizard.steps.sla.slaSection', 'Service Level Agreement')}</div>
+
                 <div className="space-y-4">
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Availability Requirements</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.sla.availabilityRequirements', 'Availability Requirements')}</div>
                     <div className="space-y-3">
                       <div>
-                        <Label className="text-sm font-medium">Uptime Target</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.uptimeTarget', 'Uptime Target')}</Label>
                         <div className="flex items-center gap-2 mt-1">
                           <Input
                             type="number"
@@ -1737,11 +1739,11 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             value={slaRequirements.uptimeTarget || ''}
                             onChange={(e) => setSlaRequirements(prev => ({ ...prev, uptimeTarget: parseFloat(e.target.value) || 0 }))}
                           />
-                          <span className="text-sm text-muted-foreground">% availability</span>
+                          <span className="text-sm text-muted-foreground">{t('data-contracts:wizard.units.percentAvailability', '% availability')}</span>
                         </div>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Maximum Downtime per Month</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.maxDowntime', 'Maximum Downtime per Month')}</Label>
                         <div className="flex items-center gap-2 mt-1">
                           <Input
                             type="number"
@@ -1750,17 +1752,17 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             value={slaRequirements.maxDowntimeMinutes || ''}
                             onChange={(e) => setSlaRequirements(prev => ({ ...prev, maxDowntimeMinutes: parseInt(e.target.value) || 0 }))}
                           />
-                          <span className="text-sm text-muted-foreground">minutes</span>
+                          <span className="text-sm text-muted-foreground">{t('data-contracts:wizard.units.minutes', 'minutes')}</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Performance Requirements</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.sla.performanceRequirements', 'Performance Requirements')}</div>
                     <div className="space-y-3">
                       <div>
-                        <Label className="text-sm font-medium">Query Response Time (P95)</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.queryResponseTime', 'Query Response Time (P95)')}</Label>
                         <div className="flex items-center gap-2 mt-1">
                           <Input
                             type="number"
@@ -1785,18 +1787,18 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             onValueChange={(value) => setSlaRequirements(prev => ({ ...prev, queryResponseTimeUnit: value }))}
                           >
                             <SelectTrigger className="w-24">
-                              <SelectValue placeholder="seconds" />
+                              <SelectValue placeholder={t('data-contracts:wizard.units.seconds', 'seconds')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="ms">ms</SelectItem>
-                              <SelectItem value="seconds">seconds</SelectItem>
-                              <SelectItem value="minutes">minutes</SelectItem>
+                              <SelectItem value="ms">{t('data-contracts:wizard.units.ms', 'ms')}</SelectItem>
+                              <SelectItem value="seconds">{t('data-contracts:wizard.units.seconds', 'seconds')}</SelectItem>
+                              <SelectItem value="minutes">{t('data-contracts:wizard.units.minutes', 'minutes')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Data Freshness</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.dataFreshness', 'Data Freshness')}</Label>
                         <div className="flex items-center gap-2 mt-1">
                           <Input
                             type="number"
@@ -1821,12 +1823,12 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             onValueChange={(value) => setSlaRequirements(prev => ({ ...prev, dataFreshnessUnit: value }))}
                           >
                             <SelectTrigger className="w-24">
-                              <SelectValue placeholder="minutes" />
+                              <SelectValue placeholder={t('data-contracts:wizard.units.minutes', 'minutes')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="minutes">minutes</SelectItem>
-                              <SelectItem value="hours">hours</SelectItem>
-                              <SelectItem value="days">days</SelectItem>
+                              <SelectItem value="minutes">{t('data-contracts:wizard.units.minutes', 'minutes')}</SelectItem>
+                              <SelectItem value="hours">{t('data-contracts:wizard.units.hours', 'hours')}</SelectItem>
+                              <SelectItem value="days">{t('data-contracts:wizard.units.days', 'days')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1835,21 +1837,21 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Support Response Times</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.sla.supportResponseTimes', 'Support Response Times')}</div>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-sm">Critical Issues</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.criticalIssues', 'Critical Issues')}</Label>
                           <div className="flex items-center gap-1 mt-1">
                             <Input type="number" placeholder="2" className="w-16 text-sm" />
-                            <span className="text-xs text-muted-foreground">hours</span>
+                            <span className="text-xs text-muted-foreground">{t('data-contracts:wizard.units.hours', 'hours')}</span>
                           </div>
                         </div>
                         <div>
-                          <Label className="text-sm">Standard Issues</Label>
+                          <Label className="text-sm">{t('data-contracts:wizard.fields.standardIssues', 'Standard Issues')}</Label>
                           <div className="flex items-center gap-1 mt-1">
                             <Input type="number" placeholder="24" className="w-16 text-sm" />
-                            <span className="text-xs text-muted-foreground">hours</span>
+                            <span className="text-xs text-muted-foreground">{t('data-contracts:wizard.units.hours', 'hours')}</span>
                           </div>
                         </div>
                       </div>
@@ -1861,23 +1863,23 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
               {/* Infrastructure & Servers */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <div className="font-medium">ODCS Server Configuration</div>
+                  <div className="font-medium">{t('data-contracts:wizard.steps.sla.serverConfig', 'ODCS Server Configuration')}</div>
                   <Button type="button" variant="default" onClick={addServerConfig} className="gap-2">
-                    <span>➕</span> Add Server
+                    <span>➕</span> {t('data-contracts:wizard.actions.addServer', 'Add Server')}
                   </Button>
                 </div>
 
                 {serverConfigs.length === 0 ? (
                   <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-                    <div className="text-muted-foreground mb-2">No servers configured yet</div>
-                    <div className="text-sm text-muted-foreground">Add server configurations to define data sources</div>
+                    <div className="text-muted-foreground mb-2">{t('data-contracts:wizard.steps.sla.emptyServersTitle', 'No servers configured yet')}</div>
+                    <div className="text-sm text-muted-foreground">{t('data-contracts:wizard.steps.sla.emptyServersHint', 'Add server configurations to define data sources')}</div>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {serverConfigs.map((server, index) => (
                       <div key={index} className="p-4 border rounded-lg">
                         <div className="flex items-center justify-between mb-4">
-                          <div className="font-medium text-sm">Server {index + 1}</div>
+                          <div className="font-medium text-sm">{t('data-contracts:wizard.steps.sla.serverLabel', 'Server {{index}}', { index: index + 1 })}</div>
                           <Button
                             type="button"
                             variant="ghost"
@@ -1885,28 +1887,28 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             onClick={() => removeServerConfig(index)}
                             className="text-destructive hover:text-destructive"
                           >
-                            Remove
+                            {t('common:actions.remove', 'Remove')}
                           </Button>
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-sm font-medium">Server Identifier *</Label>
+                            <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.serverIdentifier', 'Server Identifier *')}</Label>
                             <Input
-                              placeholder="e.g., production-db, analytics-warehouse"
+                              placeholder={t('data-contracts:wizard.fields.serverIdentifierPlaceholder', 'e.g., production-db, analytics-warehouse')}
                               value={server.server}
                               onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, server: e.target.value } : s))}
                               className="mt-1"
                             />
                           </div>
                           <div>
-                            <Label className="text-sm font-medium">Server Type *</Label>
+                            <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.serverType', 'Server Type *')}</Label>
                             <Select
                               value={server.type}
                               onValueChange={(v) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, type: v } : s))}
                             >
                               <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Select server type" />
+                                <SelectValue placeholder={t('data-contracts:wizard.fields.selectServerType', 'Select server type')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {ODCS_SERVER_TYPES.map((type) => (
@@ -1916,13 +1918,13 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             </Select>
                           </div>
                           <div>
-                            <Label className="text-sm font-medium">Environment *</Label>
+                            <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.environment', 'Environment *')}</Label>
                             <Select
                               value={server.environment}
                               onValueChange={(v) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, environment: v } : s))}
                             >
                               <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Select environment" />
+                                <SelectValue placeholder={t('data-contracts:wizard.fields.selectEnvironment', 'Select environment')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {ENVIRONMENTS.map((env) => (
@@ -1932,9 +1934,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                             </Select>
                           </div>
                           <div>
-                            <Label className="text-sm font-medium">Description</Label>
+                            <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.description', 'Description')}</Label>
                             <Input
-                              placeholder="Describe this server..."
+                              placeholder={t('data-contracts:wizard.fields.serverDescriptionPlaceholder', 'Describe this server...')}
                               value={server.description || ''}
                               onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, description: e.target.value } : s))}
                               className="mt-1"
@@ -1945,18 +1947,18 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                           {(server.type === 'postgresql' || server.type === 'mysql' || server.type === 'databricks' || server.type === 'snowflake') && (
                             <>
                               <div>
-                                <Label className="text-sm font-medium">Host</Label>
+                                <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.host', 'Host')}</Label>
                                 <Input
-                                  placeholder="server.example.com"
+                                  placeholder={t('data-contracts:wizard.fields.hostPlaceholder', 'server.example.com')}
                                   value={server.host || ''}
                                   onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, host: e.target.value } : s))}
                                   className="mt-1"
                                 />
                               </div>
                               <div>
-                                <Label className="text-sm font-medium">Database</Label>
+                                <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.database', 'Database')}</Label>
                                 <Input
-                                  placeholder="database_name"
+                                  placeholder={t('data-contracts:wizard.fields.databasePlaceholder', 'database_name')}
                                   value={server.database || ''}
                                   onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, database: e.target.value } : s))}
                                   className="mt-1"
@@ -1967,9 +1969,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                           {(server.type === 'api') && (
                             <div className="lg:col-span-2">
-                              <Label className="text-sm font-medium">API Location</Label>
+                              <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.apiLocation', 'API Location')}</Label>
                               <Input
-                                placeholder="https://api.example.com/v1"
+                                placeholder={t('data-contracts:wizard.fields.apiLocationPlaceholder', 'https://api.example.com/v1')}
                                 value={server.location || ''}
                                 onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, location: e.target.value } : s))}
                                 className="mt-1"
@@ -1979,9 +1981,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
                           {(server.type === 's3') && (
                             <div className="lg:col-span-2">
-                              <Label className="text-sm font-medium">S3 Location</Label>
+                              <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.s3Location', 'S3 Location')}</Label>
                               <Input
-                                placeholder="s3://bucket-name/path/*.json"
+                                placeholder={t('data-contracts:wizard.fields.s3LocationPlaceholder', 's3://bucket-name/path/*.json')}
                                 value={server.location || ''}
                                 onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, location: e.target.value } : s))}
                                 className="mt-1"
@@ -1998,38 +2000,38 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
             {/* Additional Infrastructure Settings */}
             <div className="space-y-4">
-              <div className="font-medium">Infrastructure Management</div>
+              <div className="font-medium">{t('data-contracts:wizard.steps.sla.infrastructureManagement', 'Infrastructure Management')}</div>
 
               <div className="space-y-4">
                 <div className="p-4 border rounded-lg">
-                  <div className="font-medium text-sm mb-3">Backup & Recovery</div>
+                  <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.sla.backupRecovery', 'Backup & Recovery')}</div>
                     <div className="space-y-3">
                       <div>
-                        <Label className="text-sm font-medium">Backup Frequency</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.backupFrequency', 'Backup Frequency')}</Label>
                         <Select>
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select frequency" />
+                            <SelectValue placeholder={t('data-contracts:wizard.fields.selectFrequency', 'Select frequency')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="realtime">Real-time</SelectItem>
-                            <SelectItem value="hourly">Hourly</SelectItem>
-                            <SelectItem value="daily">Daily</SelectItem>
-                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="realtime">{t('data-contracts:wizard.frequencies.realtime', 'Real-time')}</SelectItem>
+                            <SelectItem value="hourly">{t('data-contracts:wizard.frequencies.hourly', 'Hourly')}</SelectItem>
+                            <SelectItem value="daily">{t('data-contracts:wizard.frequencies.daily', 'Daily')}</SelectItem>
+                            <SelectItem value="weekly">{t('data-contracts:wizard.frequencies.weekly', 'Weekly')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Retention Period</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.retentionPeriod', 'Retention Period')}</Label>
                         <div className="flex items-center gap-2 mt-1">
                           <Input type="number" placeholder="30" className="w-20" />
                           <Select>
                             <SelectTrigger className="w-24">
-                              <SelectValue placeholder="days" />
+                              <SelectValue placeholder={t('data-contracts:wizard.units.days', 'days')} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="days">days</SelectItem>
-                              <SelectItem value="months">months</SelectItem>
-                              <SelectItem value="years">years</SelectItem>
+                              <SelectItem value="days">{t('data-contracts:wizard.units.days', 'days')}</SelectItem>
+                              <SelectItem value="months">{t('data-contracts:wizard.units.months', 'months')}</SelectItem>
+                              <SelectItem value="years">{t('data-contracts:wizard.units.years', 'years')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -2038,26 +2040,26 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Cost & Pricing</div>
+                    <div className="font-medium text-sm mb-3">{t('data-contracts:wizard.steps.sla.costPricing', 'Cost & Pricing')}</div>
                     <div className="space-y-3">
                       <div>
-                        <Label className="text-sm font-medium">Pricing Model</Label>
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.pricingModel', 'Pricing Model')}</Label>
                         <Select>
                           <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select pricing model" />
+                            <SelectValue placeholder={t('data-contracts:wizard.fields.selectPricingModel', 'Select pricing model')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="free">Free</SelectItem>
-                            <SelectItem value="per-query">Per Query</SelectItem>
-                            <SelectItem value="per-user">Per User</SelectItem>
-                            <SelectItem value="per-gb">Per GB</SelectItem>
-                            <SelectItem value="monthly">Monthly Subscription</SelectItem>
+                            <SelectItem value="free">{t('data-contracts:wizard.pricingModels.free', 'Free')}</SelectItem>
+                            <SelectItem value="per-query">{t('data-contracts:wizard.pricingModels.perQuery', 'Per Query')}</SelectItem>
+                            <SelectItem value="per-user">{t('data-contracts:wizard.pricingModels.perUser', 'Per User')}</SelectItem>
+                            <SelectItem value="per-gb">{t('data-contracts:wizard.pricingModels.perGb', 'Per GB')}</SelectItem>
+                            <SelectItem value="monthly">{t('data-contracts:wizard.pricingModels.monthly', 'Monthly Subscription')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label className="text-sm font-medium">Cost Center / Budget Code</Label>
-                        <Input placeholder="DEPT-DATA-001" className="mt-1" />
+                        <Label className="text-sm font-medium">{t('data-contracts:wizard.fields.costCenter', 'Cost Center / Budget Code')}</Label>
+                        <Input placeholder={t('data-contracts:wizard.fields.costCenterPlaceholder', 'DEPT-DATA-001')} className="mt-1" />
                       </div>
                     </div>
                   </div>
@@ -2069,22 +2071,22 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         <DialogFooter className="mt-4">
           <div className="flex justify-between w-full">
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={handlePrev} disabled={step === 1}>Previous</Button>
-              <Button 
-                type="button" 
-                variant="secondary" 
-                onClick={handleSaveDraft} 
+              <Button type="button" variant="outline" onClick={handlePrev} disabled={step === 1}>{t('common:actions.previous', 'Previous')}</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveDraft}
                 disabled={isSavingDraft || isSubmitting}
                 className="flex items-center gap-2"
               >
-                {isSavingDraft ? 'Saving...' : (initial ? 'Save' : 'Save Draft')}
+                {isSavingDraft ? t('common:actions.saving', 'Saving...') : (initial ? t('common:actions.save', 'Save') : t('data-contracts:wizard.actions.saveDraft', 'Save Draft'))}
               </Button>
             </div>
             <div className="flex gap-2">
               {step < totalSteps ? (
-                <Button type="button" onClick={handleNext}>Next</Button>
+                <Button type="button" onClick={handleNext}>{t('common:actions.next', 'Next')}</Button>
               ) : (
-                <Button type="button" onClick={handleSubmit} disabled={isSubmitting || isSavingDraft}>{isSubmitting ? 'Saving...' : 'Save Contract'}</Button>
+                <Button type="button" onClick={handleSubmit} disabled={isSubmitting || isSavingDraft}>{isSubmitting ? t('common:actions.saving', 'Saving...') : t('data-contracts:wizard.actions.saveContract', 'Save Contract')}</Button>
               )}
             </div>
           </div>

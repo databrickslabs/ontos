@@ -95,13 +95,13 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
   const handleSubmit = async () => {
     // Validate
     if (!name.trim()) {
-      toast({ title: 'Validation Error', description: 'Schema name is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:schema.toast.validationError', 'Validation Error'), description: t('data-contracts:schema.toast.nameRequired', 'Schema name is required'), variant: 'destructive' })
       return
     }
 
     const propsToUse = propertyEditorRef.current?.getPropertiesForSubmit?.() ?? properties
     if (propsToUse.length === 0) {
-      toast({ title: 'Validation Error', description: 'At least one column is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:schema.toast.validationError', 'Validation Error'), description: t('data-contracts:schema.toast.columnRequired', 'At least one column is required'), variant: 'destructive' })
       return
     }
 
@@ -125,8 +125,8 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
       onOpenChange(false)
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save schema',
+        title: t('common:toast.error', 'Error'),
+        description: error?.message || t('data-contracts:schema.toast.saveError', 'Failed to save schema'),
         variant: 'destructive',
       })
     } finally {
@@ -138,52 +138,52 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Schema' : 'Add New Schema'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-contracts:schema.editTitle', 'Edit Schema') : t('data-contracts:schema.addTitle', 'Add New Schema')}</DialogTitle>
           <DialogDescription>
-            Define a schema object (table/view) and its properties (columns).
+            {t('data-contracts:schema.description', 'Define a schema object (table/view) and its properties (columns).')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
           {/* Schema-level fields */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Schema Information</h3>
+            <h3 className="text-sm font-semibold">{t('data-contracts:schema.sections.information', 'Schema Information')}</h3>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">
-                  Name <span className="text-destructive">*</span>
+                  {t('common:labels.name', 'Name')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., customers"
+                  placeholder={t('data-contracts:schema.fields.namePlaceholder', 'e.g., customers')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="physicalName">Physical Name</Label>
+                <Label htmlFor="physicalName">{t('data-contracts:schema.fields.physicalName', 'Physical Name')}</Label>
                 <Input
                   id="physicalName"
                   value={physicalName}
                   onChange={(e) => setPhysicalName(e.target.value)}
-                  placeholder="e.g., catalog.schema.customers"
+                  placeholder={t('data-contracts:schema.fields.physicalNamePlaceholder', 'e.g., catalog.schema.customers')}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="businessName">Business Name</Label>
+                <Label htmlFor="businessName">{t('data-contracts:schema.fields.businessName', 'Business Name')}</Label>
                 <Input
                   id="businessName"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="Human-readable name"
+                  placeholder={t('data-contracts:schema.fields.businessNamePlaceholder', 'Human-readable name')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="physicalType">Physical Type</Label>
+                <Label htmlFor="physicalType">{t('data-contracts:schema.fields.physicalType', 'Physical Type')}</Label>
                 <Select value={physicalType} onValueChange={setPhysicalType}>
                   <SelectTrigger id="physicalType">
                     <SelectValue />
@@ -200,30 +200,30 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t('common:labels.description', 'Description')}</Label>
               <Textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe this schema"
+                placeholder={t('data-contracts:schema.fields.descriptionPlaceholder', 'Describe this schema')}
                 rows={2}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="dataGranularityDescription">Data Granularity</Label>
+              <Label htmlFor="dataGranularityDescription">{t('data-contracts:schema.fields.dataGranularity', 'Data Granularity')}</Label>
               <Input
                 id="dataGranularityDescription"
                 value={dataGranularityDescription}
                 onChange={(e) => setDataGranularityDescription(e.target.value)}
-                placeholder="e.g., One row per customer"
+                placeholder={t('data-contracts:schema.fields.dataGranularityPlaceholder', 'e.g., One row per customer')}
               />
             </div>
           </div>
 
           {/* Schema-level Business Concepts */}
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Business Concepts</Label>
+            <Label className="text-sm font-semibold">{t('data-contracts:schema.sections.businessConcepts', 'Business Concepts')}</Label>
             <BusinessConceptsDisplay
               concepts={schemaSemanticConcepts}
               onConceptsChange={setSchemaSemanticConcepts}
@@ -237,18 +237,18 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
           {/* Unity Catalog Metadata (read-only, shown when present) */}
           {initial && (initial.tableType || initial.owner || initial.createdAt || initial.updatedAt || initial.tableProperties) && (
             <div className="space-y-4 border-t pt-4">
-              <h3 className="text-sm font-semibold text-muted-foreground">Unity Catalog Metadata (Read-Only)</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground">{t('data-contracts:schema.sections.ucMetadata', 'Unity Catalog Metadata (Read-Only)')}</h3>
 
               <div className="grid grid-cols-2 gap-4">
                 {initial.tableType && (
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Table Type</Label>
+                    <Label className="text-muted-foreground">{t('data-contracts:schema.fields.tableType', 'Table Type')}</Label>
                     <Input value={initial.tableType} disabled className="bg-muted" />
                   </div>
                 )}
                 {initial.owner && (
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Owner</Label>
+                    <Label className="text-muted-foreground">{t('common:labels.owner', 'Owner')}</Label>
                     <Input value={initial.owner} disabled className="bg-muted" />
                   </div>
                 )}
@@ -257,13 +257,13 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
               <div className="grid grid-cols-2 gap-4">
                 {initial.createdAt && (
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Created At</Label>
+                    <Label className="text-muted-foreground">{t('common:labels.createdAt', 'Created At')}</Label>
                     <Input value={initial.createdAt} disabled className="bg-muted" />
                   </div>
                 )}
                 {initial.updatedAt && (
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Updated At</Label>
+                    <Label className="text-muted-foreground">{t('common:labels.updatedAt', 'Updated At')}</Label>
                     <Input value={initial.updatedAt} disabled className="bg-muted" />
                   </div>
                 )}
@@ -271,7 +271,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
 
               {initial.tableProperties && Object.keys(initial.tableProperties).length > 0 && (
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Table Properties</Label>
+                  <Label className="text-muted-foreground">{t('data-contracts:schema.fields.tableProperties', 'Table Properties')}</Label>
                   <div className="rounded-md border bg-muted p-3 text-sm">
                     {Object.entries(initial.tableProperties).map(([key, value]) => (
                       <div key={key} className="flex justify-between py-1">
@@ -288,7 +288,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
           {/* Properties section */}
           <div className="space-y-4 border-t pt-4">
             <h3 className="text-sm font-semibold">
-              Properties (Columns) <span className="text-destructive">*</span>
+              {t('data-contracts:schema.sections.properties', 'Properties (Columns)')} <span className="text-destructive">*</span>
             </h3>
 
             <SchemaPropertyEditor
@@ -302,7 +302,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
           <div className="space-y-4 border-t pt-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold flex items-center gap-2">
-                Relationships (Foreign Keys)
+                {t('data-contracts:schema.sections.relationships', 'Relationships (Foreign Keys)')}
                 {schemaRelationships.length > 0 && (
                   <Badge variant="secondary" className="text-xs">{schemaRelationships.length}</Badge>
                 )}
@@ -336,25 +336,25 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
             <div className="border rounded-lg p-3 bg-background space-y-2">
               <div className="grid grid-cols-7 gap-2">
                 <div className="col-span-3 space-y-1">
-                  <Label className="text-xs">From (local column)</Label>
+                  <Label className="text-xs">{t('data-contracts:schema.relationships.from', 'From (local column)')}</Label>
                   <Input
                     value={newRelFrom}
                     onChange={(e) => setNewRelFrom(e.target.value)}
-                    placeholder="e.g., customer_id"
+                    placeholder={t('data-contracts:schema.relationships.fromPlaceholder', 'e.g., customer_id')}
                     className="h-9 font-mono text-xs"
                   />
                 </div>
                 <div className="col-span-3 space-y-1">
-                  <Label className="text-xs">To (target reference)</Label>
+                  <Label className="text-xs">{t('data-contracts:schema.relationships.to', 'To (target reference)')}</Label>
                   <Input
                     value={newRelTo}
                     onChange={(e) => setNewRelTo(e.target.value)}
-                    placeholder="e.g., schema.table.column"
+                    placeholder={t('data-contracts:schema.relationships.toPlaceholder', 'e.g., schema.table.column')}
                     className="h-9 font-mono text-xs"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Type</Label>
+                  <Label className="text-xs">{t('common:labels.type', 'Type')}</Label>
                   <Select value={newRelType} onValueChange={setNewRelType}>
                     <SelectTrigger className="h-9">
                       <SelectValue />
@@ -380,7 +380,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
                 className="h-7"
               >
                 <Plus className="h-3 w-3 mr-1" />
-                Add Relationship
+                {t('data-contracts:schema.relationships.add', 'Add Relationship')}
               </Button>
             </div>
           </div>

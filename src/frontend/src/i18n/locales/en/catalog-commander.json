@@ -47,7 +47,10 @@
     "datasetView": "Dataset View: {{name}}",
     "confirmOperation": "Confirm Operation",
     "selectedItems": "Selected items: {{items}}",
-    "noItemsSelected": "No items selected"
+    "noItemsSelected": "No items selected",
+    "noResponse": "No response",
+    "tableNotFound": "Table \"{{name}}\" not found in {{schema}}",
+    "failedToNavigate": "Failed to navigate to {{path}}"
   },
   
   "askPanel": {
@@ -70,7 +73,8 @@
   
   "errors": {
     "error": "Error",
-    "failedToSendMessage": "Failed to send message"
+    "failedToSendMessage": "Failed to send message",
+    "chatRequestFailed": "Chat request failed"
   }
 }
 

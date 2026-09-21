@@ -157,7 +157,7 @@ export default function DataProducts() {
 
       } catch (err: any) {
         console.error('Error fetching initial data:', err);
-        setError(err.message || 'Failed to load initial data');
+        setError(err.message || t('messages.loadInitialError'));
         // Reset state on error
         setProducts([]);
         setStatuses([]);
@@ -261,7 +261,7 @@ export default function DataProducts() {
       setProducts(Array.isArray(productsData) ? productsData : []);
     } catch (err: any) {
       console.error('Error refetching products:', err);
-      setError(err.message || 'Failed to refresh products list');
+      setError(err.message || t('messages.refreshError'));
       toast({ title: t('messages.error'), description: `${t('messages.fetchError')}: ${err.message}`, variant: 'destructive' });
     }
   };
@@ -378,7 +378,7 @@ export default function DataProducts() {
 
   // Helper to extract human-readable error message from API error responses
   const extractErrorMessage = (error: any): string => {
-    if (!error) return 'Unknown error';
+    if (!error) return t('messages.unknownError');
     if (typeof error === 'string') return error;
     if (typeof error === 'object') {
       // Handle structured error objects from the API
@@ -392,14 +392,14 @@ export default function DataProducts() {
         const firstError = error.errors[0];
         if (typeof firstError === 'string') return firstError;
         if (firstError?.message) return firstError.message;
-        return `${error.errors.length} validation error(s) occurred`;
+        return t('messages.validationErrors', { count: error.errors.length });
       }
       // Try to stringify, but limit length
       try {
         const str = JSON.stringify(error);
         return str.length > 200 ? str.substring(0, 200) + '...' : str;
       } catch {
-        return 'Unknown error format';
+        return t('messages.unknownErrorFormat');
       }
     }
     return String(error);
@@ -408,7 +408,7 @@ export default function DataProducts() {
   // Keep File Upload Handlers
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!canWrite) {
-      toast({ title: "Permission Denied", description: "You do not have permission to upload data products.", variant: "destructive" });
+      toast({ title: t('permissions.denied'), description: t('permissions.noUpload'), variant: "destructive" });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -433,10 +433,7 @@ export default function DataProducts() {
           errorMsg.toLowerCase().includes('odcs');
         
         if (isLikelyODCSContract) {
-          throw new Error(
-            `${errorMsg}\n\nHint: This page is for Data Products (ODPS format). ` +
-            `If you're trying to upload a Data Contract (ODCS format), please use the Data Contracts page instead.`
-          );
+          throw new Error(`${errorMsg}\n\n${t('upload.odcsHint')}`);
         }
         throw new Error(errorMsg);
       }
@@ -546,7 +543,7 @@ export default function DataProducts() {
         const primaryId = product.primary_domain_id || getDomainIdByName(product.domain) || domainIds[0] || null;
         return (
           <div className="space-y-1">
-            <div className="font-medium">{product.name || 'Unnamed Product'}</div>
+            <div className="font-medium">{product.name || t('table.unnamedProduct')}</div>
             <DomainBadgeList
               domains={product.domains}
               domainIds={domainIds}
@@ -618,7 +615,7 @@ export default function DataProducts() {
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant={getStatusColor(row.original.status)}>{row.original.status}</Badge>
             {row.original.draftOwnerId && (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">Personal Draft</Badge>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">{t('data-products:status.personalDraft')}</Badge>
             )}
             <CertificationBadge
               certificationLevel={row.original.certification_level}
@@ -681,7 +678,7 @@ export default function DataProducts() {
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); setPreviewProductId(product.id ?? null); setPreviewProductTitle(product.name ?? ''); }}
-                title="Preview Metadata"
+                title={t('data-products:table.previewMetadata')}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -690,7 +687,7 @@ export default function DataProducts() {
                 size="icon"
                 onClick={() => handleEditClick(product)}
                 disabled={!canWrite || permissionsLoading}
-                title={canWrite ? "Edit" : "Edit (Permission Denied)"}
+                title={canWrite ? t('common:actions.edit') : t('table.editDenied')}
             >
               <Pencil className="h-4 w-4" />
             </Button>
@@ -704,7 +701,7 @@ export default function DataProducts() {
                     handleDeleteClick(product);
                 }}
                 disabled={!canAdmin || permissionsLoading}
-                title={canAdmin ? "Delete" : "Delete (Permission Denied)"}
+                title={canAdmin ? t('common:actions.delete') : t('table.deleteDenied')}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -753,7 +750,7 @@ export default function DataProducts() {
                 onClick={() => setError(null)}
                 title={t('common:tooltips.dismiss')}
               >
-                <span className="sr-only">Dismiss</span>
+                <span className="sr-only">{t('common:actions.dismiss')}</span>
                 ×
               </Button>
             </Alert>

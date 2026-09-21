@@ -4,10 +4,16 @@
   "tabs": {
     "askOntos": "Preguntar a {{shortName}}",
     "indexSearch": "Búsqueda de Índice",
+    "searchConcepts": "Buscar conceptos",
     "viewGraph": "Ver Grafo",
     "searchGraph": "Buscar Grafo",
     "concepts": "Conceptos",
+    "properties": "Propiedades",
     "knowledgeGraph": "Grafo de Conocimiento"
+  },
+  "subtitles": {
+    "searchConcepts": "Busca y explora conceptos y propiedades de la ontología",
+    "searchGraph": "Consulta y explora el grafo de conocimiento con SPARQL"
   },
   "noResults": "No se encontraron resultados",
   "noResultsHint": "Intenta ajustar tus términos de búsqueda o filtros",
@@ -56,7 +62,18 @@
     "resourcesWithLabel": "Recursos con rdfs:label",
     "subjectsAndTypes": "Sujetos y sus tipos",
     "topPredicates": "Predicados principales por frecuencia",
-    "mostLinkedSeeAlso": "Más vinculados via rdfs:seeAlso"
+    "mostLinkedSeeAlso": "Más vinculados via rdfs:seeAlso",
+    "resourceDetail": "Detalle del recurso",
+    "prefixPlaceholder": "p. ej., example.org/banking",
+    "resourceLoading": "Cargando…",
+    "noTriples": "No hay tripletas para este recurso.",
+    "blankNodeExpanded": "(nodo en blanco, expandido a continuación)",
+    "hover": {
+      "type": "Tipo: {{type}}",
+      "id": "ID: {{id}}",
+      "owner": "Propietario: {{owner}}",
+      "status": "Estado: {{status}}"
+    }
   },
   "index": {
     "title": "Búsqueda de Índice",
@@ -75,6 +92,10 @@
     "noRelatedProperties": "No se encontraron propiedades relacionadas.",
     "linkedCatalogObjects": "Objetos de Catálogo Vinculados",
     "noCatalogObjects": "No hay objetos de catálogo asignados.",
+    "linkedUCTable": "Tabla de UC",
+    "linkedUCColumn": "Columna de UC",
+    "linkedUCCatalog": "Catálogo de UC",
+    "linkedUCSchema": "Esquema de UC",
     "assignToConcept": "Asignar a Concepto",
     "assignDialog": {
       "title": "Asignar Objeto a Concepto",
@@ -84,6 +105,16 @@
       "dataContract": "Contrato de Datos",
       "asset": "Activo",
       "dataDomain": "Dominio de Datos",
+      "dataset": "Conjunto de datos",
+      "ucCatalog": "Catálogo de UC",
+      "ucSchema": "Esquema de UC",
+      "ucTable": "Tabla de UC",
+      "browseUCCatalog": "Explorar catálogo de UC...",
+      "browseUCSchema": "Explorar esquema de UC...",
+      "browseUCTable": "Explorar tabla de UC...",
+      "ucCatalogTitle": "Seleccionar catálogo de UC",
+      "ucSchemaTitle": "Seleccionar esquema de UC",
+      "ucTableTitle": "Seleccionar tabla de UC",
       "selectEntity": "Seleccionar {{entityType}}..."
     },
     "messages": {
@@ -91,6 +122,39 @@
       "assignError": "Por favor seleccione tanto un tipo de entidad como una entidad específica.",
       "assignFailed": "Error al asignar concepto al objeto.",
       "navigationError": "No se puede navegar a {{entityType}}"
+    }
+  },
+  "properties": {
+    "searchAndSelect": "Busca y selecciona una propiedad:",
+    "searchPlaceholder": "Escribe para buscar por nombre, etiqueta o IRI...",
+    "clear": "Limpiar",
+    "domainRange": "Dominio / Rango",
+    "linkedCatalogObjects": "Objetos de catálogo vinculados",
+    "noCatalogObjects": "No hay objetos de catálogo asignados.",
+    "assignToProperty": "Asignar a la propiedad",
+    "assignDialog": {
+      "title": "Asignar objeto a la propiedad",
+      "targetType": "Tipo de destino",
+      "selectTargetType": "Selecciona el tipo de destino...",
+      "dataContractProperty": "Propiedad de contrato de datos",
+      "ucTable": "Tabla de UC",
+      "ucColumn": "Columna de UC",
+      "contract": "Contrato",
+      "selectContract": "Selecciona un contrato...",
+      "schema": "Esquema",
+      "selectSchema": "Selecciona un esquema...",
+      "property": "Propiedad",
+      "selectProperty": "Selecciona una propiedad...",
+      "browseUCColumn": "Explora la tabla de UC y selecciona una columna...",
+      "ucColumnTitle": "Seleccionar columna de UC",
+      "asset": "Activo",
+      "noColumnAssets": "No se encontraron activos de columna ni de atributo lógico",
+      "selectAsset": "Seleccionar activo"
+    },
+    "messages": {
+      "selectPropertyTarget": "Selecciona un contrato, un esquema y una propiedad.",
+      "linkedSuccess": "Propiedad vinculada correctamente.",
+      "assignFailed": "No se pudo asignar la propiedad al objeto."
     }
   },
   "llm": {
@@ -115,7 +179,11 @@
       "findCustomerData": "¿Dónde puedo encontrar datos de clientes?",
       "dataProductsCost": "¿Cuánto cuestan todos los productos de datos?",
       "businessTermsSales": "¿Qué términos de negocio están relacionados con ventas?",
-      "showDataProducts": "Muéstrame productos de datos en el dominio Cliente"
+      "showDataProducts": "Muéstrame productos de datos en el dominio Cliente",
+      "howToCreateProduct": "¿Cómo creo mi primer producto de datos?",
+      "howToSetupDomains": "¿Cómo configuro los dominios de datos?",
+      "whatIsOntos": "¿Qué es Ontos y qué puedo hacer con él?",
+      "coreConcepts": "Explica los conceptos clave: productos de datos, contratos y dominios."
     },
     "messages": {
       "sessionDeleted": "Sesión eliminada",
@@ -123,11 +191,45 @@
       "loadSessionFailed": "Error al cargar la sesión",
       "deleteSessionFailed": "Error al eliminar la sesión",
       "loadFailed": "Error al cargar la búsqueda LLM. Por favor intente más tarde."
+    },
+    "debug": {
+      "title": "Depuración",
+      "toolCallCount_one": "{{count}} llamada de herramienta",
+      "toolCallCount_other": "{{count}} llamadas de herramienta",
+      "priorResults": "({{count}} anteriores)",
+      "followUp": "Seguimiento: el LLM tiene {{messages}} mensajes anteriores ({{results}} resultados de herramienta) en el historial de la conversación",
+      "queryClassification": "Clasificación de la consulta",
+      "query": "Consulta:",
+      "categories": "Categorías:",
+      "toolsProvided": "Herramientas proporcionadas:",
+      "model": "Modelo:",
+      "iterations": "Iteraciones:",
+      "total": "total",
+      "toolExecutions": "Ejecuciones de herramientas",
+      "llmIterations": "Iteraciones del LLM",
+      "messagesSent": "{{count}} mensajes",
+      "toolCallsShort": "{{count}} llamada(s) de herramienta",
+      "args": "Argumentos:",
+      "showResult": "Mostrar resultado",
+      "hideResult": "Ocultar resultado",
+      "modeEnabled": "Modo de depuración activado",
+      "modeDisabled": "Modo de depuración desactivado",
+      "modeEnabledDesc": "Se mostrarán los pasos intermedios del LLM",
+      "clickToDisable": "Haz clic para desactivar el modo de depuración"
     }
   },
   "copilot": {
+    "title": "Pregunta a {{shortName}}",
+    "subtitle": "Asistente basado en IA",
+    "button": "Pregunta a {{shortName}}",
+    "welcome": "¡Bienvenido a Pregunta a {{shortName}}!",
+    "welcomeDescription": "Obtén ayuda con el modelado, las asignaciones, la creación de productos y los análisis de estado. Prueba uno de los prompts sugeridos a continuación o escribe tu propia pregunta.",
+    "askingAbout": "Preguntando sobre:",
     "scopePageSpecific": "Específico de la página",
     "scopeGeneral": "Ontos (general)",
-    "scopeThisPage": "Esta página"
+    "scopeThisPage": "Esta página",
+    "inputPlaceholder": "Pregúntale cualquier cosa a {{shortName}}...",
+    "messageSendFailed": "No se pudo enviar el mensaje",
+    "resizeHandle": "Redimensionar el panel de Pregunta a Ontos"
   }
 }

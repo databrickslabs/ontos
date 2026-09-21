@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ChevronRight,
   ChevronDown,
@@ -105,6 +106,7 @@ export default function SchemaBrowser({
   selectedPaths,
   onSelectionChange,
 }: SchemaBrowserProps) {
+  const { t } = useTranslation(['database-schema', 'common']);
   const { get: apiGet } = useApi();
   const [roots, setRoots] = useState<TreeNode[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
@@ -484,7 +486,7 @@ export default function SchemaBrowser({
   if (!connectionId) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        Select a connection to browse its resources
+        {t('database-schema:browser.selectConnection')}
       </div>
     );
   }
@@ -493,7 +495,7 @@ export default function SchemaBrowser({
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
+        <span className="ml-2 text-sm text-muted-foreground">{t('common:states.loading')}</span>
       </div>
     );
   }
@@ -504,13 +506,13 @@ export default function SchemaBrowser({
         <div className="flex items-center justify-center h-64 px-4">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Connection Error</AlertTitle>
+            <AlertTitle>{t('database-schema:browser.connectionError')}</AlertTitle>
             <AlertDescription className="space-y-2">
               <p>{browseError}</p>
               {browseErrorDetail && (
                 <Collapsible>
                   <CollapsibleTrigger className="text-xs underline cursor-pointer">
-                    Show details
+                    {t('database-schema:browser.showDetails')}
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <pre className="text-xs mt-2 p-2 bg-muted rounded whitespace-pre-wrap break-all">
@@ -526,7 +528,7 @@ export default function SchemaBrowser({
     }
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        No resources found for this connection
+        {t('database-schema:browser.noResources')}
       </div>
     );
   }
@@ -539,7 +541,7 @@ export default function SchemaBrowser({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             className="h-9 text-sm pl-8 pr-8"
-            placeholder="Search: t:catalog.schema.table"
+            placeholder={t('database-schema:browser.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -553,7 +555,7 @@ export default function SchemaBrowser({
           )}
         </div>
         <p className="text-[11px] text-muted-foreground px-1">
-          Type prefix for filtering: t:table, v:view, f:function, m:model, vol:volume
+          {t('database-schema:browser.searchHint')}
         </p>
       </div>
 
@@ -571,7 +573,7 @@ export default function SchemaBrowser({
       {/* Tree */}
       {visibleRoots.length === 0 ? (
         <div className="flex items-center justify-center h-48 text-muted-foreground text-sm border rounded-md">
-          No matches found
+          {t('database-schema:browser.noMatches')}
         </div>
       ) : (
         <ScrollArea className="h-[460px] border rounded-md">

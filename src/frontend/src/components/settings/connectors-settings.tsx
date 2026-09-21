@@ -65,12 +65,12 @@ export default function ConnectorsSettings() {
       if (result.healthy) {
         toast({
           title: t('settings:connectors.messages.testSuccess', 'Connection successful'),
-          description: result.project ? `Project: ${result.project}` : undefined,
+          description: result.project ? t('settings:connectors.messages.testSuccessProject', { project: result.project }) : undefined,
         });
       } else {
         toast({
           title: t('settings:connectors.messages.testFailed', 'Connection failed'),
-          description: result.error || 'Unknown error',
+          description: result.error || t('common:errors.unknownError'),
           variant: 'destructive',
         });
       }
@@ -89,13 +89,13 @@ export default function ConnectorsSettings() {
     try {
       const response = await apiDelete(`/api/connections/${deletingId}`);
       if (response.error) {
-        toast({ title: 'Delete failed', description: response.error, variant: 'destructive' });
+        toast({ title: t('settings:connectors.messages.deleteFailed', 'Delete failed'), description: response.error, variant: 'destructive' });
       } else {
         toast({ title: t('settings:connectors.messages.deleteSuccess', 'Connection deleted') });
         fetchConnections();
       }
     } catch {
-      toast({ title: 'Delete failed', variant: 'destructive' });
+      toast({ title: t('settings:connectors.messages.deleteFailed', 'Delete failed'), variant: 'destructive' });
     } finally {
       setIsDeleteDialogOpen(false);
       setDeletingId(null);
@@ -112,7 +112,7 @@ export default function ConnectorsSettings() {
         <div className="flex items-center gap-2">
           <span className="font-medium">{row.original.name}</span>
           {isSystem(row.original) && (
-            <Badge variant="outline" className="text-xs">System</Badge>
+            <Badge variant="outline" className="text-xs">{t('settings:connectors.badges.system', 'System')}</Badge>
           )}
         </div>
       ),
@@ -140,11 +140,11 @@ export default function ConnectorsSettings() {
       header: t('settings:connectors.columns.status', 'Status'),
       cell: ({ row }) => {
         if (row.original.is_default) {
-          return <Badge variant="default">Default</Badge>;
+          return <Badge variant="default">{t('settings:connectors.badges.default', 'Default')}</Badge>;
         }
         return row.original.enabled
-          ? <Badge className="bg-green-600 hover:bg-green-700">Enabled</Badge>
-          : <Badge variant="outline">Disabled</Badge>;
+          ? <Badge className="bg-green-600 hover:bg-green-700">{t('common:labels.enabled')}</Badge>
+          : <Badge variant="outline">{t('common:labels.disabled')}</Badge>;
       },
     },
     {
@@ -165,7 +165,7 @@ export default function ConnectorsSettings() {
               size="sm"
               onClick={(e) => { e.stopPropagation(); handleTest(conn.id); }}
               disabled={isTesting}
-              title="Test Connection"
+              title={t('settings:connectors.testConnection', 'Test Connection')}
             >
               {isTesting
                 ? <Loader2 className="w-4 h-4 animate-spin" />

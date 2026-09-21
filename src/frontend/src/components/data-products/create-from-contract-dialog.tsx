@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
 }) => {
   const { post } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['data-products', 'common']);
 
   const [productName, setProductName] = useState('');
   const [productType, setProductType] = useState<string>('source-aligned');
@@ -58,17 +60,17 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
   const handleSubmit = async () => {
     // Validation
     if (!productName.trim()) {
-      setError('Product name is required');
+      setError(t('data-products:createFromContract.errors.nameRequired'));
       return;
     }
 
     if (!version.trim()) {
-      setError('Version is required');
+      setError(t('data-products:createFromContract.errors.versionRequired'));
       return;
     }
 
     if (!productType) {
-      setError('Product type is required');
+      setError(t('data-products:createFromContract.errors.typeRequired'));
       return;
     }
 
@@ -89,8 +91,8 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
       }
 
       toast({
-        title: 'Product Created',
-        description: `Data Product "${productName}" created successfully from contract.`,
+        title: t('data-products:createFromContract.messages.productCreated'),
+        description: t('data-products:createFromContract.messages.productCreatedDesc', { productName }),
       });
 
       // Call success callback with product ID
@@ -103,10 +105,10 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
       handleClose();
 
     } catch (e: any) {
-      setError(e.message || 'Failed to create product from contract');
+      setError(e.message || t('data-products:createFromContract.errors.createError'));
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to create product from contract',
+        title: t('common:toast.error'),
+        description: e.message || t('data-products:createFromContract.errors.createError'),
         variant: 'destructive',
       });
     } finally {
@@ -140,11 +142,10 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
-            Create Data Product from Contract
+            {t('data-products:createFromContract.title')}
           </DialogTitle>
           <DialogDescription>
-            Create a new Data Product that uses this contract to govern one deliverable.
-            The product will inherit the contract's domain, owner team, and project.
+            {t('data-products:createFromContract.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +153,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
           {/* Contract Information */}
           <div className="p-3 bg-muted/50 rounded-lg border">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-medium">Contract:</span>
+              <span className="font-medium">{t('data-products:createFromContract.contractLabel')}</span>
               <span className="font-mono">{contractId}</span>
             </div>
             <div className="text-sm font-medium mt-1">{contractName}</div>
@@ -161,13 +162,13 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
           {/* Product Name */}
           <div className="space-y-2">
             <Label htmlFor="product-name" className="text-sm font-medium">
-              Product Name *
+              {t('data-products:createFromContract.productNameLabel')}
             </Label>
             <Input
               id="product-name"
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              placeholder="e.g., Customer Analytics Product"
+              placeholder={t('data-products:createFromContract.productNamePlaceholder')}
               disabled={submitting}
             />
           </div>
@@ -175,7 +176,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
           {/* Product Type */}
           <div className="space-y-2">
             <Label htmlFor="product-type" className="text-sm font-medium">
-              Product Type *
+              {t('data-products:createFromContract.productTypeLabel')}
             </Label>
             <Select
               value={productType}
@@ -183,7 +184,7 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
               disabled={submitting}
             >
               <SelectTrigger id="product-type">
-                <SelectValue placeholder="Select product type" />
+                <SelectValue placeholder={t('data-products:createFromContract.productTypePlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {PRODUCT_TYPES.map((type) => (
@@ -198,13 +199,13 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
           {/* Version */}
           <div className="space-y-2">
             <Label htmlFor="version" className="text-sm font-medium">
-              Version *
+              {t('data-products:createFromContract.versionLabel')}
             </Label>
             <Input
               id="version"
               value={version}
               onChange={(e) => setVersion(e.target.value)}
-              placeholder="e.g., v1.0.0"
+              placeholder={t('data-products:createFromContract.versionPlaceholder')}
               disabled={submitting}
             />
           </div>
@@ -212,17 +213,17 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
           {/* Output Port Name (Optional) */}
           <div className="space-y-2">
             <Label htmlFor="output-port-name" className="text-sm font-medium">
-              Deliverable Name (Optional)
+              {t('data-products:createFromContract.deliverableNameLabel')}
             </Label>
             <Input
               id="output-port-name"
               value={outputPortName}
               onChange={(e) => setOutputPortName(e.target.value)}
-              placeholder={`Defaults to: ${contractName}`}
+              placeholder={t('data-products:createFromContract.deliverableNamePlaceholder', { contractName })}
               disabled={submitting}
             />
             <div className="text-xs text-muted-foreground">
-              If not specified, the deliverable will use the contract name
+              {t('data-products:createFromContract.deliverableNameHint')}
             </div>
           </div>
 
@@ -237,14 +238,14 @@ const CreateFromContractDialog: React.FC<CreateFromContractDialogProps> = ({
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={handleClose} disabled={submitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={submitting || !productName.trim() || !version.trim()}
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {submitting ? 'Creating...' : 'Create Product'}
+            {submitting ? t('data-products:createFromContract.creating') : t('data-products:createFromContract.createButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -357,11 +357,11 @@ const DataCatalog: React.FC = () => {
   const getSourceBadge = (source: string) => {
     switch (source) {
       case 'both':
-        return <Badge variant="default" className="text-[10px] px-1.5 py-0">Both</Badge>;
+        return <Badge variant="default" className="text-[10px] px-1.5 py-0">{t('data-catalog:sourceBadges.both')}</Badge>;
       case 'asset':
-        return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Asset</Badge>;
+        return <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{t('data-catalog:sourceBadges.asset')}</Badge>;
       case 'contract':
-        return <Badge variant="outline" className="text-[10px] px-1.5 py-0">Contract</Badge>;
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{t('data-catalog:sourceBadges.contract')}</Badge>;
       default:
         return null;
     }
@@ -379,7 +379,7 @@ const DataCatalog: React.FC = () => {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
               {t('data-catalog:title', 'Data Catalog')}
-              {!isLoading && <span className="text-muted-foreground ml-2">({tableCount} Tables)</span>}
+              {!isLoading && <span className="text-muted-foreground ml-2">{t('data-catalog:tableCountBadge', { count: tableCount })}</span>}
             </h1>
             <p className="text-sm text-muted-foreground">
               {t('data-catalog:subtitle', 'Browse all columns across Unity Catalog tables and views')}
@@ -406,10 +406,10 @@ const DataCatalog: React.FC = () => {
         {/* Asset Type */}
         <Select value={selectedAssetType} onValueChange={setSelectedAssetType}>
           <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Asset Type" />
+            <SelectValue placeholder={t('data-catalog:filters.assetType')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="all">{t('data-catalog:filters.allTypes')}</SelectItem>
             {hierarchyFilters?.asset_types.map((type) => (
               <SelectItem key={type} value={type}>{type}</SelectItem>
             ))}
@@ -420,10 +420,10 @@ const DataCatalog: React.FC = () => {
         {hierarchyFilters && hierarchyFilters.systems.length > 0 && (
           <Select value={selectedSystem} onValueChange={setSelectedSystem}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="System" />
+              <SelectValue placeholder={t('data-catalog:filters.system')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Systems</SelectItem>
+              <SelectItem value="all">{t('data-catalog:filters.allSystems')}</SelectItem>
               {hierarchyFilters.systems.map((s) => (
                 <SelectItem key={s} value={s}>{s}</SelectItem>
               ))}
@@ -435,10 +435,10 @@ const DataCatalog: React.FC = () => {
         {hierarchyFilters && hierarchyFilters.catalogs.length > 0 && (
           <Select value={selectedCatalog} onValueChange={setSelectedCatalog}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Catalog" />
+              <SelectValue placeholder={t('data-catalog:filters.catalog')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Catalogs</SelectItem>
+              <SelectItem value="all">{t('data-catalog:filters.allCatalogs')}</SelectItem>
               {hierarchyFilters.catalogs.map((c) => (
                 <SelectItem key={c} value={c}>{c}</SelectItem>
               ))}
@@ -450,10 +450,10 @@ const DataCatalog: React.FC = () => {
         {hierarchyFilters && hierarchyFilters.schemas.length > 0 && (
           <Select value={selectedSchema} onValueChange={setSelectedSchema}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Schema" />
+              <SelectValue placeholder={t('data-catalog:filters.schema')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Schemas</SelectItem>
+              <SelectItem value="all">{t('data-catalog:filters.allSchemas')}</SelectItem>
               {hierarchyFilters.schemas.map((s) => (
                 <SelectItem key={s} value={s}>{s}</SelectItem>
               ))}
@@ -465,7 +465,7 @@ const DataCatalog: React.FC = () => {
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             <X className="h-4 w-4 mr-1" />
-            Clear
+            {t('common:actions.clear')}
           </Button>
         )}
 
@@ -527,7 +527,7 @@ const DataCatalog: React.FC = () => {
                     <SortHeader field="table_name">
                       {t('data-catalog:columns.tableName', 'Table Name')}
                     </SortHeader>
-                    <TableHead className="w-[70px]">Source</TableHead>
+                    <TableHead className="w-[70px]">{t('data-catalog:columns.source')}</TableHead>
                     <TableHead className="w-[40px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -606,14 +606,18 @@ const DataCatalog: React.FC = () => {
       {!isLoading && !error && totalCount > 0 && (
         <div className="flex items-center justify-between text-sm">
           <div className="text-muted-foreground">
-            Showing {offset + 1}–{Math.min(offset + pageSize, totalCount)} of {totalCount.toLocaleString()} columns
-            {searchQuery && ` matching "${searchQuery}"`}
+            {t('data-catalog:pagination.showing', {
+              from: offset + 1,
+              to: Math.min(offset + pageSize, totalCount),
+              total: totalCount.toLocaleString(),
+            })}
+            {searchQuery && t('data-catalog:pagination.matching', { query: searchQuery })}
           </div>
 
           <div className="flex items-center gap-4">
             {/* Page size selector */}
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Per page:</span>
+              <span className="text-muted-foreground">{t('data-catalog:pagination.perPage')}</span>
               <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
                 <SelectTrigger className="w-[70px] h-8">
                   <SelectValue />
@@ -637,7 +641,7 @@ const DataCatalog: React.FC = () => {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="text-muted-foreground">
-                Page {currentPage} of {totalPages}
+                {t('data-catalog:pagination.pageOf', { current: currentPage, total: totalPages })}
               </span>
               <Button
                 variant="outline"

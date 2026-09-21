@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 // Input - unused
@@ -57,13 +58,14 @@ export interface TagSelectorProps {
 const TagSelector: React.FC<TagSelectorProps> = ({
   value,
   onChange,
-  placeholder = 'Select tags...',
+  placeholder,
   disabled = false,
   maxTags,
   allowCreate = true,
   label,
   className,
 }) => {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -199,10 +201,10 @@ const TagSelector: React.FC<TagSelectorProps> = ({
           >
             {value.length > 0 ? (
               <span className="truncate">
-                {value.length === 1 ? '1 tag selected' : `${value.length} tags selected`}
+                {t('common:tagSelector.selectedCount', { count: value.length })}
               </span>
             ) : (
-              placeholder
+              placeholder ?? t('common:tagSelector.selectPlaceholder')
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
@@ -210,7 +212,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
         <PopoverContent className="w-full p-0" align="start">
           <Command shouldFilter={false}>
             <CommandInput
-              placeholder="Search tags..."
+              placeholder={t('common:tagSelector.searchPlaceholder')}
               value={searchValue}
               onValueChange={setSearchValue}
             />
@@ -220,18 +222,18 @@ const TagSelector: React.FC<TagSelectorProps> = ({
             >
               <CommandList>
                 {loading ? (
-                  <CommandEmpty>Loading tags...</CommandEmpty>
+                  <CommandEmpty>{t('common:states.loadingTags')}</CommandEmpty>
                 ) : (
                   <>
                     {filteredTags.length === 0 && !effectiveAllowCreate && (
-                      <CommandEmpty>No tags found.</CommandEmpty>
+                      <CommandEmpty>{t('common:states.noTagsFound')}</CommandEmpty>
                     )}
 
                     {filteredTags.length === 0 && effectiveAllowCreate && searchValue && !exactMatch && (
                       <CommandGroup>
                         <CommandItem onSelect={handleCreateTag}>
                           <Plus className="mr-2 h-4 w-4" />
-                          Create "{searchValue}"
+                          {t('common:tagSelector.create', { value: searchValue })}
                         </CommandItem>
                       </CommandGroup>
                     )}
@@ -273,7 +275,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
                       <CommandGroup>
                         <CommandItem onSelect={handleCreateTag}>
                           <Plus className="mr-2 h-4 w-4" />
-                          Create "{searchValue}"
+                          {t('common:tagSelector.create', { value: searchValue })}
                         </CommandItem>
                       </CommandGroup>
                     )}
@@ -287,7 +289,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
 
       {maxTags && (
         <p className="text-sm text-muted-foreground">
-          {value.length} of {maxTags} tags selected
+          {t('common:tagSelector.selectedOfMax', { count: value.length, max: maxTags })}
         </p>
       )}
     </div>

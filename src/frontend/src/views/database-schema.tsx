@@ -77,7 +77,7 @@ function TableNode({ data }: { data: Table }) {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <CardTitle className="text-sm font-bold">{data.name}</CardTitle>
-              <div className="text-[10px] opacity-75 mt-0.5">{data.columns.length} columns</div>
+              <div className="text-[10px] opacity-75 mt-0.5">{t('database-schema:columns', { count: data.columns.length })}</div>
             </div>
             <Popover>
               <PopoverTrigger asChild>
@@ -136,7 +136,7 @@ function TableNode({ data }: { data: Table }) {
                       <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
                         {col.type}
                         {!col.nullable && (
-                          <span className="text-red-500 ml-1" title="NOT NULL">
+                          <span className="text-red-500 ml-1" title={t('database-schema:notNull')}>
                             *
                           </span>
                         )}
@@ -273,20 +273,20 @@ export default function DatabaseSchema() {
         setError(null);
         const response = await fetch('/api/database-schema');
         if (!response.ok) {
-          throw new Error(`Failed to load schema: ${response.statusText}`);
+          throw new Error(t('database-schema:failedToLoadSchemaStatus', { status: response.statusText }));
         }
         const data = await response.json();
         setSchemaData(data);
       } catch (err) {
         console.error('Error loading database schema:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load schema');
+        setError(err instanceof Error ? err.message : t('database-schema:failedToLoadSchema'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchSchema();
-  }, []);
+  }, [t]);
 
   // Filter and layout nodes/edges when schema or search changes
   useEffect(() => {

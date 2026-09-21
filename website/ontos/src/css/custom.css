@@ -34,7 +34,7 @@
  * Source: node_modules/infima/dist/css/default/default.css (infima
  * 0.2.0-alpha.45), the first :root { ... } block, copied verbatim.
  *
- * TODO(#<PARKED>): remove this vendored block once we can switch the build to
+ * TODO(#849): remove this vendored block once we can switch the build to
  * the LightningCSS-based @docusaurus/faster minifier (blocked: its transitive
  * dep @module-federation/runtime-tools@0.22.0 is not on our JFrog npm proxy).
  * ---------------------------------------------------------------------------

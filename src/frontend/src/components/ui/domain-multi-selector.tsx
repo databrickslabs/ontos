@@ -199,50 +199,68 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-full p-0" align="start">
+        {/*
+          pointer-events-auto is the real scroll fix: a modal Dialog sets
+          `body { pointer-events: none }` and only re-enables it on the dialog
+          content. This popover is portaled to <body> (a sibling of the dialog),
+          so without this it inherits pointer-events:none — the dropdown is
+          painted but click/wheel-through, and the wheel scrolls the dialog
+          behind it. Re-enabling it here makes the dropdown interactive again.
+        */}
+        <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
           <Command shouldFilter={false}>
             <CommandInput
               placeholder={t('common:domainSelector.searchPlaceholder')}
               value={searchValue}
               onValueChange={setSearchValue}
             />
-            <div
-              className="max-h-60 overflow-y-auto"
+            {/*
+              Single scroll container: the primitive supplies `overflow-y-auto`
+              and `max-h-60` caps the height (twMerge overrides max-h-[300px]).
+              A previous wrapper <div> added a second, shorter scroller — nested
+              scrollers that clipped long lists.
+              onWheel stopPropagation is REQUIRED here: the modal Dialog installs
+              a body-level wheel listener (scroll-lock) that preventDefaults;
+              since this popover is portaled to <body>, a bubbling wheel reaches
+              that handler and cancels the list's own scroll unless stopped.
+              overscroll-contain stops chaining at the list edges. (Interactivity
+              — pointer-events-auto — is on PopoverContent above.)
+            */}
+            <CommandList
+              className="max-h-60 overscroll-contain"
               onWheel={(e) => e.stopPropagation()}
             >
-              <CommandList>
-                {loading ? (
-                  <CommandEmpty>{t('common:states.loadingDomains')}</CommandEmpty>
-                ) : filteredDomains.length === 0 ? (
-                  <CommandEmpty>{t('common:states.noDomainsFound')}</CommandEmpty>
-                ) : (
-                  <CommandGroup>
-                    {filteredDomains.map((domain) => (
-                      <CommandItem
-                        key={domain.id}
-                        value={domain.name}
-                        onSelect={() => (isSelected(domain.id) ? removeDomain(domain.id) : addDomain(domain.id))}
-                      >
-                        <Check
-                          className={cn(
-                            'mr-2 h-4 w-4',
-                            isSelected(domain.id) ? 'opacity-100' : 'opacity-0'
-                          )}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium truncate">{domain.name}</span>
-                          {domain.description && (
-                            <div className="text-sm text-muted-foreground truncate">
-                              {domain.description}
-                            </div>
-                          )}
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )}
-              </CommandList>
-            </div>
+              {loading ? (
+                <CommandEmpty>{t('common:states.loadingDomains')}</CommandEmpty>
+              ) : filteredDomains.length === 0 ? (
+                <CommandEmpty>{t('common:states.noDomainsFound')}</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {filteredDomains.map((domain) => (
+                    <CommandItem
+                      key={domain.id}
+                      value={domain.name}
+                      onSelect={() => (isSelected(domain.id) ? removeDomain(domain.id) : addDomain(domain.id))}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          isSelected(domain.id) ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium truncate">{domain.name}</span>
+                        {domain.description && (
+                          <div className="text-sm text-muted-foreground truncate">
+                            {domain.description}
+                          </div>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
           </Command>
         </PopoverContent>
       </Popover>

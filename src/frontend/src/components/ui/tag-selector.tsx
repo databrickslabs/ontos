@@ -209,18 +209,35 @@ const TagSelector: React.FC<TagSelectorProps> = ({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-full p-0" align="start">
+        {/*
+          pointer-events-auto is the real scroll fix: a modal Dialog sets
+          `body { pointer-events: none }`, which cascades to this popover
+          (portaled to <body>, a sibling of the dialog), making it click/wheel-
+          through so the wheel scrolls the dialog behind it. Mirrors the
+          DomainMultiSelector fix.
+        */}
+        <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
           <Command shouldFilter={false}>
             <CommandInput
               placeholder={t('common:tagSelector.searchPlaceholder')}
               value={searchValue}
               onValueChange={setSearchValue}
             />
-            <div 
-              className="max-h-60 overflow-y-auto"
+            {/*
+              Single scroll container (primitive supplies overflow-y-auto;
+              max-h-60 caps height via twMerge). A wrapper <div> previously added
+              a second, shorter scroller that clipped long lists.
+              onWheel stopPropagation is REQUIRED: the modal Dialog's body-level
+              wheel scroll-lock would otherwise preventDefault the bubbled event
+              (this popover is portaled to <body>) and cancel the list's scroll.
+              overscroll-contain stops chaining at the edges. (Interactivity —
+              pointer-events-auto — is on PopoverContent above.) Mirrors the
+              DomainMultiSelector fix.
+            */}
+            <CommandList
+              className="max-h-60 overscroll-contain"
               onWheel={(e) => e.stopPropagation()}
             >
-              <CommandList>
                 {loading ? (
                   <CommandEmpty>{t('common:states.loadingTags')}</CommandEmpty>
                 ) : (
@@ -281,8 +298,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
                     )}
                   </>
                 )}
-              </CommandList>
-            </div>
+            </CommandList>
           </Command>
         </PopoverContent>
       </Popover>

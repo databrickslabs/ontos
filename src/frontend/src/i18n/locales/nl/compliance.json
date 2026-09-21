@@ -34,12 +34,73 @@
     "security": "Beveiliging",
     "dataQuality": "Datakwaliteit",
     "privacy": "Privacy",
-    "governance": "Governance"
+    "governance": "Governance",
+    "maturity": "Volwassenheid"
   },
   "errors": {
     "loadingPolicies": "Fout bij Laden van Beleid",
     "savingPolicy": "Fout bij Opslaan van Beleid",
-    "deletingPolicy": "Fout bij Verwijderen van Beleid"
+    "deletingPolicy": "Fout bij Verwijderen van Beleid",
+    "loadPolicyFailed": "Kon beleid niet laden",
+    "loadFailed": "Laden mislukt",
+    "savePolicyFailed": "Kon beleid niet opslaan",
+    "deletePolicyFailed": "Kon beleid niet verwijderen",
+    "noDataReceived": "Geen data ontvangen van het compliance-beleid-endpoint.",
+    "saveNoDataReturned": "Kon beleid niet opslaan: geen data teruggegeven",
+    "loadPoliciesFailed": "Kon compliance-beleid niet laden",
+    "loadRunResultsFailed": "Kon uitvoeringsresultaten niet laden",
+    "policyNotFound": "Compliance-beleid niet gevonden.",
+    "runNotFound": "Uitvoering niet gevonden."
+  },
+  "results": {
+    "passed": "Geslaagd",
+    "failed": "Mislukt",
+    "showFailed": "Mislukte Tonen",
+    "showAll": "Alles Tonen",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Terug naar Lijst",
+    "run": "Uitvoeren",
+    "id": "ID",
+    "examples": "Voorbeelden",
+    "shouldPass": "Moet Slagen",
+    "shouldFail": "Moet Falen",
+    "noExamples": "Geen voorbeelden",
+    "runSummary": {
+      "title": "Uitvoeringsoverzicht",
+      "lastRunStarted": "Laatste uitvoering gestart {{date}}",
+      "statusLabel": "Status:",
+      "score": "Score",
+      "passed": "Geslaagd",
+      "failed": "Mislukt",
+      "passedExamples": "Geslaagde voorbeelden",
+      "failedExamples": "Mislukte voorbeelden",
+      "noPassedExamples": "Geen geslaagde voorbeelden in deze uitvoering",
+      "noFailures": "Geen fouten in deze uitvoering"
+    },
+    "runsList": {
+      "title": "Uitvoeringen",
+      "mostRecentFirst": "Meest recente eerst",
+      "noRuns": "Nog geen uitvoeringen",
+      "scoreLabel": "Score:",
+      "scoreDetail": "{{passed}} geslaagd / {{failed}} mislukt",
+      "openRunDetails": "Uitvoeringsdetails openen"
+    },
+    "resultsCard": {
+      "title": "Resultaten",
+      "filteredFailed": "Gefilterd op alleen mislukt — laatste uitvoering {{date}}",
+      "filteredAll": "Gefilterd op alles — laatste uitvoering {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Uitvoering {{id}}",
+    "viewPolicy": "Beleid Bekijken",
+    "statusLabel": "Status:",
+    "scoreLabel": "Score:",
+    "passedLabel": "Geslaagd:",
+    "failedLabel": "Mislukt:",
+    "startedLabel": "Gestart: {{date}}"
   },
   "toast": {
     "policySaved": "Beleid '{{name}}' succesvol opgeslagen",
@@ -102,4 +163,3 @@
     }
   }
 }
-

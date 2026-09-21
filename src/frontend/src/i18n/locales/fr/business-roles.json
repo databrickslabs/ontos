@@ -1,0 +1,78 @@
+{
+  "title": "Rôles métier",
+  "subtitle": "Rôles nommés pouvant être attribués aux utilisateurs en tant que propriétaires de divers objets.",
+  "addNew": "Ajouter un rôle",
+  "editRole": "Modifier le rôle",
+  "deleteRole": "Supprimer le rôle",
+  "systemBadge": "Système",
+  "openMenu": "Ouvrir le menu",
+  "table": {
+    "name": "Nom",
+    "description": "Description",
+    "category": "Catégorie",
+    "status": "Statut",
+    "system": "Système",
+    "lastUpdated": "Dernière mise à jour",
+    "actions": "Actions"
+  },
+  "categories": {
+    "governance": "Gouvernance",
+    "technical": "Technique",
+    "business": "Métier",
+    "operational": "Opérationnel"
+  },
+  "statuses": {
+    "active": "Actif",
+    "deprecated": "Déprécié"
+  },
+  "permissions": {
+    "deniedView": "Vous n'avez pas la permission de voir les rôles métier.",
+    "deniedCreate": "Vous n'avez pas la permission de créer des rôles métier.",
+    "deniedEdit": "Vous n'avez pas la permission de modifier les rôles métier.",
+    "deniedDelete": "Vous n'avez pas la permission de supprimer les rôles métier.",
+    "permissionDenied": "Permission refusée"
+  },
+  "messages": {
+    "errorFetching": "Erreur lors de la récupération des rôles métier",
+    "loadFailed": "Échec du chargement des rôles métier",
+    "errorDeleting": "Erreur lors de la suppression du rôle métier",
+    "deleted": "Rôle métier supprimé",
+    "deletedSuccess": "Le rôle métier a été supprimé avec succès.",
+    "errorLoadingData": "Erreur lors du chargement des données"
+  },
+  "deleteDialog": {
+    "title": "Supprimer le rôle métier ?",
+    "description": "Cette action ne peut pas être annulée. Les attributions de propriétaire existantes utilisant ce rôle peuvent devenir orphelines.",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
+  },
+  "emptyState": {
+    "title": "Aucun rôle métier défini pour le moment",
+    "description": "Créez votre premier rôle métier (par ex. Propriétaire de données, Propriétaire de domaine)."
+  },
+  "form": {
+    "createTitle": "Créer un rôle métier",
+    "createDescription": "Ajouter un nouveau rôle métier pouvant être attribué aux utilisateurs.",
+    "editTitle": "Modifier le rôle métier",
+    "editDescription": "Mettre à jour les détails de ce rôle métier.",
+    "create": "Créer",
+    "update": "Enregistrer les modifications",
+    "noCategory": "Aucune catégorie",
+    "isApprover": "Approbateur de workflow",
+    "isApproverDescription": "Afficher ce rôle dans les listes déroulantes des approbateurs de workflow et des destinataires de notifications.",
+    "isApproverInUse": "Impossible de désactiver — utilisé dans {{count}} workflow(s) : {{workflows}}.",
+    "placeholders": {
+      "name": "par ex. Propriétaire de données",
+      "description": "Décrivez les responsabilités de ce rôle...",
+      "category": "Sélectionner une catégorie"
+    },
+    "toasts": {
+      "created": "Rôle métier créé",
+      "createdDescription": "« {{name}} » a été créé.",
+      "updated": "Rôle métier mis à jour",
+      "updatedDescription": "« {{name}} » a été mis à jour.",
+      "createFailed": "Échec de la création",
+      "updateFailed": "Échec de la mise à jour"
+    }
+  }
+}

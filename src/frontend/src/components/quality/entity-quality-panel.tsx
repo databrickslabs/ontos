@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
@@ -38,6 +39,7 @@ function fmtDate(iso: string) {
 }
 
 const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggregation }) => {
+  const { t } = useTranslation(['metadata', 'common']);
   const [items, setItems] = React.useState<QualityItem[]>([]);
   const [summary, setSummary] = React.useState<QualitySummary | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -65,7 +67,7 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
       setItems(Array.isArray(list) ? list : []);
       setSummary(sum || null);
     } catch (e: any) {
-      toast({ title: 'Failed to load quality data', description: e?.message || String(e), variant: 'destructive' });
+      toast({ title: t('metadata:quality.messages.loadFailed'), description: e?.message || String(e), variant: 'destructive' });
     } finally { setLoading(false); }
   }, [entityId, entityType, productAggregation, toast]);
 
@@ -113,9 +115,9 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
 
   const validate = (payload: Partial<QualityItemCreate>) => {
     const errs: Record<string, string> = {};
-    if (!payload.dimension) errs.dimension = 'Required';
-    if (payload.score_percent == null || Number.isNaN(payload.score_percent)) errs.score_percent = 'Required';
-    else if (payload.score_percent < 0 || payload.score_percent > 100) errs.score_percent = '0-100';
+    if (!payload.dimension) errs.dimension = t('metadata:quality.validation.required');
+    if (payload.score_percent == null || Number.isNaN(payload.score_percent)) errs.score_percent = t('metadata:quality.validation.required');
+    else if (payload.score_percent < 0 || payload.score_percent > 100) errs.score_percent = t('metadata:quality.validation.range');
     return errs;
   };
 
@@ -124,7 +126,7 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
     const errs = validate(payload);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
-      toast({ title: 'Missing required fields', variant: 'destructive' });
+      toast({ title: t('metadata:quality.messages.missingFields'), variant: 'destructive' });
       return;
     }
 
@@ -142,31 +144,31 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
         });
         if (!resp.ok) throw new Error(await resp.text());
       }
-      toast({ title: editing ? 'Measurement updated' : 'Measurement added' });
+      toast({ title: editing ? t('metadata:quality.messages.updated') : t('metadata:quality.messages.added') });
       setShowForm(false); resetForm(); fetchData();
     } catch (e: any) {
-      toast({ title: 'Save failed', description: e?.message || String(e), variant: 'destructive' });
+      toast({ title: t('metadata:quality.messages.saveFailed'), description: e?.message || String(e), variant: 'destructive' });
     }
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl flex items-center gap-2">Data Quality</CardTitle>
+        <CardTitle className="text-xl flex items-center gap-2">{t('metadata:quality.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button size="icon" variant="ghost" onClick={fetchData}><RefreshCcw className="h-4 w-4" /></Button>
             {summary?.measured_at && (
-              <span className="text-xs text-muted-foreground">Last measured {fmtDate(summary.measured_at)}</span>
+              <span className="text-xs text-muted-foreground">{t('metadata:quality.lastMeasured', { date: fmtDate(summary.measured_at) })}</span>
             )}
           </div>
           <div className="flex items-center gap-4">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div style={gaugeStyle} aria-label="quality-gauge" className="border border-border">
+                  <div style={gaugeStyle} aria-label={t('metadata:quality.gaugeAria')} className="border border-border">
                     <div className="bg-background rounded-full w-10 h-10 flex items-center justify-center text-xs font-bold"
                       style={{ color: scoreColor(overallPct) }}>
                       {overallPct.toFixed(0)}%
@@ -174,9 +176,9 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
                   </div>
                 </TooltipTrigger>
                 <TooltipContent className="space-y-1">
-                  <div className="text-xs font-medium mb-1">By Dimension</div>
+                  <div className="text-xs font-medium mb-1">{t('metadata:quality.byDimension')}</div>
                   {Object.entries(byDim).length === 0 ? (
-                    <div className="text-xs text-muted-foreground">No measurements</div>
+                    <div className="text-xs text-muted-foreground">{t('metadata:quality.noMeasurements')}</div>
                   ) : (
                     <div className="space-y-1">
                       {Object.entries(byDim).map(([k, v]) => (
@@ -194,31 +196,31 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
               </Tooltip>
             </TooltipProvider>
             <div className="text-right">
-              <div className="text-xs text-muted-foreground">Overall Score</div>
+              <div className="text-xs text-muted-foreground">{t('metadata:quality.overallScore')}</div>
               <div className="text-lg font-semibold" style={{ color: scoreColor(overallPct) }}>
                 {overallPct.toFixed(1)}%
               </div>
             </div>
-            <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-2" /> Add measurement</Button>
+            <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-2" /> {t('metadata:quality.addMeasurement')}</Button>
           </div>
         </div>
 
         <Separator />
 
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading</div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('metadata:quality.loading')}</div>
         ) : items.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No quality measurements recorded.</div>
+          <div className="text-sm text-muted-foreground">{t('metadata:quality.noMeasurementsRecorded')}</div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Dimension</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Measured</TableHead>
-                <TableHead className="w-24">Actions</TableHead>
+                <TableHead>{t('metadata:quality.table.title')}</TableHead>
+                <TableHead>{t('metadata:quality.table.dimension')}</TableHead>
+                <TableHead>{t('metadata:quality.table.source')}</TableHead>
+                <TableHead>{t('metadata:quality.table.score')}</TableHead>
+                <TableHead>{t('metadata:quality.table.measured')}</TableHead>
+                <TableHead className="w-24">{t('common:labels.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -245,8 +247,8 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
                       <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"
                         onClick={async () => {
                           const resp = await fetch(`/api/quality-items/${it.id}`, { method: 'DELETE' });
-                          if (resp.ok) { toast({ title: 'Measurement deleted' }); fetchData(); }
-                          else { toast({ title: 'Delete failed', description: await resp.text(), variant: 'destructive' }); }
+                          if (resp.ok) { toast({ title: t('metadata:quality.messages.deleted') }); fetchData(); }
+                          else { toast({ title: t('metadata:quality.messages.deleteFailed'), description: await resp.text(), variant: 'destructive' }); }
                         }}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -261,19 +263,19 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
         {/* Create / Edit dialog */}
         <Dialog open={showForm} onOpenChange={setShowForm}>
           <DialogContent className="max-w-xl">
-            <DialogHeader><DialogTitle>{editing ? 'Edit measurement' : 'Add measurement'}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing ? t('metadata:quality.editMeasurement') : t('metadata:quality.addMeasurement')}</DialogTitle></DialogHeader>
             <div className="grid gap-3">
               <div>
-                <Label htmlFor="q-title">Title</Label>
+                <Label htmlFor="q-title">{t('metadata:quality.form.title')}</Label>
                 <Input id="q-title" value={form.title || ''} onChange={e => setForm({ ...form, title: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="q-desc">Description</Label>
+                <Label htmlFor="q-desc">{t('common:labels.description')}</Label>
                 <Input id="q-desc" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label>Dimension <span className="text-destructive">*</span></Label>
+                  <Label>{t('metadata:quality.form.dimension')} <span className="text-destructive">*</span></Label>
                   <Select value={form.dimension || 'completeness'} onValueChange={v => setForm({ ...form, dimension: v as QualityDimension })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -283,7 +285,7 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
                   {errors.dimension && <div className="text-xs text-destructive mt-1">{errors.dimension}</div>}
                 </div>
                 <div>
-                  <Label>Source</Label>
+                  <Label>{t('metadata:quality.form.source')}</Label>
                   <Select value={form.source || 'manual'} onValueChange={v => setForm({ ...form, source: v as QualitySource })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -294,25 +296,25 @@ const EntityQualityPanel: React.FC<Props> = ({ entityId, entityType, productAggr
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <Label htmlFor="q-score">Score (%) <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="q-score">{t('metadata:quality.form.score')} <span className="text-destructive">*</span></Label>
                   <Input id="q-score" type="number" min={0} max={100} step={0.1}
                     value={form.score_percent ?? ''} onChange={e => setForm({ ...form, score_percent: Number(e.target.value) })} />
                   {errors.score_percent && <div className="text-xs text-destructive mt-1">{errors.score_percent}</div>}
                 </div>
                 <div>
-                  <Label htmlFor="q-passed">Checks Passed</Label>
+                  <Label htmlFor="q-passed">{t('metadata:quality.form.checksPassed')}</Label>
                   <Input id="q-passed" type="number" min={0}
                     value={form.checks_passed ?? ''} onChange={e => setForm({ ...form, checks_passed: e.target.value ? Number(e.target.value) : undefined })} />
                 </div>
                 <div>
-                  <Label htmlFor="q-total">Checks Total</Label>
+                  <Label htmlFor="q-total">{t('metadata:quality.form.checksTotal')}</Label>
                   <Input id="q-total" type="number" min={0}
                     value={form.checks_total ?? ''} onChange={e => setForm({ ...form, checks_total: e.target.value ? Number(e.target.value) : undefined })} />
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-                <Button onClick={submit} disabled={form.score_percent == null}>Save</Button>
+                <Button variant="outline" onClick={() => setShowForm(false)}>{t('common:actions.cancel')}</Button>
+                <Button onClick={submit} disabled={form.score_percent == null}>{t('common:actions.save')}</Button>
               </div>
             </div>
           </DialogContent>

@@ -4,10 +4,16 @@
   "tabs": {
     "askOntos": "Vraag {{shortName}}",
     "indexSearch": "Index Zoeken",
+    "searchConcepts": "Concepten Zoeken",
     "viewGraph": "Grafiek Bekijken",
     "searchGraph": "Grafiek Zoeken",
     "concepts": "Concepten",
+    "properties": "Eigenschappen",
     "knowledgeGraph": "Kennisgraaf"
+  },
+  "subtitles": {
+    "searchConcepts": "Zoek en blader door ontologieconcepten en -eigenschappen",
+    "searchGraph": "Bevraag en verken de kennisgraaf met SPARQL"
   },
   "noResults": "Geen resultaten gevonden",
   "noResultsHint": "Probeer je zoektermen of filters aan te passen",
@@ -56,7 +62,18 @@
     "resourcesWithLabel": "Resources met rdfs:label",
     "subjectsAndTypes": "Subjects en hun types",
     "topPredicates": "Top predicaten op frequentie",
-    "mostLinkedSeeAlso": "Meest gelinkt via rdfs:seeAlso"
+    "mostLinkedSeeAlso": "Meest gelinkt via rdfs:seeAlso",
+    "resourceDetail": "Resourcedetail",
+    "prefixPlaceholder": "bijv. example.org/banking",
+    "resourceLoading": "Laden…",
+    "noTriples": "Geen triples voor deze resource.",
+    "blankNodeExpanded": "(blank node, hieronder uitgebreid)",
+    "hover": {
+      "type": "Type: {{type}}",
+      "id": "ID: {{id}}",
+      "owner": "Eigenaar: {{owner}}",
+      "status": "Status: {{status}}"
+    }
   },
   "index": {
     "title": "Index Zoeken",
@@ -75,6 +92,10 @@
     "noRelatedProperties": "Geen gerelateerde eigenschappen gevonden.",
     "linkedCatalogObjects": "Gekoppelde Catalogus Objecten",
     "noCatalogObjects": "Geen catalogus objecten toegewezen.",
+    "linkedUCTable": "UC-tabel",
+    "linkedUCColumn": "UC-kolom",
+    "linkedUCCatalog": "UC-catalogus",
+    "linkedUCSchema": "UC-schema",
     "assignToConcept": "Toewijzen aan Concept",
     "assignDialog": {
       "title": "Object Toewijzen aan Concept",
@@ -84,6 +105,16 @@
       "dataContract": "Datacontract",
       "asset": "Asset",
       "dataDomain": "Datadomein",
+      "dataset": "Dataset",
+      "ucCatalog": "UC-catalogus",
+      "ucSchema": "UC-schema",
+      "ucTable": "UC-tabel",
+      "browseUCCatalog": "Blader door UC-catalogus...",
+      "browseUCSchema": "Blader door UC-schema...",
+      "browseUCTable": "Blader door UC-tabel...",
+      "ucCatalogTitle": "Selecteer UC-catalogus",
+      "ucSchemaTitle": "Selecteer UC-schema",
+      "ucTableTitle": "Selecteer UC-tabel",
       "selectEntity": "Selecteer {{entityType}}..."
     },
     "messages": {
@@ -91,6 +122,39 @@
       "assignError": "Selecteer alstublieft zowel een entity type als specifieke entity.",
       "assignFailed": "Kon concept niet toewijzen aan object.",
       "navigationError": "Kan niet navigeren naar {{entityType}}"
+    }
+  },
+  "properties": {
+    "searchAndSelect": "Zoek en selecteer een eigenschap:",
+    "searchPlaceholder": "Typ om te zoeken op naam, label of IRI...",
+    "clear": "Wissen",
+    "domainRange": "Domein / Bereik",
+    "linkedCatalogObjects": "Gekoppelde Catalogus Objecten",
+    "noCatalogObjects": "Geen catalogus objecten toegewezen.",
+    "assignToProperty": "Toewijzen aan Eigenschap",
+    "assignDialog": {
+      "title": "Object Toewijzen aan Eigenschap",
+      "targetType": "Doeltype",
+      "selectTargetType": "Selecteer doeltype...",
+      "dataContractProperty": "Datacontract-eigenschap",
+      "ucTable": "UC-tabel",
+      "ucColumn": "UC-kolom",
+      "contract": "Contract",
+      "selectContract": "Selecteer contract...",
+      "schema": "Schema",
+      "selectSchema": "Selecteer schema...",
+      "property": "Eigenschap",
+      "selectProperty": "Selecteer eigenschap...",
+      "browseUCColumn": "Blader door UC-tabel en selecteer kolom...",
+      "ucColumnTitle": "Selecteer UC-kolom",
+      "asset": "Asset",
+      "noColumnAssets": "Geen Kolom- of Logisch Attribuut-assets gevonden",
+      "selectAsset": "Selecteer asset"
+    },
+    "messages": {
+      "selectPropertyTarget": "Selecteer een contract, schema en eigenschap.",
+      "linkedSuccess": "Eigenschap succesvol gekoppeld.",
+      "assignFailed": "Kon eigenschap niet toewijzen aan object."
     }
   },
   "llm": {
@@ -115,7 +179,11 @@
       "findCustomerData": "Waar kan ik klantdata vinden?",
       "dataProductsCost": "Hoeveel kosten alle dataproducten?",
       "businessTermsSales": "Welke business termen zijn gerelateerd aan verkoop?",
-      "showDataProducts": "Toon me dataproducten in het Klant domein"
+      "showDataProducts": "Toon me dataproducten in het Klant domein",
+      "howToCreateProduct": "Hoe maak ik mijn eerste dataproduct?",
+      "howToSetupDomains": "Hoe stel ik datadomeinen in?",
+      "whatIsOntos": "Wat is Ontos en wat kan ik ermee doen?",
+      "coreConcepts": "Leg de kernconcepten uit: dataproducten, contracten en domeinen."
     },
     "messages": {
       "sessionDeleted": "Sessie verwijderd",
@@ -123,12 +191,45 @@
       "loadSessionFailed": "Kon sessie niet laden",
       "deleteSessionFailed": "Kon sessie niet verwijderen",
       "loadFailed": "Kon LLM zoeken niet laden. Probeer het later opnieuw."
+    },
+    "debug": {
+      "title": "Debug",
+      "toolCallCount_one": "{{count}} tool-aanroep",
+      "toolCallCount_other": "{{count}} tool-aanroepen",
+      "priorResults": "({{count}} eerder)",
+      "followUp": "Vervolg: LLM heeft {{messages}} eerdere berichten ({{results}} toolresultaten) in de gespreksgeschiedenis",
+      "queryClassification": "Queryclassificatie",
+      "query": "Query:",
+      "categories": "Categorieën:",
+      "toolsProvided": "Aangeboden tools:",
+      "model": "Model:",
+      "iterations": "Iteraties:",
+      "total": "totaal",
+      "toolExecutions": "Tooluitvoeringen",
+      "llmIterations": "LLM-iteraties",
+      "messagesSent": "{{count}} ber.",
+      "toolCallsShort": "{{count}} tool-aanroep(en)",
+      "args": "Args:",
+      "showResult": "Resultaat tonen",
+      "hideResult": "Resultaat verbergen",
+      "modeEnabled": "Debugmodus ingeschakeld",
+      "modeDisabled": "Debugmodus uitgeschakeld",
+      "modeEnabledDesc": "Tussenstappen van de LLM worden getoond",
+      "clickToDisable": "Klik om debugmodus uit te schakelen"
     }
   },
   "copilot": {
+    "title": "Vraag {{shortName}}",
+    "subtitle": "AI-aangedreven assistent",
+    "button": "Vraag {{shortName}}",
+    "welcome": "Welkom bij Vraag {{shortName}}!",
+    "welcomeDescription": "Krijg hulp bij modellering, mappings, productcreatie en gezondheidsinzichten. Probeer een van de voorgestelde prompts hieronder of typ je eigen vraag.",
+    "askingAbout": "Vraagt over:",
     "scopePageSpecific": "Pagina-specifiek",
     "scopeGeneral": "Ontos (algemeen)",
-    "scopeThisPage": "Deze pagina"
+    "scopeThisPage": "Deze pagina",
+    "inputPlaceholder": "Vraag {{shortName}} wat dan ook...",
+    "messageSendFailed": "Kon bericht niet verzenden",
+    "resizeHandle": "Formaat van Vraag Ontos-paneel aanpassen"
   }
 }
-

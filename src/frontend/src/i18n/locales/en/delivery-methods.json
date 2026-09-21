@@ -4,6 +4,8 @@
   "addNew": "Add Method",
   "editMethod": "Edit Method",
   "deleteMethod": "Delete Method",
+  "systemBadge": "System",
+  "openMenu": "Open menu",
   "table": {
     "name": "Name",
     "description": "Description",
@@ -32,6 +34,7 @@
   },
   "messages": {
     "errorFetching": "Error fetching delivery methods",
+    "loadFailed": "Failed to load delivery methods",
     "errorDeleting": "Error deleting delivery method",
     "deleted": "Delivery Method Deleted",
     "deletedSuccess": "The delivery method was successfully deleted.",

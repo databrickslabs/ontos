@@ -1,0 +1,651 @@
+{
+  "designer": {
+    "newWorkflow": "新規ワークフロー",
+    "newStepName": "新規 {{type}} ステップ",
+    "deleteConnection": "接続を削除",
+    "actions": {
+      "done": "完了"
+    },
+    "keyValue": {
+      "keyRequired": "キーが必要です",
+      "keyExistsAdd": "キーはすでに存在します — 既存のエントリを編集してください",
+      "keyExistsEdit": "キーはすでに存在します — 別の名前を選択してください",
+      "addEntry": "エントリを追加",
+      "noEntries": "エントリがありません。",
+      "checkTemplate": "テンプレートを確認",
+      "keyPlaceholder": "キー",
+      "valuePlaceholder": "値",
+      "newEntryKeyAria": "新規エントリのキー",
+      "newEntryValueAria": "新規エントリの値",
+      "editEntryKeyAria": "エントリのキーを編集",
+      "editEntryValueAria": "エントリの値を編集",
+      "saveEditAria": "編集を保存",
+      "cancelEditAria": "編集をキャンセル",
+      "editRowAria": "行を編集",
+      "removeRowAria": "行を削除"
+    },
+    "schema": {
+      "noProperties": "このステップタイプには設定可能なプロパティがありません。"
+    },
+    "roles": {
+      "special": "特別",
+      "requesterOriginalUser": "リクエスト者（元のユーザー）",
+      "ownerEntityOwner": "所有者（エンティティ所有者）",
+      "appRoles": "アプリロール",
+      "businessRoles": "ビジネスロール",
+      "noGroups": "グループがありません"
+    },
+    "messages": {
+      "loadWorkflowFailed": "ワークフローの読み込みに失敗しました",
+      "validationError": "検証エラー",
+      "selectWorkflowType": "ワークフロータイプを選択してください",
+      "nameRequired": "ワークフロー名は必須です",
+      "createdSuccess": "ワークフローを正常に作成しました",
+      "updatedSuccess": "ワークフローを正常に更新しました",
+      "createFailed": "ワークフローの作成に失敗しました: {{error}}",
+      "updateFailed": "ワークフローの更新に失敗しました: {{error}}"
+    },
+    "badges": {
+      "default": "デフォルト",
+      "approval": "承認",
+      "process": "プロセス",
+      "unsavedChanges": "未保存の変更"
+    },
+    "placeholders": {
+      "workflowName": "ワークフロー名"
+    },
+    "preview": {
+      "saveToPreview": "最新バージョンをプレビューするには変更を保存してください",
+      "dryRunTitle": "ドライランモードでウィザードを実行",
+      "previewWizard": "ウィザードをプレビュー"
+    },
+    "typeChooser": {
+      "title": "どのタイプのワークフローですか？",
+      "subtitle": "このワークフローの使用方法に基づいてタイプを選択してください。",
+      "processTitle": "プロセスワークフロー",
+      "processDescription": "イベントによってトリガーされるバックグラウンド自動化 — 検証、通知、タグ付け、スクリプトの実行。",
+      "approvalTitle": "承認ワークフロー",
+      "approvalDescription": "ユーザー操作の前に表示されるインタラクティブなウィザード — 同意、規約、確認事項を収集します。"
+    },
+    "palette": {
+      "addStep": "ステップを追加",
+      "soonSuffix": " （近日公開）",
+      "policy_check": "ポリシーチェック",
+      "validation": "検証",
+      "approval": "承認をリクエスト",
+      "entity_action": "エンティティアクション",
+      "notification": "通知",
+      "assign_tag": "タグを割り当て",
+      "conditional": "条件分岐",
+      "script": "スクリプト",
+      "create_asset_review": "アセットレビュー",
+      "webhook": "Webhook",
+      "grant_permissions": "権限を付与",
+      "on_behalf_of": "代理",
+      "legal_document": "法的文書",
+      "acknowledgement_checklist": "確認チェックリスト",
+      "user_action": "ユーザーアクション",
+      "co_signers": "連署者",
+      "persist_agreement": "契約を保存",
+      "generate_pdf": "PDF を生成",
+      "deliver": "配信"
+    },
+    "discard": {
+      "description": "このワークフローに未保存の変更があります。今すぐ離れると、変更内容は失われます。",
+      "stay": "とどまる",
+      "confirm": "変更を破棄"
+    },
+    "triggerConfig": {
+      "title": "トリガー設定",
+      "fromStatus": "変更元ステータス",
+      "fromStatusPlaceholder": "例: draft",
+      "toStatus": "変更先ステータス",
+      "toStatusPlaceholder": "例: active",
+      "descriptionPlaceholder": "ワークフローの説明"
+    },
+    "stepConfig": {
+      "title": "ステップ設定",
+      "stepName": "ステップ名",
+      "stepType": "ステップタイプ",
+      "deleteStep": "ステップを削除"
+    },
+    "entityAction": {
+      "action": "アクション",
+      "certify": "認定",
+      "decertify": "認定解除",
+      "publish": "公開",
+      "unpublish": "公開停止",
+      "certLevelSource": "認定レベルのソース",
+      "levelFromRequest": "リクエストから",
+      "levelFixed": "固定レベル",
+      "levelFromApproval": "承認から",
+      "fixedLevel": "固定レベル",
+      "fixedLevelPlaceholder": "例: 1",
+      "scopeSource": "公開範囲のソース",
+      "scopeFromRequest": "リクエストから",
+      "scopeFixed": "固定範囲",
+      "scopeFromApproval": "承認から",
+      "fixedScope": "固定範囲",
+      "scopeDomain": "ドメイン",
+      "scopeOrganization": "組織",
+      "scopeExternal": "外部",
+      "help": "このワークフローをトリガーしたエンティティに対してライフサイクルアクションを実行します（リクエストトリガーで使用する場合は承認後）。"
+    },
+    "userAction": {
+      "title": "タイトル",
+      "titlePlaceholder": "例: 理由を入力",
+      "descriptionPlaceholder": "ウィザードステップの説明（任意）",
+      "requiresInput": "入力が必要",
+      "requiresInputHelp": "オンの場合、続行する前にユーザーは主要フィールドに何かを入力する必要があります。",
+      "minInputLength": "最小入力長",
+      "minInputPlaceholder": "例: 10",
+      "minInputHelp": "主要フィールドの最小文字数（最小値なしの場合は空欄）。",
+      "fieldsHelp": "ユーザーアクションステップは、承認ワークフローで入力（理由、承諾など）を収集します。上でフィールドを追加し、ユーザーの主要入力が入るフィールドの「主要」にチェックを入れてください。",
+      "primaryRequiredTooltip": "閉じる前に上で主要フィールドを選択してください。"
+    },
+    "policyCheck": {
+      "label": "コンプライアンスポリシー",
+      "placeholder": "コンプライアンスポリシーを選択",
+      "noPolicies": "有効なポリシーが見つかりません",
+      "help": "このステップは、選択したコンプライアンスポリシーの DSL ルールを実行時に評価します。"
+    },
+    "validation": {
+      "dslRule": "DSL ルール",
+      "dslPlaceholder": "MATCH (obj:Object)\nASSERT obj.name MATCHES '^[a-z_]+$'"
+    },
+    "notification": {
+      "recipientsRole": "受信者（ロール）",
+      "recipientsPlaceholder": "受信者を選択",
+      "additionalRecipientsAria": "追加の受信者",
+      "template": "テンプレート",
+      "selectTemplate": "テンプレートを選択",
+      "templates": {
+        "requestSubmitted": "リクエストが送信されました",
+        "requestApproved": "リクエストが承認されました",
+        "requestDenied": "リクエストが却下されました",
+        "validationFailed": "検証に失敗しました",
+        "validationPassed": "検証に合格しました",
+        "productApproved": "プロダクトが承認されました",
+        "productRejected": "プロダクトが却下されました",
+        "piiDetected": "PII を検出しました"
+      },
+      "customMessage": "カスタムメッセージ",
+      "customMessagePlaceholder": "テンプレートメッセージを上書きします。${entity_name}、${entity_type}、${user_email}、${entity.field} に対応...",
+      "variablesLabel": "変数:",
+      "channels": "チャネル",
+      "channelsHelp": "何も選択しない場合はグローバル設定がデフォルトになります。"
+    },
+    "customPrincipals": {
+      "label": "カスタムプリンシパル",
+      "help": "ロールに加えて特定のユーザーまたはグループを追加します。",
+      "usersGroups": "ユーザーとグループ",
+      "addPlaceholder": "ユーザーまたはグループを追加…"
+    },
+    "assignTag": {
+      "tagKey": "タグキー",
+      "tagKeyPlaceholder": "例: owner",
+      "valueSource": "値のソース",
+      "selectSource": "ソースを選択",
+      "sourceCurrentUser": "現在のユーザー",
+      "sourceProjectName": "プロジェクト名",
+      "sourceTimestamp": "タイムスタンプ"
+    },
+    "approval": {
+      "approversRole": "承認者（ロール）",
+      "selectRole": "ロールを選択",
+      "additionalApproversAria": "追加の承認者",
+      "timeoutDays": "タイムアウト（日）"
+    },
+    "assetReview": {
+      "reviewerRole": "レビュー担当者ロール",
+      "selectReviewerRole": "レビュー担当者ロールを選択",
+      "reviewerRoleHelp": "メンバーがアセットをレビューできるロールです。",
+      "reviewType": "レビュータイプ",
+      "selectReviewType": "レビュータイプを選択",
+      "typeStandard": "標準レビュー",
+      "typeExpedited": "迅速レビュー",
+      "typeCompliance": "コンプライアンスレビュー",
+      "typeSecurity": "セキュリティレビュー",
+      "notesPlaceholder": "レビュー担当者への追加メモ..."
+    },
+    "webhook": {
+      "mode": "モード",
+      "selectMode": "モードを選択",
+      "modeConnection": "UC 接続（推奨）",
+      "modeInline": "インライン URL",
+      "modeHelp": "UC 接続は資格情報を Unity Catalog に安全に保存します。",
+      "httpConnection": "HTTP 接続",
+      "selectConnection": "UC HTTP 接続を選択",
+      "noConnections": "HTTP 接続が見つかりません",
+      "pathPlaceholder": "/api/now/table/incident",
+      "pathHelp": "接続のベース URL に追加されるパスです。",
+      "url": "URL",
+      "urlPlaceholder": "https://api.example.com/webhook",
+      "inlineWarning": "警告: インライン資格情報はワークフロー設定に保存されます。",
+      "httpMethod": "HTTP メソッド",
+      "selectMethod": "メソッドを選択",
+      "bodyTemplate": "ボディテンプレート",
+      "bodyPlaceholder": "{\n  \"description\": \"Alert for ${entity_name}\",\n  \"entity_type\": \"${entity_type}\"\n}",
+      "bodyHelp": "置換には ${variable} を使用します。スコープ内のすべての変数についてはパネルを参照してください。",
+      "additionalHeaders": "追加ヘッダー",
+      "additionalHeadersHelp": "リクエストヘッダーにマージされます。キーが競合する場合は `headers` を上書きします。値は ${variable} の置換に対応します。",
+      "headerKeyPlaceholder": "X-Trace-Id",
+      "headerValuePlaceholder": "${execution_id}",
+      "additionalQueryParams": "追加クエリパラメータ",
+      "additionalQueryParamsHelp": "クエリ文字列としてリクエスト URL/パスに追加されます。値は ${variable} の置換に対応し、URL エンコードされます。",
+      "queryKeyPlaceholder": "caller",
+      "queryValuePlaceholder": "ontos",
+      "pathSuffix": "パスサフィックス",
+      "pathSuffixPlaceholder": "/${entity_id}",
+      "pathSuffixHelp": "クエリ文字列の前にパスに追加されます。${variable} の置換に対応します。",
+      "timeoutSeconds": "タイムアウト（秒）",
+      "retryCount": "リトライ回数",
+      "retryHelp": "失敗時のリトライ回数（0～5）。"
+    }
+  },
+  "approvalResponse": {
+    "titleFallback": "承認または却下",
+    "descriptionFallback": "承認または却下の判断理由を入力してください。",
+    "requestDetails": "リクエストの詳細",
+    "adjustTerms": "承認条件を調整",
+    "durationDays": "期間（日）",
+    "permissionLevel": "権限レベル",
+    "reasonLabel": "承認または却下の理由",
+    "reasonPlaceholder": "理由を入力...",
+    "approved": "承認済み",
+    "rejected": "却下済み",
+    "requestFallback": "リクエスト",
+    "days_one": "{{count}} 日",
+    "days_other": "{{count}} 日",
+    "rows": {
+      "onBehalfOf": "代理対象",
+      "resource": "リソース",
+      "duration": "期間",
+      "reason": "理由",
+      "workflow": "ワークフロー"
+    },
+    "messages": {
+      "reasonRequiredTitle": "理由が必要です",
+      "reasonRequiredDesc": "判断の理由を入力してください。",
+      "processFailed": "承認の処理に失敗しました。",
+      "processFailedRetry": "承認の処理に失敗しました。もう一度お試しください。",
+      "entityApproved": "{{name}} が承認されました。",
+      "entityRejected": "{{name}} が却下されました。"
+    }
+  },
+  "approvalWizard": {
+    "title": "承認ウィザード",
+    "previewBadge": "プレビュー",
+    "referenceDocuments": "参照文書",
+    "loadingEllipsis": "読み込み中…",
+    "selectEllipsis": "選択…",
+    "failedToLoadOptions": "オプションの読み込みに失敗しました",
+    "noOptionsAvailable": "利用可能なオプションがありません",
+    "dryRunDescription": "ドライラン — 何も保存されず、通知も送信されません。",
+    "chooseWorkflow": "このエンティティに対して実行する承認ワークフローを選択してください。",
+    "stepPrefix": "ステップ: {{name}}",
+    "completedShort": "完了しました。",
+    "progressStep": "ステップ {{number}}: {{name}}",
+    "completeBefore": "次を {{action}} する前に以下を完了してください:",
+    "proceed": "続行",
+    "previewCompleteScreen": "プレビューが完了しました。契約は作成されず、通知も送信されませんでした。",
+    "agreementRecorded": "契約を記録しました。",
+    "agreementId": "契約 ID: {{id}}",
+    "downloadAgreement": "契約をダウンロード",
+    "noWorkflowsAvailable": "利用可能な承認ワークフローがありません。「設定」→「ワークフロー」（承認ワークフロー）で追加してください。",
+    "completeButton": "完了",
+    "acknowledgeDefault": "上記を読み、理解しました",
+    "scrollToBottom": "続行するには文書の最下部までスクロールしてください。",
+    "coSignerPlaceholder": "メールアドレスまたはグループ名を入力",
+    "noDocumentContent": "*文書のコンテンツが提供されていません。*",
+    "preview": {
+      "skipped": "{{action}} — プレビューではスキップされます",
+      "wouldSaveAgreement": "契約を保存します",
+      "wouldGenerateDocument": "文書を生成します",
+      "wouldSendNotifications": "通知を送信します",
+      "wouldFinalize": "確定します"
+    },
+    "progress": {
+      "savingAgreement": "契約を保存中...",
+      "generatingDocument": "文書を生成中...",
+      "sendingNotifications": "通知を送信中...",
+      "finalizing": "確定中..."
+    },
+    "coSigners": {
+      "minRequired_one": "最低 {{count}} 名の連署者が必要です。",
+      "minRequired_other": "最低 {{count}} 名の連署者が必要です。",
+      "optional": "このステップでは連署者は任意です。",
+      "maximum": "最大: {{count}} 名。",
+      "auditNote": "連署者は監査目的で契約に記録されます。"
+    },
+    "obo": {
+      "forMyself": "自分自身のため",
+      "forMyGroup": "自分が所属するグループのため",
+      "noGroupsAvailable": "（利用可能なグループがありません）",
+      "selectGroup": "所属するグループのいずれかを選択",
+      "otherGroupOrSp": "その他のグループまたはサービスプリンシパル",
+      "groupOption": "グループ（表示名）",
+      "servicePrincipalOption": "サービスプリンシパル（表示名または applicationId）",
+      "groupPlaceholder": "例: sales_consumers",
+      "spPlaceholder": "例: 11111111-2222-3333-4444-555555555555",
+      "validationNote": "リクエストが記録される前に、ワークスペースディレクトリに対して検証されます。",
+      "justification": "正当性の説明",
+      "justificationPlaceholder": "このプリンシパルへのアクセスをリクエストする理由は何ですか？"
+    },
+    "validation": {
+      "requiresInput": "このステップには入力が必要です。",
+      "minLength": "最小長: {{min}} 文字（{{entered}} 文字入力済み）。"
+    },
+    "messages": {
+      "nothingToPreview": "プレビューする内容がありません",
+      "nothingToPreviewDesc": "ワークフローにステップがありません。",
+      "startSessionFailed": "セッションの開始に失敗しました",
+      "previewComplete": "プレビュー完了",
+      "previewCompleteDesc": "契約は作成されず、通知も送信されませんでした。",
+      "submitStepFailed": "ステップの送信に失敗しました",
+      "completed": "完了しました",
+      "completedDesc": "承認ワークフローが正常に完了しました。",
+      "cancelled": "キャンセルしました",
+      "previewCancelled": "プレビューをキャンセルしました"
+    }
+  },
+  "entityTypeSelect": {
+    "label": "適用対象",
+    "helper": "これがどの種類のオブジェクトで発動するか",
+    "firesRegardless": "このトリガーはエンティティタイプに関係なく発動します。"
+  },
+  "execution": {
+    "noSteps": "ステップが定義されていません",
+    "trigger": "トリガー",
+    "titleFallback": "ワークフロー実行",
+    "executionId": "実行 ID: {{id}}...",
+    "stepsProgress": "{{done}}/{{total}} ステップ",
+    "triggeredBy": "トリガー者: {{user}}",
+    "workflowSteps": "ワークフローステップ",
+    "loadDefinitionFailed": "ワークフロー定義の読み込みに失敗しました",
+    "states": {
+      "pending": "保留中",
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗",
+      "skipped": "スキップ",
+      "waiting": "待機中"
+    },
+    "summary": {
+      "entity": "エンティティ",
+      "started": "開始",
+      "waitingAt": "待機中のステップ",
+      "progress": "進捗"
+    }
+  },
+  "nodes": {
+    "checklistTitle": "チェックリスト",
+    "assetReviewTitle": "アセットレビュー",
+    "successTitle": "成功",
+    "failureTitle": "失敗",
+    "stepFallback": "ステップ",
+    "notificationTo": "宛先: {{recipient}}",
+    "actionLabel": "アクション: {{action}}",
+    "noActionSet": "アクションが設定されていません",
+    "itemCount_one": "{{count}} 件のアイテム",
+    "itemCount_other": "{{count}} 件のアイテム",
+    "keyLabel": "キー: {{key}}",
+    "policyLabel": "ポリシー: {{name}}",
+    "idLabel": "ID: {{id}}",
+    "noPolicySelected": "ポリシーが選択されていません",
+    "reviewerLabel": "レビュー担当者:",
+    "notSet": "未設定",
+    "connectionLabel": "接続: {{name}}",
+    "notConfigured": "未設定",
+    "configureUrlOrConnection": "URL または接続を設定",
+    "requestApproval": "承認をリクエスト"
+  },
+  "requiredFields": {
+    "title": "カスタムフィールド",
+    "emptyState": "カスタムフィールドはまだありません。リクエスト者が送信前に入力する必要があるフィールドを追加してください。",
+    "primaryError": "主要フィールドを選択してください — ユーザーの主要入力がそこに入ります。「入力が必要」がオンのため必須です。",
+    "errors": {
+      "idRequired": "ID は必須です。",
+      "idInvalid": "ID は文字で始まる小文字、数字、またはアンダースコアである必要があります。",
+      "idDuplicate": "ID はこのステップ内で一意である必要があります。"
+    },
+    "fieldIdLabel": "フィールド ID",
+    "fieldIdPlaceholder": "例: target_group",
+    "labelLabel": "ラベル",
+    "labelPlaceholder": "リクエスト者に表示されます",
+    "typeText": "テキスト",
+    "typeSelect": "選択",
+    "requiredShort": "必須",
+    "primaryTooltip": "この行をステップの主要入力フィールドとしてマークします",
+    "primary": "主要",
+    "primaryAriaLabel": "主要フィールド",
+    "removeFieldAriaLabel": "フィールドを削除",
+    "staticOptions": "静的オプション",
+    "fromEndpoint": "エンドポイントから",
+    "optionValuePlaceholder": "値",
+    "optionLabelPlaceholder": "ラベル",
+    "removeOptionAriaLabel": "オプションを削除",
+    "addOption": "オプションを追加",
+    "optionsEndpoint": "オプションエンドポイント",
+    "endpointPlaceholder": "/api/workspace/groups",
+    "endpointHint": "JSON を返すバックエンドエンドポイント",
+    "addField": "フィールドを追加"
+  },
+  "templateVars": {
+    "copiedToClipboard": "{{placeholder}} をクリップボードにコピーしました。",
+    "copyFailed": "コピーに失敗しました",
+    "copyBlocked": "ブラウザがクリップボードへのアクセスをブロックしました。",
+    "copyPlaceholder": "{{placeholder}} をコピー",
+    "sampleLabel": "例: {{sample}}",
+    "loadFailed": "変数の読み込みに失敗しました",
+    "pickTriggerBefore": "置換に使用できる変数を確認するには、トリガーとエンティティタイプを選択してください:",
+    "pickTriggerAfter": "",
+    "loadingVariables": "変数を読み込み中…",
+    "loadFailedWithError": "変数の読み込みに失敗しました: {{error}}",
+    "noDescriptors": "このトリガーとエンティティタイプにはまだ変数記述子が登録されていません。汎用のプレースホルダーは引き続き使用できます（",
+    "noDescriptorsSuffix": " など）。",
+    "availableVariables": "利用可能な変数",
+    "copyHint": "コピーアイコンをクリックしてプレースホルダーを取得します。",
+    "filterPlaceholder": "名前または説明で絞り込み…",
+    "searchAriaLabel": "テンプレート変数を検索",
+    "clearSearchAriaLabel": "検索をクリア",
+    "matches_one": "{{count}} 件の一致",
+    "matches_other": "{{count}} 件の一致",
+    "noMatch": "一致する変数がありません"
+  },
+  "triggerPicker": {
+    "label": "発動条件",
+    "helper": "どのアクションでこのワークフローが実行されるか",
+    "placeholder": "トリガーを選択…",
+    "noTypes": "利用可能なトリガータイプがありません。",
+    "availableToAny": "認証済みの任意のユーザーが利用できます。",
+    "groups": {
+      "lifecycle": "ライフサイクルイベント",
+      "request_flow": "リクエストフロー",
+      "validation_gates": "検証ゲート",
+      "system_scheduled": "システムとスケジュール"
+    },
+    "requiredPermission": {
+      "label": "必要な権限:",
+      "prefix": "ユーザーには",
+      "suffix": "以上が、このワークフローを表示・実行するために必要です。「設定」→「ロール」で設定してください。"
+    }
+  },
+  "view": {
+    "subtitle": "検証、承認、通知のための自動化ワークフローを設定します。",
+    "readOnlyAccess": "（読み取り専用アクセス）",
+    "copyNameSuffix": "{{name}}（コピー）",
+    "approvalWorkflowFallback": "承認ワークフロー",
+    "stepLabel": "ステップ {{number}}",
+    "errorDetails": "エラーの詳細",
+    "actions": {
+      "loadDefaults": "デフォルトを読み込む",
+      "createWorkflow": "ワークフローを作成",
+      "previewWizard": "ウィザードをプレビュー",
+      "duplicate": "複製",
+      "forceApprove": "強制承認",
+      "forceReject": "強制却下"
+    },
+    "loadDefaults": {
+      "menuLabel": "デフォルトワークフロー",
+      "newOnly": "新規のみ読み込む",
+      "reloadAll": "すべてのデフォルトを再読み込み"
+    },
+    "badges": {
+      "default": "デフォルト",
+      "approval": "承認",
+      "process": "プロセス"
+    },
+    "columns": {
+      "steps": "ステップ",
+      "workflow": "ワークフロー",
+      "entity": "エンティティ",
+      "currentStep": "現在のステップ",
+      "started": "開始",
+      "completed": "完了",
+      "error": "エラー"
+    },
+    "help": {
+      "process": "プロセス: イベント後に実行（通知、タグ付け、検証）",
+      "approval": "承認: アクションの前に表示（同意、規約）",
+      "chain": "これらは連鎖します: 最初に承認、次にプロセス"
+    },
+    "stats": {
+      "activeWorkflows": "有効なワークフロー",
+      "ofTotal": "全 {{count}} 件中",
+      "inactiveCount": "（{{count}} 件が無効）",
+      "defaultWorkflows": "デフォルトワークフロー",
+      "builtInWorkflows": "組み込みワークフロー",
+      "inProgress": "進行中",
+      "runningOrPaused": "実行中または一時停止中",
+      "recentFailures": "最近の失敗",
+      "inLast50Runs": "直近 50 回の実行中"
+    },
+    "filter": {
+      "label": "絞り込み: {{filter}}",
+      "active": "有効なワークフロー",
+      "inactive": "無効なワークフロー",
+      "default": "デフォルトワークフロー",
+      "running": "実行中の実行",
+      "failed": "失敗した実行",
+      "clear": "フィルターをクリア"
+    },
+    "sections": {
+      "definitionsTitle": "ワークフロー定義",
+      "executionsTitle": "最近の実行",
+      "executionsDescription": "ワークフローの実行とそのステータスを監視します。"
+    },
+    "empty": {
+      "noWorkflows": "ワークフローがまだ設定されていません。",
+      "noWorkflowsHint": "「デフォルトを読み込む」をクリックして、デフォルトワークフローで開始してください。",
+      "noExecutions": "ワークフローの実行がまだありません。",
+      "noExecutionsHint": "ワークフローがトリガーされると、実行がここに表示されます。"
+    },
+    "bulk": {
+      "enable": "有効化 ({{count}})",
+      "disable": "無効化 ({{count}})",
+      "delete": "削除 ({{count}})",
+      "cancel": "キャンセル ({{count}})",
+      "retry": "リトライ ({{count}})"
+    },
+    "dialogs": {
+      "duplicateTitle": "ワークフローを複製",
+      "duplicateDescription": "「{{name}}」のコピーを新しい名前で作成します。",
+      "deleteExecutionTitle": "実行を削除",
+      "deleteExecutionDescription": "このワークフロー実行を削除してもよろしいですか？この操作は元に戻せません。"
+    },
+    "placeholders": {
+      "newWorkflowName": "新しいワークフロー名"
+    },
+    "detail": {
+      "workflow": "ワークフロー:",
+      "status": "ステータス:",
+      "entity": "エンティティ:"
+    },
+    "tooltips": {
+      "clickFullError": "クリックして完全なエラーを表示"
+    },
+    "permission": {
+      "denied": "権限が拒否されました",
+      "modifyWorkflows": "ワークフローを変更する権限がありません。",
+      "deleteWorkflows": "ワークフローを削除する権限がありません。",
+      "loadDefaults": "デフォルトワークフローを読み込む権限がありません。",
+      "cancelExecutions": "実行をキャンセルする権限がありません。",
+      "retryExecutions": "実行をリトライする権限がありません。",
+      "overrideApprovals": "ワークフローの承認を上書きする権限がありません。",
+      "deleteExecutions": "実行を削除する権限がありません。"
+    },
+    "confirm": {
+      "deleteWorkflows_one": "{{count}} 件のワークフローを削除してもよろしいですか？",
+      "deleteWorkflows_other": "{{count}} 件のワークフローを削除してもよろしいですか？",
+      "deleteWorkflowsSkipped_one": " （{{count}} 件のデフォルトワークフローはスキップされます）",
+      "deleteWorkflowsSkipped_other": " （{{count}} 件のデフォルトワークフローはスキップされます）",
+      "deleteExecutions_one": "{{count}} 件の実行を削除してもよろしいですか？",
+      "deleteExecutions_other": "{{count}} 件の実行を削除してもよろしいですか？",
+      "deleteExecutionsSkipped_one": " （{{count}} 件の実行中/一時停止中の実行はスキップされます）",
+      "deleteExecutionsSkipped_other": " （{{count}} 件の実行中/一時停止中の実行はスキップされます）"
+    },
+    "messages": {
+      "loadFailed": "ワークフローの読み込みに失敗しました",
+      "workflowEnabled": "ワークフローを有効にしました",
+      "workflowDisabled": "ワークフローを無効にしました",
+      "updateStatusFailed": "ワークフローのステータスの更新に失敗しました",
+      "duplicateSuccess": "ワークフローを正常に複製しました",
+      "duplicateFailed": "ワークフローの複製に失敗しました",
+      "cannotDelete": "削除できません",
+      "cannotDeleteDefault": "デフォルトワークフローは削除できません。代わりに無効にしてください。",
+      "deleteSuccess": "ワークフローを削除しました",
+      "deleteFailed": "ワークフローの削除に失敗しました",
+      "loadDefaultsFailed": "デフォルトワークフローの読み込みに失敗しました",
+      "cancelSuccess": "実行を正常にキャンセルしました",
+      "cancelFailed": "実行のキャンセルに失敗しました",
+      "retryStarted": "実行のリトライを開始しました",
+      "retryFailed": "実行のリトライに失敗しました",
+      "executionDeleteSuccess": "実行を正常に削除しました",
+      "executionDeleteFailed": "実行の削除に失敗しました",
+      "forceApprovedByAdmin": "管理者により強制承認されました",
+      "forceRejectedByAdmin": "管理者により強制却下されました",
+      "approveResumeSuccess": "ワークフローを承認して再開しました",
+      "approveFailed": "ワークフローの承認に失敗しました",
+      "rejectResumeSuccess": "ワークフローを却下して再開しました",
+      "rejectFailed": "ワークフローの却下に失敗しました",
+      "noChanges": "変更なし",
+      "allAlreadyEnabled": "選択したワークフローはすべてすでに有効です。",
+      "allAlreadyDisabled": "選択したワークフローはすべてすでに無効です。",
+      "workflowsEnabled_one": "{{count}} 件のワークフローを有効にしました。",
+      "workflowsEnabled_other": "{{count}} 件のワークフローを有効にしました。",
+      "workflowsDisabled_one": "{{count}} 件のワークフローを無効にしました。",
+      "workflowsDisabled_other": "{{count}} 件のワークフローを無効にしました。",
+      "workflowsFailedUpdate_one": "{{count}} 件のワークフローの更新に失敗しました。",
+      "workflowsFailedUpdate_other": "{{count}} 件のワークフローの更新に失敗しました。",
+      "updateWorkflowsFailed": "ワークフローの更新に失敗しました",
+      "allDefaultsCannotDelete": "選択したワークフローはすべてデフォルトであり、削除できません。",
+      "workflowsDeleted_one": "{{count}} 件のワークフローを削除しました。",
+      "workflowsDeleted_other": "{{count}} 件のワークフローを削除しました。",
+      "workflowsFailedDelete_one": "{{count}} 件のワークフローの削除に失敗しました。",
+      "workflowsFailedDelete_other": "{{count}} 件のワークフローの削除に失敗しました。",
+      "deleteWorkflowsFailed": "ワークフローの削除に失敗しました",
+      "noCancellable": "キャンセル可能な実行がありません",
+      "noCancellableDesc": "選択した実行のいずれもキャンセルできません。",
+      "executionsCancelled_one": "{{count}} 件の実行をキャンセルしました。",
+      "executionsCancelled_other": "{{count}} 件の実行をキャンセルしました。",
+      "executionsFailedCancel_one": "{{count}} 件の実行のキャンセルに失敗しました。",
+      "executionsFailedCancel_other": "{{count}} 件の実行のキャンセルに失敗しました。",
+      "cancelExecutionsFailed": "実行のキャンセルに失敗しました",
+      "noRetriable": "リトライ可能な実行がありません",
+      "noRetriableDesc": "選択した実行のいずれもリトライできません。",
+      "executionsRetryStarted_one": "{{count}} 件の実行のリトライを開始しました。",
+      "executionsRetryStarted_other": "{{count}} 件の実行のリトライを開始しました。",
+      "executionsFailedRetry_one": "{{count}} 件の実行のリトライに失敗しました。",
+      "executionsFailedRetry_other": "{{count}} 件の実行のリトライに失敗しました。",
+      "retryExecutionsFailed": "実行のリトライに失敗しました",
+      "runningCannotDelete": "実行中または一時停止中の実行は削除できません。",
+      "executionsDeleted_one": "{{count}} 件の実行を削除しました。",
+      "executionsDeleted_other": "{{count}} 件の実行を削除しました。",
+      "executionsFailedDelete_one": "{{count}} 件の実行の削除に失敗しました。",
+      "executionsFailedDelete_other": "{{count}} 件の実行の削除に失敗しました。",
+      "deleteExecutionsFailed": "実行の削除に失敗しました",
+      "errorCopied": "エラーをクリップボードにコピーしました。"
+    }
+  }
+}

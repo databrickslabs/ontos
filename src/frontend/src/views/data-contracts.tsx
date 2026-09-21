@@ -111,12 +111,12 @@ export default function DataContracts() {
       const endpoint = qs ? `/api/data-contracts?${qs}` : '/api/data-contracts';
 
       const response = await fetch(endpoint);
-      if (!response.ok) throw new Error('Failed to fetch contracts');
+      if (!response.ok) throw new Error(t('data-contracts:messages.fetchError', 'Failed to fetch data contracts'));
       const data = await response.json();
       setContracts(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch contracts');
+      setError(err instanceof Error ? err.message : t('data-contracts:messages.fetchError', 'Failed to fetch data contracts'));
     } finally {
       setLoading(false);
     }
@@ -135,19 +135,19 @@ export default function DataContracts() {
       });
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to create contract: ${errorText}`);
+        throw new Error(t('data-contracts:messages.createErrorDetail', 'Failed to create contract: {{error}}', { error: errorText }));
       }
       await fetchContracts();
       toast({ 
-        title: 'Success', 
-        description: 'Data contract created successfully' 
+        title: t('data-contracts:messages.success', 'Success'), 
+        description: t('data-contracts:form.createSuccess', 'Data contract created successfully')
       });
       setOpenWizard(false); // Close the wizard on success
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create contract';
+      const message = err instanceof Error ? err.message : t('data-contracts:form.createError', 'Failed to create data contract');
       setError(message);
       toast({ 
-        title: 'Error', 
+        title: t('data-contracts:messages.error', 'Error'), 
         description: message, 
         variant: 'destructive' 
       });
@@ -160,34 +160,34 @@ export default function DataContracts() {
       const response = await fetch(`/api/data-contracts/${id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete contract');
+      if (!response.ok) throw new Error(t('data-contracts:messages.deleteError', 'Failed to delete data contract'));
       await fetchContracts();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete contract');
+      setError(err instanceof Error ? err.message : t('data-contracts:messages.deleteError', 'Failed to delete data contract'));
     }
   };
 
   const handleBulkDelete = async (selectedIds: string[]) => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected contract(s)?`)) return;
+    if (!confirm(t('data-contracts:messages.bulkDeleteConfirm', 'Are you sure you want to delete {{count}} selected contract(s)?', { count: selectedIds.length }))) return;
     try {
       const results = await Promise.allSettled(selectedIds.map(async (id) => {
         const res = await fetch(`/api/data-contracts/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(`ID ${id}: delete failed`);
+        if (!res.ok) throw new Error(t('data-contracts:messages.bulkDeleteRowError', 'ID {{id}}: delete failed', { id }));
         return id;
       }));
       const successes = results.filter(r => r.status === 'fulfilled').length;
       const failures = results.filter(r => r.status === 'rejected').length;
       if (successes > 0) {
-        toast({ title: 'Bulk Delete Success', description: `${successes} contract(s) deleted.` });
+        toast({ title: t('data-contracts:messages.bulkDeleteSuccessTitle', 'Bulk Delete Success'), description: t('data-contracts:messages.bulkDeleteSuccess', '{{count}} contract(s) deleted.', { count: successes }) });
       }
       if (failures > 0) {
         const firstError = (results.find(r => r.status === 'rejected') as PromiseRejectedResult)?.reason?.message || 'Unknown error';
-        toast({ title: 'Bulk Delete Error', description: `${failures} contract(s) could not be deleted. First error: ${firstError}`, variant: 'destructive' });
+        toast({ title: t('data-contracts:messages.bulkDeleteErrorTitle', 'Bulk Delete Error'), description: t('data-contracts:messages.bulkDeleteError', '{{count}} contract(s) could not be deleted. First error: {{error}}', { count: failures, error: firstError }), variant: 'destructive' });
       }
       await fetchContracts();
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to bulk delete', variant: 'destructive' });
+      toast({ title: t('data-contracts:messages.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:messages.bulkDeleteFailed', 'Failed to bulk delete'), variant: 'destructive' });
     }
   };
 
@@ -205,15 +205,15 @@ export default function DataContracts() {
         )
       );
       const failed = results.filter(r => !r.ok);
-      if (failed.length > 0) throw new Error('Failed to submit access requests');
-      toast({ title: 'Request Sent', description: 'Access request submitted. You will be notified.' });
+      if (failed.length > 0) throw new Error(t('data-contracts:messages.accessRequestError', 'Failed to submit access requests'));
+      toast({ title: t('data-contracts:messages.requestSentTitle', 'Request Sent'), description: t('data-contracts:messages.requestSent', 'Access request submitted. You will be notified.') });
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to submit', variant: 'destructive' });
+      toast({ title: t('data-contracts:messages.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:messages.submitFailed', 'Failed to submit'), variant: 'destructive' });
     }
   };
 
   const handleDeleteContract = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this contract?')) return;
+    if (!confirm(t('data-contracts:messages.deleteConfirm', 'Are you sure you want to delete this data contract?'))) return;
     await deleteContract(id);
   };
 
@@ -223,7 +223,7 @@ export default function DataContracts() {
 
       const file = acceptedFiles[0];
       if (!file.type.startsWith('text/') && file.type !== 'application/json' && file.type !== 'application/x-yaml') {
-        setUploadError({ message: 'Please upload a text file (JSON, YAML, etc)' });
+        setUploadError({ message: t('data-contracts:messages.uploadFileTypeError', 'Please upload a text file (JSON, YAML, etc)') });
         return;
       }
 
@@ -240,7 +240,7 @@ export default function DataContracts() {
         });
 
         if (!response.ok) {
-          let errorMsg = 'Failed to upload contract';
+          let errorMsg = t('data-contracts:messages.uploadError', 'Failed to upload contract');
           let errorDetail: string | undefined;
           try {
             const contentType = response.headers.get('Content-Type');
@@ -250,7 +250,7 @@ export default function DataContracts() {
                 if (typeof errorBody.detail === 'string') {
                   errorMsg = errorBody.detail;
                 } else {
-                  errorMsg = errorBody.detail.message || 'Upload failed';
+                  errorMsg = errorBody.detail.message || t('data-contracts:messages.uploadFailed', 'Upload failed');
                   errorDetail = errorBody.detail.error;
                 }
               } else if (errorBody?.message) {
@@ -265,7 +265,7 @@ export default function DataContracts() {
           
           const combined = (errorMsg + ' ' + (errorDetail || '')).toLowerCase();
           if (combined.includes('odps') || combined.includes('outputports')) {
-            errorMsg += '\n\nHint: This page is for Data Contracts (ODCS format). If you\'re trying to upload a Data Product (ODPS format), please use the Data Products page instead.';
+            errorMsg += t('data-contracts:messages.uploadOdpsHint', '\n\nHint: This page is for Data Contracts (ODCS format). If you\'re trying to upload a Data Product (ODPS format), please use the Data Products page instead.');
           }
           
           setUploadError({ message: errorMsg, detail: errorDetail });
@@ -274,9 +274,9 @@ export default function DataContracts() {
 
         await fetchContracts();
         setOpenUploadDialog(false);
-        toast({ title: 'Success', description: 'Contract uploaded successfully' });
+        toast({ title: t('data-contracts:messages.success', 'Success'), description: t('data-contracts:messages.uploadSuccess', 'Contract uploaded successfully') });
       } catch (err) {
-        setUploadError({ message: err instanceof Error ? err.message : 'Failed to upload contract' });
+        setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:messages.uploadError', 'Failed to upload contract') });
       } finally {
         setUploading(false);
       }
@@ -412,7 +412,7 @@ export default function DataContracts() {
           <div className="flex flex-wrap items-center gap-1.5">
             {contract.draftOwnerId && (
               <Badge variant="outline" className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
-                Personal
+                {t('data-contracts:list.personal', 'Personal')}
               </Badge>
             )}
             <Badge variant="outline" className={getStatusColor(row.getValue("status"))}>
@@ -491,7 +491,7 @@ export default function DataContracts() {
               variant="ghost"
               size="icon"
               onClick={(e) => { e.stopPropagation(); setPreviewContractId(contract.id ?? null); setPreviewContractTitle(contract.name ?? ''); }}
-              title="Preview Metadata"
+              title={t('data-contracts:table.previewMetadata', 'Preview Metadata')}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -538,7 +538,7 @@ export default function DataContracts() {
             onClick={() => setError(null)}
             title={t('common:tooltips.dismiss')}
           >
-            <span className="sr-only">Dismiss</span>
+            <span className="sr-only">{t('common:tooltips.dismiss', 'Dismiss')}</span>
             ×
           </Button>
         </Alert>
@@ -588,12 +588,12 @@ export default function DataContracts() {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-xs">
-                      <p className="font-medium">Upload Data Contract (ODCS format)</p>
+                      <p className="font-medium">{t('data-contracts:import.uploadTooltipTitle', 'Upload Data Contract (ODCS format)')}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Accepts JSON, YAML, or text files following the ODCS (Open Data Contract Standard) schema.
+                        {t('data-contracts:import.uploadTooltipFormats', 'Accepts JSON, YAML, or text files following the ODCS (Open Data Contract Standard) schema.')}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        For Data Products (ODPS), use the Data Products page instead.
+                        {t('data-contracts:import.uploadTooltipOdps', 'For Data Products (ODPS), use the Data Products page instead.')}
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -611,7 +611,7 @@ export default function DataContracts() {
                 title={t('common:tooltips.requestAccessForSelected')}
               >
                 <KeyRound className="w-4 h-4 mr-1" />
-                Request Access ({selectedRows.length})
+                {t('data-contracts:list.requestAccess', 'Request Access ({{count}})', { count: selectedRows.length })}
               </Button>
               <Button
                 variant="destructive"
@@ -621,7 +621,7 @@ export default function DataContracts() {
                 title={t('common:tooltips.deleteSelected')}
               >
                 <Trash2 className="w-4 h-4 mr-1" />
-                Delete Selected ({selectedRows.length})
+                {t('common:actions.deleteSelected', 'Delete Selected ({{count}})', { count: selectedRows.length })}
               </Button>
             </>
           )}
@@ -636,7 +636,7 @@ export default function DataContracts() {
       <Dialog open={openUploadDialog} onOpenChange={setOpenUploadDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upload Data Contract</DialogTitle>
+            <DialogTitle>{t('data-contracts:import.uploadTitle', 'Upload Data Contract')}</DialogTitle>
           </DialogHeader>
           {uploadError && (
             <Alert variant="destructive" className="mb-4 relative pr-8">
@@ -650,7 +650,7 @@ export default function DataContracts() {
                     onClick={() => setShowErrorDetail(!showErrorDetail)}
                   >
                     {showErrorDetail ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                    Technical details
+                    {t('data-contracts:import.technicalDetails', 'Technical details')}
                   </button>
                 )}
                 {showErrorDetail && uploadError.detail && (
@@ -664,7 +664,7 @@ export default function DataContracts() {
                 title={t('common:tooltips.dismiss')}
               >
                 <X className="h-4 w-4" />
-                <span className="sr-only">Dismiss</span>
+                <span className="sr-only">{t('common:tooltips.dismiss', 'Dismiss')}</span>
               </button>
             </Alert>
           )}
@@ -683,17 +683,17 @@ export default function DataContracts() {
               <>
                 <p className="text-sm text-muted-foreground">
                   {isDragActive
-                    ? 'Drop the file here'
-                    : 'Drag and drop a contract file here, or click to select'}
+                    ? t('data-contracts:import.dropActive', 'Drop the file here')
+                    : t('data-contracts:import.dropInactive', 'Drag and drop a contract file here, or click to select')}
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Supported formats: JSON, YAML, or plain text
+                  {t('data-contracts:import.supportedFormats', 'Supported formats: JSON, YAML, or plain text')}
                 </p>
               </>
             )}
           </div>
           <div className="mt-4">
-            <Label htmlFor="odcsPaste">Or paste ODCS JSON</Label>
+            <Label htmlFor="odcsPaste">{t('data-contracts:import.orPasteOdcs', 'Or paste ODCS JSON')}</Label>
             <textarea
               id="odcsPaste"
               placeholder={t('common:placeholders.pasteODCSJSON')}
@@ -719,21 +719,21 @@ export default function DataContracts() {
                   })
                   if (!res.ok) {
                     const err = await res.json().catch(() => null)
-                    throw new Error(err?.detail?.message || err?.detail || 'Failed to import ODCS JSON')
+                    throw new Error(err?.detail?.message || err?.detail || t('data-contracts:import.importOdcsError', 'Failed to import ODCS JSON'))
                   }
                   await fetchContracts()
                   setOpenUploadDialog(false)
                   setOdcsPaste('')
-                  toast({ title: 'Imported', description: 'ODCS JSON imported successfully' })
+                  toast({ title: t('data-contracts:import.importedTitle', 'Imported'), description: t('data-contracts:import.importedSuccess', 'ODCS JSON imported successfully') })
                 } catch (err) {
-                  setUploadError({ message: err instanceof Error ? err.message : 'Failed to import ODCS JSON' })
+                  setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:import.importOdcsError', 'Failed to import ODCS JSON') })
                 } finally {
                   setImportingPaste(false)
                 }
               }}
             >
               {importingPaste && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Import JSON
+              {t('data-contracts:import.importJsonButton', 'Import JSON')}
             </Button>
           </div>
         </DialogContent>

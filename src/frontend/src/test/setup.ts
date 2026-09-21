@@ -1,6 +1,18 @@
 import '@testing-library/jest-dom/vitest';
+// Install the localStorage mock before any other import so it exists at
+// module-evaluation time for imports that touch it (e.g. the i18n config).
+import './localstorage';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
+
+// Initialize the real i18n instance (loads all English namespaces) so that
+// components using useTranslation()/t() render resolved English text instead
+// of raw keys. Without this, migrated components emit keys like
+// "workflows:templateVars.loadFailedWithError" and assertions written against
+// the English copy fail. Force English for deterministic output regardless of
+// jsdom's navigator language.
+import i18n from '../i18n/config';
+i18n.changeLanguage('en');
 
 // Cleanup after each test
 afterEach(() => {
@@ -117,34 +129,8 @@ afterEach(() => {
   console.warn = originalWarn;
 });
 
-// Mock localStorage
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => {
-      store[key] = value.toString();
-    },
-    removeItem: (key: string) => {
-      delete store[key];
-    },
-    clear: () => {
-      store = {};
-    },
-    get length() {
-      return Object.keys(store).length;
-    },
-    key: (index: number) => {
-      const keys = Object.keys(store);
-      return keys[index] || null;
-    },
-  };
-})();
-
-global.localStorage = localStorageMock as any;
-
-// Clear localStorage before each test
+// localStorage mock is installed via the './localstorage' import above.
+// Clear it before each test.
 beforeEach(() => {
   localStorage.clear();
 });

@@ -37,6 +37,7 @@ import { useApi } from '@/hooks/use-api';
 import TagSelector from '@/components/ui/tag-selector';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import { ConsumerGroupsPicker } from '@/components/data-products/consumer-groups-picker';
+import { useTranslation } from 'react-i18next';
 
 // --- Prop Types --- 
 interface DataProductFormDialogProps {
@@ -208,6 +209,7 @@ interface PortMetadataEditorProps {
 const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
   control: _control, register: _register, getValues, setValue, portIndex, portType
 }) => {
+  const { t } = useTranslation(['data-products', 'common']);
   const linksFieldName = `${portType}.${portIndex}.links` as const;
   const customFieldName = `${portType}.${portIndex}.custom` as const;
 
@@ -229,11 +231,11 @@ const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
     <div className="space-y-4 mt-4 pt-4 border-t">
         {/* Port Links Editor */}
         <div className="space-y-2">
-            <Label className="font-semibold">Port Links</Label>
+            <Label className="font-semibold">{t('data-products:form.portEditor.portLinks')}</Label>
             {portLinksArray.map((link: { key: string, value: string }, index: number) => (
                <div key={`link-${portType}-${portIndex}-${index}`} className="flex items-center gap-2">
                   <Input
-                      placeholder="Link Key"
+                      placeholder={t('data-products:form.portEditor.linkKey')}
                       value={link.key}
                       onChange={(e) => {
                           const newArr = [...portLinksArray];
@@ -243,7 +245,7 @@ const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
                       className="flex-1"
                   />
                   <Input
-                      placeholder="URL"
+                      placeholder={t('data-products:form.portEditor.url')}
                       value={link.value}
                        onChange={(e) => {
                           const newArr = [...portLinksArray];
@@ -255,7 +257,7 @@ const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
                   <Button
                       type="button" variant="ghost" size="icon"
                       onClick={() => setPortLinksArray(portLinksArray.filter((_: { key: string, value: string }, i: number) => i !== index))}
-                      className="text-destructive" title="Remove Link">
+                      className="text-destructive" title={t('data-products:form.portEditor.removeLink')}>
                       <X className="h-4 w-4" />
                   </Button>
                </div>
@@ -264,18 +266,18 @@ const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
               <Button
                  type="button" variant="outline" size="sm"
                  onClick={() => setPortLinksArray([...portLinksArray, { key: '', value: '' }])}>
-                 <Plus className="mr-2 h-4 w-4"/> Add Link
+                 <Plus className="mr-2 h-4 w-4"/> {t('data-products:form.portEditor.addLink')}
               </Button>
             </div>
         </div>
 
         {/* Port Custom Properties Editor */}
         <div className="space-y-2">
-            <Label className="font-semibold">Port Custom Properties</Label>
+            <Label className="font-semibold">{t('data-products:form.portEditor.portCustomProperties')}</Label>
             {portCustomArray.map((custom: { key: string, value: any }, index: number) => (
                <div key={`custom-${portType}-${portIndex}-${index}`} className="flex items-center gap-2">
                   <Input
-                      placeholder="Property Key"
+                      placeholder={t('data-products:form.portEditor.propertyKey')}
                       value={custom.key}
                       onChange={(e) => {
                           const newArr = [...portCustomArray];
@@ -285,7 +287,7 @@ const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
                       className="flex-1"
                   />
                   <Input
-                      placeholder="Property Value"
+                      placeholder={t('data-products:form.portEditor.propertyValue')}
                       value={custom.value}
                        onChange={(e) => {
                           const newArr = [...portCustomArray];
@@ -297,7 +299,7 @@ const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
                   <Button
                       type="button" variant="ghost" size="icon"
                       onClick={() => setPortCustomArray(portCustomArray.filter((_: { key: string, value: any }, i: number) => i !== index))}
-                      className="text-destructive" title="Remove Property">
+                      className="text-destructive" title={t('data-products:form.portEditor.removeProperty')}>
                       <X className="h-4 w-4" />
                   </Button>
                </div>
@@ -306,7 +308,7 @@ const PortMetadataEditor: React.FC<PortMetadataEditorProps> = React.memo(({
               <Button
                  type="button" variant="outline" size="sm"
                  onClick={() => setPortCustomArray([...portCustomArray, { key: '', value: '' }])}>
-                 <Plus className="mr-2 h-4 w-4"/> Add Custom Property
+                 <Plus className="mr-2 h-4 w-4"/> {t('data-products:form.portEditor.addCustomProperty')}
               </Button>
             </div>
         </div>
@@ -327,6 +329,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 }) => {
   const { get, post, put } = api; // Destructure methods from passed api object
   const { toast } = useToast();
+  const { t } = useTranslation(['data-products', 'common']);
   const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext();
   const isEditMode = !!initialProduct?.id;
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
@@ -401,7 +404,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     const fetchAndCompileSchema = async () => {
       if (!isOpen || dataProductSchema || !ajv.current) return; // Only fetch if open and not already loaded
       setIsSchemaLoading(true);
-      setValidationStatusMessage("Loading schema...");
+      setValidationStatusMessage(t('data-products:form.validation.loadingSchema'));
       setSchemaValidationErrors(null);
       try {
         const response = await get<object>(`/api/metadata/schemas/${schemaName}`);
@@ -409,17 +412,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         setDataProductSchema(schema);
         const validate = ajv.current.compile(schema);
         setSchemaValidator(() => validate);
-        setValidationStatusMessage("Schema ready.");
+        setValidationStatusMessage(t('data-products:form.validation.schemaReady'));
       } catch (err: any) {
         console.error("Error fetching or compiling schema:", err);
-        setValidationStatusMessage(`Error loading schema: ${err.message}`);
-        toast({ title: 'Schema Error', description: `Could not load schema: ${err.message}`, variant: 'destructive' });
+        setValidationStatusMessage(t('data-products:form.messages.couldNotLoadSchema', { message: err.message }));
+        toast({ title: t('data-products:form.validation.schemaError'), description: t('data-products:form.messages.couldNotLoadSchema', { message: err.message }), variant: 'destructive' });
       } finally {
         setIsSchemaLoading(false);
       }
     };
     fetchAndCompileSchema();
-  }, [isOpen, get, dataProductSchema, toast]); // Add toast to dependencies
+  }, [isOpen, get, dataProductSchema, toast, t]); // Add toast to dependencies
 
   // Effect to load product data when dialog opens in edit mode
   useEffect(() => {
@@ -477,8 +480,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
         } catch (err: any) {
           console.error('Error loading product for editing:', err);
-          setFormError(`Failed to load product details: ${err.message}`);
-          toast({ title: "Error Loading Data", description: `Could not fetch details. ${err.message}`, variant: "destructive" });
+          setFormError(t('data-products:form.messages.failedToLoadDetails', { message: err.message }));
+          toast({ title: t('data-products:form.messages.errorLoadingData'), description: t('data-products:form.messages.couldNotFetchDetails', { message: err.message }), variant: "destructive" });
           // Maybe close the dialog if loading fails critically?
           // onOpenChange(false);
         } finally {
@@ -504,7 +507,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
     loadProductForEdit();
 
-  }, [isOpen, isEditMode, initialProduct, get, reset, toast, schemaValidator, fetchUserProjects]); // Dependencies
+  }, [isOpen, isEditMode, initialProduct, get, reset, toast, schemaValidator, fetchUserProjects, t]); // Dependencies
 
   // Set default project when creating new product and currentProject is available
   useEffect(() => {
@@ -571,7 +574,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   // Validate product object against schema
   const validateProductObject = (data: any): boolean => {
     if (!schemaValidator) {
-      setValidationStatusMessage("Schema not ready.");
+      setValidationStatusMessage(t('data-products:form.validation.schemaNotReady'));
       setIsJsonValid(false); // Assume invalid if no validator
       setSchemaValidationErrors(null);
       return false;
@@ -582,7 +585,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
     const isValid = schemaValidator(data);
     if (isValid) {
-       setValidationStatusMessage("Schema Valid");
+       setValidationStatusMessage(t('data-products:form.validation.schemaValid'));
        setIsJsonValid(true);
        setSchemaValidationErrors(null);
     } else {
@@ -590,7 +593,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
        const errors = schemaValidator.errors ?? [];
        setSchemaValidationErrors(errors);
        const errorCount = errors.length;
-       setValidationStatusMessage(`${errorCount} schema validation error(s)`); 
+       setValidationStatusMessage(t('data-products:form.validation.schemaErrors', { count: errorCount }));
     }
     return isValid;
   };
@@ -611,7 +614,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     } catch (error: any) {
       setIsJsonValid(false);
       setJsonParseError(error.message); // Set specific parse error
-      setValidationStatusMessage("Invalid JSON syntax");
+      setValidationStatusMessage(t('data-products:form.validation.invalidJsonSyntax'));
       setSchemaValidationErrors(null); // Clear schema errors if syntax is wrong
     }
   };
@@ -645,8 +648,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
            setActiveTab('json');
          } catch (err: any) {
            console.error("Error preparing JSON from UI state:", err);
-           setJsonParseError("Failed to serialize UI state to JSON.");
-           toast({ title: "Sync Error", description: "Could not sync UI state to JSON editor.", variant: "destructive" });
+           setJsonParseError(t('data-products:form.messages.failedToSerialize'));
+           toast({ title: t('data-products:form.messages.syncError'), description: t('data-products:form.messages.couldNotSyncUiToJson'), variant: "destructive" });
          }
       })(); // Immediately invoke handleSubmit
 
@@ -659,9 +662,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
          
          // Validate before attempting to reset the form
          if (!validateProductObject(parsedData)) {
-             toast({ 
-                 title: "Invalid JSON", 
-                 description: "Cannot switch to UI editor. Please fix schema validation errors first.",
+             toast({
+                 title: t('data-products:form.messages.invalidJson'),
+                 description: t('data-products:form.messages.invalidJsonDescription'),
                  variant: "destructive"
              });
              return; // Prevent switching tabs
@@ -717,9 +720,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
        } catch (error: any) {
           setIsJsonValid(false);
-          setJsonParseError(`Invalid JSON: ${error.message}`);
-          setValidationStatusMessage("Invalid JSON syntax");
-          toast({ title: "Sync Error", description: `Could not parse JSON: ${error.message}`, variant: "destructive" });
+          setJsonParseError(t('data-products:form.messages.invalidJsonError', { message: error.message }));
+          setValidationStatusMessage(t('data-products:form.validation.invalidJsonSyntax'));
+          toast({ title: t('data-products:form.messages.syncError'), description: t('data-products:form.messages.couldNotParseJson', { message: error.message }), variant: "destructive" });
        }
     }
   };
@@ -743,8 +746,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
     // Re-validate the cleaned payload before submitting
     if (!validateProductObject(payload)) {
-        setFormError("Data failed schema validation. Please check the highlighted fields or the JSON editor.");
-        toast({ title: "Validation Error", description: "Please fix validation errors before saving.", variant: "destructive" });
+        setFormError(t('data-products:form.validation.dataFailedValidation'));
+        toast({ title: t('data-products:form.messages.validationError'), description: t('data-products:form.messages.pleaseFixValidation'), variant: "destructive" });
         setActiveTab('json'); // Switch to JSON tab to show errors easily
         // Update jsonString state to reflect the *cleaned* payload causing validation errors
         setJsonString(JSON.stringify(payload, null, 2));
@@ -777,15 +780,15 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
             result = checkApiResponse(response, 'Create Product');
         }
 
-        toast({ title: 'Success', description: `Data product ${isEditMode ? 'updated' : 'created'}.` });
+        toast({ title: t('data-products:messages.success'), description: isEditMode ? t('data-products:form.updateSuccess') : t('data-products:form.createSuccess') });
         onSubmitSuccess(result); // Call the success callback from parent
         onOpenChange(false); // Close dialog on success
 
     } catch (err: any) {
         console.error('Error submitting product form:', err);
-        const errorMsg = err.message || 'An unexpected error occurred.';
+        const errorMsg = err.message || t('data-products:form.messages.unexpectedError');
         setFormError(errorMsg);
-        toast({ title: 'Save Error', description: errorMsg, variant: 'destructive' });
+        toast({ title: t('data-products:form.messages.saveError'), description: errorMsg, variant: 'destructive' });
     }
   };
 
@@ -803,8 +806,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
       const parsedData = JSON.parse(jsonString);
       // Validate structure first
       if (!validateProductObject(parsedData)) {
-        toast({ title: "Validation Error", description: "JSON data failed schema validation. Cannot save.", variant: "destructive" });
-        return; 
+        toast({ title: t('data-products:form.messages.validationError'), description: t('data-products:form.messages.jsonDataFailedValidation'), variant: "destructive" });
+        return;
       }
       // Pass the parsed and validated JSON data to the submit logic
       await performSubmit(parsedData); 
@@ -812,10 +815,10 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     } catch (error: any) {
       console.error("Error submitting JSON:", error);
       setIsJsonValid(false);
-      const errorMsg = `Invalid JSON: ${error.message}`;
+      const errorMsg = t('data-products:form.messages.invalidJsonError', { message: error.message });
       setJsonParseError(errorMsg);
       setFormError(errorMsg); // Show error in form area too
-      toast({ title: "Save Error", description: errorMsg, variant: "destructive" });
+      toast({ title: t('data-products:form.messages.saveError'), description: errorMsg, variant: "destructive" });
     }
   };
 
@@ -823,7 +826,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   const handleCloseDialog = (open: boolean) => {
      if (!open) {
        if (isDirty) { // Check if form has unsaved changes
-          if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+          if (!confirm(t('data-products:form.confirmUnsavedClose'))) {
              return; // Prevent closing
           }
        }
@@ -853,17 +856,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {isEditMode ? 'Edit Data Product' : 'Create Data Product'}
+            {isEditMode ? t('data-products:form.editTitle') : t('data-products:form.createTitle')}
           </DialogTitle>
           <DialogDescription>
-              Fill in the details for the data product. Use the tabs to switch between UI and JSON editors.
+              {t('data-products:form.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
         
         {isLoadingProduct ? (
             <div className="flex justify-center items-center h-[60vh]">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="ml-2">Loading product details...</p>
+              <p className="ml-2">{t('data-products:form.loadingDetails')}</p>
             </div>
          ) : (
             <Tabs 
@@ -872,8 +875,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
               className="flex-grow flex flex-col min-h-0"
             > 
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="ui" disabled={isSubmitting}>UI Editor</TabsTrigger>
-                  <TabsTrigger value="json" disabled={isSubmitting}>JSON Editor</TabsTrigger>
+                  <TabsTrigger value="ui" disabled={isSubmitting}>{t('data-products:form.tabs.uiEditor')}</TabsTrigger>
+                  <TabsTrigger value="json" disabled={isSubmitting}>{t('data-products:form.tabs.jsonEditor')}</TabsTrigger>
                 </TabsList>
 
                 {/* UI Editor Tab */} 
@@ -884,11 +887,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* ID and Spec Version */} 
                           <div className="grid grid-cols-2 gap-4">
                               <div>
-                                <Label htmlFor="productId">ID (unique identifier)</Label>
-                                <Input 
-                                  id="productId" 
-                                  {...register("id")} 
-                                  placeholder={isEditMode ? "(System ID)" : "e.g., my-unique-product (optional)"}
+                                <Label htmlFor="productId">{t('data-products:form.fields.id')}</Label>
+                                <Input
+                                  id="productId"
+                                  {...register("id")}
+                                  placeholder={isEditMode ? t('data-products:form.placeholders.systemId') : t('data-products:form.placeholders.productIdOptional')}
                                   disabled={isEditMode} // Disable ID editing for existing products
                                   className={isEditMode ? "bg-muted" : ""}
                                 />
@@ -897,14 +900,14 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                               {/* Version Field */}
                               {/* Make Version editable only on create */}
                               <div>
-                                <Label htmlFor="version">Version</Label>
+                                <Label htmlFor="version">{t('data-products:form.version')}</Label>
                                 <Input 
                                   id="version" 
                                   {...register("version")} 
                                   readOnly={isEditMode}
                                   disabled={isEditMode || isSubmitting}
                                   className={isEditMode ? "bg-muted cursor-not-allowed" : ""}
-                                  placeholder="e.g., 1.0.0"
+                                  placeholder={t('data-products:form.versionPlaceholder')}
                                 />
                                 {errors.version && <p className="text-sm text-red-600 mt-1">{errors.version.message}</p>}
                               </div>
@@ -913,40 +916,40 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* Info Card */} 
                           <Card>
                             <CardHeader>
-                              <CardTitle>Info</CardTitle>
-                              <CardDescription>Basic information about the data product.</CardDescription>
+                              <CardTitle>{t('data-products:form.sections.info')}</CardTitle>
+                              <CardDescription>{t('data-products:form.sections.infoDescription')}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                               <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="info.title">Title *</Label>
-                                    <Input id="info.title" {...register("info.title", { required: "Title is required" })} />
+                                    <Label htmlFor="info.title">{t('data-products:form.fields.title')}</Label>
+                                    <Input id="info.title" {...register("info.title", { required: t('data-products:form.validation.titleRequired') })} />
                                     {errors.info?.title && <p className="text-sm text-red-600 mt-1">{errors.info.title.message}</p>}
                                   </div>
                                   <div>
-                                    <Label htmlFor="info.owner">Owner *</Label>
-                                      {/* TODO: Consider using a Select if owners prop is populated and meant for dropdown */} 
-                                      <Input 
-                                        id="info.owner" 
-                                        {...register("info.owner", { required: "Owner is required" })} 
+                                    <Label htmlFor="info.owner">{t('data-products:form.fields.owner')}</Label>
+                                      {/* TODO: Consider using a Select if owners prop is populated and meant for dropdown */}
+                                      <Input
+                                        id="info.owner"
+                                        {...register("info.owner", { required: t('data-products:form.validation.ownerRequired') })}
                                       />
                                     {errors.info?.owner && <p className="text-sm text-red-600 mt-1">{errors.info.owner.message}</p>}
                                   </div>
                               </div>
                               {/* Product Type Field */} 
                               <div>
-                                  <Label htmlFor="productType">Product Type *</Label>
+                                  <Label htmlFor="productType">{t('data-products:form.fields.productType')}</Label>
                                   <Controller
                                       name="productType"
                                       control={control}
-                                      rules={{ required: "Product Type is required" }}
+                                      rules={{ required: t('data-products:form.validation.productTypeRequired') }}
                                       render={({ field }) => (
                                           <Select 
                                               onValueChange={(value) => field.onChange(value === '' ? undefined : value)} 
                                               value={field.value || ""}
                                               disabled={isSubmitting}
                                           >
-                                              <SelectTrigger><SelectValue placeholder="Select product type" /></SelectTrigger>
+                                              <SelectTrigger><SelectValue placeholder={t('data-products:form.placeholders.selectProductType')} /></SelectTrigger>
                                               <SelectContent>
                                                   {productTypes.map(pt => <SelectItem key={pt} value={pt}>{pt}</SelectItem>)}
                                               </SelectContent>
@@ -957,7 +960,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                               </div>
                               {/* Project Field */}
                               <div>
-                                  <Label htmlFor="project_id">Project</Label>
+                                  <Label htmlFor="project_id">{t('data-products:form.fields.project')}</Label>
                                   <Controller
                                       name="project_id"
                                       control={control}
@@ -967,12 +970,12 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                               value={field.value || "_none"}
                                               disabled={isSubmitting || projectsLoading}
                                           >
-                                              <SelectTrigger><SelectValue placeholder="Select project (optional)" /></SelectTrigger>
+                                              <SelectTrigger><SelectValue placeholder={t('data-products:form.placeholders.selectProject')} /></SelectTrigger>
                                               <SelectContent>
-                                                  <SelectItem value="_none">None</SelectItem>
+                                                  <SelectItem value="_none">{t('common:states.none')}</SelectItem>
                                                   {availableProjects.map(project => (
                                                       <SelectItem key={project.id} value={project.id}>
-                                                          {project.name} ({project.team_count} teams)
+                                                          {project.name} {t('data-products:form.projectTeamCount', { count: project.team_count })}
                                                       </SelectItem>
                                                   ))}
                                               </SelectContent>
@@ -980,12 +983,12 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       )}
                                   />
                                   <p className="text-xs text-muted-foreground mt-1">
-                                      You can only select projects you are a member of
+                                      {t('data-products:form.projectMemberHint')}
                                   </p>
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="domain_ids">Domains</Label>
+                                    <Label htmlFor="domain_ids">{t('data-products:form.fields.domains')}</Label>
                                     <DomainMultiSelector
                                       value={domainIds}
                                       primaryDomainId={primaryDomainId}
@@ -993,17 +996,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                         setDomainIds(ids);
                                         setPrimaryDomainId(primary);
                                       }}
-                                      placeholder="Select domains..."
+                                      placeholder={t('data-products:form.placeholders.selectDomains')}
                                     />
                                   </div>
                                   <div>
-                                    <Label htmlFor="info.archetype">Archetype</Label>
+                                    <Label htmlFor="info.archetype">{t('data-products:form.fields.archetype')}</Label>
                                     <Controller
                                       name="info.archetype"
                                       control={control}
                                       render={({ field }) => (
                                         <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
-                                          <SelectTrigger><SelectValue placeholder="Select archetype" /></SelectTrigger>
+                                          <SelectTrigger><SelectValue placeholder={t('data-products:form.placeholders.selectArchetype')} /></SelectTrigger>
                                           <SelectContent>
                                             {/* Removed archetypes prop from here */}
                                           </SelectContent>
@@ -1014,18 +1017,18 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                   </div>
                               </div>
                               <div>
-                                <Label htmlFor="info.description">Description</Label>
+                                <Label htmlFor="info.description">{t('data-products:form.description')}</Label>
                                 <Textarea id="info.description" {...register("info.description")} />
                                 {errors.info?.description && <p className="text-sm text-red-600 mt-1">{errors.info.description.message}</p>}
                               </div>
                               <div>
-                                  <Label htmlFor="info.status">Status</Label>
+                                  <Label htmlFor="info.status">{t('data-products:form.status')}</Label>
                                   <Controller
                                     name="info.status"
                                     control={control}
                                     render={({ field }) => (
                                       <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
-                                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                                        <SelectTrigger><SelectValue placeholder={t('data-products:form.placeholders.selectStatus')} /></SelectTrigger>
                                         <SelectContent>
                                           {statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                         </SelectContent>
@@ -1040,8 +1043,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* Input Ports Card */} 
                           <Card>
                               <CardHeader>
-                                <CardTitle>Consumables</CardTitle>
-                                <CardDescription>Sources feeding this product. Select tables from the metastore.</CardDescription>
+                                <CardTitle>{t('data-products:form.sections.consumables')}</CardTitle>
+                                <CardDescription>{t('data-products:form.sections.consumablesDescription')}</CardDescription>
                               </CardHeader>
                               <CardContent className="space-y-4">
                                 {inputPortFields.map((field, index) => (
@@ -1049,28 +1052,28 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       <Button 
                                           variant="ghost" size="icon" 
                                           className="absolute top-1 right-1 h-6 w-6 text-destructive" 
-                                          onClick={() => removeInputPort(index)} type="button" title="Remove Consumable">
+                                          onClick={() => removeInputPort(index)} type="button" title={t('data-products:form.consumable.removeTitle')}>
                                           <X className="h-4 w-4" />
                                       </Button>
                                       <div className="space-y-3">
                                         <div className="grid grid-cols-2 gap-4">
                                           <div>
-                                            <Label htmlFor={`inputPorts.${index}.id`}>Consumable ID *</Label>
-                                            <Input {...register(`inputPorts.${index}.id`, { required: "Consumable ID is required" })} />
+                                            <Label htmlFor={`inputPorts.${index}.id`}>{t('data-products:form.consumable.idLabel')}</Label>
+                                            <Input {...register(`inputPorts.${index}.id`, { required: t('data-products:form.consumable.idRequired') })} />
                                             {errors.inputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].id?.message}</p>}
                                           </div>
                                           <div>
-                                              <Label htmlFor={`inputPorts.${index}.name`}>Consumable Name *</Label>
-                                              <Input {...register(`inputPorts.${index}.name`, { required: "Consumable Name is required" })} />
+                                              <Label htmlFor={`inputPorts.${index}.name`}>{t('data-products:form.consumable.nameLabel')}</Label>
+                                              <Input {...register(`inputPorts.${index}.name`, { required: t('data-products:form.consumable.nameRequired') })} />
                                               {errors.inputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].name?.message}</p>}
                                           </div>
                                         </div>
                                         <div>
-                                          <Label htmlFor={`inputPorts.${index}.sourceSystemId`}>Source Table (Metastore) *</Label>
+                                          <Label htmlFor={`inputPorts.${index}.sourceSystemId`}>{t('data-products:form.consumable.sourceTableLabel')}</Label>
                                           <Controller
                                               name={`inputPorts.${index}.sourceSystemId`}
                                               control={control}
-                                              rules={{ required: "Source Table is required" }}
+                                              rules={{ required: t('data-products:form.consumable.sourceTableRequired') }}
                                               render={({ field: controllerField }) => (
                                                 <Popover open={isComboboxOpen[field.id] ?? false} onOpenChange={(open) => handleComboboxOpenChange(open, field.id)}>
                                                   <PopoverTrigger asChild>
@@ -1080,20 +1083,20 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                         aria-expanded={isComboboxOpen[field.id] ?? false}
                                                         className="w-full justify-between font-normal"
                                                       >
-                                                        {controllerField.value || "Select source table..."}
+                                                        {controllerField.value || t('data-products:form.consumable.selectSourceTable')}
                                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                       </Button>
                                                     </PopoverTrigger>
                                                     <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
                                                       <Command shouldFilter={false}>
                                                           <CommandInput 
-                                                            placeholder="Search metastore tables..."
+                                                            placeholder={t('data-products:form.consumable.searchMetastore')}
                                                             value={tableSearchQuery} 
                                                             onValueChange={handleTableSearchInputChange}
                                                           />
                                                           <CommandList>
                                                             <CommandEmpty>
-                                                                {isSearchingTables ? "Searching..." : "No tables found."}
+                                                                {isSearchingTables ? t('data-products:form.consumable.searching') : t('data-products:form.consumable.noTablesFound')}
                                                             </CommandEmpty>
                                                             <CommandGroup>
                                                               {tableSearchResults.map((table) => (
@@ -1122,11 +1125,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                             <input type="hidden" {...register(`inputPorts.${index}.type`, { value: 'table' })} />
                                         </div>
                                         <div>
-                                            <Label htmlFor={`inputPorts.${index}.description`}>Description</Label>
+                                            <Label htmlFor={`inputPorts.${index}.description`}>{t('data-products:form.description')}</Label>
                                             <Textarea {...register(`inputPorts.${index}.description`)} />
                                         </div>
                                         <div>
-                                          <Label htmlFor={`inputPorts.${index}.tags`}>Tags</Label>
+                                          <Label htmlFor={`inputPorts.${index}.tags`}>{t('data-products:form.tags')}</Label>
                                           <Controller
                                               name={`inputPorts.${index}.tags`}
                                               control={control}
@@ -1134,7 +1137,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                 <TagSelector
                                                     value={field.value || []}
                                                     onChange={field.onChange}
-                                                    placeholder="Search and select tags for this consumable..."
+                                                    placeholder={t('data-products:form.consumable.tagsPlaceholder')}
                                                     allowCreate={true}
                                                 />
                                               )}
@@ -1156,15 +1159,15 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                     type="button" variant="outline" 
                                     onClick={() => appendInputPort({ 
                                         id: `input-${inputPortFields.length + 1}`,
-                                        name: 'New Consumable',
+                                        name: t('data-products:form.consumable.defaultName'),
                                         version: '1.0.0', // Required ODPS field
                                         contractId: '', // Required ODPS field
                                         sourceSystemId: '',
                                         type: 'table', 
                                         links: {}, custom: {}, tags: []
                                     })}
-                                  > 
-                                    <Plus className="mr-2 h-4 w-4"/> Add Consumable 
+                                  >
+                                    <Plus className="mr-2 h-4 w-4"/> {t('data-products:form.consumable.add')}
                                 </Button>
                               </CardContent>
                           </Card>
@@ -1172,34 +1175,34 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* Output Ports Card */} 
                           <Card>
                               <CardHeader>
-                                <CardTitle>Deliverables</CardTitle>
-                                <CardDescription>Outputs provided by this data product.</CardDescription>
+                                <CardTitle>{t('data-products:form.sections.deliverables')}</CardTitle>
+                                <CardDescription>{t('data-products:form.sections.deliverablesDescription')}</CardDescription>
                               </CardHeader>
                               <CardContent className="space-y-4">
                                 {outputPortFields.map((field, index) => (
                                   <Card key={field.id} className="p-4 pt-8 relative">
-                                      <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 text-destructive" onClick={() => removeOutputPort(index)} type="button" title="Remove Deliverable">
+                                      <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 text-destructive" onClick={() => removeOutputPort(index)} type="button" title={t('data-products:form.deliverable.removeTitle')}>
                                          <X className="h-4 w-4" />
                                        </Button>
                                        <div className="space-y-3">
                                           <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                              <Label htmlFor={`outputPorts.${index}.id`}>Deliverable ID *</Label>
-                                              <Input {...register(`outputPorts.${index}.id`, { required: "Deliverable ID is required" })} />
+                                              <Label htmlFor={`outputPorts.${index}.id`}>{t('data-products:form.deliverable.idLabel')}</Label>
+                                              <Input {...register(`outputPorts.${index}.id`, { required: t('data-products:form.deliverable.idRequired') })} />
                                               {errors.outputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].id?.message}</p>}
                                             </div>
                                             <div>
-                                                <Label htmlFor={`outputPorts.${index}.name`}>Deliverable Name *</Label>
-                                                <Input {...register(`outputPorts.${index}.name`, { required: "Deliverable Name is required" })} />
+                                                <Label htmlFor={`outputPorts.${index}.name`}>{t('data-products:form.deliverable.nameLabel')}</Label>
+                                                <Input {...register(`outputPorts.${index}.name`, { required: t('data-products:form.deliverable.nameRequired') })} />
                                                 {errors.outputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].name?.message}</p>}
                                             </div>
                                           </div>
                                           <div>
-                                              <Label htmlFor={`outputPorts.${index}.description`}>Description</Label>
+                                              <Label htmlFor={`outputPorts.${index}.description`}>{t('data-products:form.description')}</Label>
                                               <Textarea {...register(`outputPorts.${index}.description`)} />
                                           </div>
                                           <div>
-                                            <Label htmlFor={`outputPorts.${index}.tags`}>Tags</Label>
+                                            <Label htmlFor={`outputPorts.${index}.tags`}>{t('data-products:form.tags')}</Label>
                                             <Controller
                                                 name={`outputPorts.${index}.tags`}
                                                 control={control}
@@ -1207,7 +1210,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                   <TagSelector
                                                       value={field.value || []}
                                                       onChange={field.onChange}
-                                                      placeholder="Search and select tags for this deliverable..."
+                                                      placeholder={t('data-products:form.deliverable.tagsPlaceholder')}
                                                       allowCreate={true}
                                                   />
                                                 )}
@@ -1229,14 +1232,14 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                   type="button" variant="outline" 
                                   onClick={() => appendOutputPort({ 
                                       id: `output-${outputPortFields.length + 1}`,
-                                      name: 'New Deliverable',
+                                      name: t('data-products:form.deliverable.defaultName'),
                                       version: '1.0.0', // Required ODPS field
                                       description: '',
                                       type: 'table', 
                                       links: {}, custom: {}, tags: [] 
                                    })}
-                                > 
-                                  <Plus className="mr-2 h-4 w-4"/> Add Deliverable 
+                                >
+                                  <Plus className="mr-2 h-4 w-4"/> {t('data-products:form.deliverable.add')}
                                 </Button>
                               </CardContent>
                           </Card>
@@ -1244,8 +1247,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* Main Tags Card */} 
                           <Card>
                             <CardHeader>
-                              <CardTitle>Tags</CardTitle>
-                              <CardDescription>Add relevant tags (comma-separated).</CardDescription>
+                              <CardTitle>{t('data-products:form.tags')}</CardTitle>
+                              <CardDescription>{t('data-products:form.sections.tagsDescription')}</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Controller
@@ -1255,7 +1258,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       <TagSelector
                                           value={field.value || []}
                                           onChange={field.onChange}
-                                          placeholder="Search and select tags for this data product..."
+                                          placeholder={t('data-products:form.tagsProductPlaceholder')}
                                           allowCreate={true}
                                       />
                                     )}
@@ -1266,9 +1269,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* Consumer Groups Card */}
                           <Card>
                             <CardHeader>
-                              <CardTitle>Consumer Groups</CardTitle>
+                              <CardTitle>{t('data-products:form.sections.consumerGroups')}</CardTitle>
                               <CardDescription>
-                                Workspace groups that represent the expected consumers of this product. Each entry is stored as a typed principal <code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>; surfaced to subscribe webhooks via <code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
+                                {t('data-products:form.sections.consumerGroupsDescriptionPart1')}<code className="text-xs">{'{'}type: "group", value: "..."{'}'}</code>{t('data-products:form.sections.consumerGroupsDescriptionPart2')}<code className="text-xs">${'{'}entity.consumer_principals{'}'}</code>.
                               </CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -1288,14 +1291,14 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* Main Links Card */} 
                           <Card>
                               <CardHeader>
-                                  <CardTitle>Links</CardTitle>
-                                  <CardDescription>Add relevant links (e.g., documentation, dashboards).</CardDescription>
+                                  <CardTitle>{t('data-products:form.sections.links')}</CardTitle>
+                                  <CardDescription>{t('data-products:form.sections.linksDescription')}</CardDescription>
                               </CardHeader>
                               <CardContent className="space-y-3">
                                   {linksArray.map((link, index) => (
                                     <div key={`main-link-${index}`} className="flex items-center gap-2">
-                                        <Input 
-                                            placeholder="Link Key (e.g., docs)" 
+                                        <Input
+                                            placeholder={t('data-products:form.links.keyPlaceholder')}
                                             value={link.key}
                                             onChange={(e) => {
                                                 const newLinks = [...linksArray];
@@ -1304,8 +1307,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                             }}
                                             className="flex-1"
                                         />
-                                        <Input 
-                                            placeholder="URL *" 
+                                        <Input
+                                            placeholder={t('data-products:form.links.urlPlaceholder')}
                                             value={link.url}
                                             onChange={(e) => {
                                               const newLinks = [...linksArray];
@@ -1314,8 +1317,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                             }}
                                             className="flex-1"
                                         />
-                                        <Input 
-                                            placeholder="Description" 
+                                        <Input
+                                            placeholder={t('data-products:form.links.descriptionPlaceholder')}
                                             value={link.description}
                                             onChange={(e) => {
                                               const newLinks = [...linksArray];
@@ -1324,13 +1327,13 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                             }}
                                             className="flex-1"
                                         />
-                                        <Button type="button" variant="ghost" size="icon" onClick={() => setLinksArray(linksArray.filter((_, i) => i !== index))} className="text-destructive" title="Remove Link">
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => setLinksArray(linksArray.filter((_, i) => i !== index))} className="text-destructive" title={t('data-products:form.links.removeTitle')}>
                                             <X className="h-4 w-4" />
                                         </Button>
                                     </div>
                                   ))}
                                   <Button type="button" variant="outline" onClick={() => setLinksArray([...linksArray, { key: '', url: '', description: '' }])}>
-                                    <Plus className="mr-2 h-4 w-4"/> Add Link
+                                    <Plus className="mr-2 h-4 w-4"/> {t('data-products:form.links.add')}
                                   </Button>
                               </CardContent>
                           </Card>
@@ -1338,14 +1341,14 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                           {/* Main Custom Properties Card */} 
                           <Card>
                             <CardHeader>
-                                <CardTitle>Custom Properties</CardTitle>
-                                <CardDescription>Add custom key-value metadata.</CardDescription>
+                                <CardTitle>{t('data-products:form.sections.customProperties')}</CardTitle>
+                                <CardDescription>{t('data-products:form.sections.customPropertiesDescription')}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                   {customArray.map((custom, index) => (
                                     <div key={`main-custom-${index}`} className="flex items-center gap-2">
-                                        <Input 
-                                            placeholder="Property Key" 
+                                        <Input
+                                            placeholder={t('data-products:form.customProps.keyPlaceholder')}
                                             value={custom.key}
                                             onChange={(e) => {
                                                 const newCustom = [...customArray];
@@ -1354,8 +1357,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                             }}
                                             className="flex-1"
                                         />
-                                        <Input 
-                                            placeholder="Property Value (string)" 
+                                        <Input
+                                            placeholder={t('data-products:form.customProps.valuePlaceholder')}
                                             value={custom.value} // Treat as string in UI
                                             onChange={(e) => {
                                               const newCustom = [...customArray];
@@ -1364,13 +1367,13 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                             }}
                                             className="flex-1"
                                         />
-                                        <Button type="button" variant="ghost" size="icon" onClick={() => setCustomArray(customArray.filter((_, i) => i !== index))} className="text-destructive" title="Remove Property">
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => setCustomArray(customArray.filter((_, i) => i !== index))} className="text-destructive" title={t('data-products:form.customProps.removeTitle')}>
                                             <X className="h-4 w-4" />
                                         </Button>
                                     </div>
                                   ))}
                                   <Button type="button" variant="outline" onClick={() => setCustomArray([...customArray, { key: '', value: '' }])}>
-                                    <Plus className="mr-2 h-4 w-4"/> Add Custom Property
+                                    <Plus className="mr-2 h-4 w-4"/> {t('data-products:form.customProps.add')}
                                   </Button>
                             </CardContent>
                           </Card>
@@ -1389,14 +1392,14 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                     
                   {/* UI Form Footer - Outside scrollable div, inside TabsContent */} 
                   <DialogFooter className="px-6 pb-6 pt-4 border-t">
-                    <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>Cancel</Button>
+                    <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>{t('data-products:form.cancel')}</Button>
                     <Button 
                       type="submit" 
                       form="data-product-ui-form" 
                       disabled={isSubmitting || isLoadingProduct}
                     >
                       {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                      {isSubmitting ? "Saving..." : (isEditMode ? 'Update Product' : 'Create Product')}
+                      {isSubmitting ? t('data-products:form.saving') : (isEditMode ? t('data-products:form.buttons.updateProduct') : t('data-products:form.buttons.createProduct'))}
                     </Button>
                   </DialogFooter>
                 </TabsContent>
@@ -1413,7 +1416,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                     `}</style> */} 
                     {/* Remove inner wrapper div */}
                     {/* <div className="pr-4 space-y-2 flex flex-col json-editor-wrapper"> */} 
-                      <Label htmlFor="jsonEditor">JSON Payload</Label>
+                      <Label htmlFor="jsonEditor">{t('data-products:form.jsonPayloadLabel')}</Label>
                       {/* Restore Textarea */}
                       <Textarea
                           id="jsonEditor"
@@ -1425,15 +1428,15 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                               "font-mono text-sm h-[400px] resize-none w-full", 
                               (!isJsonValid || jsonParseError) && "border-destructive focus-visible:ring-destructive"
                           )}
-                          placeholder='Enter or edit the Data Product JSON...'
+                          placeholder={t('data-products:form.jsonPlaceholder')}
                         />
                        {/* Status/Error Display Area */} 
                        <div className="text-sm min-h-[40px]"> 
                           {jsonParseError ? (
-                              <p className="text-destructive">Syntax Error: {jsonParseError}</p>
+                              <p className="text-destructive">{t('data-products:form.syntaxErrorLabel')} {jsonParseError}</p>
                           ) : validationStatusMessage && (
                               <p className={cn(isJsonValid ? "text-green-600" : "text-destructive")}>
-                                Validation Status: {validationStatusMessage}
+                                {t('data-products:form.validationStatusLabel')} {validationStatusMessage}
                               </p>
                           )}
                        </div>
@@ -1442,7 +1445,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                            <Accordion type="single" collapsible className="w-full border-t pt-2 pb-2"> {/* Add pb-2 for spacing before footer */} 
                              <AccordionItem value="item-1" className="border-b-0">
                                <AccordionTrigger className="text-sm text-destructive hover:no-underline py-1">
-                                   Show {schemaValidationErrors.length} validation details
+                                   {t('data-products:form.showValidationDetails', { count: schemaValidationErrors.length })}
                                </AccordionTrigger>
                                <AccordionContent>
                                  <ScrollArea className="max-h-[150px] w-full rounded-md border bg-muted">
@@ -1457,15 +1460,15 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                     {/* </div> */} {/* Remove closing wrapper div */} 
 
                     {/* Footer scrolls with content */}
-                    <DialogFooter className="px-6 pb-6 pt-4 border-t"> 
-                      <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>Cancel</Button>
+                    <DialogFooter className="px-6 pb-6 pt-4 border-t">
+                      <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>{t('data-products:form.cancel')}</Button>
                       <Button 
                         type="button" 
                         onClick={submitFromJson}
                         disabled={isSubmitting || isLoadingProduct || !isJsonValid || !!jsonParseError}
                       >
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                        {isSubmitting ? "Saving..." : (isEditMode ? 'Update via JSON' : 'Create via JSON')}
+                        {isSubmitting ? t('data-products:form.saving') : (isEditMode ? t('data-products:form.buttons.updateViaJson') : t('data-products:form.buttons.createViaJson'))}
                     </Button>
                   </DialogFooter>
                 </TabsContent>

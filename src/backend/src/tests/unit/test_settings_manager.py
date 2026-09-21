@@ -575,3 +575,29 @@ class TestSettingsManager:
         assert intersection == {"Both"}
         assert "Contracts only" not in intersection
 
+    # =====================================================================
+    # Schema Importer child-limit setting
+    # =====================================================================
+
+    @pytest.mark.parametrize("bad_value", [0, -1, 10001, "abc", None])
+    def test_update_schema_import_child_limit_rejects_invalid(self, manager, bad_value):
+        """Out-of-range or non-integer values must raise ValueError (surfaced
+        as HTTP 400 by the route) rather than persisting a bad cap."""
+        with pytest.raises(ValueError):
+            manager.update_settings({"schema_import_child_limit": bad_value})
+
+    @pytest.mark.parametrize("good_value", [1, 500, 2500, 10000])
+    def test_update_schema_import_child_limit_persists_valid(
+        self, manager, db_session, good_value
+    ):
+        """A valid value is written to app_settings and reflected in-memory."""
+        from src.repositories.app_settings_repository import app_settings_repo
+
+        manager.update_settings({"schema_import_child_limit": good_value})
+
+        assert (
+            app_settings_repo.get_by_key(db_session, "SCHEMA_IMPORT_CHILD_LIMIT")
+            == str(good_value)
+        )
+        assert manager._settings.SCHEMA_IMPORT_CHILD_LIMIT == good_value
+

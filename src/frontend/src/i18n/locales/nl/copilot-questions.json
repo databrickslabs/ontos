@@ -1,11 +1,17 @@
 {
   "categories": {
+    "getting_started": "Aan de slag",
     "explore": "Verkennen & Ontdekken",
     "build": "Bouwen & Creëren",
     "govern": "Governance & Compliance",
     "operate": "Beheer & Uitrol"
   },
   "questions": {
+    "gs_create_first_product": "Hoe maak ik mijn eerste dataproduct?",
+    "gs_setup_domains": "Hoe stel ik datadomeinen in?",
+    "gs_assign_roles": "Hoe wijs ik rollen toe aan mijn team?",
+    "gs_what_is_ontos": "Wat is Ontos en wat kan ik ermee doen?",
+    "gs_concepts_overview": "Leg de kernconcepten uit: dataproducten, contracten en domeinen.",
     "global_find_customer_data": "Waar kan ik klantgegevens vinden?",
     "global_business_terms_sales": "Welke bedrijfstermen zijn gerelateerd aan verkoop?",
     "global_what_domains_exist": "Welke datadomeinen zijn gedefinieerd in de organisatie?",

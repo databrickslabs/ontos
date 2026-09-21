@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,13 +28,14 @@ const CreateVersionDialog: React.FC<CreateVersionDialogProps> = ({
   productTitle,
   onSubmit,
 }) => {
+  const { t } = useTranslation(['data-products', 'common']);
   const [newVersion, setNewVersion] = useState<string>(currentVersion); // Pre-fill with current
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = () => {
     const trimmedVersion = newVersion.trim();
     if (!trimmedVersion) {
-      setError("Version string cannot be empty.");
+      setError(t('data-products:createVersion.errors.versionEmpty'));
       return;
     }
     setError(null);
@@ -60,28 +62,27 @@ const CreateVersionDialog: React.FC<CreateVersionDialogProps> = ({
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Create New Version</AlertDialogTitle>
+          <AlertDialogTitle>{t('data-products:createVersion.title')}</AlertDialogTitle>
           <AlertDialogDescription>
-            Enter the new version identifier for data product "{productTitle}". 
-            It's often helpful to increment based on the current version ({currentVersion}).
+            {t('data-products:createVersion.description', { productTitle, currentVersion })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="py-4">
           <Label htmlFor="new-version-input" className="mb-2 block">
-            New Version String
+            {t('data-products:createVersion.versionLabel')}
           </Label>
           <Input
             id="new-version-input"
             value={newVersion}
             onChange={(e) => setNewVersion(e.target.value)}
-            placeholder="e.g., v1.1, v2.0-beta"
+            placeholder={t('data-products:createVersion.versionPlaceholder')}
             className={error ? "border-destructive" : ""}
           />
           {error && <p className="text-sm text-destructive mt-1">{error}</p>}
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleSubmit}>Create Version</AlertDialogAction>
+          <AlertDialogCancel onClick={handleCancel}>{t('common:actions.cancel')}</AlertDialogCancel>
+          <AlertDialogAction onClick={handleSubmit}>{t('data-products:createVersion.createButton')}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

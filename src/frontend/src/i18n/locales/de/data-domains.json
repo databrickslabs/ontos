@@ -6,6 +6,8 @@
   "editDomain": "Bereich bearbeiten",
   "deleteDomain": "Bereich löschen",
   "noDomainsYet": "Noch keine Datenbereiche.",
+  "openMenu": "Menü öffnen",
+  "previewMetadata": "Metadaten-Vorschau",
   "table": {
     "name": "Name",
     "description": "Beschreibung",
@@ -28,12 +30,133 @@
     "domainDeletedSuccess": "Der Datenbereich wurde erfolgreich gelöscht.",
     "errorFetchingDomains": "Fehler beim Abrufen der Bereiche",
     "errorDeletingDomain": "Fehler beim Löschen des Bereichs",
-    "errorLoadingData": "Fehler beim Laden der Daten"
+    "errorLoadingData": "Fehler beim Laden der Daten",
+    "failedLoadDomains": "Datenbereiche konnten nicht geladen werden",
+    "failedDeleteDomain": "Bereich konnte nicht gelöscht werden."
   },
   "deleteDialog": {
     "title": "Sind Sie absolut sicher?",
     "description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies wird den Datenbereich dauerhaft löschen.",
     "cancel": "Abbrechen",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "cannotDelete": "Dieser Bereich kann nicht gelöscht werden.",
+    "primaryForAssignments_one": "Er ist der primäre Bereich für {{count}} Entitätszuweisung:",
+    "primaryForAssignments_other": "Er ist der primäre Bereich für {{count}} Entitätszuweisungen:",
+    "assignmentCount": "{{count}} {{type}}(s)",
+    "reassignFirst": "Weisen Sie diese zunächst einem anderen primären Bereich zu."
+  },
+  "form": {
+    "editTitle": "Datenbereich bearbeiten",
+    "createTitle": "Neuen Datenbereich erstellen",
+    "editDescription": "Nehmen Sie Änderungen am bestehenden Datenbereich vor.",
+    "createDescription": "Fügen Sie dem System einen neuen Datenbereich hinzu.",
+    "createSubmit": "Bereich erstellen",
+    "nameLabel": "Name *",
+    "namePlaceholder": "z. B. Sales Analytics",
+    "descriptionLabel": "Beschreibung",
+    "descriptionPlaceholder": "Beschreiben Sie den Zweck dieses Bereichs...",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "Tags für diesen Datenbereich suchen und auswählen...",
+    "parentLabel": "Übergeordneter Bereich",
+    "parentPlaceholder": "Übergeordneten Bereich auswählen (optional)",
+    "noParent": "Kein übergeordneter Bereich",
+    "validation": {
+      "nameMin": "Der Name muss mindestens 2 Zeichen lang sein.",
+      "descriptionMax": "Die Beschreibung darf 500 Zeichen nicht überschreiten."
+    },
+    "discardDescription": "Sie haben ungespeicherte Änderungen, die verloren gehen, wenn Sie diesen Dialog schließen. Möchten Sie sie wirklich verwerfen?",
+    "continueEditing": "Weiter bearbeiten",
+    "discardChanges": "Änderungen verwerfen",
+    "toasts": {
+      "updated": "Bereich aktualisiert",
+      "created": "Bereich erstellt",
+      "saveSuccess": "'{{name}}' erfolgreich gespeichert.",
+      "saveError": "Fehler beim Speichern des Bereichs"
+    }
+  },
+  "details": {
+    "backToList": "Zurück zur Liste",
+    "backToDataDomains": "Zurück zu den Datenbereichen",
+    "edit": "Bearbeiten",
+    "notFound": "Datenbereich nicht gefunden oder konnte nicht geladen werden.",
+    "noDomainIdProvided": "Keine Bereichs-ID angegeben.",
+    "invalidDomain": "Ungültiger Bereich",
+    "relatedEntities": "Verwandte Entitäten",
+    "addConcept": "Konzept hinzufügen",
+    "hierarchyContext": "Hierarchiekontext des Bereichs",
+    "info": {
+      "id": "ID",
+      "parentDomain": "Übergeordneter Bereich",
+      "childrenCount": "Anzahl der Kinder",
+      "tags": "Tags",
+      "createdBy": "Erstellt von",
+      "createdAt": "Erstellt am",
+      "lastUpdatedAt": "Zuletzt aktualisiert am",
+      "linkedBusinessConcepts": "Verknüpfte Geschäftskonzepte"
+    },
+    "childDomains": {
+      "title": "Untergeordnete Datenbereiche ({{count}})",
+      "description": "Direkt verschachtelte Datenbereiche.",
+      "empty": "Keine untergeordneten Bereiche gefunden",
+      "columns": {
+        "name": "Name",
+        "id": "ID"
+      }
+    },
+    "teams": {
+      "title": "Bereichsteams",
+      "countBadge_one": "{{count}} Team",
+      "countBadge_other": "{{count}} Teams",
+      "create": "Team erstellen",
+      "description": "Diesem Datenbereich zugewiesene Teams. Teams erben bereichsspezifische Berechtigungen und Verantwortlichkeiten.",
+      "empty": "Keine Teams zugewiesen",
+      "emptyHint": "Erstellen Sie ein Team, um es diesem Datenbereich zuzuweisen.",
+      "createFirst": "Erstes Team erstellen",
+      "columns": {
+        "name": "Teamname",
+        "title": "Titel",
+        "noTitle": "Kein Titel",
+        "members": "Mitglieder",
+        "memberCount_one": "{{count}} Mitglied",
+        "memberCount_other": "{{count}} Mitglieder",
+        "actions": "Aktionen",
+        "edit": "Bearbeiten"
+      }
+    },
+    "assignedEntities": {
+      "title": "Zugewiesene Entitäten",
+      "description": "Datenprodukte, Verträge und Assets, die diesem Bereich zugewiesen sind (primär oder zusätzlich).",
+      "dataProducts": "Datenprodukte",
+      "dataContracts": "Datenverträge",
+      "assets": "Assets",
+      "primaryDomain": "Primärer Bereich",
+      "additionalDomain": "Zusätzlicher Bereich",
+      "noneAssigned": "Keine zugewiesen."
+    },
+    "linkedAssets": {
+      "title": "Verknüpfte Assets",
+      "description": "Assets (Datenprodukte, Verträge usw.), die über semantische Beziehungen mit diesem Datenbereich verknüpft sind.",
+      "empty": "Keine verknüpften Assets gefunden",
+      "countBadge": "{{count}} insgesamt",
+      "columns": {
+        "name": "Asset-Name",
+        "type": "Typ",
+        "unknownType": "Unbekannt",
+        "path": "Pfad",
+        "domain": "Bereich"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "Geschäftskonzept mit Datenbereich verknüpft.",
+    "conceptUnlinked": "Verknüpfung des Geschäftskonzepts mit dem Datenbereich aufgehoben.",
+    "linkConceptError": "Geschäftskonzept konnte nicht verknüpft werden",
+    "unlinkConceptError": "Verknüpfung des Geschäftskonzepts konnte nicht aufgehoben werden",
+    "errorFetchingDomain": "Fehler beim Abrufen des Bereichs",
+    "couldNotLoadDomain": "Bereichsdetails konnten nicht geladen werden.",
+    "failedFetchDomain": "Bereichsdetails konnten nicht abgerufen werden.",
+    "metadataLoadFailed": "Laden der Metadaten fehlgeschlagen",
+    "couldNotLoadMetadata": "Metadaten konnten nicht geladen werden.",
+    "editTeamLoadError": "Teamdetails zum Bearbeiten konnten nicht geladen werden."
   }
 }

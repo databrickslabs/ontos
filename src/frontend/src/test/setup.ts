@@ -142,7 +142,13 @@ const localStorageMock = (() => {
   };
 })();
 
-global.localStorage = localStorageMock as any;
+// jsdom in Vitest 5 exposes `localStorage` as a getter-only property, so a
+// direct assignment throws. Define it explicitly to override the built-in.
+Object.defineProperty(global, 'localStorage', {
+  configurable: true,
+  writable: true,
+  value: localStorageMock,
+});
 
 // Clear localStorage before each test
 beforeEach(() => {

@@ -53,13 +53,18 @@ export default defineConfig({
       all: true,
       // Gates set to current baseline floors (just under measured coverage)
       // to prevent regressions. Ratchet up as coverage improves toward the
-      // 80% goal. Measured at time of writing: lines/statements 10.2%,
-      // functions 36.1%, branches 72.1%.
+      // 80% goal.
+      //
+      // NOTE: Vitest 5 corrected v8 branch/function accounting (AST-aware
+      // remapping + the include/exclude glob fix). The pre-v5 numbers for
+      // branches (~72%) and functions (~36%) were inflated relative to the
+      // ~10% line coverage and are not comparable. Measured under Vitest 5:
+      // lines 10.2%, statements 10.0%, functions 7.9%, branches 7.7%.
       thresholds: {
         lines: 10,
-        functions: 35,
-        branches: 70,
-        statements: 10,
+        functions: 7,
+        branches: 7,
+        statements: 9,
       },
     },
   },

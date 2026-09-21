@@ -17,6 +17,20 @@
 
 /* You can override the default Infima variables here. */
 :root {
+  /*
+   * Re-declare Infima's base font stacks. Infima ships these as multi-line
+   * values in its default.css, and our CSS build (minifier) drops those two
+   * specific declarations — leaving `font: ... var(--ifm-font-family-base)`
+   * with an undefined variable, which makes the whole shorthand invalid and
+   * the site fall back to the browser's serif default (i.e. "unstyled").
+   * Defining them here (a source the build preserves) restores the fonts.
+   */
+  --ifm-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu,
+    Cantarell, 'Noto Sans', sans-serif, BlinkMacSystemFont, Helvetica, Arial,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --ifm-font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+
   --ifm-color-primary: #1288e2;
   --ifm-color-primary-dark: #107acb;
   --ifm-color-primary-darker: #0f74c0;

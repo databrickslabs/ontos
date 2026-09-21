@@ -92,6 +92,8 @@ async def update_settings(
             details['enabled_jobs'] = settings_payload.get('enabled_jobs')
         if 'allow_job_enablement_requests' in settings_payload:
             details['allow_job_enablement_requests'] = settings_payload.get('allow_job_enablement_requests')
+        if 'schema_import_child_limit' in settings_payload:
+            details['schema_import_child_limit'] = settings_payload.get('schema_import_child_limit')
 
         updated = manager.update_settings(settings_payload)
         success = True

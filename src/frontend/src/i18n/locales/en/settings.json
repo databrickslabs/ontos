@@ -150,6 +150,13 @@
         "help": "When a user hits a feature whose background job is not enabled, they can send a notification asking an administrator to enable it."
       }
     },
+    "schemaImporter": {
+      "title": "Schema Importer",
+      "childLimit": {
+        "label": "Max objects fetched per level",
+        "help": "Maximum number of tables/views/objects the importer fetches per catalog or schema when browsing (1–10000). Raise this for large estates; there is no pagination beyond this cap."
+      }
+    },
     "llm": {
       "title": "AI / LLM Configuration",
       "enabled": {

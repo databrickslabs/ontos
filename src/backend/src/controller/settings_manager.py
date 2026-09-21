@@ -210,6 +210,14 @@ class SettingsManager:
             if 'WORKSPACE_DEPLOYMENT_PATH' in all_settings and all_settings['WORKSPACE_DEPLOYMENT_PATH'] is not None:
                 self._settings.WORKSPACE_DEPLOYMENT_PATH = all_settings['WORKSPACE_DEPLOYMENT_PATH']
                 logger.debug(f"Loaded WORKSPACE_DEPLOYMENT_PATH from database: {all_settings['WORKSPACE_DEPLOYMENT_PATH']}")
+
+            # SCHEMA_IMPORT_CHILD_LIMIT (Schema Importer per-path fetch cap)
+            if all_settings.get('SCHEMA_IMPORT_CHILD_LIMIT') is not None:
+                try:
+                    self._settings.SCHEMA_IMPORT_CHILD_LIMIT = int(all_settings['SCHEMA_IMPORT_CHILD_LIMIT'])
+                    logger.debug(f"Loaded SCHEMA_IMPORT_CHILD_LIMIT from database: {all_settings['SCHEMA_IMPORT_CHILD_LIMIT']}")
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid SCHEMA_IMPORT_CHILD_LIMIT in database: {all_settings['SCHEMA_IMPORT_CHILD_LIMIT']}")
             
             # Databricks Unity Catalog settings
             if 'DATABRICKS_CATALOG' in all_settings and all_settings['DATABRICKS_CATALOG']:
@@ -1249,6 +1257,8 @@ class SettingsManager:
             'available_workflows': available,
             'current_settings': self._settings.to_dict(),
             'workspace_deployment_path': self._settings.WORKSPACE_DEPLOYMENT_PATH,
+            # Schema Importer per-path child fetch limit
+            'schema_import_child_limit': self._settings.SCHEMA_IMPORT_CHILD_LIMIT,
             # Databricks Unity Catalog settings
             'databricks_catalog': self._settings.DATABRICKS_CATALOG,
             'databricks_schema': self._settings.DATABRICKS_SCHEMA,
@@ -1302,6 +1312,20 @@ class SettingsManager:
             self._settings.WORKSPACE_DEPLOYMENT_PATH = new_path
             logger.info(f"Updated WORKSPACE_DEPLOYMENT_PATH to: {new_path}")
             self._reinitialize_workspace_deployer()
+
+        # Schema Importer per-path child fetch limit (bounded 1..10000 per the
+        # connector contract, ListAssetsOptions)
+        if 'schema_import_child_limit' in settings:
+            value = settings.get('schema_import_child_limit')
+            try:
+                int_val = int(value)
+            except (ValueError, TypeError):
+                raise ValueError("schema_import_child_limit must be an integer between 1 and 10000")
+            if not (1 <= int_val <= 10000):
+                raise ValueError("schema_import_child_limit must be between 1 and 10000")
+            app_settings_repo.set(self._db, 'SCHEMA_IMPORT_CHILD_LIMIT', str(int_val))
+            self._settings.SCHEMA_IMPORT_CHILD_LIMIT = int_val
+            logger.info(f"Updated SCHEMA_IMPORT_CHILD_LIMIT to: {int_val}")
 
         # Compute job enable/disable delta against current state from DB (source of truth)
         try:

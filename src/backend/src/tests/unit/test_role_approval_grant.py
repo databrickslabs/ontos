@@ -82,6 +82,16 @@ def test_approval_is_idempotent(manager, db_session, consumer_role):
     assert json.loads(consumer_role.assigned_users) == ["dup@example.com"]
 
 
+def test_two_different_users_both_granted(manager, db_session, consumer_role):
+    # Approving two different users to the same role accumulates both (append,
+    # not overwrite) — the sequential form of the concurrent-approval scenario.
+    _handle(manager, consumer_role.id, "first@example.com", approved=True)
+    _handle(manager, consumer_role.id, "second@example.com", approved=True)
+
+    db_session.refresh(consumer_role)
+    assert json.loads(consumer_role.assigned_users) == ["first@example.com", "second@example.com"]
+
+
 def test_denial_does_not_grant(manager, db_session, consumer_role):
     _handle(manager, consumer_role.id, "denied@example.com", approved=False)
 

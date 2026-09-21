@@ -2235,7 +2235,11 @@ class SettingsManager:
             List of AppRole objects that the user can request.
         """
         try:
-            # First, determine what role(s) the user currently has (by group OR email)
+            # First, determine what role(s) the user currently has (by group OR email).
+            # `(x or '')` coalesces None entries in group/user lists rather than
+            # failing: this is an authorization read path, and raising on a single
+            # malformed row would lock the user out of the whole app. Empty strings
+            # never match a real group/email, so dirty data is simply ignored here.
             user_group_set = set((g or '').lower() for g in (user_groups or []))
             user_email_norm = (user_email or "").strip().lower() or None
             user_role_ids: List[str] = []
@@ -2394,14 +2398,24 @@ class SettingsManager:
         #    so email-based direct assignment is how an approved requester gains
         #    access. Denial changes nothing.
         if request_data.approved:
-            email_norm = (request_data.requester_email or "").strip().lower()
+            # Normalize consistently with the other assigned_users sites (strip →
+            # lower → empty becomes None).
+            email_norm = (request_data.requester_email or "").strip().lower() or None
             try:
-                role_db = self.app_role_repo.get(db=db, id=request_data.role_id)
+                # Lock the role row for the read-modify-write so concurrent approvals
+                # to the SAME role serialize instead of clobbering each other's
+                # assigned_users (row lock on Postgres; a no-op but harmless on SQLite).
+                role_db = (
+                    db.query(AppRoleDb)
+                    .filter(AppRoleDb.id == str(request_data.role_id))
+                    .with_for_update()
+                    .first()
+                )
                 if not role_db:
                     raise ValueError(f"Role with ID '{request_data.role_id}' not found for grant")
                 existing = json.loads(getattr(role_db, "assigned_users", "[]") or "[]")
                 emails = [e for e in existing if isinstance(e, str)]
-                already = email_norm in {e.strip().lower() for e in emails}
+                already = bool(email_norm) and email_norm in {e.strip().lower() for e in emails}
                 if email_norm and not already:
                     emails.append(email_norm)
                     self.app_role_repo.update(db=db, db_obj=role_db, obj_in={"assigned_users": emails})

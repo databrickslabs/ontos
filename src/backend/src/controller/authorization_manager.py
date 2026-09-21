@@ -88,9 +88,11 @@ class AuthorizationManager:
         matching_roles = []
         logger.debug("Identifying matching roles based on group intersection OR email assignment...")
         for role in all_roles:
-            # Normalize role groups + assigned_users to lowercase for case-insensitive matching
-            role_assigned_groups_set = set(g.lower() for g in (role.assigned_groups or []))
-            role_assigned_users_set = set(u.lower() for u in (getattr(role, 'assigned_users', None) or []))
+            # Normalize role groups + assigned_users to lowercase for case-insensitive
+            # matching. `(x or '')` guards against None entries in dirty data (a None
+            # element would raise on .lower()).
+            role_assigned_groups_set = set((g or '').lower() for g in (role.assigned_groups or []))
+            role_assigned_users_set = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
 
             group_match = bool(user_group_set.intersection(role_assigned_groups_set))
             email_match = bool(user_email_norm and user_email_norm in role_assigned_users_set)
@@ -232,8 +234,9 @@ class AuthorizationManager:
 
         role_ids: Set[str] = set()
         for role in all_roles:
-            role_groups = set(g.lower() for g in (role.assigned_groups or []))
-            role_users = set(u.lower() for u in (getattr(role, 'assigned_users', None) or []))
+            # `(x or '')` guards against None entries in dirty data.
+            role_groups = set((g or '').lower() for g in (role.assigned_groups or []))
+            role_users = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
             if user_group_set.intersection(role_groups) or (user_email_norm and user_email_norm in role_users):
                 role_ids.add(str(role.id))
         return role_ids

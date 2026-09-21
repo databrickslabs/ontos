@@ -4,6 +4,17 @@
  * work well for content-centric websites.
  */
 
+/*
+ * Tailwind v4. We import only the theme + utilities layers (not the full
+ * "tailwindcss" bundle) on purpose: the full import also pulls in Preflight,
+ * whose base-element reset conflicts with Infima and breaks the Docusaurus
+ * doc-page styling. The custom landing page (src/pages/index.tsx) uses Tailwind
+ * utility classes (flex, flex-col, items-center, w-full, ...); without this
+ * import those classes emit nothing and the page renders unstyled.
+ */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
 /* You can override the default Infima variables here. */
 :root {
   --ifm-color-primary: #1288e2;

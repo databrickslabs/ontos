@@ -166,3 +166,45 @@ def test_upgrade_rejects_non_upgrade_target(manager, db_session):
             db_session, contract_id=source.id, target_api_version="v3.0.1",
             current_user="tester",
         )
+
+
+def test_upgrade_avoids_version_collision_in_family(manager, db_session):
+    source = _make_contract(db_session, api_version="v3.1.0")
+    # A sibling already occupies the default minor-bump target (1.1.0).
+    sibling = DataContractDb(
+        name="cust", version="1.1.0", status="active", api_version="v3.1.0",
+        kind="DataContract", version_family_id=source.version_family_id,
+    )
+    db_session.add(sibling)
+    db_session.commit()
+
+    upgraded = manager.upgrade_contract_version(
+        db_session, contract_id=source.id, target_api_version="v3.2.0",
+        current_user="tester", version_bump="minor",
+    )
+    # 1.1.0 is taken, so the next free patch is chosen.
+    assert upgraded.version == "1.1.1"
+    assert upgraded.api_version == "v3.2.0"
+
+
+def test_datacontractread_surfaces_context_from_orm():
+    # Requirement #2: context must round-trip back to the UI, not only to raw export.
+    from src.models.data_contracts_api import context_orm_to_odcs, DataContractRead
+
+    class _VS:
+        stable_id = None; question = "Deduped?"; answer = "Yes"
+        tags_json = None; authoritative_definitions_json = None; custom_properties_json = None
+
+    class _Ctx:
+        instructions = "Use for churn only."
+        verified_statements = [_VS()]
+        constraints = []
+
+    odcs = context_orm_to_odcs(_Ctx())
+    assert odcs["instructions"] == "Use for churn only."
+    assert odcs["verifiedStatements"][0] == {"question": "Deduped?", "answer": "Yes"}
+
+    # The read model's before-validator accepts the ORM row and the dict alike.
+    read = DataContractRead(id="c", name="n", version="1.0.0", status="draft", context=_Ctx())
+    assert read.context["instructions"] == "Use for churn only."
+    assert context_orm_to_odcs(None) is None

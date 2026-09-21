@@ -116,16 +116,29 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const [descriptionPurpose, setDescriptionPurpose] = useState(initial?.descriptionPurpose || '')
   const [descriptionLimitations, setDescriptionLimitations] = useState(initial?.descriptionLimitations || '')
 
-  // ODCS v3.2.0 contract-level context (RFC-0038): AI/semantic guidance
-  const [contextInstructions, setContextInstructions] = useState<string>(
-    (initial as { contextInstructions?: string } | undefined)?.contextInstructions ?? '',
-  )
+  // ODCS v3.2.0 contract-level context (RFC-0038): AI/semantic guidance.
+  // Read from the contract's `context` block (string shorthand or object), which
+  // is what the API returns — so editing an existing contract prefills it.
+  const initialContext = (() => {
+    const c = (initial as { context?: unknown } | undefined)?.context
+    if (!c) return { instructions: '', verifiedStatements: [] as { question: string; answer: string }[], constraints: [] as string[] }
+    if (typeof c === 'string') return { instructions: c, verifiedStatements: [], constraints: [] }
+    const obj = c as {
+      instructions?: string
+      verifiedStatements?: { question?: string; answer?: string }[]
+      constraints?: ({ constraint?: string } | string)[]
+    }
+    return {
+      instructions: obj.instructions ?? '',
+      verifiedStatements: (obj.verifiedStatements ?? []).map((s) => ({ question: s.question ?? '', answer: s.answer ?? '' })),
+      constraints: (obj.constraints ?? []).map((x) => (typeof x === 'string' ? x : x.constraint ?? '')).filter(Boolean),
+    }
+  })()
+  const [contextInstructions, setContextInstructions] = useState<string>(initialContext.instructions)
   const [contextVerifiedStatements, setContextVerifiedStatements] = useState<{ question: string; answer: string }[]>(
-    (initial as { contextVerifiedStatements?: { question: string; answer: string }[] } | undefined)?.contextVerifiedStatements ?? [],
+    initialContext.verifiedStatements,
   )
-  const [contextConstraints, setContextConstraints] = useState<string[]>(
-    (initial as { contextConstraints?: string[] } | undefined)?.contextConstraints ?? [],
-  )
+  const [contextConstraints, setContextConstraints] = useState<string[]>(initialContext.constraints)
 
   // Stakeholders / access groups / support contacts wired up in Phase 4
   // (PRD #335). Previously these step-4 fields rendered but their values

@@ -1851,6 +1851,7 @@ async def get_schema_properties(
                 pass
         item = {
             "name": p.name,
+            "stableId": p.stable_id,
             "logicalType": p.logical_type or "string",
             "physicalType": p.physical_type,
             "required": p.required,
@@ -1868,8 +1869,16 @@ async def get_schema_properties(
             "transformSourceObjects": p.transform_source_objects,
             "transformDescription": p.transform_description,
             "encryptedName": p.encrypted_name,
+            # ODCS v3.2.0: property semanticType (column|measure|dimension)
+            "semanticType": p.semantic_type,
+            "itemType": p.items_logical_type,
         }
+        # Keep flat option keys (existing string/number/date constraint editors
+        # read them at the top level) AND expose the nested logicalTypeOptions
+        # object (the v3.2.0 vector/map editors read prop.logicalTypeOptions.*).
         item.update(options)
+        if options:
+            item["logicalTypeOptions"] = options
         items.append(item)
 
     return {"items": items, "total": total, "skip": skip, "limit": limit}

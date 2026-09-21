@@ -1043,14 +1043,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['semanticType'] = prop.semantic_type
                         # logicalTypeOptions: ODCS nests these under `logicalTypeOptions`
                         # (the schema forbids unevaluated top-level keys). vector
-                        # (RFC-0042) / map (RFC-0030) options are v3.2.0-only.
+                        # (RFC-0042) / map (RFC-0030) options are v3.2.0-only; each is
+                        # gated on its own feature key (registry is the single source).
                         logical_type = prop_dict.get('logicalType')
                         is_v320_type = logical_type in ('vector', 'map')
-                        if is_v320_type and not odcs_versions.supports('vector', api_version):
+                        v320_type_allowed = (not is_v320_type) or odcs_versions.supports(logical_type, api_version)
+                        if is_v320_type and not v320_type_allowed:
                             # Cannot represent a vector/map property at this version;
                             # degrade the type so the document still validates.
                             prop_dict['logicalType'] = 'string' if logical_type == 'vector' else 'object'
-                        if prop.logical_type_options_json and not (is_v320_type and not odcs_versions.supports('vector', api_version)):
+                        if prop.logical_type_options_json and v320_type_allowed:
                             try:
                                 logical_type_options = json.loads(prop.logical_type_options_json)
                                 if isinstance(logical_type_options, dict) and logical_type_options:
@@ -2768,10 +2770,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if s_dict.get('description'):
                             existing.description = s_dict['description']
                     else:
-                        # New schema or schema with updated properties → recreate
+                        # New schema or schema with updated properties → recreate.
+                        # Recreation cascade-deletes the schema-object context
+                        # (ODCS v3.2.0). Preserve it across the edit when the
+                        # payload doesn't carry its own context.
                         if name in existing_schemas:
+                            existing = existing_schemas[name]
+                            if not s_dict.get('context') and getattr(existing, 'context', None):
+                                preserved_ctx = self._build_context_dict(existing.context)
+                                if preserved_ctx:
+                                    s_dict['context'] = preserved_ctx
                             db.query(SchemaObjectDb).filter(
-                                SchemaObjectDb.id == existing_schemas[name].id
+                                SchemaObjectDb.id == existing.id
                             ).delete()
                         schemas_to_create.append(s_dict)
 
@@ -2784,7 +2794,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
                 if schemas_to_create:
                     self._create_schema_objects(db, contract_id, schemas_to_create, current_user)
-            
+
+            # Handle contract-level context (ODCS v3.2.0) if provided: replace-all.
+            # Only touched when the caller supplies `context`, so unrelated updates
+            # never disturb previously-saved context.
+            if 'context' in data_dict and data_dict.get('context') is not None:
+                from src.db_models.data_contracts import DataContractContextDb
+                db.query(DataContractContextDb).filter(
+                    DataContractContextDb.contract_id == contract_id
+                ).delete()
+                self._create_contract_context(db, contract_id, data_dict.get('context'))
+
             # Handle quality rules if provided
             if data_dict.get('qualityRules') is not None:
                 # Get all schema objects for this contract
@@ -4855,6 +4875,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             )
 
         resolved_version = new_version or self._bump_semver(source.version, version_bump)
+
+        # Avoid collision with an existing version in the same family (e.g. the
+        # family already has the computed minor bump). Bump the patch until free.
+        family_id = source.version_family_id or source.id
+        existing_versions = {
+            v for (v,) in db.query(DataContractDb.version).filter(
+                DataContractDb.version_family_id == family_id
+            ).all()
+        }
+        while resolved_version in existing_versions:
+            resolved_version = self._bump_semver(resolved_version, 'patch')
+
         summary = change_summary or f"Upgrade ODCS {source.api_version} -> {target_api_version}"
 
         # Clone into a new draft version (copies all nested entities). This
@@ -6773,8 +6805,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "transformSourceObjects": p.transform_source_objects,
                     "transformDescription": p.transform_description,
                     "encryptedName": p.encrypted_name,
+                    # ODCS v3.2.0 semanticType
+                    "semanticType": p.semantic_type,
+                    "stableId": p.stable_id,
+                    "itemType": p.items_logical_type,
                 }
+                # Flat keys (existing constraint editors) + nested logicalTypeOptions
+                # (v3.2.0 vector/map editors read prop.logicalTypeOptions.*).
                 item.update(options)
+                if options:
+                    item["logicalTypeOptions"] = options
                 prop_items.append(item)
 
             schema_objects.append(SchemaObject(
@@ -6785,6 +6825,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 description=schema_obj.description,
                 properties=prop_items,
                 propertyCount=len(prop_items),
+                context=self._build_context_dict(getattr(schema_obj, 'context', None)),
             ))
         
         # Build team (ODCS compliant)
@@ -6959,6 +7000,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             dataProduct=db_contract.data_product,
             description=description,
             tags=tags,  # Include tags in response
+            context=self._build_context_dict(getattr(db_contract, 'context', None)),
             schema=schema_objects,
             team=team,
             support=support,

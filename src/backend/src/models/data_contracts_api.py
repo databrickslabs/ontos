@@ -160,6 +160,56 @@ class ContextBlock(BaseModel):
         extra = "allow"
 
 
+def context_orm_to_odcs(ctx) -> Optional[Dict[str, Any]]:
+    """Serialize a DataContractContextDb ORM row to an ODCS context dict.
+
+    Passthrough for a dict/string/None (so it is safe as a Pydantic before-
+    validator that may receive already-serialized values).
+    """
+    if ctx is None or isinstance(ctx, (dict, str)):
+        return ctx
+    import json as _json
+
+    def _load(value):
+        if not value:
+            return None
+        try:
+            return _json.loads(value)
+        except (ValueError, TypeError):
+            return None
+
+    out: Dict[str, Any] = {}
+    if getattr(ctx, 'instructions', None):
+        out['instructions'] = ctx.instructions
+    verified = []
+    for s in (getattr(ctx, 'verified_statements', None) or []):
+        item: Dict[str, Any] = {'question': s.question}
+        if getattr(s, 'stable_id', None):
+            item['id'] = s.stable_id
+        if s.answer is not None:
+            item['answer'] = s.answer
+        for key, raw in (('tags', s.tags_json), ('authoritativeDefinitions', s.authoritative_definitions_json), ('customProperties', s.custom_properties_json)):
+            loaded = _load(raw)
+            if loaded:
+                item[key] = loaded
+        verified.append(item)
+    if verified:
+        out['verifiedStatements'] = verified
+    constraints = []
+    for c in (getattr(ctx, 'constraints', None) or []):
+        item = {'constraint': c.constraint}
+        if getattr(c, 'stable_id', None):
+            item['id'] = c.stable_id
+        for key, raw in (('tags', c.tags_json), ('authoritativeDefinitions', c.authoritative_definitions_json), ('customProperties', c.custom_properties_json)):
+            loaded = _load(raw)
+            if loaded:
+                item[key] = loaded
+        constraints.append(item)
+    if constraints:
+        out['constraints'] = constraints
+    return out or None
+
+
 class QualityRule(BaseModel):
     # Core fields
     name: Optional[str] = None
@@ -561,7 +611,7 @@ class DataContractRead(BaseModel):
     project_name: Optional[str] = None  # Resolved at query time
     kind: str = Field('DataContract')  # Required by ODCS
     # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it
-    apiVersion: str = Field('v3.1.0', alias='apiVersion')  # Required by ODCS
+    apiVersion: str = Field('v3.2.0', alias='apiVersion')  # Required by ODCS
     tenant: Optional[str] = None
     domain: Optional[str] = None  # Primary domain name
     domainId: Optional[str] = None  # Primary domain ID
@@ -573,6 +623,13 @@ class DataContractRead(BaseModel):
     # ODCS top-level fields
     tags: Optional[List[AssignedTag]] = Field(default_factory=list)  # Read model returns AssignedTag, not AssignedTagCreate
     contractCreatedTs: Optional[str] = None
+    # ODCS v3.2.0 context block (RFC-0038); serialized from the ORM context row.
+    context: Optional[Dict[str, Any]] = None
+
+    @field_validator('context', mode='before')
+    @classmethod
+    def _coerce_context(cls, v):
+        return context_orm_to_odcs(v)
 
     # Schema section
     contract_schema: List[SchemaObject] = Field(default_factory=list, alias="schema")

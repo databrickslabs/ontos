@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -104,6 +104,26 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const { domains, loading, getDomainName } = useDomains();
+
+  // When open inside a modal Dialog, a single Escape closes BOTH the popover and
+  // the surrounding Dialog: Radix routes Escape through document-level listeners
+  // registered (on mount) before anything this child can add, so it can't be
+  // stopped from within the popover's own handlers. A `window` capture-phase
+  // listener fires before any document listener, so we intercept Escape there
+  // while open, close only the popover, and stop the event — the Dialog stays
+  // open, and a second Escape (listener now removed) closes it as expected.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [open]);
 
   // Resolve the effective primary: the explicit one if still selected, else the first.
   const effectivePrimary = resolveEffectivePrimary(value, primaryDomainId);

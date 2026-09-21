@@ -72,6 +72,24 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   const [loading, setLoading] = useState(false);
   const { get } = useApi();
 
+  // Escape should close only this popover, not the surrounding modal Dialog.
+  // Radix's document-level Escape listeners (registered before this child mounts)
+  // otherwise close both; a window capture-phase listener fires first, so we
+  // intercept Escape while open, close the popover, and stop the event. Mirrors
+  // the DomainMultiSelector fix.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [open]);
+
   // Check if user has permission to create tags
   const { hasPermission } = usePermissions();
   const canCreateTags = hasPermission('tags', FeatureAccessLevel.READ_WRITE);
@@ -216,7 +234,20 @@ const TagSelector: React.FC<TagSelectorProps> = ({
           through so the wheel scrolls the dialog behind it. Mirrors the
           DomainMultiSelector fix.
         */}
-        <PopoverContent className="w-full p-0 pointer-events-auto" align="start">
+        <PopoverContent
+          className="w-full p-0 pointer-events-auto"
+          align="start"
+          onKeyDown={(e) => {
+            // Escape closes only this popover, not the surrounding modal Dialog.
+            // Stop it before Radix's document-level Escape listeners fire and
+            // close the popover manually. Mirrors the DomainMultiSelector fix.
+            if (e.key === 'Escape' && open) {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+            }
+          }}
+        >
           <Command shouldFilter={false}>
             <CommandInput
               placeholder={t('common:tagSelector.searchPlaceholder')}

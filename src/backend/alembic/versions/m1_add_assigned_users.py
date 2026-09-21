@@ -6,8 +6,13 @@ a role by email and is the mechanism by which approving a role access request
 grants the role (#196 / #760 / #311). Backward compatible: existing roles default
 to an empty list.
 
+Also acts as the merge point for the two migration heads that landed on
+development in parallel off ``l1_entity_domain_associations`` — ``m1_uc_domain_id``
+(#761) and ``m1_mcp_keyless_default`` — so the tree keeps a single head. This
+revision only adds the column; it depends on both parents purely to unify them.
+
 Revision ID: m1_assigned_users
-Revises: l1_entity_domain_associations
+Revises: m1_uc_domain_id, m1_mcp_keyless_default
 Create Date: 2026-09-20
 """
 from typing import Sequence, Union
@@ -17,7 +22,7 @@ import sqlalchemy as sa
 
 
 revision: str = "m1_assigned_users"
-down_revision: Union[str, Sequence[str], None] = "l1_entity_domain_associations"
+down_revision: Union[str, Sequence[str], None] = ("m1_uc_domain_id", "m1_mcp_keyless_default")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

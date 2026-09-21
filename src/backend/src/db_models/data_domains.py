@@ -25,6 +25,11 @@ class DataDomain(Base):
 
     parent_id = Column(String, ForeignKey('data_domains.id'), nullable=True)
 
+    # Unity Catalog domain id this domain is synced with (#761). Nullable; indexed
+    # (not unique — a deleted+recreated UC domain can reuse a name but gets a new id,
+    # and unsynced domains have none). Used to match idempotently across sync runs.
+    uc_domain_id = Column(String, nullable=True, index=True)
+
     # Relationships
     parent = relationship("DataDomain", remote_side=[id], back_populates="children", lazy="select")
     children = relationship("DataDomain", back_populates="parent", lazy="select", cascade="all, delete-orphan")

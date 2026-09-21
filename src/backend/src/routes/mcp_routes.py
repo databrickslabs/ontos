@@ -48,7 +48,17 @@ MCP_AUTH_FAILED = -32001
 MCP_AUTH_MISSING_SCOPE = -32002
 
 # MCP Protocol Version
-MCP_PROTOCOL_VERSION = "2024-11-05"
+# MCP protocol revisions this server is compatible with, newest first. Per the
+# MCP spec's initialize negotiation, the server echoes back the client's
+# requested protocolVersion when it's one of these, otherwise it responds with
+# its newest. Our JSON-RPC surface (initialize / tools.list / tools.call / ping
+# / notifications) is stable across these revisions and uses no version-specific
+# features, so declaring support for all of them is safe. Clients that speak a
+# newer revision (e.g. the Databricks AI Gateway MCP client) reject a server
+# that answers with an older version than they requested, so a single hardcoded
+# version breaks them — hence the echo-with-fallback below.
+SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"]
+MCP_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 # Feature ID for audit logging
 MCP_FEATURE_ID = "mcp"
@@ -205,7 +215,18 @@ class MCPHandler:
         if self._session_id and self._session_id in _sessions:
             _sessions[self._session_id]["client_info"] = client_info
             _sessions[self._session_id]["initialized"] = True
-        
+
+        # Protocol version negotiation: echo the client's requested version when
+        # we support it, otherwise fall back to our newest. Answering with an
+        # older version than the client asked for makes strict clients (e.g. the
+        # Databricks AI Gateway) abort with "unsupported protocol version".
+        requested_version = params.get("protocolVersion")
+        negotiated_version = (
+            requested_version
+            if requested_version in SUPPORTED_PROTOCOL_VERSIONS
+            else MCP_PROTOCOL_VERSION
+        )
+
         self._audit(
             action="SESSION_CREATE",
             success=True,
@@ -213,11 +234,13 @@ class MCPHandler:
                 "session_id": self._session_id,
                 "token_name": self._token_info.name,
                 "client_info": client_info,
+                "requested_protocol_version": requested_version,
+                "negotiated_protocol_version": negotiated_version,
             },
         )
-        
+
         return {
-            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "protocolVersion": negotiated_version,
             "serverInfo": {
                 "name": "ontos-mcp-server",
                 "version": "1.0.0"
@@ -394,9 +417,52 @@ def validate_api_key(
     """Validate the API key and return token info if valid."""
     if not x_api_key:
         return None
-    
+
     token_manager = MCPTokensManager(db=db)
     return token_manager.validate_token(x_api_key)
+
+
+def _forwarded_email(request: Request) -> Optional[str]:
+    """
+    Extract the caller's Databricks identity from the app-proxy forwarded headers.
+
+    These headers are injected by the Databricks Apps OAuth2 proxy after it
+    authenticates the user, so their presence means the request has already
+    cleared the app-gate. Header-trust only — no OBO/SDK round-trip — matching
+    the trust level the regular HTTP API places in the same headers.
+    """
+    return request.headers.get("X-Forwarded-Email") or request.headers.get("X-Forwarded-User")
+
+
+def resolve_mcp_principal(
+    db: Session,
+    x_api_key: Optional[str],
+    request: Request
+) -> Optional[MCPTokenInfo]:
+    """
+    Resolve the caller of an MCP request to a token principal, or None to reject.
+
+    Two paths:
+    - A request carrying an ``X-API-Key`` is validated exactly as before; the
+      keyless default is never consulted.
+    - A request with no key but a forwarded Databricks identity (i.e. it cleared
+      the app-gate) is resolved to the active keyless default token, if one exists,
+      stamped with the caller's forwarded email for audit attribution. This is the
+      opt-in keyless path: it is inert unless an admin has designated an active
+      default token.
+
+    Returns None (reject) when no key is present and either keyless access is not
+    enabled or the request carries no forwarded identity.
+    """
+    if x_api_key:
+        return validate_api_key(db, x_api_key)
+
+    email = _forwarded_email(request)
+    if not email:
+        return None
+
+    token_manager = MCPTokensManager(db=db)
+    return token_manager.resolve_keyless_default(email)
 
 
 async def sse_event_generator(
@@ -475,14 +541,15 @@ async def mcp_sse_stream(
             detail="GET requires Accept: text/event-stream header"
         )
     
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key"
         )
-    
+
     # Get or create session
     session_id = mcp_session_id
     if session_id and session_id not in _sessions:
@@ -580,8 +647,9 @@ async def mcp_handler(
         return Response(status_code=202,
                         headers={"MCP-Session-Id": session_id} if session_id else {})
     
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         audit_manager.log_action(
             db=db,
@@ -661,8 +729,9 @@ async def mcp_delete_session(
     
     Clients should call this when they no longer need the session.
     """
-    # Validate API key
-    token_info = validate_api_key(db, x_api_key)
+    # Resolve caller: X-API-Key token, or the keyless default for app-gate
+    # authenticated requests when enabled.
+    token_info = resolve_mcp_principal(db, x_api_key, request)
     if not token_info:
         audit_manager.log_action(
             db=db,
@@ -717,4 +786,5 @@ async def mcp_health():
         "server": "ontos-mcp-server",
         "version": "1.0.0",
         "protocol_version": MCP_PROTOCOL_VERSION,
+        "supported_protocol_versions": SUPPORTED_PROTOCOL_VERSIONS,
     }

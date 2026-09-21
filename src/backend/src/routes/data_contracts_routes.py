@@ -3796,6 +3796,81 @@ async def clone_contract_for_new_version(
         raise HTTPException(status_code=500, detail="Failed to clone contract")
 
 
+@router.get('/data-contracts/meta/odcs-versions', response_model=dict)
+async def get_odcs_versions(
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """List supported ODCS apiVersions plus the latest/default (for the UI)."""
+    from src.common import odcs_versions
+    return {
+        "supported": odcs_versions.SUPPORTED_ODCS_VERSIONS,
+        "latest": odcs_versions.LATEST_ODCS_VERSION,
+        "default": odcs_versions.DEFAULT_ODCS_VERSION,
+    }
+
+
+@router.post('/data-contracts/{contract_id}/upgrade', response_model=dict, status_code=201)
+async def upgrade_contract_version(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    body: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Upgrade a contract to a newer ODCS apiVersion as a new draft version.
+
+    Body: {targetApiVersion (required), changeSummary?, versionBump? (major|minor|patch),
+    newVersion?}. The new draft enters the normal review lifecycle.
+    """
+    target_api_version = body.get('targetApiVersion') or body.get('target_api_version')
+    if not target_api_version:
+        raise HTTPException(status_code=400, detail="targetApiVersion is required")
+    change_summary = body.get('changeSummary') or body.get('change_summary')
+    version_bump = body.get('versionBump') or body.get('version_bump') or 'minor'
+    new_version = body.get('newVersion') or body.get('new_version')
+
+    try:
+        new_contract = manager.upgrade_contract_version(
+            db=db,
+            contract_id=contract_id,
+            target_api_version=target_api_version,
+            change_summary=change_summary,
+            current_user=current_user.username if current_user else None,
+            version_bump=version_bump,
+            new_version=new_version,
+        )
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="UPGRADE_ODCS_VERSION",
+            success=True,
+            details={
+                "source_contract_id": contract_id,
+                "new_contract_id": new_contract.id,
+                "target_api_version": target_api_version,
+                "new_version": new_contract.version,
+            }
+        )
+
+        from src.models.data_contracts_api import DataContractRead
+        return DataContractRead.model_validate(new_contract, from_attributes=True).model_dump()
+
+    except ValueError as e:
+        logger.error("Validation error upgrading contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("Error upgrading contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to upgrade contract")
+
+
 @router.post('/data-contracts/compare', response_model=dict)
 async def compare_contract_versions(
     body: dict = Body(...),

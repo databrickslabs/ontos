@@ -67,6 +67,7 @@ class ColumnProperty(BaseModel):
     # ODCS additional property fields
     businessName: Optional[str] = None
     encryptedName: Optional[str] = None
+    semanticType: Optional[str] = None  # ODCS v3.2.0: column|measure|dimension
     criticalDataElement: Optional[bool] = None
     transformLogic: Optional[str] = None
     # ODCS v3.1.0 defines transformSourceObjects as an array of strings; accept a
@@ -109,6 +110,9 @@ class SchemaObject(BaseModel):
     # ODCS v3.1.0 relationships (schema-level FKs)
     relationships: Optional[List[SchemaRelationship]] = None
 
+    # ODCS v3.2.0 context block (RFC-0038); string shorthand or full object
+    context: Optional[Union[str, 'ContextBlock']] = None
+
     class Config:
         populate_by_name = True
         by_alias = False  # Use field names (physicalName) not aliases (physical_name) for serialization
@@ -119,6 +123,41 @@ class ContractDescription(BaseModel):
     usage: Optional[str] = None
     purpose: Optional[str] = None
     limitations: Optional[str] = None
+
+
+class ContextVerifiedStatement(BaseModel):
+    """ODCS v3.2.0 context verifiedStatement (RFC-0038)."""
+    id: Optional[str] = None
+    question: str
+    answer: Optional[str] = None
+    tags: Optional[List[str]] = None
+    authoritativeDefinitions: Optional[List[Dict[str, Any]]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
+
+    class Config:
+        extra = "allow"
+
+
+class ContextConstraint(BaseModel):
+    """ODCS v3.2.0 context constraint (RFC-0038)."""
+    id: Optional[str] = None
+    constraint: str
+    tags: Optional[List[str]] = None
+    authoritativeDefinitions: Optional[List[Dict[str, Any]]] = None
+    customProperties: Optional[List[Dict[str, Any]]] = None
+
+    class Config:
+        extra = "allow"
+
+
+class ContextBlock(BaseModel):
+    """ODCS v3.2.0 context block (RFC-0038): AI/semantic guidance."""
+    instructions: Optional[str] = None
+    verifiedStatements: Optional[List[ContextVerifiedStatement]] = None
+    constraints: Optional[List[ContextConstraint]] = None
+
+    class Config:
+        extra = "allow"
 
 
 class QualityRule(BaseModel):
@@ -282,7 +321,9 @@ class ServerConfig(BaseModel):
 
     # Common server properties (stored as key-value pairs)
     host: Optional[str] = None
-    port: Optional[int] = None
+    # ODCS v3.2.0 (RFC-0050): port may be an integer or a runtime variable
+    # reference string such as "${DB_PORT}".
+    port: Optional[Union[int, str]] = None
     database: Optional[str] = None
     database_schema: Optional[str] = Field(None, alias="schema")
     catalog: Optional[str] = None
@@ -342,9 +383,9 @@ class ServerConfig(BaseModel):
 
 # Full ODCS Contract Structure
 class ODCSContract(BaseModel):
-    """ODCS v3.1.0 compliant contract structure"""
+    """ODCS-compliant contract structure (supports up to v3.2.0)"""
     kind: str = 'DataContract'  # Required by ODCS
-    apiVersion: str = Field('v3.1.0', alias='api_version')  # Required by ODCS
+    apiVersion: str = Field('v3.2.0', alias='api_version')  # Required by ODCS
     id: str  # Required by ODCS
     version: str  # Required by ODCS
     status: str  # Required by ODCS
@@ -360,6 +401,8 @@ class ODCSContract(BaseModel):
     # ODCS top-level fields
     tags: Optional[List[AssignedTag]] = Field(default_factory=list)
     contractCreatedTs: Optional[str] = None  # ISO datetime string
+    # ODCS v3.2.0 context block (RFC-0038); string shorthand or full object
+    context: Optional[Union[str, 'ContextBlock']] = None
 
     # Schema section
     contract_schema: List[SchemaObject] = Field(default_factory=list, alias="schema")

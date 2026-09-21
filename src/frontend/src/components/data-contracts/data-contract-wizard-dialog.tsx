@@ -116,6 +116,17 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const [descriptionPurpose, setDescriptionPurpose] = useState(initial?.descriptionPurpose || '')
   const [descriptionLimitations, setDescriptionLimitations] = useState(initial?.descriptionLimitations || '')
 
+  // ODCS v3.2.0 contract-level context (RFC-0038): AI/semantic guidance
+  const [contextInstructions, setContextInstructions] = useState<string>(
+    (initial as { contextInstructions?: string } | undefined)?.contextInstructions ?? '',
+  )
+  const [contextVerifiedStatements, setContextVerifiedStatements] = useState<{ question: string; answer: string }[]>(
+    (initial as { contextVerifiedStatements?: { question: string; answer: string }[] } | undefined)?.contextVerifiedStatements ?? [],
+  )
+  const [contextConstraints, setContextConstraints] = useState<string[]>(
+    (initial as { contextConstraints?: string[] } | undefined)?.contextConstraints ?? [],
+  )
+
   // Stakeholders / access groups / support contacts wired up in Phase 4
   // (PRD #335). Previously these step-4 fields rendered but their values
   // were dropped at submit time; they now flow into the wizard payload.
@@ -402,6 +413,19 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
+        // ODCS v3.2.0 contract-level context block (RFC-0038). Omitted entirely
+        // when empty so older-version contracts stay clean.
+        context: (contextInstructions.trim() || contextVerifiedStatements.length || contextConstraints.length)
+          ? {
+              instructions: contextInstructions.trim() || undefined,
+              verifiedStatements: contextVerifiedStatements
+                .filter((s) => s.question.trim())
+                .map((s) => ({ question: s.question.trim(), answer: s.answer.trim() || undefined })),
+              constraints: contextConstraints
+                .filter((c) => c.trim())
+                .map((c) => ({ constraint: c.trim() })),
+            }
+          : undefined,
         // Phase 4 stakeholder / access / support fields — previously
         // rendered but unwired in the wizard.
         consumers,
@@ -490,6 +514,19 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
+        // ODCS v3.2.0 contract-level context block (RFC-0038). Omitted entirely
+        // when empty so older-version contracts stay clean.
+        context: (contextInstructions.trim() || contextVerifiedStatements.length || contextConstraints.length)
+          ? {
+              instructions: contextInstructions.trim() || undefined,
+              verifiedStatements: contextVerifiedStatements
+                .filter((s) => s.question.trim())
+                .map((s) => ({ question: s.question.trim(), answer: s.answer.trim() || undefined })),
+              constraints: contextConstraints
+                .filter((c) => c.trim())
+                .map((c) => ({ constraint: c.trim() })),
+            }
+          : undefined,
         // Phase 4 stakeholder / access / support fields — previously
         // rendered but unwired in the wizard.
         consumers,
@@ -722,6 +759,67 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     className="mt-1 min-h-[100px]"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* ODCS v3.2.0 Context (RFC-0038): AI / semantic guidance */}
+            <div className="border-t pt-6 space-y-3">
+              <div>
+                <Label className="text-sm font-medium">Context — AI / Semantic Guidance</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  ODCS v3.2.0 context: instructions, verified Q&amp;A, and constraints for LLMs and BI tools.
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs">Instructions</Label>
+                <Textarea
+                  value={contextInstructions}
+                  onChange={(e) => setContextInstructions(e.target.value)}
+                  placeholder="Guidance for consumers / AI agents using this contract..."
+                  className="mt-1 min-h-[70px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Verified Statements (Q&amp;A)</Label>
+                  <Button type="button" variant="outline" size="sm" className="h-7"
+                    onClick={() => setContextVerifiedStatements((p) => [...p, { question: '', answer: '' }])}>
+                    Add
+                  </Button>
+                </div>
+                {contextVerifiedStatements.map((s, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
+                    <Input value={s.question} placeholder="Question"
+                      onChange={(e) => setContextVerifiedStatements((p) => p.map((x, j) => j === i ? { ...x, question: e.target.value } : x))} />
+                    <Input value={s.answer} placeholder="Answer"
+                      onChange={(e) => setContextVerifiedStatements((p) => p.map((x, j) => j === i ? { ...x, answer: e.target.value } : x))} />
+                    <Button type="button" variant="ghost" size="sm" className="h-9"
+                      onClick={() => setContextVerifiedStatements((p) => p.filter((_, j) => j !== i))}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Constraints</Label>
+                  <Button type="button" variant="outline" size="sm" className="h-7"
+                    onClick={() => setContextConstraints((p) => [...p, ''])}>
+                    Add
+                  </Button>
+                </div>
+                {contextConstraints.map((c, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto] gap-2 items-start">
+                    <Input value={c} placeholder="e.g. Do not join to marketing_events"
+                      onChange={(e) => setContextConstraints((p) => p.map((x, j) => j === i ? e.target.value : x))} />
+                    <Button type="button" variant="ghost" size="sm" className="h-9"
+                      onClick={() => setContextConstraints((p) => p.filter((_, j) => j !== i))}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
 

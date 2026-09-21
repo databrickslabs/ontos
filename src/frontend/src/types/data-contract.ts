@@ -112,7 +112,57 @@ export type ColumnProperty = {
   customProperties?: Record<string, any>  // ODCS custom properties
   // ODCS v3.1.0 relationships (property-level FKs)
   relationships?: SchemaRelationship[]
+  // ODCS v3.2.0 property semanticType
+  semanticType?: SemanticType
 }
+
+// ODCS v3.2.0 property semanticType (RFC-0038 / measures & dimensions)
+export type SemanticType = 'column' | 'measure' | 'dimension'
+
+// ODCS v3.2.0 vector logicalTypeOptions (RFC-0042)
+export type VectorLogicalTypeOptions = {
+  dimensions: number
+  elementType?: 'bfloat16' | 'binary' | 'float16' | 'float32' | 'float64' | 'int8' | 'uint8'
+  distanceMetric?: 'cosine' | 'dotProduct' | 'euclidean' | 'hamming' | 'manhattan'
+  embeddingModel?: string
+  embeddingModelVersion?: string
+  normalized?: boolean
+}
+
+// ODCS v3.2.0 map logicalTypeOptions (RFC-0030)
+export type MapLogicalTypeOptions = {
+  map: {
+    key: Record<string, any>
+    value: Record<string, any>
+  }
+}
+
+// ODCS v3.2.0 context block (RFC-0038): AI/semantic guidance
+export type ContextVerifiedStatement = {
+  id?: string
+  question: string
+  answer?: string
+  tags?: string[]
+  authoritativeDefinitions?: { url: string; type: string }[]
+  customProperties?: Record<string, any>[]
+}
+
+export type ContextConstraint = {
+  id?: string
+  constraint: string
+  tags?: string[]
+  authoritativeDefinitions?: { url: string; type: string }[]
+  customProperties?: Record<string, any>[]
+}
+
+export type ContextBlock = {
+  instructions?: string
+  verifiedStatements?: ContextVerifiedStatement[]
+  constraints?: ContextConstraint[]
+}
+
+// `context` may be a shorthand string or the full object.
+export type OdcsContext = string | ContextBlock
 
 // ODCS compliant schema object
 export type SchemaObject = {
@@ -138,6 +188,8 @@ export type SchemaObject = {
   semanticConcepts?: { iri: string; label?: string }[]
   // ODCS v3.1.0 relationships (schema-level FKs)
   relationships?: SchemaRelationship[]
+  // ODCS v3.2.0 schema-object-level context block
+  context?: OdcsContext
 }
 
 // Lightweight schema summary for listing (no properties loaded)
@@ -239,7 +291,8 @@ export type ServerConfig = {
   description?: string
   environment?: string
   host?: string
-  port?: number
+  // ODCS v3.2.0 (RFC-0050): port may be an integer or a runtime variable string like "${DB_PORT}"
+  port?: number | string
   database?: string
   schema?: string
   catalog?: string
@@ -270,6 +323,8 @@ export interface DataContract {
   project_name?: string // Resolved project name
   description?: ContractDescription
   tags?: any[] // Tags assigned to the contract
+  // ODCS v3.2.0 contract-level context block (RFC-0038)
+  context?: OdcsContext
   schema?: SchemaObject[]
   qualityRules?: QualityRule[]
   team?: TeamMember[]

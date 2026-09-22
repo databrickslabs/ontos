@@ -7,21 +7,42 @@
   "noTablesAccessible": "Geen tabellen toegankelijk in Unity Catalog",
   "showingColumns": "Toont {{count}} kolommen",
   "matchingSearch": "overeenkomend",
-  
+  "tableCountBadge": " ({{count}} Tabellen)",
   "columns": {
     "label": "Label",
     "description": "Beschrijving",
     "columnName": "Kolomnaam",
     "type": "Type",
-    "tableName": "Tabel"
+    "tableName": "Tabel",
+    "businessTerms": "Bedrijfstermen",
+    "source": "Bron"
   },
-  
+  "filters": {
+    "assetType": "Assettype",
+    "allTypes": "Alle Types",
+    "system": "Systeem",
+    "allSystems": "Alle Systemen",
+    "catalog": "Catalogus",
+    "allCatalogs": "Alle Catalogi",
+    "schema": "Schema",
+    "allSchemas": "Alle Schema's"
+  },
+  "sourceBadges": {
+    "both": "Beide",
+    "asset": "Asset",
+    "contract": "Contract"
+  },
+  "pagination": {
+    "showing": "Toont {{from}}–{{to}} van {{total}} kolommen",
+    "matching": " overeenkomend met \"{{query}}\"",
+    "perPage": "Per pagina:",
+    "pageOf": "Pagina {{current}} van {{total}}"
+  },
   "tabs": {
     "overview": "Overzicht",
     "dataDetails": "Data Details",
     "lineage": "Lineage"
   },
-  
   "overview": {
     "basicInfo": "Basis Informatie",
     "catalog": "Catalogus",
@@ -39,33 +60,114 @@
     "description": "Beschrijving",
     "tags": "Tags"
   },
-  
+  "details": {
+    "backToList": "Terug naar lijst",
+    "by": "door {{user}}",
+    "fallbackTitle": "Details"
+  },
   "dataDetails": {
     "title": "Kolommen",
-    "description": "Kolomdefinities en metadata",
+    "description": "Beschrijving",
     "columnName": "Kolomnaam",
     "type": "Type",
     "nullable": "Nullable",
-    "description": "Beschrijving"
+    "partition": "Partitie {{index}}",
+    "yes": "Ja",
+    "no": "Nee"
   },
-  
   "lineage": {
     "title": "Data Lineage",
     "description": "Visualiseer upstream en downstream afhankelijkheden",
     "noLineage": "Geen lineage informatie beschikbaar",
     "noLineageHint": "Deze tabel heeft mogelijk geen upstream of downstream afhankelijkheden",
+    "noDataAvailable": "Geen lineage data beschikbaar",
+    "loadingLineage": "Lineage laden…",
     "both": "Beide Richtingen",
     "upstream": "Alleen Upstream",
     "downstream": "Alleen Downstream",
     "legend": "Legenda",
     "impactSummary": "Impact Samenvatting",
     "impactWarning": "Wijzigingen aan deze tabel kunnen beïnvloeden:",
-    "notifyOwners": "Te informeren eigenaren"
+    "notifyOwners": "Te informeren eigenaren",
+    "impactedTables_one": "{{count}} tabel",
+    "impactedTables_other": "{{count}} tabellen",
+    "impactedViews_one": "{{count}} view",
+    "impactedViews_other": "{{count}} views",
+    "impactedExternal_one": "{{count}} extern",
+    "impactedExternal_other": "{{count}} externe",
+    "toolbar": {
+      "upstream": "Upstream",
+      "both": "Beide",
+      "downstream": "Downstream",
+      "breadth": "Breedte:",
+      "nesting": "Nesting:",
+      "entitiesEdges": "{{nodes}} entiteiten · {{edges}} edges"
+    },
+    "legendPanel": {
+      "entityTypes": "Entiteitstypes",
+      "edgeStyles": "Edge-stijlen",
+      "dataFlow": "Datastroom",
+      "containment": "Bevatting",
+      "governance": "Governance",
+      "semantic": "Semantisch"
+    },
+    "dev": {
+      "entityTypeLabel": "Entiteitstype:",
+      "entityTypePlaceholder": "bijv. DataProduct",
+      "entityIdLabel": "Entiteit-ID:",
+      "entityIdPlaceholder": "bijv. uuid",
+      "load": "Laden",
+      "emptyHint": "Voer hierboven een entiteitstype en ID in en klik dan op Laden"
+    }
   },
-  
+  "hierarchy": {
+    "browserTitle": "Hiërarchiebrowser",
+    "browserSubtitle": "Navigeer datahiërarchieën van systemen en domeinen tot tabellen en kolommen",
+    "browse": "Bladeren",
+    "filterPlaceholder": "Filteren...",
+    "noMatches": "Geen overeenkomsten gevonden",
+    "noRoots": "Geen root-entiteiten gevonden",
+    "rootsLoadFailed": "Laden van hiërarchie-roots mislukt",
+    "permissionDenied": "Geen Toegang",
+    "noAccess": "Je hebt geen toegang om de hiërarchie te bekijken.",
+    "selectEntity": "Selecteer een entiteit",
+    "selectEntityHint": "Klik op een item in de boom om de hiërarchie te bekijken",
+    "childCount_one": "{{count}} onderliggend item",
+    "childCount_other": "{{count}} onderliggende items",
+    "maxDepthTooltip": "Max. hiërarchiediepte",
+    "treeView": "Boomweergave",
+    "graphView": "Grafiekweergave",
+    "viewDetail": "Detail bekijken",
+    "viewDetails": "Details bekijken",
+    "show": "Tonen:",
+    "showAll": "Alles tonen",
+    "heading": "Hiërarchie",
+    "noChildren": "Geen onderliggende items in de hiërarchie",
+    "noChildrenFound": "Geen onderliggende items gevonden",
+    "expand": "Uitklappen",
+    "collapse": "Inklappen",
+    "levelsOption": "{{count}} niveaus",
+    "allLevels": "Alle",
+    "rootType": {
+      "domain": "Domein",
+      "product": "Product"
+    }
+  },
+  "preview": {
+    "title": "Voorbeeld",
+    "notAvailable": "Voorbeeld niet beschikbaar voor dit bestand.",
+    "fetchFailed": "Ophalen van voorbeeldinhoud mislukt.",
+    "loadImageFailed": "Laden van afbeelding mislukt",
+    "pdfNotSupported": "PDF-voorbeeld niet ondersteund.",
+    "textPreviewTitle": "Tekstvoorbeeld",
+    "noInlinePreview": "Geen inline voorbeeld voor dit bestandstype.",
+    "noPreviewUrl": "Geen voorbeeld-URL beschikbaar. Bestandsnaam: {{filename}} • Pad: {{path}}"
+  },
   "errors": {
     "fetchFailed": "Kon data niet ophalen",
-    "tableNotFound": "Tabel niet gevonden"
+    "tableNotFound": "Tabel niet gevonden",
+    "fetchTableFailed": "Ophalen van tabel mislukt: {{status}}",
+    "fetchLineageFailed": "Ophalen van lineage mislukt",
+    "loadLineageFailed": "Laden van lineage mislukt"
   }
 }
-

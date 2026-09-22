@@ -34,12 +34,73 @@
     "security": "セキュリティ",
     "dataQuality": "データ品質",
     "privacy": "プライバシー",
-    "governance": "ガバナンス"
+    "governance": "ガバナンス",
+    "maturity": "成熟度"
   },
   "errors": {
     "loadingPolicies": "ポリシーの読み込みエラー",
     "savingPolicy": "ポリシーの保存エラー",
-    "deletingPolicy": "ポリシーの削除エラー"
+    "deletingPolicy": "ポリシーの削除エラー",
+    "loadPolicyFailed": "ポリシーの読み込みに失敗しました",
+    "loadFailed": "読み込みに失敗しました",
+    "savePolicyFailed": "ポリシーの保存に失敗しました",
+    "deletePolicyFailed": "ポリシーの削除に失敗しました",
+    "noDataReceived": "コンプライアンスポリシーのエンドポイントからデータを受信できませんでした。",
+    "saveNoDataReturned": "ポリシーの保存に失敗しました: データが返されませんでした",
+    "loadPoliciesFailed": "コンプライアンスポリシーの読み込みに失敗しました",
+    "loadRunResultsFailed": "実行結果の読み込みに失敗しました",
+    "policyNotFound": "コンプライアンスポリシーが見つかりません。",
+    "runNotFound": "実行が見つかりません。"
+  },
+  "results": {
+    "passed": "合格",
+    "failed": "不合格",
+    "showFailed": "不合格のみ表示",
+    "showAll": "すべて表示",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "一覧に戻る",
+    "run": "実行",
+    "id": "ID",
+    "examples": "例",
+    "shouldPass": "合格すべき",
+    "shouldFail": "不合格にすべき",
+    "noExamples": "例がありません",
+    "runSummary": {
+      "title": "実行サマリー",
+      "lastRunStarted": "前回の実行開始 {{date}}",
+      "statusLabel": "ステータス:",
+      "score": "スコア",
+      "passed": "合格",
+      "failed": "不合格",
+      "passedExamples": "合格した例",
+      "failedExamples": "不合格の例",
+      "noPassedExamples": "この実行で合格した例はありません",
+      "noFailures": "この実行に失敗はありません"
+    },
+    "runsList": {
+      "title": "実行",
+      "mostRecentFirst": "新しい順",
+      "noRuns": "まだ実行がありません",
+      "scoreLabel": "スコア:",
+      "scoreDetail": "{{passed}} 件合格 / {{failed}} 件不合格",
+      "openRunDetails": "実行の詳細を開く"
+    },
+    "resultsCard": {
+      "title": "結果",
+      "filteredFailed": "不合格のみに絞り込み — 最新の実行 {{date}}",
+      "filteredAll": "すべてに絞り込み — 最新の実行 {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "実行 {{id}}",
+    "viewPolicy": "ポリシーを表示",
+    "statusLabel": "ステータス:",
+    "scoreLabel": "スコア:",
+    "passedLabel": "合格:",
+    "failedLabel": "不合格:",
+    "startedLabel": "開始: {{date}}"
   },
   "toast": {
     "policySaved": "ポリシー '{{name}}' を保存しました",
@@ -102,4 +163,3 @@
     }
   }
 }
-

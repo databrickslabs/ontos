@@ -6,7 +6,6 @@
   "basicInformation": "Basis Informatie",
   "commentsAndActivity": "Opmerkingen & Activiteit",
   "askOntos": "Vraag {{shortName}}",
-  
   "actions": {
     "viewData": "Data Bekijken",
     "move": "Verplaatsen",
@@ -20,7 +19,6 @@
     "cancel": "Annuleren",
     "confirm": "Bevestigen"
   },
-  
   "tooltips": {
     "copyToTarget": "Kopiëren naar doel",
     "moveToTarget": "Verplaatsen naar doel",
@@ -28,7 +26,6 @@
     "refresh": "Vernieuwen (houd Shift ingedrukt voor geforceerd vernieuwen)",
     "dragToResize": "Sleep om te verkleinen/vergroten"
   },
-  
   "labels": {
     "metastore": "Metastore",
     "filterCatalogs": "Catalogussen filteren...",
@@ -38,7 +35,6 @@
     "fullPath": "Volledig Pad:",
     "actions": "Acties:"
   },
-  
   "messages": {
     "selectObjectToViewInfo": "Selecteer een object om de informatie te bekijken",
     "selectObjectToViewComments": "Selecteer een object om opmerkingen te bekijken",
@@ -47,9 +43,11 @@
     "datasetView": "Dataset Weergave: {{name}}",
     "confirmOperation": "Bevestig Bewerking",
     "selectedItems": "Geselecteerde items: {{items}}",
-    "noItemsSelected": "Geen items geselecteerd"
+    "noItemsSelected": "Geen items geselecteerd",
+    "noResponse": "Geen antwoord",
+    "tableNotFound": "Tabel \"{{name}}\" niet gevonden in {{schema}}",
+    "failedToNavigate": "Kon niet navigeren naar {{path}}"
   },
-  
   "askPanel": {
     "title": "Vraag {{shortName}}",
     "askAboutItem": "Vraag over dit catalogus item",
@@ -67,10 +65,9 @@
       "usage": "Hoe wordt dit gebruikt?"
     }
   },
-  
   "errors": {
     "error": "Fout",
-    "failedToSendMessage": "Kon bericht niet verzenden"
+    "failedToSendMessage": "Kon bericht niet verzenden",
+    "chatRequestFailed": "Chatverzoek mislukt"
   }
 }
-

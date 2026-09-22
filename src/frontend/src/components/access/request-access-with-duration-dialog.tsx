@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -62,8 +63,9 @@ export default function RequestAccessWithDurationDialog({
 }: RequestAccessWithDurationDialogProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['access-grants', 'common']);
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
-  
+
   const [reason, setReason] = useState('');
   const [duration, setDuration] = useState<number>(30);
   const [permissionLevel, setPermissionLevel] = useState<PermissionLevel>('READ');
@@ -100,12 +102,12 @@ export default function RequestAccessWithDurationDialog({
   const handleSubmit = async () => {
     // Validate reason
     if (!reason.trim()) {
-      setError('Please provide a reason for requesting access');
+      setError(t('access-grants:request.reason.required', 'Please provide a reason for requesting access'));
       return;
     }
 
     if (reason.trim().length < 10) {
-      setError('Please provide a more detailed reason (at least 10 characters)');
+      setError(t('access-grants:request.reason.minLength', 'Please provide a more detailed reason (at least 10 characters)'));
       return;
     }
 
@@ -127,8 +129,11 @@ export default function RequestAccessWithDurationDialog({
       }
 
       toast({
-        title: 'Request Submitted',
-        description: `Your access request for ${duration} days has been submitted. You will be notified of the decision.`
+        title: t('access-grants:request.submittedTitle', 'Request Submitted'),
+        description: t('access-grants:request.submittedDescription', {
+          count: duration,
+          defaultValue: 'Your access request for {{count}} days has been submitted. You will be notified of the decision.',
+        })
       });
 
       // Refresh notifications to show any new ones
@@ -145,10 +150,10 @@ export default function RequestAccessWithDurationDialog({
       }
 
     } catch (e: any) {
-      const errorMessage = e.message || 'Failed to submit access request';
+      const errorMessage = e.message || t('access-grants:request.error', 'Failed to submit access request');
       setError(errorMessage);
       toast({
-        title: 'Error',
+        title: t('common:toast.error', 'Error'),
         description: errorMessage,
         variant: 'destructive'
       });
@@ -166,13 +171,13 @@ export default function RequestAccessWithDurationDialog({
   };
 
   const formatDuration = (days: number): string => {
-    if (days < 30) return `${days} day${days !== 1 ? 's' : ''}`;
-    if (days === 30) return '1 month';
-    if (days === 60) return '2 months';
-    if (days === 90) return '3 months';
-    if (days === 180) return '6 months';
-    if (days === 365) return '1 year';
-    return `${days} days`;
+    if (days < 30) return t('access-grants:duration.days', { count: days });
+    if (days === 30) return t('access-grants:duration.months', { count: 1 });
+    if (days === 60) return t('access-grants:duration.months', { count: 2 });
+    if (days === 90) return t('access-grants:duration.months', { count: 3 });
+    if (days === 180) return t('access-grants:duration.months', { count: 6 });
+    if (days === 365) return t('access-grants:duration.years', { count: 1 });
+    return t('access-grants:duration.days', { count: days });
   };
 
   return (
@@ -181,11 +186,13 @@ export default function RequestAccessWithDurationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {ENTITY_TYPE_ICONS[entityType] || <Package className="h-5 w-5 text-primary" />}
-            Request Time-Limited Access
+            {t('access-grants:request.dialogTitle', 'Request Time-Limited Access')}
           </DialogTitle>
           <DialogDescription>
-            Submit a request for temporary access to this {ENTITY_TYPE_LABELS[entityType]?.toLowerCase() || 'resource'}.
-            Select how long you need access and provide a reason.
+            {t('access-grants:request.dialogDescription', {
+              entityType: t(`access-grants:entityTypeLabels.${entityType}`, ENTITY_TYPE_LABELS[entityType] || 'Resource').toLowerCase() || t('access-grants:resource', 'resource'),
+              defaultValue: 'Submit a request for temporary access to this {{entityType}}. Select how long you need access and provide a reason.',
+            })}
           </DialogDescription>
         </DialogHeader>
 
@@ -193,7 +200,7 @@ export default function RequestAccessWithDurationDialog({
           {/* Entity Information */}
           <div className="p-3 bg-muted/50 rounded-lg border">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-medium">{ENTITY_TYPE_LABELS[entityType] || 'Resource'}:</span>
+              <span className="font-medium">{t(`access-grants:entityTypeLabels.${entityType}`, ENTITY_TYPE_LABELS[entityType] || t('access-grants:resourceCapitalized', 'Resource'))}:</span>
             </div>
             <div className="text-sm font-medium mt-1">
               {entityName || entityId}
@@ -207,7 +214,7 @@ export default function RequestAccessWithDurationDialog({
           <div className="space-y-2">
             <Label htmlFor="access-duration" className="text-sm font-medium flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Access Duration *
+              {t('access-grants:request.duration.label', 'Access Duration')} *
             </Label>
             <Select
               value={duration.toString()}
@@ -215,7 +222,7 @@ export default function RequestAccessWithDurationDialog({
               disabled={submitting || loadingConfig}
             >
               <SelectTrigger id="access-duration">
-                <SelectValue placeholder="Select duration" />
+                <SelectValue placeholder={t('access-grants:request.duration.placeholder', 'Select duration')} />
               </SelectTrigger>
               <SelectContent>
                 {durationOptions.map((d) => (
@@ -226,14 +233,14 @@ export default function RequestAccessWithDurationDialog({
               </SelectContent>
             </Select>
             <div className="text-xs text-muted-foreground">
-              Your access will automatically expire after this period.
+              {t('access-grants:request.duration.help', 'Your access will automatically expire after this period.')}
             </div>
           </div>
 
           {/* Permission Level Selection */}
           <div className="space-y-2">
             <Label htmlFor="permission-level" className="text-sm font-medium">
-              Permission Level *
+              {t('access-grants:request.permissionLabel', 'Permission Level')} *
             </Label>
             <Select
               value={permissionLevel}
@@ -241,12 +248,12 @@ export default function RequestAccessWithDurationDialog({
               disabled={submitting}
             >
               <SelectTrigger id="permission-level">
-                <SelectValue placeholder="Select permission level" />
+                <SelectValue placeholder={t('access-grants:permissionSelectPlaceholder', 'Select permission level')} />
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(PERMISSION_LABELS).map(([level, label]) => (
                   <SelectItem key={level} value={level}>
-                    {label}
+                    {t(`access-grants:permissionOptions.${level}`, label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -256,18 +263,18 @@ export default function RequestAccessWithDurationDialog({
           {/* Reason Field */}
           <div className="space-y-2">
             <Label htmlFor="access-reason" className="text-sm font-medium">
-              Reason for Access Request *
+              {t('access-grants:request.reason.fullLabel', 'Reason for Access Request')} *
             </Label>
             <Textarea
               id="access-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Please explain why you need access to this resource. Include details about your intended use case, project requirements, or business justification..."
+              placeholder={t('access-grants:request.reason.detailedPlaceholder', 'Please explain why you need access to this resource. Include details about your intended use case, project requirements, or business justification...')}
               className="min-h-[100px] resize-none"
               disabled={submitting}
             />
             <div className="text-xs text-muted-foreground">
-              Minimum 10 characters required. This information will be reviewed by administrators.
+              {t('access-grants:request.reason.help', 'Minimum 10 characters required. This information will be reviewed by administrators.')}
             </div>
           </div>
 
@@ -286,14 +293,19 @@ export default function RequestAccessWithDurationDialog({
             onClick={handleCancel}
             disabled={submitting}
           >
-            Cancel
+            {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={submitting || !reason.trim() || loadingConfig}
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {submitting ? 'Sending Request...' : `Request ${formatDuration(duration)} Access`}
+            {submitting
+              ? t('access-grants:request.submitting', 'Sending Request...')
+              : t('access-grants:request.submitButtonWithDuration', {
+                  duration: formatDuration(duration),
+                  defaultValue: 'Request {{duration}} Access',
+                })}
           </Button>
         </DialogFooter>
       </DialogContent>

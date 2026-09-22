@@ -4,10 +4,16 @@
   "tabs": {
     "askOntos": "{{shortName}}に聞く",
     "indexSearch": "インデックス検索",
+    "searchConcepts": "コンセプトを検索",
     "viewGraph": "グラフを表示",
     "searchGraph": "グラフを検索",
     "concepts": "コンセプト",
+    "properties": "プロパティ",
     "knowledgeGraph": "ナレッジグラフ"
+  },
+  "subtitles": {
+    "searchConcepts": "オントロジーのコンセプトとプロパティを検索・参照します",
+    "searchGraph": "SPARQL を使用してナレッジグラフをクエリ・探索します"
   },
   "noResults": "結果が見つかりません",
   "noResultsHint": "検索語句やフィルターを調整してみてください",
@@ -56,7 +62,18 @@
     "resourcesWithLabel": "rdfs:labelを持つリソース",
     "subjectsAndTypes": "サブジェクトとそのタイプ",
     "topPredicates": "頻度別上位述語",
-    "mostLinkedSeeAlso": "rdfs:seeAlso経由で最もリンク"
+    "mostLinkedSeeAlso": "rdfs:seeAlso経由で最もリンク",
+    "resourceDetail": "リソースの詳細",
+    "prefixPlaceholder": "例: example.org/banking",
+    "resourceLoading": "読み込み中…",
+    "noTriples": "このリソースにはトリプルがありません。",
+    "blankNodeExpanded": "（空白ノード、下に展開）",
+    "hover": {
+      "type": "タイプ: {{type}}",
+      "id": "ID: {{id}}",
+      "owner": "所有者: {{owner}}",
+      "status": "ステータス: {{status}}"
+    }
   },
   "index": {
     "title": "インデックス検索",
@@ -75,6 +92,10 @@
     "noRelatedProperties": "関連プロパティが見つかりません。",
     "linkedCatalogObjects": "リンクされたカタログオブジェクト",
     "noCatalogObjects": "カタログオブジェクトは割り当てられていません。",
+    "linkedUCTable": "UC テーブル",
+    "linkedUCColumn": "UC カラム",
+    "linkedUCCatalog": "UC カタログ",
+    "linkedUCSchema": "UC スキーマ",
     "assignToConcept": "概念に割り当て",
     "assignDialog": {
       "title": "オブジェクトを概念に割り当て",
@@ -84,6 +105,16 @@
       "dataContract": "データ契約",
       "asset": "アセット",
       "dataDomain": "データドメイン",
+      "dataset": "データセット",
+      "ucCatalog": "UC カタログ",
+      "ucSchema": "UC スキーマ",
+      "ucTable": "UC テーブル",
+      "browseUCCatalog": "UC カタログを参照...",
+      "browseUCSchema": "UC スキーマを参照...",
+      "browseUCTable": "UC テーブルを参照...",
+      "ucCatalogTitle": "UC カタログを選択",
+      "ucSchemaTitle": "UC スキーマを選択",
+      "ucTableTitle": "UC テーブルを選択",
       "selectEntity": "{{entityType}}を選択..."
     },
     "messages": {
@@ -91,6 +122,39 @@
       "assignError": "エンティティタイプと特定のエンティティの両方を選択してください。",
       "assignFailed": "概念のオブジェクトへの割り当てに失敗しました。",
       "navigationError": "{{entityType}}にナビゲートできません"
+    }
+  },
+  "properties": {
+    "searchAndSelect": "プロパティを検索して選択:",
+    "searchPlaceholder": "名前、ラベル、または IRI で検索するには入力...",
+    "clear": "クリア",
+    "domainRange": "定義域 / 値域",
+    "linkedCatalogObjects": "リンクされたカタログオブジェクト",
+    "noCatalogObjects": "カタログオブジェクトは割り当てられていません。",
+    "assignToProperty": "プロパティに割り当て",
+    "assignDialog": {
+      "title": "オブジェクトをプロパティに割り当て",
+      "targetType": "ターゲットタイプ",
+      "selectTargetType": "ターゲットタイプを選択...",
+      "dataContractProperty": "データ契約プロパティ",
+      "ucTable": "UC テーブル",
+      "ucColumn": "UC カラム",
+      "contract": "契約",
+      "selectContract": "契約を選択...",
+      "schema": "スキーマ",
+      "selectSchema": "スキーマを選択...",
+      "property": "プロパティ",
+      "selectProperty": "プロパティを選択...",
+      "browseUCColumn": "UC テーブルを参照してカラムを選択...",
+      "ucColumnTitle": "UC カラムを選択",
+      "asset": "アセット",
+      "noColumnAssets": "カラムまたは論理属性のアセットが見つかりません",
+      "selectAsset": "アセットを選択"
+    },
+    "messages": {
+      "selectPropertyTarget": "契約、スキーマ、プロパティを選択してください。",
+      "linkedSuccess": "プロパティを正常にリンクしました。",
+      "assignFailed": "プロパティのオブジェクトへの割り当てに失敗しました。"
     }
   },
   "llm": {
@@ -115,7 +179,11 @@
       "findCustomerData": "顧客データはどこにありますか？",
       "dataProductsCost": "すべてのデータ製品のコストはいくらですか？",
       "businessTermsSales": "売上に関連するビジネス用語は何ですか？",
-      "showDataProducts": "顧客ドメインのデータ製品を表示してください"
+      "showDataProducts": "顧客ドメインのデータ製品を表示してください",
+      "howToCreateProduct": "最初のデータ製品を作成するにはどうすればよいですか？",
+      "howToSetupDomains": "データドメインを設定するにはどうすればよいですか？",
+      "whatIsOntos": "Ontos とは何ですか？何ができますか？",
+      "coreConcepts": "中核となる概念（データ製品、契約、ドメイン）について説明してください。"
     },
     "messages": {
       "sessionDeleted": "セッション削除",
@@ -123,11 +191,45 @@
       "loadSessionFailed": "セッションの読み込みに失敗しました",
       "deleteSessionFailed": "セッションの削除に失敗しました",
       "loadFailed": "LLM検索の読み込みに失敗しました。後でもう一度お試しください。"
+    },
+    "debug": {
+      "title": "デバッグ",
+      "toolCallCount_one": "{{count}} 件のツール呼び出し",
+      "toolCallCount_other": "{{count}} 件のツール呼び出し",
+      "priorResults": "（{{count}} 件前）",
+      "followUp": "フォローアップ: LLM は会話履歴に {{messages}} 件の過去メッセージ（{{results}} 件のツール結果）を保持しています",
+      "queryClassification": "クエリ分類",
+      "query": "クエリ:",
+      "categories": "カテゴリ:",
+      "toolsProvided": "提供されたツール:",
+      "model": "モデル:",
+      "iterations": "反復回数:",
+      "total": "合計",
+      "toolExecutions": "ツールの実行",
+      "llmIterations": "LLM の反復",
+      "messagesSent": "{{count}} 件のメッセージ",
+      "toolCallsShort": "{{count}} 件のツール呼び出し",
+      "args": "引数:",
+      "showResult": "結果を表示",
+      "hideResult": "結果を非表示",
+      "modeEnabled": "デバッグモードを有効にしました",
+      "modeDisabled": "デバッグモードを無効にしました",
+      "modeEnabledDesc": "LLM の中間ステップが表示されます",
+      "clickToDisable": "クリックしてデバッグモードを無効にする"
     }
   },
   "copilot": {
+    "title": "{{shortName}}に聞く",
+    "subtitle": "AI 搭載アシスタント",
+    "button": "{{shortName}}に聞く",
+    "welcome": "{{shortName}}に聞くへようこそ！",
+    "welcomeDescription": "モデリング、マッピング、製品作成、ヘルスインサイトのサポートを受けられます。以下の推奨プロンプトのいずれかを試すか、独自の質問を入力してください。",
+    "askingAbout": "質問対象:",
     "scopePageSpecific": "ページ固有",
     "scopeGeneral": "Ontos（全般）",
-    "scopeThisPage": "このページ"
+    "scopeThisPage": "このページ",
+    "inputPlaceholder": "{{shortName}}に何でも質問...",
+    "messageSendFailed": "メッセージの送信に失敗しました",
+    "resizeHandle": "Ask Ontos パネルのサイズを変更"
   }
 }

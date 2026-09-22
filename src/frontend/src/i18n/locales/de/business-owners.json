@@ -1,0 +1,65 @@
+{
+  "title": "Business Owner",
+  "subtitle": "Zuständigkeitszuweisungen, die festhalten, wer wofür verantwortlich ist.",
+  "addNew": "Owner zuweisen",
+  "editOwner": "Zuweisung bearbeiten",
+  "removeOwner": "Owner entfernen",
+  "table": {
+    "object": "Objekt",
+    "objectType": "Objekttyp",
+    "owner": "Owner",
+    "role": "Rolle",
+    "status": "Status",
+    "assignedAt": "Zugewiesen",
+    "removedAt": "Entfernt",
+    "actions": "Aktionen"
+  },
+  "objectTypes": {
+    "data_product": "Data Product",
+    "data_contract": "Data Contract",
+    "dataset": "Datensatz",
+    "data_domain": "Data Domain",
+    "business_term": "Geschäftsbegriff",
+    "policy": "Richtlinie",
+    "asset": "Asset",
+    "tag": "Tag"
+  },
+  "statusLabels": {
+    "active": "Aktiv",
+    "inactive": "Inaktiv"
+  },
+  "permissions": {
+    "deniedView": "Sie haben keine Berechtigung, Business Owner anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Owner zuzuweisen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Owner-Zuweisungen zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Owner zu entfernen.",
+    "permissionDenied": "Zugriff verweigert"
+  },
+  "messages": {
+    "errorFetching": "Fehler beim Abrufen der Business Owner",
+    "errorRemoving": "Fehler beim Entfernen des Business Owners",
+    "removed": "Owner entfernt",
+    "removedSuccess": "Die Zuständigkeitszuweisung wurde erfolgreich entfernt.",
+    "errorLoadingData": "Fehler beim Laden der Daten"
+  },
+  "removeDialog": {
+    "title": "Owner entfernen?",
+    "description": "Dadurch wird die Zuständigkeitszuweisung deaktiviert. Der Verlauf bleibt erhalten.",
+    "reasonLabel": "Grund (optional)",
+    "reasonPlaceholder": "Grund für die Entfernung eingeben...",
+    "cancel": "Abbrechen",
+    "remove": "Entfernen"
+  },
+  "emptyState": {
+    "title": "Noch keine Zuständigkeitszuweisungen",
+    "description": "Weisen Sie Business Owner zu Data Products, Contracts und anderen Objekten zu."
+  },
+  "panel": {
+    "title": "Owner",
+    "currentOwners": "Aktuelle Owner",
+    "previousOwners": "Frühere Owner",
+    "noOwners": "Keine Owner zugewiesen",
+    "assignOwner": "Owner zuweisen",
+    "history": "Verlauf anzeigen"
+  }
+}

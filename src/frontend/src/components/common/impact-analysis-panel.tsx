@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, RefreshCw, Target, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { LineageGraph } from '@/types/ontology-schema';
 import { BusinessLineageView } from '@/components/lineage';
 
@@ -31,6 +32,7 @@ export function ImpactAnalysisPanel({
   maxDepth = 4,
 }: ImpactAnalysisPanelProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const [graphData, setGraphData] = useState<LineageGraph | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,14 +44,14 @@ export function ImpactAnalysisPanel({
       const res = await fetch(
         `/api/business-lineage/${entityType}/${entityId}/impact?max_depth=${maxDepth}`
       );
-      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      if (!res.ok) throw new Error(t('common:impactAnalysis.failedStatus', { status: res.status }));
       setGraphData(await res.json());
     } catch (e: any) {
-      setError(e.message || 'Failed to load impact analysis');
+      setError(e.message || t('common:impactAnalysis.failedLoad'));
     } finally {
       setIsLoading(false);
     }
-  }, [entityType, entityId, maxDepth]);
+  }, [entityType, entityId, maxDepth, t]);
 
   useEffect(() => { fetchImpact(); }, [fetchImpact]);
 
@@ -75,7 +77,7 @@ export function ImpactAnalysisPanel({
       <Card>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-sm text-muted-foreground">Analyzing impact...</span>
+          <span className="ml-2 text-sm text-muted-foreground">{t('common:impactAnalysis.analyzing')}</span>
         </CardContent>
       </Card>
     );
@@ -88,7 +90,7 @@ export function ImpactAnalysisPanel({
           <AlertCircle className="h-5 w-5 text-destructive mx-auto mb-2" />
           <p className="text-sm text-destructive">{error}</p>
           <Button variant="outline" size="sm" className="mt-2" onClick={fetchImpact}>
-            <RefreshCw className="mr-2 h-3.5 w-3.5" /> Retry
+            <RefreshCw className="mr-2 h-3.5 w-3.5" /> {t('common:retry')}
           </Button>
         </CardContent>
       </Card>
@@ -103,17 +105,17 @@ export function ImpactAnalysisPanel({
           <CardTitle className="text-base flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Target className="h-4 w-4" />
-              Impact Summary
+              {t('common:impactAnalysis.summary')}
             </span>
             <Badge variant={affectedCount > 0 ? 'secondary' : 'outline'}>
-              {affectedCount} affected entit{affectedCount === 1 ? 'y' : 'ies'}
+              {t('common:impactAnalysis.affectedCount', { count: affectedCount })}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {affectedCount === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No downstream entities affected by changes to this {entityType}.
+              {t('common:impactAnalysis.noDownstream', { type: entityType })}
             </p>
           ) : (
             <div className="space-y-3">

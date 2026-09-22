@@ -25,7 +25,7 @@ export function VersionCountBadge({ count, className, onClick }: VersionCountBad
 
   if (!count || count <= 1) return null
 
-  const label = t('versionFamily.countBadge', { count, defaultValue: '{{count}} versions' })
+  const label = t('common:versionFamily.countBadge', { count })
 
   return (
     <button

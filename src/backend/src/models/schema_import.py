@@ -35,6 +35,8 @@ class BrowseResponse(BaseModel):
     nodes: List[BrowseNode] = Field(default_factory=list)
     error: Optional[str] = Field(None, description="Short error message if browsing failed")
     error_detail: Optional[str] = Field(None, description="Full error details for debugging")
+    truncated: bool = Field(False, description="True if leaf assets at this path were capped by the configured fetch limit; more assets exist than are shown")
+    truncated_at: Optional[int] = Field(None, description="The child fetch limit that was applied when truncated is True")
 
 
 # ---------------------------------------------------------------------------

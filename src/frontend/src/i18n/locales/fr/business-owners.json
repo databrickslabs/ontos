@@ -1,0 +1,65 @@
+{
+  "title": "Propriétaires métier",
+  "subtitle": "Affectations de propriété indiquant qui est responsable de quoi.",
+  "addNew": "Attribuer un propriétaire",
+  "editOwner": "Modifier l'affectation",
+  "removeOwner": "Retirer le propriétaire",
+  "table": {
+    "object": "Objet",
+    "objectType": "Type d'objet",
+    "owner": "Propriétaire",
+    "role": "Rôle",
+    "status": "Statut",
+    "assignedAt": "Attribué",
+    "removedAt": "Retiré",
+    "actions": "Actions"
+  },
+  "objectTypes": {
+    "data_product": "Produit de données",
+    "data_contract": "Contrat de données",
+    "dataset": "Jeu de données",
+    "data_domain": "Domaine de données",
+    "business_term": "Terme métier",
+    "policy": "Politique",
+    "asset": "Actif",
+    "tag": "Étiquette"
+  },
+  "statusLabels": {
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "permissions": {
+    "deniedView": "Vous n'avez pas la permission de voir les propriétaires métier.",
+    "deniedCreate": "Vous n'avez pas la permission d'attribuer des propriétaires.",
+    "deniedEdit": "Vous n'avez pas la permission de modifier les affectations de propriétaire.",
+    "deniedDelete": "Vous n'avez pas la permission de retirer des propriétaires.",
+    "permissionDenied": "Permission refusée"
+  },
+  "messages": {
+    "errorFetching": "Erreur lors de la récupération des propriétaires métier",
+    "errorRemoving": "Erreur lors du retrait du propriétaire métier",
+    "removed": "Propriétaire retiré",
+    "removedSuccess": "L'affectation de propriété a été retirée avec succès.",
+    "errorLoadingData": "Erreur lors du chargement des données"
+  },
+  "removeDialog": {
+    "title": "Retirer le propriétaire ?",
+    "description": "Cela désactivera l'affectation de propriété. L'historique sera conservé.",
+    "reasonLabel": "Motif (optionnel)",
+    "reasonPlaceholder": "Saisir le motif du retrait...",
+    "cancel": "Annuler",
+    "remove": "Retirer"
+  },
+  "emptyState": {
+    "title": "Aucune affectation de propriété pour le moment",
+    "description": "Attribuez des propriétaires métier aux produits de données, contrats et autres objets."
+  },
+  "panel": {
+    "title": "Propriétaires",
+    "currentOwners": "Propriétaires actuels",
+    "previousOwners": "Anciens propriétaires",
+    "noOwners": "Aucun propriétaire attribué",
+    "assignOwner": "Attribuer un propriétaire",
+    "history": "Afficher l'historique"
+  }
+}

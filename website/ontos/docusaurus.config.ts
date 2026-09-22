@@ -12,9 +12,23 @@ const config: Config = {
   favicon: '/img/ontos-logo2.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
-  // Improve compatibility with the upcoming Docusaurus v4
+  // Improve compatibility with the upcoming Docusaurus v4.
+  // We enable the v4 flags individually rather than via `v4: true`, because two
+  // of the implied flags don't work for this site yet:
+  //  - fasterByDefault turns on the Docusaurus Faster (rspack) bundler, which
+  //    requires the @docusaurus/faster package; we can't add that dependency
+  //    here (its transitive deps aren't on our npm proxy), so we keep webpack.
+  //  - mdx1CompatDisabledByDefault enables strict MDX, which breaks the
+  //    `{#heading-id}` anchors in getting_started/install_databricks.md.
+  // The remaining flags are safe and keep the site v4-ready.
   future: {
-    v4: true, 
+    v4: {
+      removeLegacyPostBuildHeadAttribute: true,
+      useCssCascadeLayers: true,
+      siteStorageNamespacing: true,
+      fasterByDefault: false,
+      mdx1CompatDisabledByDefault: false,
+    },
   },
 
   // Set the production url of your site here

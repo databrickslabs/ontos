@@ -5,5 +5,25 @@
     "build": "Costruisci",
     "govern": "Governa",
     "deploy": "Distribuisci"
+  },
+  "dbDown": {
+    "title": "Database non disponibile",
+    "body": "L'applicazione non riesce a raggiungere il suo database dei metadati. La maggior parte delle funzionalità restituirà errori finché la connessione non viene ripristinata.",
+    "retrying": "Nuovo tentativo…",
+    "retryConnection": "Riprova connessione",
+    "retryFailed": "Tentativo non riuscito",
+    "autoRetrying": "Nuovo tentativo automatico ogni {{seconds}} secondi",
+    "pausedTitle": "Applicazione in pausa",
+    "pausedBodyBefore": "Il database dei metadati è irraggiungibile, quindi la navigazione e le viste dati sono disabilitate per evitare di mostrare uno stato incoerente. Usa",
+    "pausedBodyAfter": "sopra (oppure attendi il prossimo tentativo automatico) per riprendere."
+  },
+  "warning": {
+    "title": "Avviso di sistema",
+    "workspaceFailed": "Connessione al workspace Databricks non riuscita. Alcune funzionalità potrebbero non essere disponibili."
+  },
+  "routeError": {
+    "title": "Si è verificato un problema",
+    "body": "Si è verificato un errore imprevisto durante il rendering di questa pagina. Puoi riprovare oppure tornare alla pagina iniziale.",
+    "goHome": "Vai alla home"
   }
 }

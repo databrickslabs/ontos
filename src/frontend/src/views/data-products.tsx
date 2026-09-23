@@ -76,6 +76,10 @@ export default function DataProducts() {
   // #851: import options dialog + opt-in "Create missing domains" toggle (default off).
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [createMissingDomains, setCreateMissingDomains] = useState(false);
+  // #853: adopt valid, non-colliding file UUIDs as PK (default on); duplicate-id handling
+  // (default skip; on = import as a new copy).
+  const [adoptIds, setAdoptIds] = useState(true);
+  const [duplicatesAsNew, setDuplicatesAsNew] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -427,6 +431,9 @@ export default function DataProducts() {
     Array.from(files).forEach((f) => formData.append('files', f));
     // #851: opt-in "Create missing domains" toggle, applied per-upload to every entity.
     formData.append('create_missing_domains', String(createMissingDomains));
+    // #853: id adoption + duplicate handling.
+    formData.append('adopt_ids', String(adoptIds));
+    formData.append('on_duplicate', duplicatesAsNew ? 'new' : 'skip');
     setUploadDialogOpen(false);
     const fileLabel = files.length === 1 ? files[0].name : `${files.length} files`;
     try {
@@ -464,6 +471,9 @@ export default function DataProducts() {
           duration: 10000,
         });
         if (failedItems.length > 0) setError(`${summarizeImport(result)}\n${detail}`);
+      } else if (result && result.skipped > 0) {
+        // No failures, but some entities were skipped as already present (#853).
+        toast({ title: t('upload.success'), description: summarizeImport(result) });
       } else {
         toast({
           title: t('upload.success'),
@@ -894,6 +904,28 @@ export default function DataProducts() {
                           onCheckedChange={setCreateMissingDomains}
                           disabled={isUploading}
                         />
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="pr-3">
+                          <Label htmlFor="pAdoptIds" className="cursor-pointer">
+                            {t('upload.adoptIds', 'Adopt IDs from file')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {t('upload.adoptIdsHint', 'Reuse a valid, non-colliding UUID from the file as the primary key so links between entities survive import.')}
+                          </p>
+                        </div>
+                        <Switch id="pAdoptIds" checked={adoptIds} onCheckedChange={setAdoptIds} disabled={isUploading} />
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="pr-3">
+                          <Label htmlFor="pDuplicatesAsNew" className="cursor-pointer">
+                            {t('upload.duplicatesAsNew', 'Import duplicate IDs as new copies')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {t('upload.duplicatesAsNewHint', 'Off (default): a product whose ID already exists is skipped. On: it is imported as a new copy with a fresh ID.')}
+                          </p>
+                        </div>
+                        <Switch id="pDuplicatesAsNew" checked={duplicatesAsNew} onCheckedChange={setDuplicatesAsNew} disabled={isUploading} />
                       </div>
                       <Button onClick={triggerFileUpload} disabled={isUploading} className="w-full gap-2">
                         {isUploading

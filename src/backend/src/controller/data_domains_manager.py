@@ -111,6 +111,19 @@ class DataDomainManager(DeliveryMixin, SearchableAsset):
         db_obj_data = domain_in.model_dump(exclude_unset=True, exclude={'tags'}) # Use model_dump for Pydantic v2
         db_obj_data['created_by'] = current_user_id
 
+        # Optional caller-provided UUID (API only). Drop a null id so the column
+        # default generates one; otherwise stringify it (String PK) and reject
+        # collisions up front for a clear error instead of an IntegrityError.
+        if db_obj_data.get('id') is None:
+            db_obj_data.pop('id', None)
+        else:
+            db_obj_data['id'] = str(db_obj_data['id'])
+            if self.repository.get(db, db_obj_data['id']):
+                raise ConflictError(f"Data domain with id '{db_obj_data['id']}' already exists.")
+        # Normalize parent_id UUID to string for String FK column.
+        if isinstance(db_obj_data.get('parent_id'), UUID):
+            db_obj_data['parent_id'] = str(db_obj_data['parent_id'])
+
         # Tags are now handled by TagsManager - no serialization needed
 
         db_domain = DataDomain(**db_obj_data)

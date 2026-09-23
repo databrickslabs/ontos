@@ -49,6 +49,10 @@ export default function DataContracts() {
   // #851: opt-in "Create missing domains" import toggle, applied per-upload to every
   // entity in the batch (default off → unresolved domains are left unassigned).
   const [createMissingDomains, setCreateMissingDomains] = useState(false)
+  // #853: adopt valid, non-colliding UUIDs from the file as the PK (default on), and how
+  // to handle a duplicate id already present (default skip; on = import as a new copy).
+  const [adoptIds, setAdoptIds] = useState(true)
+  const [duplicatesAsNew, setDuplicatesAsNew] = useState(false)
   const [importingPaste, setImportingPaste] = useState(false)
   const [showErrorDetail, setShowErrorDetail] = useState(false)
   const [previewContractId, setPreviewContractId] = useState<string | null>(null);
@@ -242,6 +246,8 @@ export default function DataContracts() {
         const formData = new FormData();
         acceptedFiles.forEach((f) => formData.append('files', f));
         formData.append('create_missing_domains', String(createMissingDomains));
+        formData.append('adopt_ids', String(adoptIds));
+        formData.append('on_duplicate', duplicatesAsNew ? 'new' : 'skip');
 
         const response = await fetch('/api/data-contracts/upload', {
           method: 'POST',
@@ -302,10 +308,12 @@ export default function DataContracts() {
         setOpenUploadDialog(false);
         toast({
           title: t('data-contracts:messages.success', 'Success'),
-          description: t('data-contracts:messages.uploadSuccessCount', {
-            count: result.created,
-            defaultValue: '{{count}} contract(s) imported successfully',
-          }),
+          description: result.skipped > 0
+            ? summarizeImport(result)
+            : t('data-contracts:messages.uploadSuccessCount', {
+                count: result.created,
+                defaultValue: '{{count}} contract(s) imported successfully',
+              }),
         });
       } catch (err) {
         setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:messages.uploadError', 'Failed to upload contract') });
@@ -717,6 +725,39 @@ export default function DataContracts() {
               disabled={uploading || importingPaste}
             />
           </div>
+          {/* #853: adopt file UUIDs + duplicate-id handling, applied per-upload. */}
+          <div className="flex items-center justify-between rounded-md border p-3 mb-3">
+            <div className="pr-3">
+              <Label htmlFor="adoptIds" className="cursor-pointer">
+                {t('data-contracts:import.adoptIds', 'Adopt IDs from file')}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('data-contracts:import.adoptIdsHint', 'Reuse a valid, non-colliding UUID from the file as the primary key so links between entities survive import.')}
+              </p>
+            </div>
+            <Switch
+              id="adoptIds"
+              checked={adoptIds}
+              onCheckedChange={setAdoptIds}
+              disabled={uploading || importingPaste}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-md border p-3 mb-3">
+            <div className="pr-3">
+              <Label htmlFor="duplicatesAsNew" className="cursor-pointer">
+                {t('data-contracts:import.duplicatesAsNew', 'Import duplicate IDs as new copies')}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('data-contracts:import.duplicatesAsNewHint', 'Off (default): an entity whose ID already exists is skipped. On: it is imported as a new copy with a fresh ID.')}
+              </p>
+            </div>
+            <Switch
+              id="duplicatesAsNew"
+              checked={duplicatesAsNew}
+              onCheckedChange={setDuplicatesAsNew}
+              disabled={uploading || importingPaste}
+            />
+          </div>
           <div
             {...getRootProps()}
             className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer ${
@@ -761,7 +802,7 @@ export default function DataContracts() {
                 setUploadError(null)
                 try {
                   const body = JSON.parse(value)
-                  const res = await fetch(`/api/data-contracts/odcs/import?create_missing_domains=${createMissingDomains}`, {
+                  const res = await fetch(`/api/data-contracts/odcs/import?create_missing_domains=${createMissingDomains}&adopt_ids=${adoptIds}&on_duplicate=${duplicatesAsNew ? 'new' : 'skip'}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),

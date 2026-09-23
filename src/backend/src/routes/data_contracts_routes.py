@@ -1538,6 +1538,8 @@ async def upload_contract(
     current_user: AuditCurrentUserDep,
     files: List[UploadFile] = File(...),
     create_missing_domains: bool = Form(False),
+    adopt_ids: bool = Form(True),
+    on_duplicate: str = Form("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
@@ -1568,6 +1570,8 @@ async def upload_contract(
             files=file_inputs,
             current_user=current_user.username if current_user else None,
             create_missing_domains=create_missing_domains,
+            adopt_ids=adopt_ids,
+            on_duplicate=on_duplicate,
         )
 
         # Success = at least one entity created (partial success still 200 with detail).
@@ -1622,6 +1626,8 @@ async def import_odcs_json(
     current_user: AuditCurrentUserDep,
     body: Any = Body(...),
     create_missing_domains: bool = Query(False),
+    adopt_ids: bool = Query(True),
+    on_duplicate: str = Query("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
@@ -1636,6 +1642,8 @@ async def import_odcs_json(
             files=[("paste.json", contract_text, "application/json")],
             current_user=current_user.username if current_user else None,
             create_missing_domains=create_missing_domains,
+            adopt_ids=adopt_ids,
+            on_duplicate=on_duplicate,
         )
 
         success = result.created > 0

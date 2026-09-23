@@ -7,6 +7,11 @@ import os
 from pathlib import Path
 
 SOURCE_ID_PROPERTY = "sourceId"
+# Reserved id round-trip keys (#853). ontosOriginalId folds in the legacy sourceId
+# convention (both written during the transition; either read); ontosEntityId is the
+# current Ontos primary key, re-derived on export so a re-import can detect/rebind.
+ONTOS_ORIGINAL_ID_PROPERTY = "ontosOriginalId"
+ONTOS_ENTITY_ID_PROPERTY = "ontosEntityId"
 
 
 def _is_valid_uuid(value: str) -> bool:
@@ -15,6 +20,23 @@ def _is_valid_uuid(value: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
+
+
+def _upsert_custom_property(data: dict, prop: str, value) -> None:
+    """Set a customProperties entry on an ODCS payload dict, tolerating the
+    list-of-{property,value} form and the legacy {key: value} dict form."""
+    cprops = data.get('customProperties')
+    if cprops is None:
+        cprops = data.get('custom_properties')
+    if isinstance(cprops, dict):
+        cprops[prop] = value
+        data['customProperties'] = cprops
+        return
+    if not isinstance(cprops, list):
+        cprops = []
+    cprops = [c for c in cprops if not (isinstance(c, dict) and c.get('property') == prop)]
+    cprops.append({"property": prop, "value": value})
+    data['customProperties'] = cprops
 
 import yaml
 from sqlalchemy.orm import Session
@@ -1458,6 +1480,10 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 custom_props_list, odcs.get('customProperties')
             )
 
+        # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
+        # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
+        _upsert_custom_property(odcs, ONTOS_ENTITY_ID_PROPERTY, db_obj.id)
+
         # Build authoritative definitions
         if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
             auth_defs = []
@@ -2878,6 +2904,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         parsed_odcs: dict,
         current_user: Optional[str] = None,
         create_missing_domains: bool = False,
+        adopt_ids: bool = True,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
@@ -2957,16 +2984,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
             # Preserve original external ID (e.g. URN) as a custom property
             original_id = parsed_odcs.get('id')
-            if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
-                custom_props = parsed_odcs.get('customProperties') or parsed_odcs.get('custom_properties') or []
-                if isinstance(custom_props, list):
-                    custom_props.append({"property": SOURCE_ID_PROPERTY, "value": original_id})
-                elif isinstance(custom_props, dict):
-                    custom_props[SOURCE_ID_PROPERTY] = original_id
-                parsed_odcs['customProperties'] = custom_props
+            if original_id and isinstance(original_id, str):
+                # ontosOriginalId (#853) records the source id verbatim; legacy sourceId is
+                # also written for non-UUID ids during the transition.
+                _upsert_custom_property(parsed_odcs, ONTOS_ORIGINAL_ID_PROPERTY, original_id)
+                if not _is_valid_uuid(original_id):
+                    _upsert_custom_property(parsed_odcs, SOURCE_ID_PROPERTY, original_id)
 
-            # Create main contract record (always use auto-generated UUID)
+            # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
+            # so YAML-expressed cross-entity links survive import; else auto-generate.
+            adopted_id = None
+            if (
+                adopt_ids
+                and original_id and isinstance(original_id, str) and _is_valid_uuid(original_id)
+                and data_contract_repo.get(db, original_id) is None
+            ):
+                adopted_id = original_id
+
+            # Create main contract record (adopt the file id when eligible, else default UUID).
             db_obj = DataContractDb(
+                **({"id": adopted_id} if adopted_id else {}),
                 name=name_val,
                 version=version_val,
                 status=status_val,
@@ -3121,6 +3158,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         files: List[tuple],
         current_user: Optional[str] = None,
         create_missing_domains: bool = False,
+        adopt_ids: bool = True,
+        on_duplicate: str = "skip",
     ) -> BatchImportResult:
         """Import ODCS contracts from one or more uploaded files.
 
@@ -3131,6 +3170,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             current_user: Username of the uploader.
             create_missing_domains: opt-in "Create missing domains" import toggle (#851),
                 applied per-upload to every entity in the batch.
+            adopt_ids: "Adopt IDs from file" toggle (#853, default on). A valid, non-colliding
+                UUID is adopted as the primary key; otherwise a fresh UUID is generated.
+            on_duplicate: what to do when the payload id is a valid UUID that already exists —
+                "skip" (default, recorded as skipped) or "new" (import as a new copy with a
+                fresh UUID). Import stays create-only either way.
 
         Returns:
             A :class:`BatchImportResult`. Per-entity failures are captured as failed
@@ -3167,10 +3211,25 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     ))
                     index += 1
                     continue
+                # Duplicate-id handling (#853): a valid UUID already present is either
+                # skipped (default) or imported as a new copy with a fresh UUID.
+                dup = bool(
+                    source_id and isinstance(source_id, str) and _is_valid_uuid(source_id)
+                    and data_contract_repo.get(db, source_id) is not None
+                )
+                if dup and on_duplicate == "skip":
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        entity_id=source_id, name=entity.get('name'), status="skipped",
+                        message="already present (same id)",
+                    ))
+                    index += 1
+                    continue
                 try:
                     created = self.create_from_upload(
                         db=db, parsed_odcs=entity, current_user=current_user,
                         create_missing_domains=create_missing_domains,
+                        adopt_ids=adopt_ids and not dup,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,

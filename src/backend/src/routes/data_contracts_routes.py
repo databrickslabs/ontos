@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List, Set, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from src.controller.data_contracts_manager import DataContractsManager
@@ -1537,6 +1537,7 @@ async def upload_contract(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     files: List[UploadFile] = File(...),
+    create_missing_domains: bool = Form(False),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
@@ -1546,6 +1547,9 @@ async def upload_contract(
     entities across all files are imported in one operation and reported via a
     truthful `BatchImportResult` summary. A single bad entity is recorded as a
     failed item and never aborts the batch.
+
+    `create_missing_domains` is the opt-in "Create missing domains" toggle (#851),
+    applied per-upload to every entity in the batch (default off).
     """
     success = False
     details_for_audit = {
@@ -1563,6 +1567,7 @@ async def upload_contract(
             db=db,
             files=file_inputs,
             current_user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
         )
 
         # Success = at least one entity created (partial success still 200 with detail).
@@ -1616,6 +1621,7 @@ async def import_odcs_json(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     body: Any = Body(...),
+    create_missing_domains: bool = Query(False),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
@@ -1629,6 +1635,7 @@ async def import_odcs_json(
             db=db,
             files=[("paste.json", contract_text, "application/json")],
             current_user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
         )
 
         success = result.created > 0

@@ -22,6 +22,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { DataTable } from "@/components/ui/data-table";
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -72,6 +73,9 @@ export default function DataProducts() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<DataProduct | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // #851: import options dialog + opt-in "Create missing domains" toggle (default off).
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [createMissingDomains, setCreateMissingDomains] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -421,6 +425,9 @@ export default function DataProducts() {
     // Multi-file: append every selected file under the `files` field, matching
     // the backend `List[UploadFile]`. Each file may itself hold an ODPS array.
     Array.from(files).forEach((f) => formData.append('files', f));
+    // #851: opt-in "Create missing domains" toggle, applied per-upload to every entity.
+    formData.append('create_missing_domains', String(createMissingDomains));
+    setUploadDialogOpen(false);
     const fileLabel = files.length === 1 ? files[0].name : `${files.length} files`;
     try {
       // The upload endpoint returns a truthful BatchImportResult summary
@@ -834,7 +841,7 @@ export default function DataProducts() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                            onClick={triggerFileUpload}
+                            onClick={() => setUploadDialogOpen(true)}
                             className="gap-2 h-9"
                             variant="outline"
                             disabled={isUploading || !canWrite || permissionsLoading}
@@ -863,6 +870,38 @@ export default function DataProducts() {
                     multiple
                     style={{ display: 'none' }}
                   />
+                  {/* #851: import options dialog hosting the per-upload domain toggle. */}
+                  <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>{t('upload.dialogTitle', 'Upload Data Products')}</DialogTitle>
+                        <DialogDescription>
+                          {t('upload.dialogDescription', 'Select one or more ODPS files (YAML/JSON). Each file may contain a single product or an array.')}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <div className="pr-3">
+                          <Label htmlFor="pCreateMissingDomains" className="cursor-pointer">
+                            {t('upload.createMissingDomains', 'Create missing domains')}
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {t('upload.createMissingDomainsHint', "Auto-create domains that don't already exist. Off: unmatched domains are left unassigned (the original is preserved).")}
+                          </p>
+                        </div>
+                        <Switch
+                          id="pCreateMissingDomains"
+                          checked={createMissingDomains}
+                          onCheckedChange={setCreateMissingDomains}
+                          disabled={isUploading}
+                        />
+                      </div>
+                      <Button onClick={triggerFileUpload} disabled={isUploading} className="w-full gap-2">
+                        {isUploading
+                          ? (<><Loader2 className="h-4 w-4 animate-spin" /> {t('upload.uploading')}</>)
+                          : (<><Upload className="h-4 w-4" /> {t('upload.chooseFiles', 'Choose file(s)')}</>)}
+                      </Button>
+                    </DialogContent>
+                  </Dialog>
                 </>
               }
             bulkActions={(selectedRows) => {

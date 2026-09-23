@@ -1600,6 +1600,8 @@ async def upload_data_products(
     current_user: AuditCurrentUserDep,
     files: List[UploadFile] = File(...),
     create_missing_domains: bool = Form(False),
+    adopt_ids: bool = Form(True),
+    on_duplicate: str = Form("skip"),
     manager: DataProductsManager = Depends(get_data_products_manager),
     auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
@@ -1642,6 +1644,8 @@ async def upload_data_products(
         result = manager.create_products_from_files(
             file_inputs, user=current_user.username if current_user else None,
             create_missing_domains=create_missing_domains,
+            adopt_ids=adopt_ids,
+            on_duplicate=on_duplicate,
         )
 
         success = result.created > 0

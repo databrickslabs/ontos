@@ -259,7 +259,11 @@ def create_default_registry() -> ToolRegistry:
         GetCatalogDetailsTool,
         ListSchemasTool
     )
-    
+    from src.tools.authority_resolution import (
+        ResolveAuthorityTool,
+        GetAuthorityRelationTool,
+    )
+
     registry = ToolRegistry()
     
     # Data Products tools (full CRUD)
@@ -346,7 +350,11 @@ def create_default_registry() -> ToolRegistry:
     registry.register(ListCatalogsTool())
     registry.register(GetCatalogDetailsTool())
     registry.register(ListSchemasTool())
-    
+
+    # Authority Resolution tools (ARF) — the agentic decision gate + AR lookup
+    registry.register(ResolveAuthorityTool())
+    registry.register(GetAuthorityRelationTool())
+
     logger.info(f"Created default registry with {len(registry)} tools")
     return registry
 

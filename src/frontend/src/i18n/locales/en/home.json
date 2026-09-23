@@ -15,6 +15,10 @@
         "description": "Current compliance score",
         "notAvailable": "N/A"
       },
+      "authorityResolution": {
+        "title": "Authority Resolution",
+        "description": "Active authority relations"
+      },
       "dataContracts": {
         "title": "Data Contracts",
         "description": "Active contracts"

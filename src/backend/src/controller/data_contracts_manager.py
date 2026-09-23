@@ -60,7 +60,7 @@ from src.db_models.data_contracts import (
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.controller.domain_export_adapter import domain_export_adapter
+from src.controller.domain_export_adapter import domain_export_adapter, ONTOS_ORIGINAL_DOMAIN_PROPERTY
 
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
@@ -962,7 +962,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['transformLogic'] = prop.transform_logic
                         if prop.transform_source_objects:
                             try:
-                                import json
                                 prop_dict['transformSourceObjects'] = json.loads(prop.transform_source_objects)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['transformSourceObjects'] = prop.transform_source_objects
@@ -970,7 +969,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['description'] = prop.transform_description
                         if prop.examples:
                             try:
-                                import json
                                 prop_dict['examples'] = json.loads(prop.examples)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['examples'] = prop.examples
@@ -978,7 +976,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['criticalDataElement'] = prop.critical_data_element
                         if prop.logical_type_options_json:
                             try:
-                                import json
                                 logical_type_options = json.loads(prop.logical_type_options_json)
                                 prop_dict.update(logical_type_options)  # Merge constraints into property
                             except (json.JSONDecodeError, TypeError):
@@ -1067,7 +1064,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 prop_value = custom_prop.value
                                 try:
                                     # Try to parse JSON if it's a serialized object
-                                    import json
                                     prop_value = json.loads(custom_prop.value)
                                 except (json.JSONDecodeError, TypeError):
                                     pass  # Keep as string
@@ -1652,20 +1648,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 domain_obj = data_domain_repo.get_by_name(db, name=domain_name)
                 if domain_obj:
                     return domain_obj.id
-                # Auto-create missing domain
-                try:
-                    from src.controller.data_domains_manager import DataDomainManager
-                    from src.models.data_domains import DataDomainCreate
-                    manager = DataDomainManager(repository=data_domain_repo)
-                    created_read = manager.create_domain(
-                        db,
-                        domain_in=DataDomainCreate(name=domain_name, description=None, owner=['system'], tags=[], parent_id=None),
-                        current_user_id='system'
-                    )
-                    return str(created_read.id)
-                except Exception as ce:
-                    logger.warning(f"Auto-create domain failed for '{domain_name}': {ce}")
-                    return None
+                # No match → leave unassigned (#851). The previous silent auto-create is
+                # gone; auto-create is now an explicit, opt-in import toggle handled in the
+                # reconciliation path (domain_export_adapter.parse_odcs(create_missing=...)).
+                logger.info("Domain name '%s' not found; leaving unassigned.", domain_name)
+                return None
         except ValueError:
             raise
         except Exception as e:
@@ -2889,19 +2876,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         self,
         db,
         parsed_odcs: dict,
-        current_user: Optional[str] = None
+        current_user: Optional[str] = None,
+        create_missing_domains: bool = False,
     ) -> DataContractDb:
         """
         Create a contract from uploaded ODCS file. Manages transaction.
-        
+
         Args:
             db: Database session
             parsed_odcs: Parsed ODCS dictionary
             current_user: Username of current user
-            
+            create_missing_domains: When True, auto-create by name any domain that
+                doesn't resolve (the opt-in "Create missing domains" import toggle, #851).
+
         Returns:
             Created DataContractDb instance
-            
+
         Raises:
             ValueError: If validation fails
             Exception: If creation fails
@@ -2927,9 +2917,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             elif not isinstance(description, dict):
                 description = {}
             
-            # Resolve the domain assignment from the parsed ODCS payload (primary name +
-            # customProperties.additionalDomains, or app round-trip domainIds).
-            import_domain_ids, import_primary_domain_id = domain_export_adapter.parse_odcs(parsed_odcs, db)
+            # Reconcile the domain assignment from the parsed payload: best-effort ID→name
+            # (authoritative ontosDomainId key first, then legacy keys, then the standard
+            # `domain` name). No match → unassigned unless create_missing_domains is set (#851).
+            import_domain_ids, import_primary_domain_id = domain_export_adapter.parse_odcs(
+                parsed_odcs, db, create_missing=create_missing_domains, created_by=current_user,
+            )
+            # Always preserve the raw incoming domain string(s) as provenance so the original
+            # is never lost (and a later export can surface it via ontosOriginalDomain).
+            original_domains = domain_export_adapter.extract_original_domain_strings(parsed_odcs)
+            if original_domains:
+                cprops = parsed_odcs.get('customProperties')
+                if not isinstance(cprops, list):
+                    cprops = [] if cprops is None else cprops
+                if isinstance(cprops, list):
+                    cprops = [
+                        c for c in cprops
+                        if not (isinstance(c, dict) and c.get('property') == ONTOS_ORIGINAL_DOMAIN_PROPERTY)
+                    ]
+                    cprops.append({"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains})
+                    parsed_odcs['customProperties'] = cprops
 
             # Try to resolve owner as team name
             owner_team_id = self._resolve_team_name_to_id(db, owner_val)
@@ -3113,6 +3120,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         db,
         files: List[tuple],
         current_user: Optional[str] = None,
+        create_missing_domains: bool = False,
     ) -> BatchImportResult:
         """Import ODCS contracts from one or more uploaded files.
 
@@ -3121,6 +3129,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             files: List of ``(filename, content_text, content_type)`` tuples. Each
                 file may contain a single ODCS object or an array of them.
             current_user: Username of the uploader.
+            create_missing_domains: opt-in "Create missing domains" import toggle (#851),
+                applied per-upload to every entity in the batch.
 
         Returns:
             A :class:`BatchImportResult`. Per-entity failures are captured as failed
@@ -3160,6 +3170,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 try:
                     created = self.create_from_upload(
                         db=db, parsed_odcs=entity, current_user=current_user,
+                        create_missing_domains=create_missing_domains,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,

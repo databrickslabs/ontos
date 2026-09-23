@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import yaml
-from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends, Request, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Depends, Request, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 import json
@@ -1596,6 +1596,7 @@ async def upload_data_products(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     files: List[UploadFile] = File(...),
+    create_missing_domains: bool = Form(False),
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
@@ -1605,6 +1606,9 @@ async def upload_data_products(
     entities across all files are imported in one operation and reported via a
     truthful `BatchImportResult` summary. Per-entity failures are captured as
     failed items and never abort the batch.
+
+    `create_missing_domains` is the opt-in "Create missing domains" toggle (#851),
+    applied per-upload to every entity in the batch (default off).
     """
     safe_filenames = [sanitize_filename(f.filename or "upload.bin", default="upload.bin") for f in files]
 
@@ -1622,6 +1626,7 @@ async def upload_data_products(
 
         result = manager.create_products_from_files(
             file_inputs, user=current_user.username if current_user else None,
+            create_missing_domains=create_missing_domains,
         )
 
         success = result.created > 0

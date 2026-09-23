@@ -46,6 +46,9 @@ export default function DataContracts() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<{ message: string; detail?: string } | null>(null);
   const [odcsPaste, setOdcsPaste] = useState<string>('')
+  // #851: opt-in "Create missing domains" import toggle, applied per-upload to every
+  // entity in the batch (default off → unresolved domains are left unassigned).
+  const [createMissingDomains, setCreateMissingDomains] = useState(false)
   const [importingPaste, setImportingPaste] = useState(false)
   const [showErrorDetail, setShowErrorDetail] = useState(false)
   const [previewContractId, setPreviewContractId] = useState<string | null>(null);
@@ -238,6 +241,7 @@ export default function DataContracts() {
         // List[UploadFile]); each file may itself hold an ODCS array.
         const formData = new FormData();
         acceptedFiles.forEach((f) => formData.append('files', f));
+        formData.append('create_missing_domains', String(createMissingDomains));
 
         const response = await fetch('/api/data-contracts/upload', {
           method: 'POST',
@@ -696,6 +700,23 @@ export default function DataContracts() {
               </button>
             </Alert>
           )}
+          {/* #851: per-upload reconciliation toggle, applied to file drops and pasted JSON alike. */}
+          <div className="flex items-center justify-between rounded-md border p-3 mb-3">
+            <div className="pr-3">
+              <Label htmlFor="createMissingDomains" className="cursor-pointer">
+                {t('data-contracts:import.createMissingDomains', 'Create missing domains')}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('data-contracts:import.createMissingDomainsHint', 'Auto-create domains that don\'t already exist. Off: unmatched domains are left unassigned (the original is preserved).')}
+              </p>
+            </div>
+            <Switch
+              id="createMissingDomains"
+              checked={createMissingDomains}
+              onCheckedChange={setCreateMissingDomains}
+              disabled={uploading || importingPaste}
+            />
+          </div>
           <div
             {...getRootProps()}
             className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer ${
@@ -740,7 +761,7 @@ export default function DataContracts() {
                 setUploadError(null)
                 try {
                   const body = JSON.parse(value)
-                  const res = await fetch('/api/data-contracts/odcs/import', {
+                  const res = await fetch(`/api/data-contracts/odcs/import?create_missing_domains=${createMissingDomains}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),

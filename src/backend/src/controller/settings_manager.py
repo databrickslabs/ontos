@@ -211,6 +211,14 @@ class SettingsManager:
                 self._settings.WORKSPACE_DEPLOYMENT_PATH = all_settings['WORKSPACE_DEPLOYMENT_PATH']
                 logger.debug(f"Loaded WORKSPACE_DEPLOYMENT_PATH from database: {all_settings['WORKSPACE_DEPLOYMENT_PATH']}")
 
+            # SCHEMA_IMPORT_ASYNC_THRESHOLD (item count at/above which the importer offers a background run)
+            if all_settings.get('SCHEMA_IMPORT_ASYNC_THRESHOLD') is not None:
+                try:
+                    self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD = int(all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD'])
+                    logger.debug(f"Loaded SCHEMA_IMPORT_ASYNC_THRESHOLD from database: {all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD']}")
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid SCHEMA_IMPORT_ASYNC_THRESHOLD in database: {all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD']}")
+
             # SCHEMA_IMPORT_CHILD_LIMIT (Schema Importer per-path fetch cap)
             if all_settings.get('SCHEMA_IMPORT_CHILD_LIMIT') is not None:
                 try:
@@ -1257,6 +1265,8 @@ class SettingsManager:
             'available_workflows': available,
             'current_settings': self._settings.to_dict(),
             'workspace_deployment_path': self._settings.WORKSPACE_DEPLOYMENT_PATH,
+            # Schema Importer: threshold at/above which a background import is offered
+            'schema_import_async_threshold': self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD,
             # Schema Importer per-path child fetch limit
             'schema_import_child_limit': self._settings.SCHEMA_IMPORT_CHILD_LIMIT,
             # Databricks Unity Catalog settings
@@ -1312,6 +1322,19 @@ class SettingsManager:
             self._settings.WORKSPACE_DEPLOYMENT_PATH = new_path
             logger.info(f"Updated WORKSPACE_DEPLOYMENT_PATH to: {new_path}")
             self._reinitialize_workspace_deployer()
+
+        # Schema Importer async threshold (positive integer)
+        if 'schema_import_async_threshold' in settings:
+            value = settings.get('schema_import_async_threshold')
+            try:
+                int_val = int(value)
+            except (ValueError, TypeError):
+                raise ValueError("schema_import_async_threshold must be a positive integer")
+            if int_val < 1:
+                raise ValueError("schema_import_async_threshold must be a positive integer")
+            app_settings_repo.set(self._db, 'SCHEMA_IMPORT_ASYNC_THRESHOLD', str(int_val))
+            self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD = int_val
+            logger.info(f"Updated SCHEMA_IMPORT_ASYNC_THRESHOLD to: {int_val}")
 
         # Schema Importer per-path child fetch limit (bounded 1..10000 per the
         # connector contract, ListAssetsOptions)

@@ -176,6 +176,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         name: initialRole?.name || '',
         description: initialRole?.description || '',
         assigned_groups: initialRole?.assigned_groups || [],
+        assigned_users: initialRole?.assigned_users || [],
         feature_permissions: initialRole?.feature_permissions || getDefaultPermissions(featuresConfig),
         home_sections: initialRole?.home_sections || [],
         approval_privileges: normalizeApprovalPrivileges(initialRole?.approval_privileges),
@@ -201,6 +202,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 name: initialRole.name || '',
                 description: initialRole.description || '',
                 assigned_groups: initialRole.assigned_groups || [],
+                assigned_users: initialRole.assigned_users || [],
                 feature_permissions: initialRole.feature_permissions || getDefaultPermissions(featuresConfig),
                 home_sections: initialRole.home_sections || [],
                 approval_privileges: normalizeApprovalPrivileges(initialRole.approval_privileges),
@@ -211,8 +213,9 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             } : { 
                 id: '', 
                 name: '', 
-                description: '', 
-                assigned_groups: [], 
+                description: '',
+                assigned_groups: [],
+                assigned_users: [],
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
                 approval_privileges: {},
@@ -246,8 +249,9 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             reset({ 
                 id: '', 
                 name: '', 
-                description: '', 
-                assigned_groups: [], 
+                description: '',
+                assigned_groups: [],
+                assigned_users: [],
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
                 approval_privileges: {},
@@ -314,6 +318,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         const basePayload: AppRole = {
             ...data,
             assigned_groups: assignedGroupsArray,
+            assigned_users: Array.isArray(data.assigned_users) ? data.assigned_users : [],
             approval_privileges: cleanedApprovalPrivileges,
             deployment_policy: cleanedDeploymentPolicy,
         } as AppRole;
@@ -422,6 +427,29 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                         />
                                         {errors.assigned_groups && <p className="text-sm text-red-600 mt-1">{errors.assigned_groups.message}</p>}
                                         <p className="text-xs text-muted-foreground mt-1">{t('roles.general.assignedGroupsHelp')}</p>
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="assigned_users">{t('roles.general.assignedUsers', 'Assigned Users')}</Label>
+                                        <Controller
+                                            name="assigned_users"
+                                            control={control}
+                                            render={({ field }) => {
+                                                const value = Array.isArray(field.value) ? field.value : [];
+                                                return (
+                                                    <PrincipalPicker
+                                                        id="assigned_users"
+                                                        multiple
+                                                        accepts={['user']}
+                                                        value={value}
+                                                        onChange={(next) => field.onChange(next)}
+                                                        placeholder={t('roles.general.assignedUsersPlaceholder', 'Add users by email…')}
+                                                        aria-label={t('roles.general.assignedUsers', 'Assigned Users')}
+                                                    />
+                                                );
+                                            }}
+                                        />
+                                        <p className="text-xs text-muted-foreground mt-1">{t('roles.general.assignedUsersHelp', 'Individual users assigned to this role by email, in addition to any groups. Approving a role access request adds the requester here.')}</p>
                                     </div>
                                 </div>
                             </ScrollArea>

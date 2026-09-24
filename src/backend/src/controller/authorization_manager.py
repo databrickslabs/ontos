@@ -14,27 +14,44 @@ class AuthorizationManager:
         """Requires SettingsManager to access role configurations."""
         self._settings_manager = settings_manager
 
-    def get_user_effective_permissions(self, user_groups: Optional[List[str]], team_role_override: Optional[str] = None) -> Dict[str, FeatureAccessLevel]:
+    def get_user_effective_permissions(
+        self,
+        user_groups: Optional[List[str]],
+        team_role_override: Optional[str] = None,
+        user_email: Optional[str] = None,
+    ) -> Dict[str, FeatureAccessLevel]:
         """
-        Calculates the effective permission level for each feature based on the user's groups and team role overrides.
+        Calculates the effective permission level for each feature based on the user's groups,
+        their direct user-by-email assignment, and team role overrides.
         Permissions are merged by taking the highest level granted by any matching role.
         Team role overrides take precedence over group-based roles.
+
+        Role matching (#196/#760): a role matches the user if EITHER
+          - the user's groups intersect with `role.assigned_groups` (case-insensitive), OR
+          - the user's email is in `role.assigned_users` (case-insensitive).
 
         Args:
             user_groups: A list of group names the user belongs to.
             team_role_override: Optional team role that overrides group-based permissions.
+            user_email: Optional user email for direct-assignment matching against
+                        `role.assigned_users`. When provided, OR-combined with group matching.
 
         Returns:
             A dictionary mapping feature IDs to the highest granted FeatureAccessLevel.
         """
         if not user_groups:
             user_groups = []
-            logger.warning("Received empty or None user_groups for permission calculation.") # Log if groups are empty
-        else:
-            logger.debug(f"Calculating effective permissions for user groups: {user_groups}") # Log received groups
 
         # Normalize user groups to lowercase for case-insensitive matching
         user_group_set = set(g.lower() for g in user_groups)
+        # Normalize the email for case-insensitive direct-assignment matching
+        user_email_norm = (user_email or "").strip().lower() or None
+
+        if not user_group_set and not user_email_norm:
+            logger.warning("Received empty user_groups and no user_email for permission calculation.")
+        else:
+            logger.debug(f"Calculating effective permissions for groups={user_groups}, email={user_email_norm}")
+
         effective_permissions: Dict[str, FeatureAccessLevel] = defaultdict(lambda: FeatureAccessLevel.NONE)
 
         # Log before fetching roles
@@ -69,19 +86,24 @@ class AuthorizationManager:
                 logger.warning(f"Team role override '{team_role_override}' not found in available roles. Falling back to group-based permissions.")
 
         matching_roles = []
-        logger.debug("Identifying matching roles based on group intersection...")
+        logger.debug("Identifying matching roles based on group intersection OR email assignment...")
         for role in all_roles:
-            # Normalize role groups to lowercase for case-insensitive matching
-            role_assigned_groups_set = set(g.lower() for g in (role.assigned_groups or []))
-            # Check for intersection
-            if user_group_set.intersection(role_assigned_groups_set):
+            # Normalize role groups + assigned_users to lowercase for case-insensitive
+            # matching. `(x or '')` guards against None entries in dirty data (a None
+            # element would raise on .lower()).
+            role_assigned_groups_set = set((g or '').lower() for g in (role.assigned_groups or []))
+            role_assigned_users_set = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
+
+            group_match = bool(user_group_set.intersection(role_assigned_groups_set))
+            email_match = bool(user_email_norm and user_email_norm in role_assigned_users_set)
+
+            if group_match or email_match:
                 matching_roles.append(role)
-                logger.debug(f"  MATCH FOUND: User group(s) {list(user_group_set.intersection(role_assigned_groups_set))} match role: '{role.name}' (Assigned: {role.assigned_groups})")
-            # else: 
-            #    logger.debug(f"  NO MATCH: User groups {list(user_group_set)} vs Role '{role.name}' groups {list(role_assigned_groups_set)}")
+                reason = "groups+email" if (group_match and email_match) else ("groups" if group_match else "email")
+                logger.debug(f"  MATCH FOUND ({reason}): role '{role.name}'")
 
         if not matching_roles:
-            logger.warning(f"No matching roles found for user groups: {user_groups}. Returning NONE access for all features.")
+            logger.warning(f"No matching roles for groups={user_groups}, email={user_email_norm}. Returning NONE access for all features.")
             return {feat_id: FeatureAccessLevel.NONE for feat_id in feature_config}
 
         logger.debug(f"Merging permissions from {len(matching_roles)} matching roles...")
@@ -173,6 +195,7 @@ class AuthorizationManager:
         self,
         user_groups: Optional[List[str]],
         applied_role_override_id: Optional[str] = None,
+        user_email: Optional[str] = None,
     ) -> Set[str]:
         """Return the set of AppRole UUIDs the viewer currently holds.
 
@@ -180,12 +203,14 @@ class AuthorizationManager:
         1. If *applied_role_override_id* is set, the viewer is pinned to exactly
            that one role (same as the impersonation override path).
         2. Otherwise, every AppRole whose ``assigned_groups`` intersects the
-           viewer's *user_groups* is included (case-insensitive).
+           viewer's *user_groups* OR whose ``assigned_users`` contains the
+           viewer's *user_email* is included (case-insensitive) (#196/#760).
 
         Args:
             user_groups: Workspace/IdP groups for the viewing user.
             applied_role_override_id: Optional role-ID override (from
                 ``SettingsManager.get_applied_role_override_for_user``).
+            user_email: Optional email for direct-assignment matching.
 
         Returns:
             A (possibly empty) set of role-ID strings.
@@ -202,13 +227,16 @@ class AuthorizationManager:
             )
             return set()
 
-        if not user_groups:
+        user_group_set = set(g.lower() for g in (user_groups or []))
+        user_email_norm = (user_email or "").strip().lower() or None
+        if not user_group_set and not user_email_norm:
             return set()
 
-        user_group_set = set(g.lower() for g in user_groups)
         role_ids: Set[str] = set()
         for role in all_roles:
-            role_groups = set(g.lower() for g in (role.assigned_groups or []))
-            if user_group_set.intersection(role_groups):
+            # `(x or '')` guards against None entries in dirty data.
+            role_groups = set((g or '').lower() for g in (role.assigned_groups or []))
+            role_users = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
+            if user_group_set.intersection(role_groups) or (user_email_norm and user_email_norm in role_users):
                 role_ids.add(str(role.id))
         return role_ids

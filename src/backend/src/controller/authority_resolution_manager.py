@@ -312,6 +312,10 @@ class AuthorityResolutionManager:
             return None
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
         reviewers = [a for a in affs if getattr(a, "is_reviewer", False)]
+        # The Asset Review requester must be an email (EmailStr). The AR owner is
+        # typically an email, but in local/dev it can be a bare username — fall
+        # back to the reviewer principal (always an email/group id) in that case.
+        requester_email = owner if (owner and "@" in owner) else None
         reviews_created = 0
         for a in reviewers:
             review_request_id: Optional[str] = None
@@ -320,7 +324,7 @@ class AuthorityResolutionManager:
                     from src.models.data_asset_reviews import DataAssetReviewRequestCreate
                     req = reviews_manager.create_review_request(
                         DataAssetReviewRequestCreate(
-                            requester_email=owner or a.principal,
+                            requester_email=requester_email or a.principal,
                             reviewer_email=a.principal,
                             asset_fqns=[f"authority-relation://{relation_id}"],
                             title=f"Authority Relation review: {relation.name}",
@@ -469,6 +473,25 @@ class AuthorityResolutionManager:
                     })
         except Exception as e:  # pragma: no cover - env dependent
             logger.warning(f"Could not load workflow executions for AR {relation_id}: {e}")
+        # Always surface the governing AR-review workflow *definition* so the owner
+        # can open the process even when no execution row has been materialized.
+        try:
+            from src.repositories.process_workflows_repository import process_workflow_repo
+            gov = process_workflow_repo.get_by_trigger_type(
+                db, "on_request_review", entity_type="authority_relation", active_only=True,
+            )
+            if gov is not None and not any(w.get("workflow_id") == gov.id for w in workflows):
+                workflows.append({
+                    "execution_id": None,
+                    "workflow_id": gov.id,
+                    "workflow_name": gov.name,
+                    "status": "defined",
+                    "current_step": None,
+                    "entity_id": relation_id,
+                    "started_at": None,
+                })
+        except Exception as e:  # pragma: no cover - env dependent
+            logger.warning(f"Could not load governing workflow for AR {relation_id}: {e}")
         return {"relation_id": relation_id, "reviews": reviews, "workflows": workflows}
 
     # ------------------------------------------------------- DNA-Coefficient

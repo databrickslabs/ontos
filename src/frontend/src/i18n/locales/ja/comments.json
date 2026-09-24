@@ -1,0 +1,73 @@
+{
+  "trigger": {
+    "button": "コメント"
+  },
+  "timeline": {
+    "heading": "アクティビティタイムライン",
+    "edited": "（編集済み）",
+    "loadError": "タイムラインの読み込みに失敗しました: {{error}}"
+  },
+  "project": {
+    "label": "プロジェクト: {{name}}",
+    "noContext": "プロジェクトコンテキストなし（グローバル）"
+  },
+  "filter": {
+    "label": "フィルタ:",
+    "comments": "コメント",
+    "changes": "変更"
+  },
+  "actions": {
+    "addComment": "コメントを追加"
+  },
+  "form": {
+    "titleLabel": "タイトル（任意）",
+    "titlePlaceholder": "このコメントのタイトルを追加...",
+    "commentLabel": "コメント",
+    "commentPlaceholder": "コメントを入力...",
+    "postInProject": "プロジェクトに投稿",
+    "projectOverrideTooltip": "メインビューとは異なるプロジェクトで投稿しています。タイムラインの一覧には影響しません。",
+    "globalNoProject": "グローバル（プロジェクトなし）",
+    "audienceHelp": "特定のチームまたはロールを対象に指定できます（任意）。空欄の場合はすべてのプロジェクトメンバーに表示されます。",
+    "teamsLabel": "チーム",
+    "noTeams": "現在のプロジェクトに利用可能なチームがありません",
+    "appRolesLabel": "アプリロール",
+    "usersGroupsLabel": "ユーザーとグループ",
+    "principalsPlaceholder": "ユーザーまたはグループを追加…",
+    "principalsAria": "対象のユーザーとグループ",
+    "post": "投稿"
+  },
+  "badge": {
+    "team": "チーム: {{name}}",
+    "role": "ロール: {{name}}"
+  },
+  "change": {
+    "requesterLabel": "リクエスト元:",
+    "decisionLabel": "判断:",
+    "messageLabel": "メッセージ:",
+    "iriLabel": "IRI:",
+    "linkIdLabel": "リンクID:",
+    "operationLabel": "操作:",
+    "operationLinked": "リンク済み",
+    "operationUnlinked": "リンク解除済み"
+  },
+  "validation": {
+    "commentRequired": "コメントの内容は必須です"
+  },
+  "confirmDelete": "このコメントを削除してもよろしいですか？",
+  "toast": {
+    "createSuccess": "コメントを作成しました",
+    "createError": "コメントの作成に失敗しました: {{error}}",
+    "updateSuccess": "コメントを更新しました",
+    "updateError": "コメントの更新に失敗しました: {{error}}",
+    "deleteSuccess": "コメントを削除しました",
+    "deleteError": "コメントの削除に失敗しました: {{error}}"
+  },
+  "empty": {
+    "commentsTitle": "まだコメントはありません",
+    "commentsSubtitle": "最初のコメントを追加しましょう！",
+    "changesTitle": "記録された変更はありません",
+    "changesSubtitle": "変更が発生するとここに表示されます",
+    "allTitle": "まだアクティビティはありません",
+    "allSubtitle": "コメントと変更がここに表示されます"
+  }
+}

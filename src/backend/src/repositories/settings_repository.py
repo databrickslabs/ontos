@@ -30,6 +30,8 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
         # Serialize complex fields
         # Make sure assigned_groups and feature_permissions exist on obj_in
         db_obj_data['assigned_groups'] = json.dumps(getattr(obj_in, 'assigned_groups', []))
+        # assigned_users is parallel to assigned_groups (normalized by Pydantic validator)
+        db_obj_data['assigned_users'] = json.dumps(getattr(obj_in, 'assigned_users', []) or [])
         permissions_dict = getattr(obj_in, 'feature_permissions', {})
         db_obj_data['feature_permissions'] = json.dumps(
             {k: v.value for k, v in permissions_dict.items()} # Save enum values
@@ -73,6 +75,8 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
         # Serialize complex fields if they are present in the update data
         if 'assigned_groups' in update_data and update_data['assigned_groups'] is not None:
             update_data['assigned_groups'] = json.dumps(update_data['assigned_groups'])
+        if 'assigned_users' in update_data and update_data['assigned_users'] is not None:
+            update_data['assigned_users'] = json.dumps(update_data['assigned_users'])
         if 'feature_permissions' in update_data and update_data['feature_permissions'] is not None:
             perm_dict = update_data['feature_permissions']
             update_data['feature_permissions'] = json.dumps(

@@ -54,7 +54,8 @@
     "groupByDomain": "Group by Domain",
     "allTypes": "All Types",
     "allScopes": "All Scopes",
-    "allCollections": "All Collections"
+    "allCollections": "All Collections",
+    "labelLanguage": "Label Language"
   },
   "groupBy": {
     "collection": "By Collection",
@@ -98,7 +99,9 @@
     "noConceptsFound": "No concepts found",
     "selectConcept": "Select a concept to view details",
     "linkAdded": "Link added successfully",
-    "linkRemoved": "Link removed successfully"
+    "linkRemoved": "Link removed successfully",
+    "saveFailed": "Failed to save concept",
+    "deleteConceptFailed": "Failed to delete concept"
   },
   "status": {
     "draft": "Draft",
@@ -119,6 +122,10 @@
     "delete": "Delete",
     "notFound": "Concept not found",
     "loading": "Loading...",
+    "loadError": "Failed to load concept",
+    "created": "Created",
+    "refreshing": "Refreshing...",
+    "openIriAria": "Open IRI",
     "linkedAssets": "Linked Assets",
     "synonyms": "Synonyms",
     "relatedTerms": "Related Terms"
@@ -134,7 +141,8 @@
     "childConcepts": "Child Concepts",
     "scope": "Scope",
     "concepts": "Concepts",
-    "source": "Source"
+    "source": "Source",
+    "sourceUrl": "Source URL"
   },
   "form": {
     "createTitle": "Create Term",
@@ -159,7 +167,8 @@
   },
   "badges": {
     "imported": "Imported",
-    "custom": "Custom"
+    "custom": "Custom",
+    "readonly": "Read-only"
   },
   "links": {
     "outgoing": "Outgoing Links",
@@ -216,6 +225,238 @@
       "rdflibDefault": "Default graph",
       "appEntities": "App Entities",
       "demoGraph": "Demo business concepts"
+    }
+  },
+  "import": {
+    "chooseFile": "Choose file…",
+    "file": "File",
+    "noEditableCollections": "No editable collections available. Create one first.",
+    "selectCollection": "Select a collection…",
+    "submit": "Import",
+    "success": "Import successful",
+    "supportedFormats": "Supported: Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "targetCollection": "Target Collection",
+    "title": "Import Concepts"
+  },
+  "propertyTypes": {
+    "object": "Object Property",
+    "datatype": "Datatype Property",
+    "annotation": "Annotation Property"
+  },
+  "conceptEditor": {
+    "editTitle": "Edit Concept",
+    "createDescription": "Create a new term or concept in the collection.",
+    "collectionLabel": "Collection",
+    "selectCollectionPlaceholder": "Select collection...",
+    "selectTypePlaceholder": "Select type...",
+    "label": "Label",
+    "labelPlaceholder": "e.g., Revenue",
+    "definitionPlaceholder": "A clear, concise definition...",
+    "propertyConfiguration": "Property Configuration",
+    "propertyType": "Property Type",
+    "selectPropertyTypePlaceholder": "Select property type...",
+    "domainPlaceholder": "e.g., schema:Person or IRI...",
+    "domainHelp": "The class or type this property applies to (subject)",
+    "rangeDatatypePlaceholder": "e.g., xsd:string, xsd:integer...",
+    "rangeObjectPlaceholder": "e.g., schema:Organization or IRI...",
+    "rangeDatatypeHelp": "The datatype of the property value",
+    "rangeObjectHelp": "The class or type of the property value (object)",
+    "addSynonymPlaceholder": "Add synonym...",
+    "addExamplePlaceholder": "Add example...",
+    "certified": "Certified",
+    "expires": "Expires",
+    "promotedFrom": "Promoted from",
+    "migratedFrom": "Migrated from",
+    "history": "History",
+    "submitForReview": "Submit for Review",
+    "typeDescriptions": {
+      "concept": "A general term or notion (SKOS Concept)",
+      "class": "A category or type (RDFS/OWL Class)",
+      "property": "A relationship or attribute (RDF Property)",
+      "individual": "A specific instance (OWL Individual)",
+      "term": "A business glossary term"
+    },
+    "propertyTypeDescriptions": {
+      "object": "Relates to other concepts",
+      "datatype": "Relates to literal values",
+      "annotation": "Metadata annotation"
+    }
+  },
+  "collectionEditor": {
+    "editTitle": "Edit Collection",
+    "createDescription": "Create a new glossary, taxonomy, or ontology collection.",
+    "editDescription": "Update collection settings.",
+    "namePlaceholder": "e.g., Finance Glossary",
+    "descriptionPlaceholder": "Optional description...",
+    "parentCollection": "Parent Collection",
+    "noneRootCollection": "None (root collection)",
+    "editable": "Editable",
+    "editableHelp": "Allow creating and editing concepts in this collection"
+  },
+  "promotion": {
+    "promoteConcept": "Promote Concept",
+    "demoteConcept": "Demote Concept",
+    "migrateConcept": "Migrate Concept",
+    "move": "Move",
+    "toDifferentCollection": "to a different collection",
+    "actionLabel": "Action",
+    "promote": "Promote",
+    "migrate": "Migrate",
+    "currentLocation": "Current Location",
+    "selectTargetPlaceholder": "Select target collection...",
+    "newIri": "New IRI",
+    "sourceConcept": "Source Concept",
+    "deprecateOriginal": "Deprecate original (recommended)",
+    "deleteOriginal": "Delete original",
+    "deleteHelp": "Only draft concepts can be deleted. Published concepts will be deprecated.",
+    "promoteWarning": "Promoted concepts require re-approval at the new scope level."
+  },
+  "collectionTree": {
+    "readOnly": "Read-only collection",
+    "noCollectionsYet": "No collections yet"
+  },
+  "knowledgeGraph": {
+    "rootFilter": {
+      "show_one": "Show {{label}} ({{count}} concept)",
+      "show_other": "Show {{label}} ({{count}} concepts)",
+      "hide_one": "Hide {{label}} ({{count}} concept)",
+      "hide_other": "Hide {{label}} ({{count}} concepts)",
+      "sourcesVisible": "{{visible}} of {{total}} sources visible",
+      "filterSources": "Filter Sources",
+      "showAll": "Show All",
+      "hideAll": "Hide All",
+      "toggleHint": "Click legend items to toggle visibility"
+    },
+    "layout": {
+      "placeholder": "Layout"
+    },
+    "layouts": {
+      "circular": "Circular",
+      "forceDirected": "Force-Directed",
+      "grid": "Grid",
+      "hierarchical": "Hierarchical",
+      "concentric": "Concentric"
+    },
+    "toolbar": {
+      "showDomainGroups": "Show domain groups",
+      "hideDomainGroups": "Hide domain groups",
+      "groups": "Groups",
+      "showNodeLabels": "Show node labels",
+      "hideNodeLabels": "Hide node labels",
+      "nodeLabels": "Node labels",
+      "showEdgeLabels": "Show edge labels",
+      "hideEdgeLabels": "Hide edge labels",
+      "edgeLabels": "Edge labels",
+      "size": "Size",
+      "nodeSize": "Node size",
+      "spacing": "Spacing",
+      "nodeSpacing": "Node spacing",
+      "spacingHint": "Re-runs layout. Affects edge length and node repulsion.",
+      "conceptCount_one": "{{count}} concept",
+      "conceptCount_other": "{{count}} concepts"
+    },
+    "fullscreen": {
+      "description": "Fullscreen view of the concept graph visualization",
+      "hint": "Click on nodes to select concepts. Use scroll to zoom, drag to pan."
+    }
+  },
+  "linkedConcepts": {
+    "empty": "No business concepts linked",
+    "removeAria": "Remove concept link"
+  },
+  "ontologyGenerator": {
+    "title": "Ontology Generator",
+    "subtitle": "Browse a remote system, select tables, and generate an OWL ontology from their schemas.",
+    "connectionDescription": "Select a data platform connection",
+    "noConnections": "No connections configured. Add one in Settings > Connectors.",
+    "chooseConnection": "Choose connection...",
+    "generationOptions": "Generation Options",
+    "generationOptionsDescription": "Customize the ontology generation",
+    "guidelines": "Guidelines",
+    "guidelinesPlaceholder": "E.g., Create a domain ontology for e-commerce data...",
+    "baseUri": "Base URI",
+    "dataProperties": "Data properties",
+    "relationships": "Relationships",
+    "inheritance": "Inheritance",
+    "cancelGeneration": "Cancel Generation",
+    "generateOntology": "Generate Ontology ({{count}} selected)",
+    "recentRuns": "Recent Runs",
+    "noRuns": "No runs yet",
+    "direct": "Direct",
+    "directGeneration": "Direct generation",
+    "deleteRun": "Delete run",
+    "paths": "Paths",
+    "steps": "Steps",
+    "started": "Started",
+    "finished": "Finished",
+    "resources": "Resources",
+    "resourcesWithName": "{{name}} — Resources",
+    "resourcesDescription": "Select the catalogs, schemas, or tables to generate an ontology from",
+    "selectedCount": "{{count}} selected",
+    "agentProgress": "Agent Progress",
+    "generatedTurtle": "Generated Turtle",
+    "saveToCollection": "Save to Collection",
+    "empty": "(empty)",
+    "agentExecutionLog": "Agent Execution Log",
+    "agentLogSummary": "{{iterations}} iteration(s) · {{promptTokens}} prompt tokens · {{completionTokens}} completion tokens",
+    "noClasses": "No classes generated",
+    "noProperties": "No properties generated",
+    "noAgentSteps": "No agent steps recorded",
+    "runStatus": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
+    "progress": {
+      "starting": "Starting...",
+      "working": "Working..."
+    },
+    "tabs": {
+      "classes": "Classes ({{count}})",
+      "properties": "Properties ({{count}})",
+      "turtle": "Turtle",
+      "agentLog": "Agent Log"
+    },
+    "table": {
+      "class": "Class",
+      "parent": "Parent",
+      "attributes": "Attributes",
+      "none": "none",
+      "property": "Property",
+      "range": "Range",
+      "objectType": "Object",
+      "dataType": "Data"
+    },
+    "toasts": {
+      "generatedTitle": "Ontology generated",
+      "generatedDescription": "{{classes}} classes, {{properties}} properties.",
+      "generatedFallback": "Generation completed.",
+      "cancelledTitle": "Generation cancelled",
+      "failedTitle": "Generation failed",
+      "unknownError": "Unknown error",
+      "startFailed": "Failed to start generation",
+      "startedTitle": "Generation started",
+      "startedDescription": "The LLM agent is working in the background.",
+      "cancelFailed": "Cancel failed",
+      "noResultTitle": "No result",
+      "noResultDescription": "This run has no result data.",
+      "deleteFailed": "Delete failed",
+      "turtleCopied": "Turtle content copied to clipboard.",
+      "saveFailed": "Save failed",
+      "savedTitle": "Saved to collection",
+      "savedDescription_one": "{{count}} triple imported into \"{{name}}\".",
+      "savedDescription_other": "{{count}} triples imported into \"{{name}}\"."
+    },
+    "saveDialog": {
+      "title": "Save to Concept Collection",
+      "description": "Create a new ontology collection and import the generated triples into the knowledge graph.",
+      "nameLabel": "Collection Name",
+      "namePlaceholder": "e.g., Customer Domain Ontology",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "Describe the purpose of this ontology collection...",
+      "importSummary": "{{classes}} classes and {{properties}} properties will be imported."
     }
   }
 }

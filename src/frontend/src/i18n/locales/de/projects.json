@@ -1,6 +1,7 @@
 {
   "title": "Projekte",
   "subtitle": "Erstellen und verwalten Sie Projekte zur Organisation von Teams und Workspace-Isolation.",
+  "openMenu": "Menü öffnen",
   "addNewProject": "Neues Projekt hinzufügen",
   "editProject": "Projekt bearbeiten",
   "deleteProject": "Projekt löschen",

@@ -4,7 +4,7 @@ from enum import Enum
 from typing import List, Dict, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.common.features import FeatureAccessLevel, APP_FEATURES
 
@@ -76,6 +76,10 @@ class AppRoleBase(BaseModel):
     name: str
     description: Optional[str] = None
     assigned_groups: List[str] = Field(default_factory=list)
+    assigned_users: List[str] = Field(
+        default_factory=list,
+        description="Individual users (by email) assigned to this role; parallel to assigned_groups."
+    )
     feature_permissions: Dict[str, FeatureAccessLevel] = Field(default_factory=dict)
     home_sections: List[HomeSection] = Field(default_factory=list, description="Home sections visible for this role")
     approval_privileges: Dict[ApprovalEntity, bool] = Field(default_factory=dict, description="Entity-level approval capabilities")
@@ -83,13 +87,32 @@ class AppRoleBase(BaseModel):
     is_admin: bool = Field(default=False, description="Whether this role is the admin role")
     # Role hierarchy fields
     requestable_by_roles: List[str] = Field(
-        default_factory=list, 
+        default_factory=list,
         description="Role IDs that can request this role. Use '__NO_ROLE__' for users without any role."
     )
     approver_roles: List[str] = Field(
-        default_factory=list, 
+        default_factory=list,
         description="Role IDs that can approve access requests for this role."
     )
+
+    @field_validator('assigned_users', mode='before')
+    @classmethod
+    def _normalize_assigned_users(cls, v):
+        """Normalize emails: strip whitespace, lowercase, drop empties, dedupe (preserve order)."""
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            return v  # let Pydantic raise the type error
+        seen = set()
+        out: List[str] = []
+        for entry in v:
+            if not isinstance(entry, str):
+                continue
+            normalized = entry.strip().lower()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                out.append(normalized)
+        return out
 
 # Model for creating a new role (input)
 class AppRoleCreate(AppRoleBase):
@@ -103,6 +126,7 @@ class AppRoleUpdate(AppRoleBase):
     name: Optional[str] = None
     description: Optional[str] = None
     assigned_groups: Optional[List[str]] = None
+    assigned_users: Optional[List[str]] = None
     feature_permissions: Optional[Dict[str, FeatureAccessLevel]] = None
     home_sections: Optional[List[HomeSection]] = None
     approval_privileges: Optional[Dict[ApprovalEntity, bool]] = None

@@ -376,7 +376,7 @@ export default function UICustomizationSettings() {
               ) : (
                 <img
                   src={settings.customLogoUrl}
-                  alt="Logo preview"
+                  alt={t('settings:uiCustomization.logo.previewAlt')}
                   className="h-10 w-10 object-contain"
                   onError={() => setLogoError(true)}
                 />
@@ -454,7 +454,7 @@ export default function UICustomizationSettings() {
               ) : (
                 <img
                   src={settings.faviconUrl}
-                  alt="Favicon preview"
+                  alt={t('settings:uiCustomization.favicon.previewAlt')}
                   className="h-6 w-6 object-contain"
                   onError={() => setFaviconError(true)}
                 />

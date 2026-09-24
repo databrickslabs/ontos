@@ -20,6 +20,9 @@ class AppRoleDb(Base):
     # Store lists/dicts as JSON strings or Text
     # Using Text for broader compatibility, can switch to JSONB if needed
     assigned_groups = Column(Text, nullable=False, default='[]')
+    # Individual users (by email) assigned to this role, parallel to assigned_groups.
+    # Matched case-insensitively against the user's IdP-issued email at auth time (#196/#760).
+    assigned_users = Column(Text, nullable=False, default='[]', server_default='[]')
     feature_permissions = Column(Text, nullable=False, default='{}')
     home_sections = Column(Text, nullable=False, default='[]')
     # Approval privileges JSON (e.g., {"CONTRACTS": true, "PRODUCTS": true})

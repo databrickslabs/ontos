@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Loader2,
   CheckCircle2,
@@ -145,6 +146,7 @@ export default function ImportPreviewDialog({
   selectedPaths,
   depth,
 }: ImportPreviewDialogProps) {
+  const { t } = useTranslation(['database-schema', 'common']);
   const { post: apiPost } = useApi();
   const { toast } = useToast();
 
@@ -177,7 +179,7 @@ export default function ImportPreviewDialog({
       }
     } catch (err) {
       console.error('Preview failed:', err);
-      toast({ title: 'Preview failed', description: String(err), variant: 'destructive' });
+      toast({ title: t('database-schema:preview.previewFailed'), description: String(err), variant: 'destructive' });
     } finally {
       setIsLoadingPreview(false);
     }
@@ -202,13 +204,17 @@ export default function ImportPreviewDialog({
         setImportResult(resp.data);
         setCollapsed(new Set());
         toast({
-          title: 'Import complete',
-          description: `Created ${resp.data.created}, skipped ${resp.data.skipped}, errors ${resp.data.errors}`,
+          title: t('database-schema:preview.importComplete'),
+          description: t('database-schema:preview.importCompleteSummary', {
+            created: resp.data.created,
+            skipped: resp.data.skipped,
+            errors: resp.data.errors,
+          }),
         });
       }
     } catch (err) {
       console.error('Import failed:', err);
-      toast({ title: 'Import failed', description: String(err), variant: 'destructive' });
+      toast({ title: t('database-schema:preview.importFailed'), description: String(err), variant: 'destructive' });
     } finally {
       setIsImporting(false);
     }
@@ -385,7 +391,7 @@ export default function ImportPreviewDialog({
                   <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top">Link to existing asset</TooltipContent>
+              <TooltipContent side="top">{t('database-schema:preview.linkToExisting')}</TooltipContent>
             </Tooltip>
           )}
           {isMapped && (
@@ -398,7 +404,7 @@ export default function ImportPreviewDialog({
                   <Unlink className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top">Unlink — create new instead</TooltipContent>
+              <TooltipContent side="top">{t('database-schema:preview.unlinkCreateNew')}</TooltipContent>
             </Tooltip>
           )}
 
@@ -407,14 +413,14 @@ export default function ImportPreviewDialog({
           </Badge>
 
           {isExcluded ? (
-            <span className="text-xs text-muted-foreground shrink-0">skip</span>
+            <span className="text-xs text-muted-foreground shrink-0">{t('database-schema:preview.statusSkip')}</span>
           ) : isMapped ? (
-            <span className="text-xs text-blue-500 shrink-0">linked</span>
+            <span className="text-xs text-blue-500 shrink-0">{t('database-schema:preview.statusLinked')}</span>
           ) : (
             <span className="text-xs text-muted-foreground shrink-0">
               {item.will_create
-                ? (item.is_ancestor ? 'auto' : 'new')
-                : 'exists'}
+                ? (item.is_ancestor ? t('database-schema:preview.statusAuto') : t('database-schema:preview.statusNew'))
+                : t('database-schema:preview.statusExists')}
             </span>
           )}
         </div>
@@ -493,19 +499,23 @@ export default function ImportPreviewDialog({
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {importResult ? 'Import Results' : 'Import Preview'}
+              {importResult ? t('database-schema:preview.resultsTitle') : t('database-schema:preview.previewTitle')}
             </DialogTitle>
             <DialogDescription>
               {importResult
-                ? `${importResult.created} created, ${importResult.skipped} skipped, ${importResult.errors} errors`
-                : `${toCreate} to create, ${toSkip} already exist`}
+                ? t('database-schema:preview.resultSummary', {
+                    created: importResult.created,
+                    skipped: importResult.skipped,
+                    errors: importResult.errors,
+                  })
+                : t('database-schema:preview.previewSummary', { toCreate, toSkip })}
             </DialogDescription>
           </DialogHeader>
 
           {isLoadingPreview ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <span className="ml-2 text-sm text-muted-foreground">Analyzing resources...</span>
+              <span className="ml-2 text-sm text-muted-foreground">{t('database-schema:preview.analyzing')}</span>
             </div>
           ) : importResult ? (
             <ScrollArea className="max-h-[400px]">
@@ -513,7 +523,7 @@ export default function ImportPreviewDialog({
                 {resultTree.map(renderResultNode)}
                 {resultTree.length === 0 && (
                   <div className="text-center py-8 text-sm text-muted-foreground">
-                    No items in import result
+                    {t('database-schema:preview.noResultItems')}
                   </div>
                 )}
               </div>
@@ -524,7 +534,7 @@ export default function ImportPreviewDialog({
                 {previewTree.map(renderPreviewNode)}
                 {previewTree.length === 0 && (
                   <div className="text-center py-8 text-sm text-muted-foreground">
-                    No importable resources found at the selected paths
+                    {t('database-schema:preview.noImportable')}
                   </div>
                 )}
               </div>
@@ -534,19 +544,19 @@ export default function ImportPreviewDialog({
           <DialogFooter>
             {importResult ? (
               <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                Close
+                {t('common:actions.close')}
               </Button>
             ) : (
               <>
                 <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                  Cancel
+                  {t('common:actions.cancel')}
                 </Button>
                 <Button
                   onClick={executeImport}
                   disabled={isImporting || toCreate === 0}
                 >
                   {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Import {toCreate} asset{toCreate !== 1 ? 's' : ''}
+                  {t('database-schema:preview.importAssets', { count: toCreate })}
                 </Button>
               </>
             )}
@@ -560,9 +570,9 @@ export default function ImportPreviewDialog({
         onOpenChange={(open) => { if (!open) setSelectorOpenForPath(null); }}
         onConfirm={handleAssetSelected}
         targetAssetTypes={selectorTargetType}
-        title="Link to existing asset"
-        description="Pick an existing asset to use instead of creating a new one"
-        confirmLabel="Use selected"
+        title={t('database-schema:preview.linkToExisting')}
+        description={t('database-schema:preview.assetSelectorDescription')}
+        confirmLabel={t('database-schema:preview.useSelected')}
       />
     </>
   );

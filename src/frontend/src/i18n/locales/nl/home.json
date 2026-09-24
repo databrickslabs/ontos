@@ -63,6 +63,10 @@
     "requestAccess": "Toegang Aanvragen",
     "moreRoles": "En {{count}} meer rollen beschikbaar..."
   },
+  "myActions": {
+    "title": "Mijn Acties",
+    "approvals": "Goedkeuringen"
+  },
   "quickActions": {
     "title": "Snelle Acties",
     "loading": "Laden...",
@@ -111,7 +115,13 @@
     "unknown": "Onbekend",
     "status": "N.v.t.",
     "untitled": "Naamloos",
-    "info": "Info"
+    "info": "Info",
+    "manage": "Beheren",
+    "mySubscriptions": "Mijn Abonnementen",
+    "subscribe": "Abonneren",
+    "subscribed": "Geabonneerd",
+    "unknownProduct": "Onbekend product",
+    "viewAllSubscribed": "Alle abonnementen bekijken"
   },
   "dataCurationSection": {
     "title": "Data Curatie",
@@ -151,7 +161,26 @@
     "openButton": "Openen",
     "markReadButton": "Markeer als gelezen",
     "readLabel": "Gelezen",
-    "alertMessage": "Deze lijst toont alleen actie-vereiste notificaties toegewezen aan je rol(len)."
+    "alertMessage": "Deze lijst toont alleen actie-vereiste notificaties toegewezen aan je rol(len).",
+    "loadError": "Laden van goedkeuringen mislukt",
+    "unknownUser": "Onbekende gebruiker",
+    "unknownRole": "Onbekende rol",
+    "approvalRequest": "Goedkeuringsverzoek",
+    "badges": {
+      "roleRequest": "Rolverzoek",
+      "contract": "Contract",
+      "product": "Product",
+      "approval": "Goedkeuring"
+    },
+    "table": {
+      "type": "Type",
+      "requesterName": "Aanvrager / Naam",
+      "roleStatusReason": "Rol / Status / Reden",
+      "date": "Datum",
+      "actions": "Acties"
+    },
+    "approveDenyRequest": "Verzoek goedkeuren/afwijzen",
+    "approveDenyWorkflow": "Workflowverzoek goedkeuren/afwijzen"
   },
   "marketplace": {
     "welcome": "Hallo",
@@ -182,7 +211,9 @@
       "browseToSubscribe": "Blader door de Verkennen tab om producten te vinden om op te abonneren.",
       "exploreProducts": "Verken Dataproducten",
       "owner": "Eigenaar",
-      "unknown": "Onbekend"
+      "unknown": "Onbekend",
+      "unknownProduct": "Onbekend product",
+      "untitled": "Naamloos"
     },
     "datasets": {
       "available": "{{count}} dataset beschikbaar",
@@ -218,7 +249,47 @@
       "three": "3 per rij",
       "four": "4 per rij"
     },
-    "openInDetails": "Openen in detailweergave"
+    "scopeFilter": {
+      "placeholder": "Bereik",
+      "all": "Alle Bereiken"
+    },
+    "openInDetails": "Openen in detailweergave",
+    "loadError": "Laden van producten mislukt"
+  },
+  "myProducts": {
+    "title": "Mijn Producten",
+    "description": "Dataproducten waarop je geabonneerd bent.",
+    "loading": "Je producten laden...",
+    "empty": "Je hebt je nog niet geabonneerd op dataproducten.",
+    "browseMarketplace": "Blader door Marketplace"
+  },
+  "myRequests": {
+    "title": "Mijn Verzoeken",
+    "description": "Door jou aangemaakte verzoeken die goedkeuring vereisen (inclusief toegang en abonnementen).",
+    "loading": "Je verzoeken laden...",
+    "empty": "Je hebt geen verzoeken aangemaakt.",
+    "entity": "Entiteit",
+    "type": "Type",
+    "status": "Status",
+    "requestedAt": "Aangevraagd",
+    "handledAt": "Afgehandeld",
+    "cancel": "Annuleren",
+    "cancelSuccess": "Verzoek geannuleerd",
+    "statusPending": "In afwachting",
+    "statusApproved": "Goedgekeurd",
+    "statusDenied": "Afgewezen",
+    "statusCancelled": "Geannuleerd",
+    "statusExpired": "Verlopen",
+    "statusInProgress": "In behandeling",
+    "statusCompleted": "Voltooid",
+    "statusAbandoned": "Afgebroken",
+    "typeAccess": "Toegang",
+    "typeSubscription": "Abonnement",
+    "typeApproval": "Goedkeuring",
+    "entityType": "Entiteitstype",
+    "name": "Naam",
+    "entityTypeDataProduct": "Dataproduct",
+    "entityTypeDataset": "Dataset",
+    "entityTypeDataContract": "Datacontract"
   }
 }
-

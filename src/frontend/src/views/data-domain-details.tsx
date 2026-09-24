@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -68,10 +69,10 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value, icon, children, class
 );
 
 // Column definitions for child domains table
-const createChildDomainsColumns = (_navigate: (path: string) => void): ColumnDef<any>[] => [
+const createChildDomainsColumns = (_navigate: (path: string) => void, t: TFunction): ColumnDef<any>[] => [
   {
     accessorKey: "name",
-    header: "Name",
+    header: t('data-domains:details.childDomains.columns.name'),
     cell: ({ row }) => (
       <Link
         to={`/settings/data-domains/${row.original.id}`}
@@ -83,7 +84,7 @@ const createChildDomainsColumns = (_navigate: (path: string) => void): ColumnDef
   },
   {
     accessorKey: "id",
-    header: "ID",
+    header: t('data-domains:details.childDomains.columns.id'),
     cell: ({ row }) => (
       <code className="text-xs bg-muted px-2 py-1 rounded">
         {row.getValue("id")}
@@ -93,10 +94,10 @@ const createChildDomainsColumns = (_navigate: (path: string) => void): ColumnDef
 ];
 
 // Column definitions for teams table
-const createTeamsColumns = (_navigate: (path: string) => void, onEdit: (teamId: string) => void): ColumnDef<TeamSummary>[] => [
+const createTeamsColumns = (_navigate: (path: string) => void, onEdit: (teamId: string) => void, t: TFunction): ColumnDef<TeamSummary>[] => [
   {
     accessorKey: "name",
-    header: "Team Name",
+    header: t('data-domains:details.teams.columns.name'),
     cell: ({ row }) => (
       <Link
         to={`/teams/${row.original.id}`}
@@ -108,24 +109,24 @@ const createTeamsColumns = (_navigate: (path: string) => void, onEdit: (teamId: 
   },
   {
     accessorKey: "title",
-    header: "Title",
+    header: t('data-domains:details.teams.columns.title'),
     cell: ({ row }) => {
       const title = row.getValue("title") as string;
-      return title || <span className="text-muted-foreground italic">No title</span>;
+      return title || <span className="text-muted-foreground italic">{t('data-domains:details.teams.columns.noTitle')}</span>;
     },
   },
   {
     accessorKey: "member_count",
-    header: "Members",
+    header: t('data-domains:details.teams.columns.members'),
     cell: ({ row }) => (
       <Badge variant="secondary" className="text-xs">
-        {row.getValue("member_count")} members
+        {t('data-domains:details.teams.columns.memberCount', { count: row.getValue("member_count") as number })}
       </Badge>
     ),
   },
   {
     id: "actions",
-    header: "Actions",
+    header: t('data-domains:details.teams.columns.actions'),
     cell: ({ row }) => (
       <Button
         variant="ghost"
@@ -134,7 +135,7 @@ const createTeamsColumns = (_navigate: (path: string) => void, onEdit: (teamId: 
         className="text-xs px-2 py-1"
       >
         <Edit3 className="w-3 h-3 mr-1" />
-        Edit
+        {t('data-domains:details.teams.columns.edit')}
       </Button>
     ),
   },
@@ -157,32 +158,32 @@ interface LinkedAssetsViewProps {
 }
 
 const LinkedAssetsView: React.FC<LinkedAssetsViewProps> = ({ assets }) => {
-  const { t } = useTranslation(['common']);
+  const { t } = useTranslation(['data-domains', 'common']);
   const { getDomainName } = useDomains();
   // Define columns for the linked assets table
   const columns: ColumnDef<LinkedAsset>[] = [
     {
       accessorKey: "name",
-      header: "Asset Name",
+      header: t('details.linkedAssets.columns.name'),
       cell: ({ row }) => (
         <div className="font-medium">{row.getValue("name")}</div>
       ),
     },
     {
       accessorKey: "type",
-      header: "Type",
+      header: t('details.linkedAssets.columns.type'),
       cell: ({ row }) => {
         const type = row.getValue("type") as string;
         return (
           <Badge variant="outline" className="text-xs">
-            {type?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'}
+            {type?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || t('details.linkedAssets.columns.unknownType')}
           </Badge>
         );
       },
     },
     {
       accessorKey: "path",
-      header: "Path",
+      header: t('details.linkedAssets.columns.path'),
       cell: ({ row }) => {
         const path = row.getValue("path") as string;
         return path ? (
@@ -194,7 +195,7 @@ const LinkedAssetsView: React.FC<LinkedAssetsViewProps> = ({ assets }) => {
     },
     {
       accessorKey: "domainId",
-      header: "Domain",
+      header: t('details.linkedAssets.columns.domain'),
       cell: ({ row }) => {
         const asset = row.original;
         const domainName = asset.domainId ? getDomainName(asset.domainId) : null;
@@ -206,7 +207,7 @@ const LinkedAssetsView: React.FC<LinkedAssetsViewProps> = ({ assets }) => {
   if (assets.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        No linked assets found
+        {t('details.linkedAssets.empty')}
       </div>
     );
   }
@@ -214,9 +215,9 @@ const LinkedAssetsView: React.FC<LinkedAssetsViewProps> = ({ assets }) => {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Linked Assets</h3>
+        <h3 className="text-lg font-semibold">{t('details.linkedAssets.title')}</h3>
         <Badge variant="secondary" className="text-xs">
-          {assets.length} total
+          {t('details.linkedAssets.countBadge', { count: assets.length })}
         </Badge>
       </div>
       <DataTable
@@ -321,7 +322,7 @@ export default function DataDomainDetailsView() {
   const fetchDomainDetails = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
-    setDynamicTitle('Loading...');
+    setDynamicTitle(t('common:states.loading'));
     try {
       const [domainRes, linksRes] = await Promise.all([
         get<DataDomain>(`/api/data-domains/${id}`),
@@ -399,14 +400,14 @@ export default function DataDomainDetailsView() {
         setParentSemanticLinks([]);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch domain details.');
+      setError(err.message || t('toasts.failedFetchDomain'));
       toast({
-        title: 'Error Fetching Domain',
-        description: err.message || 'Could not load domain details.',
+        title: t('toasts.errorFetchingDomain'),
+        description: err.message || t('toasts.couldNotLoadDomain'),
         variant: 'destructive',
       });
       setDomain(null);
-      setDynamicTitle('Error');
+      setDynamicTitle(t('common:states.error'));
     }
     setIsLoading(false);
   }, [get, toast, setDynamicTitle, fetchDomainHierarchyConceptIris]);
@@ -433,9 +434,9 @@ export default function DataDomainDetailsView() {
       if (res.error) throw new Error(res.error);
       await fetchDomainDetails(domainId);
       setIriDialogOpen(false);
-      toast({ title: 'Linked', description: 'Business concept linked to data domain.' });
+      toast({ title: t('common:toast.linked'), description: t('toasts.conceptLinked') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to link business concept', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e.message || t('toasts.linkConceptError'), variant: 'destructive' });
     }
   };
 
@@ -444,9 +445,9 @@ export default function DataDomainDetailsView() {
       const res = await del(`/api/semantic-links/${linkId}`);
       if (res.error) throw new Error(res.error);
       await fetchDomainDetails(domainId!);
-      toast({ title: 'Unlinked', description: 'Business concept unlinked from data domain.' });
+      toast({ title: t('common:toast.unlinked'), description: t('toasts.conceptUnlinked') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to unlink business concept', variant: 'destructive' });
+      toast({ title: t('common:toast.error'), description: e.message || t('toasts.unlinkConceptError'), variant: 'destructive' });
     }
   };
 
@@ -467,7 +468,7 @@ export default function DataDomainDetailsView() {
       setLinks(checkApiResponse(liResp, 'Links'));
       setDocuments(checkApiResponse(docResp, 'Documents'));
     } catch (err: any) {
-      toast({ title: 'Metadata load failed', description: err.message || 'Could not load metadata.', variant: 'destructive' });
+      toast({ title: t('toasts.metadataLoadFailed'), description: err.message || t('toasts.couldNotLoadMetadata'), variant: 'destructive' });
     }
   }, [get, toast]);
 
@@ -523,8 +524,8 @@ export default function DataDomainDetailsView() {
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to load team details for editing.',
+        title: t('common:toast.error'),
+        description: t('toasts.editTeamLoadError'),
       });
     }
   };
@@ -544,15 +545,15 @@ export default function DataDomainDetailsView() {
   };
 
   useEffect(() => {
-    setStaticSegments([{ label: 'Data Domains', path: listPath }]);
+    setStaticSegments([{ label: t('title'), path: listPath }]);
     if (domainId) {
       fetchDomainDetails(domainId);
       fetchMetadata(domainId);
       fetchDomainTeams(domainId);
       fetchDomainEntities(domainId);
     } else {
-      setError("No Domain ID provided.");
-      setDynamicTitle("Invalid Domain");
+      setError(t('details.noDomainIdProvided'));
+      setDynamicTitle(t('details.invalidDomain'));
       setIsLoading(false);
     }
     return () => {
@@ -594,11 +595,11 @@ export default function DataDomainDetailsView() {
       <div className="container mx-auto py-10">
         <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>{t('common:states.error')}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
         </Alert>
         <Button variant="outline" onClick={() => navigate(listPath)}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Data Domains
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t('details.backToDataDomains')}
         </Button>
       </div>
     );
@@ -608,10 +609,10 @@ export default function DataDomainDetailsView() {
     return (
         <div className="container mx-auto py-10 text-center">
             <Alert className="mb-4">
-                <AlertDescription>Data domain not found or could not be loaded.</AlertDescription>
+                <AlertDescription>{t('details.notFound')}</AlertDescription>
             </Alert>
             <Button variant="outline" onClick={() => navigate(listPath)}>
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Data Domains
+                <ArrowLeft className="mr-2 h-4 w-4" /> {t('details.backToDataDomains')}
             </Button>
         </div>
     );
@@ -622,7 +623,7 @@ export default function DataDomainDetailsView() {
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate(listPath)} size="sm">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to List
+          {t('details.backToList')}
         </Button>
         <div className="flex items-center gap-2">
           <CommentSidebar
@@ -633,7 +634,7 @@ export default function DataDomainDetailsView() {
             className="h-8"
           />
           <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
-              <Edit3 className="mr-2 h-4 w-4" /> Edit
+              <Edit3 className="mr-2 h-4 w-4" /> {t('details.edit')}
           </Button>
         </div>
       </div>
@@ -646,18 +647,18 @@ export default function DataDomainDetailsView() {
             {domain.description && <CardDescription className="pt-1">{domain.description}</CardDescription>}
         </CardHeader>
         <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
-            <InfoItem label="ID" value={domain.id} icon={<Hash />} className="lg:col-span-1 md:col-span-2" />
-            
+            <InfoItem label={t('details.info.id')} value={domain.id} icon={<Hash />} className="lg:col-span-1 md:col-span-2" />
+
             {domain.parent_info && (
-              <InfoItem label="Parent Domain" icon={<ListTree />}>
+              <InfoItem label={t('details.info.parentDomain')} icon={<ListTree />}>
                 <Link to={`/settings/data-domains/${domain.parent_info.id}`} className="text-primary hover:underline">
                   {domain.parent_info.name}
                 </Link>
               </InfoItem>
             )}
-             <InfoItem label="Children Count" value={domain.children_count?.toString() ?? '0'} icon={<ListTree />} />
+             <InfoItem label={t('details.info.childrenCount')} value={domain.children_count?.toString() ?? '0'} icon={<ListTree />} />
 
-            <InfoItem label="Tags" icon={<Tag />}>
+            <InfoItem label={t('details.info.tags')} icon={<Tag />}>
               {domain.tags && domain.tags.length > 0 ? (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {domain.tags.map((tag, i) => <TagChip key={i} tag={tag} size="sm" />)}
@@ -665,19 +666,19 @@ export default function DataDomainDetailsView() {
               ) : t('common:states.none')}
             </InfoItem>
            
-            <InfoItem label="Created By" value={domain.created_by || t('common:states.notAvailable')} icon={<UserCircle />} />
-            <InfoItem label="Created At" icon={<CalendarDays />}>
+            <InfoItem label={t('details.info.createdBy')} value={domain.created_by || t('common:states.notAvailable')} icon={<UserCircle />} />
+            <InfoItem label={t('details.info.createdAt')} icon={<CalendarDays />}>
                 {domain.created_at ? <RelativeDate date={domain.created_at} /> : t('common:states.notAvailable')}
             </InfoItem>
-            <InfoItem label="Last Updated At" icon={<CalendarDays />}>
+            <InfoItem label={t('details.info.lastUpdatedAt')} icon={<CalendarDays />}>
                 {domain.updated_at ? <RelativeDate date={domain.updated_at} /> : t('common:states.notAvailable')}
             </InfoItem>
-            
-            <InfoItem label="Linked Business Concepts" className="col-span-full">
+
+            <InfoItem label={t('details.info.linkedBusinessConcepts')} className="col-span-full">
               <LinkedConceptChips
                 links={semanticLinks}
                 onRemove={(id) => removeLink(id)}
-                trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>}
+                trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>{t('details.addConcept')}</Button>}
               />
             </InfoItem>
         </CardContent>
@@ -691,7 +692,7 @@ export default function DataDomainDetailsView() {
           <CardHeader className='pb-2'>
             <CardTitle className="text-lg font-semibold flex items-center">
               <ChevronsUpDown className="h-5 w-5 mr-2 text-primary" />
-              Domain Hierarchy Context
+              {t('details.hierarchyContext')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -706,20 +707,20 @@ export default function DataDomainDetailsView() {
           <CardHeader>
             <CardTitle className="text-xl flex items-center">
               <ListTree className="mr-2 h-5 w-5 text-primary"/>
-              Child Data Domains ({domain.children_count})
+              {t('details.childDomains.title', { count: domain.children_count })}
             </CardTitle>
-            <CardDescription>Directly nested data domains.</CardDescription>
+            <CardDescription>{t('details.childDomains.description')}</CardDescription>
           </CardHeader>
           <CardContent>
             {domain.children_info && domain.children_info.length > 0 ? (
               <DataTable
-                columns={createChildDomainsColumns(navigate)}
+                columns={createChildDomainsColumns(navigate, t)}
                 data={domain.children_info}
                 searchColumn="name"
               />
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                No child domains found
+                {t('details.childDomains.empty')}
               </div>
             )}
           </CardContent>
@@ -732,9 +733,9 @@ export default function DataDomainDetailsView() {
           <CardTitle className="text-xl flex items-center justify-between">
             <div className="flex items-center">
               <Users className="mr-2 h-5 w-5 text-primary"/>
-              Domain Teams
+              {t('details.teams.title')}
               <Badge variant="secondary" className="ml-3 text-xs">
-                {domainTeams.length} teams
+                {t('details.teams.countBadge', { count: domainTeams.length })}
               </Badge>
             </div>
             <Button
@@ -744,25 +745,25 @@ export default function DataDomainDetailsView() {
               className="flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              Create Team
+              {t('details.teams.create')}
             </Button>
           </CardTitle>
           <CardDescription>
-            Teams assigned to this data domain. Teams inherit domain-specific permissions and responsibilities.
+            {t('details.teams.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {domainTeams.length > 0 ? (
             <DataTable
-              columns={createTeamsColumns(navigate, handleEditTeam)}
+              columns={createTeamsColumns(navigate, handleEditTeam, t)}
               data={domainTeams}
               searchColumn="name"
             />
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="mx-auto h-12 w-12 mb-4 opacity-30" />
-              <p className="text-lg font-medium">No teams assigned</p>
-              <p className="text-sm">Create a team to assign it to this data domain.</p>
+              <p className="text-lg font-medium">{t('details.teams.empty')}</p>
+              <p className="text-sm">{t('details.teams.emptyHint')}</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -770,7 +771,7 @@ export default function DataDomainDetailsView() {
                 className="mt-4"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Create First Team
+                {t('details.teams.createFirst')}
               </Button>
             </div>
           )}
@@ -783,20 +784,20 @@ export default function DataDomainDetailsView() {
         <CardHeader>
           <CardTitle className="text-xl flex items-center">
             <Tag className="mr-2 h-5 w-5 text-primary"/>
-            Assigned Entities
+            {t('details.assignedEntities.title')}
           </CardTitle>
           <CardDescription>
-            Data products, contracts, and assets assigned to this domain (primary or additional).
+            {t('details.assignedEntities.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {([
-            { label: 'Data Products', items: domainProducts, path: (i: any) => `/data-products/${i.id}`, primaryKey: 'primary_domain_id' },
-            { label: 'Data Contracts', items: domainContracts, path: (i: any) => `/data-contracts/${i.id}`, primaryKey: 'primaryDomainId' },
-            { label: 'Assets', items: domainAssets, path: (i: any) => `/governance/assets/${i.id}`, primaryKey: 'primary_domain_id' },
-          ] as const).map(({ label, items, path, primaryKey }) => (
-            <div key={label}>
-              <h4 className="text-sm font-semibold text-muted-foreground mb-2">{label} ({items.length})</h4>
+            { labelKey: 'details.assignedEntities.dataProducts', items: domainProducts, path: (i: any) => `/data-products/${i.id}`, primaryKey: 'primary_domain_id' },
+            { labelKey: 'details.assignedEntities.dataContracts', items: domainContracts, path: (i: any) => `/data-contracts/${i.id}`, primaryKey: 'primaryDomainId' },
+            { labelKey: 'details.assignedEntities.assets', items: domainAssets, path: (i: any) => `/governance/assets/${i.id}`, primaryKey: 'primary_domain_id' },
+          ] as const).map(({ labelKey, items, path, primaryKey }) => (
+            <div key={labelKey}>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2">{t(labelKey)} ({items.length})</h4>
               {items.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {items.map((it: any) => {
@@ -807,7 +808,7 @@ export default function DataDomainDetailsView() {
                         variant={isPrimary ? 'default' : 'secondary'}
                         className="cursor-pointer hover:opacity-80 gap-1"
                         onClick={() => navigate(path(it))}
-                        title={isPrimary ? 'Primary domain' : 'Additional domain'}
+                        title={isPrimary ? t('details.assignedEntities.primaryDomain') : t('details.assignedEntities.additionalDomain')}
                       >
                         {isPrimary && <Star className="h-3 w-3 fill-current" />}
                         {it.name || it.id}
@@ -816,7 +817,7 @@ export default function DataDomainDetailsView() {
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">None assigned.</p>
+                <p className="text-sm text-muted-foreground">{t('details.assignedEntities.noneAssigned')}</p>
               )}
             </div>
           ))}
@@ -828,10 +829,10 @@ export default function DataDomainDetailsView() {
         <CardHeader>
           <CardTitle className="text-xl flex items-center">
             <Tag className="mr-2 h-5 w-5 text-primary"/>
-            Linked Assets
+            {t('details.linkedAssets.title')}
           </CardTitle>
           <CardDescription>
-            Assets (data products, contracts, etc.) linked to this data domain through semantic relationships.
+            {t('details.linkedAssets.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -846,7 +847,7 @@ export default function DataDomainDetailsView() {
       <EntityTreePanel
         entityType="DataDomain"
         entityId={domainId!}
-        title="Related Entities"
+        title={t('details.relatedEntities')}
         canEdit
       />
 

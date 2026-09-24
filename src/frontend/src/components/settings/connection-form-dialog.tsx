@@ -206,14 +206,14 @@ export function ConnectionFormDialog({
         response = await api.post('/api/connections', payload);
       }
       if (response.error) {
-        toast({ title: 'Error', description: response.error, variant: 'destructive' });
+        toast({ title: t('common:status.error'), description: response.error, variant: 'destructive' });
       } else {
         toast({ title: t('settings:connectors.messages.saveSuccess', 'Connection saved') });
         onSubmitSuccess();
         onOpenChange(false);
       }
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: e.message, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -228,12 +228,12 @@ export function ConnectionFormDialog({
       if (result.healthy) {
         toast({
           title: t('settings:connectors.messages.testSuccess', 'Connection successful'),
-          description: result.project ? `Project: ${result.project}` : undefined,
+          description: result.project ? t('settings:connectors.messages.testSuccessProject', { project: result.project }) : undefined,
         });
       } else {
         toast({
           title: t('settings:connectors.messages.testFailed', 'Connection failed'),
-          description: result.error || 'Unknown error',
+          description: result.error || t('common:errors.unknownError'),
           variant: 'destructive',
         });
       }
@@ -277,7 +277,7 @@ export function ConnectionFormDialog({
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a connector type..." />
+                          <SelectValue placeholder={t('settings:connectors.form.connectorTypePlaceholder', 'Select a connector type...')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -302,7 +302,7 @@ export function ConnectionFormDialog({
                 <FormItem>
                   <FormLabel>{t('settings:connectors.form.name', 'Name')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Production BQ - Analytics" {...field} disabled={isSystem} />
+                    <Input placeholder={t('settings:connectors.form.namePlaceholder', 'e.g. Production BQ - Analytics')} {...field} disabled={isSystem} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -318,7 +318,7 @@ export function ConnectionFormDialog({
                   <FormLabel>{t('settings:connectors.form.description', 'Description')}</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Optional description..."
+                      placeholder={t('settings:connectors.form.descriptionPlaceholder', 'Optional description...')}
                       rows={2}
                       {...field}
                       value={field.value || ''}
@@ -375,12 +375,12 @@ export function ConnectionFormDialog({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Auto-create on first import" />
+                        <SelectValue placeholder={t('settings:connectors.form.autoCreateOnImport', 'Auto-create on first import')} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="__none__">
-                        <span className="text-muted-foreground">Auto-create on first import</span>
+                        <span className="text-muted-foreground">{t('settings:connectors.form.autoCreateOnImport', 'Auto-create on first import')}</span>
                       </SelectItem>
                       {systemAssets.map((sa) => (
                         <SelectItem key={sa.id} value={sa.id}>
@@ -416,7 +416,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.bigquery.projectId', 'GCP Project ID')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="my-gcp-project" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.bigquery.projectIdPlaceholder', 'my-gcp-project')} {...field} value={field.value || ''} />
                         </FormControl>
                         <FormDescription>
                           {t('settings:connectors.bigquery.projectIdHelp', 'Optional. Derived from credentials if not set.')}
@@ -431,7 +431,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.bigquery.location', 'Location')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="US" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.bigquery.locationPlaceholder', 'US')} {...field} value={field.value || ''} />
                         </FormControl>
                         <FormDescription>
                           {t('settings:connectors.bigquery.locationHelp', 'e.g. US, EU, us-central1')}
@@ -448,7 +448,7 @@ export function ConnectionFormDialog({
                     <FormItem>
                       <FormLabel>{t('settings:connectors.bigquery.ucConnectionName', 'UC Connection Name')}</FormLabel>
                       <FormControl>
-                        <Input placeholder="my-bigquery-connection" {...field} value={field.value || ''} />
+                        <Input placeholder={t('settings:connectors.bigquery.ucConnectionNamePlaceholder', 'my-bigquery-connection')} {...field} value={field.value || ''} />
                       </FormControl>
                       <FormDescription>
                         {t('settings:connectors.bigquery.ucConnectionNameHelp', 'Optional. Provides GCP Project ID from UC Connection metadata.')}
@@ -473,7 +473,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.bigquery.secretScope', 'Secret Scope')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="ontos-connectors" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.bigquery.secretScopePlaceholder', 'ontos-connectors')} {...field} value={field.value || ''} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -485,7 +485,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.bigquery.secretKey', 'Secret Key')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="bigquery-sa-key" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.bigquery.secretKeyPlaceholder', 'bigquery-sa-key')} {...field} value={field.value || ''} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -499,7 +499,7 @@ export function ConnectionFormDialog({
                     <FormItem>
                       <FormLabel>{t('settings:connectors.bigquery.credentialsPath', 'Credentials File Path')}</FormLabel>
                       <FormControl>
-                        <Input placeholder="/path/to/service-account-key.json" {...field} value={field.value || ''} />
+                        <Input placeholder={t('settings:connectors.bigquery.credentialsPathPlaceholder', '/path/to/service-account-key.json')} {...field} value={field.value || ''} />
                       </FormControl>
                       <FormDescription>
                         {t('settings:connectors.bigquery.credentialsPathHelp', 'Dev fallback: local path to a service account key JSON file.')}
@@ -526,7 +526,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.snowflake.account', 'Account Identifier')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="myorg-myaccount" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.snowflake.accountPlaceholder', 'myorg-myaccount')} {...field} value={field.value || ''} />
                         </FormControl>
                         <FormDescription>
                           {t('settings:connectors.snowflake.accountHelp', 'e.g. myorg-myaccount or xy12345.us-east-1')}
@@ -541,7 +541,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.snowflake.user', 'User')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="ONTOS_SVC" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.snowflake.userPlaceholder', 'ONTOS_SVC')} {...field} value={field.value || ''} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -556,7 +556,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.snowflake.warehouse', 'Warehouse')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="COMPUTE_WH" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.snowflake.warehousePlaceholder', 'COMPUTE_WH')} {...field} value={field.value || ''} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -568,7 +568,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.snowflake.role', 'Role')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="SYSADMIN" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.snowflake.rolePlaceholder', 'SYSADMIN')} {...field} value={field.value || ''} />
                         </FormControl>
                         <FormDescription>
                           {t('settings:connectors.snowflake.roleHelp', 'Optional. Role to assume for queries.')}
@@ -586,7 +586,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.snowflake.database', 'Default Database')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="ANALYTICS" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.snowflake.databasePlaceholder', 'ANALYTICS')} {...field} value={field.value || ''} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -598,7 +598,7 @@ export function ConnectionFormDialog({
                       <FormItem>
                         <FormLabel>{t('settings:connectors.snowflake.defaultSchema', 'Default Schema')}</FormLabel>
                         <FormControl>
-                          <Input placeholder="PUBLIC" {...field} value={field.value || ''} />
+                          <Input placeholder={t('settings:connectors.snowflake.defaultSchemaPlaceholder', 'PUBLIC')} {...field} value={field.value || ''} />
                         </FormControl>
                       </FormItem>
                     )}

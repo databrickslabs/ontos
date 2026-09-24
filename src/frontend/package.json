@@ -92,6 +92,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.3",
+    "eslint-plugin-i18next": "^6.1.5",
     "globals": "^17.6.0",
     "jsdom": "^27.0.0",
     "license-checker": "^25.0.1",
@@ -123,6 +124,9 @@
     "license-check:production": "license-checker --production --summary",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
+    "check:i18n": "python3 ../scripts/check_translations.py",
+    "check:i18n:unused": "python3 ../scripts/check_translations.py --check-unused",
+    "audit:i18n": "python3 ../scripts/audit_hardcoded_strings.py",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\""
   },

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -108,6 +109,7 @@ export default function AccessGrantsPanel({
 }: AccessGrantsPanelProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['access-grants', 'common']);
 
   const [grants, setGrants] = useState<AccessGrant[]>([]);
   const [pendingRequests, setPendingRequests] = useState<AccessGrantRequest[]>([]);
@@ -168,8 +170,11 @@ export default function AccessGrantsPanel({
       }
 
       toast({
-        title: 'Access Revoked',
-        description: `Access for ${grantToRevoke.grantee_email} has been revoked.`,
+        title: t('access-grants:panel.revokedTitle', 'Access Revoked'),
+        description: t('access-grants:panel.revokedDescription', {
+          user: grantToRevoke.grantee_email,
+          defaultValue: 'Access for {{user}} has been revoked.',
+        }),
       });
 
       setRevokeDialogOpen(false);
@@ -177,8 +182,8 @@ export default function AccessGrantsPanel({
       fetchData();
     } catch (e: any) {
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to revoke access',
+        title: t('common:toast.error', 'Error'),
+        description: e.message || t('access-grants:panel.revokeError', 'Failed to revoke access'),
         variant: 'destructive',
       });
     } finally {
@@ -197,13 +202,12 @@ export default function AccessGrantsPanel({
   };
 
   const formatDaysUntilExpiry = (days?: number): string => {
-    if (days === undefined || days === null) return 'Unknown';
-    if (days < 0) return 'Expired';
-    if (days === 0) return 'Today';
-    if (days === 1) return '1 day';
-    if (days < 7) return `${days} days`;
-    if (days < 30) return `${Math.floor(days / 7)} week(s)`;
-    return `${Math.floor(days / 30)} month(s)`;
+    if (days === undefined || days === null) return t('access-grants:panel.expiry.unknown', 'Unknown');
+    if (days < 0) return t('access-grants:panel.expiry.expired', 'Expired');
+    if (days === 0) return t('access-grants:panel.expiry.today', 'Today');
+    if (days < 7) return t('access-grants:panel.expiry.days', { count: days });
+    if (days < 30) return t('access-grants:panel.expiry.weeks', { count: Math.floor(days / 7) });
+    return t('access-grants:panel.expiry.months', { count: Math.floor(days / 30) });
   };
 
   const getExpiryBadgeClass = (days?: number): string => {
@@ -229,7 +233,7 @@ export default function AccessGrantsPanel({
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            <span>Access Grants</span>
+            <span>{t('access-grants:panel.title', 'Access Grants')}</span>
             {totalCount > 0 && (
               <Badge variant="secondary">{totalCount}</Badge>
             )}
@@ -239,11 +243,14 @@ export default function AccessGrantsPanel({
                   <TooltipTrigger>
                     <Badge variant="outline" className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
                       <AlertTriangle className="h-3 w-3 mr-1" />
-                      {summary.expiring_soon_count} expiring
+                      {t('access-grants:panel.expiringBadge', {
+                        count: summary.expiring_soon_count,
+                        defaultValue: '{{count}} expiring',
+                      })}
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{summary.expiring_soon_count} grant(s) expiring soon</p>
+                    <p>{t('access-grants:panel.expiringSoonTooltip', { count: summary.expiring_soon_count })}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -264,7 +271,7 @@ export default function AccessGrantsPanel({
           </div>
         </CardTitle>
         <CardDescription>
-          Users with time-limited access to this resource
+          {t('access-grants:panel.description', 'Users with time-limited access to this resource')}
         </CardDescription>
       </CardHeader>
 
@@ -275,16 +282,16 @@ export default function AccessGrantsPanel({
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-orange-600 dark:text-orange-400">
                 <Clock className="h-4 w-4" />
-                Pending Requests ({pendingRequests.length})
+                {t('access-grants:panel.pendingRequestsCount', { count: pendingRequests.length })}
               </div>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Requester</TableHead>
-                    <TableHead>Permission</TableHead>
-                    <TableHead>Duration</TableHead>
-                    <TableHead>Requested</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('access-grants:panel.columns.requester', 'Requester')}</TableHead>
+                    <TableHead>{t('common:labels.permission', 'Permission')}</TableHead>
+                    <TableHead>{t('access-grants:panel.columns.duration', 'Duration')}</TableHead>
+                    <TableHead>{t('access-grants:panel.requestedAt', 'Requested')}</TableHead>
+                    <TableHead className="text-right">{t('access-grants:panel.columns.actions', 'Actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -293,10 +300,10 @@ export default function AccessGrantsPanel({
                       <TableCell className="font-medium">{request.requester_email}</TableCell>
                       <TableCell>
                         <Badge variant={PERMISSION_BADGES[request.permission_level]?.variant || 'secondary'}>
-                          {PERMISSION_BADGES[request.permission_level]?.label || request.permission_level}
+                          {t(`access-grants:permissionLevels.${request.permission_level}`, PERMISSION_BADGES[request.permission_level]?.label || request.permission_level)}
                         </Badge>
                       </TableCell>
-                      <TableCell>{request.requested_duration_days} days</TableCell>
+                      <TableCell>{t('access-grants:panel.durationDays', { count: request.requested_duration_days })}</TableCell>
                       <TableCell>
                         <RelativeDate date={request.created_at} />
                       </TableCell>
@@ -306,7 +313,7 @@ export default function AccessGrantsPanel({
                           size="sm"
                           onClick={() => openHandleRequestDialog(request)}
                         >
-                          Review
+                          {t('access-grants:panel.review', 'Review')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -322,18 +329,18 @@ export default function AccessGrantsPanel({
               {pendingRequests.length > 0 && (
                 <div className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400">
                   <Users className="h-4 w-4" />
-                  Active Grants ({grants.length})
+                  {t('access-grants:panel.activeGrantsCount', { count: grants.length })}
                 </div>
               )}
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Permission</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Granted By</TableHead>
-                    <TableHead>Status</TableHead>
-                    {canManage && <TableHead className="text-right">Actions</TableHead>}
+                    <TableHead>{t('access-grants:panel.columns.user', 'User')}</TableHead>
+                    <TableHead>{t('common:labels.permission', 'Permission')}</TableHead>
+                    <TableHead>{t('access-grants:panel.columns.expires', 'Expires')}</TableHead>
+                    <TableHead>{t('access-grants:panel.columns.grantedBy', 'Granted By')}</TableHead>
+                    <TableHead>{t('common:labels.status', 'Status')}</TableHead>
+                    {canManage && <TableHead className="text-right">{t('access-grants:panel.columns.actions', 'Actions')}</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -342,7 +349,7 @@ export default function AccessGrantsPanel({
                       <TableCell className="font-medium">{grant.grantee_email}</TableCell>
                       <TableCell>
                         <Badge variant={PERMISSION_BADGES[grant.permission_level]?.variant || 'secondary'}>
-                          {PERMISSION_BADGES[grant.permission_level]?.label || grant.permission_level}
+                          {t(`access-grants:permissionLevels.${grant.permission_level}`, PERMISSION_BADGES[grant.permission_level]?.label || grant.permission_level)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -354,7 +361,7 @@ export default function AccessGrantsPanel({
                               </Badge>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>Expires: {new Date(grant.expires_at).toLocaleString()}</p>
+                              <p>{t('access-grants:panel.expiresTooltip', { date: new Date(grant.expires_at).toLocaleString() })}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -364,7 +371,7 @@ export default function AccessGrantsPanel({
                       </TableCell>
                       <TableCell>
                         <Badge className={STATUS_BADGES[grant.status]?.className || ''}>
-                          {STATUS_BADGES[grant.status]?.label || grant.status}
+                          {t(`access-grants:statuses.${grant.status}`, STATUS_BADGES[grant.status]?.label || grant.status)}
                         </Badge>
                       </TableCell>
                       {canManage && (
@@ -389,9 +396,9 @@ export default function AccessGrantsPanel({
           ) : !hasContent ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No access grants for this resource</p>
+              <p>{t('access-grants:panel.noGrants', 'No access grants for this resource')}</p>
               <p className="text-sm">
-                Users can request time-limited access using the "Request Access" button.
+                {t('access-grants:panel.noGrantsHint', 'Users can request time-limited access using the "Request Access" button.')}
               </p>
             </div>
           ) : null}
@@ -402,21 +409,24 @@ export default function AccessGrantsPanel({
       <AlertDialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Revoke Access</AlertDialogTitle>
+            <AlertDialogTitle>{t('access-grants:panel.revokeTitle', 'Revoke Access')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to revoke access for{' '}
-              <strong>{grantToRevoke?.grantee_email}</strong>? This action cannot be undone.
+              <Trans
+                i18nKey="access-grants:panel.revokeConfirmDetailed"
+                values={{ user: grantToRevoke?.grantee_email }}
+                components={{ bold: <strong /> }}
+              />
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={revoking}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={revoking}>{t('common:actions.cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRevoke}
               disabled={revoking}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {revoking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Revoke Access
+              {t('access-grants:panel.revokeTitle', 'Revoke Access')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

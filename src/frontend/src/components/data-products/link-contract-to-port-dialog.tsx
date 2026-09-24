@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus } from 'lucide-react';
 import type { OutputPort, DataProduct } from '@/types/data-product';
@@ -27,6 +28,7 @@ export default function LinkContractToPortDialog({
   onSuccess
 }: LinkContractToPortDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation(['data-products', 'common']);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // PRD #442 picker value. Entity-pinned only for now — switching the
   // output-port write path to support family-follow-latest requires the
@@ -138,16 +140,16 @@ export default function LinkContractToPortDialog({
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Link Contract to Deliverable</DialogTitle>
+            <DialogTitle>{t('data-products:linkContract.title')}</DialogTitle>
             <DialogDescription>
-              Select an existing contract or create a new one to link to <strong>{currentPort?.name || 'this deliverable'}</strong>
+              {t('data-products:linkContract.descriptionPrefix')} <strong>{currentPort?.name || t('data-products:linkContract.thisDeliverable')}</strong>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             {currentPort && (
               <div className="rounded-lg bg-muted p-4 space-y-2">
-                <Label className="text-sm font-medium">Deliverable</Label>
+                <Label className="text-sm font-medium">{t('data-products:linkContract.labels.deliverable')}</Label>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{currentPort.name}</span>
                   <Badge variant="outline">v{currentPort.version}</Badge>
@@ -160,7 +162,7 @@ export default function LinkContractToPortDialog({
 
             <div className="space-y-2">
               <Label htmlFor="contract">
-                Select Contract <span className="text-destructive">*</span>
+                {t('data-products:linkContract.labels.selectContract')} <span className="text-destructive">*</span>
               </Label>
               {/* EntityVersionPicker disambiguates same-named contracts by
                   showing the version inline (closes #69). Entity-pinned
@@ -172,7 +174,7 @@ export default function LinkContractToPortDialog({
                 onChange={setPickerValue}
                 allowedScopes={['entity']}
                 statusFilter={activeStatuses}
-                placeholder="Choose a contract…"
+                placeholder={t('data-products:linkContract.placeholders.chooseContract')}
               />
               <p className="text-xs text-muted-foreground">
                 Only showing contracts with 'active', 'approved', or 'certified' status.
@@ -182,7 +184,7 @@ export default function LinkContractToPortDialog({
 
             <div className="flex items-center gap-2">
               <div className="flex-1 border-t" />
-              <span className="text-sm text-muted-foreground">OR</span>
+              <span className="text-sm text-muted-foreground">{t('data-products:linkContract.labels.or')}</span>
               <div className="flex-1 border-t" />
             </div>
 

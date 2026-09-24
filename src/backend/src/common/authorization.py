@@ -122,7 +122,7 @@ async def is_user_feature_admin(
             )
         else:
             effective = auth_manager.get_user_effective_permissions(
-                user_groups or [], team_role_override
+                user_groups or [], team_role_override, user_email=user_email
             )
 
         return effective.get(feature_id) == FeatureAccessLevel.ADMIN
@@ -579,15 +579,17 @@ async def enforce_feature_permission(
     can't be done with FastAPI's ``Depends`` (resolved before the handler
     runs).
     """
-    if not user_details.groups:
+    # A user with no groups may still hold a role via direct email assignment
+    # (assigned_users, #196/#760), so only deny early when there is neither.
+    if not user_details.groups and not user_details.email:
         logger.warning(
-            "User '%s' has no groups. Denying access for '%s'",
+            "User '%s' has no groups and no email. Denying access for '%s'",
             user_details.user or user_details.email,
             feature_id,
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User has no assigned groups, cannot determine permissions.",
+            detail="User has no assigned groups or email, cannot determine permissions.",
         )
 
     auth_manager: AuthorizationManager = getattr(request.app.state, "authorization_manager", None)
@@ -617,6 +619,7 @@ async def enforce_feature_permission(
             effective_permissions = auth_manager.get_user_effective_permissions(
                 user_details.groups,
                 team_role_override,
+                user_email=user_details.email,
             )
 
         if not auth_manager.has_permission(effective_permissions, feature_id, required_level):
@@ -662,11 +665,13 @@ class PermissionChecker:
         """Performs the permission check when the dependency is called."""
         logger.debug("Checking permission for feature '%s' (level: '%s') for user '%s'", self.feature_id, self.required_level.value, user_details.user or user_details.email)
 
-        if not user_details.groups:
-            logger.warning("User '%s' has no groups. Denying access for '%s'", user_details.user or user_details.email, self.feature_id)
+        # A user with no groups may still hold a role via direct email assignment
+        # (assigned_users, #196/#760), so only deny early when there is neither.
+        if not user_details.groups and not user_details.email:
+            logger.warning("User '%s' has no groups and no email. Denying access for '%s'", user_details.user or user_details.email, self.feature_id)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User has no assigned groups, cannot determine permissions."
+                detail="User has no assigned groups or email, cannot determine permissions."
             )
 
         try:
@@ -692,7 +697,8 @@ class PermissionChecker:
             else:
                 effective_permissions = auth_manager.get_user_effective_permissions(
                     user_details.groups,
-                    team_role_override
+                    team_role_override,
+                    user_email=user_details.email,
                 )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,

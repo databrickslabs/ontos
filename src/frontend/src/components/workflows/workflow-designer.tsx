@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactFlow, {
   Node,
@@ -175,6 +176,7 @@ function KeyValueEditor({
   value,
   onChange,
 }: KeyValueEditorProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   // Entries derived from the controlled prop — insertion-order preserved.
   const entries = useMemo(() => Object.entries(value || {}), [value]);
 
@@ -202,11 +204,11 @@ function KeyValueEditor({
   const handleAdd = () => {
     const trimmedKey = addKey.trim();
     if (!trimmedKey) {
-      setAddKeyError('Key required');
+      setAddKeyError(t('workflows:designer.keyValue.keyRequired'));
       return;
     }
     if (Object.prototype.hasOwnProperty.call(value || {}, trimmedKey)) {
-      setAddKeyError('Key already exists — edit the existing entry');
+      setAddKeyError(t('workflows:designer.keyValue.keyExistsAdd'));
       return;
     }
     commitEntries([...entries, [trimmedKey, addValue]]);
@@ -231,7 +233,7 @@ function KeyValueEditor({
   const commitEdit = () => {
     const trimmedKey = editKey.trim();
     if (!trimmedKey) {
-      setEditKeyError('Key required');
+      setEditKeyError(t('workflows:designer.keyValue.keyRequired'));
       return;
     }
     // Duplicate check: allow the same key if it's the row being edited.
@@ -239,7 +241,7 @@ function KeyValueEditor({
       ([k], i) => k === trimmedKey && i !== editIdx,
     );
     if (isDuplicate) {
-      setEditKeyError('Key already exists — choose a different name');
+      setEditKeyError(t('workflows:designer.keyValue.keyExistsEdit'));
       return;
     }
     const next = entries.map((e, i) =>
@@ -261,7 +263,7 @@ function KeyValueEditor({
 
       {/* Add-entry row */}
       <div className="mt-2 p-2 rounded-md border border-dashed bg-muted/30 space-y-1">
-        <p className="text-xs text-muted-foreground font-medium">Add entry</p>
+        <p className="text-xs text-muted-foreground font-medium">{t('workflows:designer.keyValue.addEntry')}</p>
         <div className="flex gap-2 items-start">
           <div className="flex-1 space-y-1">
             <Input
@@ -271,9 +273,9 @@ function KeyValueEditor({
                 if (addKeyError) setAddKeyError(null);
               }}
               onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder={keyPlaceholder || 'key'}
+              placeholder={keyPlaceholder || t('workflows:designer.keyValue.keyPlaceholder')}
               className="font-mono text-sm"
-              aria-label="New entry key"
+              aria-label={t('workflows:designer.keyValue.newEntryKeyAria')}
             />
             {addKeyError && (
               <p className="text-xs text-destructive">{addKeyError}</p>
@@ -284,9 +286,9 @@ function KeyValueEditor({
               value={addValue}
               onChange={(e) => setAddValue(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder={valuePlaceholder || 'value'}
+              placeholder={valuePlaceholder || t('workflows:designer.keyValue.valuePlaceholder')}
               className="font-mono text-sm"
-              aria-label="New entry value"
+              aria-label={t('workflows:designer.keyValue.newEntryValueAria')}
             />
           </div>
           <Button
@@ -294,10 +296,10 @@ function KeyValueEditor({
             size="sm"
             variant="outline"
             onClick={handleAdd}
-            aria-label="Add entry"
+            aria-label={t('workflows:designer.keyValue.addEntry')}
           >
             <Plus className="w-3 h-3 mr-1" />
-            Add
+            {t('common:actions.add')}
           </Button>
         </div>
       </div>
@@ -305,7 +307,7 @@ function KeyValueEditor({
       {/* Saved entries list */}
       <div className="space-y-1 mt-2">
         {entries.length === 0 && (
-          <p className="text-xs text-muted-foreground italic">No entries.</p>
+          <p className="text-xs text-muted-foreground italic">{t('workflows:designer.keyValue.noEntries')}</p>
         )}
         {entries.map(([k, v], idx) => {
           const isEditing = editIdx === idx;
@@ -326,9 +328,9 @@ function KeyValueEditor({
                         if (editKeyError) setEditKeyError(null);
                       }}
                       onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }}
-                      placeholder={keyPlaceholder || 'key'}
+                      placeholder={keyPlaceholder || t('workflows:designer.keyValue.keyPlaceholder')}
                       className="font-mono text-sm"
-                      aria-label="Edit entry key"
+                      aria-label={t('workflows:designer.keyValue.editEntryKeyAria')}
                       autoFocus
                     />
                     {editKeyError && (
@@ -340,9 +342,9 @@ function KeyValueEditor({
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') cancelEdit(); }}
-                      placeholder={valuePlaceholder || 'value'}
+                      placeholder={valuePlaceholder || t('workflows:designer.keyValue.valuePlaceholder')}
                       className="font-mono text-sm"
-                      aria-label="Edit entry value"
+                      aria-label={t('workflows:designer.keyValue.editEntryValueAria')}
                     />
                   </div>
                   <div className="flex gap-1">
@@ -351,7 +353,7 @@ function KeyValueEditor({
                       size="icon"
                       variant="ghost"
                       onClick={commitEdit}
-                      aria-label="Save edit"
+                      aria-label={t('workflows:designer.keyValue.saveEditAria')}
                       className="text-green-600 hover:text-green-700"
                     >
                       <Check className="w-4 h-4" />
@@ -361,7 +363,7 @@ function KeyValueEditor({
                       size="icon"
                       variant="ghost"
                       onClick={cancelEdit}
-                      aria-label="Cancel edit"
+                      aria-label={t('workflows:designer.keyValue.cancelEditAria')}
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -377,7 +379,7 @@ function KeyValueEditor({
                         variant="outline"
                         className="shrink-0 text-amber-700 border-amber-400 bg-amber-100 text-xs px-1 py-0"
                       >
-                        Check template
+                        {t('workflows:designer.keyValue.checkTemplate')}
                       </Badge>
                     )}
                   </div>
@@ -387,7 +389,7 @@ function KeyValueEditor({
                       size="icon"
                       variant="ghost"
                       onClick={() => startEdit(idx)}
-                      aria-label="Edit row"
+                      aria-label={t('workflows:designer.keyValue.editRowAria')}
                     >
                       <Edit2 className="w-4 h-4" />
                     </Button>
@@ -396,7 +398,7 @@ function KeyValueEditor({
                       size="icon"
                       variant="ghost"
                       onClick={() => removeRow(idx)}
-                      aria-label="Remove row"
+                      aria-label={t('workflows:designer.keyValue.removeRowAria')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -455,6 +457,7 @@ function SchemaConfigPanel({
   config: Record<string, unknown>;
   onUpdate: (newConfig: Record<string, unknown>) => void;
 }) {
+  const { t } = useTranslation(['workflows', 'common']);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const properties = (schema as any)?.properties || {};
   const propertyEntries = Object.entries(properties);
@@ -463,7 +466,7 @@ function SchemaConfigPanel({
     const schemaDesc = (schema as any)?.description;
     return (
       <p className="text-xs text-muted-foreground">
-        {schemaDesc || 'No configurable properties for this step type.'}
+        {schemaDesc || t('workflows:designer.schema.noProperties')}
       </p>
     );
   }
@@ -610,6 +613,7 @@ function DeletableEdge({
   id, sourceX, sourceY, targetX, targetY,
   sourcePosition, targetPosition, style, label, labelStyle, markerEnd, selected, data,
 }: EdgeProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
   });
@@ -640,7 +644,7 @@ function DeletableEdge({
               className="flex items-center justify-center w-5 h-5 rounded-full
                 bg-red-500 hover:bg-red-600 text-white text-xs leading-none
                 shadow-sm transition-colors dark:bg-red-600 dark:hover:bg-red-700"
-              title="Delete connection"
+              title={t('workflows:designer.deleteConnection')}
             >
               ✕
             </button>
@@ -801,6 +805,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const isNew = !id || id === 'new';
   const initialType = (searchParams.get('type') as WorkflowTypeValue) || undefined;
 
+  const { t } = useTranslation(['workflows', 'common']);
   const { get, post, put } = useApi();
   const { toast } = useToast();
 
@@ -846,23 +851,23 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
       <>
         {includeSpecialItems?.requester && (
           <SelectGroup>
-            <SelectLabel>Special</SelectLabel>
-            <SelectItem value="requester">Requester (Original User)</SelectItem>
+            <SelectLabel>{t('workflows:designer.roles.special')}</SelectLabel>
+            <SelectItem value="requester">{t('workflows:designer.roles.requesterOriginalUser')}</SelectItem>
             {includeSpecialItems?.owner && (
-              <SelectItem value="owner">Owner (Entity Owner)</SelectItem>
+              <SelectItem value="owner">{t('workflows:designer.roles.ownerEntityOwner')}</SelectItem>
             )}
           </SelectGroup>
         )}
         {appRoles.length > 0 && (
           <SelectGroup>
-            <SelectLabel>App Roles</SelectLabel>
+            <SelectLabel>{t('workflows:designer.roles.appRoles')}</SelectLabel>
             {appRoles.map((role) => (
               <SelectItem key={role.id} value={role.id}>
                 <div className="flex items-center gap-2">
                   <span>{role.name}</span>
                   {!role.has_groups && (
                     <Badge variant="outline" className="text-xs text-amber-600">
-                      No groups
+                      {t('workflows:designer.roles.noGroups')}
                     </Badge>
                   )}
                 </div>
@@ -872,7 +877,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         )}
         {businessRoles.length > 0 && (
           <SelectGroup>
-            <SelectLabel>Business Roles</SelectLabel>
+            <SelectLabel>{t('workflows:designer.roles.businessRoles')}</SelectLabel>
             {businessRoles.map((role) => (
               <SelectItem key={role.id} value={role.id}>
                 <div className="flex items-center gap-2">
@@ -966,9 +971,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   // Set up breadcrumbs
   useEffect(() => {
     setStaticSegments([
-      { label: 'Workflows', path: '/workflows' },
+      { label: t('common:labels.workflows'), path: '/workflows' },
     ]);
-    setDynamicTitle(isNew ? 'New Workflow' : 'Loading...');
+    setDynamicTitle(isNew ? t('workflows:designer.newWorkflow') : t('common:states.loading'));
     
     return () => {
       setStaticSegments([]);
@@ -1106,8 +1111,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           }
         } catch (error) {
           toast({
-            title: 'Error',
-            description: 'Failed to load workflow',
+            title: t('common:toast.error'),
+            description: t('workflows:designer.messages.loadWorkflowFailed'),
             variant: 'destructive',
           });
         } finally {
@@ -1301,7 +1306,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
     const stepId = `step-${Date.now()}`;
     const newStep: WorkflowStepCreate = {
       step_id: stepId,
-      name: `New ${type} Step`,
+      name: t('workflows:designer.newStepName', { type }),
       step_type: type,
       config: type === 'entity_action' ? { action: 'certify' } : {},
       order: steps.length,
@@ -1366,8 +1371,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
   const handleSave = async () => {
     if (!workflowType) {
       toast({
-        title: 'Validation Error',
-        description: 'Please select a workflow type',
+        title: t('workflows:designer.messages.validationError'),
+        description: t('workflows:designer.messages.selectWorkflowType'),
         variant: 'destructive',
       });
       return;
@@ -1375,8 +1380,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
     if (!name.trim()) {
       toast({
-        title: 'Validation Error',
-        description: 'Workflow name is required',
+        title: t('workflows:designer.messages.validationError'),
+        description: t('workflows:designer.messages.nameRequired'),
         variant: 'destructive',
       });
       return;
@@ -1407,7 +1412,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
 
       if (response.error) {
         toast({
-          title: 'Validation Error',
+          title: t('workflows:designer.messages.validationError'),
           description: response.error,
           variant: 'destructive',
         });
@@ -1426,15 +1431,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         });
         
         toast({
-          title: 'Success',
-          description: `Workflow ${isNew ? 'created' : 'updated'} successfully`,
+          title: t('common:toast.success'),
+          description: isNew
+            ? t('workflows:designer.messages.createdSuccess')
+            : t('workflows:designer.messages.updatedSuccess'),
         });
         navigate('/workflows');
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : t('common:errors.unknownError');
       toast({
-        title: 'Error',
-        description: `Failed to ${isNew ? 'create' : 'update'} workflow: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: t('common:toast.error'),
+        description: isNew
+          ? t('workflows:designer.messages.createFailed', { error: errorMessage })
+          : t('workflows:designer.messages.updateFailed', { error: errorMessage }),
         variant: 'destructive',
       });
     } finally {
@@ -1473,26 +1483,26 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             }}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+            {t('common:actions.back')}
           </Button>
           {workflow?.is_default && (
-            <Badge variant="secondary">Default</Badge>
+            <Badge variant="secondary">{t('workflows:designer.badges.default')}</Badge>
           )}
           {workflowType && (
             <Badge variant="outline" className={workflowType === 'approval' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800'}>
-              {workflowType === 'approval' ? 'Approval' : 'Process'}
+              {workflowType === 'approval' ? t('workflows:designer.badges.approval') : t('workflows:designer.badges.process')}
             </Badge>
           )}
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Workflow name"
+            placeholder={t('workflows:designer.placeholders.workflowName')}
             className="text-lg font-semibold border-none shadow-none px-2 h-8 min-w-[200px]"
             style={{ width: `${Math.max(200, name.length * 12 + 20)}px` }}
           />
           {isDirty && (
             <Badge variant="outline" className="text-amber-600 border-amber-500 dark:text-amber-400 dark:border-amber-400/50">
-              Unsaved changes
+              {t('workflows:designer.badges.unsavedChanges')}
             </Badge>
           )}
         </div>
@@ -1506,19 +1516,19 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
               // workflow — otherwise designers would chase phantom diffs
               // between the saved snapshot and unsaved edits.
               disabled={isDirty || isSaving}
-              title={isDirty ? 'Save changes to preview the latest version' : 'Run the wizard in dry-run mode'}
+              title={isDirty ? t('workflows:designer.preview.saveToPreview') : t('workflows:designer.preview.dryRunTitle')}
             >
               <Eye className="h-4 w-4 mr-2" />
-              Preview wizard
+              {t('workflows:designer.preview.previewWizard')}
             </Button>
           )}
           <div className="flex items-center gap-2 mr-2">
             <Switch checked={isActive} onCheckedChange={setIsActive} />
-            <span className="text-sm">{isActive ? 'Active' : 'Inactive'}</span>
+            <span className="text-sm">{isActive ? t('common:labels.active') : t('common:labels.inactive')}</span>
           </div>
           <Button onClick={handleSave} disabled={isSaving} size="sm" className={isDirty ? 'ring-2 ring-amber-500/50' : ''}>
             {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Save{isDirty ? ' *' : ''}
+            {t('common:actions.save')}{isDirty ? ' *' : ''}
           </Button>
         </div>
       </div>
@@ -1529,22 +1539,22 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         {isNew && workflowType === null && (
           <div className="flex-1 flex items-center justify-center">
             <div className="max-w-lg w-full space-y-4">
-              <h2 className="text-lg font-semibold text-center">What type of workflow?</h2>
-              <p className="text-sm text-muted-foreground text-center">Choose the type based on how this workflow will be used.</p>
+              <h2 className="text-lg font-semibold text-center">{t('workflows:designer.typeChooser.title')}</h2>
+              <p className="text-sm text-muted-foreground text-center">{t('workflows:designer.typeChooser.subtitle')}</p>
               <div className="grid grid-cols-2 gap-4">
                 <button
                   className="border rounded-lg p-6 text-left hover:border-primary hover:bg-accent transition-colors"
                   onClick={() => setWorkflowType('process')}
                 >
-                  <div className="font-medium mb-1">Process Workflow</div>
-                  <div className="text-sm text-muted-foreground">Background automation triggered by events — validate, notify, tag, run scripts.</div>
+                  <div className="font-medium mb-1">{t('workflows:designer.typeChooser.processTitle')}</div>
+                  <div className="text-sm text-muted-foreground">{t('workflows:designer.typeChooser.processDescription')}</div>
                 </button>
                 <button
                   className="border rounded-lg p-6 text-left hover:border-primary hover:bg-accent transition-colors"
                   onClick={() => setWorkflowType('approval')}
                 >
-                  <div className="font-medium mb-1">Approval Workflow</div>
-                  <div className="text-sm text-muted-foreground">Interactive wizard before user actions — collect consent, terms, acknowledgements.</div>
+                  <div className="font-medium mb-1">{t('workflows:designer.typeChooser.approvalTitle')}</div>
+                  <div className="text-sm text-muted-foreground">{t('workflows:designer.typeChooser.approvalDescription')}</div>
                 </button>
               </div>
             </div>
@@ -1582,18 +1592,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
             {/* Step type toolbar */}
             <Panel position="top-left" className="bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-lg p-2 dark:bg-slate-800/95">
               <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground dark:text-slate-300 px-2 mb-1">Add Step</span>
+                <span className="text-xs font-medium text-muted-foreground dark:text-slate-300 px-2 mb-1">{t('workflows:designer.palette.addStep')}</span>
                 {(workflowType === 'approval' ? APPROVAL_PALETTE_STEPS : PROCESS_PALETTE_STEPS).map(({ type, label, icon: Icon, disabled }) => (
                   <Button key={type} variant="ghost" size="sm" className={`justify-start ${disabled ? 'opacity-50' : ''}`} onClick={() => !disabled && addStep(type)} disabled={disabled}>
-                    <Icon className="h-4 w-4 mr-2" /> {label}{disabled ? ' (soon)' : ''}
+                    <Icon className="h-4 w-4 mr-2" /> {t(`workflows:designer.palette.${type}`, label)}{disabled ? t('workflows:designer.palette.soonSuffix') : ''}
                   </Button>
                 ))}
                 <Separator className="my-1" />
                 <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('pass')}>
-                  <CheckCircle className="h-4 w-4 mr-2 text-green-500" /> Pass
+                  <CheckCircle className="h-4 w-4 mr-2 text-green-500" /> {t('common:workflows.stepTypes.pass')}
                 </Button>
                 <Button variant="ghost" size="sm" className="justify-start" onClick={() => addStep('fail')}>
-                  <XCircle className="h-4 w-4 mr-2 text-red-500" /> Fail
+                  <XCircle className="h-4 w-4 mr-2 text-red-500" /> {t('common:workflows.stepTypes.fail')}
                 </Button>
               </div>
             </Panel>
@@ -1621,18 +1631,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
         <AlertDialog open={showDiscardDialog} onOpenChange={setShowDiscardDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+              <AlertDialogTitle>{t('common:confirmations.discardChanges')}</AlertDialogTitle>
               <AlertDialogDescription>
-                You have unsaved changes to this workflow. If you leave now, your changes will be lost.
+                {t('workflows:designer.discard.description')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Stay</AlertDialogCancel>
+              <AlertDialogCancel>{t('workflows:designer.discard.stay')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => navigate('/workflows')}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                Discard Changes
+                {t('workflows:designer.discard.confirm')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1643,7 +1653,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
           <SheetContent className="w-[480px] sm:max-w-[560px] flex flex-col p-0">
             <SheetHeader className="px-6 pt-6 pb-2 shrink-0">
               <SheetTitle>
-                {selectedNodeId === 'trigger' ? 'Trigger Configuration' : 'Step Configuration'}
+                {selectedNodeId === 'trigger' ? t('workflows:designer.triggerConfig.title') : t('workflows:designer.stepConfig.title')}
               </SheetTitle>
             </SheetHeader>
 
@@ -1684,55 +1694,55 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   {(triggerType === 'on_status_change' || triggerType === 'before_status_change' || triggerType === 'on_request_status_change') && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <Label>From Status</Label>
+                        <Label>{t('workflows:designer.triggerConfig.fromStatus')}</Label>
                         <Input
                           value={triggerFromStatus}
                           onChange={(e) => setTriggerFromStatus(e.target.value)}
-                          placeholder="e.g. draft"
+                          placeholder={t('workflows:designer.triggerConfig.fromStatusPlaceholder')}
                         />
                       </div>
                       <div>
-                        <Label>To Status</Label>
+                        <Label>{t('workflows:designer.triggerConfig.toStatus')}</Label>
                         <Input
                           value={triggerToStatus}
                           onChange={(e) => setTriggerToStatus(e.target.value)}
-                          placeholder="e.g. active"
+                          placeholder={t('workflows:designer.triggerConfig.toStatusPlaceholder')}
                         />
                       </div>
                     </div>
                   )}
 
                   <div>
-                    <Label>Description</Label>
+                    <Label>{t('common:labels.description')}</Label>
                     <Textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Workflow description"
+                      placeholder={t('workflows:designer.triggerConfig.descriptionPlaceholder')}
                       rows={3}
                     />
                   </div>
-                  
+
                   <Separator />
-                  
-                  <Button 
+
+                  <Button
                     className="w-full"
                     onClick={() => setSelectedNodeId(null)}
                   >
-                    Done
+                    {t('workflows:designer.actions.done')}
                   </Button>
                 </>
               ) : selectedStep ? (
                 // Step configuration
                 <>
                   <div>
-                    <Label>Step Name</Label>
+                    <Label>{t('workflows:designer.stepConfig.stepName')}</Label>
                     <Input
                       value={selectedStep.name || ''}
                       onChange={(e) => updateStep(selectedStep.step_id, { name: e.target.value })}
                     />
                   </div>
                   <div>
-                    <Label>Step Type</Label>
+                    <Label>{t('workflows:designer.stepConfig.stepType')}</Label>
                     <Input value={selectedStep.step_type} disabled />
                   </div>
                   
@@ -1740,7 +1750,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   {selectedStep.step_type === 'entity_action' && (
                     <>
                       <div>
-                        <Label>Action</Label>
+                        <Label>{t('workflows:designer.entityAction.action')}</Label>
                         <Select
                           value={(selectedStep.config as { action?: string })?.action || 'certify'}
                           onValueChange={(v) =>
@@ -1753,17 +1763,17 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="certify">Certify</SelectItem>
-                            <SelectItem value="decertify">Decertify</SelectItem>
-                            <SelectItem value="publish">Publish</SelectItem>
-                            <SelectItem value="unpublish">Unpublish</SelectItem>
+                            <SelectItem value="certify">{t('workflows:designer.entityAction.certify')}</SelectItem>
+                            <SelectItem value="decertify">{t('workflows:designer.entityAction.decertify')}</SelectItem>
+                            <SelectItem value="publish">{t('workflows:designer.entityAction.publish')}</SelectItem>
+                            <SelectItem value="unpublish">{t('workflows:designer.entityAction.unpublish')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       {((selectedStep.config as { action?: string })?.action || 'certify') === 'certify' && (
                         <>
                           <div>
-                            <Label>Certification level source</Label>
+                            <Label>{t('workflows:designer.entityAction.certLevelSource')}</Label>
                             <Select
                               value={
                                 (selectedStep.config as { level_source?: string })?.level_source ||
@@ -1779,15 +1789,15 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="from_request">From request</SelectItem>
-                                <SelectItem value="fixed">Fixed level</SelectItem>
-                                <SelectItem value="from_approval">From approval</SelectItem>
+                                <SelectItem value="from_request">{t('workflows:designer.entityAction.levelFromRequest')}</SelectItem>
+                                <SelectItem value="fixed">{t('workflows:designer.entityAction.levelFixed')}</SelectItem>
+                                <SelectItem value="from_approval">{t('workflows:designer.entityAction.levelFromApproval')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           {(selectedStep.config as { level_source?: string })?.level_source === 'fixed' && (
                             <div>
-                              <Label>Fixed level</Label>
+                              <Label>{t('workflows:designer.entityAction.fixedLevel')}</Label>
                               <Input
                                 type="number"
                                 min={0}
@@ -1805,7 +1815,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                     },
                                   });
                                 }}
-                                placeholder="e.g. 1"
+                                placeholder={t('workflows:designer.entityAction.fixedLevelPlaceholder')}
                               />
                             </div>
                           )}
@@ -1814,7 +1824,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       {((selectedStep.config as { action?: string })?.action || '') === 'publish' && (
                         <>
                           <div>
-                            <Label>Publication scope source</Label>
+                            <Label>{t('workflows:designer.entityAction.scopeSource')}</Label>
                             <Select
                               value={
                                 (selectedStep.config as { scope_source?: string })?.scope_source ||
@@ -1830,16 +1840,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="from_request">From request</SelectItem>
-                                <SelectItem value="fixed">Fixed scope</SelectItem>
-                                <SelectItem value="from_approval">From approval</SelectItem>
+                                <SelectItem value="from_request">{t('workflows:designer.entityAction.scopeFromRequest')}</SelectItem>
+                                <SelectItem value="fixed">{t('workflows:designer.entityAction.scopeFixed')}</SelectItem>
+                                <SelectItem value="from_approval">{t('workflows:designer.entityAction.scopeFromApproval')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           {(selectedStep.config as { scope_source?: string })?.scope_source ===
                             'fixed' && (
                             <div>
-                              <Label>Fixed scope</Label>
+                              <Label>{t('workflows:designer.entityAction.fixedScope')}</Label>
                               <Select
                                 value={
                                   (selectedStep.config as { fixed_scope?: string })?.fixed_scope ||
@@ -1855,9 +1865,9 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="domain">Domain</SelectItem>
-                                  <SelectItem value="organization">Organization</SelectItem>
-                                  <SelectItem value="external">External</SelectItem>
+                                  <SelectItem value="domain">{t('workflows:designer.entityAction.scopeDomain')}</SelectItem>
+                                  <SelectItem value="organization">{t('workflows:designer.entityAction.scopeOrganization')}</SelectItem>
+                                  <SelectItem value="external">{t('workflows:designer.entityAction.scopeExternal')}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1865,8 +1875,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         </>
                       )}
                       <p className="text-xs text-muted-foreground">
-                        Runs a lifecycle action on the entity that triggered this workflow (after
-                        approval when used with request triggers).
+                        {t('workflows:designer.entityAction.help')}
                       </p>
                     </>
                   )}
@@ -1874,23 +1883,23 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   {selectedStep.step_type === 'user_action' && (
                     <>
                       <div>
-                        <Label>Title</Label>
+                        <Label>{t('workflows:designer.userAction.title')}</Label>
                         <Input
                           value={(selectedStep.config as { title?: string })?.title || ''}
                           onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, title: e.target.value },
                           })}
-                          placeholder="e.g. Enter a reason"
+                          placeholder={t('workflows:designer.userAction.titlePlaceholder')}
                         />
                       </div>
                       <div>
-                        <Label>Description</Label>
+                        <Label>{t('common:labels.description')}</Label>
                         <Textarea
                           value={(selectedStep.config as { description?: string })?.description || ''}
                           onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, description: e.target.value },
                           })}
-                          placeholder="Optional description for the wizard step"
+                          placeholder={t('workflows:designer.userAction.descriptionPlaceholder')}
                           rows={2}
                         />
                       </div>
@@ -1903,14 +1912,14 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           })}
                         />
                         <Label htmlFor="user-action-requires-input" className="cursor-pointer">
-                          Requires input
+                          {t('workflows:designer.userAction.requiresInput')}
                         </Label>
                       </div>
                       <p className="text-xs text-muted-foreground -mt-2">
-                        When on, user must enter something in the primary field before continuing.
+                        {t('workflows:designer.userAction.requiresInputHelp')}
                       </p>
                       <div>
-                        <Label>Minimum input length</Label>
+                        <Label>{t('workflows:designer.userAction.minInputLength')}</Label>
                         <Input
                           type="number"
                           min={0}
@@ -1921,10 +1930,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                               config: { ...selectedStep.config, minimum_input_length: v != null && !Number.isNaN(v) ? v : undefined },
                             });
                           }}
-                          placeholder="e.g. 10"
+                          placeholder={t('workflows:designer.userAction.minInputPlaceholder')}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Minimum characters for the primary field (leave empty for no minimum).
+                          {t('workflows:designer.userAction.minInputHelp')}
                         </p>
                       </div>
                       <RequiredFieldsEditor
@@ -1957,16 +1966,15 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         idPrefix={`rfe-${selectedStep.step_id}`}
                       />
                       <p className="text-xs text-muted-foreground">
-                        User Action steps collect input in approval workflows (e.g. reason, acceptances).
-                        Add fields above and tick &quot;Primary&quot; on the one the user&apos;s main input lands in.
+                        {t('workflows:designer.userAction.fieldsHelp')}
                       </p>
                     </>
                   )}
 
                   {selectedStep.step_type === 'policy_check' && (
                     <div>
-                      <Label>Compliance Policy</Label>
-                      <Select 
+                      <Label>{t('workflows:designer.policyCheck.label')}</Label>
+                      <Select
                         value={(selectedStep.config as { policy_id?: string })?.policy_id || ''}
                         onValueChange={(v) => {
                           const policy = compliancePolicies.find(p => p.id === v);
@@ -1980,12 +1988,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         }}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a compliance policy" />
+                          <SelectValue placeholder={t('workflows:designer.policyCheck.placeholder')} />
                         </SelectTrigger>
                         <SelectContent>
                           {compliancePolicies.length === 0 ? (
                             <div className="px-2 py-3 text-sm text-muted-foreground">
-                              No active policies found
+                              {t('workflows:designer.policyCheck.noPolicies')}
                             </div>
                           ) : (
                             compliancePolicies.map((policy) => (
@@ -1997,20 +2005,20 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground mt-2">
-                        This step will evaluate the selected compliance policy's DSL rule at runtime.
+                        {t('workflows:designer.policyCheck.help')}
                       </p>
                     </div>
                   )}
                   
                   {selectedStep.step_type === 'validation' && (
                     <div>
-                      <Label>DSL Rule</Label>
+                      <Label>{t('workflows:designer.validation.dslRule')}</Label>
                       <Textarea
                         value={(selectedStep.config as { rule?: string })?.rule || ''}
-                        onChange={(e) => updateStep(selectedStep.step_id, { 
+                        onChange={(e) => updateStep(selectedStep.step_id, {
                           config: { ...selectedStep.config, rule: e.target.value }
                         })}
-                        placeholder="MATCH (obj:Object)&#10;ASSERT obj.name MATCHES '^[a-z_]+$'"
+                        placeholder={t('workflows:designer.validation.dslPlaceholder')}
                         rows={6}
                         className="font-mono text-sm"
                       />
@@ -2059,10 +2067,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         return (
                           <>
                             <div>
-                              <Label>Recipients (Role)</Label>
+                              <Label>{t('workflows:designer.notification.recipientsRole')}</Label>
                               <Select value={split.roleToken} onValueChange={setRole}>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select recipients" />
+                                  <SelectValue placeholder={t('workflows:designer.notification.recipientsPlaceholder')} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {renderGroupedRoles(availableRoles, { requester: true, owner: true })}
@@ -2071,23 +2079,23 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             </div>
                             <div className="flex items-center justify-between rounded-md border p-3">
                               <div className="flex flex-col">
-                                <Label className="text-sm">Custom principals</Label>
+                                <Label className="text-sm">{t('workflows:designer.customPrincipals.label')}</Label>
                                 <p className="text-xs text-muted-foreground">
-                                  Add specific users or groups alongside the role.
+                                  {t('workflows:designer.customPrincipals.help')}
                                 </p>
                               </div>
                               <Switch checked={customOn} onCheckedChange={toggleCustom} />
                             </div>
                             {customOn && (
                               <div>
-                                <Label>Users &amp; groups</Label>
+                                <Label>{t('workflows:designer.customPrincipals.usersGroups')}</Label>
                                 <PrincipalPicker
                                   multiple
                                   accepts={['user', 'group']}
                                   value={split.principals}
                                   onChange={setPrincipals}
-                                  placeholder="Add users or groups…"
-                                  aria-label="Additional recipients"
+                                  placeholder={t('workflows:designer.customPrincipals.addPlaceholder')}
+                                  aria-label={t('workflows:designer.notification.additionalRecipientsAria')}
                                 />
                               </div>
                             )}
@@ -2095,44 +2103,44 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         );
                       })()}
                       <div>
-                        <Label>Template</Label>
-                        <Select 
+                        <Label>{t('workflows:designer.notification.template')}</Label>
+                        <Select
                           value={(selectedStep.config as { template?: string })?.template || ''}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, { 
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, template: v }
                           })}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select template" />
+                            <SelectValue placeholder={t('workflows:designer.notification.selectTemplate')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="request_submitted">Request Submitted</SelectItem>
-                            <SelectItem value="request_approved">Request Approved</SelectItem>
-                            <SelectItem value="request_rejected">Request Denied</SelectItem>
-                            <SelectItem value="validation_failed">Validation Failed</SelectItem>
-                            <SelectItem value="validation_passed">Validation Passed</SelectItem>
-                            <SelectItem value="product_approved">Product Approved</SelectItem>
-                            <SelectItem value="product_rejected">Product Rejected</SelectItem>
-                            <SelectItem value="pii_detected">PII Detected</SelectItem>
+                            <SelectItem value="request_submitted">{t('workflows:designer.notification.templates.requestSubmitted')}</SelectItem>
+                            <SelectItem value="request_approved">{t('workflows:designer.notification.templates.requestApproved')}</SelectItem>
+                            <SelectItem value="request_rejected">{t('workflows:designer.notification.templates.requestDenied')}</SelectItem>
+                            <SelectItem value="validation_failed">{t('workflows:designer.notification.templates.validationFailed')}</SelectItem>
+                            <SelectItem value="validation_passed">{t('workflows:designer.notification.templates.validationPassed')}</SelectItem>
+                            <SelectItem value="product_approved">{t('workflows:designer.notification.templates.productApproved')}</SelectItem>
+                            <SelectItem value="product_rejected">{t('workflows:designer.notification.templates.productRejected')}</SelectItem>
+                            <SelectItem value="pii_detected">{t('workflows:designer.notification.templates.piiDetected')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label>Custom Message</Label>
+                        <Label>{t('workflows:designer.notification.customMessage')}</Label>
                         <Textarea
                           value={(selectedStep.config as { custom_message?: string })?.custom_message || ''}
                           onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, custom_message: e.target.value }
                           })}
-                          placeholder="Override template message. Supports ${entity_name}, ${entity_type}, ${user_email}, ${entity.field}..."
+                          placeholder={t('workflows:designer.notification.customMessagePlaceholder')}
                           rows={3}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Variables: <code className="text-xs">{'${entity_name}'}</code>, <code className="text-xs">{'${entity_type}'}</code>, <code className="text-xs">{'${user_email}'}</code>, <code className="text-xs">{'${entity.field}'}</code>, <code className="text-xs">{'${step_results.step_id.field}'}</code>
+                          {t('workflows:designer.notification.variablesLabel')} <code className="text-xs">{'${entity_name}'}</code>, <code className="text-xs">{'${entity_type}'}</code>, <code className="text-xs">{'${user_email}'}</code>, <code className="text-xs">{'${entity.field}'}</code>, <code className="text-xs">{'${step_results.step_id.field}'}</code>
                         </p>
                       </div>
                       <div>
-                        <Label className="mb-2 block">Channels</Label>
+                        <Label className="mb-2 block">{t('workflows:designer.notification.channels')}</Label>
                         <div className="flex flex-col gap-2">
                           {(['in_app', 'webhook'] as const).map((ch) => (
                             <div key={ch} className="flex items-center gap-2">
@@ -2153,7 +2161,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             </div>
                           ))}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">Defaults to global setting if none selected.</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('workflows:designer.notification.channelsHelp')}</p>
                       </div>
                     </>
                   )}
@@ -2161,30 +2169,30 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   {selectedStep.step_type === 'assign_tag' && (
                     <>
                       <div>
-                        <Label>Tag Key</Label>
+                        <Label>{t('workflows:designer.assignTag.tagKey')}</Label>
                         <Input
                           value={(selectedStep.config as { key?: string })?.key || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
+                          onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, key: e.target.value }
                           })}
-                          placeholder="e.g., owner"
+                          placeholder={t('workflows:designer.assignTag.tagKeyPlaceholder')}
                         />
                       </div>
                       <div>
-                        <Label>Value Source</Label>
-                        <Select 
+                        <Label>{t('workflows:designer.assignTag.valueSource')}</Label>
+                        <Select
                           value={(selectedStep.config as { value_source?: string })?.value_source || ''}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, { 
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, value_source: v }
                           })}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select source" />
+                            <SelectValue placeholder={t('workflows:designer.assignTag.selectSource')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="current_user">Current User</SelectItem>
-                            <SelectItem value="project_name">Project Name</SelectItem>
-                            <SelectItem value="timestamp">Timestamp</SelectItem>
+                            <SelectItem value="current_user">{t('workflows:designer.assignTag.sourceCurrentUser')}</SelectItem>
+                            <SelectItem value="project_name">{t('workflows:designer.assignTag.sourceProjectName')}</SelectItem>
+                            <SelectItem value="timestamp">{t('workflows:designer.assignTag.sourceTimestamp')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -2229,10 +2237,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         return (
                           <>
                             <div>
-                              <Label>Approvers (Role)</Label>
+                              <Label>{t('workflows:designer.approval.approversRole')}</Label>
                               <Select value={split.roleToken} onValueChange={setRole}>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select role" />
+                                  <SelectValue placeholder={t('workflows:designer.approval.selectRole')} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {renderGroupedRoles(approverRoles, { requester: true })}
@@ -2241,23 +2249,23 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             </div>
                             <div className="flex items-center justify-between rounded-md border p-3">
                               <div className="flex flex-col">
-                                <Label className="text-sm">Custom principals</Label>
+                                <Label className="text-sm">{t('workflows:designer.customPrincipals.label')}</Label>
                                 <p className="text-xs text-muted-foreground">
-                                  Add specific users or groups alongside the role.
+                                  {t('workflows:designer.customPrincipals.help')}
                                 </p>
                               </div>
                               <Switch checked={customOn} onCheckedChange={toggleCustom} />
                             </div>
                             {customOn && (
                               <div>
-                                <Label>Users &amp; groups</Label>
+                                <Label>{t('workflows:designer.customPrincipals.usersGroups')}</Label>
                                 <PrincipalPicker
                                   multiple
                                   accepts={['user', 'group']}
                                   value={split.principals}
                                   onChange={setPrincipals}
-                                  placeholder="Add users or groups…"
-                                  aria-label="Additional approvers"
+                                  placeholder={t('workflows:designer.customPrincipals.addPlaceholder')}
+                                  aria-label={t('workflows:designer.approval.additionalApproversAria')}
                                 />
                               </div>
                             )}
@@ -2265,7 +2273,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                         );
                       })()}
                       <div>
-                        <Label>Timeout (days)</Label>
+                        <Label>{t('workflows:designer.approval.timeoutDays')}</Label>
                         <Input
                           type="number"
                           value={(selectedStep.config as { timeout_days?: number })?.timeout_days || 7}
@@ -2280,51 +2288,51 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   {selectedStep.step_type === 'create_asset_review' && (
                     <>
                       <div>
-                        <Label>Reviewer Role</Label>
-                        <Select 
+                        <Label>{t('workflows:designer.assetReview.reviewerRole')}</Label>
+                        <Select
                           value={(selectedStep.config as { reviewer_role?: string })?.reviewer_role || ''}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, { 
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, reviewer_role: v }
                           })}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select reviewer role" />
+                            <SelectValue placeholder={t('workflows:designer.assetReview.selectReviewerRole')} />
                           </SelectTrigger>
                           <SelectContent>
                             {renderGroupedRoles(availableRoles)}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground mt-1">
-                          The role whose members can review the asset.
+                          {t('workflows:designer.assetReview.reviewerRoleHelp')}
                         </p>
                       </div>
                       <div>
-                        <Label>Review Type</Label>
-                        <Select 
+                        <Label>{t('workflows:designer.assetReview.reviewType')}</Label>
+                        <Select
                           value={(selectedStep.config as { review_type?: string })?.review_type || 'standard'}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, { 
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, review_type: v }
                           })}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select review type" />
+                            <SelectValue placeholder={t('workflows:designer.assetReview.selectReviewType')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="standard">Standard Review</SelectItem>
-                            <SelectItem value="expedited">Expedited Review</SelectItem>
-                            <SelectItem value="compliance">Compliance Review</SelectItem>
-                            <SelectItem value="security">Security Review</SelectItem>
+                            <SelectItem value="standard">{t('workflows:designer.assetReview.typeStandard')}</SelectItem>
+                            <SelectItem value="expedited">{t('workflows:designer.assetReview.typeExpedited')}</SelectItem>
+                            <SelectItem value="compliance">{t('workflows:designer.assetReview.typeCompliance')}</SelectItem>
+                            <SelectItem value="security">{t('workflows:designer.assetReview.typeSecurity')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label>Notes</Label>
+                        <Label>{t('common:labels.notes')}</Label>
                         <Textarea
                           value={(selectedStep.config as { notes?: string })?.notes || ''}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
+                          onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, notes: e.target.value }
                           })}
-                          placeholder="Additional notes for the reviewer..."
+                          placeholder={t('workflows:designer.assetReview.notesPlaceholder')}
                           rows={2}
                         />
                       </div>
@@ -2334,8 +2342,8 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                   {selectedStep.step_type === 'webhook' && (
                     <>
                       <div>
-                        <Label>Mode</Label>
-                        <Select 
+                        <Label>{t('workflows:designer.webhook.mode')}</Label>
+                        <Select
                           value={(selectedStep.config as { connection_name?: string })?.connection_name !== undefined ? 'connection' : 'inline'}
                           onValueChange={(v) => {
                             if (v === 'connection') {
@@ -2358,35 +2366,35 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select mode" />
+                            <SelectValue placeholder={t('workflows:designer.webhook.selectMode')} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="connection">UC Connection (Recommended)</SelectItem>
-                            <SelectItem value="inline">Inline URL</SelectItem>
+                            <SelectItem value="connection">{t('workflows:designer.webhook.modeConnection')}</SelectItem>
+                            <SelectItem value="inline">{t('workflows:designer.webhook.modeInline')}</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground mt-1">
-                          UC Connections store credentials securely in Unity Catalog.
+                          {t('workflows:designer.webhook.modeHelp')}
                         </p>
                       </div>
                       
                       {(selectedStep.config as { connection_name?: string })?.connection_name !== undefined && (
                         <>
                           <div>
-                            <Label>HTTP Connection</Label>
-                            <Select 
+                            <Label>{t('workflows:designer.webhook.httpConnection')}</Label>
+                            <Select
                               value={(selectedStep.config as { connection_name?: string })?.connection_name || ''}
-                              onValueChange={(v) => updateStep(selectedStep.step_id, { 
+                              onValueChange={(v) => updateStep(selectedStep.step_id, {
                                 config: { ...selectedStep.config, connection_name: v }
                               })}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select a UC HTTP Connection" />
+                                <SelectValue placeholder={t('workflows:designer.webhook.selectConnection')} />
                               </SelectTrigger>
                               <SelectContent>
                                 {httpConnections.length === 0 ? (
                                   <div className="px-2 py-3 text-sm text-muted-foreground">
-                                    No HTTP connections found
+                                    {t('workflows:designer.webhook.noConnections')}
                                   </div>
                                 ) : (
                                   httpConnections.map((conn) => (
@@ -2399,16 +2407,16 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                             </Select>
                           </div>
                           <div>
-                            <Label>Path</Label>
+                            <Label>{t('common:labels.path')}</Label>
                             <Input
                               value={(selectedStep.config as { path?: string })?.path || ''}
-                              onChange={(e) => updateStep(selectedStep.step_id, { 
+                              onChange={(e) => updateStep(selectedStep.step_id, {
                                 config: { ...selectedStep.config, path: e.target.value }
                               })}
-                              placeholder="/api/now/table/incident"
+                              placeholder={t('workflows:designer.webhook.pathPlaceholder')}
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                              Path appended to the connection's base URL.
+                              {t('workflows:designer.webhook.pathHelp')}
                             </p>
                           </div>
                         </>
@@ -2416,30 +2424,30 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       
                       {(selectedStep.config as { url?: string })?.url !== undefined && (
                         <div>
-                          <Label>URL</Label>
+                          <Label>{t('workflows:designer.webhook.url')}</Label>
                           <Input
                             value={(selectedStep.config as { url?: string })?.url || ''}
-                            onChange={(e) => updateStep(selectedStep.step_id, { 
+                            onChange={(e) => updateStep(selectedStep.step_id, {
                               config: { ...selectedStep.config, url: e.target.value }
                             })}
-                            placeholder="https://api.example.com/webhook"
+                            placeholder={t('workflows:designer.webhook.urlPlaceholder')}
                           />
                           <p className="text-xs text-amber-600 mt-1">
-                            Warning: Inline credentials are stored in workflow config.
+                            {t('workflows:designer.webhook.inlineWarning')}
                           </p>
                         </div>
                       )}
                       
                       <div>
-                        <Label>HTTP Method</Label>
-                        <Select 
+                        <Label>{t('workflows:designer.webhook.httpMethod')}</Label>
+                        <Select
                           value={(selectedStep.config as { method?: string })?.method || 'POST'}
-                          onValueChange={(v) => updateStep(selectedStep.step_id, { 
+                          onValueChange={(v) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, method: v }
                           })}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select method" />
+                            <SelectValue placeholder={t('workflows:designer.webhook.selectMethod')} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="GET">GET</SelectItem>
@@ -2452,7 +2460,7 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       </div>
                       
                       <div>
-                        <Label>Body Template</Label>
+                        <Label>{t('workflows:designer.webhook.bodyTemplate')}</Label>
                         {/* Two-column layout: textarea on the left, the
                             variable inspector on the right. The inspector
                             stacks below the textarea on narrow screens via
@@ -2464,12 +2472,12 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                               onChange={(e) => updateStep(selectedStep.step_id, {
                                 config: { ...selectedStep.config, body_template: e.target.value }
                               })}
-                              placeholder={'{\n  "description": "Alert for ${entity_name}",\n  "entity_type": "${entity_type}"\n}'}
+                              placeholder={t('workflows:designer.webhook.bodyPlaceholder')}
                               rows={8}
                               className="font-mono text-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                              Use {'${variable}'} for substitution. See the panel for all variables in scope.
+                              {t('workflows:designer.webhook.bodyHelp')}
                             </p>
                           </div>
                           <TemplateVarsInspector
@@ -2484,10 +2492,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           the downstream service needs context-derived headers, query string params,
                           or path segments computed from ${entity.*} / ${trigger.*}. */}
                       <KeyValueEditor
-                        label="Additional Headers"
-                        helpText="Merged into the request headers. Override `headers` on key collision. Values support ${variable} substitution."
-                        keyPlaceholder="X-Trace-Id"
-                        valuePlaceholder="${execution_id}"
+                        label={t('workflows:designer.webhook.additionalHeaders')}
+                        helpText={t('workflows:designer.webhook.additionalHeadersHelp')}
+                        keyPlaceholder={t('workflows:designer.webhook.headerKeyPlaceholder')}
+                        valuePlaceholder={t('workflows:designer.webhook.headerValuePlaceholder')}
                         value={(selectedStep.config as { additional_headers?: Record<string, string> })?.additional_headers || {}}
                         onChange={(next) => updateStep(selectedStep.step_id, {
                           config: { ...selectedStep.config, additional_headers: next },
@@ -2495,10 +2503,10 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       />
 
                       <KeyValueEditor
-                        label="Additional Query Parameters"
-                        helpText="Appended to the request URL/path as query string. Values support ${variable} substitution and are URL-encoded."
-                        keyPlaceholder="caller"
-                        valuePlaceholder="ontos"
+                        label={t('workflows:designer.webhook.additionalQueryParams')}
+                        helpText={t('workflows:designer.webhook.additionalQueryParamsHelp')}
+                        keyPlaceholder={t('workflows:designer.webhook.queryKeyPlaceholder')}
+                        valuePlaceholder={t('workflows:designer.webhook.queryValuePlaceholder')}
                         value={(selectedStep.config as { additional_query_params?: Record<string, string> })?.additional_query_params || {}}
                         onChange={(next) => updateStep(selectedStep.step_id, {
                           config: { ...selectedStep.config, additional_query_params: next },
@@ -2506,21 +2514,21 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       />
 
                       <div>
-                        <Label>Path Suffix</Label>
+                        <Label>{t('workflows:designer.webhook.pathSuffix')}</Label>
                         <Input
                           value={(selectedStep.config as { path_suffix?: string })?.path_suffix || ''}
                           onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, path_suffix: e.target.value },
                           })}
-                          placeholder="/${entity_id}"
+                          placeholder={t('workflows:designer.webhook.pathSuffixPlaceholder')}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Appended to Path before the query string. Supports {'${variable}'} substitution.
+                          {t('workflows:designer.webhook.pathSuffixHelp')}
                         </p>
                       </div>
 
                       <div>
-                        <Label>Timeout (seconds)</Label>
+                        <Label>{t('workflows:designer.webhook.timeoutSeconds')}</Label>
                         <Input
                           type="number"
                           value={(selectedStep.config as { timeout_seconds?: number })?.timeout_seconds || 30}
@@ -2531,18 +2539,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                       </div>
                       
                       <div>
-                        <Label>Retry Count</Label>
+                        <Label>{t('workflows:designer.webhook.retryCount')}</Label>
                         <Input
                           type="number"
                           min={0}
                           max={5}
                           value={(selectedStep.config as { retry_count?: number })?.retry_count || 0}
-                          onChange={(e) => updateStep(selectedStep.step_id, { 
+                          onChange={(e) => updateStep(selectedStep.step_id, {
                             config: { ...selectedStep.config, retry_count: parseInt(e.target.value) || 0 }
                           })}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Number of retries on failure (0-5).
+                          {t('workflows:designer.webhook.retryHelp')}
                         </p>
                       </div>
                     </>
@@ -2578,18 +2586,18 @@ export default function WorkflowDesigner({ workflowId }: WorkflowDesignerProps) 
                           disabled={userActionInvalid}
                           title={
                             userActionInvalid
-                              ? 'Pick a primary field above before closing.'
+                              ? t('workflows:designer.userAction.primaryRequiredTooltip')
                               : undefined
                           }
                           data-testid="step-config-done"
                         >
-                          Done
+                          {t('workflows:designer.actions.done')}
                         </Button>
                         <Button
                           variant="destructive"
                           size="icon"
                           onClick={() => deleteStep(selectedStep.step_id)}
-                          title="Delete Step"
+                          title={t('workflows:designer.stepConfig.deleteStep')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

@@ -14,6 +14,8 @@ export interface BrowseResponse {
   nodes: BrowseNode[];
   error?: string | null;
   error_detail?: string | null;
+  truncated?: boolean;
+  truncated_at?: number | null;
 }
 
 export type ImportDepth = 'selected_only' | 'one_level' | 'full_recursive';

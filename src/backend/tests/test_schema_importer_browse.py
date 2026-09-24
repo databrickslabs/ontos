@@ -209,6 +209,188 @@ def _table_metadata(path: str, columns: List[ColumnInfo]) -> AssetMetadata:
     )
 
 
+class TestSchemaImporterChildLimit:
+    """The per-path child fetch limit is configurable via General Settings and
+    the browse response signals when the returned list was capped."""
+
+    @staticmethod
+    def _db_with_limit(value):
+        """A db whose app_settings lookup returns `value` for the limit key.
+
+        `_child_limit` reads via `app_settings_repo.get_by_key(db, key)`, which
+        issues a query on the session; patching the repo is cleaner than mocking
+        the query chain, so tests below patch it directly.
+        """
+        return MagicMock()
+
+    def test_default_limit_applied_when_unset(self, monkeypatch):
+        """With no persisted setting, the connector is called with the config
+        default (500) and behavior is unchanged."""
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: None)
+
+        captured = {}
+        path = "cat.sch"
+
+        class _CapturingConnector(_StubConnector):
+            def list_assets(self, options=None):
+                if options and options.path == path:
+                    captured["limit"] = options.limit
+                return []
+
+        stub = _CapturingConnector(assets_by_path={path: []})
+        manager = _make_manager_with_stub_connector(stub)
+
+        manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        assert captured["limit"] == 500
+
+    def test_persisted_limit_overrides_default(self, monkeypatch):
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: "2500")
+
+        captured = {}
+        path = "cat.sch"
+
+        class _CapturingConnector(_StubConnector):
+            def list_assets(self, options=None):
+                if options and options.path == path:
+                    captured["limit"] = options.limit
+                return []
+
+        stub = _CapturingConnector(assets_by_path={path: []})
+        manager = _make_manager_with_stub_connector(stub)
+
+        manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        assert captured["limit"] == 2500
+
+    def test_out_of_range_persisted_limit_is_clamped(self, monkeypatch):
+        """A stale/invalid persisted value must never violate the connector
+        contract (ListAssetsOptions: 1..10000)."""
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: "999999")
+
+        captured = {}
+        path = "cat.sch"
+
+        class _CapturingConnector(_StubConnector):
+            def list_assets(self, options=None):
+                if options and options.path == path:
+                    captured["limit"] = options.limit
+                return []
+
+        stub = _CapturingConnector(assets_by_path={path: []})
+        manager = _make_manager_with_stub_connector(stub)
+
+        manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        assert captured["limit"] == 10000
+
+    def test_invalid_persisted_limit_falls_back_to_default(self, monkeypatch):
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: "not-a-number")
+
+        captured = {}
+        path = "cat.sch"
+
+        class _CapturingConnector(_StubConnector):
+            def list_assets(self, options=None):
+                if options and options.path == path:
+                    captured["limit"] = options.limit
+                return []
+
+        stub = _CapturingConnector(assets_by_path={path: []})
+        manager = _make_manager_with_stub_connector(stub)
+
+        manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        assert captured["limit"] == 500
+
+    def test_truncated_flag_set_when_list_fills_limit(self, monkeypatch):
+        """When the connector returns as many assets as the limit, the browse
+        response flags truncation so the UI can tell the user more exist."""
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: "3")
+
+        path = "cat.sch"
+        assets = [
+            AssetInfo(
+                identifier=f"{path}.t{i}",
+                name=f"t{i}",
+                asset_type=UnifiedAssetType.UC_TABLE,
+                connector_type="stub",
+            )
+            for i in range(3)
+        ]
+        stub = _StubConnector(assets_by_path={path: assets})
+        manager = _make_manager_with_stub_connector(stub)
+
+        response = manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        assert response.truncated is True
+        assert response.truncated_at == 3
+
+    def test_not_truncated_at_container_level_even_when_list_assets_fills_limit(self, monkeypatch):
+        """At a container level (catalogs/schemas) list_containers returns the
+        complete, unbounded set; the redundant list_assets call re-lists the same
+        containers and may hit the cap, but that must NOT be reported as
+        truncation (regression: root with >limit catalogs showed a false
+        'showing first N' notice even though all N were displayed)."""
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: "3")
+
+        # Container level: list_containers returns 4 catalogs (the real, complete
+        # set); list_assets returns the same 4 (>= limit 3) and is deduped away.
+        containers = [
+            {"name": f"cat{i}", "type": "catalog", "path": f"cat{i}", "has_children": True}
+            for i in range(4)
+        ]
+        assets = [
+            AssetInfo(identifier=f"cat{i}", name=f"cat{i}",
+                      asset_type=UnifiedAssetType.UC_CATALOG, connector_type="stub")
+            for i in range(4)
+        ]
+        stub = _StubConnector(containers_by_path={"": containers}, assets_by_path={"": assets})
+        manager = _make_manager_with_stub_connector(stub)
+
+        response = manager.browse(db=MagicMock(), connection_id=uuid4(), path=None)
+
+        # All 4 containers shown; not flagged as truncated.
+        assert len([n for n in response.nodes if n.node_type != "column"]) == 4
+        assert response.truncated is False
+        assert response.truncated_at is None
+
+    def test_not_truncated_when_under_limit(self, monkeypatch):
+        import src.controller.schema_import_manager as sim
+
+        monkeypatch.setattr(sim.app_settings_repo, "get_by_key", lambda db, key: "500")
+
+        path = "cat.sch"
+        assets = [
+            AssetInfo(
+                identifier=f"{path}.t{i}",
+                name=f"t{i}",
+                asset_type=UnifiedAssetType.UC_TABLE,
+                connector_type="stub",
+            )
+            for i in range(2)
+        ]
+        stub = _StubConnector(assets_by_path={path: assets})
+        manager = _make_manager_with_stub_connector(stub)
+
+        response = manager.browse(db=MagicMock(), connection_id=uuid4(), path=path)
+
+        assert response.truncated is False
+        assert response.truncated_at is None
+
+
 class TestSchemaImporterBrowseSorting:
     """Browse nodes must be alphabetically ordered within each group so long
     lists are scannable regardless of connector/API return order."""

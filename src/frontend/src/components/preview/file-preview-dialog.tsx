@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 
@@ -22,7 +23,8 @@ const isPdf = (ct?: string | null) => ct === 'application/pdf';
 const isText = (ct?: string | null) => !!ct && (ct.startsWith('text/') || ct.includes('json') || ct.includes('csv'));
 
 export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOpenChange, source, fetchUrl }) => {
-  const title = source?.title || source?.originalFilename || 'Preview';
+  const { t } = useTranslation(['data-catalog', 'common']);
+  const title = source?.title || source?.originalFilename || t('data-catalog:preview.title');
   const ct = source?.contentType;
   const [url, setUrl] = React.useState<string | undefined>(source?.downloadUrl);
   const [fetching, setFetching] = React.useState<boolean>(false);
@@ -48,11 +50,11 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
               setUrl(u);
               setErrorMsg(null);
             } else {
-              setErrorMsg('Preview not available for this file.');
+              setErrorMsg(t('data-catalog:preview.notAvailable'));
             }
           }
         } catch {
-          if (!cancelled) setErrorMsg('Failed to fetch preview content.');
+          if (!cancelled) setErrorMsg(t('data-catalog:preview.fetchFailed'));
         } finally {
           if (!cancelled) setFetching(false);
         }
@@ -75,7 +77,7 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
                 alt={title}
                 className="max-h-[70vh] max-w-full rounded"
                 onLoad={() => { setLoading(false); setErrorMsg(null); }}
-                onError={() => { setLoading(false); setErrorMsg('Failed to load image'); }}
+                onError={() => { setLoading(false); setErrorMsg(t('data-catalog:preview.loadImageFailed')); }}
               />
             ) : isPdf(ct) ? (
               <object
@@ -84,22 +86,22 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
                 className="w-full h-[70vh] rounded"
                 onLoad={() => { setLoading(false); setErrorMsg(null); }}
               >
-                <p className="text-sm text-muted-foreground">PDF preview not supported. <a className="underline" href={url} target="_blank" rel="noreferrer">Open</a></p>
+                <p className="text-sm text-muted-foreground">{t('data-catalog:preview.pdfNotSupported')} <a className="underline" href={url} target="_blank" rel="noreferrer">{t('common:actions.open')}</a></p>
               </object>
             ) : isText(ct) ? (
               <iframe
                 src={url}
-                title="text-preview"
+                title={t('data-catalog:preview.textPreviewTitle')}
                 className="w-full h-[70vh] rounded bg-background"
                 onLoad={() => { setLoading(false); setErrorMsg(null); }}
               />
             ) : (
-              <div className="text-sm text-muted-foreground">No inline preview for this file type. {url && (<a className="underline ml-1" href={url} target="_blank" rel="noreferrer">Download</a>)}
+              <div className="text-sm text-muted-foreground">{t('data-catalog:preview.noInlinePreview')} {url && (<a className="underline ml-1" href={url} target="_blank" rel="noreferrer">{t('common:actions.download')}</a>)}
               </div>
             )
           ) : (!fetching && !loading && !fetchUrl) ? (
             <div className="text-sm text-muted-foreground">
-              No preview URL available. Filename: {source?.originalFilename} • Path: {source?.storagePath}
+              {t('data-catalog:preview.noPreviewUrl', { filename: source?.originalFilename, path: source?.storagePath })}
             </div>
           ) : null}
           {(fetching || loading) && (

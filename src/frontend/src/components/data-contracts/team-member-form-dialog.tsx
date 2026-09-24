@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ type TeamMemberFormProps = {
 }
 
 export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, initial }: TeamMemberFormProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -38,18 +40,18 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
 
   const handleSubmit = async () => {
     if (!role.trim()) {
-      toast({ title: 'Validation Error', description: 'Role is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:team.validationError', 'Validation Error'), description: t('data-contracts:team.roleRequired', 'Role is required'), variant: 'destructive' })
       return
     }
 
     if (!email.trim()) {
-      toast({ title: 'Validation Error', description: 'Email/Username is required', variant: 'destructive' })
+      toast({ title: t('data-contracts:team.validationError', 'Validation Error'), description: t('data-contracts:team.emailRequired', 'Email/Username is required'), variant: 'destructive' })
       return
     }
 
     // Basic email validation (if it looks like an email)
     if (email.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast({ title: 'Validation Error', description: 'Please enter a valid email address', variant: 'destructive' })
+      toast({ title: t('data-contracts:team.validationError', 'Validation Error'), description: t('data-contracts:team.invalidEmail', 'Please enter a valid email address'), variant: 'destructive' })
       return
     }
 
@@ -65,8 +67,8 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
       onOpenChange(false)
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save team member',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-contracts:team.saveError', 'Failed to save team member'),
         variant: 'destructive',
       })
     } finally {
@@ -78,56 +80,56 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Team Member' : 'Add Team Member'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-contracts:team.editTitle', 'Edit Team Member') : t('data-contracts:team.addTitle', 'Add Team Member')}</DialogTitle>
           <DialogDescription>
-            Add a team member responsible for this data contract.
+            {t('data-contracts:team.description', 'Add a team member responsible for this data contract.')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="role">
-              Role <span className="text-destructive">*</span>
+              {t('data-contracts:team.roleLabel', 'Role')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="e.g., Data Owner, Steward, Engineer"
+              placeholder={t('data-contracts:team.rolePlaceholder', 'e.g., Data Owner, Steward, Engineer')}
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="email">
-              Email/Username <span className="text-destructive">*</span>
+              {t('data-contracts:team.emailLabel', 'Email/Username')} <span className="text-destructive">*</span>
             </Label>
             <PrincipalPicker
               id="email"
               accepts={['user']}
               value={email || null}
               onChange={(next) => setEmail(next ?? '')}
-              placeholder="user@example.com or username"
-              aria-label="Email or username"
+              placeholder={t('data-contracts:team.emailPlaceholder', 'user@example.com or username')}
+              aria-label={t('data-contracts:team.emailAriaLabel', 'Email or username')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t('common:labels.name')}</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Full name (optional)"
+              placeholder={t('data-contracts:team.namePlaceholder', 'Full name (optional)')}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : initial ? 'Save Changes' : 'Add Member'}
+            {isSubmitting ? t('common:actions.saving') : initial ? t('common:actions.saveChanges') : t('data-contracts:team.addButton', 'Add Member')}
           </Button>
         </DialogFooter>
       </DialogContent>

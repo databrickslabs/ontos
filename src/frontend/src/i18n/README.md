@@ -148,21 +148,30 @@ npm run test:e2e -- tests/i18n.spec.ts
 npm run test:e2e:ui -- tests/i18n.spec.ts
 ```
 
+## Tooling & Guardrails (issue #471)
+
+Two scripts under `src/scripts/` (wired as npm scripts) drive and protect the migration:
+
+| Command | What it does |
+|---------|--------------|
+| `npm run check:i18n` | Validates locale parity: every locale has the same keys per namespace, and every `t('...')` key used in code is defined. Non-zero exit on missing namespaces/keys (CI gate). |
+| `npm run audit:i18n` | Heuristic scan for user-facing strings **not yet** wrapped in `t(...)` (JSX text + translatable attributes). The migration worklist. |
+| `python3 src/scripts/check_translations.py --scaffold` | Brings every non-`en` locale up to `en`'s key set: creates missing namespace files, seeds missing keys with a `__TODO__ <english>` value (preserving existing translations), and writes a manifest of seeded keys. |
+
+**`__TODO__` convention:** an untranslated value is prefixed with `__TODO__ ` so the gap is visible/greppable rather than silently falling back to English. Translating a key means replacing the value and removing the marker. (Zero `__TODO__` markers remain as of the completed migration.)
+
+**ESLint guardrail:** `i18next/no-literal-string` (`warn`) flags new hardcoded JSX text; test/config/i18n code is excluded. Consider flipping to `error` in `eslint.config.js` once `audit:i18n` is confirmed clean of true positives, to block regressions in CI.
+
 ## Migration Status
 
-### ✅ Completed
-- Infrastructure setup (react-i18next, configuration)
-- Language selector component in header
-- Settings page (Jobs & Workflows tab)
-- Toast notifications (status messages)
-
-### 🚧 To Be Migrated
-- Other Settings tabs (General, Databricks, Git, Roles, Tags, Semantic Models)
-- All view pages (Home, Data Products, Data Contracts, etc.)
-- All components (wizards, dialogs, forms)
-- Navigation menu
-- Feature configurations
-- Error messages
+### ✅ Completed (issue #471)
+- Infrastructure (react-i18next, auto-discovery config) + 7 locales (en, de, es, fr, it, ja, nl)
+- Language selector in header; persistence across reloads
+- Tooling & guardrails above (`check:i18n`, `audit:i18n`, `--scaffold`, ESLint rule)
+- **All views, components, dialogs, wizards, panels, navigation, feature configs, toasts, and validation messages migrated to `t(...)`** across every namespace (`check:i18n` passes; `audit:i18n` shows only non-translatable false-positives)
+- **Full locale parity** — every namespace has identical keys in all 7 locales
+- **Real translations** for de/es/fr/it/ja/nl (0 `__TODO__` markers remaining)
+- Playwright coverage across all 7 locales (`tests/i18n-locales.spec.ts`)
 
 ## Best Practices
 

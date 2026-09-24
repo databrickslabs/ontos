@@ -28,17 +28,27 @@ defaults:
 jobs:
   build:
     name: Build Docusaurus site
-    runs-on: ubuntu-latest
+    # Must run on the protected runner group: the databrickslabs org has an IP
+    # allow list, and stock GitHub-hosted runner IPs are not on it, so any
+    # GitHub API call from ubuntu-latest fails with "your IP address is not
+    # permitted to access this resource".
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      # The protected runners install npm packages through the internal JFrog
+      # registry (authenticated via OIDC), not public npm. Stock actions/setup-node
+      # leaves npm pointed at a registry it can't reach here, so `npm ci` aborts
+      # ("Exit handler never called!") and the docusaurus binary is never installed.
+      # This composite action fetches a JFrog token, writes ~/.npmrc, and sets up Node.
+      - name: Setup Node.js (JFrog npm)
+        uses: ./.github/actions/setup-node-jfrog
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: website/ontos/package-lock.json
+          node-version: '24'
+          lock-path: website/ontos/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -54,7 +64,11 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    runs-on: ubuntu-latest
+    # Protected runner group required here too: actions/deploy-pages calls the
+    # GitHub Pages API, which the org IP allow list blocks from ubuntu-latest.
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

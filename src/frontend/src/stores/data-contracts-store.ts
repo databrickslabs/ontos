@@ -38,8 +38,8 @@ export function defaultDraft(): DataContractDraft {
     status: 'draft',
     owner: '',
     kind: 'DataContract',
-    apiVersion: 'v3.0.1',
-    contract_text: '{\n  "version": "1.0",\n  "kind": "DataContract",\n  "apiVersion": "v3.0.1"\n}',
+    apiVersion: 'v3.2.0',
+    contract_text: '{\n  "version": "1.0",\n  "kind": "DataContract",\n  "apiVersion": "v3.2.0"\n}',
     format: 'json',
   }
 }

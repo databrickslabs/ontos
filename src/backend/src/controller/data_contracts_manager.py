@@ -32,6 +32,9 @@ from src.models.data_contracts import (
     DatasetLifecycle,
 )
 
+# ODCS version registry (supported versions + feature-capability gating)
+from src.common import odcs_versions
+
 # Import Search Interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 # Import the registry decorator
@@ -811,11 +814,73 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         return members_list
 
+    @staticmethod
+    def _build_context_dict(context_obj) -> Optional[Dict[str, Any]]:
+        """Serialize an ODCS v3.2.0 context ORM row to an ODCS dict, or None."""
+        if not context_obj:
+            return None
+
+        def _json_load(value):
+            if not value:
+                return None
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return None
+
+        result: Dict[str, Any] = {}
+        if getattr(context_obj, 'instructions', None):
+            result['instructions'] = context_obj.instructions
+
+        verified = []
+        for vs in (getattr(context_obj, 'verified_statements', None) or []):
+            item: Dict[str, Any] = {'question': vs.question}
+            if getattr(vs, 'stable_id', None):
+                item['id'] = vs.stable_id
+            if vs.answer is not None:
+                item['answer'] = vs.answer
+            tags = _json_load(vs.tags_json)
+            if tags:
+                item['tags'] = tags
+            ad = _json_load(vs.authoritative_definitions_json)
+            if ad:
+                item['authoritativeDefinitions'] = ad
+            cp = _json_load(vs.custom_properties_json)
+            if cp:
+                item['customProperties'] = cp
+            verified.append(item)
+        if verified:
+            result['verifiedStatements'] = verified
+
+        constraints = []
+        for c in (getattr(context_obj, 'constraints', None) or []):
+            item = {'constraint': c.constraint}
+            if getattr(c, 'stable_id', None):
+                item['id'] = c.stable_id
+            tags = _json_load(c.tags_json)
+            if tags:
+                item['tags'] = tags
+            ad = _json_load(c.authoritative_definitions_json)
+            if ad:
+                item['authoritativeDefinitions'] = ad
+            cp = _json_load(c.custom_properties_json)
+            if cp:
+                item['customProperties'] = cp
+            constraints.append(item)
+        if constraints:
+            result['constraints'] = constraints
+
+        return result or None
+
     def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None) -> Dict[str, Any]:
+        # Version-aware export: emit only fields valid for the contract's stored
+        # apiVersion so a v3.0.x/v3.1.0 contract round-trips without bleeding in
+        # v3.2.0-only constructs (context, vector/map, semanticType).
+        api_version = db_obj.api_version or odcs_versions.DEFAULT_ODCS_VERSION
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
-            'apiVersion': db_obj.api_version or 'v3.1.0',
+            'apiVersion': api_version,
             'version': db_obj.version,
             'status': db_obj.status,
         }
@@ -961,7 +1026,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['transformLogic'] = prop.transform_logic
                         if prop.transform_source_objects:
                             try:
-                                import json
                                 prop_dict['transformSourceObjects'] = json.loads(prop.transform_source_objects)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['transformSourceObjects'] = prop.transform_source_objects
@@ -969,17 +1033,30 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                             prop_dict['description'] = prop.transform_description
                         if prop.examples:
                             try:
-                                import json
                                 prop_dict['examples'] = json.loads(prop.examples)
                             except (json.JSONDecodeError, TypeError):
                                 prop_dict['examples'] = prop.examples
                         if prop.critical_data_element is not None:
                             prop_dict['criticalDataElement'] = prop.critical_data_element
-                        if prop.logical_type_options_json:
+                        # ODCS v3.2.0 semanticType (column|measure|dimension), version-gated
+                        if getattr(prop, 'semantic_type', None) and odcs_versions.supports('semantic_type', api_version):
+                            prop_dict['semanticType'] = prop.semantic_type
+                        # logicalTypeOptions: ODCS nests these under `logicalTypeOptions`
+                        # (the schema forbids unevaluated top-level keys). vector
+                        # (RFC-0042) / map (RFC-0030) options are v3.2.0-only; each is
+                        # gated on its own feature key (registry is the single source).
+                        logical_type = prop_dict.get('logicalType')
+                        is_v320_type = logical_type in ('vector', 'map')
+                        v320_type_allowed = (not is_v320_type) or odcs_versions.supports(logical_type, api_version)
+                        if is_v320_type and not v320_type_allowed:
+                            # Cannot represent a vector/map property at this version;
+                            # degrade the type so the document still validates.
+                            prop_dict['logicalType'] = 'string' if logical_type == 'vector' else 'object'
+                        if prop.logical_type_options_json and v320_type_allowed:
                             try:
-                                import json
                                 logical_type_options = json.loads(prop.logical_type_options_json)
-                                prop_dict.update(logical_type_options)  # Merge constraints into property
+                                if isinstance(logical_type_options, dict) and logical_type_options:
+                                    prop_dict['logicalTypeOptions'] = logical_type_options
                             except (json.JSONDecodeError, TypeError):
                                 pass
                         if prop.items_logical_type:
@@ -1066,7 +1143,6 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                                 prop_value = custom_prop.value
                                 try:
                                     # Try to parse JSON if it's a serialized object
-                                    import json
                                     prop_value = json.loads(custom_prop.value)
                                 except (json.JSONDecodeError, TypeError):
                                     pass  # Keep as string
@@ -1287,8 +1363,20 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         rels.append(rel_dict)
                     schema_dict['relationships'] = rels
 
+                # ODCS v3.2.0 schema-object-level context (version-gated)
+                if odcs_versions.supports('context', api_version):
+                    ctx_dict = self._build_context_dict(getattr(schema_obj, 'context', None))
+                    if ctx_dict:
+                        schema_dict['context'] = ctx_dict
+
                 schema.append(schema_dict)
             odcs['schema'] = schema
+
+        # ODCS v3.2.0 contract-level context (version-gated)
+        if odcs_versions.supports('context', api_version):
+            contract_ctx = self._build_context_dict(getattr(db_obj, 'context', None))
+            if contract_ctx:
+                odcs['context'] = contract_ctx
             
         # Build team (version-aware: Team object for v3.1.0+, plain array for v3.0.x)
         # Merge active Business Owners into the exported team array for YAML fidelity
@@ -1712,6 +1800,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         all_obj_relationships = []
         all_prop_relationships = []
         all_quality_checks = []
+        all_context_rows = []
         # Collect semantic link work to process after bulk insert
         schema_semantic_work = []
         prop_semantic_work = []
@@ -1764,6 +1853,13 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 for field in ['itemType', 'minItems', 'maxItems']:
                     if prop_dict.get(field) is not None:
                         logical_type_options[field] = prop_dict[field]
+                # ODCS v3.2.0: logicalTypeOptions may arrive as a nested object
+                # (including vector RFC-0042 and map RFC-0030 options such as
+                # dimensions, elementType, distanceMetric, embeddingModel,
+                # map.key/map.value). Preserve the whole object so it round-trips.
+                nested_opts = prop_dict.get('logicalTypeOptions') or prop_dict.get('logical_type_options')
+                if isinstance(nested_opts, dict):
+                    logical_type_options.update(nested_opts)
 
                 examples_json = None
                 if prop_dict.get('examples'):
@@ -1795,7 +1891,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     critical_data_element=prop_dict.get('criticalDataElement', False),
                     logical_type_options_json=json.dumps(logical_type_options) if logical_type_options else None,
                     items_logical_type=prop_dict.get('itemType'),
-                    business_name=prop_dict.get('businessName')
+                    business_name=prop_dict.get('businessName'),
+                    semantic_type=prop_dict.get('semanticType') or prop_dict.get('semantic_type'),
                 )
                 all_properties.append(prop)
 
@@ -1843,6 +1940,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         custom_properties_json=json.dumps(rel_data['customProperties']) if rel_data.get('customProperties') else None,
                     ))
 
+            # Collect schema-object-level context (ODCS v3.2.0)
+            all_context_rows.extend(
+                self._build_context_rows(schema_dict.get('context'), 'schema_object', schema_obj_id)
+            )
+
         # Bulk add all schema objects, properties, and relationships in one flush
         db.add_all(all_schema_objs)
         db.add_all(all_properties)
@@ -1852,6 +1954,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.add_all(all_prop_relationships)
         if all_quality_checks:
             db.add_all(all_quality_checks)
+        if all_context_rows:
+            db.add_all(all_context_rows)
         db.flush()
 
         # Process semantic links after bulk insert
@@ -1876,6 +1980,88 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     authoritative_definitions=auth_defs,
                     created_by=current_user
                 )
+
+    @staticmethod
+    def _build_context_rows(context_payload, owner_kind: str, owner_id: str) -> list:
+        """Build ODCS v3.2.0 context ORM rows (context + verifiedStatements + constraints).
+
+        ``context_payload`` may be a shorthand string (stored as ``instructions``)
+        or an object with ``instructions``/``verifiedStatements``/``constraints``.
+        ``owner_kind`` is 'contract' or 'schema_object'. All ids are assigned in
+        Python so the returned rows can be bulk-added before a single flush.
+        Returns an empty list when there is nothing to persist.
+        """
+        from src.db_models.data_contracts import (
+            DataContractContextDb,
+            DataContractContextVerifiedStatementDb,
+            DataContractContextConstraintDb,
+        )
+        if context_payload is None:
+            return []
+
+        instructions = None
+        verified_statements = []
+        constraints = []
+        if isinstance(context_payload, str):
+            instructions = context_payload
+        elif isinstance(context_payload, dict):
+            instructions = context_payload.get('instructions')
+            verified_statements = context_payload.get('verifiedStatements') or context_payload.get('verified_statements') or []
+            constraints = context_payload.get('constraints') or []
+        else:
+            return []
+
+        # Skip a completely empty context object.
+        if not instructions and not verified_statements and not constraints:
+            return []
+
+        ctx_id = str(uuid4())
+        ctx = DataContractContextDb(
+            id=ctx_id,
+            instructions=instructions,
+            contract_id=owner_id if owner_kind == 'contract' else None,
+            schema_object_id=owner_id if owner_kind == 'schema_object' else None,
+        )
+        rows = [ctx]
+
+        def _json_or_none(value):
+            return json.dumps(value) if value else None
+
+        for idx, vs in enumerate(verified_statements or []):
+            if not isinstance(vs, dict) or not vs.get('question'):
+                continue
+            rows.append(DataContractContextVerifiedStatementDb(
+                id=str(uuid4()),
+                context_id=ctx_id,
+                stable_id=vs.get('id'),
+                question=vs.get('question'),
+                answer=vs.get('answer'),
+                position=idx,
+                tags_json=_json_or_none(vs.get('tags')),
+                authoritative_definitions_json=_json_or_none(vs.get('authoritativeDefinitions') or vs.get('authoritative_definitions')),
+                custom_properties_json=_json_or_none(vs.get('customProperties') or vs.get('custom_properties')),
+            ))
+        for idx, c in enumerate(constraints or []):
+            if not isinstance(c, dict) or not c.get('constraint'):
+                continue
+            rows.append(DataContractContextConstraintDb(
+                id=str(uuid4()),
+                context_id=ctx_id,
+                stable_id=c.get('id'),
+                constraint=c.get('constraint'),
+                position=idx,
+                tags_json=_json_or_none(c.get('tags')),
+                authoritative_definitions_json=_json_or_none(c.get('authoritativeDefinitions') or c.get('authoritative_definitions')),
+                custom_properties_json=_json_or_none(c.get('customProperties') or c.get('custom_properties')),
+            ))
+        return rows
+
+    def _create_contract_context(self, db, contract_id: str, context_payload) -> None:
+        """Persist the contract-level ODCS v3.2.0 context block."""
+        rows = self._build_context_rows(context_payload, 'contract', contract_id)
+        if rows:
+            db.add_all(rows)
+            db.flush()
 
     @staticmethod
     def _build_quality_check_db(rule_data, object_id: str, property_id: Optional[str] = None) -> 'DataQualityCheckDb':
@@ -2584,10 +2770,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         if s_dict.get('description'):
                             existing.description = s_dict['description']
                     else:
-                        # New schema or schema with updated properties → recreate
+                        # New schema or schema with updated properties → recreate.
+                        # Recreation cascade-deletes the schema-object context
+                        # (ODCS v3.2.0). Preserve it across the edit when the
+                        # payload doesn't carry its own context.
                         if name in existing_schemas:
+                            existing = existing_schemas[name]
+                            if not s_dict.get('context') and getattr(existing, 'context', None):
+                                preserved_ctx = self._build_context_dict(existing.context)
+                                if preserved_ctx:
+                                    s_dict['context'] = preserved_ctx
                             db.query(SchemaObjectDb).filter(
-                                SchemaObjectDb.id == existing_schemas[name].id
+                                SchemaObjectDb.id == existing.id
                             ).delete()
                         schemas_to_create.append(s_dict)
 
@@ -2600,7 +2794,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
                 if schemas_to_create:
                     self._create_schema_objects(db, contract_id, schemas_to_create, current_user)
-            
+
+            # Handle contract-level context (ODCS v3.2.0) if provided: replace-all.
+            # Only touched when the caller supplies `context`, so unrelated updates
+            # never disturb previously-saved context.
+            if 'context' in data_dict and data_dict.get('context') is not None:
+                from src.db_models.data_contracts import DataContractContextDb
+                db.query(DataContractContextDb).filter(
+                    DataContractContextDb.contract_id == contract_id
+                ).delete()
+                self._create_contract_context(db, contract_id, data_dict.get('context'))
+
             # Handle quality rules if provided
             if data_dict.get('qualityRules') is not None:
                 # Get all schema objects for this contract
@@ -2917,7 +3121,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             status_val = parsed_odcs.get('status', 'draft')
             owner_val = parsed_odcs.get('owner') or current_user or 'system'
             kind_val = parsed_odcs.get('kind', 'DataContract')
-            api_version_val = parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version', 'v3.1.0')
+            api_version_val = parsed_odcs.get('apiVersion') or parsed_odcs.get('api_version') or odcs_versions.DEFAULT_ODCS_VERSION
             
             # Extract description fields
             description = parsed_odcs.get('description', {})
@@ -3024,6 +3228,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             auth_defs_data = parsed_odcs.get('authoritativeDefinitions', [])
             if isinstance(auth_defs_data, list) and auth_defs_data:
                 self._create_contract_authoritative_definitions(db, created.id, auth_defs_data)
+
+            # Create contract-level context if present (ODCS v3.2.0)
+            context_payload = parsed_odcs.get('context')
+            if context_payload:
+                self._create_contract_context(db, created.id, context_payload)
             
             # Create servers if present
             servers_data = parsed_odcs.get('servers', [])
@@ -4372,6 +4581,24 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
     # Version Management Methods
     # ============================================================================
     
+    def _insert_cloned_context(self, db, ctx_data: Optional[Dict[str, Any]]) -> None:
+        """Insert a cloned context block (from ContractCloner) with its children."""
+        if not ctx_data:
+            return
+        from src.db_models.data_contracts import (
+            DataContractContextDb,
+            DataContractContextVerifiedStatementDb,
+            DataContractContextConstraintDb,
+        )
+        verified_statements = ctx_data.pop('verified_statements', [])
+        constraints = ctx_data.pop('constraints', [])
+        db.add(DataContractContextDb(**ctx_data))
+        db.flush()
+        for vs_data in verified_statements:
+            db.add(DataContractContextVerifiedStatementDb(**vs_data))
+        for c_data in constraints:
+            db.add(DataContractContextConstraintDb(**c_data))
+
     def clone_contract_for_new_version(
         self,
         db,
@@ -4411,7 +4638,11 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             DataContractAuthoritativeDefinitionDb,
             SchemaObjectDb, SchemaPropertyDb,
             SchemaObjectAuthoritativeDefinitionDb,
-            SchemaPropertyAuthoritativeDefinitionDb
+            SchemaPropertyAuthoritativeDefinitionDb,
+            SchemaObjectCustomPropertyDb, SchemaObjectRelationshipDb,
+            SchemaPropertyRelationshipDb, DataQualityCheckDb,
+            DataContractTeamMetadataDb, DataContractContextDb,
+            DataContractContextVerifiedStatementDb, DataContractContextConstraintDb,
         )
         
         # Validate semantic version format (allow -draft suffix for personal drafts)
@@ -4529,7 +4760,18 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 cloned_auth_defs = cloner.clone_authoritative_defs(source_contract.authoritative_defs, new_contract.id, 'contract')
                 for def_data in cloned_auth_defs:
                     db.add(DataContractAuthoritativeDefinitionDb(**def_data))
-            
+
+            # Team object metadata (ODCS v3.1.0)
+            if getattr(source_contract, 'team_metadata', None):
+                meta_data = cloner.clone_team_metadata(source_contract.team_metadata, new_contract.id)
+                if meta_data:
+                    db.add(DataContractTeamMetadataDb(**meta_data))
+
+            # Contract-level context (ODCS v3.2.0)
+            if getattr(source_contract, 'context', None):
+                ctx_data = cloner.clone_contract_context(source_contract.context, new_contract.id)
+                self._insert_cloned_context(db, ctx_data)
+
             # Schemas with nested properties
             if source_contract.schema_objects:
                 cloned_schemas = cloner.clone_schema_objects(source_contract.schema_objects, new_contract.id)
@@ -4537,29 +4779,52 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     schema_id = schema_data.pop('id')
                     properties = schema_data.pop('properties', [])
                     authoritative_defs = schema_data.pop('authoritative_defs', [])
-                    
+                    schema_custom_props = schema_data.pop('custom_properties', [])
+                    schema_relationships = schema_data.pop('relationships', [])
+                    quality_checks = schema_data.pop('quality_checks', [])
+                    schema_context = schema_data.pop('context', None)
+
                     schema = SchemaObjectDb(id=schema_id, **schema_data)
                     db.add(schema)
                     db.flush()
-                    
+
                     # Schema-level authoritative definitions
                     for auth_def_data in authoritative_defs:
                         db.add(SchemaObjectAuthoritativeDefinitionDb(**auth_def_data))
-                    
+
+                    # Schema-level custom properties
+                    for cp_data in schema_custom_props:
+                        db.add(SchemaObjectCustomPropertyDb(**cp_data))
+
+                    # Schema-level relationships
+                    for rel_data in schema_relationships:
+                        db.add(SchemaObjectRelationshipDb(**rel_data))
+
+                    # Schema-object-level context (ODCS v3.2.0)
+                    self._insert_cloned_context(db, schema_context)
+
                     # Properties
                     for prop_data in properties:
                         prop_id = prop_data.pop('id')
                         prop_auth_defs = prop_data.pop('authoritative_defs', [])
-                        
+                        prop_relationships = prop_data.pop('relationships', [])
+
                         prop = SchemaPropertyDb(id=prop_id, **prop_data)
                         db.add(prop)
                         db.flush()
-                        
+
                         # Property-level authoritative definitions
                         for prop_auth_def_data in prop_auth_defs:
-                            from src.db_models.data_contracts import SchemaPropertyAuthoritativeDefinitionDb
                             db.add(SchemaPropertyAuthoritativeDefinitionDb(**prop_auth_def_data))
-            
+
+                        # Property-level relationships
+                        for prop_rel_data in prop_relationships:
+                            db.add(SchemaPropertyRelationshipDb(**prop_rel_data))
+
+                    # Quality checks (object- and property-level; property_id already remapped)
+                    for qc_data in quality_checks:
+                        db.add(DataQualityCheckDb(**qc_data))
+
             db.commit()
             db.refresh(new_contract)
             
@@ -4569,6 +4834,93 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.rollback()
             logger.error(f"Error cloning contract for new version: {e}", exc_info=True)
             raise
+
+    @staticmethod
+    def _bump_semver(version: str, bump: str) -> str:
+        """Bump an X.Y.Z semver by 'major' | 'minor' | 'patch' (default minor)."""
+        import re
+        m = re.match(r'^(\d+)\.(\d+)\.(\d+)', version or '')
+        major, minor, patch = (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else (1, 0, 0)
+        if bump == 'major':
+            return f"{major + 1}.0.0"
+        if bump == 'patch':
+            return f"{major}.{minor}.{patch + 1}"
+        # default: minor
+        return f"{major}.{minor + 1}.0"
+
+    def upgrade_contract_version(
+        self,
+        db,
+        contract_id: str,
+        target_api_version: str,
+        change_summary: Optional[str] = None,
+        current_user: Optional[str] = None,
+        version_bump: str = 'minor',
+        new_version: Optional[str] = None,
+    ) -> DataContractDb:
+        """Upgrade a contract to a newer ODCS apiVersion as a NEW draft version.
+
+        Reuses the existing versioning machinery: clones the source (same
+        version_family_id, parent_contract_id = source, status = draft), then sets
+        the new apiVersion. The transform is purely additive — no data is dropped —
+        so the new draft enters the usual draft -> proposed -> under_review ->
+        approved review lifecycle unchanged.
+
+        Args:
+            target_api_version: apiVersion to upgrade to (must be supported and
+                strictly newer than the source's current apiVersion).
+            version_bump: semver bump when ``new_version`` is not supplied.
+            new_version: explicit new semantic version (overrides ``version_bump``).
+
+        Raises:
+            ValueError: contract not found, target unsupported, or not an upgrade.
+        """
+        source = data_contract_repo.get(db, id=contract_id)
+        if not source:
+            raise ValueError("Contract not found")
+
+        if not odcs_versions.is_supported(target_api_version):
+            raise ValueError(f"Unsupported ODCS apiVersion: {target_api_version}")
+
+        valid_targets = odcs_versions.upgrade_targets(source.api_version)
+        if target_api_version not in valid_targets:
+            raise ValueError(
+                f"{target_api_version} is not an upgrade from {source.api_version} "
+                f"(valid targets: {', '.join(valid_targets) or 'none'})"
+            )
+
+        resolved_version = new_version or self._bump_semver(source.version, version_bump)
+
+        # Avoid collision with an existing version in the same family (e.g. the
+        # family already has the computed minor bump). Bump the patch until free.
+        family_id = source.version_family_id or source.id
+        existing_versions = {
+            v for (v,) in db.query(DataContractDb.version).filter(
+                DataContractDb.version_family_id == family_id
+            ).all()
+        }
+        while resolved_version in existing_versions:
+            resolved_version = self._bump_semver(resolved_version, 'patch')
+
+        summary = change_summary or f"Upgrade ODCS {source.api_version} -> {target_api_version}"
+
+        # Clone into a new draft version (copies all nested entities). This
+        # commits the clone; we then set the apiVersion and commit again.
+        new_contract = self.clone_contract_for_new_version(
+            db=db,
+            contract_id=contract_id,
+            new_version=resolved_version,
+            change_summary=summary,
+            current_user=current_user,
+        )
+
+        new_contract.api_version = target_api_version
+        new_contract.updated_by = current_user
+        db.add(new_contract)
+        db.commit()
+        db.refresh(new_contract)
+        self._update_search_index(new_contract, db)
+        return new_contract
 
     def commit_personal_draft(
         self,
@@ -6468,8 +6820,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     "transformSourceObjects": p.transform_source_objects,
                     "transformDescription": p.transform_description,
                     "encryptedName": p.encrypted_name,
+                    # ODCS v3.2.0 semanticType
+                    "semanticType": p.semantic_type,
+                    "stableId": p.stable_id,
+                    "itemType": p.items_logical_type,
                 }
+                # Flat keys (existing constraint editors) + nested logicalTypeOptions
+                # (v3.2.0 vector/map editors read prop.logicalTypeOptions.*).
                 item.update(options)
+                if options:
+                    item["logicalTypeOptions"] = options
                 prop_items.append(item)
 
             schema_objects.append(SchemaObject(
@@ -6480,6 +6840,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 description=schema_obj.description,
                 properties=prop_items,
                 propertyCount=len(prop_items),
+                context=self._build_context_dict(getattr(schema_obj, 'context', None)),
             ))
         
         # Build team (ODCS compliant)
@@ -6654,6 +7015,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             dataProduct=db_contract.data_product,
             description=description,
             tags=tags,  # Include tags in response
+            context=self._build_context_dict(getattr(db_contract, 'context', None)),
             schema=schema_objects,
             team=team,
             support=support,

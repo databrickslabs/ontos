@@ -5,7 +5,7 @@ import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ShieldCheck, Globe, Link2 } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles, Package, ShieldCheck, Globe, Link2, ArrowUpCircle } from 'lucide-react'
 import {
   DetailHeaderSkeleton,
   PanelSkeleton,
@@ -58,6 +58,8 @@ import LinkProductToContractDialog from '@/components/data-contracts/link-produc
 import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog'
 import CustomPropertyFormDialog from '@/components/data-contracts/custom-property-form-dialog'
 import CommitDraftDialog from '@/components/data-contracts/commit-draft-dialog'
+import UpgradeVersionDialog from '@/components/data-contracts/upgrade-version-dialog'
+import { canUpgradeOdcsVersion } from '@/lib/odcs-lifecycle'
 import VersionNavigator from '@/components/common/version-navigator'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
@@ -289,6 +291,7 @@ export default function DataContractDetails() {
 
   // Commit draft dialog state
   const [isCommitDraftDialogOpen, setIsCommitDraftDialogOpen] = useState(false)
+  const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false)
 
   const [certificationLevels, setCertificationLevels] = useState<CertificationLevel[]>([])
   const [certifyDialogOpen, setCertifyDialogOpen] = useState(false)
@@ -1824,6 +1827,12 @@ export default function DataContractDetails() {
           {!isPersonalDraft && (
             <Button variant="outline" onClick={handleCreateNewVersion} size="sm">
               <CopyPlus className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.createNewVersion', 'Create New Version')}
+            </Button>
+          )}
+          {/* Upgrade ODCS version (when a newer standard is available) */}
+          {!isPersonalDraft && canUpgradeOdcsVersion(contract.apiVersion) && (
+            <Button variant="outline" onClick={() => setIsUpgradeDialogOpen(true)} size="sm">
+              <ArrowUpCircle className="mr-2 h-4 w-4" /> Upgrade ODCS Version
             </Button>
           )}
           {/* Edit metadata only if editable */}
@@ -3368,6 +3377,16 @@ export default function DataContractDetails() {
         contractId={contractId!}
         contractName={contract?.name || t('data-contracts:detailsView.common.thisContract', 'this contract')}
         onSuccess={handleCommitSuccess}
+      />
+
+      {/* Upgrade ODCS Version Dialog */}
+      <UpgradeVersionDialog
+        isOpen={isUpgradeDialogOpen}
+        onOpenChange={setIsUpgradeDialogOpen}
+        contractId={contractId!}
+        contractName={contract?.name || 'this contract'}
+        currentApiVersion={contract?.apiVersion || ''}
+        onSuccess={(newId) => navigate(`${listPath}/${newId}`)}
       />
 
       <DirectCertifyDialog

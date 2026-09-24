@@ -111,7 +111,23 @@ export default function AuthorityRelationReview({ relationId, reviewer, onComple
             <DetailBlock label="Action" data={ctx.details.action} />
           </div>
           <DetailBlock label="Domain-Context" data={ctx.details.domain_context} />
-          <DetailBlock label="Decision logic (compiled)" data={ctx.details.decision_logic} />
+          <div>
+            <div className="text-xs uppercase text-muted-foreground mb-1">Decision criteria</div>
+            {(ctx.details.criteria || []).length > 0 ? (
+              <div className="space-y-1">
+                {(ctx.details.criteria || []).map((c, i) => (
+                  <div key={i} className="text-xs rounded border p-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{c.name || 'Criterion'}</span>
+                      <span className="ml-auto text-muted-foreground">{c.direction} · w{c.weight}</span>
+                    </div>
+                    <div className="font-mono break-all">{c.rule}</div>
+                  </div>
+                ))}
+              </div>
+            ) : <span className="text-sm text-muted-foreground">—</span>}
+          </div>
+          <DetailBlock label="Evidence sources" data={ctx.details.evidence_sources} />
           <DetailBlock label="Evidence binding" data={ctx.details.evidence_binding} />
           <DetailBlock label="Justification chain" data={ctx.details.justification_chain} />
         </div>

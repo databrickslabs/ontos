@@ -225,6 +225,63 @@ async def start_review(
     return result
 
 
+@router.get("/authority/relations/{relation_id}/criteria")
+async def list_criteria(
+    relation_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """The AR's author-configured decision criteria (Compliance Checks + facets)."""
+    relation = manager.get_relation(db, relation_id)
+    if not relation:
+        raise HTTPException(status_code=404, detail="Authority Relation not found")
+    return manager.to_read_dict(db, relation).get("criteria", [])
+
+
+@router.get("/authority/criteria/policies")
+async def list_reusable_checks(
+    db: DBSessionDep,
+    category: Optional[str] = Query(None, description="Filter by compliance policy category"),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Reusable Compliance Checks for the criteria picker (authority-scoped so the
+    builder isn't gated on the separate compliance permission)."""
+    from src.db_models.compliance import CompliancePolicyDb
+    q = db.query(CompliancePolicyDb).filter(CompliancePolicyDb.is_active == True)  # noqa: E712
+    if category:
+        q = q.filter(CompliancePolicyDb.category == category)
+    return [
+        {
+            "id": p.id, "name": p.name, "rule": p.rule, "category": p.category,
+            "failure_message": p.failure_message, "severity": p.severity,
+        }
+        for p in q.order_by(CompliancePolicyDb.name.asc()).all()
+    ]
+
+
+@router.post("/authority/criteria/validate")
+async def validate_criterion(
+    db: DBSessionDep,
+    payload: dict = Body(...),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Live-validate a single criterion's DSL rule against a sample request object.
+
+    Body: ``{rule, object}``. The ``ASSERT`` keyword is prepended if omitted.
+    Returns ``{passed, message}``.
+    """
+    from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
+    rule = (payload.get("rule") or "").strip()
+    if rule and not rule.upper().startswith("ASSERT"):
+        rule = "ASSERT " + rule
+    obj = payload.get("object") or {}
+    try:
+        passed, msg = eval_dsl(rule, obj)
+        return {"passed": passed, "message": msg}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Rule validation failed: {e}")
+
+
 @router.post("/authority/recompute-scheduled")
 async def recompute_scheduled(
     db: DBSessionDep,

@@ -22,16 +22,19 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common import authority_resolution_dna as authority_dna
-from src.common.authority_resolution_dna import ARSpec, DIR_NONE
+from src.common.authority_resolution_dna import Criterion, DIR_NONE
+from src.common.compliance_dsl import evaluate_rule_on_object
 from src.db_models.authority_resolution import (
     AuthorityRelationDb,
     AuthorityAffirmationDb,
     AuthorityDecisionDb,
     AuthorityDnaRunDb,
 )
+from src.db_models.compliance import CompliancePolicyDb
 from src.repositories.authority_resolution_repository import (
     authority_relation_repo,
     authority_affirmation_repo,
+    authority_criterion_repo,
     authority_dna_run_repo,
     authority_decision_repo,
 )
@@ -66,37 +69,30 @@ class AuthorityResolutionManager:
     def _now() -> datetime:
         return datetime.utcnow()
 
-    @staticmethod
-    def _compile_decision_logic(fields: Dict[str, Any]) -> Dict[str, Any]:
-        """Compile the deterministic runtime rule from the AR's fields.
+    def _load_criteria(self, relation: AuthorityRelationDb) -> List[Criterion]:
+        """The AR's enabled decision criteria as engine ``Criterion`` objects.
 
-        Author-provided ``decision_logic`` wins; otherwise a sensible default is
-        derived (allowed signer = the documented actor identity, plus the
-        Domain-Context threshold and the action)."""
-        provided = fields.get("decision_logic") or {}
-        domain_context = fields.get("domain_context") or {}
-        threshold = authority_dna._to_float(domain_context.get("threshold"))
-        compiled = {
-            "allowed_principals": provided.get(
-                "allowed_principals",
-                [fields["actor_identity"]] if fields.get("actor_identity") else [],
-            ),
-            "threshold": provided.get("threshold", threshold),
-            "required_cosign": bool(provided.get("required_cosign", False)),
-            "action": provided.get("action", fields.get("action")),
-        }
-        return compiled
-
-    def _ar_spec(self, relation: AuthorityRelationDb) -> ARSpec:
-        dl = relation.decision_logic or {}
-        domain_context = relation.domain_context or {}
-        threshold = authority_dna._to_float(dl.get("threshold", domain_context.get("threshold")))
-        return ARSpec(
-            documented_approver=relation.actor_identity,
-            threshold=threshold,
-            action=relation.action,
-            required_cosign=bool(dl.get("required_cosign", False)),
-        )
+        Each links a Compliance Check (its DSL ``ASSERT`` rule is the condition);
+        ``direction``/``weight`` are the ARF divergence facets on the link. Drives
+        both the runtime gate and the DNA-Coefficient engine — one definition.
+        """
+        out: List[Criterion] = []
+        for c in sorted(relation.criteria or [], key=lambda x: (x.display_order or 0)):
+            if not getattr(c, "enabled", True):
+                continue
+            policy = getattr(c, "compliance_policy", None)
+            if not policy or not policy.rule:
+                continue
+            out.append(Criterion(
+                # Human-readable label (name) preferred so DNAco divergence reasons
+                # and the timeline read cleanly; falls back to slug/id.
+                code=(policy.name or policy.slug or c.id),
+                rule=policy.rule,
+                direction=c.direction or "neutral",
+                weight=c.weight if c.weight is not None else 1.0,
+                message=policy.failure_message or None,
+            ))
+        return out
 
     # ------------------------------------------------------------------ CRUD
 
@@ -130,11 +126,9 @@ class AuthorityResolutionManager:
             "dna_max_threshold": data.get("dna_max_threshold", 0.3),
             "dna_scoring_config": data.get("dna_scoring_config"),
             "schedule_cron": data.get("schedule_cron"),
+            "decision_logic": data.get("decision_logic"),
             "created_by": current_user,
         }
-        fields["decision_logic"] = self._compile_decision_logic(
-            {**fields, "decision_logic": data.get("decision_logic")}
-        )
 
         relation = authority_relation_repo.create(db, obj_in={k: v for k, v in fields.items() if k in _MODEL_COLUMNS})
 
@@ -149,6 +143,8 @@ class AuthorityResolutionManager:
 
         # N-functional affirmation stakeholders.
         self._replace_affirmations(db, rel_id, data.get("affirmations") or [])
+        # Author-configurable decision criteria (Compliance Checks).
+        self._replace_criteria(db, rel_id, data.get("criteria") or [])
         # Polymorphic tags.
         self._set_tags(db, rel_id, getattr(payload, "tags", None), current_user)
         return relation
@@ -188,21 +184,13 @@ class AuthorityResolutionManager:
         domain_ids = data.pop("domain_ids", None)
         primary_domain_id = data.pop("primary_domain_id", None)
         affirmations = data.pop("affirmations", None)
+        criteria = data.pop("criteria", None)
 
         evidence = data.get("evidence_binding")
         if evidence is not None and hasattr(evidence, "dict"):
             data["evidence_binding"] = evidence.dict()
 
         update_data = {k: v for k, v in data.items() if k in _MODEL_COLUMNS}
-        # Recompile decision_logic when any input to it changed.
-        if any(k in data for k in ("decision_logic", "domain_context", "actor_identity", "action")):
-            merged = {
-                "actor_identity": data.get("actor_identity", relation.actor_identity),
-                "action": data.get("action", relation.action),
-                "domain_context": data.get("domain_context", relation.domain_context),
-                "decision_logic": data.get("decision_logic", relation.decision_logic),
-            }
-            update_data["decision_logic"] = self._compile_decision_logic(merged)
 
         # A material change bumps the version and re-opens the review gate.
         update_data["version"] = (relation.version or 1) + 1
@@ -216,6 +204,8 @@ class AuthorityResolutionManager:
             )
         if affirmations is not None:
             self._replace_affirmations(db, relation_id, affirmations)
+        if criteria is not None:
+            self._replace_criteria(db, relation_id, criteria)
         # Polymorphic tags (only when the caller supplied the field).
         self._set_tags(db, relation_id, getattr(payload, "tags", None), current_user)
 
@@ -255,6 +245,58 @@ class AuthorityResolutionManager:
                 "review_status": "pending" if is_reviewer else "na",
                 "sort_order": a.get("sort_order", idx),
             })
+
+    # ------------------------------------------------------- decision criteria
+
+    def _replace_criteria(self, db: Session, relation_id: str, criteria: List[Any]) -> None:
+        """Replace the AR's decision-criteria links. Each input either references an
+        existing Compliance Check (``policy_id``) or authors a new one inline
+        (``name`` + ``rule``). Mirrors ``_replace_affirmations``; re-run on each
+        version bump so the criteria travel with the AR version.
+        """
+        authority_criterion_repo.delete_for_relation(db, relation_id=relation_id)
+        for idx, item in enumerate(criteria):
+            c = item.dict() if hasattr(item, "dict") else dict(item)
+            policy_id = c.get("policy_id") or self._create_criterion_policy(db, c, relation_id, idx)
+            if not policy_id:
+                continue
+            authority_criterion_repo.create(db, obj_in={
+                "id": str(uuid.uuid4()),
+                "relation_id": relation_id,
+                "compliance_policy_id": policy_id,
+                "direction": c.get("direction") or "neutral",
+                "weight": c.get("weight") if c.get("weight") is not None else 1.0,
+                "display_order": c.get("order", idx),
+                "enabled": c.get("enabled", True),
+            })
+
+    def _create_criterion_policy(self, db: Session, c: Dict[str, Any], relation_id: str, idx: int) -> Optional[str]:
+        """Author a new Compliance Check for an inline criterion and return its id.
+
+        The rule is a Compliance-DSL ``ASSERT`` condition (the ``ASSERT`` keyword is
+        prepended if the author omitted it). Category ``Authority Decision`` mirrors
+        how the Maturity feature tags its seeded policies (``Maturity``).
+        """
+        rule = (c.get("rule") or "").strip()
+        if not rule:
+            return None
+        if not rule.upper().startswith("ASSERT"):
+            rule = "ASSERT " + rule
+        pid = str(uuid.uuid4())
+        policy = CompliancePolicyDb(
+            id=pid,
+            slug=f"ar-criterion-{pid[:12]}",
+            name=c.get("name") or f"Authority criterion {idx + 1}",
+            description=f"Authority decision criterion for Authority Relation {relation_id}",
+            failure_message=c.get("failure_message") or None,
+            rule=rule,
+            category="Authority Decision",
+            severity="high",
+            is_active=True,
+        )
+        db.add(policy)
+        db.flush()
+        return pid
 
     def affirm(self, db: Session, affirmation_id: str, affirmed_by: str, notes: Optional[str] = None) -> Optional[AuthorityAffirmationDb]:
         aff = authority_affirmation_repo.get(db, affirmation_id)
@@ -409,7 +451,14 @@ class AuthorityResolutionManager:
                 "actor_identity": relation.actor_identity,
                 "action": relation.action,
                 "domain_context": relation.domain_context,
-                "decision_logic": relation.decision_logic,
+                "criteria": [
+                    {
+                        "name": c.compliance_policy.name if c.compliance_policy else None,
+                        "rule": c.compliance_policy.rule if c.compliance_policy else None,
+                        "direction": c.direction, "weight": c.weight, "enabled": c.enabled,
+                    }
+                    for c in sorted(relation.criteria or [], key=lambda x: (x.display_order or 0))
+                ],
                 "evidence_binding": relation.evidence_binding,
                 "evidence_sources": relation.evidence_sources,
                 "justification_chain": relation.justification_chain,
@@ -547,9 +596,6 @@ class AuthorityResolutionManager:
         if not relation:
             return None
 
-        binding = relation.evidence_binding or {}
-        column_map = binding.get("column_map") or {}
-
         run = authority_dna_run_repo.create(db, obj_in={
             "id": str(uuid.uuid4()),
             "relation_id": relation_id,
@@ -560,12 +606,10 @@ class AuthorityResolutionManager:
         try:
             if rows is None:
                 # Read + normalise across all bound evidence sources (falls back to
-                # the legacy single ``evidence_binding``). Normalised rows are keyed
-                # by canonical AR elements, so the engine uses an identity map.
-                rows, column_map = self._collect_evidence(relation)
-            result = authority_dna.compute_dnaco(
-                self._ar_spec(relation), rows, column_map, relation.dna_scoring_config
-            )
+                # the legacy single ``evidence_binding``); rows are keyed by the
+                # canonical request fields the criteria rules reference.
+                rows = self._collect_evidence(relation)
+            result = authority_dna.compute_dnaco(self._load_criteria(relation), rows)
 
             # Persist per-row divergences as evidence AR Decisions (the DNAco sample).
             for rd in result.rows:
@@ -650,10 +694,11 @@ class AuthorityResolutionManager:
                 results.append({"relation_id": r.id, "status": "failed", "error": str(e)})
         return {"scheduled": len(due), "results": results}
 
-    # Canonical AR elements the DNAco engine reads from each row.
+    # Canonical request fields the criteria rules reference (``obj.<field>``); the
+    # evidence column_map normalises each source's columns onto these names, so the
+    # same criterion evaluates against a live request and a historical evidence row.
     _CANONICAL_ELEMENTS = (
-        "actual_approver", "documented_approver", "value",
-        "escalated", "cosign_present", "action", "object_id",
+        "actor_identity", "action", "value", "escalated", "cosign_present", "object_id",
     )
 
     def _resolve_evidence_sources(self, relation: AuthorityRelationDb) -> List[Dict[str, Any]]:
@@ -680,9 +725,10 @@ class AuthorityResolutionManager:
                 out.append({"table_fqn": b["source_table_fqn"], "column_map": b.get("column_map") or {}, "row_filter": b.get("row_filter")})
         return out
 
-    def _collect_evidence(self, relation: AuthorityRelationDb) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
+    def _collect_evidence(self, relation: AuthorityRelationDb) -> List[Dict[str, Any]]:
         """Read rows from every resolvable evidence source and normalise them to the
-        canonical AR elements, so a single identity column-map drives the engine.
+        canonical request fields (with types coerced), so an author's criterion
+        rules evaluate against evidence rows exactly as against a live request.
         """
         sources = self._resolve_evidence_sources(relation)
         combined: List[Dict[str, Any]] = []
@@ -690,9 +736,9 @@ class AuthorityResolutionManager:
             cm = src.get("column_map") or {}
             raw = self._read_evidence_rows({"source_table_fqn": src["table_fqn"], "row_filter": src.get("row_filter")})
             for r in raw:
-                combined.append({k: r.get(cm[k]) for k in self._CANONICAL_ELEMENTS if k in cm})
-        identity = {k: k for k in self._CANONICAL_ELEMENTS}
-        return combined, identity
+                row = {k: r.get(cm[k]) for k in self._CANONICAL_ELEMENTS if k in cm}
+                combined.append(authority_dna.normalize_row(row))
+        return combined
 
     def _read_evidence_rows(self, binding: Dict[str, Any], limit: int = 500) -> List[Dict[str, Any]]:
         """Best-effort read of the bound UC Delta table via the SQL warehouse.
@@ -756,35 +802,21 @@ class AuthorityResolutionManager:
     # --------------------------------------------------------- runtime gate
 
     def _evaluate_decision(self, relation: AuthorityRelationDb, req: Dict[str, Any]) -> Tuple[str, str]:
-        """Deterministic evaluation of request params against the AR's decision_logic."""
-        dl = relation.decision_logic or {}
-        reasons: List[str] = []
-
-        # Action must match when the AR constrains it.
-        if dl.get("action") and req.get("action") and str(req["action"]) != str(dl["action"]):
-            return VERDICT_DENIED, f"action '{req['action']}' does not match required '{dl['action']}'"
-
-        # The signer must be an allowed principal (when the AR enumerates them).
-        allowed = dl.get("allowed_principals") or []
-        signer = req.get("actor_identity")
-        if allowed:
-            if not signer or signer not in allowed:
-                return VERDICT_DENIED, f"signer '{signer}' is not an allowed principal"
-            reasons.append("signer authorized")
-
-        # Threshold: exceeding it requires an escalation flag.
-        threshold = authority_dna._to_float(dl.get("threshold"))
-        value = authority_dna._to_float(req.get("value"))
-        if threshold is not None and value is not None and value > threshold:
-            if not bool(req.get("escalated")):
-                return VERDICT_DENIED, f"value {value} exceeds threshold {threshold} without escalation"
-            reasons.append("escalation present for over-threshold value")
-
-        # Required co-sign must be present.
-        if dl.get("required_cosign") and not bool(req.get("cosign_present")):
-            return VERDICT_DENIED, "required co-sign is missing"
-
-        return VERDICT_APPROVED, "; ".join(reasons) or "all checks passed"
+        """Deterministic evaluation of request params against the AR's author-configured
+        decision criteria. Each enabled criterion's DSL rule is run against the request;
+        the first that fails denies (with its failure message). No criteria = an
+        unconstrained gate (approve).
+        """
+        norm = authority_dna.normalize_row(req)
+        for c in self._load_criteria(relation):
+            try:
+                passed, msg = evaluate_rule_on_object(c.rule, norm)
+            except Exception as e:  # pragma: no cover - malformed author rule
+                logger.warning(f"Criterion '{c.code}' failed to evaluate on AR {relation.id}: {e}")
+                continue
+            if not passed:
+                return VERDICT_DENIED, (c.message or msg or f"Criterion '{c.code}' failed")
+        return VERDICT_APPROVED, "all checks passed"
 
     def resolve(self, db: Session, ar_ref: str, req: Dict[str, Any], record: bool = True, require_active: bool = True) -> Dict[str, Any]:
         """Deterministically resolve a decision against an AR (by id or slug).
@@ -845,6 +877,9 @@ class AuthorityResolutionManager:
 
     def to_read_dict(self, db: Session, relation: AuthorityRelationDb) -> Dict[str, Any]:
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation.id)
+        # Load criteria via the repo (not relation.criteria) so a create/update
+        # response reflects rows just written in the same transaction.
+        criteria = authority_criterion_repo.list_for_relation(db, relation_id=relation.id)
         domains = entity_domain_repo.get_domains_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation.id)
         fully_affirmed = self.is_fully_affirmed(db, relation.id)
         # Polymorphic tags (best-effort — never break the read).
@@ -904,6 +939,21 @@ class AuthorityResolutionManager:
                     "review_request_id": getattr(a, "review_request_id", None),
                 }
                 for a in affs
+            ],
+            "criteria": [
+                {
+                    "id": c.id,
+                    "policy_id": c.compliance_policy_id,
+                    "name": c.compliance_policy.name if c.compliance_policy else None,
+                    "rule": c.compliance_policy.rule if c.compliance_policy else None,
+                    "failure_message": c.compliance_policy.failure_message if c.compliance_policy else None,
+                    "category": c.compliance_policy.category if c.compliance_policy else None,
+                    "direction": c.direction,
+                    "weight": c.weight,
+                    "order": c.display_order,
+                    "enabled": c.enabled,
+                }
+                for c in criteria
             ],
             "tags": tags,
             "created_at": relation.created_at,

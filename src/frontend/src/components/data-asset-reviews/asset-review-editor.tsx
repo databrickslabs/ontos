@@ -41,6 +41,10 @@ const SyntaxHighlighter = SyntaxHighlighterBase as React.ComponentType<any>;
 interface AssetReviewEditorProps {
     requestId: string;
     asset: ReviewedAsset;
+    /** The task's assigned reviewer (from the review request), used by
+     *  reviewer-identity-specific editors (e.g. Authority Relation) so the
+     *  assigned reviewer's context loads regardless of who is viewing. */
+    reviewerEmail?: string | null;
     api: ReturnType<typeof useApi>;
     onReviewSave: (updatedAsset: ReviewedAsset) => void; // Callback after saving
     onNext?: () => void; // Callback to navigate to next asset
@@ -62,10 +66,11 @@ const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?
     return response.data as T;
 };
 
-export default function AssetReviewEditor({ 
-    requestId, 
-    asset, 
-    api, 
+export default function AssetReviewEditor({
+    requestId,
+    asset,
+    reviewerEmail,
+    api,
     onReviewSave,
     onNext,
     hasNext = false,
@@ -329,6 +334,7 @@ export default function AssetReviewEditor({
             <div className="px-1 pb-1">
                 <AuthorityRelationReview
                     relationId={relationId}
+                    reviewer={reviewerEmail}
                     onCompleted={() => {
                         onReviewSave({
                             ...asset,

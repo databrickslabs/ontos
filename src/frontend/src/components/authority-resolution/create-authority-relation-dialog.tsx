@@ -8,6 +8,9 @@ import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import TagSelector from '@/components/ui/tag-selector';
 import type { AssignedTag } from '@/components/ui/tag-chip';
 import ScheduleSelect from '@/components/authority-resolution/schedule-select';
+import CriteriaBuilder, {
+  rowsFromCriteria, rowsToPayload, type CriterionRow,
+} from '@/components/authority-resolution/criteria-builder';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
@@ -25,12 +28,11 @@ interface Props {
 }
 
 const DEFAULT_COLUMN_MAP = `{
-  "actual_approver": "approver",
-  "documented_approver": "documented_approver",
+  "actor_identity": "approver",
+  "action": "action",
   "value": "discount",
   "escalated": "escalated",
   "cosign_present": "cosign",
-  "action": "action",
   "object_id": "promo_id"
 }`;
 
@@ -67,7 +69,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [currency, setCurrency] = useState('');
   const [market, setMarket] = useState('');
   const [dnaMax, setDnaMax] = useState('0.3');
-  const [requiredCosign, setRequiredCosign] = useState(false);
+  const [criteriaRows, setCriteriaRows] = useState<CriterionRow[]>([]);
   const [evidenceSources, setEvidenceSources] = useState<EvidenceSourceInput[]>([]);
   const [domainIds, setDomainIds] = useState<string[]>([]);
   const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
@@ -78,7 +80,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const reset = () => {
     setName(''); setSlug(''); setDescription(''); setActorRole(''); setActorIdentity('');
     setAction('approve'); setObjectType('data_product'); setObjectId(''); setThreshold('');
-    setCurrency(''); setMarket(''); setDnaMax('0.3'); setRequiredCosign(false);
+    setCurrency(''); setMarket(''); setDnaMax('0.3'); setCriteriaRows([]);
     setEvidenceSources([]); setDomainIds([]); setPrimaryDomainId(null);
     setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]); setScheduleCron(null);
   };
@@ -102,7 +104,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       setCurrency(dc.currency || '');
       setMarket(dc.market || '');
       setDnaMax(relation.dna_max_threshold != null ? String(relation.dna_max_threshold) : '0.3');
-      setRequiredCosign(!!(relation.decision_logic && relation.decision_logic.required_cosign));
+      setCriteriaRows(rowsFromCriteria(relation.criteria));
       const srcs = relation.evidence_sources || [];
       if (srcs.length > 0) {
         setEvidenceSources(srcs.map((s) => ({
@@ -182,7 +184,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       object_type: objectType.trim() || undefined,
       object_id: objectId.trim() || undefined,
       domain_context: Object.keys(domain_context).length ? domain_context : undefined,
-      decision_logic: requiredCosign ? { required_cosign: true } : undefined,
+      criteria: rowsToPayload(criteriaRows),
       evidence_sources,
       dna_max_threshold: parseFloat(dnaMax) || 0.3,
       domain_ids: domainIds,
@@ -274,10 +276,12 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
               <Input value={market} onChange={(e) => setMarket(e.target.value)} placeholder="emea-north" />
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={requiredCosign} onChange={(e) => setRequiredCosign(e.target.checked)} />
-            Require a co-sign for this decision
-          </label>
+          <div className="text-sm font-semibold text-muted-foreground pt-2">Decision criteria</div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Author the rules the resolution gate enforces (and the DNA-Coefficient measures divergence
+            against). Each criterion is a reusable <strong>Compliance Check</strong>.
+          </p>
+          <CriteriaBuilder rows={criteriaRows} onChange={setCriteriaRows} />
 
           <div className="text-sm font-semibold text-muted-foreground pt-2">Domains</div>
           <DomainMultiSelector

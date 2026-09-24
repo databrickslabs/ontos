@@ -102,6 +102,11 @@ class AuthorityRelationDb(Base):
         "AuthorityAffirmationDb", back_populates="relation",
         cascade="all, delete-orphan", lazy="selectin",
     )
+    criteria = relationship(
+        "AuthorityCriterionDb", back_populates="relation",
+        cascade="all, delete-orphan", lazy="selectin",
+        order_by="AuthorityCriterionDb.display_order",
+    )
     decisions = relationship(
         "AuthorityDecisionDb", back_populates="relation",
         cascade="all, delete-orphan", lazy="select",
@@ -149,6 +154,41 @@ class AuthorityAffirmationDb(Base):
     sort_order = Column(Integer, default=0, nullable=False)
 
     relation = relationship("AuthorityRelationDb", back_populates="affirmations")
+
+
+class AuthorityCriterionDb(Base):
+    """An author-configurable decision criterion attached to an AR.
+
+    Mirrors the Maturity-Level → Compliance-Policy link (``MaturityGateDb``): each
+    row binds a reusable **Compliance Check** (its DSL ``ASSERT`` rule is the
+    condition) to an Authority Relation. The gate approves only when every enabled
+    criterion passes; the DNA-Coefficient engine treats a criterion that *fails*
+    for an evidence row as a divergence, weighted by ``weight`` and signed by
+    ``direction`` (the ARF ``arf:direction``). ``direction``/``weight`` are the
+    ARF-specific facets a plain pass/fail check cannot carry, so they live here on
+    the link rather than on the shared policy. Scoped to the versioned AR row; the
+    manager re-creates the links on each version bump.
+    """
+    __tablename__ = 'authority_criteria'
+
+    id = Column(String, primary_key=True)
+    relation_id = Column(
+        String, ForeignKey('authority_relations.id', ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    compliance_policy_id = Column(
+        String, ForeignKey('compliance_policies.id', ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    # actual-exceeds-documented | documented-exceeds-actual | neutral
+    direction = Column(String, nullable=False, default='neutral')
+    weight = Column(Float, nullable=False, default=1.0)
+    display_order = Column(Integer, nullable=False, default=0)
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    relation = relationship("AuthorityRelationDb", back_populates="criteria")
+    compliance_policy = relationship("CompliancePolicyDb", lazy="selectin")
 
 
 class AuthorityDnaRunDb(Base):

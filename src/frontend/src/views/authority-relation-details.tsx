@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History, Database } from 'lucide-react';
 import { formatDna } from './authority-resolution';
 import { RelativeDate } from '@/components/common/relative-date';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
@@ -420,17 +420,56 @@ export default function AuthorityRelationDetails() {
         <Card>
           <CardHeader><CardTitle className="text-base">Runtime & evidence</CardTitle></CardHeader>
           <CardContent className="text-sm space-y-1">
-            <div className="text-muted-foreground">Decision logic (compiled, deterministic)</div>
-            <JsonBlock data={relation.decision_logic} />
+            <div className="text-muted-foreground">Decision criteria</div>
+            {(relation.criteria || []).length > 0 ? (
+              <div className="space-y-2">
+                {(relation.criteria || []).map((c) => (
+                  <div key={c.id} className="rounded border p-2 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{c.name || 'Criterion'}</span>
+                      {!c.enabled && <Badge variant="outline" className="text-xs">disabled</Badge>}
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {c.direction} · w{c.weight}
+                      </span>
+                    </div>
+                    <div className="font-mono text-xs break-all">{c.rule}</div>
+                    {c.failure_message && (
+                      <div className="text-xs text-muted-foreground">↳ {c.failure_message}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-muted-foreground text-xs">No criteria — the gate is unconstrained (approves any request).</div>
+            )}
             <div className="pt-2 text-muted-foreground">Evidence sources</div>
             {(relation.evidence_sources || []).length > 0 ? (
               <div className="space-y-1">
-                {(relation.evidence_sources || []).map((s, i) => (
-                  <div key={i} className="text-xs">
-                    <Badge variant="outline" className="mr-1">{s.type}</Badge>
-                    <span className="font-mono">{s.ref}</span>{s.label ? ` — ${s.label}` : ''}
-                  </div>
-                ))}
+                {(relation.evidence_sources || []).map((s, i) => {
+                  // delta_table / asset sources resolve to a UC table FQN — link to
+                  // Catalog Commander to preview it. data_product refs aren't a table FQN.
+                  const linkable = (s.type === 'delta_table' || s.type === 'asset')
+                    && (s.ref || '').split('.').length >= 3;
+                  return (
+                    <div key={i} className="text-xs">
+                      <Badge variant="outline" className="mr-1">{s.type}</Badge>
+                      {linkable ? (
+                        <a
+                          href={`/catalog-commander?table=${encodeURIComponent(s.ref)}`}
+                          className="font-mono text-primary hover:underline inline-flex items-center gap-1"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Open ${s.ref} in Catalog Commander`}
+                        >
+                          <Database className="h-3 w-3" />{s.ref}
+                        </a>
+                      ) : (
+                        <span className="font-mono">{s.ref}</span>
+                      )}
+                      {s.label ? ` — ${s.label}` : ''}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <JsonBlock data={relation.evidence_binding} />

@@ -41,8 +41,9 @@ export interface AuthorityReviewContext {
     actor_identity?: string | null;
     action?: string | null;
     domain_context?: Record<string, any> | null;
-    decision_logic?: Record<string, any> | null;
+    criteria?: { name?: string | null; rule?: string | null; direction?: string; weight?: number; enabled?: boolean }[];
     evidence_binding?: EvidenceBinding | null;
+    evidence_sources?: EvidenceSource[] | null;
     justification_chain?: Record<string, any> | null;
   } | null;
 }
@@ -62,6 +63,45 @@ export interface EvidenceSource {
   column_map?: Record<string, string>;
   row_filter?: string | null;
 }
+
+export interface AuthorityCriterion {
+  id: string;
+  policy_id?: string | null;
+  name?: string | null;
+  rule?: string | null;              // Compliance-DSL ASSERT rule (the condition)
+  failure_message?: string | null;
+  category?: string | null;
+  direction: string;                 // actual-exceeds-documented | documented-exceeds-actual | neutral
+  weight: number;
+  order: number;
+  enabled: boolean;
+}
+
+export interface CriterionInput {
+  policy_id?: string;                // link an existing Compliance Check
+  name?: string;                     // inline-authored check name
+  rule?: string;                     // inline-authored ASSERT rule
+  failure_message?: string;
+  direction: string;
+  weight: number;
+  order: number;
+  enabled: boolean;
+}
+
+export interface ReusableCheck {
+  id: string;
+  name: string;
+  rule: string;
+  category?: string | null;
+  failure_message?: string | null;
+  severity?: string | null;
+}
+
+export const ARF_DIRECTIONS: { value: string; label: string }[] = [
+  { value: 'actual-exceeds-documented', label: 'Actual exceeds documented' },
+  { value: 'documented-exceeds-actual', label: 'Documented exceeds actual' },
+  { value: 'neutral', label: 'Neutral' },
+];
 
 export interface AuthorityRelation {
   id: string;
@@ -96,6 +136,7 @@ export interface AuthorityRelation {
   denied_count?: number;
   domains?: AssignedDomain[];
   affirmations?: AuthorityAffirmation[];
+  criteria?: AuthorityCriterion[];
   tags?: { fully_qualified_name?: string | null; assigned_value?: string | null }[];
   created_at?: string;
   updated_at?: string;

@@ -8,6 +8,7 @@ from src.common.repository import CRUDBase
 from src.db_models.authority_resolution import (
     AuthorityRelationDb,
     AuthorityAffirmationDb,
+    AuthorityCriterionDb,
     AuthorityDecisionDb,
     AuthorityDnaRunDb,
 )
@@ -57,6 +58,26 @@ class AuthorityAffirmationRepository(CRUDBase[AuthorityAffirmationDb, Dict[str, 
         return deleted
 
 
+class AuthorityCriterionRepository(CRUDBase[AuthorityCriterionDb, Dict[str, Any], Dict[str, Any]]):
+    def __init__(self):
+        super().__init__(AuthorityCriterionDb)
+
+    def list_for_relation(self, db: Session, *, relation_id: str) -> List[AuthorityCriterionDb]:
+        stmt = (
+            select(AuthorityCriterionDb)
+            .where(AuthorityCriterionDb.relation_id == relation_id)
+            .order_by(AuthorityCriterionDb.display_order.asc())
+        )
+        return list(db.execute(stmt).scalars().all())
+
+    def delete_for_relation(self, db: Session, *, relation_id: str) -> int:
+        return (
+            db.query(AuthorityCriterionDb)
+            .filter(AuthorityCriterionDb.relation_id == relation_id)
+            .delete(synchronize_session=False)
+        )
+
+
 class AuthorityDnaRunRepository(CRUDBase[AuthorityDnaRunDb, Dict[str, Any], Dict[str, Any]]):
     def __init__(self):
         super().__init__(AuthorityDnaRunDb)
@@ -87,5 +108,6 @@ class AuthorityDecisionRepository(CRUDBase[AuthorityDecisionDb, Dict[str, Any], 
 
 authority_relation_repo = AuthorityRelationRepository()
 authority_affirmation_repo = AuthorityAffirmationRepository()
+authority_criterion_repo = AuthorityCriterionRepository()
 authority_dna_run_repo = AuthorityDnaRunRepository()
 authority_decision_repo = AuthorityDecisionRepository()

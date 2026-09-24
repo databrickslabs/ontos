@@ -47,6 +47,23 @@ class AffirmationInput(BaseModel):
     is_reviewer: bool = False
 
 
+class CriterionInput(BaseModel):
+    """One author-configurable decision criterion attached to an AR.
+
+    Either link an existing Compliance Check (``policy_id``) or author a new one
+    inline (``name`` + ``rule``, an ``ASSERT`` DSL condition). ``direction`` and
+    ``weight`` are the ARF divergence facets recorded on the link.
+    """
+    policy_id: Optional[str] = None             # link an existing compliance policy
+    name: Optional[str] = None                  # inline-authored policy name
+    rule: Optional[str] = None                  # inline-authored DSL rule (ASSERT obj.… )
+    failure_message: Optional[str] = None
+    direction: str = "neutral"                  # actual-exceeds-documented | documented-exceeds-actual | neutral
+    weight: float = 1.0
+    order: int = 0
+    enabled: bool = True
+
+
 class AuthorityRelationCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -72,6 +89,8 @@ class AuthorityRelationCreate(BaseModel):
     primary_domain_id: Optional[str] = None
     # N-functional affirmation stakeholders
     affirmations: List[AffirmationInput] = Field(default_factory=list)
+    # Author-configurable decision criteria (Compliance Checks)
+    criteria: List[CriterionInput] = Field(default_factory=list)
     # Polymorphic tags
     tags: Optional[List[AssignedTagCreate]] = None
 
@@ -97,6 +116,7 @@ class AuthorityRelationUpdate(BaseModel):
     domain_ids: Optional[List[str]] = None
     primary_domain_id: Optional[str] = None
     affirmations: Optional[List[AffirmationInput]] = None
+    criteria: Optional[List[CriterionInput]] = None
     tags: Optional[List[AssignedTagCreate]] = None
 
 

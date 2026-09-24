@@ -22,20 +22,33 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from src.common.compliance_dsl import evaluate_rule_on_object
+
 # Direction flags (ARF `arf:direction`).
 DIR_ACTUAL_EXCEEDS = "actual-exceeds-documented"
 DIR_DOCUMENTED_EXCEEDS = "documented-exceeds-actual"
 DIR_BALANCED = "balanced"
 DIR_NONE = "none"
 
+# Directions an author-configurable criterion may declare.
+DIR_NEUTRAL = "neutral"
+
 
 @dataclass
-class ARSpec:
-    """The *documented* half of the comparison, extracted from the AR Definition."""
-    documented_approver: Optional[str] = None   # actor_identity / heldBy
-    threshold: Optional[float] = None            # domain_context.threshold
-    action: Optional[str] = None
-    required_cosign: bool = False                # whether a co-sign is documented as required
+class Criterion:
+    """One author-configurable decision criterion.
+
+    ``rule`` is a Compliance-DSL rule (``ASSERT obj.<field> …``) evaluated against
+    the decision request (gate) or a normalised evidence row (divergence). A
+    criterion that *fails* is a denial (gate) or a divergence (DNAco), signed by
+    ``direction`` and scaled by ``weight``. ``code`` labels the reason; ``message``
+    is the human-readable denial text.
+    """
+    code: str
+    rule: str
+    direction: str = DIR_NEUTRAL
+    weight: float = 1.0
+    message: Optional[str] = None
 
 
 @dataclass
@@ -44,6 +57,7 @@ class RowDivergence:
     diverged: bool
     signed: int                                  # +1 actual-exceeds-doc, -1 doc-exceeds-actual, 0 neutral
     reasons: List[str] = field(default_factory=list)
+    weight: float = 1.0                          # max weight across this row's failed criteria
     actor_identity: Optional[str] = None
     action: Optional[str] = None
     object_id: Optional[str] = None
@@ -88,96 +102,91 @@ def _truthy(v: Any) -> bool:
     return str(v).strip().lower() in {"1", "true", "yes", "y", "t", "present", "signed"}
 
 
-def _get(row: Dict[str, Any], column_map: Dict[str, str], key: str) -> Any:
-    """Fetch an AR element from a row via the column map. Returns None if unmapped/missing."""
-    col = column_map.get(key)
-    if not col:
-        return None
-    return row.get(col)
+# Canonical request/evidence fields whose types we coerce before DSL evaluation
+# (evidence columns arrive as strings; the DSL compares strictly).
+_NUMERIC_FIELDS = ("value",)
+_BOOL_FIELDS = ("escalated", "cosign_present")
+
+
+def normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce a request/evidence row's known fields to comparable Python types so
+    author DSL rules (``obj.value <= 0.15``, ``obj.escalated = True``) evaluate
+    correctly against raw evidence columns."""
+    out = dict(row)
+    for f in _NUMERIC_FIELDS:
+        if f in out and out[f] is not None:
+            fv = _to_float(out[f])
+            if fv is not None:
+                out[f] = fv
+    for f in _BOOL_FIELDS:
+        if f in out and out[f] is not None:
+            out[f] = _truthy(out[f])
+    return out
+
+
+def _direction_sign(direction: Optional[str]) -> int:
+    if direction == DIR_ACTUAL_EXCEEDS:
+        return 1
+    if direction == DIR_DOCUMENTED_EXCEEDS:
+        return -1
+    return 0
 
 
 # --------------------------------------------------------------------------- #
 # Core evaluation                                                             #
 # --------------------------------------------------------------------------- #
 
-def evaluate_row(spec: ARSpec, row: Dict[str, Any], column_map: Dict[str, str]) -> RowDivergence:
-    """Decide whether a single evidence row diverges from the documented authority.
-
-    v1 predicates:
-      * ``approver_mismatch`` — the actual approver differs from the documented
-        role-holder (neutral direction on its own).
-      * ``threshold_breach_without_escalation`` — the decision value exceeded the
-        documented threshold with no escalation recorded (actual exceeds documented).
-      * ``missing_cosign`` — a required co-sign is absent (documented exceeds actual).
-    """
+def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergence:
+    """Decide whether a single evidence row diverges, by running each criterion's
+    rule against it: a criterion that **fails** is a divergence, contributing its
+    ``weight`` to the row and its ``direction`` to the aggregate sign."""
+    norm = normalize_row(row)
     reasons: List[str] = []
+    weights: List[float] = []
     signed = 0
-
-    actual_approver = _get(row, column_map, "actual_approver")
-    documented_approver = _get(row, column_map, "documented_approver") or spec.documented_approver
-    value = _to_float(_get(row, column_map, "value"))
-    escalated = _truthy(_get(row, column_map, "escalated"))
-    cosign_present = _truthy(_get(row, column_map, "cosign_present"))
-    action = _get(row, column_map, "action")
-    object_id = _get(row, column_map, "object_id")
-
-    # 1. Approver mismatch (only when both sides are known).
-    if actual_approver and documented_approver and str(actual_approver).strip() != str(documented_approver).strip():
-        reasons.append("approver_mismatch")
-
-    # 2. Threshold breached without escalation → actual exceeded documented scope.
-    if value is not None and spec.threshold is not None and value > spec.threshold and not escalated:
-        reasons.append("threshold_breach_without_escalation")
-        signed += 1
-
-    # 3. Required co-sign missing → documented required more than actually happened.
-    if spec.required_cosign and not cosign_present:
-        reasons.append("missing_cosign")
-        signed -= 1
+    for c in criteria:
+        try:
+            passed, _ = evaluate_rule_on_object(c.rule, norm)
+        except Exception:
+            # A malformed rule must not fabricate divergence.
+            passed = True
+        if not passed:
+            reasons.append(c.code)
+            weights.append(c.weight if c.weight is not None else 1.0)
+            signed += _direction_sign(c.direction)
 
     diverged = len(reasons) > 0
-    # Clamp the aggregate row sign to {-1, 0, +1}.
-    signed = (signed > 0) - (signed < 0)
+    signed = (signed > 0) - (signed < 0)   # clamp to {-1, 0, +1}
+    value = _to_float(norm.get("value"))
     return RowDivergence(
         diverged=diverged,
         signed=signed,
         reasons=reasons,
-        actor_identity=str(actual_approver) if actual_approver is not None else None,
-        action=str(action) if action is not None else None,
-        object_id=str(object_id) if object_id is not None else None,
+        weight=max(weights) if weights else 1.0,
+        actor_identity=str(norm["actor_identity"]) if norm.get("actor_identity") is not None else None,
+        action=str(norm["action"]) if norm.get("action") is not None else None,
+        object_id=str(norm["object_id"]) if norm.get("object_id") is not None else None,
         value=value,
     )
 
 
-def compute_dnaco(
-    spec: ARSpec,
-    rows: List[Dict[str, Any]],
-    column_map: Dict[str, str],
-    scoring_config: Optional[Dict[str, Any]] = None,
-) -> DnaResult:
+def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaResult:
     """Roll a sample of evidence rows up into a single DNA-Coefficient.
 
-    ``magnitude`` defaults to the fraction of sampled decisions that diverge
-    (``0.0`` best). Admins may supply ``scoring_config['reason_weights']`` (a map
-    of reason → weight, default ``1.0``) to weight some divergence kinds more
-    heavily; a row's contribution is the max weight across its reasons, and the
-    magnitude is capped at ``1.0``. ``direction`` is the sign of the aggregate
-    authority-level delta across divergent rows.
+    A row diverges if any criterion fails for it; its contribution is the max
+    ``weight`` across its failed criteria. ``magnitude`` is the weighted fraction
+    of diverging rows (``0.0`` best), capped at ``1.0``. ``direction`` is the sign
+    of the aggregate authority-level delta across divergent rows. With no criteria
+    (or no rows) the coefficient is ``0.0`` — nothing to diverge from.
     """
-    scoring_config = scoring_config or {}
-    reason_weights: Dict[str, float] = scoring_config.get("reason_weights", {}) or {}
-
-    evaluated = [evaluate_row(spec, r, column_map) for r in rows]
+    evaluated = [evaluate_row(criteria, r) for r in rows]
     sampled = len(evaluated)
     divergent = [rd for rd in evaluated if rd.diverged]
 
     if sampled == 0:
         return DnaResult(magnitude=0.0, direction=DIR_NONE, sampled_count=0, divergent_count=0, rows=evaluated)
 
-    weighted_sum = 0.0
-    for rd in divergent:
-        row_weight = max((reason_weights.get(reason, 1.0) for reason in rd.reasons), default=1.0)
-        weighted_sum += row_weight
+    weighted_sum = sum(rd.weight for rd in divergent)
     magnitude = min(1.0, weighted_sum / sampled)
 
     signed_total = sum(rd.signed for rd in divergent)

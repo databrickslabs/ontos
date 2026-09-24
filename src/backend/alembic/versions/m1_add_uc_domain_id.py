@@ -6,7 +6,7 @@ domains can be matched idempotently to Unity Catalog domains across sync runs
 may reuse a name but gets a fresh id.
 
 Revision ID: m1_uc_domain_id
-Revises: l1_entity_domain_associations
+Revises: m1_mcp_keyless_default
 Create Date: 2026-09-20
 """
 from typing import Sequence, Union
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 
 revision: str = "m1_uc_domain_id"
-down_revision: Union[str, Sequence[str], None] = "l1_entity_domain_associations"
+down_revision: Union[str, Sequence[str], None] = "m1_mcp_keyless_default"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

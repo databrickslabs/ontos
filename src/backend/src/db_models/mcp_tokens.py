@@ -29,9 +29,12 @@ class MCPTokenDb(Base):
         last_used_at: When the token was last used for authentication
         expires_at: When the token expires (null for no expiration)
         is_active: Whether the token is active (can be revoked)
+        is_keyless_default: Whether this token is the keyless default, used to
+            resolve app-gate-authenticated MCP requests that carry no X-API-Key.
+            At most one active token should carry this flag (enforced in code).
     """
     __tablename__ = "mcp_tokens"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     name = Column(String(255), nullable=False)
     token_hash = Column(String(255), nullable=False, unique=True, index=True)
@@ -41,6 +44,7 @@ class MCPTokenDb(Base):
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
+    is_keyless_default = Column(Boolean, nullable=False, default=False, index=True)
     
     def __repr__(self) -> str:
         return f"<MCPTokenDb(id={self.id}, name='{self.name}', is_active={self.is_active})>"
@@ -50,7 +54,13 @@ class MCPTokenDb(Base):
         """Check if the token has expired."""
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+        # Postgres round-trips tz-aware datetimes, but some backends (e.g. SQLite)
+        # drop the tzinfo. Treat a naive expires_at as UTC so the comparison never
+        # raises on offset-naive vs offset-aware.
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > expires_at
     
     @property
     def is_valid(self) -> bool:

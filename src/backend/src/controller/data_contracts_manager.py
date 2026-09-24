@@ -2932,7 +2932,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
             # Try to resolve owner as team name
             owner_team_id = self._resolve_team_name_to_id(db, owner_val)
-            
+
+            # Mirror the create() path (see there for the full rationale): a
+            # draft contract with no owning team would otherwise be invisible to
+            # its own uploader under the PRD #442 role-aware visibility filter,
+            # because the family is "elevated" only for the draft_owner or
+            # owner_team members. Stamp the uploader as the personal-draft owner
+            # so they can find the contract they just uploaded. Team-owned drafts
+            # are team-visible from the start, so draft_owner_id stays unset
+            # there; it is cleared again on the draft->proposed transition.
+            draft_owner_id_val = (
+                current_user
+                if (status_val or '').lower() == 'draft' and not owner_team_id
+                else None
+            )
+
             # Preserve original external ID (e.g. URN) as a custom property
             original_id = parsed_odcs.get('id')
             if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
@@ -2951,6 +2965,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 owner_team_id=owner_team_id,
                 kind=kind_val,
                 api_version=api_version_val,
+                draft_owner_id=draft_owner_id_val,
                 tenant=parsed_odcs.get('tenant'),
                 # Store dataProduct from imported ODCS for reference, but actual linkage is via Output Ports
                 data_product=parsed_odcs.get('dataProduct') or parsed_odcs.get('data_product'),

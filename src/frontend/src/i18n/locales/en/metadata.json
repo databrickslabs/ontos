@@ -113,7 +113,12 @@
     "selectDescription": "Select a shared asset to attach to this entity",
     "noSharedNotes": "No shared notes available",
     "noSharedLinks": "No shared links available",
-    "noSharedDocuments": "No shared documents available"
+    "noSharedDocuments": "No shared documents available",
+    "loading": "Loading shared assets...",
+    "attach": "Attach",
+    "levelInfo": "Level: {{level}}",
+    "inheritable": "Inheritable",
+    "notInheritable": "Not inheritable"
   },
   "messages": {
     "loadFailed": "Metadata load failed",
@@ -133,5 +138,118 @@
       "saveSuccess": "Tags updated",
       "saveFailed": "Failed to update tags"
     }
+  },
+  "costs": {
+    "title": "Cost Management",
+    "total": "Total",
+    "breakdown": "Breakdown",
+    "noItems": "No items",
+    "addExpense": "Add expense",
+    "editExpense": "Edit expense",
+    "loading": "Loading",
+    "noItemsForMonth": "No cost items for this month.",
+    "donutAria": "Cost breakdown",
+    "table": {
+      "title": "Title",
+      "center": "Center",
+      "monthRange": "Month Range",
+      "amountMonth": "Amount/Month"
+    },
+    "form": {
+      "title": "Title",
+      "center": "Center",
+      "customCenter": "Custom center",
+      "amountCents": "Amount (cents)",
+      "currency": "Currency",
+      "startMonth": "Start month (YYYY-MM)",
+      "endMonth": "End month (YYYY-MM)",
+      "monthPlaceholder": "YYYY-MM"
+    },
+    "validation": {
+      "required": "Required"
+    },
+    "messages": {
+      "loadFailed": "Failed to load costs",
+      "missingFields": "Missing required fields",
+      "missingFieldsDescription": "Please fill all mandatory fields.",
+      "added": "Cost added",
+      "updated": "Cost updated",
+      "deleted": "Cost deleted",
+      "deleteFailed": "Delete failed",
+      "saveFailed": "Save failed"
+    }
+  },
+  "quality": {
+    "title": "Data Quality",
+    "overallScore": "Overall Score",
+    "byDimension": "By Dimension",
+    "noMeasurements": "No measurements",
+    "addMeasurement": "Add measurement",
+    "editMeasurement": "Edit measurement",
+    "lastMeasured": "Last measured {{date}}",
+    "loading": "Loading",
+    "noMeasurementsRecorded": "No quality measurements recorded.",
+    "gaugeAria": "Quality score",
+    "table": {
+      "title": "Title",
+      "dimension": "Dimension",
+      "source": "Source",
+      "score": "Score",
+      "measured": "Measured"
+    },
+    "form": {
+      "title": "Title",
+      "dimension": "Dimension",
+      "source": "Source",
+      "score": "Score (%)",
+      "checksPassed": "Checks Passed",
+      "checksTotal": "Checks Total"
+    },
+    "validation": {
+      "required": "Required",
+      "range": "0-100"
+    },
+    "messages": {
+      "loadFailed": "Failed to load quality data",
+      "missingFields": "Missing required fields",
+      "added": "Measurement added",
+      "updated": "Measurement updated",
+      "deleted": "Measurement deleted",
+      "deleteFailed": "Delete failed",
+      "saveFailed": "Save failed"
+    }
+  },
+  "ratings": {
+    "title": "Ratings",
+    "youRated": "You rated: {{rating}}★",
+    "updateYourRating": "Update your rating",
+    "rateThisItem": "Rate this item",
+    "addReviewOptional": "Add a review (optional)",
+    "reviewPlaceholder": "Share your experience...",
+    "submitting": "Submitting...",
+    "submitRating": "Submit Rating",
+    "labels": {
+      "poor": "Poor",
+      "fair": "Fair",
+      "good": "Good",
+      "veryGood": "Very Good",
+      "excellent": "Excellent"
+    }
+  },
+  "info": {
+    "entityInformation": "Entity Information",
+    "subscribed": "Subscribed",
+    "tableOfContents": "Table of contents",
+    "noNotesAvailable": "No notes available.",
+    "noLinks": "No links.",
+    "inherited": "Inherited",
+    "shared": "Shared",
+    "ratingsAndReviews": "Ratings & Reviews",
+    "loadingRatings": "Loading ratings...",
+    "yourRating": "Your Rating",
+    "addReviewPlaceholder": "Add a review (optional)...",
+    "goToDetails": "Go to Details",
+    "alreadySubscribed": "Already Subscribed",
+    "subscribe": "Subscribe"
   }
 }

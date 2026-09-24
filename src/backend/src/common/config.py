@@ -103,6 +103,11 @@ class Settings(BaseSettings):
     # background (async) import instead of a blocking synchronous one.
     # Overridable at runtime via General Settings (SCHEMA_IMPORT_ASYNC_THRESHOLD).
     SCHEMA_IMPORT_ASYNC_THRESHOLD: int = Field(200, env='SCHEMA_IMPORT_ASYNC_THRESHOLD')
+    # Maximum number of child assets the Schema Importer fetches per path when
+    # browsing or collecting for import. Bounded by the connector contract
+    # (ListAssetsOptions: 1..10000). Overridable at runtime via General Settings
+    # (SCHEMA_IMPORT_CHILD_LIMIT in app_settings). Default preserves historic behavior.
+    SCHEMA_IMPORT_CHILD_LIMIT: int = Field(500, env='SCHEMA_IMPORT_CHILD_LIMIT')
     sync_enabled: bool = False
     sync_repository: Optional[str] = None
     enabled_jobs: List[str] = Field(default_factory=list)

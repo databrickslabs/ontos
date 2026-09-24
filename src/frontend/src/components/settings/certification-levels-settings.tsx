@@ -34,6 +34,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
+import { useTranslation } from 'react-i18next';
 
 interface CertificationLevel {
   id: string;
@@ -54,6 +55,7 @@ const COLOR_OPTIONS = ['amber', 'slate', 'yellow', 'green', 'blue', 'purple', 'r
 export default function CertificationLevelsSettings() {
   const { toast } = useToast();
   const { get, post, put, delete: apiDelete } = useApi();
+  const { t } = useTranslation(['settings', 'common']);
 
   const [levels, setLevels] = useState<CertificationLevel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +116,7 @@ export default function CertificationLevelsSettings() {
           color: formData.color,
         });
         if (error) throw new Error(error);
-        toast({ title: 'Updated', description: `Certification level "${formData.name}" updated.` });
+        toast({ title: t('common:toast.updated'), description: t('certificationLevels.messages.updated', { name: formData.name }) });
       } else {
         const maxOrder = levels.length > 0 ? Math.max(...levels.map(l => l.level_order)) : 0;
         const { error } = await post('/api/certification-levels', {
@@ -125,12 +127,12 @@ export default function CertificationLevelsSettings() {
           level_order: maxOrder + 1,
         });
         if (error) throw new Error(error);
-        toast({ title: 'Created', description: `Certification level "${formData.name}" created.` });
+        toast({ title: t('common:toast.created'), description: t('certificationLevels.messages.created', { name: formData.name }) });
       }
       setDialogOpen(false);
       fetchLevels();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to save', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: err?.message || t('common:errors.saveFailed'), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -140,9 +142,9 @@ export default function CertificationLevelsSettings() {
     if (!deletingLevel) return;
     const { error } = await apiDelete(`/api/certification-levels/${deletingLevel.id}`);
     if (error) {
-      toast({ title: 'Cannot delete', description: error, variant: 'destructive' });
+      toast({ title: t('certificationLevels.messages.cannotDeleteTitle'), description: error, variant: 'destructive' });
     } else {
-      toast({ title: 'Deleted', description: `Certification level "${deletingLevel.name}" deleted.` });
+      toast({ title: t('common:toast.deleted'), description: t('certificationLevels.messages.deleted', { name: deletingLevel.name }) });
       setDeletingLevel(null);
       fetchLevels();
     }
@@ -160,7 +162,7 @@ export default function CertificationLevelsSettings() {
       levels: newLevels.map(l => ({ id: l.id, level_order: l.level_order })),
     });
     if (error) {
-      toast({ title: 'Error', description: 'Failed to reorder', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: t('certificationLevels.messages.reorderFailed'), variant: 'destructive' });
     } else {
       fetchLevels();
     }
@@ -177,7 +179,7 @@ export default function CertificationLevelsSettings() {
       levels: newLevels.map(l => ({ id: l.id, level_order: l.level_order })),
     });
     if (error) {
-      toast({ title: 'Error', description: 'Failed to reorder', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: t('certificationLevels.messages.reorderFailed'), variant: 'destructive' });
     } else {
       fetchLevels();
     }
@@ -205,13 +207,13 @@ export default function CertificationLevelsSettings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Certification Levels</h2>
+          <h2 className="text-lg font-semibold">{t('certificationLevels.title')}</h2>
           <p className="text-sm text-muted-foreground">
-            Define the certification levels available for data products, contracts, and assets.
+            {t('certificationLevels.description')}
           </p>
         </div>
         <Button onClick={handleOpenCreate} size="sm">
-          <Plus className="h-4 w-4 mr-1" /> Add Level
+          <Plus className="h-4 w-4 mr-1" /> {t('certificationLevels.addLevel')}
         </Button>
       </div>
 
@@ -219,11 +221,11 @@ export default function CertificationLevelsSettings() {
         <TableHeader>
           <TableRow>
             <TableHead className="w-12"></TableHead>
-            <TableHead className="w-16">Order</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Preview</TableHead>
-            <TableHead className="w-24">Actions</TableHead>
+            <TableHead className="w-16">{t('certificationLevels.table.order')}</TableHead>
+            <TableHead>{t('common:labels.name')}</TableHead>
+            <TableHead>{t('common:labels.description')}</TableHead>
+            <TableHead>{t('certificationLevels.table.preview')}</TableHead>
+            <TableHead className="w-24">{t('common:labels.actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -279,7 +281,7 @@ export default function CertificationLevelsSettings() {
           {levels.length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                No certification levels configured. Click "Add Level" to create one.
+                {t('certificationLevels.emptyState')}
               </TableCell>
             </TableRow>
           )}
@@ -290,33 +292,33 @@ export default function CertificationLevelsSettings() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingLevel ? 'Edit' : 'Add'} Certification Level</DialogTitle>
+            <DialogTitle>{editingLevel ? t('certificationLevels.dialog.editTitle') : t('certificationLevels.dialog.createTitle')}</DialogTitle>
             <DialogDescription>
-              {editingLevel ? 'Update the certification level details.' : 'Create a new certification level.'}
+              {editingLevel ? t('certificationLevels.dialog.editDescription') : t('certificationLevels.dialog.createDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="cert-name">Name</Label>
+              <Label htmlFor="cert-name">{t('common:labels.name')}</Label>
               <Input
                 id="cert-name"
                 value={formData.name}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g., Gold"
+                placeholder={t('certificationLevels.form.namePlaceholder')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cert-desc">Description</Label>
+              <Label htmlFor="cert-desc">{t('common:labels.description')}</Label>
               <Textarea
                 id="cert-desc"
                 value={formData.description}
                 onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="What this level represents..."
+                placeholder={t('certificationLevels.form.descriptionPlaceholder')}
                 rows={2}
               />
             </div>
             <div className="space-y-2">
-              <Label>Color</Label>
+              <Label>{t('certificationLevels.form.colorLabel')}</Label>
               <div className="flex flex-wrap gap-2">
                 {COLOR_OPTIONS.map(c => (
                   <button
@@ -330,20 +332,20 @@ export default function CertificationLevelsSettings() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Preview</Label>
+              <Label>{t('certificationLevels.form.previewLabel')}</Label>
               <div>
                 <Badge variant="outline" className={getColorClass(formData.color)}>
                   <ShieldCheck className="h-3 w-3 mr-1" />
-                  {formData.name || 'Level Name'}
+                  {formData.name || t('certificationLevels.form.levelNamePreview')}
                 </Badge>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common:actions.cancel')}</Button>
             <Button onClick={handleSave} disabled={saving || !formData.name.trim()}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              {editingLevel ? 'Update' : 'Create'}
+              {editingLevel ? t('common:actions.update') : t('common:actions.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -353,16 +355,15 @@ export default function CertificationLevelsSettings() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete certification level?</AlertDialogTitle>
+            <AlertDialogTitle>{t('certificationLevels.delete.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deletingLevel?.name}"? This cannot be undone.
-              If entities are certified at this level, deletion will be blocked.
+              {t('certificationLevels.delete.description', { name: deletingLevel?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Delete
+              {t('common:actions.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

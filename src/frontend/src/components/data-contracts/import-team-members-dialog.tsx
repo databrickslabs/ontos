@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -34,6 +35,7 @@ export default function ImportTeamMembersDialog({
   teamName,
   onImport
 }: ImportTeamMembersDialogProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -43,7 +45,7 @@ export default function ImportTeamMembersDialog({
   useEffect(() => {
     if (isOpen && entityId && teamId) {
       setLoading(true)
-      const apiPath = entityType === 'product' 
+      const apiPath = entityType === 'product'
         ? `/api/data-products/${entityId}/import-team-members?team_id=${teamId}`
         : `/api/data-contracts/${entityId}/import-team-members?team_id=${teamId}`
       fetch(apiPath)
@@ -63,8 +65,8 @@ export default function ImportTeamMembersDialog({
         .catch(err => {
           console.error('Failed to fetch team members:', err)
           toast({
-            title: 'Error',
-            description: err.message || 'Failed to fetch team members',
+            title: t('common:toast.error'),
+            description: err.message || t('data-contracts:team.fetchError', 'Failed to fetch team members'),
             variant: 'destructive'
           })
           setMembers([])
@@ -74,30 +76,30 @@ export default function ImportTeamMembersDialog({
   }, [isOpen, entityId, entityType, teamId, toast])
 
   const toggleSelection = (index: number) => {
-    setMembers(prev => prev.map((m, i) => 
+    setMembers(prev => prev.map((m, i) =>
       i === index ? { ...m, selected: !m.selected } : m
     ))
   }
 
   const updateRole = (index: number, role: string) => {
-    setMembers(prev => prev.map((m, i) => 
+    setMembers(prev => prev.map((m, i) =>
       i === index ? { ...m, role } : m
     ))
   }
 
   const updateDescription = (index: number, description: string) => {
-    setMembers(prev => prev.map((m, i) => 
+    setMembers(prev => prev.map((m, i) =>
       i === index ? { ...m, description } : m
     ))
   }
 
   const handleImport = async () => {
     const selectedMembers = members.filter(m => m.selected)
-    
+
     if (selectedMembers.length === 0) {
       toast({
-        title: 'No members selected',
-        description: 'Please select at least one team member to import',
+        title: t('data-contracts:team.noMembersSelected', 'No members selected'),
+        description: t('data-contracts:team.noMembersSelectedDesc', 'Please select at least one team member to import'),
         variant: 'destructive'
       })
       return
@@ -118,8 +120,8 @@ export default function ImportTeamMembersDialog({
       onOpenChange(false)
     } catch (error: any) {
       toast({
-        title: 'Import failed',
-        description: error?.message || 'Failed to import team members',
+        title: t('data-contracts:team.importFailed', 'Import failed'),
+        description: error?.message || t('data-contracts:team.importError', 'Failed to import team members'),
         variant: 'destructive'
       })
     } finally {
@@ -133,9 +135,9 @@ export default function ImportTeamMembersDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Team Members from {teamName}</DialogTitle>
+          <DialogTitle>{t('data-contracts:team.importTitle', 'Import Team Members from {{teamName}}', { teamName })}</DialogTitle>
           <DialogDescription>
-            Select team members to import into the ODCS team array. You can customize their roles and descriptions.
+            {t('data-contracts:team.importDescription', 'Select team members to import into the ODCS team array. You can customize their roles and descriptions.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -146,17 +148,17 @@ export default function ImportTeamMembersDialog({
             </div>
           ) : members.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              No members found in this team
+              {t('data-contracts:team.noMembersFound', 'No members found in this team')}
             </div>
           ) : (
             <div className="space-y-4">
               <div className="text-sm text-muted-foreground">
-                {selectedCount} of {members.length} members selected
+                {t('data-contracts:team.membersSelected', '{{selected}} of {{total}} members selected', { selected: selectedCount, total: members.length })}
               </div>
 
               <div className="space-y-3 border rounded-lg p-4 max-h-[400px] overflow-y-auto">
                 {members.map((memberSelection, index) => (
-                  <div 
+                  <div
                     key={memberSelection.member.member_identifier}
                     className="flex items-start gap-3 p-3 border rounded-lg"
                   >
@@ -165,20 +167,20 @@ export default function ImportTeamMembersDialog({
                       onCheckedChange={() => toggleSelection(index)}
                       className="mt-1"
                     />
-                    
+
                     <div className="flex-1 space-y-3">
                       <div>
                         <div className="font-medium">{memberSelection.member.member_name}</div>
                         <div className="text-sm text-muted-foreground">
-                          {memberSelection.member.member_type === 'user' ? 'User' : 'Group'}
+                          {memberSelection.member.member_type === 'user' ? t('data-contracts:team.user', 'User') : t('data-contracts:team.group', 'Group')}
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                          <Label className="text-xs">Role</Label>
-                          <Select 
-                            value={memberSelection.role} 
+                          <Label className="text-xs">{t('data-contracts:team.roleLabel', 'Role')}</Label>
+                          <Select
+                            value={memberSelection.role}
                             onValueChange={(role) => updateRole(index, role)}
                             disabled={!memberSelection.selected}
                           >
@@ -186,26 +188,26 @@ export default function ImportTeamMembersDialog({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="team_member">Team Member</SelectItem>
-                              <SelectItem value="owner">Owner</SelectItem>
-                              <SelectItem value="steward">Steward</SelectItem>
-                              <SelectItem value="consumer">Consumer</SelectItem>
-                              <SelectItem value="expert">Expert</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="engineer">Engineer</SelectItem>
-                              <SelectItem value="analyst">Analyst</SelectItem>
+                              <SelectItem value="team_member">{t('data-contracts:team.roles.teamMember', 'Team Member')}</SelectItem>
+                              <SelectItem value="owner">{t('data-contracts:team.roles.owner', 'Owner')}</SelectItem>
+                              <SelectItem value="steward">{t('data-contracts:team.roles.steward', 'Steward')}</SelectItem>
+                              <SelectItem value="consumer">{t('data-contracts:team.roles.consumer', 'Consumer')}</SelectItem>
+                              <SelectItem value="expert">{t('data-contracts:team.roles.expert', 'Expert')}</SelectItem>
+                              <SelectItem value="admin">{t('data-contracts:team.roles.admin', 'Admin')}</SelectItem>
+                              <SelectItem value="engineer">{t('data-contracts:team.roles.engineer', 'Engineer')}</SelectItem>
+                              <SelectItem value="analyst">{t('data-contracts:team.roles.analyst', 'Analyst')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         <div className="space-y-1.5">
-                          <Label className="text-xs">Description (optional)</Label>
+                          <Label className="text-xs">{t('data-contracts:team.descriptionOptionalLabel', 'Description (optional)')}</Label>
                           <input
                             type="text"
                             value={memberSelection.description}
                             onChange={(e) => updateDescription(index, e.target.value)}
                             disabled={!memberSelection.selected}
-                            placeholder="e.g., Data Engineer"
+                            placeholder={t('data-contracts:team.descriptionPlaceholder', 'e.g., Data Engineer')}
                             className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                           />
                         </div>
@@ -219,22 +221,21 @@ export default function ImportTeamMembersDialog({
         </div>
 
         <DialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={() => onOpenChange(false)} 
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
-          <Button 
-            onClick={handleImport} 
+          <Button
+            onClick={handleImport}
             disabled={isSubmitting || loading || selectedCount === 0}
           >
-            {isSubmitting ? 'Importing...' : `Import ${selectedCount} ${selectedCount === 1 ? 'Member' : 'Members'}`}
+            {isSubmitting ? t('data-contracts:team.importing', 'Importing...') : t('data-contracts:team.importButton', { count: selectedCount, defaultValue: 'Import {{count}} Members' })}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
-

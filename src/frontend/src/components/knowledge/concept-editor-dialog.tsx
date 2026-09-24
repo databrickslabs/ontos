@@ -75,7 +75,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
   onViewHistory,
   readOnly = false,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['semantic-models', 'common']);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     collection_iri: '',
@@ -91,19 +91,19 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
     narrower_iris: [] as string[],
     related_iris: [] as string[],
   });
-  
+
   const conceptTypes = [
-    { value: 'concept', label: t('Concept'), description: 'A general term or notion (SKOS Concept)' },
-    { value: 'class', label: t('Class'), description: 'A category or type (RDFS/OWL Class)' },
-    { value: 'property', label: t('Property'), description: 'A relationship or attribute (RDF Property)' },
-    { value: 'individual', label: t('Individual'), description: 'A specific instance (OWL Individual)' },
-    { value: 'term', label: t('Term'), description: 'A business glossary term' },
+    { value: 'concept', label: t('semantic-models:types.concept'), description: t('semantic-models:conceptEditor.typeDescriptions.concept') },
+    { value: 'class', label: t('semantic-models:types.class'), description: t('semantic-models:conceptEditor.typeDescriptions.class') },
+    { value: 'property', label: t('semantic-models:types.property'), description: t('semantic-models:conceptEditor.typeDescriptions.property') },
+    { value: 'individual', label: t('semantic-models:types.individual'), description: t('semantic-models:conceptEditor.typeDescriptions.individual') },
+    { value: 'term', label: t('semantic-models:types.term'), description: t('semantic-models:conceptEditor.typeDescriptions.term') },
   ];
-  
+
   const propertyTypes = [
-    { value: 'object', label: t('Object Property'), description: 'Relates to other concepts' },
-    { value: 'datatype', label: t('Datatype Property'), description: 'Relates to literal values' },
-    { value: 'annotation', label: t('Annotation Property'), description: 'Metadata annotation' },
+    { value: 'object', label: t('semantic-models:propertyTypes.object'), description: t('semantic-models:conceptEditor.propertyTypeDescriptions.object') },
+    { value: 'datatype', label: t('semantic-models:propertyTypes.datatype'), description: t('semantic-models:conceptEditor.propertyTypeDescriptions.datatype') },
+    { value: 'annotation', label: t('semantic-models:propertyTypes.annotation'), description: t('semantic-models:conceptEditor.propertyTypeDescriptions.annotation') },
   ];
   const [newSynonym, setNewSynonym] = useState('');
   const [newExample, setNewExample] = useState('');
@@ -233,7 +233,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
       <DialogContent className="sm:max-w-[700px] max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {isNew ? t('Create Concept') : t('Edit Concept')}
+            {isNew ? t('semantic-models:actions.createConcept') : t('semantic-models:conceptEditor.editTitle')}
             {concept?.status && (
               <Badge className={statusColors[concept.status as ConceptStatus]}>
                 {concept.status}
@@ -242,7 +242,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
           </DialogTitle>
           <DialogDescription>
             {isNew
-              ? t('Create a new term or concept in the collection.')
+              ? t('semantic-models:conceptEditor.createDescription')
               : concept?.iri}
           </DialogDescription>
         </DialogHeader>
@@ -253,7 +253,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
               {/* Collection (for new concepts) */}
               {isNew && editableCollections.length > 0 && (
                 <div className="grid gap-2">
-                  <Label htmlFor="collection">{t('Collection')}</Label>
+                  <Label htmlFor="collection">{t('semantic-models:conceptEditor.collectionLabel')}</Label>
                   <Select
                     value={formData.collection_iri}
                     onValueChange={(value) =>
@@ -262,7 +262,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                     disabled={editableCollections.length <= 1}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('Select collection...')} />
+                      <SelectValue placeholder={t('semantic-models:conceptEditor.selectCollectionPlaceholder')} />
                     </SelectTrigger>
                     <SelectContent>
                       {editableCollections.map((c) => (
@@ -277,7 +277,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
 
               {/* Type Selector */}
               <div className="grid gap-2">
-                <Label>{t('Type')}</Label>
+                <Label>{t('common:labels.type')}</Label>
                 <Select
                   value={formData.concept_type}
                   onValueChange={(value) =>
@@ -286,7 +286,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                   disabled={!canEdit || !isNew} // Can only set type on creation
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={t('Select type...')} />
+                    <SelectValue placeholder={t('semantic-models:conceptEditor.selectTypePlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     {conceptTypes.map((type) => (
@@ -305,14 +305,14 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
 
               {/* Label */}
               <div className="grid gap-2">
-                <Label htmlFor="label">{t('Label')}</Label>
+                <Label htmlFor="label">{t('semantic-models:conceptEditor.label')}</Label>
                 <Input
                   id="label"
                   value={formData.label}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, label: e.target.value }))
                   }
-                  placeholder={t('e.g., Revenue')}
+                  placeholder={t('semantic-models:conceptEditor.labelPlaceholder')}
                   required
                   disabled={!canEdit}
                 />
@@ -320,14 +320,14 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
 
               {/* Definition */}
               <div className="grid gap-2">
-                <Label htmlFor="definition">{t('Definition')}</Label>
+                <Label htmlFor="definition">{t('semantic-models:fields.definition')}</Label>
                 <Textarea
                   id="definition"
                   value={formData.definition}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, definition: e.target.value }))
                   }
-                  placeholder={t('A clear, concise definition...')}
+                  placeholder={t('semantic-models:conceptEditor.definitionPlaceholder')}
                   rows={3}
                   disabled={!canEdit}
                 />
@@ -340,12 +340,12 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                   <div className="space-y-4 bg-muted/30 rounded-lg p-4">
                     <h4 className="text-sm font-medium flex items-center gap-2">
                       <Link2 className="h-4 w-4" />
-                      {t('Property Configuration')}
+                      {t('semantic-models:conceptEditor.propertyConfiguration')}
                     </h4>
                     
                     {/* Property Type */}
                     <div className="grid gap-2">
-                      <Label>{t('Property Type')}</Label>
+                      <Label>{t('semantic-models:conceptEditor.propertyType')}</Label>
                       <Select
                         value={formData.property_type}
                         onValueChange={(value) =>
@@ -354,7 +354,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                         disabled={!canEdit}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={t('Select property type...')} />
+                          <SelectValue placeholder={t('semantic-models:conceptEditor.selectPropertyTypePlaceholder')} />
                         </SelectTrigger>
                         <SelectContent>
                           {propertyTypes.map((type) => (
@@ -373,24 +373,24 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                     
                     {/* Domain */}
                     <div className="grid gap-2">
-                      <Label htmlFor="domain">{t('Domain')}</Label>
+                      <Label htmlFor="domain">{t('semantic-models:fields.domain')}</Label>
                       <Input
                         id="domain"
                         value={formData.domain}
                         onChange={(e) =>
                           setFormData((prev) => ({ ...prev, domain: e.target.value }))
                         }
-                        placeholder={t('e.g., schema:Person or IRI...')}
+                        placeholder={t('semantic-models:conceptEditor.domainPlaceholder')}
                         disabled={!canEdit}
                       />
                       <p className="text-xs text-muted-foreground">
-                        {t('The class or type this property applies to (subject)')}
+                        {t('semantic-models:conceptEditor.domainHelp')}
                       </p>
                     </div>
                     
                     {/* Range */}
                     <div className="grid gap-2">
-                      <Label htmlFor="range">{t('Range')}</Label>
+                      <Label htmlFor="range">{t('semantic-models:fields.range')}</Label>
                       <Input
                         id="range"
                         value={formData.range}
@@ -399,15 +399,15 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                         }
                         placeholder={
                           formData.property_type === 'datatype'
-                            ? t('e.g., xsd:string, xsd:integer...')
-                            : t('e.g., schema:Organization or IRI...')
+                            ? t('semantic-models:conceptEditor.rangeDatatypePlaceholder')
+                            : t('semantic-models:conceptEditor.rangeObjectPlaceholder')
                         }
                         disabled={!canEdit}
                       />
                       <p className="text-xs text-muted-foreground">
                         {formData.property_type === 'datatype'
-                          ? t('The datatype of the property value')
-                          : t('The class or type of the property value (object)')}
+                          ? t('semantic-models:conceptEditor.rangeDatatypeHelp')
+                          : t('semantic-models:conceptEditor.rangeObjectHelp')}
                       </p>
                     </div>
                   </div>
@@ -417,7 +417,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
 
               {/* Synonyms */}
               <div className="grid gap-2">
-                <Label>{t('Synonyms')}</Label>
+                <Label>{t('semantic-models:fields.synonyms')}</Label>
                 <div className="flex flex-wrap gap-2">
                   {formData.synonyms.map((syn) => (
                     <Badge key={syn} variant="secondary" className="flex items-center gap-1">
@@ -439,7 +439,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                     <Input
                       value={newSynonym}
                       onChange={(e) => setNewSynonym(e.target.value)}
-                      placeholder={t('Add synonym...')}
+                      placeholder={t('semantic-models:conceptEditor.addSynonymPlaceholder')}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -456,7 +456,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
 
               {/* Examples */}
               <div className="grid gap-2">
-                <Label>{t('Examples')}</Label>
+                <Label>{t('semantic-models:fields.examples')}</Label>
                 <div className="flex flex-col gap-1">
                   {formData.examples.map((ex) => (
                     <div
@@ -481,7 +481,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                     <Input
                       value={newExample}
                       onChange={(e) => setNewExample(e.target.value)}
-                      placeholder={t('Add example...')}
+                      placeholder={t('semantic-models:conceptEditor.addExamplePlaceholder')}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -506,12 +506,12 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Shield className="h-4 w-4 text-purple-500" />
-                        <span>{t('Certified')}: {new Date(concept.certified_at).toLocaleDateString()}</span>
+                        <span>{t('semantic-models:conceptEditor.certified')}: {new Date(concept.certified_at).toLocaleDateString()}</span>
                       </div>
                       {concept.certification_expires_at && (
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          <span>{t('Expires')}: {new Date(concept.certification_expires_at).toLocaleDateString()}</span>
+                          <span>{t('semantic-models:conceptEditor.expires')}: {new Date(concept.certification_expires_at).toLocaleDateString()}</span>
                         </div>
                       )}
                     </div>
@@ -522,7 +522,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <ArrowUp className="h-4 w-4" />
                       <span>
-                        {concept.promotion_type === 'promoted' ? t('Promoted from') : t('Migrated from')}:{' '}
+                        {concept.promotion_type === 'promoted' ? t('semantic-models:conceptEditor.promotedFrom') : t('semantic-models:conceptEditor.migratedFrom')}:{' '}
                         {concept.source_collection_iri}
                       </span>
                     </div>
@@ -545,7 +545,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                   onClick={() => onViewHistory(concept)}
                 >
                   <History className="h-4 w-4 mr-1" />
-                  {t('History')}
+                  {t('semantic-models:conceptEditor.history')}
                 </Button>
               )}
               {onSubmitForReview && concept.status === 'draft' && (
@@ -556,7 +556,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                   onClick={() => onSubmitForReview(concept)}
                 >
                   <Send className="h-4 w-4 mr-1" />
-                  {t('Submit for Review')}
+                  {t('semantic-models:conceptEditor.submitForReview')}
                 </Button>
               )}
               {onPromote && (
@@ -567,7 +567,7 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
                   onClick={() => onPromote(concept)}
                 >
                   <ArrowUp className="h-4 w-4 mr-1" />
-                  {t('Promote')}
+                  {t('semantic-models:promotion.promote')}
                 </Button>
               )}
             </div>
@@ -579,12 +579,12 @@ export const ConceptEditorDialog: React.FC<ConceptEditorDialogProps> = ({
             onClick={() => onOpenChange(false)}
             disabled={isLoading}
           >
-            {t('Cancel')}
+            {t('common:actions.cancel')}
           </Button>
           {canEdit && (
             <Button onClick={handleSubmit} disabled={isLoading || !formData.label}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isNew ? t('Create') : t('Save')}
+              {isNew ? t('common:actions.create') : t('common:actions.save')}
             </Button>
           )}
         </DialogFooter>

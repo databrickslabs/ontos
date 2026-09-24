@@ -1,0 +1,75 @@
+{
+  "title": "Méthodes de livraison",
+  "subtitle": "Définissez comment les données sont livrées aux consommateurs via des livrables (par ex. accès aux tables, point de terminaison de service).",
+  "addNew": "Ajouter une méthode",
+  "editMethod": "Modifier la méthode",
+  "deleteMethod": "Supprimer la méthode",
+  "systemBadge": "Système",
+  "openMenu": "Ouvrir le menu",
+  "table": {
+    "name": "Nom",
+    "description": "Description",
+    "category": "Catégorie",
+    "status": "Statut",
+    "system": "Système",
+    "lastUpdated": "Dernière mise à jour",
+    "actions": "Actions"
+  },
+  "categories": {
+    "access": "Accès",
+    "endpoint": "Point de terminaison",
+    "export": "Export",
+    "streaming": "Streaming"
+  },
+  "statuses": {
+    "active": "Actif",
+    "deprecated": "Obsolète"
+  },
+  "permissions": {
+    "deniedView": "Vous n'avez pas la permission de voir les méthodes de livraison.",
+    "deniedCreate": "Vous n'avez pas la permission de créer des méthodes de livraison.",
+    "deniedEdit": "Vous n'avez pas la permission de modifier les méthodes de livraison.",
+    "deniedDelete": "Vous n'avez pas la permission de supprimer les méthodes de livraison.",
+    "permissionDenied": "Permission refusée"
+  },
+  "messages": {
+    "errorFetching": "Erreur lors de la récupération des méthodes de livraison",
+    "loadFailed": "Échec du chargement des méthodes de livraison",
+    "errorDeleting": "Erreur lors de la suppression de la méthode de livraison",
+    "deleted": "Méthode de livraison supprimée",
+    "deletedSuccess": "La méthode de livraison a été supprimée avec succès.",
+    "errorLoadingData": "Erreur lors du chargement des données"
+  },
+  "deleteDialog": {
+    "title": "Supprimer la méthode de livraison ?",
+    "description": "Cette action ne peut pas être annulée. Les livrables existants utilisant cette méthode peuvent devenir orphelins.",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
+  },
+  "emptyState": {
+    "title": "Aucune méthode de livraison définie pour le moment",
+    "description": "Créez votre première méthode de livraison (par ex. accès aux tables, point de terminaison de service, export de fichiers)."
+  },
+  "form": {
+    "createTitle": "Créer une méthode de livraison",
+    "createDescription": "Ajouter une nouvelle méthode de livraison pour la distribution des données.",
+    "editTitle": "Modifier la méthode de livraison",
+    "editDescription": "Mettre à jour les détails de cette méthode de livraison.",
+    "create": "Créer",
+    "update": "Enregistrer les modifications",
+    "noCategory": "Aucune catégorie",
+    "placeholders": {
+      "name": "par ex. accès aux tables",
+      "description": "Décrivez comment les données sont livrées...",
+      "category": "Sélectionner une catégorie"
+    },
+    "toasts": {
+      "created": "Méthode de livraison créée",
+      "createdDescription": "\"{{name}}\" a été créée.",
+      "updated": "Méthode de livraison mise à jour",
+      "updatedDescription": "\"{{name}}\" a été mise à jour.",
+      "createFailed": "Échec de la création",
+      "updateFailed": "Échec de la mise à jour"
+    }
+  }
+}

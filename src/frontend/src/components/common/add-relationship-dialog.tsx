@@ -59,12 +59,12 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Server, Shield, BookOpen, Database, FolderOpen, Shapes, Box,
 };
 
-const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; order: number }> = {
-  data: { label: 'Data Assets', icon: Database, order: 1 },
-  analytics: { label: 'Analytics', icon: LayoutDashboard, order: 2 },
-  integration: { label: 'Integration', icon: Globe, order: 3 },
-  system: { label: 'Systems', icon: Server, order: 4 },
-  custom: { label: 'Custom', icon: Shapes, order: 5 },
+const CATEGORY_META: Record<string, { labelKey: string; icon: React.ElementType; order: number }> = {
+  data: { labelKey: 'assetSelector.categories.data', icon: Database, order: 1 },
+  analytics: { labelKey: 'assetSelector.categories.analytics', icon: LayoutDashboard, order: 2 },
+  integration: { labelKey: 'assetSelector.categories.integration', icon: Globe, order: 3 },
+  system: { labelKey: 'assetSelector.categories.system', icon: Server, order: 4 },
+  custom: { labelKey: 'assetSelector.categories.custom', icon: Shapes, order: 5 },
 };
 
 function getAssetIcon(typeName?: string) {
@@ -86,6 +86,7 @@ function TargetResultRow({ entity, isSelected, onSelect }: {
   isSelected: boolean;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation('common');
   const Icon = getAssetIcon(entity.type);
   return (
     <button
@@ -103,7 +104,7 @@ function TargetResultRow({ entity, isSelected, onSelect }: {
         )}
       </div>
       <Badge variant="outline" className="text-xs flex-shrink-0">
-        {entity.type || 'Asset'}
+        {entity.type || t('common:addRelationship.assetFallback')}
       </Badge>
       {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
     </button>
@@ -150,7 +151,7 @@ export function AddRelationshipDialog({
 }: AddRelationshipDialogProps) {
   const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation('common');
   const formatLabel = useFormatLabel();
 
   // Relationship type state
@@ -211,13 +212,13 @@ export function AddRelationshipDialog({
     return Object.entries(groups)
       .map(([cat, types]) => ({
         category: cat,
-        label: CATEGORY_META[cat]?.label || cat,
+        label: CATEGORY_META[cat]?.labelKey ? t(`common:${CATEGORY_META[cat].labelKey}`) : cat,
         icon: CATEGORY_META[cat]?.icon || Shapes,
         order: CATEGORY_META[cat]?.order || 99,
         types: types.sort((a, b) => a.name.localeCompare(b.name)),
       }))
       .sort((a, b) => a.order - b.order);
-  }, [assetTypes, targetAssetTypes]);
+  }, [assetTypes, targetAssetTypes, t]);
 
   // Auto-select the only matching type in browse mode
   useEffect(() => {
@@ -373,12 +374,12 @@ export function AddRelationshipDialog({
       };
       const response = await apiPost('/api/entity-relationships', payload);
       if (response.error) throw new Error(response.error);
-      toast({ title: 'Relationship created' });
+      toast({ title: t('common:addRelationship.relationshipCreated') });
       onOpenChange(false);
       resetState();
       onRelationshipCreated();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
+      toast({ variant: 'destructive', title: t('common:toast.error'), description: err.message });
     } finally {
       setCreateLoading(false);
     }
@@ -426,19 +427,19 @@ export function AddRelationshipDialog({
           {/* Header */}
           <div className="px-6 pt-6 pb-2">
             <DialogHeader>
-              <DialogTitle>Add Relationship</DialogTitle>
+              <DialogTitle>{t('common:addRelationship.title')}</DialogTitle>
               <DialogDescription>
-                Create a new relationship from this {formatTypeName(entityType)} to another entity.
+                {t('common:addRelationship.description', { type: formatTypeName(entityType) })}
               </DialogDescription>
             </DialogHeader>
           </div>
 
           {/* Relationship type selector */}
           <div className="px-6 pb-3">
-            <Label>Relationship Type</Label>
+            <Label>{t('common:addRelationship.relationshipType')}</Label>
             <Select value={selectedRelType} onValueChange={handleRelTypeChange}>
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder={relTypesLoading ? 'Loading...' : 'Select relationship type'} />
+                <SelectValue placeholder={relTypesLoading ? t('common:states.loading') : t('common:addRelationship.selectRelationshipType')} />
               </SelectTrigger>
               <SelectContent>
                 {validRelationships.map((r) => (
@@ -447,7 +448,7 @@ export function AddRelationshipDialog({
                   </SelectItem>
                 ))}
                 {validRelationships.length === 0 && !relTypesLoading && (
-                  <SelectItem value="_none" disabled>No valid relationships defined</SelectItem>
+                  <SelectItem value="_none" disabled>{t('common:addRelationship.noValidRelationships')}</SelectItem>
                 )}
               </SelectContent>
             </Select>
@@ -461,17 +462,19 @@ export function AddRelationshipDialog({
               {/* Mode toggle */}
               <div className="px-6 py-3 flex items-center justify-between">
                 <Label className="text-sm">
-                  Select Target{targetTypeLabel ? ` (${targetTypeLabel})` : ''}
+                  {targetTypeLabel
+                    ? t('common:addRelationship.selectTargetTyped', { type: targetTypeLabel })
+                    : t('common:addRelationship.selectTarget')}
                 </Label>
                 <Tabs value={mode} onValueChange={(v) => setMode(v as 'search' | 'browse')}>
                   <TabsList className="h-8">
                     <TabsTrigger value="search" className="gap-1.5 text-xs px-2.5 h-6">
                       <Search className="h-3 w-3" />
-                      Search
+                      {t('common:actions.search')}
                     </TabsTrigger>
                     <TabsTrigger value="browse" className="gap-1.5 text-xs px-2.5 h-6">
                       <FolderTree className="h-3 w-3" />
-                      Browse
+                      {t('common:actions.browse')}
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
@@ -485,7 +488,7 @@ export function AddRelationshipDialog({
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         ref={searchInputRef}
-                        placeholder={`Search ${targetTypeLabel || 'entities'} by name...`}
+                        placeholder={t('common:addRelationship.searchByNamePlaceholder', { type: targetTypeLabel || t('common:addRelationship.entitiesFallback') })}
                         value={searchQuery}
                         onChange={(e) => handleSearchQueryChange(e.target.value)}
                         className="pl-9"
@@ -502,8 +505,8 @@ export function AddRelationshipDialog({
                         onSelect={handleSelectTarget}
                         emptyMessage={
                           searchQuery.length >= 2
-                            ? (searchLoading ? undefined : 'No entities found')
-                            : 'Type at least 2 characters to search'
+                            ? (searchLoading ? undefined : t('common:addRelationship.noEntitiesFound'))
+                            : t('common:addRelationship.typeToSearchHint')
                         }
                       />
                     </ScrollArea>
@@ -518,7 +521,7 @@ export function AddRelationshipDialog({
                             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                           </div>
                         ) : groupedTypes.length === 0 ? (
-                          <p className="text-xs text-muted-foreground text-center py-4">No matching types</p>
+                          <p className="text-xs text-muted-foreground text-center py-4">{t('common:addRelationship.noMatchingTypes')}</p>
                         ) : (
                           groupedTypes.map(group => (
                             <div key={group.category} className="mb-2">
@@ -562,7 +565,7 @@ export function AddRelationshipDialog({
                           <div className="relative px-3 py-2 border-b">
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <Input
-                              placeholder={`Filter ${selectedTypeName || 'entities'}...`}
+                              placeholder={t('common:addRelationship.filterPlaceholder', { type: selectedTypeName || t('common:addRelationship.entitiesFallback') })}
                               value={browseFilter}
                               onChange={(e) => handleBrowseFilterChange(e.target.value)}
                               className="pl-8 h-8 text-sm"
@@ -577,14 +580,14 @@ export function AddRelationshipDialog({
                                 onSelect={handleSelectTarget}
                                 emptyMessage={
                                   browseFilter.length >= 2
-                                    ? 'No matching entities'
-                                    : 'No entities of this type'
+                                    ? t('common:addRelationship.noMatchingEntities')
+                                    : t('common:addRelationship.noEntitiesOfType')
                                 }
                               />
                             </div>
                             {browseTotal > 50 && !browseLoading && (
                               <p className="text-xs text-muted-foreground text-center py-2">
-                                Showing 50 of {browseTotal} — use the filter to narrow down
+                                {t('common:addRelationship.showingLimit', { total: browseTotal })}
                               </p>
                             )}
                           </ScrollArea>
@@ -593,7 +596,7 @@ export function AddRelationshipDialog({
                         <div className="flex-1 flex items-center justify-center">
                           <div className="text-center text-muted-foreground">
                             <FolderTree className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                            <p className="text-sm">Select a type to browse</p>
+                            <p className="text-sm">{t('common:addRelationship.selectTypeToBrowse')}</p>
                           </div>
                         </div>
                       )}
@@ -607,7 +610,7 @@ export function AddRelationshipDialog({
                 <div className="px-6 pt-2">
                   <Separator className="mb-2" />
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Selected:</span>
+                    <span className="text-muted-foreground">{t('common:addRelationship.selected')}</span>
                     <Badge variant="secondary" className="gap-1">
                       {(() => { const Icon = getAssetIcon(selectedTarget.type); return <Icon className="h-3 w-3" />; })()}
                       <span className="max-w-48 truncate">{selectedTarget.name}</span>
@@ -619,17 +622,17 @@ export function AddRelationshipDialog({
             </>
           ) : (
             <div className="px-6 py-8 text-center text-muted-foreground">
-              <p className="text-sm">Select a relationship type to find target entities</p>
+              <p className="text-sm">{t('common:addRelationship.selectRelTypePrompt')}</p>
             </div>
           )}
 
           {/* Footer */}
           <div className="px-6 pb-6 pt-3">
             <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common:actions.cancel')}</Button>
               <Button onClick={handleCreate} disabled={!selectedTarget || !selectedRelType || createLoading}>
                 {createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Relationship
+                {t('common:addRelationship.createRelationship')}
               </Button>
             </DialogFooter>
           </div>

@@ -24,7 +24,7 @@ import { useUICustomizationStore } from '@/stores/ui-customization-store';
 import { useToast } from '@/hooks/use-toast';
 
 export default function SchemaImporterView() {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation(['database-schema', 'settings', 'common']);
   const appName = useUICustomizationStore((s) => s.getAppName());
   const { get: apiGet } = useApi();
   const { toast } = useToast();
@@ -134,20 +134,20 @@ export default function SchemaImporterView() {
           {/* Connection selector */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Connection</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('common:labels.connection')}</CardTitle>
               <CardDescription className="text-xs">
-                Select a data platform connection
+                {t('database-schema:importer.selectConnectionDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingConnections ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading...
+                  {t('common:states.loading')}
                 </div>
               ) : connections.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No connections configured. Add one in Settings &gt; Connectors.
+                  {t('database-schema:importer.noConnections')}
                 </p>
               ) : (
                 <Select
@@ -155,7 +155,7 @@ export default function SchemaImporterView() {
                   onValueChange={handleConnectionChange}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose connection..." />
+                    <SelectValue placeholder={t('database-schema:importer.chooseConnection')} />
                   </SelectTrigger>
                   <SelectContent>
                     {connections.map((c) => (
@@ -177,9 +177,9 @@ export default function SchemaImporterView() {
           {/* Import depth */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Import Depth</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('database-schema:importer.importDepth')}</CardTitle>
               <CardDescription className="text-xs">
-                How deep to recurse below selected nodes
+                {t('database-schema:importer.importDepthDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -191,30 +191,30 @@ export default function SchemaImporterView() {
                 <div className="flex items-start gap-2">
                   <RadioGroupItem value="selected_only" id="depth-selected" />
                   <Label htmlFor="depth-selected" className="text-sm font-normal leading-tight cursor-pointer">
-                    <span className="font-medium">Selected only</span>
+                    <span className="font-medium">{t('database-schema:importer.depthSelectedOnly')}</span>
                     <br />
                     <span className="text-xs text-muted-foreground">
-                      Import only the selected items
+                      {t('database-schema:importer.depthSelectedOnlyHint')}
                     </span>
                   </Label>
                 </div>
                 <div className="flex items-start gap-2">
                   <RadioGroupItem value="one_level" id="depth-one" />
                   <Label htmlFor="depth-one" className="text-sm font-normal leading-tight cursor-pointer">
-                    <span className="font-medium">One level</span>
+                    <span className="font-medium">{t('database-schema:importer.depthOneLevel')}</span>
                     <br />
                     <span className="text-xs text-muted-foreground">
-                      Selected items + immediate children
+                      {t('database-schema:importer.depthOneLevelHint')}
                     </span>
                   </Label>
                 </div>
                 <div className="flex items-start gap-2">
                   <RadioGroupItem value="full_recursive" id="depth-full" />
                   <Label htmlFor="depth-full" className="text-sm font-normal leading-tight cursor-pointer">
-                    <span className="font-medium">Full recursive</span>
+                    <span className="font-medium">{t('database-schema:importer.depthFullRecursive')}</span>
                     <br />
                     <span className="text-xs text-muted-foreground">
-                      Everything nested below selected nodes
+                      {t('database-schema:importer.depthFullRecursiveHint')}
                     </span>
                   </Label>
                 </div>
@@ -231,7 +231,7 @@ export default function SchemaImporterView() {
               className="w-full"
             >
               <Eye className="mr-2 h-4 w-4" />
-              Preview ({selectedPaths.size} selected)
+              {t('database-schema:importer.previewSelected', { count: selectedPaths.size })}
             </Button>
             <Button
               onClick={() => setIsPreviewOpen(true)}
@@ -239,7 +239,7 @@ export default function SchemaImporterView() {
               className="w-full"
             >
               <Import className="mr-2 h-4 w-4" />
-              Import
+              {t('common:actions.import')}
             </Button>
           </div>
         </div>
@@ -251,15 +251,15 @@ export default function SchemaImporterView() {
               <div>
                 <CardTitle className="text-sm font-medium">
                   {selectedConnection
-                    ? `${selectedConnection.name} — Resources`
-                    : 'Resources'}
+                    ? t('database-schema:importer.resourcesTitle', { name: selectedConnection.name })
+                    : t('database-schema:importer.resources')}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Expand nodes and check the resources you want to import
+                  {t('database-schema:importer.resourcesDescription')}
                 </CardDescription>
               </div>
               {selectedPaths.size > 0 && (
-                <Badge variant="secondary">{selectedPaths.size} selected</Badge>
+                <Badge variant="secondary">{t('database-schema:importer.selectedCount', { count: selectedPaths.size })}</Badge>
               )}
             </div>
           </CardHeader>

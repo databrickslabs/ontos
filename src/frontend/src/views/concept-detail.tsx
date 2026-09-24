@@ -115,18 +115,18 @@ export default function ConceptDetailView() {
         `/api/semantic-models/concepts/by-iri?iri=${encodeURIComponent(conceptIri)}`,
       );
       if (res.error || !res.data?.concept) {
-        setError(res.error || 'Concept not found');
+        setError(res.error || t('semantic-models:details.notFound'));
         setConcept(null);
         return;
       }
       setConcept(res.data.concept);
     } catch (err: any) {
-      setError(err?.message || 'Failed to load concept');
+      setError(err?.message || t('semantic-models:details.loadError'));
       setConcept(null);
     } finally {
       setIsLoading(false);
     }
-  }, [conceptIri, get]);
+  }, [conceptIri, get, t]);
 
   // Collections are needed for source-context lookup (editability check) and
   // for the create/edit concept dialog. The relations panel itself loads
@@ -219,7 +219,7 @@ export default function ConceptDetailView() {
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({} as any));
-        throw new Error(err?.detail || 'Failed to save concept');
+        throw new Error(err?.detail || t('semantic-models:messages.saveFailed'));
       }
       toast({
         title: t('common:toast.success'),
@@ -248,7 +248,7 @@ export default function ConceptDetailView() {
       );
       if (!response.ok) {
         const err = await response.json().catch(() => ({} as any));
-        throw new Error(err?.detail || 'Failed to delete concept');
+        throw new Error(err?.detail || t('semantic-models:messages.deleteConceptFailed'));
       }
       toast({
         title: t('common:toast.success'),
@@ -384,7 +384,7 @@ export default function ConceptDetailView() {
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center text-muted-foreground hover:text-foreground shrink-0"
-            aria-label="Open IRI"
+            aria-label={t('semantic-models:details.openIriAria')}
           >
             <ExternalLink className="h-3 w-3" />
           </a>
@@ -518,13 +518,13 @@ export default function ConceptDetailView() {
 
       {concept.created_at && (
         <p className="text-xs text-muted-foreground">
-          Created: {new Date(concept.created_at).toLocaleDateString()}
+          {t('semantic-models:details.created')}: {new Date(concept.created_at).toLocaleDateString()}
         </p>
       )}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" /> Refreshing...
+          <Loader2 className="h-3 w-3 animate-spin" /> {t('semantic-models:details.refreshing')}
         </div>
       )}
 

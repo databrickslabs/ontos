@@ -1,0 +1,80 @@
+{
+  "title": "Asset-Typen",
+  "subtitle": "Wiederverwendbare Vorlagen, die festlegen, wie verschiedene Arten von Assets strukturiert sind.",
+  "addNew": "Asset-Typ hinzufügen",
+  "editAssetType": "Asset-Typ bearbeiten",
+  "deleteAssetType": "Asset-Typ löschen",
+  "systemBadge": "System",
+  "openMenu": "Menü öffnen",
+  "table": {
+    "name": "Name",
+    "description": "Beschreibung",
+    "category": "Kategorie",
+    "status": "Status",
+    "assetCount": "Assets",
+    "lastUpdated": "Zuletzt aktualisiert",
+    "actions": "Aktionen"
+  },
+  "categories": {
+    "data": "Daten",
+    "analytics": "Analytics",
+    "integration": "Integration",
+    "system": "System",
+    "custom": "Benutzerdefiniert"
+  },
+  "statuses": {
+    "active": "Aktiv",
+    "deprecated": "Veraltet"
+  },
+  "permissions": {
+    "deniedView": "Sie haben keine Berechtigung, Asset-Typen anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Asset-Typen zu erstellen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Asset-Typen zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Asset-Typen zu löschen.",
+    "permissionDenied": "Zugriff verweigert"
+  },
+  "messages": {
+    "errorFetching": "Fehler beim Abrufen der Asset-Typen",
+    "loadFailed": "Asset-Typen konnten nicht geladen werden",
+    "errorDeleting": "Fehler beim Löschen des Asset-Typs",
+    "deleted": "Asset-Typ gelöscht",
+    "deletedSuccess": "Der Asset-Typ wurde erfolgreich gelöscht.",
+    "errorLoadingData": "Fehler beim Laden der Daten"
+  },
+  "deleteDialog": {
+    "title": "Asset-Typ löschen?",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Vorhandene Assets dieses Typs können verwaist werden.",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  },
+  "emptyState": {
+    "title": "Noch keine Asset-Typen definiert",
+    "description": "Erstellen Sie Ihren ersten Asset-Typ, um Asset-Vorlagen zu definieren."
+  },
+  "form": {
+    "createTitle": "Asset-Typ erstellen",
+    "createDescription": "Fügen Sie eine neue Asset-Typ-Vorlage hinzu.",
+    "editTitle": "Asset-Typ bearbeiten",
+    "editDescription": "Aktualisieren Sie die Details dieses Asset-Typs.",
+    "create": "Erstellen",
+    "update": "Änderungen speichern",
+    "noCategory": "Keine Kategorie",
+    "labels": {
+      "icon": "Symbol"
+    },
+    "placeholders": {
+      "name": "z. B. Dashboard",
+      "description": "Beschreiben Sie diesen Asset-Typ...",
+      "category": "Kategorie auswählen",
+      "icon": "z. B. BarChart"
+    },
+    "toasts": {
+      "created": "Asset-Typ erstellt",
+      "createdDescription": "\"{{name}}\" wurde erstellt.",
+      "updated": "Asset-Typ aktualisiert",
+      "updatedDescription": "\"{{name}}\" wurde aktualisiert.",
+      "createFailed": "Erstellung fehlgeschlagen",
+      "updateFailed": "Aktualisierung fehlgeschlagen"
+    }
+  }
+}

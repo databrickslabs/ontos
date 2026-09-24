@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Network, AlertCircle, Search,
   Box, Table2, Eye, Columns2, LayoutDashboard, Globe, FileCode, Brain,
@@ -37,12 +38,12 @@ type DetailViewMode = 'tree' | 'graph';
 
 const ALL_ROOT_TYPES = ['System', 'DataDomain', 'DataProduct'] as const;
 
-const DEPTH_OPTIONS = [
-  { value: '2', label: '2 levels' },
-  { value: '3', label: '3 levels' },
-  { value: '4', label: '4 levels' },
-  { value: '6', label: '6 levels' },
-  { value: '10', label: 'All' },
+const DEPTH_OPTIONS: { value: string; all?: boolean }[] = [
+  { value: '2' },
+  { value: '3' },
+  { value: '4' },
+  { value: '6' },
+  { value: '10', all: true },
 ];
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -115,6 +116,7 @@ function DetailPanel({
   maxDepth, onMaxDepthChange, visibleTypes, onVisibleTypesChange,
 }: DetailPanelProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation(['data-catalog', 'common']);
 
   const rawDisplayNode = detailNode || node;
 
@@ -144,9 +146,9 @@ function DetailPanel({
     return (
       <div className="flex flex-col items-center justify-center h-full py-24 text-muted-foreground">
         <Network className="h-16 w-16 mb-4 opacity-20" />
-        <p className="text-lg font-medium">Select an entity</p>
+        <p className="text-lg font-medium">{t('data-catalog:hierarchy.selectEntity')}</p>
         <p className="text-sm mt-1">
-          Click on any item in the tree to view its hierarchy
+          {t('data-catalog:hierarchy.selectEntityHint')}
         </p>
       </div>
     );
@@ -174,7 +176,7 @@ function DetailPanel({
               )}
               {displayNode.child_count > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  {displayNode.child_count} {displayNode.child_count === 1 ? 'child' : 'children'}
+                  {t('data-catalog:hierarchy.childCount', { count: displayNode.child_count })}
                 </span>
               )}
             </div>
@@ -194,14 +196,16 @@ function DetailPanel({
                       <SelectContent>
                         {DEPTH_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
+                            {opt.all
+                              ? t('data-catalog:hierarchy.allLevels')
+                              : t('data-catalog:hierarchy.levelsOption', { count: Number(opt.value) })}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>Max hierarchy depth</TooltipContent>
+                <TooltipContent>{t('data-catalog:hierarchy.maxDepthTooltip')}</TooltipContent>
               </Tooltip>
               <div className="flex border rounded-md overflow-hidden">
                 <Button
@@ -209,7 +213,7 @@ function DetailPanel({
                   size="sm"
                   className={cn('h-8 px-2.5 rounded-none', viewMode === 'tree' && 'bg-muted')}
                   onClick={() => onViewModeChange('tree')}
-                  aria-label="Tree view"
+                  aria-label={t('data-catalog:hierarchy.treeView')}
                 >
                   <ListTree className="h-3.5 w-3.5" />
                 </Button>
@@ -218,7 +222,7 @@ function DetailPanel({
                   size="sm"
                   className={cn('h-8 px-2.5 rounded-none', viewMode === 'graph' && 'bg-muted')}
                   onClick={() => onViewModeChange('graph')}
-                  aria-label="Graph view"
+                  aria-label={t('data-catalog:hierarchy.graphView')}
                 >
                   <GitFork className="h-3.5 w-3.5" />
                 </Button>
@@ -231,7 +235,7 @@ function DetailPanel({
             onClick={() => navigate(getEntityRoute(displayNode.entity_type, displayNode.entity_id))}
           >
             <ExternalLink className="mr-1 h-3.5 w-3.5" />
-            View Detail
+            {t('data-catalog:hierarchy.viewDetail')}
           </Button>
         </div>
       </div>
@@ -243,7 +247,7 @@ function DetailPanel({
       {/* Entity type filter chips */}
       {allTypes.size > 1 && (
         <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
-          <span className="text-xs text-muted-foreground mr-1">Show:</span>
+          <span className="text-xs text-muted-foreground mr-1">{t('data-catalog:hierarchy.show')}</span>
           {Array.from(allTypes).map((type) => {
             const isAllVisible = visibleTypes.size === 0;
             const active = isAllVisible || visibleTypes.has(type);
@@ -268,7 +272,7 @@ function DetailPanel({
               className="h-5 px-1.5 text-[10px]"
               onClick={() => onVisibleTypesChange(new Set())}
             >
-              Show all
+              {t('data-catalog:hierarchy.showAll')}
             </Button>
           )}
         </div>
@@ -285,7 +289,7 @@ function DetailPanel({
         ) : (
           <div className="flex-1 overflow-auto">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Hierarchy
+              {t('data-catalog:hierarchy.heading')}
             </h3>
             <div className="border rounded-lg p-2">
               <div className="flex items-center gap-2 px-2 py-1.5 bg-primary/5 rounded-md mb-1">
@@ -306,7 +310,7 @@ function DetailPanel({
       ) : (
         <div className="text-center py-8 text-muted-foreground">
           <Box className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No children in the hierarchy</p>
+          <p className="text-sm">{t('data-catalog:hierarchy.noChildren')}</p>
         </div>
       )}
     </div>
@@ -333,6 +337,7 @@ export default function HierarchyBrowserView() {
 
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const { t } = useTranslation(['data-catalog', 'common']);
   const { get: apiGet } = useApi();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const formatLabel = useFormatLabel();
@@ -344,9 +349,9 @@ export default function HierarchyBrowserView() {
 
   useEffect(() => {
     setStaticSegments([]);
-    setDynamicTitle('Hierarchy Browser');
+    setDynamicTitle(t('data-catalog:hierarchy.browserTitle'));
     return () => { setStaticSegments([]); setDynamicTitle(null); };
-  }, [setStaticSegments, setDynamicTitle]);
+  }, [setStaticSegments, setDynamicTitle, t]);
 
   const fetchRoots = useCallback(async () => {
     setRootsLoading(true);
@@ -358,11 +363,11 @@ export default function HierarchyBrowserView() {
       if (response.error) throw new Error(response.error);
       setRootGroups(Array.isArray(response.data) ? response.data : []);
     } catch (err: any) {
-      setRootsError(err.message || 'Failed to load hierarchy roots');
+      setRootsError(err.message || t('data-catalog:hierarchy.rootsLoadFailed'));
     } finally {
       setRootsLoading(false);
     }
-  }, [apiGet]);
+  }, [apiGet, t]);
 
   useEffect(() => { fetchRoots(); }, [fetchRoots]);
 
@@ -438,8 +443,8 @@ export default function HierarchyBrowserView() {
       <div className="py-6">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Permission Denied</AlertTitle>
-          <AlertDescription>You don't have access to browse the hierarchy.</AlertDescription>
+          <AlertTitle>{t('data-catalog:hierarchy.permissionDenied')}</AlertTitle>
+          <AlertDescription>{t('data-catalog:hierarchy.noAccess')}</AlertDescription>
         </Alert>
       </div>
     );
@@ -451,17 +456,17 @@ export default function HierarchyBrowserView() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Network className="w-8 h-8" />
-          Hierarchy Browser
+          {t('data-catalog:hierarchy.browserTitle')}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Navigate data hierarchies from systems and domains down to tables and columns
+          {t('data-catalog:hierarchy.browserSubtitle')}
         </p>
       </div>
 
       {rootsError && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>{t('common:states.error')}</AlertTitle>
           <AlertDescription>{rootsError}</AlertDescription>
         </Alert>
       )}
@@ -472,7 +477,7 @@ export default function HierarchyBrowserView() {
           <Card className="h-full flex flex-col">
             <CardHeader className="pb-3 flex-shrink-0">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Browse</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('data-catalog:hierarchy.browse')}</CardTitle>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={fetchRoots}>
                   <RefreshCw className="h-3.5 w-3.5" />
                 </Button>
@@ -492,7 +497,7 @@ export default function HierarchyBrowserView() {
                       )}
                       onClick={() => toggleRootType(type)}
                     >
-                      {type === 'DataDomain' ? 'Domain' : type === 'DataProduct' ? 'Product' : type}
+                      {type === 'DataDomain' ? t('data-catalog:hierarchy.rootType.domain') : type === 'DataProduct' ? t('data-catalog:hierarchy.rootType.product') : type}
                       {count > 0 && <span className="ml-0.5 opacity-70">{count}</span>}
                     </Badge>
                   );
@@ -501,7 +506,7 @@ export default function HierarchyBrowserView() {
               <div className="relative mt-2">
                 <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
-                  placeholder="Filter..."
+                  placeholder={t('data-catalog:hierarchy.filterPlaceholder')}
                   value={treeFilter}
                   onChange={(e) => setTreeFilter(e.target.value)}
                   className="h-8 pl-8 text-sm"
@@ -517,7 +522,7 @@ export default function HierarchyBrowserView() {
                     <div className="text-center py-8 text-muted-foreground">
                       <Network className="h-8 w-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm">
-                        {treeFilter ? 'No matches found' : 'No root entities found'}
+                        {treeFilter ? t('data-catalog:hierarchy.noMatches') : t('data-catalog:hierarchy.noRoots')}
                       </p>
                     </div>
                   ) : (

@@ -6,7 +6,7 @@ tracks status, live progress counters, the ImportRequest payload, the final
 ImportResult blob, and the JOB_PROGRESS notification id.
 
 Revision ID: m2_schema_import_runs
-Revises: l1_entity_domain_associations
+Revises: m1_assigned_users
 Create Date: 2026-09-19
 """
 from typing import Sequence, Union
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 
 revision: str = "m2_schema_import_runs"
-down_revision: Union[str, Sequence[str], None] = "l1_entity_domain_associations"
+down_revision: Union[str, Sequence[str], None] = "m1_assigned_users"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

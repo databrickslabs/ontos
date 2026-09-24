@@ -6,7 +6,6 @@
   "basicInformation": "Informations de base",
   "commentsAndActivity": "Commentaires & Activité",
   "askOntos": "Demander à {{shortName}}",
-  
   "actions": {
     "viewData": "Voir les données",
     "move": "Déplacer",
@@ -20,7 +19,6 @@
     "cancel": "Annuler",
     "confirm": "Confirmer"
   },
-  
   "tooltips": {
     "copyToTarget": "Copier vers la cible",
     "moveToTarget": "Déplacer vers la cible",
@@ -28,7 +26,6 @@
     "refresh": "Actualiser (Maj pour forcer l'actualisation)",
     "dragToResize": "Glisser pour redimensionner"
   },
-  
   "labels": {
     "metastore": "Metastore",
     "filterCatalogs": "Filtrer les catalogues...",
@@ -38,7 +35,6 @@
     "fullPath": "Chemin complet :",
     "actions": "Actions :"
   },
-  
   "messages": {
     "selectObjectToViewInfo": "Sélectionnez un objet pour voir ses informations",
     "selectObjectToViewComments": "Sélectionnez un objet pour voir les commentaires",
@@ -47,9 +43,11 @@
     "datasetView": "Vue du dataset : {{name}}",
     "confirmOperation": "Confirmer l'opération",
     "selectedItems": "Éléments sélectionnés : {{items}}",
-    "noItemsSelected": "Aucun élément sélectionné"
+    "noItemsSelected": "Aucun élément sélectionné",
+    "noResponse": "Aucune réponse",
+    "tableNotFound": "Table « {{name}} » introuvable dans {{schema}}",
+    "failedToNavigate": "Échec de la navigation vers {{path}}"
   },
-  
   "askPanel": {
     "title": "Demander à {{shortName}}",
     "askAboutItem": "Poser une question sur cet élément",
@@ -67,10 +65,9 @@
       "usage": "Comment est-il utilisé ?"
     }
   },
-  
   "errors": {
     "error": "Erreur",
-    "failedToSendMessage": "Échec de l'envoi du message"
+    "failedToSendMessage": "Échec de l'envoi du message",
+    "chatRequestFailed": "Échec de la requête de conversation"
   }
 }
-

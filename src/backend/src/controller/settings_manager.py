@@ -218,6 +218,14 @@ class SettingsManager:
                     logger.debug(f"Loaded SCHEMA_IMPORT_ASYNC_THRESHOLD from database: {all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD']}")
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid SCHEMA_IMPORT_ASYNC_THRESHOLD in database: {all_settings['SCHEMA_IMPORT_ASYNC_THRESHOLD']}")
+
+            # SCHEMA_IMPORT_CHILD_LIMIT (Schema Importer per-path fetch cap)
+            if all_settings.get('SCHEMA_IMPORT_CHILD_LIMIT') is not None:
+                try:
+                    self._settings.SCHEMA_IMPORT_CHILD_LIMIT = int(all_settings['SCHEMA_IMPORT_CHILD_LIMIT'])
+                    logger.debug(f"Loaded SCHEMA_IMPORT_CHILD_LIMIT from database: {all_settings['SCHEMA_IMPORT_CHILD_LIMIT']}")
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid SCHEMA_IMPORT_CHILD_LIMIT in database: {all_settings['SCHEMA_IMPORT_CHILD_LIMIT']}")
             
             # Databricks Unity Catalog settings
             if 'DATABRICKS_CATALOG' in all_settings and all_settings['DATABRICKS_CATALOG']:
@@ -1259,6 +1267,8 @@ class SettingsManager:
             'workspace_deployment_path': self._settings.WORKSPACE_DEPLOYMENT_PATH,
             # Schema Importer: threshold at/above which a background import is offered
             'schema_import_async_threshold': self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD,
+            # Schema Importer per-path child fetch limit
+            'schema_import_child_limit': self._settings.SCHEMA_IMPORT_CHILD_LIMIT,
             # Databricks Unity Catalog settings
             'databricks_catalog': self._settings.DATABRICKS_CATALOG,
             'databricks_schema': self._settings.DATABRICKS_SCHEMA,
@@ -1325,6 +1335,20 @@ class SettingsManager:
             app_settings_repo.set(self._db, 'SCHEMA_IMPORT_ASYNC_THRESHOLD', str(int_val))
             self._settings.SCHEMA_IMPORT_ASYNC_THRESHOLD = int_val
             logger.info(f"Updated SCHEMA_IMPORT_ASYNC_THRESHOLD to: {int_val}")
+
+        # Schema Importer per-path child fetch limit (bounded 1..10000 per the
+        # connector contract, ListAssetsOptions)
+        if 'schema_import_child_limit' in settings:
+            value = settings.get('schema_import_child_limit')
+            try:
+                int_val = int(value)
+            except (ValueError, TypeError):
+                raise ValueError("schema_import_child_limit must be an integer between 1 and 10000")
+            if not (1 <= int_val <= 10000):
+                raise ValueError("schema_import_child_limit must be between 1 and 10000")
+            app_settings_repo.set(self._db, 'SCHEMA_IMPORT_CHILD_LIMIT', str(int_val))
+            self._settings.SCHEMA_IMPORT_CHILD_LIMIT = int_val
+            logger.info(f"Updated SCHEMA_IMPORT_CHILD_LIMIT to: {int_val}")
 
         # Compute job enable/disable delta against current state from DB (source of truth)
         try:
@@ -1735,6 +1759,13 @@ class SettingsManager:
             logger.warning(f"Could not parse assigned_groups JSON for role ID {role_db.id}: {role_db.assigned_groups}")
             assigned_groups = []
 
+        # Individual user assignment (by email), parallel to assigned_groups (#196/#760)
+        try:
+            assigned_users = json.loads(getattr(role_db, 'assigned_users', '[]') or '[]')
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"Could not parse assigned_users JSON for role ID {role_db.id}: {getattr(role_db, 'assigned_users', None)}")
+            assigned_users = []
+
         # Feature ID migrations (renamed features)
         FEATURE_ID_MIGRATIONS = {
             'security': 'security-features',
@@ -1811,6 +1842,7 @@ class SettingsManager:
             name=role_db.name,
             description=role_db.description,
             assigned_groups=assigned_groups,
+            assigned_users=assigned_users,
             feature_permissions=feature_permissions,
             home_sections=home_sections,
             approval_privileges=approval_privileges,
@@ -2208,27 +2240,40 @@ class SettingsManager:
             self._db.rollback()
             raise
 
-    def get_requestable_roles_for_user(self, user_groups: Optional[List[str]] = None) -> List[AppRole]:
+    def get_requestable_roles_for_user(
+        self,
+        user_groups: Optional[List[str]] = None,
+        user_email: Optional[str] = None,
+    ) -> List[AppRole]:
         """Get list of roles that the user can request based on their current role(s).
-        
+
         Args:
-            user_groups: List of groups the user belongs to. If None or empty, returns 
-                        roles requestable by users with no role.
-        
+            user_groups: List of groups the user belongs to. If None or empty (and no
+                        email match), returns roles requestable by users with no role.
+            user_email: Optional email; roles whose ``assigned_users`` contains it count
+                        as roles the user already holds (#196/#760), so they are excluded
+                        from the requestable list.
+
         Returns:
             List of AppRole objects that the user can request.
         """
         try:
-            # First, determine what role(s) the user currently has
+            # First, determine what role(s) the user currently has (by group OR email).
+            # `(x or '')` coalesces None entries in group/user lists rather than
+            # failing: this is an authorization read path, and raising on a single
+            # malformed row would lock the user out of the whole app. Empty strings
+            # never match a real group/email, so dirty data is simply ignored here.
+            user_group_set = set((g or '').lower() for g in (user_groups or []))
+            user_email_norm = (user_email or "").strip().lower() or None
             user_role_ids: List[str] = []
-            if user_groups:
+            if user_group_set or user_email_norm:
                 all_roles = self.list_app_roles()
                 for role in all_roles:
-                    if role.assigned_groups:
-                        # Check if any of the user's groups match the role's assigned groups
-                        if any(group in role.assigned_groups for group in user_groups):
-                            user_role_ids.append(str(role.id))
-            
+                    role_groups = set((g or '').lower() for g in (role.assigned_groups or []))
+                    role_users = set((u or '').lower() for u in (getattr(role, 'assigned_users', None) or []))
+                    if user_group_set.intersection(role_groups) or (user_email_norm and user_email_norm in role_users):
+                        user_role_ids.append(str(role.id))
+
             # Get roles requestable based on user's current roles
             requestable_role_ids: set = set()
             
@@ -2252,9 +2297,9 @@ class SettingsManager:
                 if role:
                     result.append(role)
             
-            logger.debug(f"User with groups {user_groups} can request {len(result)} roles")
+            logger.debug(f"User with groups {user_groups} / email {user_email} can request {len(result)} roles")
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting requestable roles for user: {e}", exc_info=True)
             return []
@@ -2280,18 +2325,24 @@ class SettingsManager:
             logger.error(f"Error getting approver role names for role {role_id}: {e}", exc_info=True)
             return []
 
-    def can_user_request_role(self, role_id: str, user_groups: Optional[List[str]] = None) -> bool:
+    def can_user_request_role(
+        self,
+        role_id: str,
+        user_groups: Optional[List[str]] = None,
+        user_email: Optional[str] = None,
+    ) -> bool:
         """Check if a user can request a specific role.
-        
+
         Args:
             role_id: ID of the role the user wants to request
             user_groups: List of groups the user belongs to
-            
+            user_email: Optional email for direct-assignment awareness (#196/#760)
+
         Returns:
             True if the user can request the role, False otherwise.
         """
         try:
-            requestable_roles = self.get_requestable_roles_for_user(user_groups)
+            requestable_roles = self.get_requestable_roles_for_user(user_groups, user_email=user_email)
             return any(str(role.id) == role_id for role in requestable_roles)
         except Exception as e:
             logger.error(f"Error checking if user can request role {role_id}: {e}", exc_info=True)
@@ -2364,12 +2415,53 @@ class SettingsManager:
             logger.error(f"Failed to log role request decision to change log: {e}", exc_info=True)
             # Don't fail the request if logging fails
 
-        # 3. Log decision (admin feedback only, no actual group assignment)
+        # 3. On approval, actually grant the role by adding the requester to the
+        #    role's assigned_users (#760/#311). This is the individual-user
+        #    assignment mechanism (#196) — the app cannot modify Databricks groups,
+        #    so email-based direct assignment is how an approved requester gains
+        #    access. Denial changes nothing.
         if request_data.approved:
-            logger.info(
-                f"Role request APPROVED for {request_data.requester_email} (Role: {role_name}). "
-                f"(Actual group assignment should be handled via external ITSM process)."
-            )
+            # Normalize consistently with the other assigned_users sites (strip →
+            # lower → empty becomes None).
+            email_norm = (request_data.requester_email or "").strip().lower() or None
+            try:
+                # Lock the role row for the read-modify-write so concurrent approvals
+                # to the SAME role serialize instead of clobbering each other's
+                # assigned_users (row lock on Postgres; a no-op but harmless on SQLite).
+                role_db = (
+                    db.query(AppRoleDb)
+                    .filter(AppRoleDb.id == str(request_data.role_id))
+                    .with_for_update()
+                    .first()
+                )
+                if not role_db:
+                    raise ValueError(f"Role with ID '{request_data.role_id}' not found for grant")
+                existing = json.loads(getattr(role_db, "assigned_users", "[]") or "[]")
+                emails = [e for e in existing if isinstance(e, str)]
+                already = bool(email_norm) and email_norm in {e.strip().lower() for e in emails}
+                if email_norm and not already:
+                    emails.append(email_norm)
+                    self.app_role_repo.update(db=db, db_obj=role_db, obj_in={"assigned_users": emails})
+                    db.commit()
+                    logger.info(f"Granted role '{role_name}' to '{email_norm}' via assigned_users (#760).")
+                    # Record the grant in the change log (who was granted what).
+                    try:
+                        change_log_manager.log_change_with_details(
+                            db=db,
+                            entity_type="app_role",
+                            entity_id=request_data.role_id,
+                            action="user_assigned",
+                            username="admin",
+                            details={"granted_email": email_norm, "role_name": role_name, "via": "role_request_approval"},
+                        )
+                    except Exception as cle:
+                        logger.error(f"Failed to change-log role grant: {cle}", exc_info=True)
+                else:
+                    logger.info(f"User '{email_norm}' already assigned to role '{role_name}'; no assignment change.")
+            except Exception as ge:
+                logger.error(f"Failed to grant role '{role_name}' to '{email_norm}': {ge}", exc_info=True)
+                # The grant is the whole point of approval — surface the failure.
+                raise
         else:
             logger.info(f"Role request DENIED for {request_data.requester_email} (Role: {role_name}).")
 

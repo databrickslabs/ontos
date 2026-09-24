@@ -28,7 +28,7 @@ interface Props {
 
 const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
   const { toast } = useToast();
-  const { t } = useTranslation('metadata');
+  const { t } = useTranslation(['metadata', 'common']);
 
   const [richTexts, setRichTexts] = React.useState<RichTextItem[]>([]);
   const [links, setLinks] = React.useState<LinkItem[]>([]);
@@ -748,7 +748,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
             </DialogHeader>
             <div className="overflow-y-auto max-h-[50vh]">
               {sharedAssets.loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground p-4"><Loader2 className="h-4 w-4 animate-spin" /> Loading shared assets...</div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground p-4"><Loader2 className="h-4 w-4 animate-spin" /> {t('sharedAssets.loading')}</div>
               ) : (
                 <>
                   {showSharedPicker === 'rich_text' && (
@@ -761,10 +761,10 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                             <div>
                               <div className="font-medium">{rt.title}</div>
                               <div className="text-xs text-muted-foreground">{truncate(rt.short_description, 60)}</div>
-                              <div className="text-xs text-muted-foreground mt-1">Level: {rt.level ?? 50} • {rt.inheritable ? 'Inheritable' : 'Not inheritable'}</div>
+                              <div className="text-xs text-muted-foreground mt-1">{t('sharedAssets.levelInfo', { level: rt.level ?? 50 })} • {rt.inheritable ? t('sharedAssets.inheritable') : t('sharedAssets.notInheritable')}</div>
                             </div>
                             <Button size="sm" onClick={() => handleAttachSharedAsset('rich_text', rt.id)}>
-                              <Plus className="h-4 w-4 mr-1" /> Attach
+                              <Plus className="h-4 w-4 mr-1" /> {t('sharedAssets.attach')}
                             </Button>
                           </div>
                         ))}
@@ -781,10 +781,10 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                             <div>
                               <div className="font-medium">{link.title}</div>
                               <div className="text-xs text-primary truncate max-w-[300px]">{link.url}</div>
-                              <div className="text-xs text-muted-foreground mt-1">Level: {link.level ?? 50} • {link.inheritable ? 'Inheritable' : 'Not inheritable'}</div>
+                              <div className="text-xs text-muted-foreground mt-1">{t('sharedAssets.levelInfo', { level: link.level ?? 50 })} • {link.inheritable ? t('sharedAssets.inheritable') : t('sharedAssets.notInheritable')}</div>
                             </div>
                             <Button size="sm" onClick={() => handleAttachSharedAsset('link', link.id)}>
-                              <Plus className="h-4 w-4 mr-1" /> Attach
+                              <Plus className="h-4 w-4 mr-1" /> {t('sharedAssets.attach')}
                             </Button>
                           </div>
                         ))}
@@ -801,10 +801,10 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                             <div>
                               <div className="font-medium">{doc.title}</div>
                               <div className="text-xs text-muted-foreground">{doc.original_filename}</div>
-                              <div className="text-xs text-muted-foreground mt-1">Level: {doc.level ?? 50} • {doc.inheritable ? 'Inheritable' : 'Not inheritable'}</div>
+                              <div className="text-xs text-muted-foreground mt-1">{t('sharedAssets.levelInfo', { level: doc.level ?? 50 })} • {doc.inheritable ? t('sharedAssets.inheritable') : t('sharedAssets.notInheritable')}</div>
                             </div>
                             <Button size="sm" onClick={() => handleAttachSharedAsset('document', doc.id)}>
-                              <Plus className="h-4 w-4 mr-1" /> Attach
+                              <Plus className="h-4 w-4 mr-1" /> {t('sharedAssets.attach')}
                             </Button>
                           </div>
                         ))}

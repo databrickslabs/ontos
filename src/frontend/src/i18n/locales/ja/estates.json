@@ -23,13 +23,33 @@
     "syncRequested": "エステートの同期をリクエスト中...",
     "syncTriggered": "同期を開始しました。データを更新中..."
   },
+  "form": {
+    "createTitle": "エステートを作成",
+    "editTitle": "エステートを編集",
+    "dialogDescription": "Databricksエステート接続と基本設定を構成します。共有ポリシーは詳細ページで管理されます。",
+    "name": "名前",
+    "description": "説明",
+    "type": "タイプ",
+    "workspaceUrl": "ワークスペースURL",
+    "cloud": "クラウド",
+    "selectCloudProvider": "クラウドプロバイダーを選択",
+    "connectionType": "接続タイプ",
+    "selectConnectionType": "接続タイプを選択",
+    "connectionString": "接続文字列",
+    "metastoreName": "メタストア名",
+    "syncSchedule": "同期スケジュール",
+    "enableSync": "同期を有効化",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "namePlaceholder": "例: US Production Workspace",
+    "descriptionPlaceholder": "例: US リージョンの主要な本番環境",
+    "workspaceUrlPlaceholder": "例: https://myworkspace.cloud.databricks.com",
+    "metastoreNamePlaceholder": "例: primary_prod_metastore"
+  },
   "connectionTypes": {
     "deltaShare": "Delta Share",
     "unityCatalog": "Unity Catalog",
     "database": "データベース（今後対応）"
-  },
-  "filters": {
-    "allStatus": "すべてのステータス"
   },
   "table": {
     "name": "名前",
@@ -38,11 +58,22 @@
     "connection": "接続",
     "metastore": "メタストア",
     "syncStatus": "同期ステータス",
+    "lastSync": "最終同期",
     "type": "タイプ",
     "status": "ステータス",
-    "lastSync": "最終同期",
     "assets": "アセット",
-    "actions": "アクション"
+    "actions": "アクション",
+    "neverSynced": "未同期",
+    "openMenu": "メニューを開く",
+    "syncTooltip": {
+      "status": "ステータス: {{status}}",
+      "time": "時刻: {{time}}",
+      "error": "エラー: {{error}}",
+      "inProgress": "同期を実行中またはキュー待機中..."
+    }
+  },
+  "filters": {
+    "allStatus": "すべてのステータス"
   },
   "messages": {
     "success": "成功",
@@ -67,6 +98,47 @@
     "viewDetails": "詳細を表示",
     "notFound": "エステートが見つかりません",
     "loading": "読み込み中...",
+    "pageTitle": "エステートの詳細",
+    "backToEstateManager": "エステートマネージャーに戻る",
+    "backToListButton": "一覧に戻る",
+    "configureSyncJob": "同期ジョブを構成",
+    "editNotImplemented": "エステート編集機能は今後実装されます",
+    "syncEnabled": "同期が有効",
+    "syncDisabled": "同期が無効",
+    "never": "なし",
+    "notFoundOrLoad": "エステートが見つからないか、読み込めませんでした。",
+    "labels": {
+      "cloudProvider": "クラウドプロバイダー",
+      "lastSyncTime": "最終同期時刻",
+      "lastSyncStatus": "最終同期ステータス",
+      "lastSyncError": "最終同期エラー",
+      "lastUpdatedAt": "最終更新日時"
+    },
+    "errors": {
+      "fetchTitle": "エステートの取得中にエラーが発生しました",
+      "fetchFailed": "エステートの詳細の取得に失敗しました。",
+      "couldNotLoad": "エステートの詳細を読み込めませんでした。",
+      "noEstateData": "ポリシーを追加するためのエステートデータがありません。"
+    },
+    "policies": {
+      "title": "共有ポリシー",
+      "add": "ポリシーを追加",
+      "sectionDescription": "このエステートと特定のデータプロダクトまたはセマンティックモデルの用語を共有するルールを定義します。共有されたリソースは、構成された接続タイプ経由でアクセスできます。",
+      "resourceTypeLabel": "リソースタイプ:",
+      "rulesLabel": "ルール（{{count}}）:",
+      "filterBy": "フィルタ条件",
+      "whereValue": "値の条件",
+      "noRules": "このポリシーにはルールが定義されていません。",
+      "emptyTitle": "このエステートには共有ポリシーが定義されていません。",
+      "emptyHint": "「ポリシーを追加」をクリックしてリソースの共有を開始してください。",
+      "editPolicyAlert": "ポリシーを編集: {{name}}",
+      "deletePolicyAlert": "ポリシーを削除: {{name}}",
+      "addedTitle": "ポリシーを追加しました",
+      "addedDescription": "共有ポリシー「{{name}}」が正常に追加されました。",
+      "addErrorTitle": "ポリシーの追加中にエラーが発生しました",
+      "addErrorDescription": "新しい共有ポリシーを保存できませんでした。もう一度お試しください。",
+      "saveFailedNoData": "ポリシーの保存に失敗しました。サーバーからデータが返されませんでした。"
+    },
     "overview": {
       "title": "エステート概要",
       "type": "タイプ",
@@ -85,24 +157,40 @@
       "noHistory": "同期履歴がありません"
     }
   },
-  "form": {
-    "createTitle": "エステートを作成",
-    "editTitle": "エステートを編集",
-    "dialogDescription": "Databricksエステート接続と基本設定を構成します。共有ポリシーは詳細ページで管理されます。",
-    "name": "名前",
-    "description": "説明",
-    "type": "タイプ",
-    "workspaceUrl": "ワークスペースURL",
-    "cloud": "クラウド",
-    "selectCloudProvider": "クラウドプロバイダーを選択",
-    "connectionType": "接続タイプ",
-    "selectConnectionType": "接続タイプを選択",
-    "connectionString": "接続文字列",
-    "metastoreName": "メタストア名",
-    "syncSchedule": "同期スケジュール",
-    "enableSync": "同期を有効化",
-    "cancel": "キャンセル",
-    "save": "保存"
+  "sharingPolicy": {
+    "dialogTitle": "新しい共有ポリシーを追加",
+    "dialogDescription": "このエステートとの間でリソースを共有する新しいポリシーを定義します。",
+    "submit": "ポリシーを追加",
+    "addRule": "ルールを追加",
+    "rulesHeading": "ルール",
+    "ruleLabel": "ルール {{number}}",
+    "fields": {
+      "name": "ポリシー名",
+      "description": "説明（任意）",
+      "resourceType": "リソースタイプ",
+      "enablePolicy": "ポリシーを有効化",
+      "filterType": "フィルタタイプ",
+      "operator": "演算子",
+      "value": "値"
+    },
+    "placeholders": {
+      "name": "例: 本番データプロダクトを共有",
+      "description": "ポリシーの目的の詳細な説明...",
+      "resourceType": "リソースタイプを選択",
+      "operator": "演算子を選択",
+      "filterType": "例: tag、domain、status",
+      "value": "例: finance、Active"
+    },
+    "validation": {
+      "nameMin": "ポリシー名は3文字以上である必要があります",
+      "filterTypeRequired": "フィルタタイプは必須です",
+      "filterValueRequired": "フィルタ値は必須です",
+      "rulesMin": "少なくとも1つのルールが必要です"
+    },
+    "toast": {
+      "submittedTitle": "ポリシーを送信しました",
+      "submittedDescription": "共有ポリシー「{{name}}」を処理中です。",
+      "addErrorDescription": "共有ポリシーの追加に失敗しました。詳細はコンソールを確認してください。"
+    }
   }
 }
-

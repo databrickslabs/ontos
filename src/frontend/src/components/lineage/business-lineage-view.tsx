@@ -20,6 +20,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Loader2, AlertCircle, Network } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -106,6 +107,7 @@ function BusinessLineageViewInner({
   showMinimap = true,
 }: BusinessLineageViewProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation(['data-catalog', 'common']);
   const { fitView, zoomIn, zoomOut } = useReactFlow();
 
   const [direction, setDirection] = useState<LineageDirection>(initialDirection);
@@ -253,7 +255,7 @@ function BusinessLineageViewInner({
       <div className={cn('flex items-center justify-center bg-muted/20 rounded-md', className)}>
         <div className="flex flex-col items-center gap-2 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="text-sm">Loading lineage…</span>
+          <span className="text-sm">{t('data-catalog:lineage.loadingLineage')}</span>
         </div>
       </div>
     );
@@ -275,7 +277,7 @@ function BusinessLineageViewInner({
       <div className={cn('flex items-center justify-center bg-muted/20 rounded-md', className)}>
         <div className="flex flex-col items-center gap-2 text-muted-foreground">
           <Network className="h-6 w-6" />
-          <span className="text-sm">No lineage data available</span>
+          <span className="text-sm">{t('data-catalog:lineage.noDataAvailable')}</span>
         </div>
       </div>
     );

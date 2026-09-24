@@ -8,6 +8,18 @@
   "newTerm": "新規用語",
   "searchPlaceholder": "用語を検索...",
   "loading": "セマンティックモデルを読み込み中...",
+  "tabs": {
+    "collections": "コレクション",
+    "concepts": "コンセプト",
+    "graph": "グラフ"
+  },
+  "types": {
+    "concept": "コンセプト",
+    "class": "クラス",
+    "property": "プロパティ",
+    "individual": "個体",
+    "term": "用語"
+  },
   "linkedObjects": {
     "title": "関連エンティティ",
     "assign": "エンティティを割り当てる",
@@ -17,13 +29,6 @@
     "removeFailed": "リンクを削除できませんでした。",
     "removeAria": "関連エンティティを削除"
   },
-  "relations": {
-    "title": "関係",
-    "loading": "関係を読み込み中...",
-    "empty": "関係が見つかりません。",
-    "outgoingTooltip": "このコンセプト → 対象",
-    "incomingTooltip": "ソース → このコンセプト"
-  },
   "neighborhood": {
     "title": "コンセプトの近傍",
     "loading": "近傍を読み込み中...",
@@ -31,13 +36,39 @@
     "moreParents": "他 {{count}} 件",
     "moreChildren": "他 {{count}} 件"
   },
+  "relations": {
+    "title": "関係",
+    "loading": "関係を読み込み中...",
+    "empty": "関係が見つかりません。",
+    "outgoingTooltip": "このコンセプト → 対象",
+    "incomingTooltip": "ソース → このコンセプト"
+  },
   "filters": {
     "allGlossaries": "すべての用語集",
     "allStatus": "すべてのステータス",
     "bySource": "ソースでフィルター",
     "all": "すべて",
     "none": "なし",
-    "groupBySource": "ソースでグループ化"
+    "groupBySource": "ソースでグループ化",
+    "showProperties": "プロパティを表示",
+    "groupByDomain": "ドメインでグループ化",
+    "allTypes": "すべてのタイプ",
+    "allScopes": "すべてのスコープ",
+    "allCollections": "すべてのコレクション",
+    "labelLanguage": "ラベルの言語"
+  },
+  "groupBy": {
+    "collection": "コレクション別",
+    "type": "タイプ別",
+    "flat": "フラットリスト"
+  },
+  "scopes": {
+    "enterprise": "エンタープライズ",
+    "domain": "ドメイン",
+    "department": "部門",
+    "team": "チーム",
+    "project": "プロジェクト",
+    "external": "外部"
   },
   "table": {
     "name": "名前",
@@ -52,7 +83,25 @@
     "error": "エラー",
     "deleteConfirm": "この用語を削除してもよろしいですか？",
     "deleteSuccess": "用語が正常に削除されました",
-    "deleteError": "用語の削除に失敗しました"
+    "deleteError": "用語の削除に失敗しました",
+    "collectionCreated": "コレクションを作成しました",
+    "collectionUpdated": "コレクションを更新しました",
+    "collectionDeleted": "コレクションを削除しました",
+    "confirmDeleteCollection": "コレクション「{{name}}」を削除してもよろしいですか？含まれるすべてのコンセプトが削除されます。",
+    "conceptCreated": "コンセプトを作成しました",
+    "conceptUpdated": "コンセプトを更新しました",
+    "conceptDeleted": "コンセプトを削除しました",
+    "submittedForReview": "コンセプトをレビューに送信しました",
+    "enterReviewerEmail": "レビュー担当者のメールアドレスを入力してください:",
+    "conceptPromoted": "コンセプトを昇格しました",
+    "conceptMigrated": "コンセプトを移行しました",
+    "noCollections": "コレクションが見つかりません",
+    "noConceptsFound": "コンセプトが見つかりません",
+    "selectConcept": "詳細を表示するコンセプトを選択してください",
+    "linkAdded": "リンクを追加しました",
+    "linkRemoved": "リンクを削除しました",
+    "saveFailed": "コンセプトの保存に失敗しました",
+    "deleteConceptFailed": "コンセプトの削除に失敗しました"
   },
   "status": {
     "draft": "下書き",
@@ -61,8 +110,10 @@
     "under_review": "レビュー中",
     "active": "アクティブ",
     "approved": "承認済み",
+    "published": "公開済み",
     "certified": "認定済み",
     "deprecated": "非推奨",
+    "archived": "アーカイブ済み",
     "retired": "廃止"
   },
   "details": {
@@ -71,9 +122,27 @@
     "delete": "削除",
     "notFound": "コンセプトが見つかりません",
     "loading": "読み込み中...",
+    "loadError": "コンセプトの読み込みに失敗しました",
+    "created": "作成日",
+    "refreshing": "更新中...",
+    "openIriAria": "IRI を開く",
     "linkedAssets": "リンクされたアセット",
     "synonyms": "同義語",
     "relatedTerms": "関連用語"
+  },
+  "fields": {
+    "definition": "定義",
+    "domain": "ドメイン",
+    "range": "値域",
+    "synonyms": "同義語",
+    "examples": "例",
+    "businessOwners": "ビジネスオーナー",
+    "parentConcepts": "親コンセプト",
+    "childConcepts": "子コンセプト",
+    "scope": "スコープ",
+    "concepts": "コンセプト",
+    "source": "ソース",
+    "sourceUrl": "ソースURL"
   },
   "form": {
     "createTitle": "用語を作成",
@@ -85,6 +154,309 @@
     "status": "ステータス",
     "cancel": "キャンセル",
     "save": "保存"
+  },
+  "collections": {
+    "title": "コレクション",
+    "glossary": "用語集",
+    "taxonomy": "分類体系",
+    "ontology": "オントロジー"
+  },
+  "actions": {
+    "createConcept": "コンセプトを作成",
+    "createCollection": "コレクションを作成"
+  },
+  "badges": {
+    "imported": "インポート済み",
+    "custom": "カスタム",
+    "readonly": "読み取り専用"
+  },
+  "links": {
+    "outgoing": "外向きのリンク",
+    "incoming": "内向きのリンク",
+    "noOutgoing": "外向きのリンクはありません",
+    "noIncoming": "内向きのリンクはありません",
+    "source": "ソース",
+    "target": "ターゲット",
+    "relationshipType": "関係タイプ",
+    "selectTarget": "ターゲットを選択",
+    "typeToSearch": "入力してコンセプトを検索",
+    "createLink": "リンクを作成"
+  },
+  "graph": {
+    "legend": "凡例",
+    "layout": "レイアウト",
+    "hierarchical": "階層",
+    "force": "力学",
+    "circular": "円形"
+  },
+  "dialogs": {
+    "deleteConcept": {
+      "title": "コンセプトを削除",
+      "description": "「{{label}}」を削除してもよろしいですか？この操作は取り消せません。ドラフトのコンセプトのみ削除できます。"
+    },
+    "linkEditor": {
+      "title": "リンクを作成",
+      "description": "2つのコンセプト間の関係を定義します"
+    }
+  },
+  "rdfSources": {
+    "syntaxColumn": "構文",
+    "serializationUnknown": "—",
+    "serializationTurtle": "Turtle",
+    "serializationRdfXml": "RDF/XML",
+    "serializationJsonLd": "JSON-LD",
+    "serializationNTriples": "N-Triples",
+    "serializationTriG": "TriG",
+    "viewRawDescription": "生の RDF コンテンツ（{{syntax}}）。",
+    "viewRawDescriptionFallback": "生の RDF コンテンツ。",
+    "nameColumn": "名前",
+    "editDisplayTitle": "表示タイトルを編集",
+    "titleDialog": "RDF ソースのタイトル",
+    "titleDialogDescription": "オントロジーヘッダーからラベルを選択するか、カスタムタイトルを入力してください。ファイル名は内部のグラフキーとして保持されます。",
+    "suggestedFromFile": "ファイルからの候補",
+    "customTitle": "カスタムタイトル",
+    "useFilename": "ファイル名を使用",
+    "titleSaved": "表示タイトルを更新しました",
+    "loadSuggestionsFailed": "タイトル候補の読み込みに失敗しました",
+    "fileBackedReadOnly": "組み込みのファイルソースはファイル名をタイトルとして使用します。",
+    "systemNamespaces": {
+      "metaSources": "ソースレジストリのメタデータ",
+      "semanticLinks": "セマンティックリンク",
+      "rdflibDefault": "デフォルトグラフ",
+      "appEntities": "アプリエンティティ",
+      "demoGraph": "デモ用ビジネスコンセプト"
+    }
+  },
+  "import": {
+    "chooseFile": "ファイルを選択…",
+    "file": "ファイル",
+    "noEditableCollections": "編集可能なコレクションがありません。先に作成してください。",
+    "selectCollection": "コレクションを選択…",
+    "submit": "インポート",
+    "success": "インポートに成功しました",
+    "supportedFormats": "対応形式: Turtle (.ttl)、RDF/XML (.rdf, .xml)、OWL (.owl)、N-Triples (.nt)、N3 (.n3)、JSON-LD (.jsonld, .json)",
+    "targetCollection": "対象コレクション",
+    "title": "コンセプトをインポート"
+  },
+  "propertyTypes": {
+    "object": "オブジェクトプロパティ",
+    "datatype": "データタイププロパティ",
+    "annotation": "注釈プロパティ"
+  },
+  "conceptEditor": {
+    "editTitle": "コンセプトを編集",
+    "createDescription": "コレクションに新しい用語またはコンセプトを作成します。",
+    "collectionLabel": "コレクション",
+    "selectCollectionPlaceholder": "コレクションを選択...",
+    "selectTypePlaceholder": "タイプを選択...",
+    "label": "ラベル",
+    "labelPlaceholder": "例: 収益",
+    "definitionPlaceholder": "明確で簡潔な定義...",
+    "propertyConfiguration": "プロパティの構成",
+    "propertyType": "プロパティタイプ",
+    "selectPropertyTypePlaceholder": "プロパティタイプを選択...",
+    "domainPlaceholder": "例: schema:Person または IRI...",
+    "domainHelp": "このプロパティが適用されるクラスまたはタイプ（主語）",
+    "rangeDatatypePlaceholder": "例: xsd:string、xsd:integer...",
+    "rangeObjectPlaceholder": "例: schema:Organization または IRI...",
+    "rangeDatatypeHelp": "プロパティ値のデータタイプ",
+    "rangeObjectHelp": "プロパティ値のクラスまたはタイプ（目的語）",
+    "addSynonymPlaceholder": "同義語を追加...",
+    "addExamplePlaceholder": "例を追加...",
+    "certified": "認定済み",
+    "expires": "有効期限",
+    "promotedFrom": "昇格元",
+    "migratedFrom": "移行元",
+    "history": "履歴",
+    "submitForReview": "レビューに送信",
+    "typeDescriptions": {
+      "concept": "一般的な用語または概念（SKOS Concept）",
+      "class": "カテゴリまたはタイプ（RDFS/OWL Class）",
+      "property": "関係または属性（RDF Property）",
+      "individual": "特定のインスタンス（OWL Individual）",
+      "term": "ビジネス用語集の用語"
+    },
+    "propertyTypeDescriptions": {
+      "object": "他のコンセプトと関連付けます",
+      "datatype": "リテラル値と関連付けます",
+      "annotation": "メタデータ注釈"
+    }
+  },
+  "collectionEditor": {
+    "editTitle": "コレクションを編集",
+    "createDescription": "新しい用語集、分類体系、またはオントロジーのコレクションを作成します。",
+    "editDescription": "コレクションの設定を更新します。",
+    "namePlaceholder": "例: 財務用語集",
+    "descriptionPlaceholder": "説明（任意）...",
+    "parentCollection": "親コレクション",
+    "noneRootCollection": "なし（ルートコレクション）",
+    "editable": "編集可能",
+    "editableHelp": "このコレクションでコンセプトの作成と編集を許可する"
+  },
+  "promotion": {
+    "promoteConcept": "コンセプトを昇格",
+    "demoteConcept": "コンセプトを降格",
+    "migrateConcept": "コンセプトを移行",
+    "move": "移動",
+    "toDifferentCollection": "別のコレクションへ",
+    "actionLabel": "アクション",
+    "promote": "昇格",
+    "migrate": "移行",
+    "currentLocation": "現在の場所",
+    "selectTargetPlaceholder": "対象コレクションを選択...",
+    "newIri": "新しい IRI",
+    "sourceConcept": "ソースコンセプト",
+    "deprecateOriginal": "元を非推奨にする（推奨）",
+    "deleteOriginal": "元を削除",
+    "deleteHelp": "ドラフトのコンセプトのみ削除できます。公開済みのコンセプトは非推奨になります。",
+    "promoteWarning": "昇格したコンセプトは、新しいスコープレベルで再承認が必要です。"
+  },
+  "collectionTree": {
+    "readOnly": "読み取り専用コレクション",
+    "noCollectionsYet": "コレクションはまだありません"
+  },
+  "knowledgeGraph": {
+    "rootFilter": {
+      "show_one": "{{label}} を表示（{{count}} 件のコンセプト）",
+      "show_other": "{{label}} を表示（{{count}} 件のコンセプト）",
+      "hide_one": "{{label}} を非表示（{{count}} 件のコンセプト）",
+      "hide_other": "{{label}} を非表示（{{count}} 件のコンセプト）",
+      "sourcesVisible": "{{total}} 件中 {{visible}} 件のソースを表示中",
+      "filterSources": "ソースをフィルタ",
+      "showAll": "すべて表示",
+      "hideAll": "すべて非表示",
+      "toggleHint": "凡例の項目をクリックすると表示/非表示を切り替えられます"
+    },
+    "layout": {
+      "placeholder": "レイアウト"
+    },
+    "layouts": {
+      "circular": "円形",
+      "forceDirected": "力学ベース",
+      "grid": "グリッド",
+      "hierarchical": "階層",
+      "concentric": "同心円"
+    },
+    "toolbar": {
+      "showDomainGroups": "ドメイングループを表示",
+      "hideDomainGroups": "ドメイングループを非表示",
+      "groups": "グループ",
+      "showNodeLabels": "ノードラベルを表示",
+      "hideNodeLabels": "ノードラベルを非表示",
+      "nodeLabels": "ノードラベル",
+      "showEdgeLabels": "エッジラベルを表示",
+      "hideEdgeLabels": "エッジラベルを非表示",
+      "edgeLabels": "エッジラベル",
+      "size": "サイズ",
+      "nodeSize": "ノードサイズ",
+      "spacing": "間隔",
+      "nodeSpacing": "ノード間隔",
+      "spacingHint": "レイアウトを再実行します。エッジの長さとノードの反発に影響します。",
+      "conceptCount_one": "{{count}} 件のコンセプト",
+      "conceptCount_other": "{{count}} 件のコンセプト"
+    },
+    "fullscreen": {
+      "description": "コンセプトグラフの可視化の全画面表示",
+      "hint": "ノードをクリックしてコンセプトを選択します。スクロールでズーム、ドラッグでパンできます。"
+    }
+  },
+  "linkedConcepts": {
+    "empty": "リンクされたビジネスコンセプトはありません",
+    "removeAria": "コンセプトのリンクを削除"
+  },
+  "ontologyGenerator": {
+    "title": "オントロジージェネレーター",
+    "subtitle": "リモートシステムを参照してテーブルを選択し、そのスキーマから OWL オントロジーを生成します。",
+    "connectionDescription": "データプラットフォーム接続を選択",
+    "noConnections": "接続が構成されていません。[設定] > [コネクタ] で追加してください。",
+    "chooseConnection": "接続を選択...",
+    "generationOptions": "生成オプション",
+    "generationOptionsDescription": "オントロジーの生成をカスタマイズします",
+    "guidelines": "ガイドライン",
+    "guidelinesPlaceholder": "例: EC データ用のドメインオントロジーを作成...",
+    "baseUri": "ベース URI",
+    "dataProperties": "データプロパティ",
+    "relationships": "関係",
+    "inheritance": "継承",
+    "cancelGeneration": "生成をキャンセル",
+    "generateOntology": "オントロジーを生成（{{count}} 件選択）",
+    "recentRuns": "最近の実行",
+    "noRuns": "実行はまだありません",
+    "direct": "直接",
+    "directGeneration": "直接生成",
+    "deleteRun": "実行を削除",
+    "paths": "パス",
+    "steps": "ステップ",
+    "started": "開始",
+    "finished": "完了",
+    "resources": "リソース",
+    "resourcesWithName": "{{name}} — リソース",
+    "resourcesDescription": "オントロジーの生成元となるカタログ、スキーマ、またはテーブルを選択してください",
+    "selectedCount": "{{count}} 件選択",
+    "agentProgress": "エージェントの進捗",
+    "generatedTurtle": "生成された Turtle",
+    "saveToCollection": "コレクションに保存",
+    "empty": "（空）",
+    "agentExecutionLog": "エージェント実行ログ",
+    "agentLogSummary": "{{iterations}} 回の反復 · プロンプトトークン {{promptTokens}} · 補完トークン {{completionTokens}}",
+    "noClasses": "クラスは生成されませんでした",
+    "noProperties": "プロパティは生成されませんでした",
+    "noAgentSteps": "記録されたエージェントステップはありません",
+    "runStatus": {
+      "pending": "保留中",
+      "running": "実行中",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル済み"
+    },
+    "progress": {
+      "starting": "開始中...",
+      "working": "処理中..."
+    },
+    "tabs": {
+      "classes": "クラス（{{count}}）",
+      "properties": "プロパティ（{{count}}）",
+      "turtle": "Turtle",
+      "agentLog": "エージェントログ"
+    },
+    "table": {
+      "class": "クラス",
+      "parent": "親",
+      "attributes": "属性",
+      "none": "なし",
+      "property": "プロパティ",
+      "range": "値域",
+      "objectType": "オブジェクト",
+      "dataType": "データ"
+    },
+    "toasts": {
+      "generatedTitle": "オントロジーを生成しました",
+      "generatedDescription": "クラス {{classes}} 件、プロパティ {{properties}} 件。",
+      "generatedFallback": "生成が完了しました。",
+      "cancelledTitle": "生成をキャンセルしました",
+      "failedTitle": "生成に失敗しました",
+      "unknownError": "不明なエラー",
+      "startFailed": "生成の開始に失敗しました",
+      "startedTitle": "生成を開始しました",
+      "startedDescription": "LLM エージェントがバックグラウンドで処理しています。",
+      "cancelFailed": "キャンセルに失敗しました",
+      "noResultTitle": "結果がありません",
+      "noResultDescription": "この実行には結果データがありません。",
+      "deleteFailed": "削除に失敗しました",
+      "turtleCopied": "Turtle コンテンツをクリップボードにコピーしました。",
+      "saveFailed": "保存に失敗しました",
+      "savedTitle": "コレクションに保存しました",
+      "savedDescription_one": "{{count}} 件のトリプルを「{{name}}」にインポートしました。",
+      "savedDescription_other": "{{count}} 件のトリプルを「{{name}}」にインポートしました。"
+    },
+    "saveDialog": {
+      "title": "コンセプトコレクションに保存",
+      "description": "新しいオントロジーコレクションを作成し、生成されたトリプルをナレッジグラフにインポートします。",
+      "nameLabel": "コレクション名",
+      "namePlaceholder": "例: 顧客ドメインオントロジー",
+      "descriptionLabel": "説明（任意）",
+      "descriptionPlaceholder": "このオントロジーコレクションの目的を説明してください...",
+      "importSummary": "クラス {{classes}} 件とプロパティ {{properties}} 件がインポートされます。"
+    }
   }
 }
-

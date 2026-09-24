@@ -24,6 +24,7 @@
  * Props in, props out — parent owns state.
  */
 import { useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -195,6 +196,7 @@ export default function RequiredFieldsEditor({
   onPrimaryFieldIdChange,
   requiresInput = false,
 }: RequiredFieldsEditorProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   const fields = value ?? [];
   const dupes = useMemo(() => duplicateIds(fields), [fields]);
   const initiallyOpen = defaultOpen ?? fields.length > 0;
@@ -369,7 +371,7 @@ export default function RequiredFieldsEditor({
         >
           <div className="flex items-center gap-2">
             <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]:rotate-90" />
-            <span className="text-sm font-medium">Custom fields</span>
+            <span className="text-sm font-medium">{t('workflows:requiredFields.title')}</span>
             <span className="text-xs text-muted-foreground">
               ({fields.length})
             </span>
@@ -381,7 +383,7 @@ export default function RequiredFieldsEditor({
       <CollapsibleContent className="px-3 pb-3 pt-1 space-y-3">
         {fields.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            No custom fields yet. Add fields the requester must fill in before submitting.
+            {t('workflows:requiredFields.emptyState')}
           </p>
         )}
 
@@ -393,8 +395,7 @@ export default function RequiredFieldsEditor({
           >
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <span>
-              Pick a primary field — the user&apos;s main input goes there.
-              Required because &quot;Requires input&quot; is on.
+              {t('workflows:requiredFields.primaryError')}
             </span>
           </div>
         )}
@@ -404,11 +405,11 @@ export default function RequiredFieldsEditor({
           const idEmpty = field.id === '';
           const idDup = field.id !== '' && dupes.has(field.id);
           const idError = idEmpty
-            ? 'ID is required.'
+            ? t('workflows:requiredFields.errors.idRequired')
             : idInvalid
-              ? 'ID must be lowercase letters, digits, or underscores, starting with a letter.'
+              ? t('workflows:requiredFields.errors.idInvalid')
               : idDup
-                ? 'ID must be unique within this step.'
+                ? t('workflows:requiredFields.errors.idDuplicate')
                 : null;
           const rowTestId = `${idPrefix}-row-${idx}`;
           return (
@@ -424,33 +425,33 @@ export default function RequiredFieldsEditor({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-end">
                 <div className="lg:col-span-3 space-y-1 min-w-0">
                   <Label htmlFor={`${idPrefix}-${idx}-id`} className="text-xs">
-                    Field ID
+                    {t('workflows:requiredFields.fieldIdLabel')}
                   </Label>
                   <Input
                     id={`${idPrefix}-${idx}-id`}
                     data-testid={`${rowTestId}-id`}
                     value={field.id}
                     onChange={(e) => updateField(idx, { id: e.target.value })}
-                    placeholder="e.g. target_group"
+                    placeholder={t('workflows:requiredFields.fieldIdPlaceholder')}
                     className={`w-full ${idError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                     aria-invalid={idError != null}
                   />
                 </div>
                 <div className="lg:col-span-4 space-y-1 min-w-0">
                   <Label htmlFor={`${idPrefix}-${idx}-label`} className="text-xs">
-                    Label
+                    {t('workflows:requiredFields.labelLabel')}
                   </Label>
                   <Input
                     id={`${idPrefix}-${idx}-label`}
                     data-testid={`${rowTestId}-label`}
                     value={field.label}
                     onChange={(e) => updateField(idx, { label: e.target.value })}
-                    placeholder="Shown to requester"
+                    placeholder={t('workflows:requiredFields.labelPlaceholder')}
                     className="w-full"
                   />
                 </div>
                 <div className="lg:col-span-2 space-y-1 min-w-0">
-                  <Label className="text-xs">Type</Label>
+                  <Label className="text-xs">{t('common:labels.type')}</Label>
                   <Select
                     value={field.type}
                     onValueChange={(v) => changeFieldType(idx, v as RequiredFieldType)}
@@ -459,13 +460,13 @@ export default function RequiredFieldsEditor({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="text">Text</SelectItem>
-                      <SelectItem value="select">Select</SelectItem>
+                      <SelectItem value="text">{t('workflows:requiredFields.typeText')}</SelectItem>
+                      <SelectItem value="select">{t('workflows:requiredFields.typeSelect')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="lg:col-span-1 flex flex-col items-center gap-1 pb-1">
-                  <Label className="text-xs">Req.</Label>
+                  <Label className="text-xs">{t('workflows:requiredFields.requiredShort')}</Label>
                   <Switch
                     data-testid={`${rowTestId}-required`}
                     checked={!!field.required}
@@ -476,16 +477,16 @@ export default function RequiredFieldsEditor({
                   <Label
                     htmlFor={`${idPrefix}-${idx}-primary`}
                     className="text-xs cursor-pointer"
-                    title="Mark this row as the step's primary input field"
+                    title={t('workflows:requiredFields.primaryTooltip')}
                   >
-                    Primary
+                    {t('workflows:requiredFields.primary')}
                   </Label>
                   <Checkbox
                     id={`${idPrefix}-${idx}-primary`}
                     data-testid={`${rowTestId}-primary`}
                     checked={!!field.id && field.id === primaryFieldId}
                     onCheckedChange={(checked) => togglePrimary(idx, checked === true)}
-                    aria-label="Primary field"
+                    aria-label={t('workflows:requiredFields.primaryAriaLabel')}
                   />
                 </div>
                 <div className="lg:col-span-1 flex justify-end pb-1">
@@ -493,7 +494,7 @@ export default function RequiredFieldsEditor({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label="Remove field"
+                    aria-label={t('workflows:requiredFields.removeFieldAriaLabel')}
                     data-testid={`${rowTestId}-delete`}
                     onClick={() => removeField(idx)}
                   >
@@ -532,7 +533,7 @@ export default function RequiredFieldsEditor({
                         htmlFor={`${idPrefix}-${idx}-mode-static`}
                         className="text-xs font-normal cursor-pointer"
                       >
-                        Static options
+                        {t('workflows:requiredFields.staticOptions')}
                       </Label>
                     </div>
                     <div className="flex items-center gap-2">
@@ -545,7 +546,7 @@ export default function RequiredFieldsEditor({
                         htmlFor={`${idPrefix}-${idx}-mode-endpoint`}
                         className="text-xs font-normal cursor-pointer"
                       >
-                        From endpoint
+                        {t('workflows:requiredFields.fromEndpoint')}
                       </Label>
                     </div>
                   </RadioGroup>
@@ -563,7 +564,7 @@ export default function RequiredFieldsEditor({
                         >
                           <Input
                             className="col-span-5"
-                            placeholder="value"
+                            placeholder={t('workflows:requiredFields.optionValuePlaceholder')}
                             data-testid={`${rowTestId}-option-${optIdx}-value`}
                             value={opt.value}
                             onChange={(e) =>
@@ -572,7 +573,7 @@ export default function RequiredFieldsEditor({
                           />
                           <Input
                             className="col-span-6"
-                            placeholder="label"
+                            placeholder={t('workflows:requiredFields.optionLabelPlaceholder')}
                             data-testid={`${rowTestId}-option-${optIdx}-label`}
                             value={opt.label}
                             onChange={(e) =>
@@ -584,7 +585,7 @@ export default function RequiredFieldsEditor({
                             variant="ghost"
                             size="icon"
                             className="col-span-1"
-                            aria-label="Remove option"
+                            aria-label={t('workflows:requiredFields.removeOptionAriaLabel')}
                             data-testid={`${rowTestId}-option-${optIdx}-delete`}
                             onClick={() => removeOption(idx, optIdx)}
                           >
@@ -599,7 +600,7 @@ export default function RequiredFieldsEditor({
                         onClick={() => addOption(idx)}
                         data-testid={`${rowTestId}-add-option`}
                       >
-                        <Plus className="h-3 w-3 mr-1" /> Add option
+                        <Plus className="h-3 w-3 mr-1" /> {t('workflows:requiredFields.addOption')}
                       </Button>
                     </div>
                   )}
@@ -610,19 +611,19 @@ export default function RequiredFieldsEditor({
                         htmlFor={`${idPrefix}-${idx}-endpoint`}
                         className="text-xs"
                       >
-                        Options endpoint
+                        {t('workflows:requiredFields.optionsEndpoint')}
                       </Label>
                       <Input
                         id={`${idPrefix}-${idx}-endpoint`}
                         data-testid={`${rowTestId}-endpoint`}
-                        placeholder="/api/workspace/groups"
+                        placeholder={t('workflows:requiredFields.endpointPlaceholder')}
                         value={field.options_endpoint ?? ''}
                         onChange={(e) =>
                           updateField(idx, { options_endpoint: e.target.value })
                         }
                       />
                       <p className="text-[10px] text-muted-foreground">
-                        Backend endpoint returning JSON{' '}
+                        {t('workflows:requiredFields.endpointHint')}{' '}
                         <code>{`{ options: [{ value, label }] }`}</code>.
                       </p>
                     </div>
@@ -640,7 +641,7 @@ export default function RequiredFieldsEditor({
           onClick={addField}
           data-testid={`${idPrefix}-add-field`}
         >
-          <Plus className="h-4 w-4 mr-1" /> Add field
+          <Plus className="h-4 w-4 mr-1" /> {t('workflows:requiredFields.addField')}
         </Button>
       </CollapsibleContent>
     </Collapsible>

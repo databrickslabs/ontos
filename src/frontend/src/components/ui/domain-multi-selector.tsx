@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronsUpDown, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -93,12 +94,13 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
   value,
   primaryDomainId,
   onChange,
-  placeholder = 'Select domains...',
+  placeholder,
   disabled = false,
   maxDomains,
   label,
   className,
 }) => {
+  const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const { domains, loading, getDomainName } = useDomains();
@@ -147,9 +149,9 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
                   <button
                     type="button"
                     onClick={() => setPrimary(domainId)}
-                    title={isPrimary ? 'Primary domain' : 'Set as primary domain'}
+                    title={isPrimary ? t('common:domainSelector.primaryDomain') : t('common:domainSelector.setAsPrimary')}
                     className="focus:outline-none"
-                    aria-label={isPrimary ? 'Primary domain' : 'Set as primary domain'}
+                    aria-label={isPrimary ? t('common:domainSelector.primaryDomain') : t('common:domainSelector.setAsPrimary')}
                   >
                     <Star className={cn('h-3 w-3', isPrimary ? 'fill-current' : 'opacity-40')} />
                   </button>
@@ -161,9 +163,9 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
                   <button
                     type="button"
                     onClick={() => removeDomain(domainId)}
-                    title="Remove domain"
+                    title={t('common:domainSelector.removeDomain')}
                     className="focus:outline-none"
-                    aria-label="Remove domain"
+                    aria-label={t('common:domainSelector.removeDomain')}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -189,10 +191,10 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
           >
             {value.length > 0 ? (
               <span className="truncate">
-                {value.length === 1 ? '1 domain selected' : `${value.length} domains selected`}
+                {t('common:domainSelector.selectedCount', { count: value.length })}
               </span>
             ) : (
-              placeholder
+              placeholder ?? t('common:domainSelector.selectPlaceholder')
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
@@ -200,7 +202,7 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
         <PopoverContent className="w-full p-0" align="start">
           <Command shouldFilter={false}>
             <CommandInput
-              placeholder="Search domains..."
+              placeholder={t('common:domainSelector.searchPlaceholder')}
               value={searchValue}
               onValueChange={setSearchValue}
             />
@@ -210,9 +212,9 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
             >
               <CommandList>
                 {loading ? (
-                  <CommandEmpty>Loading domains...</CommandEmpty>
+                  <CommandEmpty>{t('common:states.loadingDomains')}</CommandEmpty>
                 ) : filteredDomains.length === 0 ? (
-                  <CommandEmpty>No domains found.</CommandEmpty>
+                  <CommandEmpty>{t('common:states.noDomainsFound')}</CommandEmpty>
                 ) : (
                   <CommandGroup>
                     {filteredDomains.map((domain) => (
@@ -247,7 +249,7 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
 
       {maxDomains && (
         <p className="text-sm text-muted-foreground">
-          {value.length} of {maxDomains} domains selected
+          {t('common:domainSelector.selectedOfMax', { count: value.length, max: maxDomains })}
         </p>
       )}
     </div>

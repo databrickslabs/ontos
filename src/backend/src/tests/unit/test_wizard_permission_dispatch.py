@@ -256,9 +256,26 @@ def test_unknown_trigger_silent_when_raise_on_unknown_false() -> None:
     ))
 
 
-def test_user_with_no_groups_denied() -> None:
-    """Same as PermissionChecker: empty groups → 403 before we touch perms."""
+def test_user_with_no_groups_and_no_email_denied() -> None:
+    """Same as PermissionChecker: no groups AND no email → 403 before we touch perms.
+
+    A user with neither groups nor an email cannot be resolved to any role
+    (group intersection or assigned_users email match), so enforcement denies
+    early. (#196/#760 relaxed this guard to allow email-only assignment through.)
+    """
     request = _request_with_perms(effective={"access-grants": FeatureAccessLevel.ADMIN})
+    with pytest.raises(HTTPException) as exc:
+        _run(enforce_wizard_permission(
+            TriggerType.FOR_REQUEST_ACCESS.value, _user(groups=[], email=""), request
+        ))
+    assert exc.value.status_code == 403
+
+
+def test_user_no_groups_email_but_no_role_denied() -> None:
+    """No groups but has an email, and no role grants the feature → 403 via the
+    permission check (not the early guard). Confirms email-only users are still
+    denied when their email matches no role's assigned_users (#196/#760)."""
+    request = _request_with_perms(effective={})
     with pytest.raises(HTTPException) as exc:
         _run(enforce_wizard_permission(
             TriggerType.FOR_REQUEST_ACCESS.value, _user(groups=[]), request

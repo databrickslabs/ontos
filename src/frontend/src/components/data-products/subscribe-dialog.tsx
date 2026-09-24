@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,7 @@ export default function SubscribeDialog({
   productName,
   onSuccess,
 }: SubscribeDialogProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { toast } = useToast();
   const userInfo = useUserStore((s) => s.userInfo);
   const fetchUserInfo = useUserStore((s) => s.fetchUserInfo);
@@ -57,7 +59,6 @@ export default function SubscribeDialog({
   const [oboOtherType, setOboOtherType] = useState<'group' | 'service_principal'>('group');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const entityType = 'Data Product';
   const apiEndpoint = `/api/data-products/${productId}/subscribe`;
 
   // Pull user details so the "for a group I'm part of" picker is populated.
@@ -105,9 +106,11 @@ export default function SubscribeDialog({
       }
 
       const successDescription = obo
-        ? `You are now subscribed to "${productName}" on behalf of ${obo.type === 'group' ? 'group ' : 'service principal '}"${obo.value}".`
-        : `You are now subscribed to "${productName}". You'll receive notifications about updates and changes.`;
-      toast({ title: 'Subscribed!', description: successDescription });
+        ? obo.type === 'group'
+          ? t('data-products:subscribeDialog.subscribedOnBehalfGroup', { productName, value: obo.value })
+          : t('data-products:subscribeDialog.subscribedOnBehalfSP', { productName, value: obo.value })
+        : t('data-products:subscribeDialog.subscribedDesc', { productName });
+      toast({ title: t('data-products:subscribeDialog.subscribedTitle'), description: successDescription });
 
       // Reset form
       setReason('');
@@ -118,8 +121,8 @@ export default function SubscribeDialog({
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to subscribe';
-      toast({ title: 'Subscription Failed', description: message, variant: 'destructive' });
+      const message = error instanceof Error ? error.message : t('data-products:subscribeDialog.failedToSubscribe');
+      toast({ title: t('data-products:subscribeDialog.subscriptionFailed'), description: message, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -141,16 +144,18 @@ export default function SubscribeDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-primary" />
-            Subscribe to {entityType}
+            {t('data-products:subscribeDialog.title')}
           </DialogTitle>
           <DialogDescription>
-            Subscribe to <span className="font-medium">{productName}</span> to receive notifications about updates, changes, and compliance status.
+            {t('data-products:subscribeDialog.descriptionPre')}{' '}
+            <span className="font-medium">{productName}</span>{' '}
+            {t('data-products:subscribeDialog.descriptionPost')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-4">
           <div>
-            <Label className="text-sm font-medium">Subscribe as</Label>
+            <Label className="text-sm font-medium">{t('data-products:subscribeDialog.subscribeAs')}</Label>
             <RadioGroup
               className="mt-2 space-y-2"
               value={oboMode}
@@ -160,7 +165,7 @@ export default function SubscribeDialog({
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="self" id="obo-self" />
                 <Label htmlFor="obo-self" className="font-normal cursor-pointer">
-                  For myself
+                  {t('data-products:subscribeDialog.forMyself')}
                 </Label>
               </div>
 
@@ -175,9 +180,9 @@ export default function SubscribeDialog({
                     htmlFor="obo-my-group"
                     className={`font-normal cursor-pointer ${myGroups.length === 0 ? 'text-muted-foreground' : ''}`}
                   >
-                    For a group I'm part of
+                    {t('data-products:subscribeDialog.forMyGroup')}
                     {myGroups.length === 0 && (
-                      <span className="ml-1 text-xs">(no groups available)</span>
+                      <span className="ml-1 text-xs">{t('data-products:subscribeDialog.noGroupsAvailable')}</span>
                     )}
                   </Label>
                 </div>
@@ -185,7 +190,7 @@ export default function SubscribeDialog({
                   <div className="ml-6">
                     <Select value={oboGroup} onValueChange={setOboGroup}>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select one of your groups" />
+                        <SelectValue placeholder={t('data-products:subscribeDialog.selectGroup')} />
                       </SelectTrigger>
                       <SelectContent>
                         {myGroups.map((g) => (
@@ -203,7 +208,7 @@ export default function SubscribeDialog({
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="other" id="obo-other" />
                   <Label htmlFor="obo-other" className="font-normal cursor-pointer">
-                    Other group or service principal
+                    {t('data-products:subscribeDialog.otherGroupOrSP')}
                   </Label>
                 </div>
                 {oboMode === 'other' && (
@@ -216,18 +221,18 @@ export default function SubscribeDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="group">Group (display name)</SelectItem>
-                        <SelectItem value="service_principal">Service principal (display name or applicationId)</SelectItem>
+                        <SelectItem value="group">{t('data-products:subscribeDialog.groupDisplayName')}</SelectItem>
+                        <SelectItem value="service_principal">{t('data-products:subscribeDialog.spDisplayName')}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Input
-                      placeholder={oboOtherType === 'group' ? 'e.g., sales_consumers' : 'e.g., 11111111-2222-3333-4444-555555555555'}
+                      placeholder={oboOtherType === 'group' ? t('data-products:subscribeDialog.groupPlaceholder') : t('data-products:subscribeDialog.spPlaceholder')}
                       value={oboOther}
                       onChange={(e) => setOboOther(e.target.value)}
                       disabled={isSubmitting}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Will be validated against the workspace directory before the request is recorded.
+                      {t('data-products:subscribeDialog.validationNote')}
                     </p>
                   </div>
                 )}
@@ -237,36 +242,37 @@ export default function SubscribeDialog({
 
           <div>
             <Label htmlFor="reason" className="text-sm font-medium">
-              Why are you subscribing? <span className="text-muted-foreground">(optional)</span>
+              {t('data-products:subscribeDialog.reasonLabel')}{' '}
+              <span className="text-muted-foreground">{t('data-products:subscribeDialog.optional')}</span>
             </Label>
             <Textarea
               id="reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="E.g., Need this data for quarterly reporting, building a dashboard, etc."
+              placeholder={t('data-products:subscribeDialog.reasonPlaceholder')}
               className="mt-2 min-h-[80px]"
               disabled={isSubmitting}
             />
             <p className="text-xs text-muted-foreground mt-2">
-              This helps data owners understand how their products are being used.
+              {t('data-products:subscribeDialog.reasonHint')}
             </p>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={submitDisabled}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Subscribing...
+                {t('data-products:subscribeDialog.subscribing')}
               </>
             ) : (
               <>
                 <Bell className="mr-2 h-4 w-4" />
-                Subscribe
+                {t('data-products:details.subscribe')}
               </>
             )}
           </Button>

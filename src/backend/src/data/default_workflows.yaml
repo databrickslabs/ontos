@@ -765,6 +765,32 @@ workflows:
         config:
           message: "Data asset review requires changes"
 
+  # Authority Relation Review Request
+  - id: "authority-relation-review-request"
+    name: "Authority Relation Review Request"
+    description: "Handles Authority Relation (ARF) review requests. A per-reviewer Asset Review is created for each assigned reviewer/interviewee; this workflow records the overall AR review process and notifies the owner that it has started."
+    trigger:
+      type: "on_request_review"
+      entity_types:
+        - "authority_relation"
+    scope:
+      type: "all"
+    is_active: true
+    is_default: true
+    steps:
+      - id: "notify-owner"
+        name: "Confirm Review Started"
+        type: "notification"
+        config:
+          recipients: "requester"
+          template: "request_submitted"
+          custom_message: "The review process for Authority Relation '${entity_name}' has started. Assigned reviewers have each been sent an Asset Review to complete."
+        on_pass: "success"
+
+      - id: "success"
+        name: "Review Started"
+        type: "pass"
+
   # =========================================================================
   # Project Access Request Workflow
   # =========================================================================

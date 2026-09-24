@@ -11,11 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, ClipboardCheck } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, ClipboardCheck, Workflow, ExternalLink } from 'lucide-react';
 import { formatDna } from './authority-resolution';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
 import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
-import type { AuthorityRelation, ResolveResponse } from '@/types/authority-resolution';
+import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking } from '@/types/authority-resolution';
 
 function reviewStatusVariant(s?: string): 'default' | 'secondary' | 'outline' {
   switch ((s || 'na').toLowerCase()) {
@@ -60,6 +60,7 @@ export default function AuthorityRelationDetails() {
   const [testOpen, setTestOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [reviewFor, setReviewFor] = useState<string | null>(null);
+  const [tracking, setTracking] = useState<AuthorityReviewTracking | null>(null);
 
   const fetchRelation = useCallback(async () => {
     if (!relationId) return;
@@ -77,7 +78,13 @@ export default function AuthorityRelationDetails() {
     setLoading(false);
   }, [relationId, get, toast]);
 
-  useEffect(() => { fetchRelation(); }, [fetchRelation]);
+  const fetchTracking = useCallback(async () => {
+    if (!relationId) return;
+    const { data } = await get<AuthorityReviewTracking>(`/api/authority/relations/${relationId}/review-tracking`);
+    if (data) setTracking(data);
+  }, [relationId, get]);
+
+  useEffect(() => { fetchRelation(); fetchTracking(); }, [fetchRelation, fetchTracking]);
 
   const computeDna = async () => {
     setBusy('compute');
@@ -114,6 +121,7 @@ export default function AuthorityRelationDetails() {
     else {
       toast({ title: 'Review started', description: `${data?.reviewers_notified ?? 0} reviewer(s) notified` });
       fetchRelation();
+      fetchTracking();
     }
   };
 
@@ -251,6 +259,57 @@ export default function AuthorityRelationDetails() {
         </Card>
       )}
 
+      {tracking && (tracking.workflows.length > 0 || tracking.reviews.some((r) => r.review_request_id)) && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Review process</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {tracking.workflows.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs uppercase text-muted-foreground">Workflows</div>
+                {tracking.workflows.map((w) => (
+                  <div key={w.execution_id} className="flex items-center justify-between border-b py-2 last:border-0">
+                    <div className="text-sm flex items-center gap-2">
+                      <Workflow className="h-4 w-4 text-muted-foreground" />
+                      {w.workflow_name || w.workflow_id}
+                      {w.current_step && <span className="text-muted-foreground">· {w.current_step}</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{w.status}</Badge>
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate(`/workflows/${w.workflow_id}`)}>
+                        Workflow <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="space-y-2">
+              <div className="text-xs uppercase text-muted-foreground">Asset Reviews</div>
+              {tracking.reviews.length === 0 && <div className="text-sm text-muted-foreground">No reviewers assigned.</div>}
+              {tracking.reviews.map((r) => (
+                <div key={r.participant_id} className="flex items-center justify-between border-b py-2 last:border-0">
+                  <div className="text-sm">
+                    <Badge variant="outline" className="mr-2">{r.role}</Badge>
+                    {r.principal}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={reviewStatusVariant(r.review_status)}>{r.review_status || 'na'}</Badge>
+                    {r.request_status && <Badge variant="secondary">review: {r.request_status}</Badge>}
+                    {r.review_request_id ? (
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate(`/data-asset-reviews/${r.review_request_id}`)}>
+                        Open review <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">not started</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle className="text-base">Authority Relation</CardTitle></CardHeader>
@@ -307,7 +366,7 @@ export default function AuthorityRelationDetails() {
             <AuthorityRelationReview
               relationId={relationId!}
               reviewer={reviewFor}
-              onCompleted={fetchRelation}
+              onCompleted={() => { fetchRelation(); fetchTracking(); }}
             />
           )}
         </DialogContent>

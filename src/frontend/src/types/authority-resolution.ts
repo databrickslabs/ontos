@@ -89,6 +89,32 @@ export interface AuthorityRelation {
   created_by?: string | null;
 }
 
+export interface AuthorityReviewTrackingReview {
+  participant_id: string;
+  principal: string;
+  role: string;
+  review_status: string;
+  review_request_id?: string | null;   // real Asset Review id (linkable) or null
+  request_status?: string | null;      // Asset Review request status
+  request_title?: string | null;
+}
+
+export interface AuthorityReviewTrackingWorkflow {
+  execution_id: string;
+  workflow_id: string;
+  workflow_name?: string | null;
+  status: string;
+  current_step?: string | null;
+  entity_id?: string | null;
+  started_at?: string | null;
+}
+
+export interface AuthorityReviewTracking {
+  relation_id: string;
+  reviews: AuthorityReviewTrackingReview[];
+  workflows: AuthorityReviewTrackingWorkflow[];
+}
+
 export interface AffirmationInput {
   role: string;
   principal: string;

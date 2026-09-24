@@ -286,24 +286,57 @@ class AuthorityResolutionManager:
         questions = self._QUESTIONNAIRE.get((role or "").lower(), self._QUESTIONNAIRE["business"])
         return [{"id": f"q{i+1}", "text": q} for i, q in enumerate(questions)]
 
-    def start_review(self, db: Session, relation_id: str, owner: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Start the review process: mark reviewer participants in-review and fire
-        the ``on_request_review`` workflow trigger (which — via a configured
-        AR-review workflow — creates the per-reviewer Asset Review tasks and
-        notifications). Reviewers may also complete their review inline from the
-        AR detail view. Returns None if the AR does not exist.
+    def start_review(
+        self,
+        db: Session,
+        relation_id: str,
+        owner: Optional[str] = None,
+        reviews_manager: Optional[Any] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Start the review process.
+
+        For each reviewer participant we (a) pre-create a per-reviewer Asset
+        Review targeting that principal — its ``asset_fqn`` is
+        ``authority-relation://{id}`` so the reviewer's task opens the
+        role-specific AR review editor, and creating it fires the standard
+        data-asset-review workflow (notification + approval) — and (b) mark the
+        participant ``in_review`` and store the Asset Review's id so the owner
+        can track and link to it. We then fire the AR-level ``on_request_review``
+        trigger, which the ``authority-relation-review-request`` default workflow
+        consumes to record the overall review process. All workflow/review side
+        effects are best-effort and never break the request. Returns None if the
+        AR does not exist.
         """
         relation = authority_relation_repo.get(db, relation_id)
         if not relation:
             return None
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
         reviewers = [a for a in affs if getattr(a, "is_reviewer", False)]
+        reviews_created = 0
         for a in reviewers:
+            review_request_id: Optional[str] = None
+            if reviews_manager is not None:
+                try:
+                    from src.models.data_asset_reviews import DataAssetReviewRequestCreate
+                    req = reviews_manager.create_review_request(
+                        DataAssetReviewRequestCreate(
+                            requester_email=owner or a.principal,
+                            reviewer_email=a.principal,
+                            asset_fqns=[f"authority-relation://{relation_id}"],
+                            title=f"Authority Relation review: {relation.name}",
+                            notes=f"Confirm whether this Authority Relation reflects reality (reviewer role: {a.role}).",
+                        ),
+                        db=db,
+                    )
+                    review_request_id = getattr(req, "id", None)
+                    reviews_created += 1
+                except Exception as e:  # pragma: no cover - env/validation dependent
+                    logger.warning(f"Could not create Asset Review for reviewer {a.principal} on AR {relation_id}: {e}")
             authority_affirmation_repo.update(db, db_obj=a, obj_in={
                 "review_status": "in_review",
-                "review_request_id": f"authority-relation://{relation_id}#{a.id}",
+                "review_request_id": review_request_id or f"authority-relation://{relation_id}#{a.id}",
             })
-        # Fire the workflow trigger (best-effort — never breaks the request).
+        # Fire the AR-level workflow trigger (best-effort — never breaks the request).
         try:
             from src.common.workflow_triggers import fire_trigger_safe
             from src.models.process_workflows import EntityType
@@ -321,7 +354,11 @@ class AuthorityResolutionManager:
             )
         except Exception as e:  # pragma: no cover - trigger is environment-dependent
             logger.warning(f"on_request_review trigger failed for AR {relation_id}: {e}")
-        return {"relation_id": relation_id, "reviewers_notified": len(reviewers)}
+        return {
+            "relation_id": relation_id,
+            "reviewers_notified": len(reviewers),
+            "reviews_created": reviews_created,
+        }
 
     def get_review_context(self, db: Session, relation_id: str, reviewer: str) -> Optional[Dict[str, Any]]:
         """Build the role-specific review context for a reviewer of this AR."""
@@ -362,6 +399,77 @@ class AuthorityResolutionManager:
             "review_answers": answers,
             "review_status": "completed",
         })
+
+    def get_review_tracking(self, db: Session, relation_id: str, reviews_manager: Optional[Any] = None) -> Optional[Dict[str, Any]]:
+        """Owner-facing tracking for an AR's review process: per-reviewer Asset
+        Review status (+ the review id to link to) and the workflow execution(s)
+        recording the process (the AR-level ``authority-relation-review-request``
+        run plus each per-reviewer data-asset-review run). Returns None if the AR
+        does not exist. All external lookups are best-effort.
+        """
+        relation = authority_relation_repo.get(db, relation_id)
+        if not relation:
+            return None
+        affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
+        reviewers = [a for a in affs if getattr(a, "is_reviewer", False)]
+        review_ids: set = set()
+        reviews: List[Dict[str, Any]] = []
+        for a in reviewers:
+            rid = getattr(a, "review_request_id", None)
+            # Only real Asset Review ids are linkable; the synthetic fallback
+            # marker (used when no Asset Review could be created) is not.
+            linkable = bool(rid) and not str(rid).startswith("authority-relation://")
+            request_status = None
+            request_title = None
+            if linkable:
+                review_ids.add(rid)
+                if reviews_manager is not None:
+                    try:
+                        req = reviews_manager.get_review_request(rid)
+                        if req is not None:
+                            request_status = req.status.value if hasattr(req.status, "value") else str(req.status)
+                            request_title = req.title
+                    except Exception as e:  # pragma: no cover - env dependent
+                        logger.warning(f"Could not load Asset Review {rid} for AR {relation_id}: {e}")
+            reviews.append({
+                "participant_id": a.id,
+                "principal": a.principal,
+                "role": a.role,
+                "review_status": getattr(a, "review_status", "na"),
+                "review_request_id": rid if linkable else None,
+                "request_status": request_status,
+                "request_title": request_title,
+            })
+        # Workflow executions recording the process: match the AR itself or any
+        # of the per-reviewer Asset Reviews by their trigger-context entity id.
+        workflows: List[Dict[str, Any]] = []
+        try:
+            import json as _json
+            from src.repositories.process_workflows_repository import workflow_execution_repo
+            target_ids = {relation_id} | review_ids
+            for exe in workflow_execution_repo.list_all(db, limit=100):
+                entity_id = None
+                tc = getattr(exe, "trigger_context", None)
+                if tc:
+                    try:
+                        tcd = _json.loads(tc) if isinstance(tc, str) else tc
+                        entity_id = tcd.get("entity_id")
+                    except Exception:
+                        entity_id = None
+                if entity_id in target_ids:
+                    wf = getattr(exe, "workflow", None)
+                    workflows.append({
+                        "execution_id": exe.id,
+                        "workflow_id": exe.workflow_id,
+                        "workflow_name": wf.name if wf else None,
+                        "status": exe.status,
+                        "current_step": getattr(exe, "current_step_id", None),
+                        "entity_id": entity_id,
+                        "started_at": exe.started_at,
+                    })
+        except Exception as e:  # pragma: no cover - env dependent
+            logger.warning(f"Could not load workflow executions for AR {relation_id}: {e}")
+        return {"relation_id": relation_id, "reviews": reviews, "workflows": workflows}
 
     # ------------------------------------------------------- DNA-Coefficient
 

@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 
-from src.common.dependencies import DBSessionDep, AuditCurrentUserDep
+from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, DataAssetReviewManagerDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
 from src.controller.authority_resolution_manager import AuthorityResolutionManager
@@ -199,10 +199,24 @@ async def start_review(
     relation_id: str,
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
+    reviews_manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     owner = current_user.username if current_user else None
-    result = manager.start_review(db, relation_id, owner=owner)
+    result = manager.start_review(db, relation_id, owner=owner, reviews_manager=reviews_manager)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Authority Relation not found")
+    return result
+
+
+@router.get("/authority/relations/{relation_id}/review-tracking")
+async def review_tracking(
+    relation_id: str,
+    db: DBSessionDep,
+    reviews_manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    result = manager.get_review_tracking(db, relation_id, reviews_manager=reviews_manager)
     if result is None:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return result

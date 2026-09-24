@@ -71,7 +71,9 @@ class AuthorityRelationDb(Base):
     decision_logic = Column(JSON, nullable=True)      # {allowed_principals, threshold, required_affirmations, ...}
 
     # --- Evidence binding (v1: a single UC Delta table + column map) --------
-    evidence_binding = Column(JSON, nullable=True)    # {source_table_fqn, column_map, row_filter}
+    evidence_binding = Column(JSON, nullable=True)    # legacy single source: {source_table_fqn, column_map, row_filter}
+    # Multiple typed evidence sources: [{type: delta_table|data_product|asset, ref, column_map, row_filter}]
+    evidence_sources = Column(JSON, nullable=True)
 
     # --- DNA-Coefficient (aggregate, rolled up from decisions/evidence) -----
     dna_magnitude = Column(Float, nullable=True)      # 0.0 = best; higher = worse

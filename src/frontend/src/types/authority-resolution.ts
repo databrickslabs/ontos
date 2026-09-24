@@ -53,6 +53,16 @@ export interface EvidenceBinding {
   row_filter?: string | null;
 }
 
+export type EvidenceSourceType = 'delta_table' | 'data_product' | 'asset';
+
+export interface EvidenceSource {
+  type: EvidenceSourceType;
+  ref: string;
+  label?: string | null;
+  column_map?: Record<string, string>;
+  row_filter?: string | null;
+}
+
 export interface AuthorityRelation {
   id: string;
   slug?: string | null;
@@ -73,6 +83,7 @@ export interface AuthorityRelation {
   justification_chain?: Record<string, any> | null;
   decision_logic?: Record<string, any> | null;
   evidence_binding?: EvidenceBinding | null;
+  evidence_sources?: EvidenceSource[] | null;
   dna_magnitude?: number | null;
   dna_direction?: string | null;
   dna_measured_at?: string | null;

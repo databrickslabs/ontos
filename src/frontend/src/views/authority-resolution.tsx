@@ -12,6 +12,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
 import { Plus, AlertCircle, ShieldCheck, Eye, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { AuthorityRelation } from '@/types/authority-resolution';
 
 const FEATURE_ID = 'authority-resolution';
@@ -66,6 +67,14 @@ export default function AuthorityResolution() {
   }, [get]);
 
   useEffect(() => { fetchRelations(); }, [fetchRelations]);
+
+  const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
+  useEffect(() => {
+    setStaticSegments([]);
+    setDynamicTitle('Authority Resolution');
+    return () => { setStaticSegments([]); setDynamicTitle(null); };
+  }, [setStaticSegments, setDynamicTitle]);
 
   const handleDelete = async (r: AuthorityRelation) => {
     if (!confirm(`Delete Authority Relation "${r.name}"?`)) return;

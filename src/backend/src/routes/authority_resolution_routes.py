@@ -156,6 +156,20 @@ async def resolve(
     return manager.resolve(db, relation_id, _resolve_req_dict(payload))
 
 
+@router.post("/authority/relations/{relation_id}/test")
+async def test_resolve(
+    relation_id: str,
+    db: DBSessionDep,
+    payload: ResolveRequest = Body(default=ResolveRequest()),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Dry-run the resolution gate against this AR regardless of status, without
+    recording the decision or touching the usage counters. Used by the detail-view
+    Test dialog so authors can preview verdicts before activating.
+    """
+    return manager.resolve(db, relation_id, _resolve_req_dict(payload), record=False, require_active=False)
+
+
 @router.get("/authority/relations/{relation_id}/decisions")
 async def list_decisions(
     relation_id: str,

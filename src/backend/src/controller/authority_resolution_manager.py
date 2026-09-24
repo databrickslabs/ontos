@@ -126,6 +126,7 @@ class AuthorityResolutionManager:
             "domain_context": data.get("domain_context"),
             "justification_chain": data.get("justification_chain"),
             "evidence_binding": evidence,
+            "evidence_sources": data.get("evidence_sources"),
             "dna_max_threshold": data.get("dna_max_threshold", 0.3),
             "dna_scoring_config": data.get("dna_scoring_config"),
             "schedule_cron": data.get("schedule_cron"),
@@ -410,6 +411,7 @@ class AuthorityResolutionManager:
                 "domain_context": relation.domain_context,
                 "decision_logic": relation.decision_logic,
                 "evidence_binding": relation.evidence_binding,
+                "evidence_sources": relation.evidence_sources,
                 "justification_chain": relation.justification_chain,
             }
         return ctx
@@ -557,7 +559,10 @@ class AuthorityResolutionManager:
 
         try:
             if rows is None:
-                rows = self._read_evidence_rows(binding)
+                # Read + normalise across all bound evidence sources (falls back to
+                # the legacy single ``evidence_binding``). Normalised rows are keyed
+                # by canonical AR elements, so the engine uses an identity map.
+                rows, column_map = self._collect_evidence(relation)
             result = authority_dna.compute_dnaco(
                 self._ar_spec(relation), rows, column_map, relation.dna_scoring_config
             )
@@ -644,6 +649,50 @@ class AuthorityResolutionManager:
                 logger.warning(f"Scheduled DNAco recompute failed for {r.id}: {e}")
                 results.append({"relation_id": r.id, "status": "failed", "error": str(e)})
         return {"scheduled": len(due), "results": results}
+
+    # Canonical AR elements the DNAco engine reads from each row.
+    _CANONICAL_ELEMENTS = (
+        "actual_approver", "documented_approver", "value",
+        "escalated", "cosign_present", "action", "object_id",
+    )
+
+    def _resolve_evidence_sources(self, relation: AuthorityRelationDb) -> List[Dict[str, Any]]:
+        """Resolve an AR's bound evidence to a list of readable Delta tables.
+
+        Each entry is ``{table_fqn, column_map, row_filter}``. ``delta_table`` and
+        ``asset`` sources resolve to their ``ref`` (a table/view FQN); ``data_product``
+        sources are declared-only in v1 (logged, not read). Falls back to the legacy
+        single ``evidence_binding`` when no sources are declared.
+        """
+        out: List[Dict[str, Any]] = []
+        for s in (relation.evidence_sources or []):
+            stype = (s or {}).get("type") or "delta_table"
+            ref = (s or {}).get("ref")
+            if not ref:
+                continue
+            if stype in ("delta_table", "asset"):
+                out.append({"table_fqn": ref, "column_map": s.get("column_map") or {}, "row_filter": s.get("row_filter")})
+            elif stype == "data_product":
+                logger.info(f"AR evidence source data_product '{ref}' is declared-only in v1 (not read).")
+        if not out:
+            b = relation.evidence_binding or {}
+            if b.get("source_table_fqn"):
+                out.append({"table_fqn": b["source_table_fqn"], "column_map": b.get("column_map") or {}, "row_filter": b.get("row_filter")})
+        return out
+
+    def _collect_evidence(self, relation: AuthorityRelationDb) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
+        """Read rows from every resolvable evidence source and normalise them to the
+        canonical AR elements, so a single identity column-map drives the engine.
+        """
+        sources = self._resolve_evidence_sources(relation)
+        combined: List[Dict[str, Any]] = []
+        for src in sources:
+            cm = src.get("column_map") or {}
+            raw = self._read_evidence_rows({"source_table_fqn": src["table_fqn"], "row_filter": src.get("row_filter")})
+            for r in raw:
+                combined.append({k: r.get(cm[k]) for k in self._CANONICAL_ELEMENTS if k in cm})
+        identity = {k: k for k in self._CANONICAL_ELEMENTS}
+        return combined, identity
 
     def _read_evidence_rows(self, binding: Dict[str, Any], limit: int = 500) -> List[Dict[str, Any]]:
         """Best-effort read of the bound UC Delta table via the SQL warehouse.
@@ -737,16 +786,25 @@ class AuthorityResolutionManager:
 
         return VERDICT_APPROVED, "; ".join(reasons) or "all checks passed"
 
-    def resolve(self, db: Session, ar_ref: str, req: Dict[str, Any], record: bool = True) -> Dict[str, Any]:
-        """Deterministically resolve a decision against an *active* AR (by id or slug).
+    def resolve(self, db: Session, ar_ref: str, req: Dict[str, Any], record: bool = True, require_active: bool = True) -> Dict[str, Any]:
+        """Deterministically resolve a decision against an AR (by id or slug).
 
-        Returns a verdict dict; ``no_authority`` when no matching active AR exists.
+        Production/MCP use requires the AR to be ``active`` and records the
+        decision (``require_active=True``, ``record=True``). The detail-view
+        **Test** dry-run passes ``require_active=False, record=False`` so an author
+        can preview the verdict for a draft/needs_review AR without affecting the
+        usage counters. Returns ``no_authority`` when the AR does not exist, or
+        (in production mode) is not active.
         """
         relation = authority_relation_repo.get(db, ar_ref) or authority_relation_repo.get_by_slug(db, ar_ref)
-        if not relation or relation.status != STATUS_ACTIVE:
+        if not relation or (require_active and relation.status != STATUS_ACTIVE):
+            reason = (
+                "no Authority Relation matches the supplied id" if not relation
+                else f"Authority Relation is '{relation.status}', not active"
+            )
             return {
                 "verdict": VERDICT_NO_AUTHORITY,
-                "reason": "no active Authority Relation matches the supplied id",
+                "reason": reason,
                 "relation_id": relation.id if relation else None,
                 "relation_slug": relation.slug if relation else None,
             }
@@ -825,6 +883,7 @@ class AuthorityResolutionManager:
             "justification_chain": relation.justification_chain,
             "decision_logic": relation.decision_logic,
             "evidence_binding": relation.evidence_binding,
+            "evidence_sources": relation.evidence_sources,
             "dna_magnitude": relation.dna_magnitude,
             "dna_direction": relation.dna_direction,
             "dna_measured_at": relation.dna_measured_at,

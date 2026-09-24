@@ -13,8 +13,24 @@ from src.models.tags import AssignedTagCreate
 
 
 class EvidenceBinding(BaseModel):
-    """v1 evidence binding: one UC Delta table + a column→AR-element map."""
+    """Legacy single evidence binding: one UC Delta table + a column→AR-element map."""
     source_table_fqn: str
+    column_map: Dict[str, str] = Field(default_factory=dict)
+    row_filter: Optional[str] = None
+
+
+class EvidenceSource(BaseModel):
+    """One typed evidence source bound to an AR.
+
+    ``type`` is ``delta_table`` (ref = table FQN), ``asset`` (ref = an asset that
+    resolves to a table/view FQN), or ``data_product`` (ref = data product id;
+    resolved to its output-port table — declared-only in v1). ``column_map`` maps
+    canonical AR elements (actual_approver, documented_approver, value, escalated,
+    cosign_present, action, object_id) to this source's raw column names.
+    """
+    type: str = "delta_table"
+    ref: str
+    label: Optional[str] = None
     column_map: Dict[str, str] = Field(default_factory=dict)
     row_filter: Optional[str] = None
 
@@ -47,6 +63,7 @@ class AuthorityRelationCreate(BaseModel):
     justification_chain: Optional[Dict[str, Any]] = None
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
+    evidence_sources: Optional[List[EvidenceSource]] = None
     dna_max_threshold: float = 0.3
     dna_scoring_config: Optional[Dict[str, Any]] = None
     schedule_cron: Optional[str] = None
@@ -73,6 +90,7 @@ class AuthorityRelationUpdate(BaseModel):
     justification_chain: Optional[Dict[str, Any]] = None
     decision_logic: Optional[Dict[str, Any]] = None
     evidence_binding: Optional[EvidenceBinding] = None
+    evidence_sources: Optional[List[EvidenceSource]] = None
     dna_max_threshold: Optional[float] = None
     dna_scoring_config: Optional[Dict[str, Any]] = None
     schedule_cron: Optional[str] = None

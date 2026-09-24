@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import TagSelector from '@/components/ui/tag-selector';
 import type { AssignedTag } from '@/components/ui/tag-chip';
+import ScheduleSelect from '@/components/authority-resolution/schedule-select';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
@@ -37,6 +38,17 @@ const DEFAULT_AFFIRMATIONS: AffirmationInput[] = AFFIRMATION_ROLES.map((role) =>
   role, principal: '', principal_type: 'user', required: true, is_approver: true, is_reviewer: false,
 }));
 
+interface EvidenceSourceInput {
+  type: string;      // delta_table | data_product | asset
+  ref: string;       // table FQN / data product id / asset FQN
+  label: string;
+  columnMap: string; // JSON text
+}
+
+const newEvidenceSource = (): EvidenceSourceInput => ({
+  type: 'delta_table', ref: '', label: '', columnMap: DEFAULT_COLUMN_MAP,
+});
+
 export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCreated, relation }: Props) {
   const { post, put } = useApi();
   const { toast } = useToast();
@@ -56,19 +68,19 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [market, setMarket] = useState('');
   const [dnaMax, setDnaMax] = useState('0.3');
   const [requiredCosign, setRequiredCosign] = useState(false);
-  const [sourceTable, setSourceTable] = useState('');
-  const [columnMap, setColumnMap] = useState(DEFAULT_COLUMN_MAP);
+  const [evidenceSources, setEvidenceSources] = useState<EvidenceSourceInput[]>([]);
   const [domainIds, setDomainIds] = useState<string[]>([]);
   const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
   const [affirmations, setAffirmations] = useState<AffirmationInput[]>(DEFAULT_AFFIRMATIONS);
   const [tags, setTags] = useState<(string | AssignedTag)[]>([]);
+  const [scheduleCron, setScheduleCron] = useState<string | null>(null);
 
   const reset = () => {
     setName(''); setSlug(''); setDescription(''); setActorRole(''); setActorIdentity('');
     setAction('approve'); setObjectType('data_product'); setObjectId(''); setThreshold('');
     setCurrency(''); setMarket(''); setDnaMax('0.3'); setRequiredCosign(false);
-    setSourceTable(''); setColumnMap(DEFAULT_COLUMN_MAP); setDomainIds([]); setPrimaryDomainId(null);
-    setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]);
+    setEvidenceSources([]); setDomainIds([]); setPrimaryDomainId(null);
+    setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]); setScheduleCron(null);
   };
 
   // Prefill from the relation when editing; reset to defaults when creating.
@@ -91,8 +103,23 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       setMarket(dc.market || '');
       setDnaMax(relation.dna_max_threshold != null ? String(relation.dna_max_threshold) : '0.3');
       setRequiredCosign(!!(relation.decision_logic && relation.decision_logic.required_cosign));
-      setSourceTable(eb?.source_table_fqn || '');
-      setColumnMap(eb?.column_map ? JSON.stringify(eb.column_map, null, 2) : DEFAULT_COLUMN_MAP);
+      const srcs = relation.evidence_sources || [];
+      if (srcs.length > 0) {
+        setEvidenceSources(srcs.map((s) => ({
+          type: s.type || 'delta_table',
+          ref: s.ref || '',
+          label: s.label || '',
+          columnMap: JSON.stringify(s.column_map || {}, null, 2),
+        })));
+      } else if (eb?.source_table_fqn) {
+        // Migrate a legacy single binding into the multi-source editor.
+        setEvidenceSources([{
+          type: 'delta_table', ref: eb.source_table_fqn, label: '',
+          columnMap: JSON.stringify(eb.column_map || {}, null, 2),
+        }]);
+      } else {
+        setEvidenceSources([]);
+      }
       setDomainIds((relation.domains || []).map((d) => d.domain_id));
       setPrimaryDomainId((relation.domains || []).find((d) => d.is_primary)?.domain_id ?? null);
       setAffirmations(
@@ -108,6 +135,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           : DEFAULT_AFFIRMATIONS,
       );
       setTags((relation.tags || []).map((t) => t.fully_qualified_name).filter(Boolean) as string[]);
+      setScheduleCron(relation.schedule_cron ?? null);
     } else {
       reset();
     }
@@ -124,16 +152,19 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       return;
     }
 
-    let evidence_binding: any = undefined;
-    if (sourceTable.trim()) {
-      let parsedMap: Record<string, string>;
-      try {
-        parsedMap = JSON.parse(columnMap);
-      } catch (e) {
-        toast({ title: 'Invalid column map', description: 'Evidence column map must be valid JSON.', variant: 'destructive' });
-        return;
+    const evidence_sources: any[] = [];
+    for (const s of evidenceSources) {
+      if (!s.ref.trim()) continue;
+      let parsedMap: Record<string, string> = {};
+      if (s.columnMap.trim()) {
+        try {
+          parsedMap = JSON.parse(s.columnMap);
+        } catch (e) {
+          toast({ title: 'Invalid column map', description: `Column map for "${s.ref}" must be valid JSON.`, variant: 'destructive' });
+          return;
+        }
       }
-      evidence_binding = { source_table_fqn: sourceTable.trim(), column_map: parsedMap };
+      evidence_sources.push({ type: s.type, ref: s.ref.trim(), label: s.label.trim() || undefined, column_map: parsedMap });
     }
 
     const domain_context: Record<string, any> = {};
@@ -152,12 +183,13 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       object_id: objectId.trim() || undefined,
       domain_context: Object.keys(domain_context).length ? domain_context : undefined,
       decision_logic: requiredCosign ? { required_cosign: true } : undefined,
-      evidence_binding,
+      evidence_sources,
       dna_max_threshold: parseFloat(dnaMax) || 0.3,
       domain_ids: domainIds,
       primary_domain_id: primaryDomainId,
       affirmations: affirmations.filter((a) => a.principal.trim()),
       tags: tags.map((t) => ({ tag_fqn: typeof t === 'string' ? t : t.fully_qualified_name })),
+      schedule_cron: scheduleCron,
     };
 
     setSaving(true);
@@ -254,15 +286,55 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             onChange={(ids, primary) => { setDomainIds(ids); setPrimaryDomainId(primary); }}
           />
 
-          <div className="text-sm font-semibold text-muted-foreground pt-2">Evidence binding (v1: a Delta table)</div>
-          <div className="space-y-1">
-            <Label>Source table (FQN)</Label>
-            <Input value={sourceTable} onChange={(e) => setSourceTable(e.target.value)} placeholder="catalog.schema.promotion_decisions" />
-          </div>
-          <div className="space-y-1">
-            <Label>Column map (JSON)</Label>
-            <Textarea value={columnMap} onChange={(e) => setColumnMap(e.target.value)} rows={8} className="font-mono text-xs" />
-          </div>
+          <div className="text-sm font-semibold text-muted-foreground pt-2">Evidence sources</div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Bind the past decisions the DNA-Coefficient is measured against. Add one or more sources —
+            a <strong>Delta table</strong>, a <strong>Data Product</strong>, or an <strong>Asset</strong>
+            (volume file, table, or view). Each maps its columns to the canonical AR elements.
+          </p>
+          {evidenceSources.map((s, idx) => (
+            <div key={idx} className="rounded-md border p-3 space-y-2">
+              <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
+                <select
+                  className="flex h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                  value={s.type}
+                  onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, type: e.target.value } : x))}
+                >
+                  <option value="delta_table">Delta table</option>
+                  <option value="data_product">Data Product</option>
+                  <option value="asset">Asset</option>
+                </select>
+                <Input
+                  value={s.ref}
+                  onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, ref: e.target.value } : x))}
+                  placeholder={s.type === 'delta_table' ? 'catalog.schema.promotion_decisions' : s.type === 'data_product' ? 'data product id' : 'asset FQN (table/view/volume)'}
+                />
+                <Button variant="ghost" size="icon" onClick={() => setEvidenceSources((prev) => prev.filter((_, i) => i !== idx))}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <Input
+                value={s.label}
+                onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
+                placeholder="Optional label"
+              />
+              <div className="space-y-1">
+                <Label className="text-xs">Column map (JSON)</Label>
+                <Textarea
+                  value={s.columnMap}
+                  onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, columnMap: e.target.value } : x))}
+                  rows={6}
+                  className="font-mono text-xs"
+                />
+              </div>
+              {s.type === 'data_product' && (
+                <p className="text-xs text-muted-foreground">Data Product sources are recorded but not yet read for DNAco (v1).</p>
+              )}
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={() => setEvidenceSources((prev) => [...prev, newEvidenceSource()])}>
+            <Plus className="h-4 w-4 mr-1" /> Add evidence source
+          </Button>
 
           <div className="text-sm font-semibold text-muted-foreground pt-2">Participants (N-functional gate & review)</div>
           <p className="text-xs text-muted-foreground -mt-2">
@@ -314,14 +386,20 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             <Plus className="h-4 w-4 mr-1" /> Add participant
           </Button>
 
+          <div className="text-sm font-semibold text-muted-foreground pt-2">DNA-Coefficient schedule</div>
+          <ScheduleSelect value={scheduleCron} onChange={setScheduleCron} />
+
           <div className="text-sm font-semibold text-muted-foreground pt-2">Tags</div>
           <TagSelector value={tags} onChange={setTags} placeholder="Search and select tags…" />
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="space-y-1">
-              <Label>DNAco max (activation ceiling)</Label>
-              <Input value={dnaMax} onChange={(e) => setDnaMax(e.target.value)} placeholder="0.3" />
-            </div>
+          <div className="space-y-1 pt-2">
+            <Label>Max DNA-Coefficient to activate (divergence ceiling)</Label>
+            <Input value={dnaMax} onChange={(e) => setDnaMax(e.target.value)} placeholder="0.3" className="max-w-[200px]" />
+            <p className="text-xs text-muted-foreground">
+              The DNA-Coefficient measures how far past decisions <strong>diverge</strong> from this rule
+              (0.0 = perfect match, higher = worse). The AR can be activated only while its measured value
+              stays at or below this ceiling; an active AR that later drifts above it is auto-flagged <strong>Needs Review</strong>.
+            </p>
           </div>
         </div>
 

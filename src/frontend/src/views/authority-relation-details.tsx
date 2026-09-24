@@ -19,7 +19,23 @@ import RequestAuthorityActionDialog from '@/components/authority-resolution/requ
 import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking, AuthorityDnaRun, AuthorityDecision } from '@/types/authority-resolution';
+
+/** Human-readable label for a stored 5-field recompute cron. */
+function cronLabel(cron?: string | null): string {
+  if (!cron || !cron.trim()) return 'Manual only';
+  const p = cron.trim().split(/\s+/);
+  if (p.length !== 5) return `Custom (${cron})`;
+  const [min, hr, dom, mon, dow] = p;
+  const t = `${String(parseInt(hr, 10) || 0).padStart(2, '0')}:${String(parseInt(min, 10) || 0).padStart(2, '0')}`;
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  if (mon === '*' && hr === '*' && dom === '*' && dow === '*') return `Hourly (at :${String(parseInt(min, 10) || 0).padStart(2, '0')})`;
+  if (mon === '*' && dom === '*' && dow === '*') return `Daily at ${t}`;
+  if (mon === '*' && dom === '*' && dow !== '*') return `Weekly on ${days[parseInt(dow, 10)] || dow} at ${t}`;
+  if (mon === '*' && dom === '1') return `Monthly (1st) at ${t}`;
+  return `Custom (${cron})`;
+}
 
 function reviewStatusVariant(s?: string): 'default' | 'secondary' | 'outline' {
   switch ((s || 'na').toLowerCase()) {
@@ -69,6 +85,8 @@ export default function AuthorityRelationDetails() {
   const [dnaRuns, setDnaRuns] = useState<AuthorityDnaRun[]>([]);
   const [decisions, setDecisions] = useState<AuthorityDecision[]>([]);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
   const fetchRelation = useCallback(async () => {
     if (!relationId) return;
@@ -103,6 +121,13 @@ export default function AuthorityRelationDetails() {
   }, [relationId, get]);
 
   useEffect(() => { fetchRelation(); fetchTracking(); fetchHistory(); }, [fetchRelation, fetchTracking, fetchHistory]);
+
+  // Breadcrumb: Home > Authority Resolution > <name>
+  useEffect(() => {
+    setStaticSegments([{ label: 'Authority Resolution', path: '/authority-resolution' }]);
+    setDynamicTitle(relation?.name ?? 'Authority Relation');
+    return () => { setStaticSegments([]); setDynamicTitle(null); };
+  }, [relation?.name, setStaticSegments, setDynamicTitle]);
 
   const computeDna = async () => {
     setBusy('compute');
@@ -139,9 +164,9 @@ export default function AuthorityRelationDetails() {
     else { toast({ title: 'Deleted' }); navigate('/authority-resolution'); }
   };
 
-  if (loading) return <div className="container mx-auto px-4 py-8 text-muted-foreground">Loading…</div>;
+  if (loading) return <div className="py-6 text-muted-foreground">Loading…</div>;
   if (!relation) return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="py-6">
       <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Authority Relation not found.</AlertDescription></Alert>
     </div>
   );
@@ -152,31 +177,11 @@ export default function AuthorityRelationDetails() {
   const hasReviewers = reviewers.length > 0;
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/authority-resolution')}>
-        <ArrowLeft className="h-4 w-4 mr-1" /> Back
-      </Button>
-
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{relation.name}</h1>
-          <div className="flex items-center gap-2 mt-2">
-            <Badge>{relation.status}</Badge>
-            <Badge variant="outline">{relation.maturity_level}</Badge>
-            {relation.slug && <span className="text-sm text-muted-foreground">{relation.slug}</span>}
-            <span className="text-sm text-muted-foreground">v{relation.version}</span>
-          </div>
-          {relation.description && <p className="text-muted-foreground mt-2 max-w-2xl">{relation.description}</p>}
-          {(relation.tags || []).length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {(relation.tags || []).map((t, i) => (
-                <Badge key={i} variant="secondary" className="text-xs">
-                  {t.fully_qualified_name}{t.assigned_value ? `: ${t.assigned_value}` : ''}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="py-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <Button variant="outline" size="sm" onClick={() => navigate('/authority-resolution')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+        </Button>
         {canWrite && (
           <div className="flex gap-2 flex-wrap justify-end">
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
@@ -204,7 +209,29 @@ export default function AuthorityRelationDetails() {
               onToggle={() => setCommentsOpen(!commentsOpen)}
               className="h-8"
             />
-            <Button variant="ghost" size="sm" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
+            <Button variant="destructive" size="sm" onClick={remove}>
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h1 className="text-2xl font-bold">{relation.name}</h1>
+        <div className="flex items-center gap-2 mt-2">
+          <Badge>{relation.status}</Badge>
+          <Badge variant="outline">{relation.maturity_level}</Badge>
+          {relation.slug && <span className="text-sm text-muted-foreground">{relation.slug}</span>}
+          <span className="text-sm text-muted-foreground">v{relation.version}</span>
+        </div>
+        {relation.description && <p className="text-muted-foreground mt-2 max-w-2xl">{relation.description}</p>}
+        {(relation.tags || []).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(relation.tags || []).map((t, i) => (
+              <Badge key={i} variant="secondary" className="text-xs">
+                {t.fully_qualified_name}{t.assigned_value ? `: ${t.assigned_value}` : ''}
+              </Badge>
+            ))}
           </div>
         )}
       </div>
@@ -394,8 +421,20 @@ export default function AuthorityRelationDetails() {
           <CardContent className="text-sm space-y-1">
             <div className="text-muted-foreground">Decision logic (compiled, deterministic)</div>
             <JsonBlock data={relation.decision_logic} />
-            <div className="pt-2 text-muted-foreground">Evidence binding</div>
-            <JsonBlock data={relation.evidence_binding} />
+            <div className="pt-2 text-muted-foreground">Evidence sources</div>
+            {(relation.evidence_sources || []).length > 0 ? (
+              <div className="space-y-1">
+                {(relation.evidence_sources || []).map((s, i) => (
+                  <div key={i} className="text-xs">
+                    <Badge variant="outline" className="mr-1">{s.type}</Badge>
+                    <span className="font-mono">{s.ref}</span>{s.label ? ` — ${s.label}` : ''}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <JsonBlock data={relation.evidence_binding} />
+            )}
+            <div className="pt-2"><span className="text-muted-foreground">Recompute schedule:</span> {cronLabel(relation.schedule_cron)}</div>
             <div className="pt-2 text-muted-foreground">Domains</div>
             <div className="flex flex-wrap gap-1">
               {(relation.domains || []).map((d) => (
@@ -465,7 +504,7 @@ function TestResolveDialog({ open, onOpenChange, relationId }: { open: boolean; 
     setBusy(true);
     const body: any = { actor_identity: actorIdentity || undefined, action, cosign_present: cosign, escalated };
     if (value.trim()) body.value = parseFloat(value);
-    const { data, error } = await post<ResolveResponse>(`/api/authority/relations/${relationId}/resolve`, body);
+    const { data, error } = await post<ResolveResponse>(`/api/authority/relations/${relationId}/test`, body);
     setBusy(false);
     if (error) setResult({ verdict: 'error', reason: error });
     else setResult(data);
@@ -479,6 +518,11 @@ function TestResolveDialog({ open, onOpenChange, relationId }: { open: boolean; 
       <DialogContent>
         <DialogHeader><DialogTitle>Test authority resolution</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Dry-run against this Authority Relation's decision logic — works in any status and does
+            <strong> not</strong> record the decision or change the usage counters. Live decisions come
+            from the MCP <code>resolve_authority</code> tool against an <strong>active</strong> AR.
+          </p>
           <div className="space-y-1">
             <Label>Signer (actor identity)</Label>
             <Input value={actorIdentity} onChange={(e) => setActorIdentity(e.target.value)} placeholder="rsm-east@example.com" />

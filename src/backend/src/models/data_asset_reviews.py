@@ -58,6 +58,9 @@ class AssetType(str, Enum):
     # FQN format: term-mapping://{run_id}/{suggestion_id}
     CONCEPT_MAPPING_SUGGESTION = "concept_mapping_suggestion"
 
+    # Authority Relation review (ARF). FQN format: authority-relation://{ar_id}
+    AUTHORITY_RELATION = "authority_relation"
+
     # Knowledge system assets
     KNOWLEDGE_CONCEPT = "knowledge_concept"
     KNOWLEDGE_COLLECTION = "knowledge_collection"

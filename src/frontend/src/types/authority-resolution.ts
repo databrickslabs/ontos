@@ -16,6 +16,35 @@ export interface AuthorityAffirmation {
   affirmed_by?: string | null;
   affirmed_at?: string | null;
   sort_order: number;
+  // A participant can be an approver (affirmation gate), a reviewer
+  // (interviewee in the review process), or both.
+  is_approver?: boolean;
+  is_reviewer?: boolean;
+  review_status?: string;           // na | pending | in_review | completed
+  review_request_id?: string | null;
+}
+
+export interface ReviewQuestion {
+  id: string;
+  text: string;
+}
+
+export interface AuthorityReviewContext {
+  participant_id: string;
+  role: string;
+  review_status: string;            // na | pending | in_review | completed
+  questionnaire: ReviewQuestion[];
+  existing_answers?: Record<string, string> | null;
+  ar_name: string;
+  // Present for technical/governance reviewers who inspect the rule + evidence.
+  details?: {
+    actor_identity?: string | null;
+    action?: string | null;
+    domain_context?: Record<string, any> | null;
+    decision_logic?: Record<string, any> | null;
+    evidence_binding?: EvidenceBinding | null;
+    justification_chain?: Record<string, any> | null;
+  } | null;
 }
 
 export interface EvidenceBinding {
@@ -65,6 +94,8 @@ export interface AffirmationInput {
   principal: string;
   principal_type: string;
   required: boolean;
+  is_approver?: boolean;
+  is_reviewer?: boolean;
 }
 
 export interface AuthorityRelationCreate {

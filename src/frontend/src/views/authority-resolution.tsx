@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Plus, AlertCircle, ShieldCheck, Eye, Pencil, Trash2 } from 'lucide-react';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
 import type { AuthorityRelation } from '@/types/authority-resolution';
 
@@ -35,7 +35,7 @@ export function formatDna(magnitude: number | null | undefined, direction?: stri
 export default function AuthorityResolution() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { get } = useApi();
+  const { get, delete: del } = useApi();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const canWrite = !permissionsLoading && hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
 
@@ -43,6 +43,7 @@ export default function AuthorityResolution() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editRelation, setEditRelation] = useState<AuthorityRelation | null>(null);
 
   const fetchRelations = useCallback(async () => {
     setLoading(true);
@@ -58,6 +59,13 @@ export default function AuthorityResolution() {
   }, [get]);
 
   useEffect(() => { fetchRelations(); }, [fetchRelations]);
+
+  const handleDelete = async (r: AuthorityRelation) => {
+    if (!confirm(`Delete Authority Relation "${r.name}"?`)) return;
+    const { error } = await del(`/api/authority/relations/${r.id}`);
+    if (error) toast({ title: 'Delete failed', description: error, variant: 'destructive' });
+    else { toast({ title: 'Deleted', description: r.name }); fetchRelations(); }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -98,13 +106,14 @@ export default function AuthorityResolution() {
                 <TableHead>Maturity</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead className="text-right">Usage</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
               ) : relations.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No Authority Relations yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No Authority Relations yet.</TableCell></TableRow>
               ) : (
                 relations.map((r) => (
                   <TableRow
@@ -118,6 +127,23 @@ export default function AuthorityResolution() {
                     <TableCell><Badge variant="outline">{r.maturity_level}</Badge></TableCell>
                     <TableCell className="text-muted-foreground">{r.action || '—'}</TableCell>
                     <TableCell className="text-right">{r.usage_count ?? 0}</TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" title="View" onClick={() => navigate(`/authority-resolution/${r.id}`)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {canWrite && (
+                          <>
+                            <Button variant="ghost" size="icon" title="Edit" onClick={() => setEditRelation(r)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(r)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -134,6 +160,17 @@ export default function AuthorityResolution() {
           toast({ title: 'Authority Relation created', description: created.name });
           if (created.id) navigate(`/authority-resolution/${created.id}`);
           else fetchRelations();
+        }}
+      />
+
+      <CreateAuthorityRelationDialog
+        open={!!editRelation}
+        onOpenChange={(o) => !o && setEditRelation(null)}
+        relation={editRelation}
+        onCreated={(updated) => {
+          setEditRelation(null);
+          toast({ title: 'Authority Relation updated', description: updated.name });
+          fetchRelations();
         }}
       />
     </div>

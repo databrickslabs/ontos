@@ -194,6 +194,49 @@ async def list_dna_runs(
     ]
 
 
+@router.post("/authority/relations/{relation_id}/start-review")
+async def start_review(
+    relation_id: str,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    owner = current_user.username if current_user else None
+    result = manager.start_review(db, relation_id, owner=owner)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Authority Relation not found")
+    return result
+
+
+@router.get("/authority/relations/{relation_id}/review-context")
+async def review_context(
+    relation_id: str,
+    db: DBSessionDep,
+    reviewer: str = Query(..., description="Reviewer principal (email/group)"),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    ctx = manager.get_review_context(db, relation_id, reviewer)
+    if ctx is None:
+        raise HTTPException(status_code=404, detail="No review found for this reviewer on this Authority Relation")
+    return ctx
+
+
+@router.post("/authority/participants/{participant_id}/submit-review")
+async def submit_review(
+    participant_id: str,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    payload: dict = Body(...),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    reviewer = current_user.username if current_user else None
+    answers = payload.get("answers", payload) if isinstance(payload, dict) else {}
+    participant = manager.submit_review(db, participant_id, answers=answers, reviewer=reviewer)
+    if not participant:
+        raise HTTPException(status_code=404, detail="Review participant not found")
+    return {"id": participant.id, "review_status": participant.review_status}
+
+
 def register_routes(app):
     """Register the Authority Resolution routes with the FastAPI app."""
     app.include_router(router)

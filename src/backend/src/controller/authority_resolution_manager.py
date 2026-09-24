@@ -224,14 +224,18 @@ class AuthorityResolutionManager:
         authority_affirmation_repo.delete_for_relation(db, relation_id=relation_id)
         for idx, aff in enumerate(affirmations):
             a = aff.dict() if hasattr(aff, "dict") else dict(aff)
+            is_reviewer = a.get("is_reviewer", False)
             authority_affirmation_repo.create(db, obj_in={
                 "id": str(uuid.uuid4()),
                 "relation_id": relation_id,
                 "role": a["role"],
                 "principal": a["principal"],
                 "principal_type": a.get("principal_type", "user"),
+                "is_approver": a.get("is_approver", True),
+                "is_reviewer": is_reviewer,
                 "required": a.get("required", True),
                 "affirmed": False,
+                "review_status": "pending" if is_reviewer else "na",
                 "sort_order": a.get("sort_order", idx),
             })
 
@@ -244,9 +248,120 @@ class AuthorityResolutionManager:
         })
 
     def is_fully_affirmed(self, db: Session, relation_id: str) -> bool:
+        # Only APPROVER participants count toward the affirmation gate; pure
+        # reviewers/interviewees do not. (is_approver defaults True for rows
+        # created before the reviewer/approver split.)
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
-        required = [a for a in affs if a.required]
+        required = [a for a in affs if a.required and getattr(a, "is_approver", True)]
         return len(required) > 0 and all(a.affirmed for a in required)
+
+    # ------------------------------------------------------- review process
+
+    # Default structured-elicitation questionnaire per reviewer role. Business /
+    # interviewee reviewers answer these; technical reviewers instead inspect the
+    # AR details (evidence + decision logic); governance confirms proportionality.
+    _QUESTIONNAIRE: Dict[str, List[str]] = {
+        "business": [
+            "Who is actually consulted before this decision is made?",
+            "Does the documented policy match how the decision is really made in practice?",
+            "Does someone other than the documented approver effectively drive this decision?",
+            "What informal factors influence this decision?",
+        ],
+        "interviewee": [
+            "Who is actually consulted before this decision is made?",
+            "Does the documented policy match how the decision is really made in practice?",
+            "What informal factors influence this decision?",
+        ],
+        "technical": [
+            "Is the bound evidence complete and unaltered?",
+            "Does the compiled decision logic faithfully represent the rule?",
+        ],
+        "governance": [
+            "Is the intended use of this Authority Relation proportionate to the stakes?",
+            "Does activating it create any new, unreviewed concentration of authority?",
+        ],
+    }
+
+    def _questionnaire_for(self, role: str) -> List[Dict[str, str]]:
+        questions = self._QUESTIONNAIRE.get((role or "").lower(), self._QUESTIONNAIRE["business"])
+        return [{"id": f"q{i+1}", "text": q} for i, q in enumerate(questions)]
+
+    def start_review(self, db: Session, relation_id: str, owner: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Start the review process: mark reviewer participants in-review and fire
+        the ``on_request_review`` workflow trigger (which — via a configured
+        AR-review workflow — creates the per-reviewer Asset Review tasks and
+        notifications). Reviewers may also complete their review inline from the
+        AR detail view. Returns None if the AR does not exist.
+        """
+        relation = authority_relation_repo.get(db, relation_id)
+        if not relation:
+            return None
+        affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
+        reviewers = [a for a in affs if getattr(a, "is_reviewer", False)]
+        for a in reviewers:
+            authority_affirmation_repo.update(db, db_obj=a, obj_in={
+                "review_status": "in_review",
+                "review_request_id": f"authority-relation://{relation_id}#{a.id}",
+            })
+        # Fire the workflow trigger (best-effort — never breaks the request).
+        try:
+            from src.common.workflow_triggers import fire_trigger_safe
+            from src.models.process_workflows import EntityType
+            fire_trigger_safe(
+                db, "on_request_review",
+                entity_type=EntityType.AUTHORITY_RELATION,
+                entity_id=relation_id,
+                entity_name=relation.name,
+                entity_data={
+                    "asset_fqn": f"authority-relation://{relation_id}",
+                    "reviewers": [{"principal": a.principal, "role": a.role} for a in reviewers],
+                    "status": relation.status,
+                },
+                user_email=owner,
+            )
+        except Exception as e:  # pragma: no cover - trigger is environment-dependent
+            logger.warning(f"on_request_review trigger failed for AR {relation_id}: {e}")
+        return {"relation_id": relation_id, "reviewers_notified": len(reviewers)}
+
+    def get_review_context(self, db: Session, relation_id: str, reviewer: str) -> Optional[Dict[str, Any]]:
+        """Build the role-specific review context for a reviewer of this AR."""
+        relation = authority_relation_repo.get(db, relation_id)
+        if not relation:
+            return None
+        affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation_id)
+        participant = next((a for a in affs if a.principal == reviewer and getattr(a, "is_reviewer", False)), None)
+        if participant is None:
+            return None
+        role = participant.role
+        ctx: Dict[str, Any] = {
+            "participant_id": participant.id,
+            "role": role,
+            "review_status": getattr(participant, "review_status", "na"),
+            "questionnaire": self._questionnaire_for(role),
+            "existing_answers": getattr(participant, "review_answers", None),
+            "ar_name": relation.name,
+        }
+        # Technical/governance reviewers inspect the compiled rule + evidence.
+        if (role or "").lower() in ("technical", "governance"):
+            ctx["details"] = {
+                "actor_identity": relation.actor_identity,
+                "action": relation.action,
+                "domain_context": relation.domain_context,
+                "decision_logic": relation.decision_logic,
+                "evidence_binding": relation.evidence_binding,
+                "justification_chain": relation.justification_chain,
+            }
+        return ctx
+
+    def submit_review(self, db: Session, participant_id: str, answers: Dict[str, Any], reviewer: Optional[str] = None) -> Optional[AuthorityAffirmationDb]:
+        """Persist a reviewer's elicited answers and mark their review complete."""
+        participant = authority_affirmation_repo.get(db, participant_id)
+        if not participant:
+            return None
+        return authority_affirmation_repo.update(db, db_obj=participant, obj_in={
+            "review_answers": answers,
+            "review_status": "completed",
+        })
 
     # ------------------------------------------------------- DNA-Coefficient
 
@@ -508,6 +623,10 @@ class AuthorityResolutionManager:
                     "principal_type": a.principal_type, "required": a.required,
                     "affirmed": a.affirmed, "affirmed_by": a.affirmed_by,
                     "affirmed_at": a.affirmed_at, "sort_order": a.sort_order,
+                    "is_approver": getattr(a, "is_approver", True),
+                    "is_reviewer": getattr(a, "is_reviewer", False),
+                    "review_status": getattr(a, "review_status", "na"),
+                    "review_request_id": getattr(a, "review_request_id", None),
                 }
                 for a in affs
             ],

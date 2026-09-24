@@ -86,6 +86,7 @@ class EntityType(str, Enum):
     ACCESS_GRANT = "access_grant"  # For access grant request workflows
     ROLE = "role"  # For role access request workflows
     DATA_ASSET_REVIEW = "data_asset_review"  # For data asset review request workflows
+    AUTHORITY_RELATION = "authority_relation"  # For Authority Relation (ARF) review workflows
     JOB = "job"  # For background job lifecycle workflows
     SUBSCRIPTION = "subscription"  # For subscription events
     USER = "user"  # The user themselves — for on_first_access disclaimer/ToU workflows

@@ -23,6 +23,10 @@ class AffirmationInput(BaseModel):
     principal_type: str = "user"                # user|group
     required: bool = True
     sort_order: int = 0
+    # A participant can be an approver (affirmation gate), a reviewer
+    # (interviewee in the review process), or both.
+    is_approver: bool = True
+    is_reviewer: bool = False
 
 
 class AuthorityRelationCreate(BaseModel):

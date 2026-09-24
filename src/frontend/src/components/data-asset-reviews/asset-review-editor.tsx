@@ -29,6 +29,7 @@ import ReactMarkdown from 'react-markdown';
 import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 import MdmMatchReview from '@/components/mdm/mdm-match-review';
 import TermMappingSuggestionReview from '@/components/term-mapping/suggestion-review';
+import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
 
 // Register languages (using base import which has the static method)
 SyntaxHighlighterBase.registerLanguage('sql', sql);
@@ -314,6 +315,27 @@ export default function AssetReviewEditor({
                     hasNext={hasNext}
                     currentIndex={currentIndex}
                     totalCount={totalCount}
+                />
+            </div>
+        );
+    }
+
+    // Handle Authority Relation reviews with the role-specific review editor.
+    // The reviewer is the current user completing their assigned review task;
+    // asset_fqn is authority-relation://{relation_id}.
+    if (asset.asset_type === AssetType.AUTHORITY_RELATION) {
+        const relationId = asset.asset_fqn.replace(/^authority-relation:\/\//, '').split('#')[0];
+        return (
+            <div className="px-1 pb-1">
+                <AuthorityRelationReview
+                    relationId={relationId}
+                    onCompleted={() => {
+                        onReviewSave({
+                            ...asset,
+                            status: ReviewedAssetStatus.APPROVED,
+                            updated_at: new Date().toISOString(),
+                        });
+                    }}
                 />
             </div>
         );

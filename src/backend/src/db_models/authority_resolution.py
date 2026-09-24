@@ -107,10 +107,14 @@ class AuthorityRelationDb(Base):
 
 
 class AuthorityAffirmationDb(Base):
-    """One N-functional affirmation stakeholder on an AR (Teams-style role + principal).
+    """A participant on an AR — an **approver** (affirmation gate), a **reviewer**
+    (interviewee for the review process), or both.
 
-    A DNA-Coefficient is *valid-for-use* only once every required affirmation is
-    complete (ARF §4.5 tri-functional gate, generalised to N).
+    A DNA-Coefficient is *valid-for-use* only once every required **approver**
+    affirmation is complete (ARF §4.5 tri-functional gate, generalised to N).
+    **Reviewers** are the principals who must be interviewed to confirm the AR
+    reflects real-world practice; each gets an Asset Review task and their
+    elicited answers are captured here. A principal may be both.
     """
     __tablename__ = 'authority_affirmations'
 
@@ -119,10 +123,22 @@ class AuthorityAffirmationDb(Base):
     role = Column(String, nullable=False)             # business|technical|governance|<custom>
     principal = Column(String, nullable=False)        # email or group identifier
     principal_type = Column(String, default='user', nullable=False)  # user|group
+
+    # A participant can be an approver, a reviewer, or both (not mutually exclusive).
+    is_approver = Column(Boolean, default=True, nullable=False)   # counts toward the affirmation gate
+    is_reviewer = Column(Boolean, default=False, nullable=False)  # must be interviewed in the review process
+
+    # Approver facet (the affirmation gate).
     required = Column(Boolean, default=True, nullable=False)
     affirmed = Column(Boolean, default=False, nullable=False)
     affirmed_by = Column(String, nullable=True)
     affirmed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Reviewer facet (the review process / structured elicitation).
+    review_status = Column(String, default='na', nullable=False)  # na|pending|in_review|completed
+    review_answers = Column(JSON, nullable=True)                  # elicited questionnaire responses
+    review_request_id = Column(String, nullable=True, index=True)  # linked DataAssetReviewRequest id
+
     notes = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0, nullable=False)
 

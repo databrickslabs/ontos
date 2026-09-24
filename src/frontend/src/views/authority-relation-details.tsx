@@ -11,9 +11,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, ClipboardCheck } from 'lucide-react';
 import { formatDna } from './authority-resolution';
+import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
+import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
 import type { AuthorityRelation, ResolveResponse } from '@/types/authority-resolution';
+
+function reviewStatusVariant(s?: string): 'default' | 'secondary' | 'outline' {
+  switch ((s || 'na').toLowerCase()) {
+    case 'completed': return 'default';
+    case 'in_review': return 'secondary';
+    default: return 'outline';
+  }
+}
 
 const FEATURE_ID = 'authority-resolution';
 
@@ -48,6 +58,8 @@ export default function AuthorityRelationDetails() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [testOpen, setTestOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [reviewFor, setReviewFor] = useState<string | null>(null);
 
   const fetchRelation = useCallback(async () => {
     if (!relationId) return;
@@ -94,6 +106,17 @@ export default function AuthorityRelationDetails() {
     else fetchRelation();
   };
 
+  const startReview = async () => {
+    setBusy('start-review');
+    const { data, error } = await post<any>(`/api/authority/relations/${relationId}/start-review`, {});
+    setBusy(null);
+    if (error) toast({ title: 'Could not start review', description: error, variant: 'destructive' });
+    else {
+      toast({ title: 'Review started', description: `${data?.reviewers_notified ?? 0} reviewer(s) notified` });
+      fetchRelation();
+    }
+  };
+
   const remove = async () => {
     if (!confirm('Delete this Authority Relation?')) return;
     const { error } = await del(`/api/authority/relations/${relationId}`);
@@ -107,6 +130,11 @@ export default function AuthorityRelationDetails() {
       <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Authority Relation not found.</AlertDescription></Alert>
     </div>
   );
+
+  const participants = relation.affirmations || [];
+  const approvers = participants.filter((a) => a.is_approver !== false);
+  const reviewers = participants.filter((a) => a.is_reviewer === true);
+  const hasReviewers = reviewers.length > 0;
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
@@ -127,6 +155,15 @@ export default function AuthorityRelationDetails() {
         </div>
         {canWrite && (
           <div className="flex gap-2 flex-wrap justify-end">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Button>
+            {hasReviewers && (
+              <Button variant="outline" size="sm" onClick={startReview} disabled={busy === 'start-review'}>
+                {busy === 'start-review' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-1" />}
+                Start Review
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={computeDna} disabled={busy === 'compute'}>
               {busy === 'compute' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
               Compute DNAco
@@ -163,14 +200,15 @@ export default function AuthorityRelationDetails() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Affirmations (N-functional gate)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Approvers (N-functional gate)</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {(relation.affirmations || []).length === 0 && <div className="text-sm text-muted-foreground">No affirmers defined.</div>}
-          {(relation.affirmations || []).map((a) => (
+          {approvers.length === 0 && <div className="text-sm text-muted-foreground">No approvers defined.</div>}
+          {approvers.map((a) => (
             <div key={a.id} className="flex items-center justify-between border-b py-2 last:border-0">
               <div className="text-sm">
                 <Badge variant="outline" className="mr-2">{a.role}</Badge>
                 {a.principal} <span className="text-muted-foreground">({a.principal_type})</span>
+                {a.is_reviewer && <Badge variant="secondary" className="ml-2">also reviewer</Badge>}
               </div>
               <div className="flex items-center gap-2">
                 {a.affirmed ? (
@@ -185,6 +223,33 @@ export default function AuthorityRelationDetails() {
           ))}
         </CardContent>
       </Card>
+
+      {hasReviewers && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Reviewers (interviewed to confirm the relation reflects reality)</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {reviewers.map((a) => (
+              <div key={a.id} className="flex items-center justify-between border-b py-2 last:border-0">
+                <div className="text-sm">
+                  <Badge variant="outline" className="mr-2">{a.role}</Badge>
+                  {a.principal} <span className="text-muted-foreground">({a.principal_type})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={reviewStatusVariant(a.review_status)}>
+                    {a.review_status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                    {a.review_status || 'na'}
+                  </Badge>
+                  {canWrite && (
+                    <Button size="sm" variant="outline" onClick={() => setReviewFor(a.principal)}>
+                      {a.review_status === 'completed' ? 'View' : 'Review'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
@@ -223,6 +288,30 @@ export default function AuthorityRelationDetails() {
         onOpenChange={setTestOpen}
         relationId={relationId!}
       />
+
+      <CreateAuthorityRelationDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        relation={relation}
+        onCreated={(updated) => {
+          setEditOpen(false);
+          toast({ title: 'Authority Relation updated', description: updated.name });
+          fetchRelation();
+        }}
+      />
+
+      <Dialog open={!!reviewFor} onOpenChange={(o) => !o && setReviewFor(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Authority Relation review</DialogTitle></DialogHeader>
+          {reviewFor && (
+            <AuthorityRelationReview
+              relationId={relationId!}
+              reviewer={reviewFor}
+              onCompleted={fetchRelation}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

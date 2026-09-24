@@ -514,6 +514,7 @@ async def startup_event_handler(app: FastAPI):
             with session_factory() as db_session:
                 certification_levels_repo.seed_defaults(db_session)
                 maturity_repo.seed_defaults(db_session)
+                maturity_repo.seed_authority_defaults(db_session)
                 db_session.commit()
             logger.info("Reference data seed step complete.")
         except Exception as e:

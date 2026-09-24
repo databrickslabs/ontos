@@ -179,3 +179,50 @@ def test_maturity_levels():
     assert maturity_level(has_object=True, dna_measured=False, fully_affirmed=False) == "L2"
     assert maturity_level(has_object=True, dna_measured=True, fully_affirmed=False) == "L3"
     assert maturity_level(has_object=True, dna_measured=True, fully_affirmed=True) == "L4"
+
+
+# ---------------------------------- shared Maturity Level feature (compliance-gated)
+
+def test_authority_maturity_feature_integration(db_session):
+    """The ARF ladder is seeded as entity_type-specific levels, overrides the
+    generic "all" set, and the compliance-gated evaluator advances an AR through
+    the levels as it gains an object / evidence+DNA / affirmation."""
+    from src.repositories.maturity_repository import maturity_repo
+    from src.controller.maturity_evaluator import MaturityEvaluator
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    from src.models.authority_resolution import (
+        AuthorityRelationCreate, AffirmationInput, EvidenceSource,
+    )
+
+    # Seed the generic "all" model AND the ARF-specific ladder.
+    maturity_repo.seed_defaults(db_session)
+    maturity_repo.seed_authority_defaults(db_session)
+    db_session.commit()
+
+    ar_levels = maturity_repo.get_all_ordered(db_session, entity_type="AuthorityRelation")
+    # Specific overrides generic: only the 4 ARF levels, none of the "all" set.
+    assert [l.name for l in ar_levels] == [
+        "Documented", "Object-Resolved", "DNA-Measured", "N-Functionally-Affirmed",
+    ]
+    assert all(l.entity_type == "AuthorityRelation" for l in ar_levels)
+
+    mgr = AuthorityResolutionManager()
+    evaluator = MaturityEvaluator()
+
+    # (1) name only -> L1 Documented (no object stops the ladder).
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="AR"))
+    db_session.commit()
+    rep = evaluator.evaluate(db_session, entity_type="AuthorityRelation", entity_id=rel.id, persist=False)
+    assert rep.achieved_level_order == 1
+
+    # (2) add an object -> L2 Object-Resolved (no evidence/DNA stops it there).
+    rel2 = mgr.create_relation(db_session, AuthorityRelationCreate(
+        name="AR2", object_id="dp-1",
+        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actual_approver": "a"})],
+    ))
+    db_session.commit()
+    mgr.compute_dnaco(db_session, rel2.id, rows=[])  # measured (empty sample -> magnitude 0.0)
+    db_session.commit()
+    rep2 = evaluator.evaluate(db_session, entity_type="AuthorityRelation", entity_id=rel2.id, persist=False)
+    # object + evidence + measured + within ceiling, but not affirmed -> L3 DNA-Measured
+    assert rep2.achieved_level_order == 3

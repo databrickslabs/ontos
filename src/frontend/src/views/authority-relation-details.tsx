@@ -19,6 +19,7 @@ import RequestAuthorityActionDialog from '@/components/authority-resolution/requ
 import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import { MaturityInline } from '@/components/common/maturity-inline';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking, AuthorityDnaRun, AuthorityDecision } from '@/types/authority-resolution';
 
@@ -218,9 +219,9 @@ export default function AuthorityRelationDetails() {
 
       <div>
         <h1 className="text-2xl font-bold">{relation.name}</h1>
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-3 mt-2">
           <Badge>{relation.status}</Badge>
-          <Badge variant="outline">{relation.maturity_level}</Badge>
+          <MaturityInline entityType="AuthorityRelation" entityId={relationId!} compact />
           {relation.slug && <span className="text-sm text-muted-foreground">{relation.slug}</span>}
           <span className="text-sm text-muted-foreground">v{relation.version}</span>
         </div>

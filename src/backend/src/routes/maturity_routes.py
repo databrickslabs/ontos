@@ -27,6 +27,7 @@ router = APIRouter(prefix="/api", tags=["Maturity Levels"])
 SETTINGS_FEATURE_ID = "settings"
 DP_FEATURE_ID = "data-products"
 DC_FEATURE_ID = "data-contracts"
+AR_FEATURE_ID = "authority-resolution"
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +350,48 @@ def evaluate_contract_maturity(contract_id: str, db: DBSessionDep, request: Requ
 def get_contract_maturity_history(contract_id: str, db: DBSessionDep, limit: int = 50):
     """Get maturity evaluation history for a data contract."""
     return maturity_repo.list_snapshots(db, entity_type="DataContract", entity_id=contract_id, limit=limit)
+
+
+# --- Authority Relations (ARF) ---
+
+@router.get(
+    "/authority/relations/{relation_id}/maturity",
+    response_model=MaturityReport,
+    dependencies=[Depends(PermissionChecker(AR_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+def get_authority_maturity(relation_id: str, db: DBSessionDep, request: Request):
+    """Get current maturity assessment for an Authority Relation."""
+    maturity_repo.seed_authority_defaults(db)  # idempotent; self-heals if startup seed didn't run
+    evaluator = _get_evaluator(request)
+    report = evaluator.evaluate(db, entity_type="AuthorityRelation", entity_id=relation_id)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Authority Relation {relation_id} not found")
+    return report
+
+
+@router.post(
+    "/authority/relations/{relation_id}/maturity/evaluate",
+    response_model=MaturityReport,
+    dependencies=[Depends(PermissionChecker(AR_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+def evaluate_authority_maturity(relation_id: str, db: DBSessionDep, request: Request):
+    """Force re-evaluate maturity for an Authority Relation."""
+    maturity_repo.seed_authority_defaults(db)  # idempotent; self-heals if startup seed didn't run
+    evaluator = _get_evaluator(request)
+    report = evaluator.evaluate(db, entity_type="AuthorityRelation", entity_id=relation_id, persist=True)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Authority Relation {relation_id} not found")
+    return report
+
+
+@router.get(
+    "/authority/relations/{relation_id}/maturity/history",
+    response_model=List[MaturitySnapshotRead],
+    dependencies=[Depends(PermissionChecker(AR_FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+def get_authority_maturity_history(relation_id: str, db: DBSessionDep, limit: int = 50):
+    """Get maturity evaluation history for an Authority Relation."""
+    return maturity_repo.list_snapshots(db, entity_type="AuthorityRelation", entity_id=relation_id, limit=limit)
 
 
 # ===================================================================

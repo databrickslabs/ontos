@@ -9,7 +9,7 @@ import { MaturityBadge } from '@/components/common/maturity-badge';
 import type { MaturityReport, LevelResult } from '@/types/maturity';
 
 interface MaturityInlineProps {
-  entityType: 'DataProduct' | 'DataContract';
+  entityType: 'DataProduct' | 'DataContract' | 'AuthorityRelation';
   entityId: string;
   /** Render as a compact column (for header badges area) vs inline row */
   compact?: boolean;
@@ -18,6 +18,7 @@ interface MaturityInlineProps {
 const API_PREFIX: Record<string, string> = {
   DataProduct: '/api/data-products',
   DataContract: '/api/data-contracts',
+  AuthorityRelation: '/api/authority/relations',
 };
 
 const GATE_ICON: Record<string, { icon: typeof CheckCircle2; cls: string }> = {

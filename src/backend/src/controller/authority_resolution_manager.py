@@ -858,18 +858,16 @@ class AuthorityResolutionManager:
                 })
         except Exception as e:  # pragma: no cover - tag read is best-effort
             logger.warning(f"Could not read tags for AR {relation.id}: {e}")
-        maturity = authority_dna.maturity_level(
-            has_object=bool(relation.object_id),
-            dna_measured=relation.dna_magnitude is not None,
-            fully_affirmed=fully_affirmed,
-        )
         return {
             "id": relation.id,
             "slug": relation.slug,
             "name": relation.name,
             "description": relation.description,
             "status": relation.status,
-            "maturity_level": maturity,
+            # Maturity now comes from the shared compliance-gated Maturity Level
+            # feature (cached order + timestamp; full report via the maturity API).
+            "maturity_level_order": relation.maturity_level_order,
+            "maturity_evaluated_at": relation.maturity_evaluated_at,
             "version": relation.version,
             "version_family_id": relation.version_family_id,
             "actor_role": relation.actor_role,

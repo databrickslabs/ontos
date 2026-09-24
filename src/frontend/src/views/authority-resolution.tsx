@@ -123,9 +123,13 @@ export default function AuthorityResolution() {
       cell: ({ row }) => formatDna(row.original.dna_magnitude, row.original.dna_direction),
     },
     {
-      accessorKey: 'maturity_level',
+      accessorKey: 'maturity_level_order',
       header: 'Maturity',
-      cell: ({ row }) => <Badge variant="outline">{row.original.maturity_level}</Badge>,
+      cell: ({ row }) => (
+        row.original.maturity_level_order != null
+          ? <Badge variant="outline">L{row.original.maturity_level_order}</Badge>
+          : <span className="text-muted-foreground">—</span>
+      ),
       enableSorting: false,
     },
     {

@@ -85,6 +85,10 @@ class AuthorityRelationDb(Base):
     # Optional scheduled recompute (background job reads this).
     schedule_cron = Column(String, nullable=True)
 
+    # --- Maturity (shared, compliance-gated Maturity Level feature) ----------
+    maturity_level_order = Column(Integer, nullable=True)   # cache of achieved level_order
+    maturity_evaluated_at = Column(DateTime(timezone=True), nullable=True)
+
     # Denormalised usage metrics (detail tiles / list badges).
     usage_count = Column(Integer, default=0, nullable=False)
     approved_count = Column(Integer, default=0, nullable=False)

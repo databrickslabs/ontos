@@ -69,7 +69,8 @@ export interface AuthorityRelation {
   name: string;
   description?: string | null;
   status: string;                 // draft | active | needs_review | retired
-  maturity_level: string;         // L1..L4
+  maturity_level_order?: number | null;   // cached achieved level (shared Maturity feature)
+  maturity_evaluated_at?: string | null;
   version: number;
   version_family_id?: string | null;
   actor_role?: string | null;

@@ -13,6 +13,7 @@ from src.common.logging import get_logger
 from src.controller.entity_dict_builder import (
     build_data_product_dict,
     build_data_contract_dict,
+    build_authority_relation_dict,
 )
 from src.models.maturity import (
     MaturityReport,
@@ -26,6 +27,7 @@ logger = get_logger(__name__)
 _ENTITY_DICT_BUILDERS = {
     "DataProduct": build_data_product_dict,
     "DataContract": build_data_contract_dict,
+    "AuthorityRelation": build_authority_relation_dict,
 }
 
 
@@ -249,7 +251,11 @@ class MaturityEvaluator:
         try:
             from src.common.workflow_triggers import TriggerRegistry
             from src.models.process_workflows import EntityType
-            et_map = {"DataProduct": EntityType.DATA_PRODUCT, "DataContract": EntityType.DATA_CONTRACT}
+            et_map = {
+                "DataProduct": EntityType.DATA_PRODUCT,
+                "DataContract": EntityType.DATA_CONTRACT,
+                "AuthorityRelation": EntityType.AUTHORITY_RELATION,
+            }
             et_enum = et_map.get(entity_type)
             if et_enum:
                 registry = TriggerRegistry(db)
@@ -278,6 +284,12 @@ def _update_entity_cache(db: Session, *, entity_type: str, entity_id: str,
     elif entity_type == "DataContract":
         from src.db_models.data_contracts import DataContractDb
         db.query(DataContractDb).filter(DataContractDb.id == entity_id).update(
+            {"maturity_level_order": level_order, "maturity_evaluated_at": now},
+            synchronize_session=False,
+        )
+    elif entity_type == "AuthorityRelation":
+        from src.db_models.authority_resolution import AuthorityRelationDb
+        db.query(AuthorityRelationDb).filter(AuthorityRelationDb.id == entity_id).update(
             {"maturity_level_order": level_order, "maturity_evaluated_at": now},
             synchronize_session=False,
         )

@@ -181,6 +181,10 @@ class SchemaImportManager:
             browse_error_detail = str(exc)
             containers = []
 
+        # Sort containers alphabetically (case-insensitive) so the tree is
+        # scannable regardless of the order the connector/API returns them.
+        containers = sorted(containers, key=lambda c: (c.get("name") or "").lower())
+
         for c in containers:
             nodes.append(BrowseNode(
                 name=c.get("name", ""),
@@ -206,6 +210,9 @@ class SchemaImportManager:
             # truncation. Guarding on `not containers` avoids that false positive.
             if not containers and len(assets) >= child_limit:
                 truncated = True
+            # Sort leaf assets alphabetically within their group; container
+            # nodes stay first (above), columns keep metadata order (below).
+            assets = sorted(assets, key=lambda a: (a.name or "").lower())
             container_paths = {n.path for n in nodes}
             for asset in assets:
                 if asset.identifier in container_paths:

@@ -2675,6 +2675,19 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         except Exception as e:
                             logger.debug(f"Could not resolve delivery method: {e}")
 
+            # Resolve contract names for input ports (#854), mirroring output ports so the
+            # input-port contractId renders as a navigable name instead of a raw UUID. A
+            # missing contract leaves contractName None → the UI falls back to the raw id.
+            if product_api.inputPorts:
+                from src.repositories.data_contracts_repository import data_contract_repo
+                for port in product_api.inputPorts:
+                    if port.contractId:
+                        try:
+                            contract = data_contract_repo.get(self._db, id=port.contractId)
+                            port.contractName = contract.name if contract else None
+                        except Exception as e:
+                            logger.debug(f"Could not resolve input-port contract: {e}")
+
             return product_api
 
         except Exception as e:

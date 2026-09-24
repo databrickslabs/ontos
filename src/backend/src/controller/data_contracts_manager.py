@@ -6632,7 +6632,30 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 project_name = project.name if project else None
             except Exception as e:
                 logger.debug(f"Could not resolve project: {e}")
-        
+
+        # Resolve the referenced data product (#854): the contract's `dataProduct` holds a
+        # raw id/name; resolve it to a (name, id) so the detail view can render a navigable
+        # link. By id first (the import/round-trip form), then a best-effort name match.
+        # Missing/ambiguous → name stays None and the UI falls back to the raw value.
+        data_product_name = None
+        data_product_id = None
+        if db_contract.data_product:
+            try:
+                from src.repositories.data_products_repository import data_product_repo
+                from src.db_models.data_products import DataProductDb
+                product = data_product_repo.get(db, id=db_contract.data_product)
+                if not product:
+                    product = (
+                        db.query(DataProductDb)
+                        .filter(DataProductDb.name == db_contract.data_product)
+                        .first()
+                    )
+                if product:
+                    data_product_name = product.name
+                    data_product_id = product.id
+            except Exception as e:
+                logger.debug(f"Could not resolve data product: {e}")
+
         logger.debug(f"Building API model for contract {db_contract.id}")
 
         return DataContractRead(
@@ -6652,6 +6675,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             domainIds=contract_domain_ids,  # All assigned domain IDs (primary first)
             primaryDomainId=contract_primary_domain_id,
             dataProduct=db_contract.data_product,
+            dataProductName=data_product_name,
+            dataProductId=data_product_id,
             description=description,
             tags=tags,  # Include tags in response
             schema=schema_objects,

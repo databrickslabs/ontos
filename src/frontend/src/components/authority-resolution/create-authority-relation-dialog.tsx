@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
+import TagSelector from '@/components/ui/tag-selector';
+import type { AssignedTag } from '@/components/ui/tag-chip';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
@@ -59,13 +61,14 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
   const [domainIds, setDomainIds] = useState<string[]>([]);
   const [primaryDomainId, setPrimaryDomainId] = useState<string | null>(null);
   const [affirmations, setAffirmations] = useState<AffirmationInput[]>(DEFAULT_AFFIRMATIONS);
+  const [tags, setTags] = useState<(string | AssignedTag)[]>([]);
 
   const reset = () => {
     setName(''); setSlug(''); setDescription(''); setActorRole(''); setActorIdentity('');
     setAction('approve'); setObjectType('data_product'); setObjectId(''); setThreshold('');
     setCurrency(''); setMarket(''); setDnaMax('0.3'); setRequiredCosign(false);
     setSourceTable(''); setColumnMap(DEFAULT_COLUMN_MAP); setDomainIds([]); setPrimaryDomainId(null);
-    setAffirmations(DEFAULT_AFFIRMATIONS);
+    setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]);
   };
 
   // Prefill from the relation when editing; reset to defaults when creating.
@@ -104,6 +107,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             }))
           : DEFAULT_AFFIRMATIONS,
       );
+      setTags((relation.tags || []).map((t) => t.fully_qualified_name).filter(Boolean) as string[]);
     } else {
       reset();
     }
@@ -153,6 +157,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       domain_ids: domainIds,
       primary_domain_id: primaryDomainId,
       affirmations: affirmations.filter((a) => a.principal.trim()),
+      tags: tags.map((t) => ({ tag_fqn: typeof t === 'string' ? t : t.fully_qualified_name })),
     };
 
     setSaving(true);
@@ -308,6 +313,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           >
             <Plus className="h-4 w-4 mr-1" /> Add participant
           </Button>
+
+          <div className="text-sm font-semibold text-muted-foreground pt-2">Tags</div>
+          <TagSelector value={tags} onChange={setTags} placeholder="Search and select tags…" />
 
           <div className="grid grid-cols-2 gap-3 pt-2">
             <div className="space-y-1">

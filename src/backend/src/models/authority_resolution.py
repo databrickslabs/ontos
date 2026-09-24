@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from src.models.tags import AssignedTagCreate
+
 
 class EvidenceBinding(BaseModel):
     """v1 evidence binding: one UC Delta table + a column→AR-element map."""
@@ -53,6 +55,8 @@ class AuthorityRelationCreate(BaseModel):
     primary_domain_id: Optional[str] = None
     # N-functional affirmation stakeholders
     affirmations: List[AffirmationInput] = Field(default_factory=list)
+    # Polymorphic tags
+    tags: Optional[List[AssignedTagCreate]] = None
 
 
 class AuthorityRelationUpdate(BaseModel):
@@ -75,6 +79,7 @@ class AuthorityRelationUpdate(BaseModel):
     domain_ids: Optional[List[str]] = None
     primary_domain_id: Optional[str] = None
     affirmations: Optional[List[AffirmationInput]] = None
+    tags: Optional[List[AssignedTagCreate]] = None
 
 
 class StatusChangeRequest(BaseModel):

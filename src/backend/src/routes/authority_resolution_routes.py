@@ -211,6 +211,18 @@ async def start_review(
     return result
 
 
+@router.post("/authority/recompute-scheduled")
+async def recompute_scheduled(
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Manually trigger a DNAco recompute for every AR with a schedule set.
+
+    The same routine the scheduled ``authority_dna_recompute`` job runs.
+    """
+    return manager.recompute_scheduled(db)
+
+
 @router.get("/authority/relations/{relation_id}/review-tracking")
 async def review_tracking(
     relation_id: str,

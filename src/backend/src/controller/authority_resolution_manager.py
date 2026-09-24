@@ -148,7 +148,21 @@ class AuthorityResolutionManager:
 
         # N-functional affirmation stakeholders.
         self._replace_affirmations(db, rel_id, data.get("affirmations") or [])
+        # Polymorphic tags.
+        self._set_tags(db, rel_id, getattr(payload, "tags", None), current_user)
         return relation
+
+    def _set_tags(self, db: Session, relation_id: str, tags: Optional[List[Any]], user_email: Optional[str]) -> None:
+        """Best-effort: replace the AR's assigned tags (generic polymorphic tags)."""
+        if tags is None:
+            return
+        try:
+            from src.controller.tags_manager import TagsManager
+            TagsManager().set_tags_for_entity(
+                db, entity_id=relation_id, entity_type=ENTITY_TYPE, tags=list(tags), user_email=user_email,
+            )
+        except Exception as e:  # pragma: no cover - tag write is best-effort
+            logger.warning(f"Could not set tags for AR {relation_id}: {e}")
 
     def get_relation(self, db: Session, relation_id: str) -> Optional[AuthorityRelationDb]:
         return authority_relation_repo.get(db, relation_id)
@@ -201,6 +215,8 @@ class AuthorityResolutionManager:
             )
         if affirmations is not None:
             self._replace_affirmations(db, relation_id, affirmations)
+        # Polymorphic tags (only when the caller supplied the field).
+        self._set_tags(db, relation_id, getattr(payload, "tags", None), current_user)
 
         # Changing an active AR triggers recompute + re-review (best-effort recompute).
         if relation.status == STATUS_ACTIVE:
@@ -500,6 +516,25 @@ class AuthorityResolutionManager:
 
     # ------------------------------------------------------- DNA-Coefficient
 
+    def _log_timeline(self, db: Session, relation_id: str, message: str) -> None:
+        """Best-effort: append a system comment to the AR's Comments timeline.
+
+        The Comments subsystem is the entity timeline; DNAco runs and automated
+        status changes are recorded here so the history is visible on the detail
+        view. Never breaks the caller.
+        """
+        try:
+            from src.controller.comments_manager import CommentsManager
+            from src.models.comments import CommentCreate
+            CommentsManager().create_comment(
+                db,
+                data=CommentCreate(entity_type=ENTITY_TYPE, entity_id=relation_id, comment=message),
+                user_email="system@ontos",
+                is_admin=True,
+            )
+        except Exception as e:  # pragma: no cover - timeline logging is best-effort
+            logger.warning(f"Could not write AR timeline comment for {relation_id}: {e}")
+
     def compute_dnaco(self, db: Session, relation_id: str, rows: Optional[List[Dict[str, Any]]] = None) -> Optional[AuthorityDnaRunDb]:
         """Compute the DNA-Coefficient over the AR's bound evidence.
 
@@ -562,9 +597,20 @@ class AuthorityResolutionManager:
                 "dna_measured_at": self._now(),
             }
             # An active AR whose divergence exceeded its ceiling is auto-flagged.
+            auto_flagged = False
             if relation.status == STATUS_ACTIVE and result.magnitude > (relation.dna_max_threshold or 0.3):
                 agg["status"] = STATUS_NEEDS_REVIEW
+                auto_flagged = True
             authority_relation_repo.update(db, db_obj=relation, obj_in=agg)
+
+            # Record the run on the entity timeline (Comments).
+            msg = (
+                f"DNA-Coefficient computed: {result.magnitude:.2f} "
+                f"({result.divergent_count}/{result.sampled_count} divergent)."
+            )
+            if auto_flagged:
+                msg += f" Exceeded the ceiling ({relation.dna_max_threshold}); status auto-changed to needs_review."
+            self._log_timeline(db, relation_id, msg)
             return run
         except Exception as e:
             logger.error(f"DNAco computation failed for {relation_id}: {e}", exc_info=True)
@@ -572,6 +618,32 @@ class AuthorityResolutionManager:
                 "status": "failed", "finished_at": self._now(), "error_message": str(e),
             })
             raise
+
+    def recompute_scheduled(self, db: Session) -> Dict[str, Any]:
+        """Recompute the DNA-Coefficient for every AR that has a ``schedule_cron``.
+
+        Invoked by the scheduled ``authority_dna_recompute`` Databricks workflow
+        (its own cron drives cadence) and by the manual trigger endpoint. Each
+        recompute is isolated; one failure does not abort the batch. Results land
+        on each AR's dna-runs, aggregate DNAco, and Comments timeline, and an
+        active AR that drifts past its ceiling is auto-flagged ``needs_review``.
+        """
+        relations = authority_relation_repo.list_all(db)
+        due = [r for r in relations if getattr(r, "schedule_cron", None)]
+        results: List[Dict[str, Any]] = []
+        for r in due:
+            try:
+                run = self.compute_dnaco(db, r.id)
+                results.append({
+                    "relation_id": r.id,
+                    "run_id": run.id if run else None,
+                    "status": run.status if run else "skipped",
+                    "magnitude": run.magnitude if run else None,
+                })
+            except Exception as e:
+                logger.warning(f"Scheduled DNAco recompute failed for {r.id}: {e}")
+                results.append({"relation_id": r.id, "status": "failed", "error": str(e)})
+        return {"scheduled": len(due), "results": results}
 
     def _read_evidence_rows(self, binding: Dict[str, Any], limit: int = 500) -> List[Dict[str, Any]]:
         """Best-effort read of the bound UC Delta table via the SQL warehouse.
@@ -717,6 +789,17 @@ class AuthorityResolutionManager:
         affs = authority_affirmation_repo.list_for_relation(db, relation_id=relation.id)
         domains = entity_domain_repo.get_domains_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation.id)
         fully_affirmed = self.is_fully_affirmed(db, relation.id)
+        # Polymorphic tags (best-effort — never break the read).
+        tags: List[Dict[str, Any]] = []
+        try:
+            from src.controller.tags_manager import TagsManager
+            for t in TagsManager().list_assigned_tags(db, entity_id=relation.id, entity_type=ENTITY_TYPE):
+                tags.append({
+                    "fully_qualified_name": getattr(t, "fully_qualified_name", None),
+                    "assigned_value": getattr(t, "assigned_value", None),
+                })
+        except Exception as e:  # pragma: no cover - tag read is best-effort
+            logger.warning(f"Could not read tags for AR {relation.id}: {e}")
         maturity = authority_dna.maturity_level(
             has_object=bool(relation.object_id),
             dna_measured=relation.dna_magnitude is not None,
@@ -765,6 +848,7 @@ class AuthorityResolutionManager:
                 }
                 for a in affs
             ],
+            "tags": tags,
             "created_at": relation.created_at,
             "updated_at": relation.updated_at,
             "created_by": relation.created_by,

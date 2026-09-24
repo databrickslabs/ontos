@@ -11,12 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History } from 'lucide-react';
 import { formatDna } from './authority-resolution';
+import { RelativeDate } from '@/components/common/relative-date';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
 import RequestAuthorityActionDialog from '@/components/authority-resolution/request-authority-action-dialog';
 import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
-import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking } from '@/types/authority-resolution';
+import { CommentSidebar } from '@/components/comments';
+import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking, AuthorityDnaRun, AuthorityDecision } from '@/types/authority-resolution';
 
 function reviewStatusVariant(s?: string): 'default' | 'secondary' | 'outline' {
   switch ((s || 'na').toLowerCase()) {
@@ -63,6 +66,9 @@ export default function AuthorityRelationDetails() {
   const [requestOpen, setRequestOpen] = useState(false);
   const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [tracking, setTracking] = useState<AuthorityReviewTracking | null>(null);
+  const [dnaRuns, setDnaRuns] = useState<AuthorityDnaRun[]>([]);
+  const [decisions, setDecisions] = useState<AuthorityDecision[]>([]);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   const fetchRelation = useCallback(async () => {
     if (!relationId) return;
@@ -86,7 +92,17 @@ export default function AuthorityRelationDetails() {
     if (data) setTracking(data);
   }, [relationId, get]);
 
-  useEffect(() => { fetchRelation(); fetchTracking(); }, [fetchRelation, fetchTracking]);
+  const fetchHistory = useCallback(async () => {
+    if (!relationId) return;
+    const [runs, decs] = await Promise.all([
+      get<AuthorityDnaRun[]>(`/api/authority/relations/${relationId}/dna-runs`),
+      get<AuthorityDecision[]>(`/api/authority/relations/${relationId}/decisions`),
+    ]);
+    if (Array.isArray(runs.data)) setDnaRuns(runs.data);
+    if (Array.isArray(decs.data)) setDecisions(decs.data);
+  }, [relationId, get]);
+
+  useEffect(() => { fetchRelation(); fetchTracking(); fetchHistory(); }, [fetchRelation, fetchTracking, fetchHistory]);
 
   const computeDna = async () => {
     setBusy('compute');
@@ -96,6 +112,7 @@ export default function AuthorityRelationDetails() {
     else {
       toast({ title: 'DNAco computed', description: `magnitude ${data.magnitude} · ${data.divergent_count}/${data.sampled_count} divergent` });
       fetchRelation();
+      fetchHistory();
     }
   };
 
@@ -150,6 +167,15 @@ export default function AuthorityRelationDetails() {
             <span className="text-sm text-muted-foreground">v{relation.version}</span>
           </div>
           {relation.description && <p className="text-muted-foreground mt-2 max-w-2xl">{relation.description}</p>}
+          {(relation.tags || []).length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {(relation.tags || []).map((t, i) => (
+                <Badge key={i} variant="secondary" className="text-xs">
+                  {t.fully_qualified_name}{t.assigned_value ? `: ${t.assigned_value}` : ''}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
         {canWrite && (
           <div className="flex gap-2 flex-wrap justify-end">
@@ -171,6 +197,13 @@ export default function AuthorityRelationDetails() {
             <Button variant="outline" size="sm" onClick={() => setTestOpen(true)}>
               <FlaskConical className="h-4 w-4 mr-1" /> Test
             </Button>
+            <CommentSidebar
+              entityType="authority_relation"
+              entityId={relationId!}
+              isOpen={commentsOpen}
+              onToggle={() => setCommentsOpen(!commentsOpen)}
+              className="h-8"
+            />
             <Button variant="ghost" size="sm" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
           </div>
         )}
@@ -297,6 +330,51 @@ export default function AuthorityRelationDetails() {
         </Card>
       )}
 
+      {(dnaRuns.length > 0 || decisions.length > 0) && (
+        <Card>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><History className="h-4 w-4" /> History</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {dnaRuns.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs uppercase text-muted-foreground">DNA-Coefficient runs</div>
+                {dnaRuns.slice(0, 8).map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border-b py-2 last:border-0 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={r.status === 'succeeded' ? 'default' : r.status === 'failed' ? 'destructive' : 'secondary'}>{r.status}</Badge>
+                      {r.status === 'succeeded' && (
+                        <span>{formatDna(r.magnitude, r.direction)} · {r.divergent_count ?? 0}/{r.sampled_count ?? 0} divergent</span>
+                      )}
+                      {r.error_message && <span className="text-muted-foreground">{r.error_message}</span>}
+                    </div>
+                    {r.started_at && <span className="text-muted-foreground"><RelativeDate date={r.started_at} /></span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {decisions.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs uppercase text-muted-foreground">Recent decisions</div>
+                {decisions.slice(0, 10).map((d) => (
+                  <div key={d.id} className="flex items-center justify-between border-b py-2 last:border-0 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{d.source}</Badge>
+                      {d.verdict && (
+                        <Badge variant={d.verdict === 'approved' ? 'default' : d.verdict === 'denied' ? 'destructive' : 'secondary'}>{d.verdict}</Badge>
+                      )}
+                      <span className="text-muted-foreground">
+                        {d.actor_identity || '—'}{d.action ? ` · ${d.action}` : ''}{d.object_id ? ` · ${d.object_id}` : ''}
+                        {d.reason ? ` — ${d.reason}` : ''}
+                      </span>
+                    </div>
+                    {d.created_at && <span className="text-muted-foreground whitespace-nowrap"><RelativeDate date={d.created_at} /></span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle className="text-base">Authority Relation</CardTitle></CardHeader>
@@ -328,6 +406,8 @@ export default function AuthorityRelationDetails() {
           </CardContent>
         </Card>
       </div>
+
+      <EntityMetadataPanel entityId={relationId!} entityType="authority_relation" />
 
       <TestResolveDialog
         open={testOpen}

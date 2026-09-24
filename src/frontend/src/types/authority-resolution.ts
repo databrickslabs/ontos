@@ -84,6 +84,7 @@ export interface AuthorityRelation {
   denied_count?: number;
   domains?: AssignedDomain[];
   affirmations?: AuthorityAffirmation[];
+  tags?: { fully_qualified_name?: string | null; assigned_value?: string | null }[];
   created_at?: string;
   updated_at?: string;
   created_by?: string | null;
@@ -113,6 +114,31 @@ export interface AuthorityReviewTracking {
   relation_id: string;
   reviews: AuthorityReviewTrackingReview[];
   workflows: AuthorityReviewTrackingWorkflow[];
+}
+
+export interface AuthorityDnaRun {
+  id: string;
+  status: string;                  // running | succeeded | failed
+  started_at?: string | null;
+  finished_at?: string | null;
+  sampled_count?: number | null;
+  divergent_count?: number | null;
+  magnitude?: number | null;
+  direction?: string | null;
+  error_message?: string | null;
+}
+
+export interface AuthorityDecision {
+  id: string;
+  source: string;                  // mcp | evidence | ui
+  verdict?: string | null;         // approved | denied | null (evidence sample)
+  reason?: string | null;
+  actor_identity?: string | null;
+  action?: string | null;
+  object_id?: string | null;
+  relation_version?: number | null;
+  divergence_magnitude?: number | null;
+  created_at?: string | null;
 }
 
 export interface AffirmationInput {

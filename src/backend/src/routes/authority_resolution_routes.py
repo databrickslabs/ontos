@@ -200,10 +200,12 @@ async def start_review(
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     reviews_manager: DataAssetReviewManagerDep,
+    payload: dict = Body(default={}),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     owner = current_user.username if current_user else None
-    result = manager.start_review(db, relation_id, owner=owner, reviews_manager=reviews_manager)
+    message = payload.get("message") if isinstance(payload, dict) else None
+    result = manager.start_review(db, relation_id, owner=owner, reviews_manager=reviews_manager, message=message)
     if result is None:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return result

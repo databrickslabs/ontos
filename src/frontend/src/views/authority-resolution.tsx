@@ -1,26 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ColumnDef } from '@tanstack/react-table';
 import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, AlertCircle, ShieldCheck, Eye, Pencil, Trash2 } from 'lucide-react';
+import { DataTable } from '@/components/ui/data-table';
+import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
+import { Plus, AlertCircle, ShieldCheck, Eye, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
 import type { AuthorityRelation } from '@/types/authority-resolution';
 
 const FEATURE_ID = 'authority-resolution';
 
-function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
+/** Tailwind status pill colours, mirroring the Data Contracts list. */
+function getStatusColor(status: string): string {
   switch ((status || '').toLowerCase()) {
-    case 'active': return 'default';
-    case 'needs_review': return 'destructive';
-    case 'retired': return 'outline';
-    default: return 'secondary'; // draft
+    case 'active':
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+    case 'needs_review':
+      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+    case 'retired':
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    default: // draft
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
   }
 }
 
@@ -34,6 +40,7 @@ export function formatDna(magnitude: number | null | undefined, direction?: stri
 
 export default function AuthorityResolution() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { toast } = useToast();
   const { get, delete: del } = useApi();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
@@ -67,19 +74,100 @@ export default function AuthorityResolution() {
     else { toast({ title: 'Deleted', description: r.name }); fetchRelations(); }
   };
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-6 w-6 text-muted-foreground" />
-          <h1 className="text-2xl font-bold">Authority Resolution</h1>
+  const handleBulkDelete = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} selected Authority Relation(s)?`)) return;
+    const results = await Promise.allSettled(ids.map((id) => del(`/api/authority/relations/${id}`)));
+    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    if (ok > 0) toast({ title: 'Deleted', description: `${ok} Authority Relation(s) deleted.` });
+    fetchRelations();
+  };
+
+  const sortableHeader = (label: string) => ({ column }: any) => (
+    <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
+      {label}
+      <ChevronDown className="ml-2 h-4 w-4" />
+    </Button>
+  );
+
+  const columns: ColumnDef<AuthorityRelation>[] = [
+    {
+      accessorKey: 'name',
+      header: sortableHeader('Name'),
+      cell: ({ row }) => (
+        <div className="space-y-1">
+          <div className="font-medium">{row.original.name}</div>
+          {row.original.slug && <div className="text-xs text-muted-foreground">{row.original.slug}</div>}
         </div>
-        {canWrite && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" /> New Authority Relation
-          </Button>
-        )}
-      </div>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: sortableHeader('Status'),
+      cell: ({ row }) => (
+        <Badge variant="outline" className={getStatusColor(row.original.status)}>{row.original.status}</Badge>
+      ),
+    },
+    {
+      accessorKey: 'dna_magnitude',
+      header: sortableHeader('DNAco'),
+      cell: ({ row }) => formatDna(row.original.dna_magnitude, row.original.dna_direction),
+    },
+    {
+      accessorKey: 'maturity_level',
+      header: 'Maturity',
+      cell: ({ row }) => <Badge variant="outline">{row.original.maturity_level}</Badge>,
+      enableSorting: false,
+    },
+    {
+      accessorKey: 'action',
+      header: 'Action',
+      cell: ({ row }) => <span className="text-muted-foreground">{row.original.action || '—'}</span>,
+      enableSorting: false,
+    },
+    {
+      accessorKey: 'usage_count',
+      header: sortableHeader('Usage'),
+      cell: ({ row }) => <div className="text-right">{row.original.usage_count ?? 0}</div>,
+    },
+    {
+      id: 'actions',
+      enableHiding: false,
+      cell: ({ row }) => {
+        const r = row.original;
+        return (
+          <div className="flex space-x-1 justify-end">
+            <Button variant="ghost" size="icon" title="View" onClick={(e) => { e.stopPropagation(); navigate(`${pathname}/${r.id}`); }}>
+              <Eye className="h-4 w-4" />
+            </Button>
+            {canWrite && (
+              <>
+                <Button variant="ghost" size="icon" title="Edit" onClick={(e) => { e.stopPropagation(); setEditRelation(r); }}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive"
+                  title="Delete"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(r); }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
+  return (
+    <div className="py-6">
+      <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
+        <ShieldCheck className="w-8 h-8" />
+        Authority Resolution
+      </h1>
 
       <p className="text-muted-foreground mb-6 max-w-3xl">
         Author <strong>Authority Relations</strong> (ARF) that make soft decision authority explicit
@@ -89,68 +177,42 @@ export default function AuthorityResolution() {
       </p>
 
       {error && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>DNAco</TableHead>
-                <TableHead>Maturity</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead className="text-right">Usage</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
-              ) : relations.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No Authority Relations yet.</TableCell></TableRow>
-              ) : (
-                relations.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className="cursor-pointer"
-                    onClick={() => navigate(`/authority-resolution/${r.id}`)}
-                  >
-                    <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell><Badge variant={statusVariant(r.status)}>{r.status}</Badge></TableCell>
-                    <TableCell>{formatDna(r.dna_magnitude, r.dna_direction)}</TableCell>
-                    <TableCell><Badge variant="outline">{r.maturity_level}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{r.action || '—'}</TableCell>
-                    <TableCell className="text-right">{r.usage_count ?? 0}</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" title="View" onClick={() => navigate(`/authority-resolution/${r.id}`)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {canWrite && (
-                          <>
-                            <Button variant="ghost" size="icon" title="Edit" onClick={() => setEditRelation(r)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(r)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {loading ? (
+        <ListViewSkeleton columns={7} rows={5} toolbarButtons={1} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={relations}
+          searchColumn="name"
+          storageKey="authority-relations-sort"
+          toolbarActions={
+            canWrite && (
+              <Button onClick={() => setCreateOpen(true)} className="gap-2 h-9">
+                <Plus className="h-4 w-4" />
+                New Authority Relation
+              </Button>
+            )
+          }
+          bulkActions={(selectedRows) => (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-9 gap-1"
+              onClick={() => handleBulkDelete(selectedRows.map((r) => r.id).filter(Boolean))}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              Delete Selected ({selectedRows.length})
+            </Button>
+          )}
+          onRowClick={(row) => navigate(`${pathname}/${row.original.id}`)}
+        />
+      )}
 
       <CreateAuthorityRelationDialog
         open={createOpen}
@@ -158,7 +220,7 @@ export default function AuthorityResolution() {
         onCreated={(created) => {
           setCreateOpen(false);
           toast({ title: 'Authority Relation created', description: created.name });
-          if (created.id) navigate(`/authority-resolution/${created.id}`);
+          if (created.id) navigate(`${pathname}/${created.id}`);
           else fetchRelations();
         }}
       />

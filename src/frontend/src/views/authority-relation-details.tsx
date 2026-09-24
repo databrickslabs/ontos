@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, ClipboardCheck, Workflow, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink } from 'lucide-react';
 import { formatDna } from './authority-resolution';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
+import RequestAuthorityActionDialog from '@/components/authority-resolution/request-authority-action-dialog';
 import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
 import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking } from '@/types/authority-resolution';
 
@@ -59,6 +60,7 @@ export default function AuthorityRelationDetails() {
   const [busy, setBusy] = useState<string | null>(null);
   const [testOpen, setTestOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
   const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [tracking, setTracking] = useState<AuthorityReviewTracking | null>(null);
 
@@ -113,18 +115,6 @@ export default function AuthorityRelationDetails() {
     else fetchRelation();
   };
 
-  const startReview = async () => {
-    setBusy('start-review');
-    const { data, error } = await post<any>(`/api/authority/relations/${relationId}/start-review`, {});
-    setBusy(null);
-    if (error) toast({ title: 'Could not start review', description: error, variant: 'destructive' });
-    else {
-      toast({ title: 'Review started', description: `${data?.reviewers_notified ?? 0} reviewer(s) notified` });
-      fetchRelation();
-      fetchTracking();
-    }
-  };
-
   const remove = async () => {
     if (!confirm('Delete this Authority Relation?')) return;
     const { error } = await del(`/api/authority/relations/${relationId}`);
@@ -166,12 +156,9 @@ export default function AuthorityRelationDetails() {
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="h-4 w-4 mr-1" /> Edit
             </Button>
-            {hasReviewers && (
-              <Button variant="outline" size="sm" onClick={startReview} disabled={busy === 'start-review'}>
-                {busy === 'start-review' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ClipboardCheck className="h-4 w-4 mr-1" />}
-                Start Review
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={() => setRequestOpen(true)}>
+              <KeyRound className="h-4 w-4 mr-1" /> Request...
+            </Button>
             <Button variant="outline" size="sm" onClick={computeDna} disabled={busy === 'compute'}>
               {busy === 'compute' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
               Compute DNAco
@@ -357,6 +344,15 @@ export default function AuthorityRelationDetails() {
           toast({ title: 'Authority Relation updated', description: updated.name });
           fetchRelation();
         }}
+      />
+
+      <RequestAuthorityActionDialog
+        isOpen={requestOpen}
+        onOpenChange={setRequestOpen}
+        relationId={relationId!}
+        relationName={relation.name}
+        relationStatus={relation.status}
+        onSuccess={() => { fetchRelation(); fetchTracking(); }}
       />
 
       <Dialog open={!!reviewFor} onOpenChange={(o) => !o && setReviewFor(null)}>

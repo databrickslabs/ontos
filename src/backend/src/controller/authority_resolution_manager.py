@@ -292,6 +292,7 @@ class AuthorityResolutionManager:
         relation_id: str,
         owner: Optional[str] = None,
         reviews_manager: Optional[Any] = None,
+        message: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Start the review process.
 
@@ -328,7 +329,10 @@ class AuthorityResolutionManager:
                             reviewer_email=a.principal,
                             asset_fqns=[f"authority-relation://{relation_id}"],
                             title=f"Authority Relation review: {relation.name}",
-                            notes=f"Confirm whether this Authority Relation reflects reality (reviewer role: {a.role}).",
+                            notes=(
+                                f"Confirm whether this Authority Relation reflects reality (reviewer role: {a.role})."
+                                + (f"\n\nOwner note: {message.strip()}" if message and message.strip() else "")
+                            ),
                         ),
                         db=db,
                     )

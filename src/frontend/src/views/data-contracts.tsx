@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DataContractListItem, DataContractCreate } from '@/types/data-contract';
+import { BatchImportResult, summarizeImport } from '@/types/import-results';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import DomainBadgeList from '@/components/ui/domain-badge-list'
@@ -221,8 +222,10 @@ export default function DataContracts() {
     onDrop: async (acceptedFiles) => {
       if (acceptedFiles.length === 0) return;
 
-      const file = acceptedFiles[0];
-      if (!file.type.startsWith('text/') && file.type !== 'application/json' && file.type !== 'application/x-yaml') {
+      const invalid = acceptedFiles.find(
+        (f) => !f.type.startsWith('text/') && f.type !== 'application/json' && f.type !== 'application/x-yaml'
+      );
+      if (invalid) {
         setUploadError({ message: t('data-contracts:messages.uploadFileTypeError', 'Please upload a text file (JSON, YAML, etc)') });
         return;
       }
@@ -231,8 +234,10 @@ export default function DataContracts() {
         setUploading(true);
         setUploadError(null);
 
+        // Multi-file: send every dropped file under `files` (backend
+        // List[UploadFile]); each file may itself hold an ODCS array.
         const formData = new FormData();
-        formData.append('file', file);
+        acceptedFiles.forEach((f) => formData.append('files', f));
 
         const response = await fetch('/api/data-contracts/upload', {
           method: 'POST',
@@ -262,19 +267,42 @@ export default function DataContracts() {
           } catch {
             // Keep default error message
           }
-          
+
           const combined = (errorMsg + ' ' + (errorDetail || '')).toLowerCase();
           if (combined.includes('odps') || combined.includes('outputports')) {
             errorMsg += t('data-contracts:messages.uploadOdpsHint', '\n\nHint: This page is for Data Contracts (ODCS format). If you\'re trying to upload a Data Product (ODPS format), please use the Data Products page instead.');
           }
-          
+
           setUploadError({ message: errorMsg, detail: errorDetail });
           return;
         }
 
+        // Truthful BatchImportResult summary across all files/entities.
+        const result: BatchImportResult = await response.json();
         await fetchContracts();
+
+        if (result.failed > 0) {
+          const detail = result.items
+            .filter((i) => i.status === 'failed')
+            .slice(0, 5)
+            .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+            .join('\n');
+          // Keep the dialog open so the user sees which entities failed.
+          setUploadError({ message: summarizeImport(result), detail });
+          if (result.created > 0) {
+            toast({ title: t('data-contracts:messages.success', 'Success'), description: summarizeImport(result) });
+          }
+          return;
+        }
+
         setOpenUploadDialog(false);
-        toast({ title: t('data-contracts:messages.success', 'Success'), description: t('data-contracts:messages.uploadSuccess', 'Contract uploaded successfully') });
+        toast({
+          title: t('data-contracts:messages.success', 'Success'),
+          description: t('data-contracts:messages.uploadSuccessCount', {
+            count: result.created,
+            defaultValue: '{{count}} contract(s) imported successfully',
+          }),
+        });
       } catch (err) {
         setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:messages.uploadError', 'Failed to upload contract') });
       } finally {
@@ -286,7 +314,7 @@ export default function DataContracts() {
       'application/json': ['.json'],
       'application/x-yaml': ['.yaml', '.yml']
     },
-    multiple: false
+    multiple: true
   });
 
   const getStatusColor = (status: string) => {
@@ -721,10 +749,21 @@ export default function DataContracts() {
                     const err = await res.json().catch(() => null)
                     throw new Error(err?.detail?.message || err?.detail || t('data-contracts:import.importOdcsError', 'Failed to import ODCS JSON'))
                   }
+                  const result: BatchImportResult = await res.json()
                   await fetchContracts()
-                  setOpenUploadDialog(false)
-                  setOdcsPaste('')
-                  toast({ title: t('data-contracts:import.importedTitle', 'Imported'), description: t('data-contracts:import.importedSuccess', 'ODCS JSON imported successfully') })
+                  if (result.failed > 0) {
+                    const detail = result.items
+                      .filter((i) => i.status === 'failed')
+                      .slice(0, 5)
+                      .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+                      .join('\n')
+                    setUploadError({ message: summarizeImport(result), detail })
+                    if (result.created > 0) setOdcsPaste('')
+                  } else {
+                    setOpenUploadDialog(false)
+                    setOdcsPaste('')
+                    toast({ title: t('data-contracts:import.importedTitle', 'Imported'), description: summarizeImport(result) })
+                  }
                 } catch (err) {
                   setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:import.importOdcsError', 'Failed to import ODCS JSON') })
                 } finally {

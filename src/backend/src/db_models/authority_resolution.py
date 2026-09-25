@@ -44,9 +44,14 @@ class AuthorityRelationDb(Base):
     # Lifecycle status is operational; maturity_level (L0-L5) is derived in the manager.
     status = Column(String, default='draft', nullable=False, index=True)  # draft|active|needs_review|retired
 
-    # Versioning (mirrors data contracts): version_family_id groups revisions.
-    version = Column(Integer, default=1, nullable=False)
+    # Versioning (full DP/DC snapshot parity): each version is an immutable row;
+    # version_family_id groups the family, parent_relation_id is the lineage edge.
+    version = Column(String, default='1.0.0', nullable=False)  # semantic version string
     version_family_id = Column(String, nullable=True, index=True)
+    parent_relation_id = Column(String, nullable=True, index=True)  # source row this version was cloned from
+    base_name = Column(String, nullable=True)          # stable family display name
+    change_summary = Column(Text, nullable=True)       # what changed in this version
+    draft_owner_id = Column(String, nullable=True, index=True)  # personal-draft owner (mirrors DP/DC)
 
     # --- ARF tuple: Actor ---------------------------------------------------
     actor_role = Column(String, nullable=True)        # arf:actor OrganizationalRole
@@ -228,7 +233,7 @@ class AuthorityDecisionDb(Base):
 
     id = Column(String, primary_key=True)
     relation_id = Column(String, ForeignKey('authority_relations.id'), nullable=False, index=True)
-    relation_version = Column(Integer, nullable=True)
+    relation_version = Column(String, nullable=True)  # semantic version of the AR that decided it
     source = Column(String, default='mcp', nullable=False, index=True)  # mcp|evidence|test
     dna_run_id = Column(String, ForeignKey('authority_dna_runs.id'), nullable=True, index=True)
 

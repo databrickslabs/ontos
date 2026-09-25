@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History, Database } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History, Database, GitBranch } from 'lucide-react';
 import { formatDna } from './authority-resolution';
 import { RelativeDate } from '@/components/common/relative-date';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
@@ -21,6 +21,7 @@ import AuthorityRelationReview from '@/components/authority-resolution/authority
 import { CommentSidebar } from '@/components/comments';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { MaturityInline } from '@/components/common/maturity-inline';
+import VersionNavigator from '@/components/common/version-navigator';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking, AuthorityDnaRun, AuthorityDecision } from '@/types/authority-resolution';
 
@@ -101,14 +102,15 @@ function DnaTile({ relation }: { relation: AuthorityRelation }) {
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="w-72" align="start">
-        <div className="text-xs font-semibold mb-2">DNAco dimensions (additive)</div>
+        <div className="text-xs font-semibold mb-2">DNAco dimensions</div>
         <div className="space-y-2">
           {Object.entries(dims).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => (
             <DnaGauge key={k} label={k} value={Number(v)} />
           ))}
         </div>
         <div className="text-[11px] text-muted-foreground mt-2">
-          Overall = min(1.0, Σ dimensions) = {(relation.dna_magnitude ?? 0).toFixed(2)}
+          Overall = 1 − ∏(1 − dₙ) = {(relation.dna_magnitude ?? 0).toFixed(2)}
+          <span className="block opacity-80">probability of divergence on ≥1 dimension</span>
         </div>
       </HoverCardContent>
     </HoverCard>
@@ -135,6 +137,9 @@ export default function AuthorityRelationDetails() {
   const [busy, setBusy] = useState<string | null>(null);
   const [testOpen, setTestOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
+  const [newVersion, setNewVersion] = useState('');
+  const [changeSummary, setChangeSummary] = useState('');
   const [requestOpen, setRequestOpen] = useState(false);
   const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [tracking, setTracking] = useState<AuthorityReviewTracking | null>(null);
@@ -220,6 +225,35 @@ export default function AuthorityRelationDetails() {
     else { toast({ title: 'Deleted' }); navigate('/authority-resolution'); }
   };
 
+  // Suggest the next version by bumping the minor of a semantic version.
+  const suggestNextVersion = (v?: string): string => {
+    const parts = (v || '1.0.0').split('.').map((p) => parseInt(p, 10));
+    if (parts.length < 2 || parts.some((n) => Number.isNaN(n))) return `${v || '1.0.0'}-2`;
+    parts[1] += 1;
+    for (let i = 2; i < parts.length; i++) parts[i] = 0;
+    return parts.join('.');
+  };
+
+  const openVersionDialog = () => {
+    setNewVersion(suggestNextVersion(relation?.version));
+    setChangeSummary('');
+    setVersionOpen(true);
+  };
+
+  const createVersion = async () => {
+    if (!newVersion.trim()) return;
+    setBusy('version');
+    const { data, error } = await post<AuthorityRelation>(
+      `/api/authority/relations/${relationId}/versions`,
+      { new_version: newVersion.trim(), change_summary: changeSummary.trim() || undefined },
+    );
+    setBusy(null);
+    if (error) { toast({ title: 'New version failed', description: error, variant: 'destructive' }); return; }
+    setVersionOpen(false);
+    toast({ title: 'New version created', description: `v${newVersion.trim()} (draft)` });
+    if (data?.id) navigate(`/authority-resolution/${data.id}`);
+  };
+
   if (loading) return <div className="py-6 text-muted-foreground">Loading…</div>;
   if (!relation) return (
     <div className="py-6">
@@ -242,6 +276,9 @@ export default function AuthorityRelationDetails() {
           <div className="flex gap-2 flex-wrap justify-end">
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Button>
+            <Button variant="outline" size="sm" onClick={openVersionDialog}>
+              <GitBranch className="h-4 w-4 mr-1" /> New Version
             </Button>
             <Button variant="outline" size="sm" onClick={() => setRequestOpen(true)}>
               <KeyRound className="h-4 w-4 mr-1" /> Request...
@@ -279,6 +316,12 @@ export default function AuthorityRelationDetails() {
           <MaturityInline entityType="AuthorityRelation" entityId={relationId!} compact />
           {relation.slug && <span className="text-sm text-muted-foreground">{relation.slug}</span>}
           <span className="text-sm text-muted-foreground">v{relation.version}</span>
+          <VersionNavigator
+            entityKind="authority_relation"
+            currentEntityId={relationId!}
+            currentVersion={relation.version}
+            onVersionChange={(id) => navigate(`/authority-resolution/${id}`)}
+          />
         </div>
         {relation.description && <p className="text-muted-foreground mt-2 max-w-2xl">{relation.description}</p>}
         {(relation.tags || []).length > 0 && (
@@ -579,6 +622,43 @@ export default function AuthorityRelationDetails() {
               onCompleted={() => { fetchRelation(); fetchTracking(); }}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={versionOpen} onOpenChange={setVersionOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create new version</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Snapshots this Authority Relation into a new draft version. The rule, criteria,
+              participants, evidence and domains are copied; measured DNAco and usage counters reset.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="ar-new-version">New version</Label>
+              <Input
+                id="ar-new-version"
+                value={newVersion}
+                onChange={(e) => setNewVersion(e.target.value)}
+                placeholder="2.0.0"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ar-change-summary">Change summary (optional)</Label>
+              <Input
+                id="ar-change-summary"
+                value={changeSummary}
+                onChange={(e) => setChangeSummary(e.target.value)}
+                placeholder="What changed in this version?"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setVersionOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={createVersion} disabled={busy === 'version' || !newVersion.trim()}>
+                {busy === 'version' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <GitBranch className="h-4 w-4 mr-1" />}
+                Create version
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

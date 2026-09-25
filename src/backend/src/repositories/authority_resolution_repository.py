@@ -36,6 +36,15 @@ class AuthorityRelationRepository(CRUDBase[AuthorityRelationDb, Dict[str, Any], 
         stmt = select(AuthorityRelationDb).where(AuthorityRelationDb.slug == slug)
         return db.execute(stmt).scalars().first()
 
+    def get_family_versions(self, db: Session, *, family_id: str) -> List[AuthorityRelationDb]:
+        """Every version in a family (grouped by ``version_family_id``), newest first."""
+        stmt = (
+            select(AuthorityRelationDb)
+            .where(AuthorityRelationDb.version_family_id == family_id)
+            .order_by(AuthorityRelationDb.created_at.desc())
+        )
+        return list(db.execute(stmt).scalars().all())
+
 
 class AuthorityAffirmationRepository(CRUDBase[AuthorityAffirmationDb, Dict[str, Any], Dict[str, Any]]):
     def __init__(self):

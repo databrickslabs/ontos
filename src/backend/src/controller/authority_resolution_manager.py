@@ -128,8 +128,9 @@ class AuthorityResolutionManager:
             "name": data["name"],
             "description": data.get("description"),
             "status": STATUS_DRAFT,
-            "version": 1,
+            "version": data.get("version") or "1.0.0",
             "version_family_id": rel_id,
+            "base_name": data.get("name"),
             "actor_role": data.get("actor_role"),
             "actor_identity": data.get("actor_identity"),
             "actor_since": data.get("actor_since"),
@@ -185,13 +186,37 @@ class AuthorityResolutionManager:
     def get_relation_by_slug(self, db: Session, slug: str) -> Optional[AuthorityRelationDb]:
         return authority_relation_repo.get_by_slug(db, slug)
 
-    def list_relations(self, db: Session, domain_ids: Optional[List[str]] = None) -> List[AuthorityRelationDb]:
+    def list_relations(
+        self,
+        db: Session,
+        domain_ids: Optional[List[str]] = None,
+        include_history: bool = False,
+    ) -> List[AuthorityRelationDb]:
+        """List Authority Relations. By default one representative row per version
+        family (latest/best-ranked); ``include_history`` returns every version.
+
+        Each returned row carries a transient ``_version_count`` attribute (the
+        number of versions in its family) so ``to_read_dict`` can surface the
+        version-count badge without a per-row query.
+        """
         if domain_ids:
             ids = entity_domain_repo.find_entity_ids_by_domains(
                 db, domain_ids=domain_ids, entity_type=ENTITY_TYPE
             )
-            return authority_relation_repo.list_by_ids(db, ids)
-        return authority_relation_repo.list_all(db)
+            rows = authority_relation_repo.list_by_ids(db, ids)
+        else:
+            rows = authority_relation_repo.list_all(db)
+
+        from src.common.version_visibility import collapse_by_family, family_counts
+        counts = family_counts(rows)
+        if not include_history:
+            # Governance authoring surface: everyone sees every family member,
+            # so collapse with elevated (admin) semantics — draft-first, newest.
+            rows = collapse_by_family(rows, elevated_family_ids=set(), is_admin=True)
+        for r in rows:
+            fid = getattr(r, "version_family_id", None) or r.id
+            setattr(r, "_version_count", counts.get(fid, 1))
+        return rows
 
     def update_relation(self, db: Session, relation_id: str, payload, current_user: Optional[str] = None) -> Optional[AuthorityRelationDb]:
         relation = authority_relation_repo.get(db, relation_id)
@@ -210,8 +235,12 @@ class AuthorityResolutionManager:
 
         update_data = {k: v for k, v in data.items() if k in _MODEL_COLUMNS}
 
-        # A material change bumps the version and re-opens the review gate.
-        update_data["version"] = (relation.version or 1) + 1
+        # Versioning parity with Data Products / Contracts: edits mutate the
+        # current row in place (no auto-bump). A new immutable snapshot is
+        # created only via the explicit "New Version" action (create_new_version).
+        # Keep base_name in step with a renamed AR so the family label stays right.
+        if "name" in update_data:
+            update_data.setdefault("base_name", update_data["name"])
         relation = authority_relation_repo.update(db, db_obj=relation, obj_in=update_data)
 
         if domain_ids is not None:
@@ -242,6 +271,148 @@ class AuthorityResolutionManager:
         entity_domain_repo.remove_all_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation_id)
         authority_relation_repo.remove(db, id=relation_id)
         return True
+
+    # --------------------------------------------------------- versioning
+
+    # Definition fields carried onto a new version snapshot (everything that
+    # describes the *rule*, not its measured/observed state). DNAco results,
+    # usage counters, maturity cache and lifecycle status are deliberately
+    # reset so the new draft starts unmeasured.
+    _VERSION_COPY_FIELDS = (
+        "actor_role", "actor_identity", "actor_since", "action",
+        "object_type", "object_id", "object_resolves_to",
+        "domain_context", "justification_chain", "decision_logic",
+        "evidence_binding", "evidence_sources",
+        "dna_max_threshold", "dna_scoring_config", "schedule_cron",
+    )
+
+    def get_relation_versions(self, db: Session, relation_id: str) -> List[AuthorityRelationDb]:
+        """Every version in the AR's family, newest first (mirrors get_product_versions)."""
+        source = authority_relation_repo.get(db, relation_id)
+        if not source:
+            raise ValueError("Authority Relation not found")
+        family_id = getattr(source, "version_family_id", None) or source.id
+        return authority_relation_repo.get_family_versions(db, family_id=family_id)
+
+    def create_new_version(
+        self,
+        db: Session,
+        relation_id: str,
+        new_version: str,
+        change_summary: Optional[str] = None,
+        current_user: Optional[str] = None,
+    ) -> Optional[AuthorityRelationDb]:
+        """Snapshot an AR into a new immutable version (DP/DC parity).
+
+        Deep-clones the definition into a fresh row in the same version family:
+        the ARF tuple + evidence + config fields, plus the criteria, affirmations,
+        domains and tags. DNAco results, usage counters and maturity cache are
+        reset and the new version starts as a ``draft``. The source row is left
+        untouched. Returns ``None`` if the source AR does not exist.
+        """
+        source = authority_relation_repo.get(db, relation_id)
+        if not source:
+            return None
+
+        new_id = str(uuid.uuid4())
+        family_id = getattr(source, "version_family_id", None) or source.id
+        base_name = getattr(source, "base_name", None) or source.name
+
+        fields = {
+            "id": new_id,
+            "slug": None,  # slug is unique; a new version gets its own (author can set later)
+            "name": source.name,
+            "description": source.description,
+            "status": STATUS_DRAFT,
+            "version": new_version,
+            "version_family_id": family_id,
+            "parent_relation_id": source.id,
+            "base_name": base_name,
+            "change_summary": change_summary,
+            "created_by": current_user,
+        }
+        for f in self._VERSION_COPY_FIELDS:
+            fields[f] = getattr(source, f, None)
+
+        relation = authority_relation_repo.create(
+            db, obj_in={k: v for k, v in fields.items() if k in _MODEL_COLUMNS}
+        )
+
+        # Carry the source's domain assignments onto the new version.
+        domains = entity_domain_repo.get_domains_for_entity(
+            db, entity_type=ENTITY_TYPE, entity_id=source.id
+        )
+        if domains:
+            domain_ids = [getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None) for d in domains]
+            domain_ids = [d for d in domain_ids if d]
+            primary = next(
+                (getattr(d, "id", None) or (d.get("id") if isinstance(d, dict) else None)
+                 for d in domains
+                 if getattr(d, "is_primary", None) or (isinstance(d, dict) and d.get("is_primary"))),
+                None,
+            )
+            if domain_ids:
+                entity_domain_repo.set_domains_for_entity(
+                    db, entity_type=ENTITY_TYPE, entity_id=new_id,
+                    domain_ids=domain_ids, primary_domain_id=primary, assigned_by=current_user,
+                )
+
+        # Clone decision criteria (reuse the reusable Compliance Checks; only the
+        # ARF facet link is per-version).
+        src_criteria = authority_criterion_repo.list_for_relation(db, relation_id=source.id)
+        for c in src_criteria:
+            authority_criterion_repo.create(db, obj_in={
+                "id": str(uuid.uuid4()),
+                "relation_id": new_id,
+                "compliance_policy_id": c.compliance_policy_id,
+                "direction": c.direction,
+                "weight": c.weight,
+                "dimension": getattr(c, "dimension", "people"),
+                "display_order": c.display_order,
+                "enabled": c.enabled,
+            })
+
+        # Clone affirmation participants, resetting their affirmed/review state.
+        src_affs = authority_affirmation_repo.list_for_relation(db, relation_id=source.id)
+        for a in src_affs:
+            is_reviewer = getattr(a, "is_reviewer", False)
+            authority_affirmation_repo.create(db, obj_in={
+                "id": str(uuid.uuid4()),
+                "relation_id": new_id,
+                "role": a.role,
+                "business_role_id": getattr(a, "business_role_id", None),
+                "role_category": getattr(a, "role_category", None),
+                "principal": a.principal,
+                "principal_type": a.principal_type,
+                "is_approver": getattr(a, "is_approver", True),
+                "is_reviewer": is_reviewer,
+                "required": a.required,
+                "affirmed": False,
+                "review_status": "pending" if is_reviewer else "na",
+                "sort_order": a.sort_order,
+            })
+
+        # Clone polymorphic tags (best-effort).
+        try:
+            from src.controller.tags_manager import TagsManager
+            tm = TagsManager()
+            assigned = tm.list_assigned_tags(db, entity_id=source.id, entity_type=ENTITY_TYPE)
+            tags_payload = [
+                {"fully_qualified_name": getattr(t, "fully_qualified_name", None),
+                 "assigned_value": getattr(t, "assigned_value", None)}
+                for t in assigned
+                if getattr(t, "fully_qualified_name", None)
+            ]
+            if tags_payload:
+                self._set_tags(db, new_id, tags_payload, current_user)
+        except Exception as e:  # pragma: no cover - tag clone is best-effort
+            logger.warning(f"Could not clone tags onto new AR version {new_id}: {e}")
+
+        self._log_timeline(
+            db, new_id,
+            f"Version {new_version} created from {source.version} (family {family_id}).",
+        )
+        return relation
 
     # ------------------------------------------------------- affirmations
 
@@ -640,10 +811,11 @@ class AuthorityResolutionManager:
             result = authority_dna.compute_dnaco(self._load_criteria(relation), rows)
 
             # Combine the evidence-based dimensions with the definition-based
-            # 'structural' dimension; overall = additive, capped (min(1.0, Σ)).
+            # 'structural' dimension; overall = probabilistic union (noisy-OR),
+            # which scales into [0,1] instead of merely clipping a sum.
             dimensions = dict(result.dimensions)
             dimensions["structural"] = self._structural_score(relation)
-            overall = round(min(1.0, sum(dimensions.values())), 4)
+            overall = authority_dna.combine_dimensions(dimensions.values())
 
             # Persist per-row divergences as evidence AR Decisions (the DNAco sample).
             for rd in result.rows:
@@ -942,6 +1114,12 @@ class AuthorityResolutionManager:
             "maturity_evaluated_at": relation.maturity_evaluated_at,
             "version": relation.version,
             "version_family_id": relation.version_family_id,
+            "parent_relation_id": getattr(relation, "parent_relation_id", None),
+            "base_name": getattr(relation, "base_name", None),
+            "change_summary": getattr(relation, "change_summary", None),
+            "draft_owner_id": getattr(relation, "draft_owner_id", None),
+            # Transient family size set by list_relations; absent on single reads.
+            "version_count": getattr(relation, "_version_count", None),
             "actor_role": relation.actor_role,
             "actor_identity": relation.actor_identity,
             "actor_since": relation.actor_since,

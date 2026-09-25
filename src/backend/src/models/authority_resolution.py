@@ -123,6 +123,12 @@ class AuthorityRelationUpdate(BaseModel):
     tags: Optional[List[AssignedTagCreate]] = None
 
 
+class NewVersionRequest(BaseModel):
+    """Request to snapshot an AR into a new version (mirrors Data Products)."""
+    new_version: str = Field(..., description="The new semantic version string (e.g. 1.1.0, 2.0.0)")
+    change_summary: Optional[str] = None
+
+
 class StatusChangeRequest(BaseModel):
     status: str                                 # active|draft|needs_review|retired
 
@@ -147,6 +153,6 @@ class ResolveResponse(BaseModel):
     reason: str
     relation_id: Optional[str] = None
     relation_slug: Optional[str] = None
-    relation_version: Optional[int] = None
+    relation_version: Optional[str] = None
     dna_magnitude: Optional[float] = None
     dna_direction: Optional[str] = None

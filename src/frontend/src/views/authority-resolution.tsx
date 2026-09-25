@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DataTable } from '@/components/ui/data-table';
 import { ListViewSkeleton } from '@/components/common/list-view-skeleton';
+import { VersionCountBadge } from '@/components/common/version-count-badge';
 import { Plus, AlertCircle, ShieldCheck, Eye, Pencil, Trash2, ChevronDown } from 'lucide-react';
 import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -116,6 +117,20 @@ export default function AuthorityResolution() {
       cell: ({ row }) => (
         <Badge variant="outline" className={getStatusColor(row.original.status)}>{row.original.status}</Badge>
       ),
+    },
+    {
+      accessorKey: 'version',
+      header: 'Version',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm">v{row.original.version}</span>
+          <VersionCountBadge
+            count={row.original.version_count ?? undefined}
+            onClick={() => navigate(`${pathname}/${row.original.id}`)}
+          />
+        </div>
+      ),
+      enableSorting: false,
     },
     {
       accessorKey: 'dna_magnitude',

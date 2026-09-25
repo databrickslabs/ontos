@@ -116,7 +116,7 @@ def test_no_criteria_scores_zero():
     assert result.divergent_count == 0
 
 
-def test_dimensions_are_additive():
+def test_dimensions_combine_by_probabilistic_union():
     people = _crit("ASSERT obj.actor_identity IN ['ok']", dimension="people", name="ppl")
     policy = _crit("ASSERT obj.value <= 10", dimension="policy", name="pol")
     rows = [
@@ -126,7 +126,17 @@ def test_dimensions_are_additive():
     r = compute_dnaco([people, policy], rows)
     assert r.dimensions["people"] == 0.5      # 1 of 2 rows
     assert r.dimensions["policy"] == 0.5      # 1 of 2 rows
-    assert r.magnitude == 1.0                 # additive 0.5 + 0.5, capped at 1.0
+    # Noisy-OR: 1 - (1-0.5)(1-0.5) = 0.75 (scales into [0,1], not a capped sum).
+    assert r.magnitude == 0.75
+
+
+def test_combine_dimensions_properties():
+    from src.common.authority_resolution_dna import combine_dimensions
+    assert combine_dimensions([]) == 0.0
+    assert combine_dimensions([0.0, 0.0]) == 0.0
+    assert combine_dimensions([1.0, 0.3]) == 1.0        # a maxed dimension forces 1.0 (no dilution)
+    assert combine_dimensions([0.5, 0.0]) == 0.5        # clean dimension leaves it unchanged
+    assert combine_dimensions([0.225, 0.375, 0.0]) == 0.5156  # worked example
 
 
 # ---------------------------------------------------- deterministic gate
@@ -263,10 +273,11 @@ def test_configurable_criteria_gate_and_divergence(db_session):
     db_session.commit()
     assert run.divergent_count == 1
     assert run.direction == DIR_ACTUAL_EXCEEDS
-    # people dimension = 1.5 / 2 rows; structural also scored; overall = additive, capped.
+    # people dimension = 1.5 / 2 rows; structural also scored; overall = noisy-OR.
     assert run.per_dimension_scores["people"] == 0.75
     assert "structural" in run.per_dimension_scores
-    assert run.magnitude == round(min(1.0, sum(run.per_dimension_scores.values())), 4)
+    from src.common.authority_resolution_dna import combine_dimensions
+    assert run.magnitude == combine_dimensions(run.per_dimension_scores.values())
 
 
 def test_structural_dimension_scores_incompleteness(db_session):
@@ -289,6 +300,100 @@ def test_structural_dimension_scores_incompleteness(db_session):
     assert run.per_dimension_scores["structural"] == 0.2   # only justification_chain missing
     assert run.per_dimension_scores["people"] == 0.0       # no divergent rows
     assert run.magnitude == 0.2
+
+
+def test_update_does_not_bump_version(db_session):
+    """Edits mutate the current row in place — no auto version bump (DP/DC parity)."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    from src.models.authority_resolution import AuthorityRelationCreate, AuthorityRelationUpdate
+
+    mgr = AuthorityResolutionManager()
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(name="Editable AR"))
+    db_session.commit()
+    assert rel.version == "1.0.0"
+    assert rel.version_family_id == rel.id
+    assert rel.base_name == "Editable AR"
+
+    updated = mgr.update_relation(db_session, rel.id, AuthorityRelationUpdate(description="tweaked"))
+    db_session.commit()
+    assert updated.version == "1.0.0"          # unchanged
+    assert updated.description == "tweaked"
+
+
+def test_create_new_version_snapshots_definition(db_session):
+    """New Version deep-clones the definition (criteria + participants + evidence)
+    into a fresh draft row in the same family, resetting measured/observed state."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    from src.models.authority_resolution import (
+        AuthorityRelationCreate, CriterionInput, AffirmationInput, EvidenceSource,
+    )
+    mgr = AuthorityResolutionManager()
+    src = mgr.create_relation(db_session, AuthorityRelationCreate(
+        name="Versioned AR", object_id="dp-1",
+        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        criteria=[CriterionInput(name="Authorized", rule="obj.actor_identity IN ['rsm-east']",
+                                 direction=DIR_ACTUAL_EXCEEDS, weight=1.5, dimension="people")],
+        affirmations=[AffirmationInput(role="Governance Lead", principal="g@x.com",
+                                       is_approver=True, is_reviewer=True)],
+    ))
+    db_session.commit()
+    # Simulate the source having been measured/used.
+    src.dna_magnitude = 0.6
+    src.usage_count = 5
+    db_session.commit()
+
+    v2 = mgr.create_new_version(db_session, src.id, "2.0.0", change_summary="raised the cap",
+                                current_user="lars@x.com")
+    db_session.commit()
+
+    assert v2 is not None and v2.id != src.id
+    assert v2.version == "2.0.0"
+    assert v2.status == "draft"
+    assert v2.version_family_id == src.version_family_id      # same family
+    assert v2.parent_relation_id == src.id                    # lineage edge
+    assert v2.change_summary == "raised the cap"
+    assert v2.base_name == "Versioned AR"
+    # Definition copied over.
+    assert v2.object_id == "dp-1"
+    assert v2.evidence_sources == src.evidence_sources
+    # Measured/observed state reset on the new draft.
+    assert v2.dna_magnitude is None
+    assert v2.usage_count == 0
+
+    # Criteria + affirmations were cloned onto the new row.
+    v2_crit = mgr._load_criteria(v2)
+    assert len(v2_crit) == 1
+    v2_dict = mgr.to_read_dict(db_session, v2)
+    assert len(v2_dict["affirmations"]) == 1
+    assert v2_dict["affirmations"][0]["affirmed"] is False    # reset
+
+    # Both versions live in the family, newest first.
+    fam = mgr.get_relation_versions(db_session, src.id)
+    assert {r.version for r in fam} == {"1.0.0", "2.0.0"}
+    assert fam[0].id == v2.id                                  # newest first
+
+
+def test_list_collapses_by_family(db_session):
+    """The default list returns one representative per family with a version_count;
+    include_history returns every version."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    from src.models.authority_resolution import AuthorityRelationCreate
+
+    mgr = AuthorityResolutionManager()
+    a = mgr.create_relation(db_session, AuthorityRelationCreate(name="Family A"))
+    mgr.create_relation(db_session, AuthorityRelationCreate(name="Family B"))
+    db_session.commit()
+    mgr.create_new_version(db_session, a.id, "2.0.0")
+    db_session.commit()
+
+    collapsed = mgr.list_relations(db_session)
+    fam_a = [r for r in collapsed if (r.version_family_id or r.id) == a.id]
+    assert len(fam_a) == 1                                     # A collapsed to one rep
+    assert getattr(fam_a[0], "_version_count", None) == 2      # count surfaced
+
+    full = mgr.list_relations(db_session, include_history=True)
+    fam_a_full = [r for r in full if (r.version_family_id or r.id) == a.id]
+    assert len(fam_a_full) == 2                                # both A versions
 
 
 def test_authority_maturity_feature_integration(db_session):

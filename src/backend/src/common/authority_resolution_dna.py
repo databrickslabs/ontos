@@ -20,7 +20,7 @@ changes.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from src.common.compliance_dsl import evaluate_rule_on_object
 
@@ -75,6 +75,30 @@ class DnaResult:
     divergent_count: int
     dimensions: Dict[str, float] = field(default_factory=dict)  # per-dimension score 0-1 (evidence-based)
     rows: List[RowDivergence] = field(default_factory=list)
+
+
+def combine_dimensions(scores: Iterable[float]) -> float:
+    """Combine per-dimension divergence scores into one overall DNAco in [0, 1].
+
+    Uses the **probabilistic union** (noisy-OR): ``1 - Π(1 - d_i)``. Each
+    dimension is an independent chance that authority diverges from documented
+    practice; the overall is the probability that it diverges on *at least one*
+    dimension. Properties that a plain capped sum lacks:
+
+    * Always in ``[0, 1]`` with no arbitrary clipping — it *scales* rather than
+      truncates, so resolution isn't lost once the dimensions sum past 1.0.
+    * Monotonic: adding a dimension (or raising one) never lowers the overall.
+    * No dilution: a single dimension at ``1.0`` forces the overall to ``1.0``
+      (unlike an average, where clean dimensions would drag a real divergence
+      down). A clean dimension (``0.0``) leaves the overall unchanged.
+
+    Example: ``people=0.225, policy=0.375, structural=0.0``
+    → ``1 - (0.775 · 0.625 · 1.0) = 0.5156``.
+    """
+    product = 1.0
+    for s in scores:
+        product *= (1.0 - max(0.0, min(1.0, s)))
+    return round(1.0 - product, 4)
 
 
 # --------------------------------------------------------------------------- #
@@ -184,9 +208,10 @@ def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaR
     Criteria are grouped by their ``dimension`` (e.g. ``people``). For each
     dimension, its score is the weighted fraction of rows that failed a criterion
     of that dimension (``0.0`` best, capped at ``1.0``). The evidence-side
-    ``magnitude`` is the **additive** combine ``min(1.0, Σ dimension_scores)``
-    (the manager adds non-evidence dimensions like ``structural`` and recomputes
-    the overall). ``direction`` is the sign of the aggregate authority-level delta.
+    ``magnitude`` is the **probabilistic-union** combine
+    (:func:`combine_dimensions`, ``1 - Π(1 - d_i)``) — the manager adds
+    non-evidence dimensions like ``structural`` and recomputes the overall the
+    same way. ``direction`` is the sign of the aggregate authority-level delta.
     """
     evaluated = [evaluate_row(criteria, r) for r in rows]
     sampled = len(evaluated)
@@ -201,7 +226,7 @@ def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaR
         d: round(min(1.0, sum(rd.dimension_weights.get(d, 0.0) for rd in divergent) / sampled), 4)
         for d in dims
     }
-    magnitude = round(min(1.0, sum(dimensions.values())), 4)
+    magnitude = combine_dimensions(dimensions.values())
 
     signed_total = sum(rd.signed for rd in divergent)
     if not divergent:

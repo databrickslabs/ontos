@@ -115,8 +115,13 @@ export interface AuthorityRelation {
   status: string;                 // draft | active | needs_review | retired
   maturity_level_order?: number | null;   // cached achieved level (shared Maturity feature)
   maturity_evaluated_at?: string | null;
-  version: number;
+  version: string;                // semantic version string (e.g. 1.0.0)
   version_family_id?: string | null;
+  parent_relation_id?: string | null;
+  base_name?: string | null;
+  change_summary?: string | null;
+  draft_owner_id?: string | null;
+  version_count?: number | null;  // family size (list view only); drives the count badge
   actor_role?: string | null;
   actor_identity?: string | null;
   actor_since?: string | null;
@@ -194,7 +199,7 @@ export interface AuthorityDecision {
   actor_identity?: string | null;
   action?: string | null;
   object_id?: string | null;
-  relation_version?: number | null;
+  relation_version?: string | null;
   divergence_magnitude?: number | null;
   created_at?: string | null;
 }
@@ -234,7 +239,7 @@ export interface ResolveResponse {
   reason: string;
   relation_id?: string | null;
   relation_slug?: string | null;
-  relation_version?: number | null;
+  relation_version?: string | null;
   dna_magnitude?: number | null;
   dna_direction?: string | null;
 }

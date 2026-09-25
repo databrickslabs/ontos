@@ -10,6 +10,7 @@ from src.controller.authority_resolution_manager import AuthorityResolutionManag
 from src.models.authority_resolution import (
     AuthorityRelationCreate,
     AuthorityRelationUpdate,
+    NewVersionRequest,
     StatusChangeRequest,
     AffirmRequest,
     ResolveRequest,
@@ -41,10 +42,11 @@ def _resolve_req_dict(req: ResolveRequest) -> dict:
 async def list_relations(
     db: DBSessionDep,
     domain_ids: Optional[str] = Query(None, description="CSV of domain ids (any-of filter)"),
+    include_history: bool = Query(False, description="Return every version instead of one row per family"),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
     ids = [d for d in domain_ids.split(",") if d] if domain_ids else None
-    relations = manager.list_relations(db, domain_ids=ids)
+    relations = manager.list_relations(db, domain_ids=ids, include_history=include_history)
     return [manager.to_read_dict(db, r) for r in relations]
 
 
@@ -96,6 +98,55 @@ async def delete_relation(
     if not manager.delete_relation(db, relation_id):
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return {"deleted": True, "id": relation_id}
+
+
+@router.get("/authority/relations/{relation_id}/versions")
+async def get_relation_versions(
+    relation_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Every version of an AR's family, newest first — the tight row shape the
+    shared VersionSelector / VersionNavigator consumes (mirrors Data Products)."""
+    try:
+        rows = manager.get_relation_versions(db, relation_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Authority Relation not found")
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "version": r.version,
+            "status": r.status,
+            "versionFamilyId": r.version_family_id,
+            "parentRelationId": getattr(r, "parent_relation_id", None),
+            "baseName": getattr(r, "base_name", None),
+            "changeSummary": getattr(r, "change_summary", None),
+            "draftOwnerId": getattr(r, "draft_owner_id", None),
+            "createdAt": r.created_at.isoformat() if r.created_at else None,
+            "updatedAt": r.updated_at.isoformat() if r.updated_at else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/authority/relations/{relation_id}/versions", status_code=201)
+async def create_relation_version(
+    relation_id: str,
+    db: DBSessionDep,
+    current_user: AuditCurrentUserDep,
+    payload: NewVersionRequest = Body(...),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
+):
+    """Snapshot an AR into a new immutable version (deep-clones the definition)."""
+    username = current_user.username if current_user else None
+    relation = manager.create_new_version(
+        db, relation_id, payload.new_version,
+        change_summary=payload.change_summary, current_user=username,
+    )
+    if relation is None:
+        raise HTTPException(status_code=404, detail="Authority Relation not found")
+    return manager.to_read_dict(db, relation)
 
 
 @router.post("/authority/relations/{relation_id}/compute-dnaco")

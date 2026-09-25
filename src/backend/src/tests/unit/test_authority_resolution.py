@@ -373,6 +373,34 @@ def test_create_new_version_snapshots_definition(db_session):
     assert fam[0].id == v2.id                                  # newest first
 
 
+def test_slug_resolves_to_family_active_version(db_session):
+    """A slug is the family-level @id: it resolves to the family's active version
+    (even though the slug physically lives on the original row), while a UUID pins
+    the exact version."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager, STATUS_ACTIVE
+    from src.models.authority_resolution import AuthorityRelationCreate
+
+    mgr = AuthorityResolutionManager()
+    v1 = mgr.create_relation(db_session, AuthorityRelationCreate(name="Promo rule", slug="ar-promo"))
+    db_session.commit()
+    v2 = mgr.create_new_version(db_session, v1.id, "2.0.0")
+    db_session.commit()
+    # v2 is a fresh draft with no slug of its own; activate it.
+    v2.status = STATUS_ACTIVE
+    db_session.commit()
+
+    # By slug -> the family's active version (v2), not the row that holds the slug (v1).
+    assert v2.slug is None
+    resolved = mgr.resolve_relation_ref(db_session, "ar-promo")
+    assert resolved is not None and resolved.id == v2.id
+    # By UUID -> the exact version.
+    assert mgr.resolve_relation_ref(db_session, v1.id).id == v1.id
+    # No active version -> falls back to the anchor row that carries the slug.
+    v2.status = "draft"
+    db_session.commit()
+    assert mgr.resolve_relation_ref(db_session, "ar-promo").id == v1.id
+
+
 def test_list_collapses_by_family(db_session):
     """The default list returns one representative per family with a version_count;
     include_history returns every version."""

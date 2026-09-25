@@ -186,6 +186,40 @@ class AuthorityResolutionManager:
     def get_relation_by_slug(self, db: Session, slug: str) -> Optional[AuthorityRelationDb]:
         return authority_relation_repo.get_by_slug(db, slug)
 
+    def _family_active_version(
+        self, db: Session, anchor: AuthorityRelationDb
+    ) -> Optional[AuthorityRelationDb]:
+        """The newest ``active`` version in the anchor's version family, or None."""
+        family_id = getattr(anchor, "version_family_id", None) or anchor.id
+        versions = authority_relation_repo.get_family_versions(db, family_id=family_id)
+        # get_family_versions is created_at desc, so the first active is the newest.
+        for v in versions:
+            if v.status == STATUS_ACTIVE:
+                return v
+        return None
+
+    def resolve_relation_ref(
+        self, db: Session, ref: str, *, prefer_active: bool = True
+    ) -> Optional[AuthorityRelationDb]:
+        """Resolve an AR reference the way agents address it.
+
+        * A **UUID** pins an exact version (agents that want a specific revision).
+        * A **slug** is the stable, family-level ``@id``: it resolves to the
+          family's newest **active** version (``prefer_active``), so an agent
+          calling ``ar-promo-emea-north`` always hits the current active rule
+          regardless of which version row physically carries the slug. Falls
+          back to the anchor row when the family has no active version.
+        """
+        by_id = authority_relation_repo.get(db, ref)
+        if by_id is not None:
+            return by_id
+        anchor = authority_relation_repo.get_by_slug(db, ref)
+        if anchor is None:
+            return None
+        if prefer_active:
+            return self._family_active_version(db, anchor) or anchor
+        return anchor
+
     def list_relations(
         self,
         db: Session,
@@ -1037,7 +1071,9 @@ class AuthorityResolutionManager:
         usage counters. Returns ``no_authority`` when the AR does not exist, or
         (in production mode) is not active.
         """
-        relation = authority_relation_repo.get(db, ar_ref) or authority_relation_repo.get_by_slug(db, ar_ref)
+        # By slug this resolves to the family's active version (the stable @id
+        # agents call); by UUID it pins the exact version.
+        relation = self.resolve_relation_ref(db, ar_ref)
         if not relation or (require_active and relation.status != STATUS_ACTIVE):
             reason = (
                 "no Authority Relation matches the supplied id" if not relation

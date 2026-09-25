@@ -68,7 +68,9 @@ async def get_relation(
     db: DBSessionDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
-    relation = manager.get_relation(db, relation_id) or manager.get_relation_by_slug(db, relation_id)
+    # UUID pins the exact version (version navigation uses ids); a slug resolves
+    # to the family's active version (the stable agent-facing @id).
+    relation = manager.resolve_relation_ref(db, relation_id)
     if not relation:
         raise HTTPException(status_code=404, detail="Authority Relation not found")
     return manager.to_read_dict(db, relation)

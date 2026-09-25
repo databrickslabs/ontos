@@ -69,7 +69,9 @@ class GetAuthorityRelationTool(BaseTool):
 
     async def execute(self, ctx: ToolContext, **kwargs: Any) -> ToolResult:
         ar_id = kwargs.get("ar_id")
-        relation = _manager.get_relation(ctx.db, ar_id) or _manager.get_relation_by_slug(ctx.db, ar_id)
+        # By slug this returns the family's active version (the stable @id);
+        # by UUID it returns that exact version.
+        relation = _manager.resolve_relation_ref(ctx.db, ar_id)
         if not relation:
             return ToolResult(success=False, error=f"Authority Relation not found: {ar_id}")
         return ToolResult(success=True, data=_manager.to_read_dict(ctx.db, relation))

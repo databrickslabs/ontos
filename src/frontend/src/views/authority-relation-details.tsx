@@ -1,0 +1,735 @@
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useApi } from '@/hooks/use-api';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ArrowLeft, Play, CheckCircle2, FlaskConical, Trash2, Loader2, AlertCircle, Pencil, KeyRound, Workflow, ExternalLink, History, Database, GitBranch } from 'lucide-react';
+import { formatDna } from './authority-resolution';
+import { RelativeDate } from '@/components/common/relative-date';
+import CreateAuthorityRelationDialog from '@/components/authority-resolution/create-authority-relation-dialog';
+import RequestAuthorityActionDialog from '@/components/authority-resolution/request-authority-action-dialog';
+import AuthorityRelationReview from '@/components/authority-resolution/authority-relation-review';
+import { CommentSidebar } from '@/components/comments';
+import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import { MaturityInline } from '@/components/common/maturity-inline';
+import VersionNavigator from '@/components/common/version-navigator';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import type { AuthorityRelation, ResolveResponse, AuthorityReviewTracking, AuthorityDnaRun, AuthorityDecision } from '@/types/authority-resolution';
+
+/** Human-readable label for a stored 5-field recompute cron. */
+function cronLabel(cron?: string | null): string {
+  if (!cron || !cron.trim()) return 'Manual only';
+  const p = cron.trim().split(/\s+/);
+  if (p.length !== 5) return `Custom (${cron})`;
+  const [min, hr, dom, mon, dow] = p;
+  const t = `${String(parseInt(hr, 10) || 0).padStart(2, '0')}:${String(parseInt(min, 10) || 0).padStart(2, '0')}`;
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  if (mon === '*' && hr === '*' && dom === '*' && dow === '*') return `Hourly (at :${String(parseInt(min, 10) || 0).padStart(2, '0')})`;
+  if (mon === '*' && dom === '*' && dow === '*') return `Daily at ${t}`;
+  if (mon === '*' && dom === '*' && dow !== '*') return `Weekly on ${days[parseInt(dow, 10)] || dow} at ${t}`;
+  if (mon === '*' && dom === '1') return `Monthly (1st) at ${t}`;
+  return `Custom (${cron})`;
+}
+
+function reviewStatusVariant(s?: string): 'default' | 'secondary' | 'outline' {
+  switch ((s || 'na').toLowerCase()) {
+    case 'completed': return 'default';
+    case 'in_review': return 'secondary';
+    default: return 'outline';
+  }
+}
+
+const FEATURE_ID = 'authority-resolution';
+
+function Tile({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="text-xs uppercase text-muted-foreground">{label}</div>
+        <div className="text-2xl font-bold mt-1">{value}</div>
+        {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Divergence colour bands: green (≤0.3), amber (≤0.6), red. */
+function dnaScoreColor(v: number): string {
+  return v <= 0.3 ? '#16a34a' : v <= 0.6 ? '#d97706' : '#dc2626';
+}
+
+function DnaGauge({ label, value }: { label: string; value: number }) {
+  const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="relative flex items-center justify-center shrink-0"
+        style={{
+          width: 40, height: 40, borderRadius: '50%',
+          background: `conic-gradient(${dnaScoreColor(value)} 0% ${pct}%, hsl(var(--muted)) ${pct}% 100%)`,
+        }}
+      >
+        <div className="absolute inset-[5px] rounded-full bg-background flex items-center justify-center text-[10px] font-semibold">
+          {value.toFixed(2)}
+        </div>
+      </div>
+      <div className="text-xs capitalize">{label}</div>
+    </div>
+  );
+}
+
+/** DNA-Coefficient tile with a per-dimension gauge breakdown on hover. */
+function DnaTile({ relation }: { relation: AuthorityRelation }) {
+  const dims = relation.dna_dimensions || null;
+  const value = formatDna(relation.dna_magnitude, relation.dna_direction);
+  if (!dims || Object.keys(dims).length === 0) {
+    return <Tile label="DNA-Coefficient" value={value} hint="0.0 is best" />;
+  }
+  return (
+    <HoverCard openDelay={150}>
+      <HoverCardTrigger asChild>
+        <div className="cursor-help">
+          <Tile label="DNA-Coefficient" value={value} hint="0.0 is best — hover for dimensions" />
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-72" align="start">
+        <div className="text-xs font-semibold mb-2">DNAco dimensions</div>
+        <div className="space-y-2">
+          {Object.entries(dims).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => (
+            <DnaGauge key={k} label={k} value={Number(v)} />
+          ))}
+        </div>
+        <div className="text-[11px] text-muted-foreground mt-2">
+          Overall = 1 − ∏(1 − dₙ) = {(relation.dna_magnitude ?? 0).toFixed(2)}
+          <span className="block opacity-80">probability of divergence on ≥1 dimension</span>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+function JsonBlock({ data }: { data: any }) {
+  if (data === null || data === undefined) return <span className="text-muted-foreground">—</span>;
+  return (
+    <pre className="text-xs bg-muted rounded p-3 overflow-x-auto">{JSON.stringify(data, null, 2)}</pre>
+  );
+}
+
+export default function AuthorityRelationDetails() {
+  const { relationId } = useParams<{ relationId: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { get, post, delete: del } = useApi();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const canWrite = !permissionsLoading && hasPermission(FEATURE_ID, FeatureAccessLevel.READ_WRITE);
+
+  const [relation, setRelation] = useState<AuthorityRelation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [testOpen, setTestOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [versionOpen, setVersionOpen] = useState(false);
+  const [newVersion, setNewVersion] = useState('');
+  const [changeSummary, setChangeSummary] = useState('');
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [reviewFor, setReviewFor] = useState<string | null>(null);
+  const [tracking, setTracking] = useState<AuthorityReviewTracking | null>(null);
+  const [dnaRuns, setDnaRuns] = useState<AuthorityDnaRun[]>([]);
+  const [decisions, setDecisions] = useState<AuthorityDecision[]>([]);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
+
+  const fetchRelation = useCallback(async () => {
+    if (!relationId) return;
+    setLoading(true);
+    let res = await get<AuthorityRelation>(`/api/authority/relations/${relationId}`);
+    if (res.error) {
+      // A just-created relation can 404 briefly: the request session commits after
+      // the create response is sent, so a navigation-triggered read may race it.
+      // Retry once after a short delay before surfacing the error.
+      await new Promise((r) => setTimeout(r, 600));
+      res = await get<AuthorityRelation>(`/api/authority/relations/${relationId}`);
+    }
+    if (res.error) toast({ title: 'Failed to load', description: res.error, variant: 'destructive' });
+    else setRelation(res.data);
+    setLoading(false);
+  }, [relationId, get, toast]);
+
+  const fetchTracking = useCallback(async () => {
+    if (!relationId) return;
+    const { data } = await get<AuthorityReviewTracking>(`/api/authority/relations/${relationId}/review-tracking`);
+    if (data) setTracking(data);
+  }, [relationId, get]);
+
+  const fetchHistory = useCallback(async () => {
+    if (!relationId) return;
+    const [runs, decs] = await Promise.all([
+      get<AuthorityDnaRun[]>(`/api/authority/relations/${relationId}/dna-runs`),
+      get<AuthorityDecision[]>(`/api/authority/relations/${relationId}/decisions`),
+    ]);
+    if (Array.isArray(runs.data)) setDnaRuns(runs.data);
+    if (Array.isArray(decs.data)) setDecisions(decs.data);
+  }, [relationId, get]);
+
+  useEffect(() => { fetchRelation(); fetchTracking(); fetchHistory(); }, [fetchRelation, fetchTracking, fetchHistory]);
+
+  // Breadcrumb: Home > Authority Resolution > <name>
+  useEffect(() => {
+    setStaticSegments([{ label: 'Authority Resolution', path: '/authority-resolution' }]);
+    setDynamicTitle(relation?.name ?? 'Authority Relation');
+    return () => { setStaticSegments([]); setDynamicTitle(null); };
+  }, [relation?.name, setStaticSegments, setDynamicTitle]);
+
+  const computeDna = async () => {
+    setBusy('compute');
+    const { data, error } = await post<any>(`/api/authority/relations/${relationId}/compute-dnaco`, {});
+    setBusy(null);
+    if (error) toast({ title: 'DNAco computation failed', description: error, variant: 'destructive' });
+    else {
+      toast({ title: 'DNAco computed', description: `magnitude ${data.magnitude} · ${data.divergent_count}/${data.sampled_count} divergent` });
+      fetchRelation();
+      fetchHistory();
+    }
+  };
+
+  const activate = async () => {
+    setBusy('activate');
+    const { error } = await post<any>(`/api/authority/relations/${relationId}/status`, { status: 'active' });
+    setBusy(null);
+    if (error) toast({ title: 'Cannot activate', description: error, variant: 'destructive' });
+    else { toast({ title: 'Authority Relation activated' }); fetchRelation(); }
+  };
+
+  const affirm = async (affirmationId: string) => {
+    setBusy(affirmationId);
+    const { error } = await post<any>(`/api/authority/affirmations/${affirmationId}/affirm`, {});
+    setBusy(null);
+    if (error) toast({ title: 'Affirm failed', description: error, variant: 'destructive' });
+    else fetchRelation();
+  };
+
+  const remove = async () => {
+    if (!confirm('Delete this Authority Relation?')) return;
+    const { error } = await del(`/api/authority/relations/${relationId}`);
+    if (error) toast({ title: 'Delete failed', description: error, variant: 'destructive' });
+    else { toast({ title: 'Deleted' }); navigate('/authority-resolution'); }
+  };
+
+  // Suggest the next version by bumping the minor of a semantic version.
+  const suggestNextVersion = (v?: string): string => {
+    const parts = (v || '1.0.0').split('.').map((p) => parseInt(p, 10));
+    if (parts.length < 2 || parts.some((n) => Number.isNaN(n))) return `${v || '1.0.0'}-2`;
+    parts[1] += 1;
+    for (let i = 2; i < parts.length; i++) parts[i] = 0;
+    return parts.join('.');
+  };
+
+  const openVersionDialog = () => {
+    setNewVersion(suggestNextVersion(relation?.version));
+    setChangeSummary('');
+    setVersionOpen(true);
+  };
+
+  const createVersion = async () => {
+    if (!newVersion.trim()) return;
+    setBusy('version');
+    const { data, error } = await post<AuthorityRelation>(
+      `/api/authority/relations/${relationId}/versions`,
+      { new_version: newVersion.trim(), change_summary: changeSummary.trim() || undefined },
+    );
+    setBusy(null);
+    if (error) { toast({ title: 'New version failed', description: error, variant: 'destructive' }); return; }
+    setVersionOpen(false);
+    toast({ title: 'New version created', description: `v${newVersion.trim()} (draft)` });
+    if (data?.id) navigate(`/authority-resolution/${data.id}`);
+  };
+
+  if (loading) return <div className="py-6 text-muted-foreground">Loading…</div>;
+  if (!relation) return (
+    <div className="py-6">
+      <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Authority Relation not found.</AlertDescription></Alert>
+    </div>
+  );
+
+  const participants = relation.affirmations || [];
+  const approvers = participants.filter((a) => a.is_approver !== false);
+  const reviewers = participants.filter((a) => a.is_reviewer === true);
+  const hasReviewers = reviewers.length > 0;
+
+  return (
+    <div className="py-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <Button variant="outline" size="sm" onClick={() => navigate('/authority-resolution')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+        </Button>
+        {canWrite && (
+          <div className="flex gap-2 flex-wrap justify-end">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-4 w-4 mr-1" /> Edit
+            </Button>
+            <Button variant="outline" size="sm" onClick={openVersionDialog}>
+              <GitBranch className="h-4 w-4 mr-1" /> New Version
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setRequestOpen(true)}>
+              <KeyRound className="h-4 w-4 mr-1" /> Request...
+            </Button>
+            <Button variant="outline" size="sm" onClick={computeDna} disabled={busy === 'compute'}>
+              {busy === 'compute' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
+              Compute DNAco
+            </Button>
+            {relation.status !== 'active' && (
+              <Button variant="outline" size="sm" onClick={activate} disabled={busy === 'activate'}>
+                <CheckCircle2 className="h-4 w-4 mr-1" /> Activate
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setTestOpen(true)}>
+              <FlaskConical className="h-4 w-4 mr-1" /> Test
+            </Button>
+            <CommentSidebar
+              entityType="authority_relation"
+              entityId={relationId!}
+              isOpen={commentsOpen}
+              onToggle={() => setCommentsOpen(!commentsOpen)}
+              className="h-8"
+            />
+            <Button variant="destructive" size="sm" onClick={remove}>
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h1 className="text-2xl font-bold">{relation.name}</h1>
+        <div className="flex items-center gap-3 mt-2">
+          <Badge>{relation.status}</Badge>
+          <MaturityInline entityType="AuthorityRelation" entityId={relationId!} compact />
+          {relation.slug && <span className="text-sm text-muted-foreground">{relation.slug}</span>}
+          <span className="text-sm text-muted-foreground">v{relation.version}</span>
+          <VersionNavigator
+            entityKind="authority_relation"
+            currentEntityId={relationId!}
+            currentVersion={relation.version}
+            onVersionChange={(id) => navigate(`/authority-resolution/${id}`)}
+          />
+        </div>
+        {relation.description && <p className="text-muted-foreground mt-2 max-w-2xl">{relation.description}</p>}
+        {(relation.tags || []).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(relation.tags || []).map((t, i) => (
+              <Badge key={i} variant="secondary" className="text-xs">
+                {t.fully_qualified_name}{t.assigned_value ? `: ${t.assigned_value}` : ''}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <DnaTile relation={relation} />
+        <Tile label="Usage" value={relation.usage_count ?? 0} />
+        <Tile label="Approved" value={relation.approved_count ?? 0} />
+        <Tile label="Denied" value={relation.denied_count ?? 0} />
+      </div>
+
+      {relation.status !== 'active' && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Activation requires the DNA-Coefficient to be measured and within its ceiling
+            ({relation.dna_max_threshold}), and every required affirmation completed
+            {relation.fully_affirmed ? '' : ' (not yet fully affirmed)'}.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Approvers (N-functional gate)</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {approvers.length === 0 && <div className="text-sm text-muted-foreground">No approvers defined.</div>}
+          {approvers.map((a) => (
+            <div key={a.id} className="flex items-center justify-between border-b py-2 last:border-0">
+              <div className="text-sm">
+                <Badge variant="outline" className="mr-2">{a.role}</Badge>
+                {a.principal} <span className="text-muted-foreground">({a.principal_type})</span>
+                {a.is_reviewer && <Badge variant="secondary" className="ml-2">also reviewer</Badge>}
+              </div>
+              <div className="flex items-center gap-2">
+                {a.affirmed ? (
+                  <Badge><CheckCircle2 className="h-3 w-3 mr-1" /> affirmed{a.affirmed_by ? ` · ${a.affirmed_by}` : ''}</Badge>
+                ) : canWrite ? (
+                  <Button size="sm" variant="outline" onClick={() => affirm(a.id)} disabled={busy === a.id}>Affirm</Button>
+                ) : (
+                  <Badge variant="secondary">pending</Badge>
+                )}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {hasReviewers && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Reviewers (interviewed to confirm the relation reflects reality)</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {reviewers.map((a) => (
+              <div key={a.id} className="flex items-center justify-between border-b py-2 last:border-0">
+                <div className="text-sm">
+                  <Badge variant="outline" className="mr-2">{a.role}</Badge>
+                  {a.principal} <span className="text-muted-foreground">({a.principal_type})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={reviewStatusVariant(a.review_status)}>
+                    {a.review_status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                    {a.review_status || 'na'}
+                  </Badge>
+                  {canWrite && (
+                    <Button size="sm" variant="outline" onClick={() => setReviewFor(a.principal)}>
+                      {a.review_status === 'completed' ? 'View' : 'Review'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {tracking && (tracking.workflows.length > 0 || tracking.reviews.some((r) => r.review_request_id)) && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Review process</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {tracking.workflows.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs uppercase text-muted-foreground">Workflows</div>
+                {tracking.workflows.map((w) => (
+                  <div key={w.execution_id} className="flex items-center justify-between border-b py-2 last:border-0">
+                    <div className="text-sm flex items-center gap-2">
+                      <Workflow className="h-4 w-4 text-muted-foreground" />
+                      {w.workflow_name || w.workflow_id}
+                      {w.current_step && <span className="text-muted-foreground">· {w.current_step}</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{w.status}</Badge>
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate(`/workflows/${w.workflow_id}`)}>
+                        Workflow <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="space-y-2">
+              <div className="text-xs uppercase text-muted-foreground">Asset Reviews</div>
+              {tracking.reviews.length === 0 && <div className="text-sm text-muted-foreground">No reviewers assigned.</div>}
+              {tracking.reviews.map((r) => (
+                <div key={r.participant_id} className="flex items-center justify-between border-b py-2 last:border-0">
+                  <div className="text-sm">
+                    <Badge variant="outline" className="mr-2">{r.role}</Badge>
+                    {r.principal}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={reviewStatusVariant(r.review_status)}>{r.review_status || 'na'}</Badge>
+                    {r.request_status && <Badge variant="secondary">review: {r.request_status}</Badge>}
+                    {r.review_request_id ? (
+                      <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate(`/data-asset-reviews/${r.review_request_id}`)}>
+                        Open review <ExternalLink className="h-3 w-3 ml-1" />
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">not started</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {(dnaRuns.length > 0 || decisions.length > 0) && (
+        <Card>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><History className="h-4 w-4" /> History</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            {dnaRuns.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs uppercase text-muted-foreground">DNA-Coefficient runs</div>
+                {dnaRuns.slice(0, 8).map((r) => (
+                  <div key={r.id} className="flex items-center justify-between border-b py-2 last:border-0 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={r.status === 'succeeded' ? 'default' : r.status === 'failed' ? 'destructive' : 'secondary'}>{r.status}</Badge>
+                      {r.status === 'succeeded' && (
+                        <span>{formatDna(r.magnitude, r.direction)} · {r.divergent_count ?? 0}/{r.sampled_count ?? 0} divergent</span>
+                      )}
+                      {r.error_message && <span className="text-muted-foreground">{r.error_message}</span>}
+                    </div>
+                    {r.started_at && <span className="text-muted-foreground"><RelativeDate date={r.started_at} /></span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {decisions.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs uppercase text-muted-foreground">Recent decisions</div>
+                {decisions.slice(0, 10).map((d) => (
+                  <div key={d.id} className="flex items-center justify-between border-b py-2 last:border-0 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{d.source}</Badge>
+                      {d.verdict && (
+                        <Badge variant={d.verdict === 'approved' ? 'default' : d.verdict === 'denied' ? 'destructive' : 'secondary'}>{d.verdict}</Badge>
+                      )}
+                      <span className="text-muted-foreground">
+                        {d.actor_identity || '—'}{d.action ? ` · ${d.action}` : ''}{d.object_id ? ` · ${d.object_id}` : ''}
+                        {d.reason ? ` — ${d.reason}` : ''}
+                      </span>
+                    </div>
+                    {d.created_at && <span className="text-muted-foreground whitespace-nowrap"><RelativeDate date={d.created_at} /></span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Authority Relation</CardTitle></CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <div><span className="text-muted-foreground">Actor role:</span> {relation.actor_role || '—'}</div>
+            <div><span className="text-muted-foreground">Actor identity:</span> {relation.actor_identity || '—'}</div>
+            <div><span className="text-muted-foreground">Action:</span> {relation.action || '—'}</div>
+            <div><span className="text-muted-foreground">Object:</span> {relation.object_type || '—'} {relation.object_id ? `· ${relation.object_id}` : ''}</div>
+            <div className="pt-2 text-muted-foreground">Domain-Context</div>
+            <JsonBlock data={relation.domain_context} />
+            <div className="pt-2 text-muted-foreground">Justification chain</div>
+            <JsonBlock data={relation.justification_chain} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Runtime & evidence</CardTitle></CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <div className="text-muted-foreground">Decision criteria</div>
+            {(relation.criteria || []).length > 0 ? (
+              <div className="space-y-2">
+                {(relation.criteria || []).map((c) => (
+                  <div key={c.id} className="rounded border p-2 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{c.name || 'Criterion'}</span>
+                      {!c.enabled && <Badge variant="outline" className="text-xs">disabled</Badge>}
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {c.direction} · w{c.weight}
+                      </span>
+                    </div>
+                    <div className="font-mono text-xs break-all">{c.rule}</div>
+                    {c.failure_message && (
+                      <div className="text-xs text-muted-foreground">↳ {c.failure_message}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-muted-foreground text-xs">No criteria — the gate is unconstrained (approves any request).</div>
+            )}
+            <div className="pt-2 text-muted-foreground">Evidence sources</div>
+            {(relation.evidence_sources || []).length > 0 ? (
+              <div className="space-y-1">
+                {(relation.evidence_sources || []).map((s, i) => {
+                  // delta_table / asset sources resolve to a UC table FQN — link to
+                  // Catalog Commander to preview it. data_product refs aren't a table FQN.
+                  const linkable = (s.type === 'delta_table' || s.type === 'asset')
+                    && (s.ref || '').split('.').length >= 3;
+                  return (
+                    <div key={i} className="text-xs">
+                      <Badge variant="outline" className="mr-1">{s.type}</Badge>
+                      {linkable ? (
+                        <a
+                          href={`/catalog-commander?table=${encodeURIComponent(s.ref)}`}
+                          className="font-mono text-primary hover:underline inline-flex items-center gap-1"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Open ${s.ref} in Catalog Commander`}
+                        >
+                          <Database className="h-3 w-3" />{s.ref}
+                        </a>
+                      ) : (
+                        <span className="font-mono">{s.ref}</span>
+                      )}
+                      {s.label ? ` — ${s.label}` : ''}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <JsonBlock data={relation.evidence_binding} />
+            )}
+            <div className="pt-2"><span className="text-muted-foreground">Recompute schedule:</span> {cronLabel(relation.schedule_cron)}</div>
+            <div className="pt-2 text-muted-foreground">Domains</div>
+            <div className="flex flex-wrap gap-1">
+              {(relation.domains || []).map((d) => (
+                <Badge key={d.domain_id} variant={d.is_primary ? 'default' : 'outline'}>{d.domain_name}</Badge>
+              ))}
+              {(relation.domains || []).length === 0 && <span className="text-muted-foreground">—</span>}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <EntityMetadataPanel entityId={relationId!} entityType="authority_relation" />
+
+      <TestResolveDialog
+        open={testOpen}
+        onOpenChange={setTestOpen}
+        relationId={relationId!}
+      />
+
+      <CreateAuthorityRelationDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        relation={relation}
+        onCreated={(updated) => {
+          setEditOpen(false);
+          toast({ title: 'Authority Relation updated', description: updated.name });
+          fetchRelation();
+        }}
+      />
+
+      <RequestAuthorityActionDialog
+        isOpen={requestOpen}
+        onOpenChange={setRequestOpen}
+        relationId={relationId!}
+        relationName={relation.name}
+        relationStatus={relation.status}
+        onSuccess={() => { fetchRelation(); fetchTracking(); }}
+      />
+
+      <Dialog open={!!reviewFor} onOpenChange={(o) => !o && setReviewFor(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Authority Relation review</DialogTitle></DialogHeader>
+          {reviewFor && (
+            <AuthorityRelationReview
+              relationId={relationId!}
+              reviewer={reviewFor}
+              onCompleted={() => { fetchRelation(); fetchTracking(); }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={versionOpen} onOpenChange={setVersionOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create new version</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Snapshots this Authority Relation into a new draft version. The rule, criteria,
+              participants, evidence and domains are copied; measured DNAco and usage counters reset.
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="ar-new-version">New version</Label>
+              <Input
+                id="ar-new-version"
+                value={newVersion}
+                onChange={(e) => setNewVersion(e.target.value)}
+                placeholder="2.0.0"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ar-change-summary">Change summary (optional)</Label>
+              <Input
+                id="ar-change-summary"
+                value={changeSummary}
+                onChange={(e) => setChangeSummary(e.target.value)}
+                placeholder="What changed in this version?"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setVersionOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={createVersion} disabled={busy === 'version' || !newVersion.trim()}>
+                {busy === 'version' ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <GitBranch className="h-4 w-4 mr-1" />}
+                Create version
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function TestResolveDialog({ open, onOpenChange, relationId }: { open: boolean; onOpenChange: (o: boolean) => void; relationId: string }) {
+  const { post } = useApi();
+  const [actorIdentity, setActorIdentity] = useState('');
+  const [action, setAction] = useState('approve');
+  const [value, setValue] = useState('');
+  const [cosign, setCosign] = useState(false);
+  const [escalated, setEscalated] = useState(false);
+  const [result, setResult] = useState<ResolveResponse | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    const body: any = { actor_identity: actorIdentity || undefined, action, cosign_present: cosign, escalated };
+    if (value.trim()) body.value = parseFloat(value);
+    const { data, error } = await post<ResolveResponse>(`/api/authority/relations/${relationId}/test`, body);
+    setBusy(false);
+    if (error) setResult({ verdict: 'error', reason: error });
+    else setResult(data);
+  };
+
+  const verdictColor = result?.verdict === 'approved' ? 'default'
+    : result?.verdict === 'denied' ? 'destructive' : 'secondary';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Test authority resolution</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Dry-run against this Authority Relation's decision logic — works in any status and does
+            <strong> not</strong> record the decision or change the usage counters. Live decisions come
+            from the MCP <code>resolve_authority</code> tool against an <strong>active</strong> AR.
+          </p>
+          <div className="space-y-1">
+            <Label>Signer (actor identity)</Label>
+            <Input value={actorIdentity} onChange={(e) => setActorIdentity(e.target.value)} placeholder="rsm-east@example.com" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Action</Label>
+              <Input value={action} onChange={(e) => setAction(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Value</Label>
+              <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.22" />
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={cosign} onChange={(e) => setCosign(e.target.checked)} /> co-sign present</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={escalated} onChange={(e) => setEscalated(e.target.checked)} /> escalated</label>
+          </div>
+          {result && (
+            <Alert>
+              <AlertDescription>
+                <Badge variant={verdictColor as any} className="mr-2">{result.verdict}</Badge>
+                {result.reason}
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button onClick={run} disabled={busy}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Resolve</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

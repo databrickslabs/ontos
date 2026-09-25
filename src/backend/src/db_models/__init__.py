@@ -48,4 +48,5 @@ from . import workflow_job_runs
 from . import ontology_generation_runs
 from . import schema_import_runs
 from . import term_mappings
+from . import authority_resolution
 

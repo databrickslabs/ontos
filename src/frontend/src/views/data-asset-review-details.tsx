@@ -433,6 +433,7 @@ export default function DataAssetReviewDetails() {
                              <AssetReviewEditor
                                 requestId={requestId!}
                                 asset={selectedAsset}
+                                reviewerEmail={request?.reviewer_email}
                                 api={api}
                                 onReviewSave={(updatedAsset) => {
                                     // Update the asset list in the main request state

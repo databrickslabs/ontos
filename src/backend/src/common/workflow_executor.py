@@ -2449,15 +2449,22 @@ class WorkflowExecutor:
                 )
                 break
             
+            # A step may opt out of failing the whole flow (e.g. best-effort
+            # notifications): when fail_flow_on_failure is off, a failed step is
+            # logged and the flow continues via on_pass rather than terminating.
+            route_passed = result.passed or not self._step_fail_flow(step)
+            if not result.passed and route_passed:
+                logger.warning(
+                    f"Step '{step.step_id}' failed but is non-fatal "
+                    f"(fail_flow_on_failure=false); continuing. Error: {result.error}"
+                )
+
             # Determine next step
-            if result.passed:
-                current_step_id = step.on_pass
-            else:
-                current_step_id = step.on_fail
-            
+            current_step_id = step.on_pass if route_passed else step.on_fail
+
             # If no next step, we're done
             if not current_step_id:
-                if result.passed:
+                if route_passed:
                     final_status = ExecutionStatus.SUCCEEDED
                 else:
                     final_status = ExecutionStatus.FAILED
@@ -2707,15 +2714,20 @@ class WorkflowExecutor:
                 )
                 break
             
+            # Non-fatal steps (fail_flow_on_failure=false) continue via on_pass.
+            route_passed = result.passed or not self._step_fail_flow(step)
+            if not result.passed and route_passed:
+                logger.warning(
+                    f"Step '{step.step_id}' failed but is non-fatal "
+                    f"(fail_flow_on_failure=false); continuing. Error: {result.error}"
+                )
+
             # Determine next step
-            if result.passed:
-                next_step_id = step.on_pass
-            else:
-                next_step_id = step.on_fail
-            
+            next_step_id = step.on_pass if route_passed else step.on_fail
+
             # If no next step, we're done
             if not next_step_id:
-                if result.passed:
+                if route_passed:
                     final_status = ExecutionStatus.SUCCEEDED
                 else:
                     final_status = ExecutionStatus.FAILED
@@ -2810,6 +2822,22 @@ class WorkflowExecutor:
             logger.error(f"Error updating entity status after workflow completion: {e}", exc_info=True)
             # Don't fail the workflow for status update issues
     
+    def _step_fail_flow(self, step: WorkflowStep) -> bool:
+        """Whether a failure of this step should fail the whole flow.
+
+        Reads ``fail_flow_on_failure`` from the step config (default ``True`` —
+        strict). Set it ``false`` on best-effort steps (e.g. notifications) so a
+        step failure logs and the flow continues via ``on_pass`` instead of
+        terminating the execution.
+        """
+        config = step.config or {}
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except Exception:
+                config = {}
+        return bool(config.get("fail_flow_on_failure", True))
+
     def _execute_step(self, step: WorkflowStep, context: StepContext) -> StepResult:
         """Execute a single step."""
         step_type = step.step_type.value if hasattr(step.step_type, 'value') else step.step_type

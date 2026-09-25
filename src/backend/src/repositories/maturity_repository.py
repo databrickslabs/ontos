@@ -18,13 +18,28 @@ class MaturityLevelRepository:
     # ------------------------------------------------------------------
 
     def get_all_ordered(self, db: Session, *, entity_type: Optional[str] = None) -> List[MaturityLevelDb]:
-        """Return levels ordered by level_order, optionally filtered by entity_type."""
-        q = db.query(MaturityLevelDb)
+        """Return levels ordered by level_order, optionally filtered by entity_type.
+
+        Entity-type-specific levels **override** the generic ``"all"`` set: if a
+        type has its own levels (e.g. AuthorityRelation) only those are returned;
+        otherwise the shared ``"all"`` model applies (e.g. Data Products/Contracts).
+        """
         if entity_type:
-            q = q.filter(
-                MaturityLevelDb.entity_type.in_([entity_type, "all"])
+            specific = (
+                db.query(MaturityLevelDb)
+                .filter(MaturityLevelDb.entity_type == entity_type)
+                .order_by(MaturityLevelDb.level_order)
+                .all()
             )
-        return q.order_by(MaturityLevelDb.level_order).all()
+            if specific:
+                return specific
+            return (
+                db.query(MaturityLevelDb)
+                .filter(MaturityLevelDb.entity_type == "all")
+                .order_by(MaturityLevelDb.level_order)
+                .all()
+            )
+        return db.query(MaturityLevelDb).order_by(MaturityLevelDb.level_order).all()
 
     def get_by_id(self, db: Session, level_id: UUID) -> Optional[MaturityLevelDb]:
         return db.query(MaturityLevelDb).filter(MaturityLevelDb.id == level_id).first()
@@ -283,6 +298,96 @@ class MaturityLevelRepository:
             created_levels.append(level)
 
         logger.info("Seeded default 5-level maturity model with compliance policy gates")
+        return created_levels
+
+    def seed_authority_defaults(self, db: Session) -> List[MaturityLevelDb]:
+        """Seed the ARF-specific 4-level Authority Maturity ladder + gates.
+
+        Distinct from the data-product/contract model: levels are scoped to
+        entity_type="AuthorityRelation" and gated by compliance policies that
+        assert on the AR entity dict. Only seeds if no AuthorityRelation levels
+        exist yet (idempotent; independent of the "all"/product levels).
+        """
+        ar_empty = self.is_empty(db, entity_type="AuthorityRelation")
+        logger.info(f"seed_authority_defaults: AuthorityRelation levels empty? {ar_empty}")
+        if not ar_empty:
+            return self.get_all_ordered(db, entity_type="AuthorityRelation")
+
+        from src.db_models.compliance import CompliancePolicyDb
+        import uuid as _uuid
+
+        LEVELS = [
+            {
+                "level_order": 1, "name": "Documented", "entity_type": "AuthorityRelation",
+                "description": "The authority rule is captured with a name.",
+                "icon": "file-text", "color": "blue",
+                "gates": [
+                    {"name": "Name is defined", "rule": "ASSERT obj.name != ''",
+                     "severity": "high", "category": "Authority Maturity"},
+                ],
+            },
+            {
+                "level_order": 2, "name": "Object-Resolved", "entity_type": "AuthorityRelation",
+                "description": "The relation names a concrete object it governs.",
+                "icon": "book-open", "color": "cyan",
+                "gates": [
+                    {"name": "Object resolved", "rule": "ASSERT obj.has_object = True",
+                     "severity": "high", "category": "Authority Maturity"},
+                ],
+            },
+            {
+                "level_order": 3, "name": "DNA-Measured", "entity_type": "AuthorityRelation",
+                "description": "Evidence is bound and the DNA-Coefficient has been computed.",
+                "icon": "activity", "color": "amber",
+                "gates": [
+                    {"name": "Evidence bound", "rule": "ASSERT obj.has_evidence = True",
+                     "severity": "high", "category": "Authority Maturity"},
+                    {"name": "DNA-Coefficient measured", "rule": "ASSERT obj.dna_measured = True",
+                     "severity": "high", "category": "Authority Maturity"},
+                ],
+            },
+            {
+                "level_order": 4, "name": "N-Functionally-Affirmed", "entity_type": "AuthorityRelation",
+                "description": "Divergence is within its ceiling and every required approver has affirmed.",
+                "icon": "shield-check", "color": "purple",
+                "gates": [
+                    {"name": "Within divergence ceiling", "rule": "ASSERT obj.dna_within_ceiling = True",
+                     "severity": "high", "category": "Authority Maturity"},
+                    {"name": "Fully affirmed", "rule": "ASSERT obj.fully_affirmed = True",
+                     "severity": "high", "category": "Authority Maturity"},
+                ],
+            },
+        ]
+
+        created_levels = []
+        for level_def in LEVELS:
+            gate_defs = level_def.pop("gates")
+            level = self.create(db, **level_def)
+            for idx, gate_def in enumerate(gate_defs):
+                is_required = gate_def.pop("required", True)
+                policy = CompliancePolicyDb(
+                    id=str(_uuid.uuid4()),
+                    slug=f"ar-maturity-{level_def['level_order']}-{gate_def['name'].lower().replace(' ', '-')}",
+                    name=f"[AR Maturity L{level_def['level_order']}] {gate_def['name']}",
+                    description=f"ARF maturity gate for level '{level_def.get('name')}': {gate_def['name']}",
+                    failure_message=f"Gate failed: {gate_def['name']}",
+                    rule=gate_def["rule"],
+                    category=gate_def.get("category", "Authority Maturity"),
+                    severity=gate_def.get("severity", "medium"),
+                    is_active=True,
+                )
+                db.add(policy)
+                db.flush()
+                self.add_gate(
+                    db,
+                    maturity_level_id=level.id,
+                    compliance_policy_id=policy.id,
+                    required=is_required,
+                    display_order=idx,
+                )
+            created_levels.append(level)
+
+        logger.info("Seeded ARF 4-level Authority Maturity ladder with compliance policy gates")
         return created_levels
 
 

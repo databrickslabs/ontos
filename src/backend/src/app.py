@@ -79,6 +79,7 @@ from src.routes import (
     maturity_routes,
     directory_routes,
     term_mapping_routes,
+    authority_resolution_routes,
 )
 
 from src.common.database import init_db, get_session_factory, SQLAlchemySession
@@ -393,6 +394,7 @@ catalog_commander_routes.register_routes(app)
 security_features_routes.register_routes(app)
 entitlements_routes.register_routes(app)
 entitlements_sync_routes.register_routes(app)
+authority_resolution_routes.register_routes(app)
 access_grants_routes.register_routes(app)
 
 # System - Utilities, configuration, auxiliary services

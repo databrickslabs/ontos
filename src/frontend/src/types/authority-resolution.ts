@@ -110,6 +110,7 @@ export const ARF_DIRECTIONS: { value: string; label: string }[] = [
 export interface AuthorityRelation {
   id: string;
   slug?: string | null;
+  family_slug?: string | null;   // slug for the whole version family (visible on every version)
   name: string;
   description?: string | null;
   status: string;                 // draft | active | needs_review | retired

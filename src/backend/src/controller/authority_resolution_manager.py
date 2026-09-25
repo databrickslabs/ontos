@@ -1127,6 +1127,16 @@ class AuthorityResolutionManager:
         criteria = authority_criterion_repo.list_for_relation(db, relation_id=relation.id)
         domains = entity_domain_repo.get_domains_for_entity(db, entity_type=ENTITY_TYPE, entity_id=relation.id)
         fully_affirmed = self.is_fully_affirmed(db, relation.id)
+        # The slug is the family-level agent @id but physically lives on one
+        # version row (new versions have none). Surface the family's slug on
+        # every version so it stays visible as the stable identifier.
+        family_slug = relation.slug
+        if not family_slug:
+            fam_id = getattr(relation, "version_family_id", None) or relation.id
+            for v in authority_relation_repo.get_family_versions(db, family_id=fam_id):
+                if v.slug:
+                    family_slug = v.slug
+                    break
         # Polymorphic tags (best-effort — never break the read).
         tags: List[Dict[str, Any]] = []
         try:
@@ -1141,6 +1151,7 @@ class AuthorityResolutionManager:
         return {
             "id": relation.id,
             "slug": relation.slug,
+            "family_slug": family_slug,
             "name": relation.name,
             "description": relation.description,
             "status": relation.status,

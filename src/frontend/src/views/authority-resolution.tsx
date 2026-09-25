@@ -107,7 +107,9 @@ export default function AuthorityResolution() {
       cell: ({ row }) => (
         <div className="space-y-1">
           <div className="font-medium">{row.original.name}</div>
-          {row.original.slug && <div className="text-xs text-muted-foreground">{row.original.slug}</div>}
+          {(row.original.family_slug || row.original.slug) && (
+            <div className="text-xs text-muted-foreground">{row.original.family_slug || row.original.slug}</div>
+          )}
         </div>
       ),
     },

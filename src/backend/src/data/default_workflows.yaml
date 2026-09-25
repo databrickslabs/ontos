@@ -725,6 +725,8 @@ workflows:
           recipients: "owner"
           template: "request_submitted"
           custom_message: "A new data asset review request has been assigned to you."
+          # Best-effort: a notification-send failure must not fail the review flow.
+          fail_flow_on_failure: false
         on_pass: "request-approval"
 
       - id: "request-approval"
@@ -744,6 +746,7 @@ workflows:
           recipients: "requester"
           template: "request_approved"
           custom_message: "Your data asset review has been completed and approved."
+          fail_flow_on_failure: false
         on_pass: "success"
 
       - id: "notify-rejected"
@@ -753,6 +756,7 @@ workflows:
           recipients: "requester"
           template: "request_rejected"
           custom_message: "Your data asset review requires changes. Please review the feedback."
+          fail_flow_on_failure: false
         on_pass: "fail-rejected"
 
       - id: "success"
@@ -785,6 +789,7 @@ workflows:
           recipients: "requester"
           template: "request_submitted"
           custom_message: "The review process for Authority Relation '${entity_name}' has started. Assigned reviewers have each been sent an Asset Review to complete."
+          fail_flow_on_failure: false
         on_pass: "success"
 
       - id: "success"

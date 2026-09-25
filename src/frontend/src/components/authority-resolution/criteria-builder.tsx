@@ -41,6 +41,7 @@ export interface CriterionRow {
   failureMessage: string;
   direction: string;
   weight: string;
+  dimension: string;   // DNAco dimension (people|policy|…)
 }
 
 const PREDICATE_DEFAULTS: Record<Predicate, { field: string; direction: string; name: string; fail: string }> = {
@@ -54,7 +55,7 @@ export const emptyCriterionRow = (): CriterionRow => ({
   mode: 'builder', predicate: 'allowlist', field: 'actor_identity', values: '', max: '0.15',
   allowEscalation: true, rawRule: '', policyId: '',
   name: PREDICATE_DEFAULTS.allowlist.name, failureMessage: PREDICATE_DEFAULTS.allowlist.fail,
-  direction: PREDICATE_DEFAULTS.allowlist.direction, weight: '1.0',
+  direction: PREDICATE_DEFAULTS.allowlist.direction, weight: '1.0', dimension: 'people',
 });
 
 /** Existing criteria round-trip into raw rows (no rule parsing). */
@@ -65,6 +66,7 @@ export const rowsFromCriteria = (criteria?: AuthorityCriterion[] | null): Criter
     rawRule: c.rule || '', policyId: '',
     name: c.name || '', failureMessage: c.failure_message || '',
     direction: c.direction || 'neutral', weight: String(c.weight ?? 1.0),
+    dimension: c.dimension || 'people',
   }));
 
 /** Build the ASSERT condition from a builder row (without the ASSERT keyword). */
@@ -96,9 +98,10 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
   const out: CriterionInput[] = [];
   rows.forEach((r, idx) => {
     const weight = parseFloat(r.weight) || 1.0;
+    const dimension = (r.dimension || 'people').trim() || 'people';
     if (r.mode === 'existing') {
       if (!r.policyId) return;
-      out.push({ policy_id: r.policyId, direction: r.direction, weight, order: idx, enabled: true });
+      out.push({ policy_id: r.policyId, direction: r.direction, weight, dimension, order: idx, enabled: true });
       return;
     }
     const rule = ruleForRow(r);
@@ -107,7 +110,7 @@ export function rowsToPayload(rows: CriterionRow[]): CriterionInput[] {
       name: r.name.trim() || `Criterion ${idx + 1}`,
       rule,
       failure_message: r.failureMessage.trim() || undefined,
-      direction: r.direction, weight, order: idx, enabled: true,
+      direction: r.direction, weight, dimension, order: idx, enabled: true,
     });
   });
   return out;
@@ -259,6 +262,11 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
             <div className="flex items-center gap-1">
               <Label className="text-xs">Weight</Label>
               <Input value={r.weight} onChange={(e) => patch(idx, { weight: e.target.value })} className="h-8 w-16 text-xs" />
+            </div>
+            <div className="flex items-center gap-1">
+              <Label className="text-xs whitespace-nowrap">Dimension</Label>
+              <Input value={r.dimension} onChange={(e) => patch(idx, { dimension: e.target.value })}
+                     className="h-8 w-24 text-xs" placeholder="people" />
             </div>
             {r.mode === 'existing' && <Badge variant="outline" className="text-xs">reused check</Badge>}
           </div>

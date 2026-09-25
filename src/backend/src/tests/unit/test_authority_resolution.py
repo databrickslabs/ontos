@@ -26,10 +26,11 @@ from src.db_models.compliance import CompliancePolicyDb
 
 # --------------------------------------------------------------- helpers
 
-def _crit(rule, *, direction=DIR_NEUTRAL, weight=1.0, message=None, order=0,
-          enabled=True, name="crit") -> Criterion:
+def _crit(rule, *, direction=DIR_NEUTRAL, weight=1.0, dimension="people", message=None,
+          order=0, enabled=True, name="crit") -> Criterion:
     """A pure engine Criterion (rule already includes ASSERT)."""
-    return Criterion(code=name, rule=rule, direction=direction, weight=weight, message=message)
+    return Criterion(code=name, rule=rule, direction=direction, weight=weight,
+                     dimension=dimension, message=message)
 
 
 # canonical criteria mirroring the trade-promotion worked example
@@ -113,6 +114,19 @@ def test_no_criteria_scores_zero():
     result = compute_dnaco([], rows)
     assert result.magnitude == 0.0
     assert result.divergent_count == 0
+
+
+def test_dimensions_are_additive():
+    people = _crit("ASSERT obj.actor_identity IN ['ok']", dimension="people", name="ppl")
+    policy = _crit("ASSERT obj.value <= 10", dimension="policy", name="pol")
+    rows = [
+        {"actor_identity": "bad", "value": 5},    # people fails only
+        {"actor_identity": "ok", "value": 50},    # policy fails only
+    ]
+    r = compute_dnaco([people, policy], rows)
+    assert r.dimensions["people"] == 0.5      # 1 of 2 rows
+    assert r.dimensions["policy"] == 0.5      # 1 of 2 rows
+    assert r.magnitude == 1.0                 # additive 0.5 + 0.5, capped at 1.0
 
 
 # ---------------------------------------------------- deterministic gate
@@ -249,7 +263,32 @@ def test_configurable_criteria_gate_and_divergence(db_session):
     db_session.commit()
     assert run.divergent_count == 1
     assert run.direction == DIR_ACTUAL_EXCEEDS
-    assert run.magnitude == 0.75   # 1.5 / 2 rows
+    # people dimension = 1.5 / 2 rows; structural also scored; overall = additive, capped.
+    assert run.per_dimension_scores["people"] == 0.75
+    assert "structural" in run.per_dimension_scores
+    assert run.magnitude == round(min(1.0, sum(run.per_dimension_scores.values())), 4)
+
+
+def test_structural_dimension_scores_incompleteness(db_session):
+    """The built-in structural dimension scores AR-definition completeness: a
+    relation complete except for its justification-chain scores 1/5 = 0.2."""
+    from src.controller.authority_resolution_manager import AuthorityResolutionManager
+    from src.models.authority_resolution import (
+        AuthorityRelationCreate, EvidenceSource, CriterionInput, AffirmationInput,
+    )
+    mgr = AuthorityResolutionManager()
+    rel = mgr.create_relation(db_session, AuthorityRelationCreate(
+        name="Structural AR", object_id="dp-9",
+        evidence_sources=[EvidenceSource(type="delta_table", ref="c.s.t", column_map={"actor_identity": "a"})],
+        criteria=[CriterionInput(name="Authorized", rule="obj.actor_identity IN ['x']", dimension="people")],
+        affirmations=[AffirmationInput(role="Governance Lead", principal="g@x.com", is_approver=True, is_reviewer=False)],
+    ))
+    db_session.commit()
+    run = mgr.compute_dnaco(db_session, rel.id, rows=[])   # empty evidence sample
+    db_session.commit()
+    assert run.per_dimension_scores["structural"] == 0.2   # only justification_chain missing
+    assert run.per_dimension_scores["people"] == 0.0       # no divergent rows
+    assert run.magnitude == 0.2
 
 
 def test_authority_maturity_feature_integration(db_session):

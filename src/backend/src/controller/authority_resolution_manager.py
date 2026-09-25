@@ -90,9 +90,27 @@ class AuthorityResolutionManager:
                 rule=policy.rule,
                 direction=c.direction or "neutral",
                 weight=c.weight if c.weight is not None else 1.0,
+                dimension=getattr(c, "dimension", None) or "people",
                 message=policy.failure_message or None,
             ))
         return out
+
+    # Essential elements an AR definition should carry; each missing one raises the
+    # 'structural' DNAco dimension. Extensible — add checks here.
+    def _structural_score(self, relation: AuthorityRelationDb) -> float:
+        """Score the AR *definition's* completeness (0.0 = complete, higher = more
+        essentials missing). This is the ``structural`` DNAco dimension — evaluated
+        on the AR itself, not on evidence rows."""
+        checks = [
+            bool(relation.justification_chain),                       # documented basis
+            bool(relation.object_id),                                 # governs a concrete object
+            bool(relation.evidence_sources
+                 or (relation.evidence_binding or {}).get("source_table_fqn")),  # evidence bound
+            len(relation.criteria or []) > 0,                         # has decision criteria
+            any(getattr(a, "is_approver", True) for a in (relation.affirmations or [])),  # has an approver
+        ]
+        missing = sum(1 for ok in checks if not ok)
+        return round(missing / len(checks), 4)
 
     # ------------------------------------------------------------------ CRUD
 
@@ -268,6 +286,7 @@ class AuthorityResolutionManager:
                 "compliance_policy_id": policy_id,
                 "direction": c.get("direction") or "neutral",
                 "weight": c.get("weight") if c.get("weight") is not None else 1.0,
+                "dimension": c.get("dimension") or "people",
                 "display_order": c.get("order", idx),
                 "enabled": c.get("enabled", True),
             })
@@ -620,6 +639,12 @@ class AuthorityResolutionManager:
                 rows = self._collect_evidence(relation)
             result = authority_dna.compute_dnaco(self._load_criteria(relation), rows)
 
+            # Combine the evidence-based dimensions with the definition-based
+            # 'structural' dimension; overall = additive, capped (min(1.0, Σ)).
+            dimensions = dict(result.dimensions)
+            dimensions["structural"] = self._structural_score(relation)
+            overall = round(min(1.0, sum(dimensions.values())), 4)
+
             # Persist per-row divergences as evidence AR Decisions (the DNAco sample).
             for rd in result.rows:
                 if not rd.diverged:
@@ -644,27 +669,30 @@ class AuthorityResolutionManager:
                 "finished_at": self._now(),
                 "sampled_count": result.sampled_count,
                 "divergent_count": result.divergent_count,
-                "magnitude": result.magnitude,
+                "magnitude": overall,
                 "direction": result.direction,
+                "per_dimension_scores": dimensions,
             })
 
             # Roll the run up onto the Definition's aggregate DNAco.
             agg = {
-                "dna_magnitude": result.magnitude,
+                "dna_magnitude": overall,
                 "dna_direction": result.direction,
+                "dna_dimensions": dimensions,
                 "dna_measured_at": self._now(),
             }
             # An active AR whose divergence exceeded its ceiling is auto-flagged.
             auto_flagged = False
-            if relation.status == STATUS_ACTIVE and result.magnitude > (relation.dna_max_threshold or 0.3):
+            if relation.status == STATUS_ACTIVE and overall > (relation.dna_max_threshold or 0.3):
                 agg["status"] = STATUS_NEEDS_REVIEW
                 auto_flagged = True
             authority_relation_repo.update(db, db_obj=relation, obj_in=agg)
 
             # Record the run on the entity timeline (Comments).
+            dims_str = ", ".join(f"{k} {v:.2f}" for k, v in sorted(dimensions.items()))
             msg = (
-                f"DNA-Coefficient computed: {result.magnitude:.2f} "
-                f"({result.divergent_count}/{result.sampled_count} divergent)."
+                f"DNA-Coefficient computed: {overall:.2f} "
+                f"({result.divergent_count}/{result.sampled_count} divergent; {dims_str})."
             )
             if auto_flagged:
                 msg += f" Exceeded the ceiling ({relation.dna_max_threshold}); status auto-changed to needs_review."
@@ -928,6 +956,7 @@ class AuthorityResolutionManager:
             "evidence_sources": relation.evidence_sources,
             "dna_magnitude": relation.dna_magnitude,
             "dna_direction": relation.dna_direction,
+            "dna_dimensions": relation.dna_dimensions,
             "dna_measured_at": relation.dna_measured_at,
             "dna_max_threshold": relation.dna_max_threshold,
             "schedule_cron": relation.schedule_cron,
@@ -961,6 +990,7 @@ class AuthorityResolutionManager:
                     "category": c.compliance_policy.category if c.compliance_policy else None,
                     "direction": c.direction,
                     "weight": c.weight,
+                    "dimension": getattr(c, "dimension", "people"),
                     "order": c.display_order,
                     "enabled": c.enabled,
                 }

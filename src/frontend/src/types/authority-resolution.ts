@@ -75,6 +75,7 @@ export interface AuthorityCriterion {
   category?: string | null;
   direction: string;                 // actual-exceeds-documented | documented-exceeds-actual | neutral
   weight: number;
+  dimension?: string;                // DNAco dimension (people|policy|…)
   order: number;
   enabled: boolean;
 }
@@ -86,6 +87,7 @@ export interface CriterionInput {
   failure_message?: string;
   direction: string;
   weight: number;
+  dimension?: string;
   order: number;
   enabled: boolean;
 }
@@ -129,6 +131,7 @@ export interface AuthorityRelation {
   evidence_sources?: EvidenceSource[] | null;
   dna_magnitude?: number | null;
   dna_direction?: string | null;
+  dna_dimensions?: Record<string, number> | null;   // {dimension: score} incl. structural
   dna_measured_at?: string | null;
   dna_max_threshold?: number | null;
   schedule_cron?: string | null;

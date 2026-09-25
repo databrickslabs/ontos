@@ -76,8 +76,9 @@ class AuthorityRelationDb(Base):
     evidence_sources = Column(JSON, nullable=True)
 
     # --- DNA-Coefficient (aggregate, rolled up from decisions/evidence) -----
-    dna_magnitude = Column(Float, nullable=True)      # 0.0 = best; higher = worse
+    dna_magnitude = Column(Float, nullable=True)      # 0.0 = best; higher = worse (additive over dimensions)
     dna_direction = Column(String, nullable=True)     # actual-exceeds-documented | documented-exceeds-actual | balanced
+    dna_dimensions = Column(JSON, nullable=True)      # {dimension: score} incl. structural + evidence dims
     dna_measured_at = Column(DateTime(timezone=True), nullable=True)
     dna_max_threshold = Column(Float, default=0.3, nullable=False)  # activation ceiling (magnitude must be <= this)
     dna_scoring_config = Column(JSON, nullable=True)  # admin/per-domain tunable weights
@@ -186,6 +187,9 @@ class AuthorityCriterionDb(Base):
     # actual-exceeds-documented | documented-exceeds-actual | neutral
     direction = Column(String, nullable=False, default='neutral')
     weight = Column(Float, nullable=False, default=1.0)
+    # DNAco dimension this criterion contributes to (people|policy|...); structural
+    # is a separate definition-completeness evaluator, not a criterion dimension.
+    dimension = Column(String, nullable=False, default='people')
     display_order = Column(Integer, nullable=False, default=0)
     enabled = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -207,6 +211,7 @@ class AuthorityDnaRunDb(Base):
     divergent_count = Column(Integer, default=0, nullable=False)
     magnitude = Column(Float, default=0.0, nullable=False)
     direction = Column(String, nullable=True)
+    per_dimension_scores = Column(JSON, nullable=True)  # {dimension: score} for this run
     error_message = Column(Text, nullable=True)
 
     relation = relationship("AuthorityRelationDb", back_populates="dna_runs")

@@ -48,6 +48,7 @@ class Criterion:
     rule: str
     direction: str = DIR_NEUTRAL
     weight: float = 1.0
+    dimension: str = "people"                    # which DNAco dimension this criterion scores
     message: Optional[str] = None
 
 
@@ -58,6 +59,7 @@ class RowDivergence:
     signed: int                                  # +1 actual-exceeds-doc, -1 doc-exceeds-actual, 0 neutral
     reasons: List[str] = field(default_factory=list)
     weight: float = 1.0                          # max weight across this row's failed criteria
+    dimension_weights: Dict[str, float] = field(default_factory=dict)  # {dimension: max weight of failed criteria this row}
     actor_identity: Optional[str] = None
     action: Optional[str] = None
     object_id: Optional[str] = None
@@ -71,6 +73,7 @@ class DnaResult:
     direction: str
     sampled_count: int
     divergent_count: int
+    dimensions: Dict[str, float] = field(default_factory=dict)  # per-dimension score 0-1 (evidence-based)
     rows: List[RowDivergence] = field(default_factory=list)
 
 
@@ -144,6 +147,7 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
     reasons: List[str] = []
     weights: List[float] = []
     signed = 0
+    dim_weights: Dict[str, float] = {}
     for c in criteria:
         try:
             passed, _ = evaluate_rule_on_object(c.rule, norm)
@@ -152,8 +156,11 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
             passed = True
         if not passed:
             reasons.append(c.code)
-            weights.append(c.weight if c.weight is not None else 1.0)
+            w = c.weight if c.weight is not None else 1.0
+            weights.append(w)
             signed += _direction_sign(c.direction)
+            dim = c.dimension or "people"
+            dim_weights[dim] = max(dim_weights.get(dim, 0.0), w)
 
     diverged = len(reasons) > 0
     signed = (signed > 0) - (signed < 0)   # clamp to {-1, 0, +1}
@@ -163,6 +170,7 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
         signed=signed,
         reasons=reasons,
         weight=max(weights) if weights else 1.0,
+        dimension_weights=dim_weights,
         actor_identity=str(norm["actor_identity"]) if norm.get("actor_identity") is not None else None,
         action=str(norm["action"]) if norm.get("action") is not None else None,
         object_id=str(norm["object_id"]) if norm.get("object_id") is not None else None,
@@ -171,23 +179,29 @@ def evaluate_row(criteria: List[Criterion], row: Dict[str, Any]) -> RowDivergenc
 
 
 def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaResult:
-    """Roll a sample of evidence rows up into a single DNA-Coefficient.
+    """Roll a sample of evidence rows up into per-dimension DNAco scores.
 
-    A row diverges if any criterion fails for it; its contribution is the max
-    ``weight`` across its failed criteria. ``magnitude`` is the weighted fraction
-    of diverging rows (``0.0`` best), capped at ``1.0``. ``direction`` is the sign
-    of the aggregate authority-level delta across divergent rows. With no criteria
-    (or no rows) the coefficient is ``0.0`` — nothing to diverge from.
+    Criteria are grouped by their ``dimension`` (e.g. ``people``). For each
+    dimension, its score is the weighted fraction of rows that failed a criterion
+    of that dimension (``0.0`` best, capped at ``1.0``). The evidence-side
+    ``magnitude`` is the **additive** combine ``min(1.0, Σ dimension_scores)``
+    (the manager adds non-evidence dimensions like ``structural`` and recomputes
+    the overall). ``direction`` is the sign of the aggregate authority-level delta.
     """
     evaluated = [evaluate_row(criteria, r) for r in rows]
     sampled = len(evaluated)
     divergent = [rd for rd in evaluated if rd.diverged]
+    dims = {(c.dimension or "people") for c in criteria}
 
     if sampled == 0:
-        return DnaResult(magnitude=0.0, direction=DIR_NONE, sampled_count=0, divergent_count=0, rows=evaluated)
+        return DnaResult(magnitude=0.0, direction=DIR_NONE, sampled_count=0, divergent_count=0,
+                         dimensions={d: 0.0 for d in dims}, rows=evaluated)
 
-    weighted_sum = sum(rd.weight for rd in divergent)
-    magnitude = min(1.0, weighted_sum / sampled)
+    dimensions = {
+        d: round(min(1.0, sum(rd.dimension_weights.get(d, 0.0) for rd in divergent) / sampled), 4)
+        for d in dims
+    }
+    magnitude = round(min(1.0, sum(dimensions.values())), 4)
 
     signed_total = sum(rd.signed for rd in divergent)
     if not divergent:
@@ -200,10 +214,11 @@ def compute_dnaco(criteria: List[Criterion], rows: List[Dict[str, Any]]) -> DnaR
         direction = DIR_BALANCED
 
     return DnaResult(
-        magnitude=round(magnitude, 4),
+        magnitude=magnitude,
         direction=direction,
         sampled_count=sampled,
         divergent_count=len(divergent),
+        dimensions=dimensions,
         rows=evaluated,
     )
 

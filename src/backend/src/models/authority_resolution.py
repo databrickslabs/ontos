@@ -62,6 +62,7 @@ class CriterionInput(BaseModel):
     failure_message: Optional[str] = None
     direction: str = "neutral"                  # actual-exceeds-documented | documented-exceeds-actual | neutral
     weight: float = 1.0
+    dimension: str = "people"                   # DNAco dimension this criterion scores
     order: int = 0
     enabled: bool = True
 

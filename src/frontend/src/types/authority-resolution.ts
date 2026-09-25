@@ -8,7 +8,9 @@ export interface AssignedDomain {
 
 export interface AuthorityAffirmation {
   id: string;
-  role: string;
+  role: string;                     // Business Role name (cached label)
+  business_role_id?: string | null; // Settings Business Role id
+  role_category?: string | null;    // governance|technical|business|operational
   principal: string;
   principal_type: string;
   required: boolean;
@@ -196,6 +198,8 @@ export interface AuthorityDecision {
 
 export interface AffirmationInput {
   role: string;
+  business_role_id?: string | null;
+  role_category?: string | null;
   principal: string;
   principal_type: string;
   required: boolean;

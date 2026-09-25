@@ -36,7 +36,9 @@ class EvidenceSource(BaseModel):
 
 
 class AffirmationInput(BaseModel):
-    role: str                                   # business|technical|governance|<custom>
+    role: str                                   # Business Role name (cached label)
+    business_role_id: Optional[str] = None      # Settings Business Role id (organizational role)
+    role_category: Optional[str] = None         # governance|technical|business|operational
     principal: str                              # email or group id
     principal_type: str = "user"                # user|group
     required: bool = True

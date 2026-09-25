@@ -131,7 +131,10 @@ class AuthorityAffirmationDb(Base):
 
     id = Column(String, primary_key=True)
     relation_id = Column(String, ForeignKey('authority_relations.id'), nullable=False, index=True)
-    role = Column(String, nullable=False)             # business|technical|governance|<custom>
+    role = Column(String, nullable=False)             # Business Role name (cached label)
+    # Reference to the Settings Business Role (organizational role, NOT an app RBAC role).
+    business_role_id = Column(String, nullable=True)
+    role_category = Column(String, nullable=True)     # governance|technical|business|operational (drives the questionnaire)
     principal = Column(String, nullable=False)        # email or group identifier
     principal_type = Column(String, default='user', nullable=False)  # user|group
 

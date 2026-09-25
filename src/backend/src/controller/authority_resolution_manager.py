@@ -236,6 +236,8 @@ class AuthorityResolutionManager:
                 "id": str(uuid.uuid4()),
                 "relation_id": relation_id,
                 "role": a["role"],
+                "business_role_id": a.get("business_role_id"),
+                "role_category": a.get("role_category"),
                 "principal": a["principal"],
                 "principal_type": a.get("principal_type", "user"),
                 "is_approver": a.get("is_approver", True),
@@ -341,8 +343,15 @@ class AuthorityResolutionManager:
         ],
     }
 
-    def _questionnaire_for(self, role: str) -> List[Dict[str, str]]:
-        questions = self._QUESTIONNAIRE.get((role or "").lower(), self._QUESTIONNAIRE["business"])
+    def _questionnaire_for(self, role: str, category: Optional[str] = None) -> List[Dict[str, str]]:
+        """Pick the role-specific questionnaire. Prefer the Business Role's
+        ``category`` (governance|technical|business|operational); fall back to the
+        role name, then to the business questionnaire. ``operational`` maps to the
+        business questionnaire (no distinct set yet)."""
+        key = (category or role or "").lower()
+        if key == "operational":
+            key = "business"
+        questions = self._QUESTIONNAIRE.get(key, self._QUESTIONNAIRE["business"])
         return [{"id": f"q{i+1}", "text": q} for i, q in enumerate(questions)]
 
     def start_review(
@@ -441,7 +450,7 @@ class AuthorityResolutionManager:
             "participant_id": participant.id,
             "role": role,
             "review_status": getattr(participant, "review_status", "na"),
-            "questionnaire": self._questionnaire_for(role),
+            "questionnaire": self._questionnaire_for(role, getattr(participant, "role_category", None)),
             "existing_answers": getattr(participant, "review_answers", None),
             "ar_name": relation.name,
         }
@@ -930,6 +939,8 @@ class AuthorityResolutionManager:
             "affirmations": [
                 {
                     "id": a.id, "role": a.role, "principal": a.principal,
+                    "business_role_id": getattr(a, "business_role_id", None),
+                    "role_category": getattr(a, "role_category", None),
                     "principal_type": a.principal_type, "required": a.required,
                     "affirmed": a.affirmed, "affirmed_by": a.affirmed_by,
                     "affirmed_at": a.affirmed_at, "sort_order": a.sort_order,

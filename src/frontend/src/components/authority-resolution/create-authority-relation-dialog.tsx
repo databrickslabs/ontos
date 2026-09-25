@@ -15,9 +15,10 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import {
-  ACTION_VOCAB, AFFIRMATION_ROLES,
+  ACTION_VOCAB,
   type AuthorityRelation, type AffirmationInput,
 } from '@/types/authority-resolution';
+import type { BusinessRoleRead } from '@/types/business-role';
 
 interface Props {
   open: boolean;
@@ -36,9 +37,9 @@ const DEFAULT_COLUMN_MAP = `{
   "object_id": "promo_id"
 }`;
 
-const DEFAULT_AFFIRMATIONS: AffirmationInput[] = AFFIRMATION_ROLES.map((role) => ({
-  role, principal: '', principal_type: 'user', required: true, is_approver: true, is_reviewer: false,
-}));
+// Participants start empty — the author adds them and picks an organizational
+// Business Role (from Settings) per participant.
+const DEFAULT_AFFIRMATIONS: AffirmationInput[] = [];
 
 interface EvidenceSourceInput {
   type: string;      // delta_table | data_product | asset
@@ -52,10 +53,11 @@ const newEvidenceSource = (): EvidenceSourceInput => ({
 });
 
 export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCreated, relation }: Props) {
-  const { post, put } = useApi();
+  const { get, post, put } = useApi();
   const { toast } = useToast();
   const isEdit = !!relation;
   const [saving, setSaving] = useState(false);
+  const [businessRoles, setBusinessRoles] = useState<BusinessRoleRead[]>([]);
 
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -84,6 +86,15 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
     setEvidenceSources([]); setDomainIds([]); setPrimaryDomainId(null);
     setAffirmations(DEFAULT_AFFIRMATIONS); setTags([]); setScheduleCron(null);
   };
+
+  // Load active Business Roles for the participant role picker (Settings feature).
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await get<BusinessRoleRead[]>('/api/business-roles?role_status=active');
+      if (Array.isArray(data)) setBusinessRoles(data.filter((r) => r.status === 'active'));
+    })();
+  }, [open, get]);
 
   // Prefill from the relation when editing; reset to defaults when creating.
   // Keyed on `open` so reopening the dialog re-syncs from the latest data.
@@ -128,6 +139,8 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
         (relation.affirmations || []).length
           ? (relation.affirmations || []).map((a) => ({
               role: a.role,
+              business_role_id: a.business_role_id ?? undefined,
+              role_category: a.role_category ?? undefined,
               principal: a.principal,
               principal_type: a.principal_type,
               required: a.required,
@@ -189,7 +202,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
       dna_max_threshold: parseFloat(dnaMax) || 0.3,
       domain_ids: domainIds,
       primary_domain_id: primaryDomainId,
-      affirmations: affirmations.filter((a) => a.principal.trim()),
+      affirmations: affirmations.filter((a) => a.principal.trim() && a.role),
       tags: tags.map((t) => ({ tag_fqn: typeof t === 'string' ? t : t.fully_qualified_name })),
       schedule_cron: scheduleCron,
     };
@@ -349,11 +362,21 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             <div key={idx} className="grid grid-cols-[1fr_1.5fr_auto] gap-2 items-center">
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
-                value={a.role}
-                onChange={(e) => updateAffirmation(idx, { role: e.target.value })}
+                value={a.business_role_id || ''}
+                onChange={(e) => {
+                  const br = businessRoles.find((r) => r.id === e.target.value);
+                  updateAffirmation(idx, {
+                    business_role_id: br?.id,
+                    role: br?.name || '',
+                    role_category: br?.category || undefined,
+                  });
+                }}
               >
-                {AFFIRMATION_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                {!AFFIRMATION_ROLES.includes(a.role) && <option value={a.role}>{a.role}</option>}
+                <option value="">Select a role…</option>
+                {businessRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {a.business_role_id && !businessRoles.some((r) => r.id === a.business_role_id) && (
+                  <option value={a.business_role_id}>{a.role || a.business_role_id}</option>
+                )}
               </select>
               <Input
                 value={a.principal}
@@ -385,7 +408,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           ))}
           <Button
             variant="outline" size="sm"
-            onClick={() => setAffirmations((prev) => [...prev, { role: 'business', principal: '', principal_type: 'user', required: true, is_approver: true, is_reviewer: false }])}
+            onClick={() => setAffirmations((prev) => [...prev, { role: '', principal: '', principal_type: 'user', required: true, is_approver: true, is_reviewer: false }])}
           >
             <Plus className="h-4 w-4 mr-1" /> Add participant
           </Button>

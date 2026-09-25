@@ -174,8 +174,10 @@ const DomainMultiSelector: React.FC<DomainMultiSelectorProps> = ({
         </div>
       )}
 
-      {/* Domain selector */}
-      <Popover open={open} onOpenChange={setOpen}>
+      {/* Domain selector. `modal` is required so the popover stays interactive
+          when rendered inside a modal Radix Dialog (otherwise the dialog marks
+          the portaled popover as pointer-events:none and clicks fall through). */}
+      <Popover open={open} onOpenChange={setOpen} modal>
         <PopoverTrigger asChild>
           <Button
             variant="outline"

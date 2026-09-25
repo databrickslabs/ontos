@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import NativeSelect from '@/components/ui/native-select';
 import DomainMultiSelector from '@/components/ui/domain-multi-selector';
 import TagSelector from '@/components/ui/tag-selector';
 import type { AssignedTag } from '@/components/ui/tag-chip';
@@ -222,7 +223,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Authority Relation' : 'New Authority Relation'}</DialogTitle>
         </DialogHeader>
@@ -256,13 +257,9 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
             </div>
             <div className="space-y-1">
               <Label>Action</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                value={action}
-                onChange={(e) => setAction(e.target.value)}
-              >
+              <NativeSelect value={action} onChange={(e) => setAction(e.target.value)}>
                 {ACTION_VOCAB.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
+              </NativeSelect>
             </div>
             <div className="space-y-1">
               <Label>Object type</Label>
@@ -312,15 +309,15 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           {evidenceSources.map((s, idx) => (
             <div key={idx} className="rounded-md border p-3 space-y-2">
               <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
-                <select
-                  className="flex h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                <NativeSelect
+                  className="w-40"
                   value={s.type}
                   onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, type: e.target.value } : x))}
                 >
                   <option value="delta_table">Delta table</option>
                   <option value="data_product">Data Product</option>
                   <option value="asset">Asset</option>
-                </select>
+                </NativeSelect>
                 <Input
                   value={s.ref}
                   onChange={(e) => setEvidenceSources((prev) => prev.map((x, i) => i === idx ? { ...x, ref: e.target.value } : x))}
@@ -360,8 +357,7 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
           </p>
           {affirmations.map((a, idx) => (
             <div key={idx} className="grid grid-cols-[1fr_1.5fr_auto] gap-2 items-center">
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+              <NativeSelect
                 value={a.business_role_id || ''}
                 onChange={(e) => {
                   const br = businessRoles.find((r) => r.id === e.target.value);
@@ -377,21 +373,21 @@ export default function CreateAuthorityRelationDialog({ open, onOpenChange, onCr
                 {a.business_role_id && !businessRoles.some((r) => r.id === a.business_role_id) && (
                   <option value={a.business_role_id}>{a.role || a.business_role_id}</option>
                 )}
-              </select>
+              </NativeSelect>
               <Input
                 value={a.principal}
                 onChange={(e) => updateAffirmation(idx, { principal: e.target.value })}
                 placeholder="principal (email or group)"
               />
               <div className="flex items-center gap-3">
-                <select
-                  className="flex h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                <NativeSelect
+                  className="w-28"
                   value={a.principal_type}
                   onChange={(e) => updateAffirmation(idx, { principal_type: e.target.value })}
                 >
                   <option value="user">user</option>
                   <option value="group">group</option>
-                </select>
+                </NativeSelect>
                 <label className="flex items-center gap-1 text-xs whitespace-nowrap">
                   <input type="checkbox" checked={a.is_approver ?? true}
                     onChange={(e) => updateAffirmation(idx, { is_approver: e.target.checked })} /> approver

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import NativeSelect from '@/components/ui/native-select';
 import { useApi } from '@/hooks/use-api';
 import { Plus, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import {
@@ -161,15 +162,16 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
       {rows.map((r, idx) => (
         <div key={idx} className="rounded-md border p-3 space-y-2">
           <div className="flex items-center gap-2">
-            <select
-              className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+            <NativeSelect
+              className="w-52"
+              selectClassName="h-8 text-xs"
               value={r.mode}
               onChange={(e) => patch(idx, { mode: e.target.value as Mode })}
             >
               <option value="builder">Structured</option>
               <option value="raw">Raw ASSERT</option>
               <option value="existing">Reuse existing check</option>
-            </select>
+            </NativeSelect>
             <div className="flex-1" />
             <Button variant="ghost" size="icon" onClick={() => onChange(rows.filter((_, i) => i !== idx))}>
               <Trash2 className="h-4 w-4" />
@@ -177,14 +179,13 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
           </div>
 
           {r.mode === 'existing' ? (
-            <select
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+            <NativeSelect
               value={r.policyId}
               onChange={(e) => patch(idx, { policyId: e.target.value })}
             >
               <option value="">Select a Compliance Check…</option>
               {checks.map((c) => <option key={c.id} value={c.id}>{c.name}{c.category ? ` (${c.category})` : ''}</option>)}
-            </select>
+            </NativeSelect>
           ) : r.mode === 'raw' ? (
             <div className="space-y-1">
               <Input
@@ -203,8 +204,7 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
           ) : (
             <div className="space-y-2">
               <div className="grid grid-cols-[1fr_1fr] gap-2">
-                <select
-                  className="flex h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                <NativeSelect
                   value={r.predicate}
                   onChange={(e) => setPredicate(idx, e.target.value as Predicate)}
                 >
@@ -212,7 +212,7 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
                   <option value="ceiling">Numeric ceiling</option>
                   <option value="required_flag">Required flag</option>
                   <option value="action_match">Action match</option>
-                </select>
+                </NativeSelect>
                 <Input value={r.field} onChange={(e) => patch(idx, { field: e.target.value })} placeholder="field (e.g. actor_identity)" />
               </div>
               {r.predicate === 'allowlist' && (
@@ -251,13 +251,14 @@ export default function CriteriaBuilder({ rows, onChange }: Props) {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <Label className="text-xs whitespace-nowrap">Direction</Label>
-              <select
-                className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+              <NativeSelect
+                className="w-56"
+                selectClassName="h-8 text-xs"
                 value={r.direction}
                 onChange={(e) => patch(idx, { direction: e.target.value })}
               >
                 {ARF_DIRECTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
             <div className="flex items-center gap-1">
               <Label className="text-xs">Weight</Label>

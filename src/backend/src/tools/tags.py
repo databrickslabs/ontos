@@ -8,75 +8,91 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from src.common.logging import get_logger
+from src.controller import search_scoring
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
 
 
 class SearchTagsTool(BaseTool):
-    """Search for tags by name or namespace."""
-    
+    """Search for tags via the shared, tokenized search index."""
+
     name = "search_tags"
     category = "tags"
-    description = "Search for tags by name, namespace, or description. Tags are used to categorize and label any app object."
+    description = (
+        "Search tags by name, namespace or description (tags categorize any app object). "
+        "Use FEW BROAD terms, not full sentences — each term is matched independently. "
+        "Narrow with the 'namespace' filter and page with 'offset'. Leave 'query' empty "
+        "(or '*') to list tags; the response is always paginated and includes "
+        "'total_count', 'has_more' and 'facets'."
+    )
     parameters = {
         "query": {
             "type": "string",
-            "description": "Search query for tags (e.g., 'pii', 'customer', 'sensitive')"
+            "description": "Search terms (e.g., 'pii', 'customer'). Empty or '*' lists all tags."
         },
         "namespace": {
             "type": "string",
-            "description": "Optional filter by namespace name"
+            "description": "Optional filter by namespace name."
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max results to return (default: 25, max: 100)."
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Number of results to skip for pagination (default: 0)."
         }
     }
     required_params = ["query"]
     required_scope = "tags:read"
-    
+
     async def execute(
         self,
         ctx: ToolContext,
-        query: str,
-        namespace: Optional[str] = None
+        query: str = "",
+        namespace: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
     ) -> ToolResult:
-        """Search for tags."""
-        logger.info(f"[search_tags] Starting - query='{query}', namespace={namespace}")
-        
+        """Search tags over the shared in-memory index."""
+        logger.info(f"[search_tags] Starting - query='{query}', namespace={namespace}, limit={limit}, offset={offset}")
+
+        if not ctx.search_manager:
+            logger.warning("[search_tags] FAILED: search_manager is None")
+            return ToolResult(success=False, error="Search not available", data={"tags": []})
+
         try:
-            from src.controller.tags_manager import TagsManager
-            
-            tags_manager = TagsManager()
-            
-            # List all tags with optional namespace filter
-            tags = tags_manager.list_tags(
-                ctx.db,
-                name_contains=query if query != '*' else None,
-                namespace_name=namespace,
-                limit=100
+            # Tag index items store the namespace under extra_data['category'].
+            data = search_scoring.search_index(
+                ctx.search_manager.index,
+                query,
+                ctx.search_manager.config,
+                type_filter="tag",
+                filters={"category": namespace},
+                limit=limit,
+                offset=offset,
             )
-            
-            result_tags = []
-            for tag in tags:
-                result_tags.append({
-                    "id": str(tag.id),
-                    "name": tag.name,
-                    "fully_qualified_name": tag.fully_qualified_name,
-                    "namespace_name": tag.namespace_name,
-                    "description": tag.description,
-                    "status": tag.status.value if tag.status else None
-                })
-            
-            logger.info(f"[search_tags] SUCCESS: Found {len(result_tags)} tags")
+            logger.info(
+                f"[search_tags] SUCCESS: returned {data['returned']} of {data['total_count']} matching tags"
+            )
             return ToolResult(
                 success=True,
                 data={
-                    "tags": result_tags[:20],
-                    "total_found": len(result_tags)
-                }
+                    "tags": data["results"],
+                    "total_found": data["total_count"],
+                    "returned": data["returned"],
+                    "offset": data["offset"],
+                    "limit": data["limit"],
+                    "has_more": data["has_more"],
+                    "facets": data["facets"],
+                    "query": query,
+                },
             )
-            
+
         except Exception as e:
-            logger.error(f"[search_tags] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}", data={"tags": []})
+            logger.error(f"[search_tags] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
+            return ToolResult(success=False, error=f"{e.__class__.__name__}: {str(e)}", data={"tags": []})
 
 
 class GetTagTool(BaseTool):

@@ -15,11 +15,13 @@ from src.common.features import FeatureAccessLevel
 # Import search configuration
 from src.common.search_config_loader import get_search_config_loader, SearchConfigLoader
 from src.models.search_config import (
-    SearchConfig, 
-    FieldConfig, 
-    MatchType, 
+    SearchConfig,
+    FieldConfig,
+    MatchType,
     SortField,
 )
+# Shared, tokenized scoring core (single source of truth for match logic).
+from src.controller import search_scoring
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -166,12 +168,16 @@ class SearchManager:
             tag_pattern = query_stripped[4:].strip()  # Extract pattern after 'tag:'
             matches = self._filter_by_tag(tag_pattern, config)
         else:
-            # Normal search
-            query_lower = query_stripped.lower()
-            for item in self.index:
-                match = self._find_best_match(item, query_lower, config)
-                if match:
-                    matches.append(match)
+            # Normal search: tokenized scoring via the shared scorer, then wrapped
+            # in SearchMatch so downstream permission-filtering and ranking are unchanged.
+            for scored in search_scoring.score_and_rank(self.index, query_stripped, config):
+                matches.append(SearchMatch(
+                    item=scored.item,
+                    matched_field="",
+                    field_priority=scored.field_priority,
+                    boost_score=scored.total_score,
+                    match_quality=1.0,
+                ))
 
         # Filter based on permissions using AuthorizationManager
         if not user.groups:
@@ -310,108 +316,16 @@ class SearchManager:
         return best_match
 
     def _get_field_value(self, item: SearchIndexItem, field_name: str) -> Optional[str]:
-        """
-        Get the value of a field from a SearchIndexItem.
-        
-        Handles standard fields and extra_data fields.
-        """
-        # Standard fields
-        if field_name == "title":
-            return item.title
-        elif field_name == "description":
-            return item.description
-        elif field_name == "tags":
-            # Join tags into a single searchable string
-            return " ".join(str(t) for t in item.tags) if item.tags else None
-        elif field_name == "type":
-            return item.type
-        elif field_name == "id":
-            return item.id
-        
-        # Check extra_data for custom fields
-        if item.extra_data and field_name in item.extra_data:
-            value = item.extra_data[field_name]
-            if isinstance(value, list):
-                return " ".join(str(v) for v in value)
-            return str(value) if value is not None else None
-        
-        return None
+        """Get the value of a field from a SearchIndexItem (delegates to the shared scorer)."""
+        return search_scoring.get_field_value(item, field_name)
 
     def _check_match(self, value: str, query: str, match_type: MatchType) -> float:
-        """
-        Check if a value matches the query using the specified match type.
-        
-        Returns a match quality score:
-        - 0.0: No match
-        - 0.5-0.8: Partial match (fuzzy)
-        - 1.0: Full match (exact, prefix at start, substring found)
-        """
-        if not value:
-            return 0.0
-        
-        value_lower = value.lower()
-        
-        if match_type == MatchType.EXACT:
-            return 1.0 if value_lower == query else 0.0
-        
-        elif match_type == MatchType.PREFIX:
-            # Check if query matches start of value (or any word in value)
-            if value_lower.startswith(query):
-                return 1.0
-            # Also check word boundaries for multi-word values
-            # Split on spaces AND slashes to handle FQN tag format (namespace/tagname)
-            import re
-            words = re.split(r'[\s/]+', value_lower)
-            for word in words:
-                if word.startswith(query):
-                    return 0.9  # Slightly lower score for non-leading word match
-            return 0.0
-        
-        elif match_type == MatchType.SUBSTRING:
-            if query in value_lower:
-                # Higher score if match is at start or word boundary
-                if value_lower.startswith(query):
-                    return 1.0
-                elif f" {query}" in value_lower:
-                    return 0.9
-                return 0.8
-            return 0.0
-        
-        elif match_type == MatchType.FUZZY:
-            # Simple fuzzy matching using edit distance approximation
-            return self._fuzzy_match(value_lower, query)
-        
-        return 0.0
+        """Check how well a query matches a value (delegates to the shared scorer)."""
+        return search_scoring.check_match(value, query, match_type)
 
     def _fuzzy_match(self, value: str, query: str) -> float:
-        """
-        Simple fuzzy matching implementation.
-        
-        Returns a score between 0 and 1 based on similarity.
-        """
-        # First check for substring match
-        if query in value:
-            return 0.9
-        
-        # Check if all query characters appear in order (subsequence)
-        query_idx = 0
-        for char in value:
-            if query_idx < len(query) and char == query[query_idx]:
-                query_idx += 1
-        
-        if query_idx == len(query):
-            # All characters found in order
-            return 0.7
-        
-        # Check character overlap for very fuzzy matching
-        query_set = set(query)
-        value_set = set(value[:len(query) * 2])  # Only check beginning of value
-        overlap = len(query_set & value_set) / len(query_set) if query_set else 0
-        
-        if overlap >= 0.8:
-            return 0.5
-        
-        return 0.0
+        """Fuzzy match score in [0, 1] (delegates to the shared scorer)."""
+        return search_scoring.fuzzy_match(value, query)
 
     def _sort_matches(self, matches: List[SearchMatch], config: SearchConfig) -> List[SearchMatch]:
         """

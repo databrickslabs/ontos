@@ -7,80 +7,92 @@ Tools for searching, creating, updating, and deleting projects.
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
+from src.common.search_interfaces import SearchIndexItem
+from src.controller import search_scoring
+from src.models.search_config import SearchConfig
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
 
 
 class SearchProjectsTool(BaseTool):
-    """Search for projects by name or description."""
-    
+    """Search for projects via the shared, tokenized scorer (over DB rows)."""
+
     name = "search_projects"
     category = "organization"
-    description = "Search for projects by name, title, or description. Returns matching projects with their team counts."
+    description = (
+        "Search projects by name, title or description. Use FEW BROAD terms, not full "
+        "sentences — each term is matched independently and results are ranked by "
+        "relevance. Page with 'offset'. Leave 'query' empty (or '*') to list projects; "
+        "the response is always paginated and includes 'total_count' and 'has_more'."
+    )
     parameters = {
         "query": {
             "type": "string",
-            "description": "Search query for projects (e.g., 'customer analytics', 'data platform')"
+            "description": "Search terms (e.g., 'customer analytics', 'data platform'). Empty or '*' lists all projects."
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max results to return (default: 25, max: 100)."
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Number of results to skip for pagination (default: 0)."
         }
     }
     required_params = ["query"]
     required_scope = "projects:read"
-    
+
     async def execute(
         self,
         ctx: ToolContext,
-        query: str
+        query: str = "",
+        limit: int = 25,
+        offset: int = 0,
     ) -> ToolResult:
-        """Search for projects."""
-        logger.info(f"[search_projects] Starting - query='{query}'")
-        
+        """Search projects: DB rows adapted to index items, then tokenized-scored."""
+        logger.info(f"[search_projects] Starting - query='{query}', limit={limit}, offset={offset}")
+
         try:
             from src.db_models.projects import ProjectDb
-            
-            projects_db = ctx.db.query(ProjectDb).limit(500).all()
+
+            projects_db = ctx.db.query(ProjectDb).limit(5000).all()
             logger.debug(f"[search_projects] Found {len(projects_db)} total projects in database")
-            
-            if not projects_db:
-                return ToolResult(
-                    success=True,
-                    data={"projects": [], "total_found": 0, "message": "No projects found"}
+
+            # Adapt rows to SearchIndexItem so the shared scorer applies (projects are
+            # not part of the persistent search index).
+            items = [
+                SearchIndexItem(
+                    id=f"project::{p.id}",
+                    type="project",
+                    feature_id="projects",
+                    title=p.name or p.title or "",
+                    description=p.description,
+                    link=f"/projects/{p.id}",
+                    tags=[x for x in [p.title, p.project_type] if x],
                 )
-            
-            query_lower = query.lower() if query and query != '*' else ''
-            filtered = []
-            
-            for p in projects_db:
-                if not query_lower:
-                    include = True
-                else:
-                    name_match = query_lower in (p.name or "").lower()
-                    title_match = query_lower in (p.title or "").lower()
-                    desc_match = query_lower in (p.description or "").lower()
-                    include = name_match or title_match or desc_match
-                
-                if include:
-                    filtered.append({
-                        "id": str(p.id),
-                        "name": p.name,
-                        "title": p.title,
-                        "description": p.description,
-                        "project_type": p.project_type,
-                        "team_count": len(p.teams) if p.teams else 0
-                    })
-            
-            logger.info(f"[search_projects] SUCCESS: Found {len(filtered)} matching projects")
+                for p in projects_db
+            ]
+
+            config = ctx.search_manager.config if ctx.search_manager else SearchConfig()
+            data = search_scoring.search_index(items, query, config, limit=limit, offset=offset)
+            logger.info(f"[search_projects] SUCCESS: returned {data['returned']} of {data['total_count']} matching projects")
             return ToolResult(
                 success=True,
                 data={
-                    "projects": filtered[:20],
-                    "total_found": len(filtered)
-                }
+                    "projects": data["results"],
+                    "total_found": data["total_count"],
+                    "returned": data["returned"],
+                    "offset": data["offset"],
+                    "limit": data["limit"],
+                    "has_more": data["has_more"],
+                    "query": query,
+                },
             )
-            
+
         except Exception as e:
-            logger.error(f"[search_projects] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}", data={"projects": []})
+            logger.error(f"[search_projects] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
+            return ToolResult(success=False, error=f"{e.__class__.__name__}: {str(e)}", data={"projects": []})
 
 
 class GetProjectTool(BaseTool):

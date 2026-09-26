@@ -7,6 +7,9 @@ Tools for searching, creating, updating, and deleting teams.
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
+from src.common.search_interfaces import SearchIndexItem
+from src.controller import search_scoring
+from src.models.search_config import SearchConfig
 from src.repositories.entity_domain_association_repository import entity_domain_repo
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
@@ -14,36 +17,51 @@ logger = get_logger(__name__)
 
 
 class SearchTeamsTool(BaseTool):
-    """Search for teams by name or domain."""
-    
+    """Search for teams via the shared, tokenized scorer (over DB rows)."""
+
     name = "search_teams"
     category = "organization"
-    description = "Search for teams by name, title, or domain. Returns matching teams with their member counts."
+    description = (
+        "Search teams by name, title or description. Use FEW BROAD terms, not full "
+        "sentences — each term is matched independently and results are ranked by "
+        "relevance. Narrow with the 'domain_id' filter and page with 'offset'. Leave "
+        "'query' empty (or '*') to list teams; the response is always paginated and "
+        "includes 'total_count' and 'has_more'."
+    )
     parameters = {
         "query": {
             "type": "string",
-            "description": "Search query for teams (e.g., 'data engineering', 'analytics')"
+            "description": "Search terms (e.g., 'data engineering', 'analytics'). Empty or '*' lists all teams."
         },
         "domain_id": {
             "type": "string",
-            "description": "Optional filter by domain ID"
+            "description": "Optional filter by domain ID."
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max results to return (default: 25, max: 100)."
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Number of results to skip for pagination (default: 0)."
         }
     }
     required_params = ["query"]
     required_scope = "teams:read"
-    
+
     async def execute(
         self,
         ctx: ToolContext,
-        query: str,
-        domain_id: Optional[str] = None
+        query: str = "",
+        domain_id: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
     ) -> ToolResult:
-        """Search for teams."""
-        logger.info(f"[search_teams] Starting - query='{query}', domain_id={domain_id}")
-        
+        """Search teams: DB rows adapted to index items, then tokenized-scored."""
+        logger.info(f"[search_teams] Starting - query='{query}', domain_id={domain_id}, limit={limit}, offset={offset}")
+
         try:
             from src.db_models.teams import TeamDb
-            from src.repositories.entity_domain_association_repository import entity_domain_repo
 
             db_query = ctx.db.query(TeamDb)
             if domain_id:
@@ -52,53 +70,43 @@ class SearchTeamsTool(BaseTool):
                 )
                 db_query = db_query.filter(TeamDb.id.in_(team_ids or ["__none__"]))
 
-            teams_db = db_query.limit(500).all()
+            teams_db = db_query.limit(5000).all()
             logger.debug(f"[search_teams] Found {len(teams_db)} total teams in database")
-            
-            if not teams_db:
-                return ToolResult(
-                    success=True,
-                    data={"teams": [], "total_found": 0, "message": "No teams found"}
+
+            # Adapt rows to SearchIndexItem so the shared scorer applies (teams are
+            # not part of the persistent search index).
+            items = [
+                SearchIndexItem(
+                    id=f"team::{t.id}",
+                    type="team",
+                    feature_id="teams",
+                    title=t.name or t.title or "",
+                    description=t.description,
+                    link=f"/teams/{t.id}",
+                    tags=[x for x in [t.title] if x],
                 )
-            
-            query_lower = query.lower() if query and query != '*' else ''
-            filtered = []
-            
-            for t in teams_db:
-                if not query_lower:
-                    include = True
-                else:
-                    name_match = query_lower in (t.name or "").lower()
-                    title_match = query_lower in (t.title or "").lower()
-                    desc_match = query_lower in (t.description or "").lower()
-                    include = name_match or title_match or desc_match
-                
-                if include:
-                    filtered.append({
-                        "id": str(t.id),
-                        "name": t.name,
-                        "title": t.title,
-                        "description": t.description,
-                        "domain_ids": [
-                            d.domain_id for d in entity_domain_repo.get_domains_for_entity(
-                                ctx.db, entity_type="team", entity_id=str(t.id)
-                            )
-                        ],
-                        "member_count": len(t.members) if t.members else 0
-                    })
-            
-            logger.info(f"[search_teams] SUCCESS: Found {len(filtered)} matching teams")
+                for t in teams_db
+            ]
+
+            config = ctx.search_manager.config if ctx.search_manager else SearchConfig()
+            data = search_scoring.search_index(items, query, config, limit=limit, offset=offset)
+            logger.info(f"[search_teams] SUCCESS: returned {data['returned']} of {data['total_count']} matching teams")
             return ToolResult(
                 success=True,
                 data={
-                    "teams": filtered[:20],
-                    "total_found": len(filtered)
-                }
+                    "teams": data["results"],
+                    "total_found": data["total_count"],
+                    "returned": data["returned"],
+                    "offset": data["offset"],
+                    "limit": data["limit"],
+                    "has_more": data["has_more"],
+                    "query": query,
+                },
             )
-            
+
         except Exception as e:
-            logger.error(f"[search_teams] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}", data={"teams": []})
+            logger.error(f"[search_teams] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
+            return ToolResult(success=False, error=f"{e.__class__.__name__}: {str(e)}", data={"teams": []})
 
 
 class GetTeamTool(BaseTool):

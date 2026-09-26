@@ -2459,8 +2459,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
     # --- SearchableAsset implementation ---
 
-    def _build_search_index_item(self, product: DataProductApi, preloaded_domains=None) -> Optional[SearchIndexItem]:
-        """Convert a single DataProduct API model to a SearchIndexItem."""
+    def _build_search_index_item(self, product: DataProductApi, preloaded_domains=None, preloaded_concepts=None) -> Optional[SearchIndexItem]:
+        """Convert a single DataProduct API model to a SearchIndexItem.
+
+        ``preloaded_concepts`` (linked ontology concept labels/IRI tails) is
+        indexed so plain-language queries can match a product via its semantic
+        links — the same matching the MCP search tool used to do with a
+        dedicated DB lookup. During a full index build the concepts are
+        batch-loaded and passed in; on a single upsert they are fetched here.
+        """
         if not product.id or not product.name:
             return None
 
@@ -2518,6 +2525,24 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as dom_err:
             logger.debug("Could not load domains for product %s search index: %s", product.id, dom_err)
 
+        # Index linked ontology concept labels / IRI tails so semantic queries match.
+        try:
+            from src.repositories.semantic_links_repository import entity_semantic_links_repo
+            if preloaded_concepts is not None:
+                concept_terms = preloaded_concepts
+            else:
+                links = entity_semantic_links_repo.list_for_entity(
+                    self._db, entity_id=str(product.id), entity_type="data_product"
+                )
+                concept_terms = []
+                for sl in links:
+                    label = (sl.label or "").strip()
+                    iri_tail = (sl.iri.split('#')[-1].split('/')[-1]).strip() if sl.iri else ""
+                    concept_terms.extend(v for v in (label, iri_tail) if v)
+            tag_strings = tag_strings + [c for c in concept_terms if c]
+        except Exception as sem_err:
+            logger.debug("Could not load semantic links for product %s search index: %s", product.id, sem_err)
+
         extra_data = {
             "status": product.status or "",
             "version": product.version or "",
@@ -2560,8 +2585,26 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             domains_map = entity_domain_repo.get_domains_for_entities(
                 self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_api]
             ) if products_api else {}
+            # Batch-load linked concept terms once (label + IRI tail) for semantic search.
+            concepts_map: Dict[str, List[str]] = {}
+            try:
+                from src.repositories.semantic_links_repository import entity_semantic_links_repo
+                for sl in entity_semantic_links_repo.list_all(self._db):
+                    if sl.entity_type != "data_product":
+                        continue
+                    label = (sl.label or "").strip()
+                    iri_tail = (sl.iri.split('#')[-1].split('/')[-1]).strip() if sl.iri else ""
+                    terms = [v for v in (label, iri_tail) if v]
+                    if terms:
+                        concepts_map.setdefault(str(sl.entity_id), []).extend(terms)
+            except Exception as sem_err:
+                logger.debug("Could not batch-load semantic links for search index: %s", sem_err)
             for product in products_api:
-                item = self._build_search_index_item(product, preloaded_domains=domains_map.get(str(product.id), []))
+                item = self._build_search_index_item(
+                    product,
+                    preloaded_domains=domains_map.get(str(product.id), []),
+                    preloaded_concepts=concepts_map.get(str(product.id), []),
+                )
                 if item:
                     items.append(item)
             logger.info(f"Prepared {len(items)} ODPS products for search index.")

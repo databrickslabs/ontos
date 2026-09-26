@@ -152,172 +152,99 @@ class DeleteDataProductTool(BaseTool):
 
 
 class SearchDataProductsTool(BaseTool):
-    """Search for data products by name, domain, description, or keywords."""
-    
+    """Search for data products via the shared, tokenized search index."""
+
     name = "search_data_products"
     category = "data_products"
-    description = "Search for data products by name, domain, description, or keywords. Returns matching data products with their metadata."
+    description = (
+        "Search data products by name, domain, description, tags or linked ontology "
+        "concepts. Use FEW BROAD terms, not full sentences — each term is matched "
+        "independently and results are ranked by relevance. Narrow with the 'domain'/"
+        "'status' filters and page with 'offset' instead of broadening the query. Leave "
+        "'query' empty (or '*') to list products; the response is always paginated and "
+        "includes 'total_count', 'has_more' and 'facets' so you can refine rather than "
+        "fetch everything. Call get_data_product for full details (output tables, ports)."
+    )
     parameters = {
         "query": {
             "type": "string",
-            "description": "Search query for data products (e.g., 'customer', 'sales transactions')"
+            "description": "Search terms (e.g., 'customer', 'sales'). Empty or '*' lists all products."
         },
         "domain": {
             "type": "string",
-            "description": "Optional filter by domain (e.g., 'Customer', 'Sales', 'Finance')"
+            "description": "Optional filter by domain (e.g., 'Customer', 'Sales', 'Finance')."
         },
         "status": {
             "type": "string",
             "enum": ["active", "draft", "deprecated", "retired"],
-            "description": "Optional filter by product status"
+            "description": "Optional filter by product status."
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max results to return (default: 25, max: 100)."
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Number of results to skip for pagination (default: 0)."
         }
     }
     required_params = ["query"]
     required_scope = "data-products:read"
-    
+
     async def execute(
         self,
         ctx: ToolContext,
-        query: str,
+        query: str = "",
         domain: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
     ) -> ToolResult:
-        """Search for data products."""
-        logger.info(f"[search_data_products] Starting - query='{query}', domain={domain}, status={status}")
-        
+        """Search data products over the shared in-memory index."""
+        logger.info(
+            f"[search_data_products] Starting - query='{query}', domain={domain}, "
+            f"status={status}, limit={limit}, offset={offset}"
+        )
+
+        if not ctx.search_manager:
+            logger.warning("[search_data_products] FAILED: search_manager is None")
+            return ToolResult(success=False, error="Search not available", data={"products": []})
+
         try:
-            # Query database directly using the session
-            from src.db_models.data_products import DataProductDb
-            from src.db_models.semantic_links import EntitySemanticLinkDb
-            from src.repositories.entity_domain_association_repository import entity_domain_repo
-
-            products_db = ctx.db.query(DataProductDb).limit(500).all()
-            logger.debug(f"[search_data_products] Found {len(products_db)} total products in database")
-
-            if not products_db:
-                logger.info(f"[search_data_products] No products found in database")
-                return ToolResult(
-                    success=True,
-                    data={"products": [], "total_found": 0, "message": "No data products found"}
-                )
-
-            # Batch-load domain assignments (domain moved to the junction table).
-            # {product_id: [domain names]} with the primary name tracked separately.
-            domains_map = entity_domain_repo.get_domains_for_entities(
-                ctx.db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
+            data = search_scoring.search_index(
+                ctx.search_manager.index,
+                query,
+                ctx.search_manager.config,
+                type_filter="data-product",
+                filters={"domain": domain, "status": status},
+                limit=limit,
+                offset=offset,
             )
-            product_domain_names: Dict[str, List[str]] = {
-                pid: [a.domain_name for a in assigned if a.domain_name]
-                for pid, assigned in domains_map.items()
-            }
-            product_primary_domain: Dict[str, Optional[str]] = {
-                pid: next((a.domain_name for a in assigned if a.is_primary), None)
-                for pid, assigned in domains_map.items()
-            }
-            
-            # Filter by query (name, description, domain)
-            query_lower = query.lower() if query and query != '*' else ''
-            filtered = []
-            
-            # Build set of product IDs that match via semantic links
-            semantic_product_ids: set = set()
-            if query_lower:
-                try:
-                    sem_links = ctx.db.query(EntitySemanticLinkDb).filter(
-                        EntitySemanticLinkDb.entity_type == 'data_product'
-                    ).all()
-                    for sl in sem_links:
-                        iri_tail = (sl.iri.split('#')[-1].split('/')[-1]).lower()
-                        label_lower = (sl.label or '').lower()
-                        if query_lower in iri_tail or query_lower in label_lower:
-                            semantic_product_ids.add(sl.entity_id)
-                    if semantic_product_ids:
-                        logger.debug(f"[search_data_products] {len(semantic_product_ids)} products matched via semantic links")
-                except Exception as e:
-                    logger.warning(f"[search_data_products] Semantic link lookup failed: {e}")
-            
-            for p in products_db:
-                p_domain_names = product_domain_names.get(str(p.id), [])
-                # If query is empty or '*', include all products
-                if not query_lower:
-                    include = True
-                else:
-                    # Match on name
-                    name_match = query_lower in (p.name or "").lower()
-
-                    # Match on description (stored as JSON)
-                    desc_match = False
-                    if p.description:
-                        try:
-                            desc_dict = json.loads(p.description) if isinstance(p.description, str) else p.description
-                            if isinstance(desc_dict, dict):
-                                desc_text = desc_dict.get('purpose', '')
-                                desc_match = query_lower in desc_text.lower()
-                        except Exception:
-                            pass
-
-                    # Match on domain (any assigned domain — primary or additional)
-                    domain_match = any(query_lower in (n or "").lower() for n in p_domain_names)
-
-                    # Match via semantic links (ontology concepts)
-                    semantic_match = str(p.id) in semantic_product_ids
-
-                    include = name_match or desc_match or domain_match or semantic_match
-
-                if include:
-                    # Apply filters (any-of over assigned domains)
-                    if domain and not any(n.lower() == domain.lower() for n in p_domain_names):
-                        continue
-                    if status and p.status != status:
-                        continue
-                    
-                    # Extract output tables from output_ports JSON
-                    output_tables = []
-                    if p.output_ports:
-                        try:
-                            ports = json.loads(p.output_ports) if isinstance(p.output_ports, str) else p.output_ports
-                            if isinstance(ports, list):
-                                for port in ports:
-                                    if isinstance(port, dict):
-                                        output_tables.append(port.get('name', 'Unknown'))
-                        except Exception:
-                            pass
-                    
-                    # Extract description purpose from JSON
-                    desc_purpose = None
-                    if p.description:
-                        try:
-                            desc_dict = json.loads(p.description) if isinstance(p.description, str) else p.description
-                            if isinstance(desc_dict, dict):
-                                desc_purpose = desc_dict.get('purpose')
-                        except Exception:
-                            pass
-                    
-                    filtered.append({
-                        "id": str(p.id),
-                        "name": p.name,
-                        "domain": product_primary_domain.get(str(p.id)),
-                        "description": desc_purpose,
-                        "status": p.status,
-                        "output_tables": output_tables[:5],  # Limit for response size
-                        "version": p.version
-                    })
-            
-            logger.info(f"[search_data_products] SUCCESS: Found {len(filtered)} matching products")
+            # Present under the historical 'products'/'total_found' keys for compatibility.
+            logger.info(
+                f"[search_data_products] SUCCESS: returned {data['returned']} of "
+                f"{data['total_count']} matching products"
+            )
             return ToolResult(
                 success=True,
                 data={
-                    "products": filtered[:20],  # Limit results
-                    "total_found": len(filtered)
-                }
+                    "products": data["results"],
+                    "total_found": data["total_count"],
+                    "returned": data["returned"],
+                    "offset": data["offset"],
+                    "limit": data["limit"],
+                    "has_more": data["has_more"],
+                    "facets": data["facets"],
+                    "query": query,
+                },
             )
-            
+
         except Exception as e:
-            logger.error(f"[search_data_products] FAILED: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(f"[search_data_products] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
             return ToolResult(
                 success=False,
-                error=f"{type(e).__name__}: {str(e)}",
-                data={"products": []}
+                error=f"{e.__class__.__name__}: {str(e)}",
+                data={"products": []},
             )
 
 

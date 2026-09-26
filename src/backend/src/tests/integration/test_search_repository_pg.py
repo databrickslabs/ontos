@@ -25,38 +25,45 @@ from src.repositories import search_repository as repo
 _PG_URL = os.environ.get("SEARCH_TEST_PG_URL")
 
 
-def _engine_or_skip():
+def _check_pg_or_skip():
     if not _PG_URL:
         pytest.skip("SEARCH_TEST_PG_URL not set — Postgres FTS integration test skipped")
     try:
         eng = create_engine(_PG_URL, future=True)
         with eng.connect() as c:
             c.execute(text("SELECT 1"))
-        return eng
+        eng.dispose()
     except Exception as e:  # pragma: no cover - environment dependent
         pytest.skip(f"Postgres not reachable at SEARCH_TEST_PG_URL: {e}")
 
 
 @pytest.fixture()
 def pg_session():
-    """A session against a freshly created search_documents table in a temp schema."""
-    engine = _engine_or_skip()
+    """A session against a freshly created search_documents table in a throwaway schema.
+
+    The schema is set via libpq ``search_path`` on every connection (not
+    schema_translate_map) so that the model's raw ``after_create`` DDL (the
+    Postgres ``tsvector`` column + GIN index) lands in the temp schema too. The
+    schema is dropped on teardown, so nothing outside it is touched.
+    """
+    _check_pg_or_skip()
     schema = f"search_it_{uuid.uuid4().hex[:8]}"
-    with engine.begin() as conn:
+    admin = create_engine(_PG_URL, future=True)
+    with admin.begin() as conn:
         conn.execute(text(f'CREATE SCHEMA "{schema}"'))
-        conn.execute(text(f'SET search_path TO "{schema}"'))
-    # Create the table (+ tsvector/GIN via the model's after_create DDL) in the schema.
-    creator = create_engine(_PG_URL, future=True, execution_options={"schema_translate_map": {None: schema}})
-    SearchDocumentDb.__table__.create(bind=creator)
-    Session = sessionmaker(bind=creator, future=True)
+    # Every connection from this engine uses the temp schema as its search_path.
+    engine = create_engine(_PG_URL, future=True, connect_args={"options": f"-csearch_path={schema}"})
+    SearchDocumentDb.__table__.create(bind=engine)  # CREATE TABLE + after_create DDL run in the schema
+    Session = sessionmaker(bind=engine, future=True)
     db = Session()
-    db.execute(text(f'SET search_path TO "{schema}"'))
     try:
         yield db
     finally:
         db.close()
-        with engine.begin() as conn:
+        engine.dispose()
+        with admin.begin() as conn:
             conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        admin.dispose()
 
 
 def _item(id_, type_, feature_id, title, description="", tags=None, extra=None):

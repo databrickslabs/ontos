@@ -248,3 +248,81 @@ def search(
         "facets": _facets(db, where, params) if include_facets else {},
         "query": query,
     }
+
+
+def _row_to_item(row: Any) -> SearchIndexItem:
+    """Reconstruct a full SearchIndexItem from a search_documents row (for the REST path)."""
+    m = row._mapping
+    tags = m["tags"]
+    if isinstance(tags, str):
+        tags = json.loads(tags)
+    extra = m["extra_data"]
+    if isinstance(extra, str):
+        extra = json.loads(extra)
+    return SearchIndexItem(
+        id=m["id"],
+        type=m["type"],
+        title=m["title"],
+        description=m["description"],
+        link=m["link"] or "",
+        tags=[str(t) for t in (tags or [])],
+        feature_id=m["feature_id"],
+        extra_data=extra or {},
+    )
+
+
+def _search_by_tag(
+    db: Session, pattern: str, allowed_features: Optional[Iterable[str]], limit: int
+) -> List[SearchIndexItem]:
+    """Mirror SearchManager._filter_by_tag: exact match when the pattern has a '/',
+    otherwise namespace-prefix match (tag == pattern or starts with 'pattern/')."""
+    exact = "/" in pattern
+    clauses = ["lower(t) = lower(:p)"]
+    params: Dict[str, Any] = {"p": pattern, "limit": limit}
+    if not exact:
+        clauses.append("lower(t) LIKE lower(:pp)")
+        params["pp"] = f"{pattern}/%"
+    tag_cond = " OR ".join(clauses)
+    where = [f"EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags) t WHERE {tag_cond})"]
+    if allowed_features is not None:
+        where.append("feature_id = ANY(:allowed_features)")
+        params["allowed_features"] = list(allowed_features)
+    sql = (
+        "SELECT id, entity_id, type, title, description, link, tags, extra_data, feature_id "
+        f"FROM search_documents WHERE {' AND '.join(where)} ORDER BY lower(title) ASC LIMIT :limit"
+    )
+    return [_row_to_item(r) for r in db.execute(text(sql), params)]
+
+
+def search_index_items(
+    db: Session,
+    query: str,
+    *,
+    allowed_features: Optional[Iterable[str]] = None,
+    limit: int = 200,
+) -> List[SearchIndexItem]:
+    """Ranked SearchIndexItems for the REST path (caller applies permission filtering).
+
+    Supports the ``tag:`` prefix like the in-memory SearchManager.
+    """
+    limit = max(1, min(limit, 500))
+    q = (query or "").strip()
+    if q.lower().startswith("tag:"):
+        return _search_by_tag(db, q[4:].strip(), allowed_features, limit)
+
+    where, params, has_query = _where(query, None, None, allowed_features)
+    order = (
+        "ts_rank_cd(search_tsv, websearch_to_tsquery('english', :q)) DESC, lower(title) ASC"
+        if has_query else "lower(title) ASC"
+    )
+    sql = (
+        "SELECT id, entity_id, type, title, description, link, tags, extra_data, feature_id "
+        f"FROM search_documents{where} ORDER BY {order} LIMIT :limit"
+    )
+    return [_row_to_item(r) for r in db.execute(text(sql), {**params, "limit": limit})]
+
+
+def replace_all(db: Session, items: Iterable[SearchIndexItem]) -> int:
+    """Full rebuild: clear the table and re-insert all items (one transaction)."""
+    db.execute(text("DELETE FROM search_documents"))
+    return upsert_documents(db, items)

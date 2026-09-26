@@ -7,7 +7,6 @@ Tools for global search across all indexed features.
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
-from src.controller import search_scoring
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
@@ -66,10 +65,8 @@ class GlobalSearchTool(BaseTool):
         try:
             # MCP has its own scope-based access control via tokens, so no per-user
             # permission filtering here — we search the shared index directly.
-            data = search_scoring.search_index(
-                ctx.search_manager.index,
+            data = ctx.search_manager.query_index(
                 query,
-                ctx.search_manager.config,
                 type_filter=type,
                 limit=limit,
                 offset=offset,

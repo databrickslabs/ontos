@@ -8,7 +8,6 @@ import json
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
-from src.controller import search_scoring
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
@@ -536,10 +535,8 @@ class SearchDataContractsTool(BaseTool):
             return ToolResult(success=False, error="Search not available", data={"contracts": []})
 
         try:
-            data = search_scoring.search_index(
-                ctx.search_manager.index,
+            data = ctx.search_manager.query_index(
                 query,
-                ctx.search_manager.config,
                 type_filter="data-contract",
                 filters={"domain": domain, "status": status},
                 limit=limit,

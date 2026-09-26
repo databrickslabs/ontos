@@ -124,3 +124,32 @@ def test_facets(seeded):
     out = repo.search(seeded, "*")
     assert out["facets"]["type"]["data-product"] == 2
     assert out["facets"]["status"]["active"] == 2
+
+
+def test_search_index_items_reconstructs_full_item(seeded):
+    from src.common.search_interfaces import SearchIndexItem
+    items = repo.search_index_items(seeded, "customer churn")
+    assert items and isinstance(items[0], SearchIndexItem)
+    top = items[0]
+    assert top.id == "product::1"          # full id preserved (not the bare entity id)
+    assert top.type == "data-product"
+    assert top.feature_id == "data-products"
+    assert top.extra_data.get("version") == "1.2.0"   # full extra_data round-trips
+
+
+def test_search_index_items_permission_filter(seeded):
+    items = repo.search_index_items(seeded, "*", allowed_features=["data-contracts"])
+    assert [i.id for i in items] == ["contract::3"]
+
+
+def test_replace_all_rebuild_removes_stale(seeded):
+    # Rebuild with a single item — stale rows must be gone.
+    from src.common.search_interfaces import SearchIndexItem
+    repo.replace_all(seeded, [
+        SearchIndexItem(id="product::99", type="data-product", feature_id="data-products",
+                        title="Fresh Only", description="", link="/data-products/99", tags=[], extra_data={}),
+    ])
+    seeded.flush()
+    out = repo.search(seeded, "*")
+    assert out["total_count"] == 1
+    assert out["results"][0]["id"] == "99"

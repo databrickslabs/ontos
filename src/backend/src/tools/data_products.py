@@ -216,7 +216,9 @@ class SearchDataProductsTool(BaseTool):
                 query,
                 ctx.search_manager.config,
                 type_filter="data-product",
-                filters={"domain": domain, "status": status},
+                # 'domains' = full assigned-domain set, so the filter matches ANY
+                # assigned domain exactly (not just the primary).
+                filters={"domains": domain, "status": status},
                 limit=limit,
                 offset=offset,
             )

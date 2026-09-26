@@ -27,13 +27,15 @@ def items():
             id="product::1", type="data-product", feature_id="data-products",
             title="Customer Churn", description="Predicts customer churn risk",
             link="/data-products/1", tags=["ml", "customer"],
-            extra_data={"status": "active", "domain": "Customer", "owner": "Alice"},
+            extra_data={"status": "active", "domain": "Customer", "owner": "Alice",
+                        "version": "1.2.0", "domains": ["Customer", "Sales"]},
         ),
         SearchIndexItem(
             id="product::2", type="data-product", feature_id="data-products",
             title="Sales Transactions", description="Daily sales facts",
             link="/data-products/2", tags=["finance"],
-            extra_data={"status": "draft", "domain": "Sales", "owner": "Bob"},
+            extra_data={"status": "draft", "domain": "Sales", "owner": "Bob",
+                        "domains": ["Sales"]},
         ),
         SearchIndexItem(
             id="contract::3", type="data-contract", feature_id="data-contracts",
@@ -88,11 +90,23 @@ def test_type_filter(config, items):
     assert out["results"][0]["type"] == "data-contract"
 
 
-def test_status_filter_is_exact_domain_filter_is_contains(config, items):
+def test_filters_are_exact_case_insensitive(config, items):
     active = search_scoring.search_index(items, "*", config, filters={"status": "active"})
-    assert active["total_count"] == 2
-    sales = search_scoring.search_index(items, "*", config, filters={"domain": "sales"})
-    assert sales["total_count"] == 2  # Sales product + Sales-domain contract
+    assert active["total_count"] == 2  # product::1 and contract::3 are active
+    # Exact: 'Sale' must NOT match 'Sales'.
+    assert search_scoring.search_index(items, "*", config, filters={"domain": "Sale"})["total_count"] == 0
+
+
+def test_domains_filter_matches_any_assigned_domain(config, items):
+    # product::1 has assigned domains [Customer, Sales]; filtering by Sales must include it.
+    out = search_scoring.search_index(items, "*", config, filters={"domains": "sales"})
+    ids = sorted(r["id"] for r in out["results"])
+    assert ids == ["1", "2"]  # both products carry an assigned 'Sales' domain
+
+
+def test_version_surfaced_when_present(config, items):
+    out = search_scoring.search_index(items, "churn", config)
+    assert out["results"][0]["version"] == "1.2.0"
 
 
 def test_facets_present(config, items):

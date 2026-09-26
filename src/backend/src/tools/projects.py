@@ -75,7 +75,7 @@ class SearchProjectsTool(BaseTool):
             ]
 
             config = ctx.search_manager.config if ctx.search_manager else SearchConfig()
-            data = search_scoring.search_index(items, query, config, limit=limit, offset=offset)
+            data = search_scoring.search_index(items, query, config, limit=limit, offset=offset, include_facets=False)
             logger.info(f"[search_projects] SUCCESS: returned {data['returned']} of {data['total_count']} matching projects")
             return ToolResult(
                 success=True,

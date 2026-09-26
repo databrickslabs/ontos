@@ -89,7 +89,7 @@ class SearchTeamsTool(BaseTool):
             ]
 
             config = ctx.search_manager.config if ctx.search_manager else SearchConfig()
-            data = search_scoring.search_index(items, query, config, limit=limit, offset=offset)
+            data = search_scoring.search_index(items, query, config, limit=limit, offset=offset, include_facets=False)
             logger.info(f"[search_teams] SUCCESS: returned {data['returned']} of {data['total_count']} matching teams")
             return ToolResult(
                 success=True,

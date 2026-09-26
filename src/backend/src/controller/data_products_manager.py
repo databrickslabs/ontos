@@ -2517,11 +2517,18 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         # Index every assigned domain NAME so domain-keyed search matches by any of the
         # product's domains (primary or additional) — issue #520 story 14.
+        assigned_domain_names: List[str] = []
+        primary_domain_name: Optional[str] = None
         try:
             assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
                 self._db, entity_type="data_product", entity_id=str(product.id)
             )
-            tag_strings = tag_strings + [d.domain_name for d in assigned if d.domain_name]
+            assigned_domain_names = [d.domain_name for d in assigned if d.domain_name]
+            primary_domain_name = next(
+                (d.domain_name for d in assigned if getattr(d, "is_primary", False) and d.domain_name),
+                None,
+            )
+            tag_strings = tag_strings + assigned_domain_names
         except Exception as dom_err:
             logger.debug("Could not load domains for product %s search index: %s", product.id, dom_err)
 
@@ -2546,7 +2553,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         extra_data = {
             "status": product.status or "",
             "version": product.version or "",
-            "domain": product.domain or "",
+            # Primary domain for display; full assigned set for exact domain filtering.
+            "domain": primary_domain_name or product.domain or "",
+            "domains": assigned_domain_names,
             "owner": owner_team_name or product_team_name,
             "owner_team": owner_team_name,
             "product_team": product_team_name,

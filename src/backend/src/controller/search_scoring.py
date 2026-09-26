@@ -38,8 +38,10 @@ from src.models.search_config import (
 # Split on any run of non-word characters (keeps unicode letters/digits/underscore).
 _TOKEN_RE = re.compile(r"[^\w]+", re.UNICODE)
 
-# Extra_data keys surfaced on every result and used for facet counts.
+# Extra_data keys used for facet counts.
 _FACET_FIELDS = ("domain", "status", "owner")
+# Extra_data keys surfaced on every result dict (superset of facet fields).
+_RESULT_FIELDS = ("domain", "status", "owner", "version")
 
 
 def tokenize(query: str) -> List[str]:
@@ -78,6 +80,25 @@ def get_field_value(item: SearchIndexItem, field_name: str) -> Optional[str]:
         return str(value) if value is not None else None
 
     return None
+
+
+def get_field_values(item: SearchIndexItem, field_name: str) -> List[str]:
+    """Return a field's discrete values (for exact filtering).
+
+    Unlike :func:`get_field_value` (which joins lists into one searchable
+    string for scoring), this keeps multi-valued fields — e.g. a product's
+    assigned ``domains`` — as separate values so a filter can match any one of
+    them exactly.
+    """
+    if field_name == "tags":
+        return [str(t) for t in item.tags] if item.tags else []
+    if item.extra_data and field_name in item.extra_data:
+        value = item.extra_data[field_name]
+        if isinstance(value, (list, tuple, set)):
+            return [str(v) for v in value if v is not None]
+        return [str(value)] if value is not None else []
+    single = get_field_value(item, field_name)
+    return [single] if single else []
 
 
 def fuzzy_match(value: str, token: str) -> float:
@@ -232,23 +253,22 @@ def _passes_filters(
     type_filter: Optional[str],
     filters: Optional[Dict[str, Optional[str]]],
 ) -> bool:
-    """Apply the type filter and any field filters (case-insensitive contains/equals)."""
+    """Apply the type filter and any field filters.
+
+    A filter matches when its value equals (case-insensitively) *any* of the
+    field's discrete values — so a filter is exact (``domain='Sales'`` does not
+    match "Sales Ops") yet still matches multi-valued fields like a product's
+    assigned ``domains``.
+    """
     if type_filter and item.type != type_filter:
         return False
     if filters:
         for key, wanted in filters.items():
             if wanted is None or wanted == "":
                 continue
-            value = get_field_value(item, key)
-            if value is None:
-                return False
             wl = wanted.lower()
-            vl = value.lower()
-            # Equality for short enum-like fields (status); contains otherwise (domain, owner).
-            if key == "status":
-                if wl != vl:
-                    return False
-            elif wl not in vl:
+            values = get_field_values(item, key)
+            if not any(wl == v.lower() for v in values):
                 return False
     return True
 
@@ -297,7 +317,7 @@ def _to_result(item: SearchIndexItem, score: Optional[float]) -> Dict[str, Any]:
         "tags": (item.tags[:5] if item.tags else []),
         "feature_id": item.feature_id,
     }
-    for f in _FACET_FIELDS:
+    for f in _RESULT_FIELDS:
         value = get_field_value(item, f)
         if value:
             result[f] = value
@@ -315,6 +335,7 @@ def search_index(
     filters: Optional[Dict[str, Optional[str]]] = None,
     limit: int = 20,
     offset: int = 0,
+    include_facets: bool = True,
 ) -> Dict[str, Any]:
     """Search/list index items for MCP tools: paginated, faceted, filtered.
 
@@ -348,6 +369,6 @@ def search_index(
         "offset": offset,
         "limit": limit,
         "has_more": (offset + len(results)) < total,
-        "facets": _compute_facets(candidates),
+        "facets": _compute_facets(candidates) if include_facets else {},
         "query": query,
     }

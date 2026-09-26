@@ -9,6 +9,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from src.common.logging import get_logger
+from src.controller import search_scoring
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)

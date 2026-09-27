@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     # Database Reset Flag
     APP_DB_DROP_ON_START: bool = Field(False, env='APP_DB_DROP_ON_START')
 
+    # Search backend: "memory" (in-process index, default) or "postgres" (DB-backed
+    # full-text search over the search_documents table). Postgres-native search
+    # (Lakebase Search BM25/vector) is layered on the "postgres" backend later.
+    SEARCH_BACKEND: str = Field("memory", env='SEARCH_BACKEND')
+
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
 

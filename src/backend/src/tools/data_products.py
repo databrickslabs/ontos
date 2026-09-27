@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 from src.common.logging import get_logger
 from src.controller import search_scoring
 from src.tools.base import BaseTool, ToolContext, ToolResult
+# search_scoring is no longer imported here — search tools delegate to
+# SearchManager.query_index() so the active backend (memory or postgres) is used.
 
 logger = get_logger(__name__)
 
@@ -212,10 +214,8 @@ class SearchDataProductsTool(BaseTool):
             return ToolResult(success=False, error="Search not available", data={"products": []})
 
         try:
-            data = search_scoring.search_index(
-                ctx.search_manager.index,
+            data = ctx.search_manager.query_index(
                 query,
-                ctx.search_manager.config,
                 type_filter="data-product",
                 # 'domains' = full assigned-domain set, so the filter matches ANY
                 # assigned domain exactly (not just the primary).

@@ -8,78 +8,84 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from src.common.logging import get_logger
+from src.controller import search_scoring
 from src.tools.base import BaseTool, ToolContext, ToolResult
 
 logger = get_logger(__name__)
 
 
 class SearchDomainsTool(BaseTool):
-    """Search for data domains by name or description."""
-    
+    """Search for data domains via the shared, tokenized search index."""
+
     name = "search_domains"
     category = "organization"
-    description = "Search for data domains by name or description. Returns matching domains with their hierarchy information."
+    description = (
+        "Search data domains by name or description. Use FEW BROAD terms, not full "
+        "sentences — each term is matched independently and results are ranked by "
+        "relevance. Leave 'query' empty (or '*') to list domains; the response is always "
+        "paginated and includes 'total_count' and 'has_more'. Page with 'offset' instead "
+        "of broadening the query."
+    )
     parameters = {
         "query": {
             "type": "string",
-            "description": "Search query for domains (e.g., 'customer', 'finance')"
+            "description": "Search terms (e.g., 'customer', 'finance'). Empty or '*' lists all domains."
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max results to return (default: 25, max: 100)."
+        },
+        "offset": {
+            "type": "integer",
+            "description": "Number of results to skip for pagination (default: 0)."
         }
     }
     required_params = ["query"]
     required_scope = "domains:read"
-    
+
     async def execute(
         self,
         ctx: ToolContext,
-        query: str
+        query: str = "",
+        limit: int = 25,
+        offset: int = 0,
     ) -> ToolResult:
-        """Search for data domains."""
-        logger.info(f"[search_domains] Starting - query='{query}'")
-        
+        """Search data domains over the shared in-memory index."""
+        logger.info(f"[search_domains] Starting - query='{query}', limit={limit}, offset={offset}")
+
+        if not ctx.search_manager:
+            logger.warning("[search_domains] FAILED: search_manager is None")
+            return ToolResult(success=False, error="Search not available", data={"domains": []})
+
         try:
-            from src.db_models.data_domains import DataDomain
-            
-            domains_db = ctx.db.query(DataDomain).limit(500).all()
-            logger.debug(f"[search_domains] Found {len(domains_db)} total domains in database")
-            
-            if not domains_db:
-                return ToolResult(
-                    success=True,
-                    data={"domains": [], "total_found": 0, "message": "No data domains found"}
-                )
-            
-            query_lower = query.lower() if query and query != '*' else ''
-            filtered = []
-            
-            for d in domains_db:
-                if not query_lower:
-                    include = True
-                else:
-                    name_match = query_lower in (d.name or "").lower()
-                    desc_match = query_lower in (d.description or "").lower()
-                    include = name_match or desc_match
-                
-                if include:
-                    filtered.append({
-                        "id": str(d.id),
-                        "name": d.name,
-                        "description": d.description,
-                        "parent_id": str(d.parent_id) if d.parent_id else None,
-                        "created_at": d.created_at.isoformat() if d.created_at else None
-                    })
-            
-            logger.info(f"[search_domains] SUCCESS: Found {len(filtered)} matching domains")
+            data = search_scoring.search_index(
+                ctx.search_manager.index,
+                query,
+                ctx.search_manager.config,
+                type_filter="data-domain",
+                limit=limit,
+                offset=offset,
+            )
+            logger.info(
+                f"[search_domains] SUCCESS: returned {data['returned']} of "
+                f"{data['total_count']} matching domains"
+            )
             return ToolResult(
                 success=True,
                 data={
-                    "domains": filtered[:20],
-                    "total_found": len(filtered)
-                }
+                    "domains": data["results"],
+                    "total_found": data["total_count"],
+                    "returned": data["returned"],
+                    "offset": data["offset"],
+                    "limit": data["limit"],
+                    "has_more": data["has_more"],
+                    "query": query,
+                },
             )
-            
+
         except Exception as e:
-            logger.error(f"[search_domains] FAILED: {type(e).__name__}: {e}", exc_info=True)
-            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}", data={"domains": []})
+            logger.error(f"[search_domains] FAILED: {e.__class__.__name__}: {e}", exc_info=True)
+            return ToolResult(success=False, error=f"{e.__class__.__name__}: {str(e)}", data={"domains": []})
 
 
 class GetDomainTool(BaseTool):

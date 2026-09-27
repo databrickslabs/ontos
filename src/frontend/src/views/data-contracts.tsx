@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DataContractListItem, DataContractCreate } from '@/types/data-contract';
+import { BatchImportResult, summarizeImport } from '@/types/import-results';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import DomainBadgeList from '@/components/ui/domain-badge-list'
@@ -45,6 +46,13 @@ export default function DataContracts() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<{ message: string; detail?: string } | null>(null);
   const [odcsPaste, setOdcsPaste] = useState<string>('')
+  // #851: opt-in "Create missing domains" import toggle, applied per-upload to every
+  // entity in the batch (default off → unresolved domains are left unassigned).
+  const [createMissingDomains, setCreateMissingDomains] = useState(false)
+  // #853: adopt valid, non-colliding UUIDs from the file as the PK (default on), and how
+  // to handle a duplicate id already present (default skip; on = import as a new copy).
+  const [adoptIds, setAdoptIds] = useState(true)
+  const [duplicatesAsNew, setDuplicatesAsNew] = useState(false)
   const [importingPaste, setImportingPaste] = useState(false)
   const [showErrorDetail, setShowErrorDetail] = useState(false)
   const [previewContractId, setPreviewContractId] = useState<string | null>(null);
@@ -221,8 +229,10 @@ export default function DataContracts() {
     onDrop: async (acceptedFiles) => {
       if (acceptedFiles.length === 0) return;
 
-      const file = acceptedFiles[0];
-      if (!file.type.startsWith('text/') && file.type !== 'application/json' && file.type !== 'application/x-yaml') {
+      const invalid = acceptedFiles.find(
+        (f) => !f.type.startsWith('text/') && f.type !== 'application/json' && f.type !== 'application/x-yaml'
+      );
+      if (invalid) {
         setUploadError({ message: t('data-contracts:messages.uploadFileTypeError', 'Please upload a text file (JSON, YAML, etc)') });
         return;
       }
@@ -231,8 +241,13 @@ export default function DataContracts() {
         setUploading(true);
         setUploadError(null);
 
+        // Multi-file: send every dropped file under `files` (backend
+        // List[UploadFile]); each file may itself hold an ODCS array.
         const formData = new FormData();
-        formData.append('file', file);
+        acceptedFiles.forEach((f) => formData.append('files', f));
+        formData.append('create_missing_domains', String(createMissingDomains));
+        formData.append('adopt_ids', String(adoptIds));
+        formData.append('on_duplicate', duplicatesAsNew ? 'new' : 'skip');
 
         const response = await fetch('/api/data-contracts/upload', {
           method: 'POST',
@@ -262,19 +277,44 @@ export default function DataContracts() {
           } catch {
             // Keep default error message
           }
-          
+
           const combined = (errorMsg + ' ' + (errorDetail || '')).toLowerCase();
           if (combined.includes('odps') || combined.includes('outputports')) {
             errorMsg += t('data-contracts:messages.uploadOdpsHint', '\n\nHint: This page is for Data Contracts (ODCS format). If you\'re trying to upload a Data Product (ODPS format), please use the Data Products page instead.');
           }
-          
+
           setUploadError({ message: errorMsg, detail: errorDetail });
           return;
         }
 
+        // Truthful BatchImportResult summary across all files/entities.
+        const result: BatchImportResult = await response.json();
         await fetchContracts();
+
+        if (result.failed > 0) {
+          const detail = result.items
+            .filter((i) => i.status === 'failed')
+            .slice(0, 5)
+            .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+            .join('\n');
+          // Keep the dialog open so the user sees which entities failed.
+          setUploadError({ message: summarizeImport(result), detail });
+          if (result.created > 0) {
+            toast({ title: t('data-contracts:messages.success', 'Success'), description: summarizeImport(result) });
+          }
+          return;
+        }
+
         setOpenUploadDialog(false);
-        toast({ title: t('data-contracts:messages.success', 'Success'), description: t('data-contracts:messages.uploadSuccess', 'Contract uploaded successfully') });
+        toast({
+          title: t('data-contracts:messages.success', 'Success'),
+          description: result.skipped > 0
+            ? summarizeImport(result)
+            : t('data-contracts:messages.uploadSuccessCount', {
+                count: result.created,
+                defaultValue: '{{count}} contract(s) imported successfully',
+              }),
+        });
       } catch (err) {
         setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:messages.uploadError', 'Failed to upload contract') });
       } finally {
@@ -286,7 +326,7 @@ export default function DataContracts() {
       'application/json': ['.json'],
       'application/x-yaml': ['.yaml', '.yml']
     },
-    multiple: false
+    multiple: true
   });
 
   const getStatusColor = (status: string) => {
@@ -668,6 +708,56 @@ export default function DataContracts() {
               </button>
             </Alert>
           )}
+          {/* #851: per-upload reconciliation toggle, applied to file drops and pasted JSON alike. */}
+          <div className="flex items-center justify-between rounded-md border p-3 mb-3">
+            <div className="pr-3">
+              <Label htmlFor="createMissingDomains" className="cursor-pointer">
+                {t('data-contracts:import.createMissingDomains', 'Create missing domains')}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('data-contracts:import.createMissingDomainsHint', 'Auto-create domains that don\'t already exist. Off: unmatched domains are left unassigned (the original is preserved).')}
+              </p>
+            </div>
+            <Switch
+              id="createMissingDomains"
+              checked={createMissingDomains}
+              onCheckedChange={setCreateMissingDomains}
+              disabled={uploading || importingPaste}
+            />
+          </div>
+          {/* #853: adopt file UUIDs + duplicate-id handling, applied per-upload. */}
+          <div className="flex items-center justify-between rounded-md border p-3 mb-3">
+            <div className="pr-3">
+              <Label htmlFor="adoptIds" className="cursor-pointer">
+                {t('data-contracts:import.adoptIds', 'Adopt IDs from file')}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('data-contracts:import.adoptIdsHint', 'Reuse a valid, non-colliding UUID from the file as the primary key so links between entities survive import.')}
+              </p>
+            </div>
+            <Switch
+              id="adoptIds"
+              checked={adoptIds}
+              onCheckedChange={setAdoptIds}
+              disabled={uploading || importingPaste}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-md border p-3 mb-3">
+            <div className="pr-3">
+              <Label htmlFor="duplicatesAsNew" className="cursor-pointer">
+                {t('data-contracts:import.duplicatesAsNew', 'Import duplicate IDs as new copies')}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('data-contracts:import.duplicatesAsNewHint', 'Off (default): an entity whose ID already exists is skipped. On: it is imported as a new copy with a fresh ID.')}
+              </p>
+            </div>
+            <Switch
+              id="duplicatesAsNew"
+              checked={duplicatesAsNew}
+              onCheckedChange={setDuplicatesAsNew}
+              disabled={uploading || importingPaste}
+            />
+          </div>
           <div
             {...getRootProps()}
             className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer ${
@@ -712,7 +802,7 @@ export default function DataContracts() {
                 setUploadError(null)
                 try {
                   const body = JSON.parse(value)
-                  const res = await fetch('/api/data-contracts/odcs/import', {
+                  const res = await fetch(`/api/data-contracts/odcs/import?create_missing_domains=${createMissingDomains}&adopt_ids=${adoptIds}&on_duplicate=${duplicatesAsNew ? 'new' : 'skip'}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
@@ -721,10 +811,21 @@ export default function DataContracts() {
                     const err = await res.json().catch(() => null)
                     throw new Error(err?.detail?.message || err?.detail || t('data-contracts:import.importOdcsError', 'Failed to import ODCS JSON'))
                   }
+                  const result: BatchImportResult = await res.json()
                   await fetchContracts()
-                  setOpenUploadDialog(false)
-                  setOdcsPaste('')
-                  toast({ title: t('data-contracts:import.importedTitle', 'Imported'), description: t('data-contracts:import.importedSuccess', 'ODCS JSON imported successfully') })
+                  if (result.failed > 0) {
+                    const detail = result.items
+                      .filter((i) => i.status === 'failed')
+                      .slice(0, 5)
+                      .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+                      .join('\n')
+                    setUploadError({ message: summarizeImport(result), detail })
+                    if (result.created > 0) setOdcsPaste('')
+                  } else {
+                    setOpenUploadDialog(false)
+                    setOdcsPaste('')
+                    toast({ title: t('data-contracts:import.importedTitle', 'Imported'), description: summarizeImport(result) })
+                  }
                 } catch (err) {
                   setUploadError({ message: err instanceof Error ? err.message : t('data-contracts:import.importOdcsError', 'Failed to import ODCS JSON') })
                 } finally {

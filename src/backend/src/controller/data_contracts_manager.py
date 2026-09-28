@@ -19,6 +19,7 @@ def _is_valid_uuid(value: str) -> bool:
 import yaml
 from sqlalchemy.orm import Session
 
+from src.models.import_results import BatchImportResult, ImportItemResult
 from src.models.data_contracts import (
     ColumnDefinition,
     DataContract,
@@ -3072,7 +3073,113 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             db.rollback()
             logger.error(f"Error creating contract from upload: {e}", exc_info=True)
             raise
-    
+
+    def parse_uploaded_entities(
+        self, file_content: str, filename: str, content_type: str
+    ) -> List[dict]:
+        """Parse an uploaded file into a list of ODCS entity dicts.
+
+        Parity with the products path (`upload_products_batch`): a file may hold a
+        single ODCS object or a top-level array of them. A dict yields ``[dict]``;
+        a list is returned as-is. The text fallback (a non-structured payload) is
+        wrapped into a single minimal contract via `parse_uploaded_file`, preserving
+        the previous single-file behavior.
+        """
+        format = 'json'
+        if content_type == 'application/x-yaml' or filename.endswith(('.yaml', '.yml')):
+            format = 'yaml'
+        elif content_type and content_type.startswith('text/'):
+            # text/* still commonly carries JSON/YAML payloads; try structured first
+            format = 'yaml' if filename.endswith(('.yaml', '.yml')) else 'json'
+
+        parsed = None
+        try:
+            if format == 'yaml':
+                parsed = yaml.safe_load(file_content)
+            else:
+                parsed = json.loads(file_content)
+        except Exception:
+            parsed = None
+
+        if isinstance(parsed, list):
+            return [item for item in parsed]
+        if isinstance(parsed, dict):
+            return [parsed]
+        # Fall back to the single-entity text handling (minimal contract wrapper).
+        return [self.parse_uploaded_file(file_content, filename, content_type)]
+
+    def create_contracts_from_files(
+        self,
+        db,
+        files: List[tuple],
+        current_user: Optional[str] = None,
+    ) -> BatchImportResult:
+        """Import ODCS contracts from one or more uploaded files.
+
+        Args:
+            db: Database session.
+            files: List of ``(filename, content_text, content_type)`` tuples. Each
+                file may contain a single ODCS object or an array of them.
+            current_user: Username of the uploader.
+
+        Returns:
+            A :class:`BatchImportResult`. Per-entity failures are captured as failed
+            items; one bad entity never aborts the batch (each contract commits in
+            its own transaction inside `create_from_upload`).
+        """
+        result = BatchImportResult()
+        index = 0
+        for filename, content_text, content_type in files:
+            try:
+                entities = self.parse_uploaded_entities(content_text, filename, content_type)
+            except Exception as e:  # pragma: no cover - defensive; parse falls back to text
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message=f"Could not parse file: {e}",
+                ))
+                index += 1
+                continue
+
+            if not entities:
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message="File contained no contract entities",
+                ))
+                index += 1
+                continue
+
+            for entity in entities:
+                source_id = entity.get('id') if isinstance(entity, dict) else None
+                if not isinstance(entity, dict):
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, status="failed",
+                        message="Entity is not an object/mapping",
+                    ))
+                    index += 1
+                    continue
+                try:
+                    created = self.create_from_upload(
+                        db=db, parsed_odcs=entity, current_user=current_user,
+                    )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        entity_id=created.id, name=created.name, status="created",
+                    ))
+                except Exception as e:
+                    logger.error("Failed to import contract at batch index %d: %s", index, e)
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="failed",
+                        message=f"{type(e).__name__}: {e}",
+                    ))
+                index += 1
+
+        logger.info(
+            "Contract batch import complete: %d created, %d skipped, %d failed (%d total)",
+            result.created, result.skipped, result.failed, result.total,
+        )
+        return result
+
     # --- Nested Resource CRUD Methods ---
     
     def create_custom_property(

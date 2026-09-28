@@ -307,13 +307,14 @@ class TestDataContractsRoutes:
         try:
             # Upload YAML file
             with open(temp_path, 'rb') as file:
-                files = {"file": ("contract.yaml", file, "application/x-yaml")}
+                files = {"files": ("contract.yaml", file, "application/x-yaml")}
                 response = client.post("/api/data-contracts/upload", files=files)
 
-            assert response.status_code == 201
+            assert response.status_code == 200
             data = response.json()
-            assert data["name"] == "my quantum"
-            assert data["version"] == "1.1.0"
+            # BatchImportResult: one entity created from the single-object file.
+            assert data["created"] == 1
+            assert data["items"][0]["name"] == "my quantum"
 
             # Verify complex relationships were created
             contract = db_session.query(DataContractDb).filter_by(name="my quantum").first()
@@ -338,30 +339,38 @@ class TestDataContractsRoutes:
         try:
             # Upload JSON file
             with open(temp_path, 'rb') as file:
-                files = {"file": ("contract.json", file, "application/json")}
+                files = {"files": ("contract.json", file, "application/json")}
                 response = client.post("/api/data-contracts/upload", files=files)
 
-            assert response.status_code == 201
+            assert response.status_code == 200
             data = response.json()
-            assert data["name"] == "my quantum"
+            assert data["created"] == 1
+            assert data["items"][0]["name"] == "my quantum"
 
         finally:
             Path(temp_path).unlink()
 
-    def test_upload_invalid_file_format(self, client: TestClient):
-        """Test uploading invalid file format."""
-        # Create temporary text file
+    def test_upload_freeform_text_file_becomes_minimal_draft(self, client: TestClient):
+        """Free-form text is accepted as a minimal draft contract.
+
+        Contracts deliberately support plain text (`.txt` is in the upload accept
+        list and `parse_uploaded_file` wraps unstructured content into a minimal
+        contract). The batch endpoint preserves this lenient fallback and reports
+        it truthfully as one created item rather than aborting.
+        """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("This is not valid ODCS content")
             temp_path = f.name
 
         try:
             with open(temp_path, 'rb') as file:
-                files = {"file": ("invalid.txt", file, "text/plain")}
+                files = {"files": ("invalid.txt", file, "text/plain")}
                 response = client.post("/api/data-contracts/upload", files=files)
 
-            assert response.status_code == 400
-            assert "Unsupported file type" in response.json()["detail"]
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["created"] == 1
+            assert data["total"] == 1
 
         finally:
             Path(temp_path).unlink()

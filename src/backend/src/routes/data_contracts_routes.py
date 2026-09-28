@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List, Set
+from typing import Optional, List, Set, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body, Query, BackgroundTasks
@@ -54,6 +54,7 @@ from src.common.odcs_validation import validate_odcs_contract, ODCSValidationErr
 from src.common.authorization import PermissionChecker, ApprovalChecker
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
+from src.models.import_results import BatchImportResult
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
 from src.common.deployment_dependencies import get_deployment_policy_manager
@@ -1529,65 +1530,48 @@ async def delete_contract(
             details=details_for_audit,
         )
 
-@router.post('/data-contracts/upload')
+@router.post('/data-contracts/upload', response_model=BatchImportResult)
 async def upload_contract(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Upload a contract file and parse it into normalized ODCS structure"""
-    # SECURITY: Sanitize filename for safe logging and processing
-    raw_filename = file.filename or "uploaded_contract"
-    safe_filename = sanitize_filename(raw_filename, default="uploaded_contract")
-    
+    """Upload one or more contract files (each single-entity or an ODCS array).
+
+    Every file may hold a single ODCS object or a top-level array of them; all
+    entities across all files are imported in one operation and reported via a
+    truthful `BatchImportResult` summary. A single bad entity is recorded as a
+    failed item and never aborts the batch.
+    """
     success = False
     details_for_audit = {
-        "params": {"filename": safe_filename},
+        "params": {"filenames": [sanitize_filename(f.filename or "uploaded_contract", default="uploaded_contract") for f in files]},
     }
-    created_contract_id = None
 
     try:
-        # Read file content
-        contract_text = (await file.read()).decode('utf-8')
-        
-        # Parse file using manager (use sanitized filename)
-        parsed = manager.parse_uploaded_file(
-            file_content=contract_text,
-            filename=safe_filename,
-            content_type=file.content_type or 'application/json'
-        )
-        
-        # Validate ODCS (optional, log warnings)
-        validation_warnings = manager.validate_odcs(parsed, strict=False)
-        for warning in validation_warnings[:5]:
-            logger.warning(warning)
-        
-        # Create contract with all nested entities using manager
-        created = manager.create_from_upload(
-            db=db,
-            parsed_odcs=parsed,
-            current_user=current_user.username if current_user else None
-        )
-        
-        success = True
-        created_contract_id = created.id
+        file_inputs: List[tuple] = []
+        for f in files:
+            safe_filename = sanitize_filename(f.filename or "uploaded_contract", default="uploaded_contract")
+            contract_text = (await f.read()).decode('utf-8')
+            file_inputs.append((safe_filename, contract_text, f.content_type or 'application/json'))
 
-        # Load with relationships for response
-        created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        result = manager._build_contract_api_model(db, created_with_relations)
+        result = manager.create_contracts_from_files(
+            db=db,
+            files=file_inputs,
+            current_user=current_user.username if current_user else None,
+        )
+
+        # Success = at least one entity created (partial success still 200 with detail).
+        success = result.created > 0
+        details_for_audit["summary"] = {"created": result.created, "skipped": result.skipped, "failed": result.failed}
+        if result.created_ids:
+            details_for_audit["created_resource_ids"] = result.created_ids
         return result
 
-    except ValueError as e:
-        logger.error("Validation error uploading contract: %s", e)
-        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=400, detail={
-            "message": "Invalid contract data",
-            "error": str(e),
-        })
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
@@ -1599,8 +1583,6 @@ async def upload_contract(
             "error": f"{type(e).__name__}: {e}",
         })
     finally:
-        if created_contract_id:
-            details_for_audit["created_resource_id"] = created_contract_id
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else "anonymous",
@@ -1627,53 +1609,34 @@ async def get_odcs_schema(_perm: bool = Depends(PermissionChecker('data-contract
         raise HTTPException(status_code=500, detail="Failed to load schema file")
 
 
-@router.post('/data-contracts/odcs/import')
+@router.post('/data-contracts/odcs/import', response_model=BatchImportResult)
 async def import_odcs_json(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
-    body: dict = Body(...),
+    body: Any = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Import an ODCS contract from a pasted JSON object."""
+    """Import ODCS contract(s) from a pasted JSON object or array."""
     success = False
     details_for_audit: dict = {"params": {"source": "paste"}}
-    created_contract_id = None
 
     try:
         contract_text = json.dumps(body)
-
-        parsed = manager.parse_uploaded_file(
-            file_content=contract_text,
-            filename="paste.json",
-            content_type="application/json",
-        )
-
-        validation_warnings = manager.validate_odcs(parsed, strict=False)
-        for warning in validation_warnings[:5]:
-            logger.warning(warning)
-
-        created = manager.create_from_upload(
+        result = manager.create_contracts_from_files(
             db=db,
-            parsed_odcs=parsed,
+            files=[("paste.json", contract_text, "application/json")],
             current_user=current_user.username if current_user else None,
         )
 
-        success = True
-        created_contract_id = created.id
+        success = result.created > 0
+        details_for_audit["summary"] = {"created": result.created, "skipped": result.skipped, "failed": result.failed}
+        if result.created_ids:
+            details_for_audit["created_resource_ids"] = result.created_ids
+        return result
 
-        created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        return manager._build_contract_api_model(db, created_with_relations)
-
-    except ValueError as e:
-        logger.error("Validation error importing ODCS JSON: %s", e)
-        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=400, detail={
-            "message": "Invalid contract data",
-            "error": str(e),
-        })
     except HTTPException:
         raise
     except Exception as e:
@@ -1684,8 +1647,6 @@ async def import_odcs_json(
             "error": f"{type(e).__name__}: {e}",
         })
     finally:
-        if created_contract_id:
-            details_for_audit["created_resource_id"] = created_contract_id
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else "anonymous",

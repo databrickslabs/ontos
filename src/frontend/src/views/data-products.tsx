@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-table"
 import { useApi } from '@/hooks/use-api';
 import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
+import { BatchImportResult, summarizeImport } from '@/types/import-results';
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
@@ -412,37 +413,56 @@ export default function DataProducts() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
     setIsUploading(true);
     setError(null);
     const formData = new FormData();
-    formData.append('file', file);
+    // Multi-file: append every selected file under the `files` field, matching
+    // the backend `List[UploadFile]`. Each file may itself hold an ODPS array.
+    Array.from(files).forEach((f) => formData.append('files', f));
+    const fileLabel = files.length === 1 ? files[0].name : `${files.length} files`;
     try {
-      // The upload endpoint returns the created products as a list, not a
-      // { count } object; read the count off the array length.
-      const response = await post<DataProduct[]>('/api/data-products/upload', formData);
+      // The upload endpoint returns a truthful BatchImportResult summary
+      // (created/skipped/failed) across all files and entities.
+      const response = await post<BatchImportResult>('/api/data-products/upload', formData);
 
       if (response.error) {
         // Extract meaningful message from potentially complex error object
         const errorMsg = extractErrorMessage(response.error);
-        
+
         // Check if this might be a Data Contract file uploaded by mistake
-        const isLikelyODCSContract = errorMsg.toLowerCase().includes('validation') || 
+        const isLikelyODCSContract = errorMsg.toLowerCase().includes('validation') ||
           errorMsg.toLowerCase().includes('schema') ||
           errorMsg.toLowerCase().includes('odcs');
-        
+
         if (isLikelyODCSContract) {
           throw new Error(`${errorMsg}\n\n${t('upload.odcsHint')}`);
         }
         throw new Error(errorMsg);
       }
 
-      const count = response.data?.length ?? 0;
-      toast({
-        title: t('upload.success'),
-        description: t('upload.successMessage', { filename: file.name, count }),
-      });
+      const result = response.data;
+      const failedItems = result?.items?.filter((i) => i.status === 'failed') ?? [];
+      if (result && result.failed > 0) {
+        // Partial success: surface the truthful summary plus the first failures.
+        const detail = failedItems
+          .slice(0, 5)
+          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+          .join('\n');
+        toast({
+          title: result.created > 0 ? t('upload.partialSuccess', 'Imported with errors') : t('upload.failed'),
+          description: `${summarizeImport(result)}${detail ? `\n${detail}` : ''}`,
+          variant: result.created > 0 ? 'default' : 'destructive',
+          duration: 10000,
+        });
+        if (failedItems.length > 0) setError(`${summarizeImport(result)}\n${detail}`);
+      } else {
+        toast({
+          title: t('upload.success'),
+          description: t('upload.successMessage', { filename: fileLabel, count: result?.created ?? 0 }),
+        });
+      }
       await fetchProducts();
 
     } catch (err: any) {
@@ -840,6 +860,7 @@ export default function DataProducts() {
                     ref={fileInputRef}
                     onChange={handleFileChange}
                     accept=".json,.yaml,.yml"
+                    multiple
                     style={{ display: 'none' }}
                   />
                 </>

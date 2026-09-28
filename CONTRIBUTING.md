@@ -139,7 +139,7 @@ targets the matching port. Example — a second worktree on backend `8100` /
 frontend `3100`:
 
 **Backend** (from `src/`): invoke `uvicorn` directly with the port you want.
-The `yarn dev:backend` / `hatch -e dev run dev-backend` shortcut is hard-coded to
+The `npm run dev:backend` / `hatch -e dev run dev-backend` shortcut is hard-coded to
 `8000`, so a secondary worktree runs the underlying command instead:
 ```bash
 hatch -e dev run uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8100
@@ -147,7 +147,7 @@ hatch -e dev run uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 -
 
 **Frontend** (from `src/frontend/`):
 ```bash
-VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 yarn dev:frontend
+VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 npm run dev:frontend
 ```
 
 Both worktrees can share the same local `app_ontos` PostgreSQL database; only

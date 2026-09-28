@@ -14,6 +14,9 @@ from src.models.ontology_schema import (
     EntityRelationships,
     EntityTypeDefinition,
     EntityTypeSchema,
+    RelationshipDefinition,
+    RelationshipDefinitionCreate,
+    RelationshipDefinitionUpdate,
 )
 from src.controller.ontology_schema_manager import OntologySchemaManager
 from src.common.authorization import PermissionChecker
@@ -338,6 +341,138 @@ def sync_asset_types(
             db=db, username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=FEATURE_ID, action="SYNC_ASSET_TYPES", success=success, details=details,
+        )
+
+
+# ===================== User-defined relationship CRUD =====================
+
+
+@router.get(
+    "/relationships/custom",
+    response_model=List[RelationshipDefinition],
+    summary="List user-defined (custom) relationships",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY))],
+)
+def list_custom_relationships(
+    request: Request,
+    lang: Optional[str] = Query(None, description="Preferred language for labels"),
+    manager: OntologySchemaManager = Depends(get_ontology_schema_manager),
+):
+    """Return all relationships created via the API (Ontos-RDF ones are read-only)."""
+    try:
+        return manager.list_custom_relationships(lang=lang)
+    except Exception:
+        logger.exception("Failed to list custom relationships")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to list custom relationships")
+
+
+@router.post(
+    "/relationships/custom",
+    response_model=RelationshipDefinition,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a user-defined relationship",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def create_custom_relationship(
+    request: Request,
+    payload: RelationshipDefinitionCreate,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: OntologySchemaManager = Depends(get_ontology_schema_manager),
+):
+    """Create a relationship (object property) between two ontology classes."""
+    success = False
+    details = {"source": payload.source_type_iri, "target": payload.target_type_iri, "label": payload.label}
+    try:
+        result = manager.create_relationship(payload, created_by=current_user.username)
+        success = True
+        details["property_iri"] = result.property_iri
+        return result
+    except ValueError as e:
+        details["error"] = str(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to create custom relationship")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create custom relationship")
+    finally:
+        audit_manager.log_action(
+            db=db, username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID, action="CREATE_RELATIONSHIP", success=success, details=details,
+        )
+
+
+@router.put(
+    "/relationships/custom",
+    response_model=RelationshipDefinition,
+    summary="Update a user-defined relationship",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def update_custom_relationship(
+    request: Request,
+    payload: RelationshipDefinitionUpdate,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    property_iri: str = Query(..., description="IRI of the user-defined relationship to update"),
+    manager: OntologySchemaManager = Depends(get_ontology_schema_manager),
+):
+    """Update editable attributes of a user-defined relationship (domain/range immutable)."""
+    success = False
+    details = {"property_iri": property_iri}
+    try:
+        result = manager.update_relationship(property_iri, payload)
+        success = True
+        return result
+    except ValueError as e:
+        details["error"] = str(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to update custom relationship")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update custom relationship")
+    finally:
+        audit_manager.log_action(
+            db=db, username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID, action="UPDATE_RELATIONSHIP", success=success, details=details,
+        )
+
+
+@router.delete(
+    "/relationships/custom",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a user-defined relationship",
+    dependencies=[Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE))],
+)
+def delete_custom_relationship(
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    property_iri: str = Query(..., description="IRI of the user-defined relationship to delete"),
+    manager: OntologySchemaManager = Depends(get_ontology_schema_manager),
+):
+    """Delete a user-defined relationship. Ontos-RDF relationships cannot be deleted."""
+    success = False
+    details = {"property_iri": property_iri}
+    try:
+        manager.delete_relationship(property_iri)
+        success = True
+    except ValueError as e:
+        details["error"] = str(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to delete custom relationship")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete custom relationship")
+    finally:
+        audit_manager.log_action(
+            db=db, username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=FEATURE_ID, action="DELETE_RELATIONSHIP", success=success, details=details,
         )
 
 

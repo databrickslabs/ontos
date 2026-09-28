@@ -24,7 +24,7 @@ scope:
   - `VITE_PROXY_TARGET` (default `http://localhost:8000`) — must point at *your* backend port.
 - Example second pair (backend 8100 / frontend 3100):
   - Backend (from `src/`): `hatch -e dev run uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8100`
-  - Frontend (from `src/frontend/`): `VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 yarn dev:frontend`
+  - Frontend (from `src/frontend/`): `VITE_PORT=3100 VITE_PROXY_TARGET=http://localhost:8100 npm run dev:frontend`
 - Full contributor-facing docs: `CONTRIBUTING.md` → "Running Multiple Worktrees Side-by-Side".
 
 **Testing**

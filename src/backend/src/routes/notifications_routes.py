@@ -9,7 +9,11 @@ from src.common.authorization import PermissionChecker
 from src.common.dependencies import NotificationsManagerDep, DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.models.users import UserInfo
-from src.controller.notifications_manager import NotificationNotFoundError, NotificationsManager
+from src.controller.notifications_manager import (
+    NotificationNotDeletableError,
+    NotificationNotFoundError,
+    NotificationsManager,
+)
 from src.models.notifications import Notification
 
 # Configure logging
@@ -105,11 +109,37 @@ async def delete_notification(
     }
 
     try:
-        deleted = manager.delete_notification(db=db, notification_id=notification_id)
+        # Mirror the mark-as-read endpoint: the feature permission says the
+        # caller may use notifications at all, not that they may act on
+        # someone else's. Without this a principal with notifications:ADMIN
+        # could delete any other user's notification, including ones scoped
+        # to a role they are not in.
+        notification = manager.get_notification_by_id(db=db, notification_id=notification_id)
+        if not notification:
+            raise HTTPException(status_code=404, detail="Notification not found")
+
+        if not manager.can_user_access_notification(db=db, notification=notification, user_info=current_user):
+            raise HTTPException(status_code=403, detail="Cannot delete other user's notifications")
+
+        is_admin = manager.is_app_admin(current_user)
+        details["params"]["admin_override"] = is_admin and not notification.can_delete
+
+        deleted = manager.delete_notification(
+            db=db, notification_id=notification_id, is_admin=is_admin
+        )
         if not deleted:
             raise HTTPException(status_code=404, detail="Notification not found")
         success = True
         return None
+    except NotificationNotFoundError:
+        details["exception"] = {"type": "NotificationNotFoundError", "status_code": 404}
+        raise HTTPException(status_code=404, detail="Notification not found")
+    except NotificationNotDeletableError:
+        details["exception"] = {"type": "NotificationNotDeletableError", "status_code": 403}
+        raise HTTPException(
+            status_code=403,
+            detail="This notification requires a response and cannot be dismissed",
+        )
     except HTTPException as e:
         details["exception"] = {
             "type": "HTTPException",

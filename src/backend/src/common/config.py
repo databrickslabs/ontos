@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     DATABRICKS_WAREHOUSE_ID: str
     DATABRICKS_CATALOG: str = Field("app_ontos", env='DATABRICKS_CATALOG')  # Default Unity Catalog
     DATABRICKS_SCHEMA: str = Field("app_ontos", env='DATABRICKS_SCHEMA')  # Default schema
-    DATABRICKS_VOLUME: Optional[str] = Field(None, env='DATABRICKS_VOLUME')  # Full volume path (injected by Databricks Apps)
+    DATABRICKS_VOLUME: Optional[str] = Field(None, env='DATABRICKS_VOLUME')  # Full volume path (injected by Databricks Apps). Also the source of the optional test-persona override at {DATABRICKS_VOLUME}/config/test_personas.yaml
     DATABRICKS_TOKEN: Optional[str] = None  # Optional since handled by SDK
     DATABRICKS_CONFIG_PROFILE: Optional[str] = Field(
         None, env='DATABRICKS_CONFIG_PROFILE'

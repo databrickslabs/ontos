@@ -18,6 +18,8 @@ import {
   TRIGGER_LABELS,
   TRIGGER_REQUIRED_PERMISSION,
   getRequiredPermission,
+  triggerSupportsConcepts,
+  statusValuesForEntities,
 } from './workflow-labels';
 
 describe('isTriggerEntitySupported', () => {
@@ -257,5 +259,52 @@ describe('TRIGGER_REQUIRED_PERMISSION + getRequiredPermission', () => {
 
   it('returns null for unknown trigger', () => {
     expect(getRequiredPermission('not_a_real_trigger')).toBeNull();
+  });
+});
+
+describe('triggerSupportsConcepts', () => {
+  it('returns false when entity types are undefined', () => {
+    expect(triggerSupportsConcepts(undefined)).toBe(false);
+  });
+
+  it('returns false for an empty list', () => {
+    expect(triggerSupportsConcepts([])).toBe(false);
+  });
+
+  it('returns false when no concept entity type is present', () => {
+    expect(triggerSupportsConcepts(['data_product', 'data_contract'])).toBe(false);
+  });
+
+  it('returns true when a concept entity type is present', () => {
+    expect(triggerSupportsConcepts(['ontology_concept'])).toBe(true);
+    expect(triggerSupportsConcepts(['data_product', 'ontology_collection'])).toBe(true);
+    expect(triggerSupportsConcepts(['concept_changeset'])).toBe(true);
+  });
+});
+
+describe('statusValuesForEntities', () => {
+  it('returns an empty array for undefined or empty input', () => {
+    expect(statusValuesForEntities(undefined)).toEqual([]);
+    expect(statusValuesForEntities([])).toEqual([]);
+  });
+
+  it('returns the status values for a known entity type', () => {
+    expect(statusValuesForEntities(['data_contract'])).toEqual([
+      'draft', 'proposed', 'active', 'deprecated', 'retired',
+    ]);
+  });
+
+  it('ignores unknown entity types (no statuses mapped)', () => {
+    expect(statusValuesForEntities(['not_an_entity'])).toEqual([]);
+  });
+
+  it('unions and de-duplicates statuses across multiple entity types', () => {
+    const result = statusValuesForEntities(['ontology_concept', 'data_product']);
+    // shared statuses (draft, under_review, approved, deprecated) appear once
+    expect(result.filter((s) => s === 'draft')).toHaveLength(1);
+    expect(result.filter((s) => s === 'under_review')).toHaveLength(1);
+    // union includes entity-specific statuses from both
+    expect(result).toContain('certified'); // ontology_concept only
+    expect(result).toContain('sandbox'); // data_product only
   });
 });

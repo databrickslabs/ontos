@@ -36,10 +36,29 @@ describe('entity-detail-path', () => {
       ).toBe('/data-contracts/e2');
     });
 
+    it('resolves snake_case + concept entity types', () => {
+      // snake_case data_contract arm (the earlier test used the DataContract alias)
+      expect(
+        getEntityDetailPathFromPayload({ entity_type: 'data_contract', entity_id: 'e3' }),
+      ).toBe('/data-contracts/e3');
+      // ontology_concept / concept -> encoded IRI path
+      expect(
+        getEntityDetailPathFromPayload({
+          entity_type: 'ontology_concept',
+          entity_id: 'https://ontos.example.org/billing#Invoice',
+        }),
+      ).toBe('/concepts/browser/https%3A%2F%2Fontos.example.org%2Fbilling%23Invoice');
+      expect(
+        getEntityDetailPathFromPayload({ entity_type: 'concept', entity_id: 'urn:x#Y' }),
+      ).toBe('/concepts/browser/urn%3Ax%23Y');
+    });
+
     it('returns null for an unlinkable or incomplete entity', () => {
       expect(getEntityDetailPathFromPayload({ entity_type: 'access_grant', entity_id: 'g' })).toBeNull();
       expect(getEntityDetailPathFromPayload({ entity_type: 'data_product' })).toBeNull();
       expect(getEntityDetailPathFromPayload({ product_id: '' })).toBeNull();
+      // non-string entity_id hits the `typeof entityId !== 'string'` guard
+      expect(getEntityDetailPathFromPayload({ entity_type: 'data_product', entity_id: 123 })).toBeNull();
     });
   });
 

@@ -10,6 +10,7 @@ from . import audit_log
 from . import change_log
 from . import comments
 from . import compliance
+from . import concept_versions
 from . import connections
 from . import costs
 from . import data_asset_reviews
@@ -32,6 +33,7 @@ from . import rdf_triples
 from . import semantic_links
 from . import semantic_models
 from . import settings
+from . import upload_preview
 from . import tags
 from . import teams
 from . import assets

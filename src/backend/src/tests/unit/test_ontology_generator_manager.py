@@ -155,6 +155,7 @@ class _FakeUsage:
 @dataclass
 class _FakeChoice:
     message: _FakeMessage
+    finish_reason: str = "stop"
 
 
 @dataclass
@@ -298,6 +299,147 @@ class TestOntologyGeneratorManager:
         result = OntologyGeneratorManager._extract_turtle(content)
         assert result.startswith("@prefix")
         assert "```" not in result
+
+
+    @patch("src.common.llm_client.create_openai_client")
+    def test_non_usable_output_triggers_repair(self, mock_create_client):
+        """Test Fix 1: leaked-tool-call output triggers repair attempt."""
+        # Simulating the exact leaked-tool-call output from the bug
+        leaked_tool_call = 'get_table_detail(table_name=journal_entries)assistant\n\nget_table_detail(table_name="journal_entries")'
+
+        responses = [
+            _FakeResponse(choices=[_FakeChoice(message=_FakeMessage(content=leaked_tool_call))]),
+            # Second attempt (repair): model returns valid Turtle
+            _FakeResponse(choices=[_FakeChoice(message=_FakeMessage(content=GENERATED_TURTLE))]),
+        ]
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = responses
+        mock_create_client.return_value = mock_client
+
+        settings = _make_settings()
+        mgr = OntologyGeneratorManager(settings)
+        result = mgr.generate_ontology(SAMPLE_METADATA)
+
+        # Should succeed after repair
+        assert result.success
+        assert len(result.classes) > 0
+        # Should have called LLM twice (initial + repair)
+        assert mock_client.chat.completions.create.call_count >= 2
+
+    @patch("src.common.llm_client.create_openai_client")
+    def test_empty_ontology_fails(self, mock_create_client):
+        """Test Fix 1: Turtle with 0 classes and 0 properties is not usable."""
+        empty_turtle = """\
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://ontos.example.org/ontology#> .
+
+<http://ontos.example.org/ontology> a owl:Ontology ;
+    rdfs:label "Empty Ontology" .
+"""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _FakeResponse(
+            choices=[_FakeChoice(message=_FakeMessage(content=empty_turtle))]
+        )
+        mock_create_client.return_value = mock_client
+
+        settings = _make_settings()
+        mgr = OntologyGeneratorManager(settings)
+        result = mgr.generate_ontology(SAMPLE_METADATA)
+
+        # Should fail because ontology has no classes/properties
+        assert not result.success
+        assert "no classes or properties" in result.error.lower()
+
+    @patch("src.common.llm_client.create_openai_client")
+    def test_truncated_output_continuation(self, mock_create_client):
+        """Test Fix 2: truncated output (finish_reason='length') triggers continuation."""
+        # First response is truncated (finish_reason='length')
+        response1 = _FakeResponse(
+            choices=[_FakeChoice(message=_FakeMessage(content=GENERATED_TURTLE))]
+        )
+        response1.choices[0].finish_reason = "length"
+
+        # Second response (continuation) also returns valid Turtle
+        response2 = _FakeResponse(
+            choices=[_FakeChoice(message=_FakeMessage(content=GENERATED_TURTLE))]
+        )
+        response2.choices[0].finish_reason = "stop"
+
+        mock_client = MagicMock()
+        # First call returns truncated, second call (continuation) returns complete
+        mock_client.chat.completions.create.side_effect = [response1, response2]
+        mock_create_client.return_value = mock_client
+
+        settings = _make_settings()
+        mgr = OntologyGeneratorManager(settings)
+        result = mgr.generate_ontology(SAMPLE_METADATA)
+
+        # Should succeed after continuation
+        assert result.success
+        assert len(result.classes) >= 2
+        # Should have called LLM twice (initial + continuation)
+        assert mock_client.chat.completions.create.call_count == 2
+
+    def test_is_usable_turtle_valid(self):
+        """Test _is_usable_turtle with valid Turtle."""
+        usable, error = OntologyGeneratorManager._is_usable_turtle(GENERATED_TURTLE)
+        assert usable is True
+        assert error is None
+
+    def test_is_usable_turtle_invalid_syntax(self):
+        """Test _is_usable_turtle with invalid Turtle syntax."""
+        invalid_turtle = "this is not turtle @@@"
+        usable, error = OntologyGeneratorManager._is_usable_turtle(invalid_turtle)
+        assert usable is False
+        assert error is not None
+
+    def test_is_usable_turtle_no_classes_or_properties(self):
+        """Test _is_usable_turtle with empty ontology."""
+        empty_turtle = """\
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+<http://example.org/ontology> a owl:Ontology .
+"""
+        usable, error = OntologyGeneratorManager._is_usable_turtle(empty_turtle)
+        assert usable is False
+        assert "no classes or properties" in error.lower()
+
+    @patch("src.common.llm_client.create_openai_client")
+    def test_caps_note_populated(self, mock_create_client):
+        """Test Fix 4: caps_hit and caps_note are populated when tables exceed cap."""
+        # Create metadata with more tables than _MAX_TABLES_IN_METADATA
+        large_metadata = {
+            "tables": [
+                {
+                    "name": f"table_{i}",
+                    "full_name": f"cat.schema.table_{i}",
+                    "comment": f"Table {i}",
+                    "columns": [
+                        {"name": "id", "type": "INT", "comment": "ID"},
+                        {"name": "name", "type": "STRING", "comment": "Name"},
+                    ],
+                }
+                for i in range(100)  # Way more than _MAX_TABLES_IN_METADATA (50)
+            ]
+        }
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _FakeResponse(
+            choices=[_FakeChoice(message=_FakeMessage(content=GENERATED_TURTLE))]
+        )
+        mock_create_client.return_value = mock_client
+
+        settings = _make_settings()
+        mgr = OntologyGeneratorManager(settings)
+        result = mgr.generate_ontology(large_metadata)
+
+        # Should have populated cap fields
+        assert result.tables_resolved == 100
+        assert result.tables_used <= 50
+        assert result.caps_hit is True
+        assert result.caps_note != ""
 
 
 class TestResolveTablesFromConnector:

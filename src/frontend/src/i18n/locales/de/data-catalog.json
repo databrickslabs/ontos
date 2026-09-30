@@ -1,0 +1,173 @@
+{
+  "title": "Datenkatalog",
+  "subtitle": "Durchsuchen Sie alle Spalten über Unity-Catalog-Tabellen und -Views hinweg",
+  "searchPlaceholder": "Spalten suchen...",
+  "noResults": "Keine Spalten gefunden",
+  "tryDifferentSearch": "Versuchen Sie einen anderen Suchbegriff",
+  "noTablesAccessible": "Keine Tabellen in Unity Catalog zugänglich",
+  "showingColumns": "{{count}} Spalten werden angezeigt",
+  "matchingSearch": "passend zu",
+  "tableCountBadge": "({{count}} Tabellen)",
+  "columns": {
+    "label": "Label",
+    "description": "Beschreibung",
+    "columnName": "Spaltenname",
+    "type": "Typ",
+    "tableName": "Tabelle",
+    "businessTerms": "Geschäftsbegriffe",
+    "source": "Quelle"
+  },
+  "filters": {
+    "assetType": "Asset-Typ",
+    "allTypes": "Alle Typen",
+    "system": "System",
+    "allSystems": "Alle Systeme",
+    "catalog": "Katalog",
+    "allCatalogs": "Alle Kataloge",
+    "schema": "Schema",
+    "allSchemas": "Alle Schemas"
+  },
+  "sourceBadges": {
+    "both": "Beide",
+    "asset": "Asset",
+    "contract": "Vertrag"
+  },
+  "pagination": {
+    "showing": "{{from}}–{{to}} von {{total}} Spalten werden angezeigt",
+    "matching": " passend zu \"{{query}}\"",
+    "perPage": "Pro Seite:",
+    "pageOf": "Seite {{current}} von {{total}}"
+  },
+  "tabs": {
+    "overview": "Übersicht",
+    "dataDetails": "Datendetails",
+    "lineage": "Lineage"
+  },
+  "overview": {
+    "basicInfo": "Grundinformationen",
+    "catalog": "Katalog",
+    "schema": "Schema",
+    "owner": "Owner",
+    "type": "Typ",
+    "created": "Erstellt",
+    "updated": "Aktualisiert",
+    "storage": "Speicher & Statistiken",
+    "columns": "Spalten",
+    "rows": "Zeilen",
+    "size": "Größe",
+    "format": "Format",
+    "location": "Speicherort",
+    "description": "Beschreibung",
+    "tags": "Tags"
+  },
+  "details": {
+    "backToList": "Zurück zur Liste",
+    "by": "von {{user}}",
+    "fallbackTitle": "Details"
+  },
+  "dataDetails": {
+    "title": "Spalten",
+    "description": "Beschreibung",
+    "columnName": "Spaltenname",
+    "type": "Typ",
+    "nullable": "Nullable",
+    "partition": "Partition {{index}}",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "lineage": {
+    "title": "Data Lineage",
+    "description": "Vor- und nachgelagerte Abhängigkeiten visualisieren",
+    "noLineage": "Keine Lineage-Informationen verfügbar",
+    "noLineageHint": "Diese Tabelle hat möglicherweise keine vor- oder nachgelagerten Abhängigkeiten",
+    "noDataAvailable": "Keine Lineage-Daten verfügbar",
+    "loadingLineage": "Lineage wird geladen…",
+    "both": "Beide Richtungen",
+    "upstream": "Nur vorgelagert",
+    "downstream": "Nur nachgelagert",
+    "legend": "Legende",
+    "impactSummary": "Auswirkungszusammenfassung",
+    "impactWarning": "Änderungen an dieser Tabelle können sich auswirken auf:",
+    "notifyOwners": "Zu benachrichtigende Owner",
+    "impactedTables_one": "{{count}} Tabelle",
+    "impactedTables_other": "{{count}} Tabellen",
+    "impactedViews_one": "{{count}} View",
+    "impactedViews_other": "{{count}} Views",
+    "impactedExternal_one": "{{count}} extern",
+    "impactedExternal_other": "{{count}} extern",
+    "toolbar": {
+      "upstream": "Vorgelagert",
+      "both": "Beide",
+      "downstream": "Nachgelagert",
+      "breadth": "Breite:",
+      "nesting": "Verschachtelung:",
+      "entitiesEdges": "{{nodes}} Entitäten · {{edges}} Kanten"
+    },
+    "legendPanel": {
+      "entityTypes": "Entitätstypen",
+      "edgeStyles": "Kantenstile",
+      "dataFlow": "Datenfluss",
+      "containment": "Enthalten in",
+      "governance": "Governance",
+      "semantic": "Semantisch"
+    },
+    "dev": {
+      "entityTypeLabel": "Entitätstyp:",
+      "entityTypePlaceholder": "z. B. DataProduct",
+      "entityIdLabel": "Entitäts-ID:",
+      "entityIdPlaceholder": "z. B. uuid",
+      "load": "Laden",
+      "emptyHint": "Geben Sie oben einen Entitätstyp und eine ID ein und klicken Sie dann auf Laden"
+    }
+  },
+  "hierarchy": {
+    "browserTitle": "Hierarchie-Browser",
+    "browserSubtitle": "Navigieren Sie durch Datenhierarchien von Systemen und Bereichen bis hinunter zu Tabellen und Spalten",
+    "browse": "Durchsuchen",
+    "filterPlaceholder": "Filtern...",
+    "noMatches": "Keine Übereinstimmungen gefunden",
+    "noRoots": "Keine Root-Entitäten gefunden",
+    "rootsLoadFailed": "Hierarchie-Roots konnten nicht geladen werden",
+    "permissionDenied": "Zugriff verweigert",
+    "noAccess": "Sie haben keinen Zugriff, um die Hierarchie zu durchsuchen.",
+    "selectEntity": "Wählen Sie eine Entität aus",
+    "selectEntityHint": "Klicken Sie auf ein beliebiges Element im Baum, um seine Hierarchie anzuzeigen",
+    "childCount_one": "{{count}} Kind",
+    "childCount_other": "{{count}} Kinder",
+    "maxDepthTooltip": "Maximale Hierarchietiefe",
+    "treeView": "Baumansicht",
+    "graphView": "Graphansicht",
+    "viewDetail": "Detail anzeigen",
+    "viewDetails": "Details anzeigen",
+    "show": "Anzeigen:",
+    "showAll": "Alle anzeigen",
+    "heading": "Hierarchie",
+    "noChildren": "Keine Kinder in der Hierarchie",
+    "noChildrenFound": "Keine Kinder gefunden",
+    "expand": "Erweitern",
+    "collapse": "Einklappen",
+    "levelsOption": "{{count}} Ebenen",
+    "allLevels": "Alle",
+    "rootType": {
+      "domain": "Bereich",
+      "product": "Produkt"
+    }
+  },
+  "preview": {
+    "title": "Vorschau",
+    "notAvailable": "Vorschau für diese Datei nicht verfügbar.",
+    "fetchFailed": "Vorschauinhalt konnte nicht abgerufen werden.",
+    "loadImageFailed": "Bild konnte nicht geladen werden",
+    "pdfNotSupported": "PDF-Vorschau wird nicht unterstützt.",
+    "textPreviewTitle": "Textvorschau",
+    "noInlinePreview": "Keine Inline-Vorschau für diesen Dateityp.",
+    "noPreviewUrl": "Keine Vorschau-URL verfügbar. Dateiname: {{filename}} • Pfad: {{path}}"
+  },
+  "errors": {
+    "fetchFailed": "Daten konnten nicht abgerufen werden",
+    "tableNotFound": "Tabelle nicht gefunden",
+    "fetchTableFailed": "Tabelle konnte nicht abgerufen werden: {{status}}",
+    "fetchLineageFailed": "Lineage konnte nicht abgerufen werden",
+    "loadLineageFailed": "Lineage konnte nicht geladen werden"
+  }
+}

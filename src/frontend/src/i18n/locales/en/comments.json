@@ -1,0 +1,73 @@
+{
+  "trigger": {
+    "button": "Comments"
+  },
+  "timeline": {
+    "heading": "Activity Timeline",
+    "edited": "(edited)",
+    "loadError": "Failed to load timeline: {{error}}"
+  },
+  "project": {
+    "label": "Project: {{name}}",
+    "noContext": "No project context (global)"
+  },
+  "filter": {
+    "label": "Filter:",
+    "comments": "Comments",
+    "changes": "Changes"
+  },
+  "actions": {
+    "addComment": "Add Comment"
+  },
+  "form": {
+    "titleLabel": "Title (Optional)",
+    "titlePlaceholder": "Add a title for this comment...",
+    "commentLabel": "Comment",
+    "commentPlaceholder": "Write your comment...",
+    "postInProject": "Post in project",
+    "projectOverrideTooltip": "You're posting under a different project than the main view. The timeline list is unaffected.",
+    "globalNoProject": "Global (no project)",
+    "audienceHelp": "Target specific teams or roles (optional). Leave empty for visibility to all project members.",
+    "teamsLabel": "Teams",
+    "noTeams": "No teams available in current project",
+    "appRolesLabel": "App Roles",
+    "usersGroupsLabel": "Users & groups",
+    "principalsPlaceholder": "Add users or groups…",
+    "principalsAria": "Audience users and groups",
+    "post": "Post"
+  },
+  "badge": {
+    "team": "Team: {{name}}",
+    "role": "Role: {{name}}"
+  },
+  "change": {
+    "requesterLabel": "Requester:",
+    "decisionLabel": "Decision:",
+    "messageLabel": "Message:",
+    "iriLabel": "Iri:",
+    "linkIdLabel": "Link Id:",
+    "operationLabel": "Operation:",
+    "operationLinked": "linked",
+    "operationUnlinked": "unlinked"
+  },
+  "validation": {
+    "commentRequired": "Comment content is required"
+  },
+  "confirmDelete": "Are you sure you want to delete this comment?",
+  "toast": {
+    "createSuccess": "Comment created successfully",
+    "createError": "Failed to create comment: {{error}}",
+    "updateSuccess": "Comment updated successfully",
+    "updateError": "Failed to update comment: {{error}}",
+    "deleteSuccess": "Comment deleted successfully",
+    "deleteError": "Failed to delete comment: {{error}}"
+  },
+  "empty": {
+    "commentsTitle": "No comments yet",
+    "commentsSubtitle": "Be the first to add a comment!",
+    "changesTitle": "No changes recorded",
+    "changesSubtitle": "Changes will appear here when they occur",
+    "allTitle": "No activity yet",
+    "allSubtitle": "Comments and changes will appear here"
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,7 @@ type TeamMemberFormProps = {
 };
 
 export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, initial }: TeamMemberFormProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -46,7 +48,7 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
 
   const handleSubmit = async () => {
     if (!username.trim()) {
-      toast({ title: 'Validation Error', description: 'Username is required', variant: 'destructive' });
+      toast({ title: t('data-products:messages.validationTitle'), description: t('data-products:teamMemberForm.validationUsernameRequired'), variant: 'destructive' });
       return;
     }
 
@@ -64,13 +66,13 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
       await onSubmit(member);
       onOpenChange(false);
       toast({
-        title: 'Success',
-        description: initial ? 'Team member updated' : 'Team member added',
+        title: t('common:toast.success'),
+        description: initial ? t('data-products:teamMemberForm.successUpdated') : t('data-products:teamMemberForm.successAdded'),
       });
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save team member',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-products:teamMemberForm.saveError'),
         variant: 'destructive',
       });
     } finally {
@@ -82,67 +84,67 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Team Member' : 'Add Team Member'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-products:teamMemberForm.editTitle') : t('data-products:teamMemberForm.addTitle')}</DialogTitle>
           <DialogDescription>
-            Add a team member responsible for this data product (ODPS v1.0.0).
+            {t('data-products:teamMemberForm.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="username">
-              Username <span className="text-destructive">*</span>
+              {t('data-products:teamMemberForm.usernameLabel')} <span className="text-destructive">*</span>
             </Label>
             <PrincipalPicker
               id="username"
               accepts={['user']}
               value={username || null}
               onChange={(next) => setUsername(next ?? '')}
-              placeholder="e.g., user@example.com or username"
-              aria-label="Username"
+              placeholder={t('data-products:teamMemberForm.usernamePlaceholder')}
+              aria-label={t('data-products:teamMemberForm.usernameLabel')}
             />
             <p className="text-xs text-muted-foreground">
-              User&apos;s username or email address (REQUIRED in ODPS)
+              {t('data-products:teamMemberForm.usernameHint')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
+            <Label htmlFor="name">{t('data-products:teamMemberForm.fullNameLabel')}</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Full name (optional)"
+              placeholder={t('data-products:teamMemberForm.fullNamePlaceholder')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
+            <Label htmlFor="role">{t('data-products:teamMemberForm.roleLabel')}</Label>
             <Input
               id="role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="e.g., owner, data steward, contributor"
+              placeholder={t('data-products:teamMemberForm.rolePlaceholder')}
             />
             <p className="text-xs text-muted-foreground">
-              User's role in the team (e.g., owner, data steward, contributor)
+              {t('data-products:teamMemberForm.roleHint')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('common:labels.description')}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Additional information about this team member"
+              placeholder={t('data-products:teamMemberForm.descriptionPlaceholder')}
               rows={2}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="dateIn">Date Joined</Label>
+              <Label htmlFor="dateIn">{t('data-products:teamMemberForm.dateJoinedLabel')}</Label>
               <Input
                 id="dateIn"
                 type="date"
@@ -152,7 +154,7 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="dateOut">Date Left</Label>
+              <Label htmlFor="dateOut">{t('data-products:teamMemberForm.dateLeftLabel')}</Label>
               <Input
                 id="dateOut"
                 type="date"
@@ -165,10 +167,10 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : initial ? 'Save Changes' : 'Add Member'}
+            {isSubmitting ? t('common:actions.saving') : initial ? t('common:actions.saveChanges') : t('data-products:teamMemberForm.addButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

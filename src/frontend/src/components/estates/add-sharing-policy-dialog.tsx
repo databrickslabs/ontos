@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -25,22 +27,20 @@ const sharingResourceTypeValues: [SharingResourceType, ...SharingResourceType[]]
     'data_product', 'business_glossary'
 ];
 
-// Zod Schema for Validation
-const sharingRuleSchema = z.object({
-  filter_type: z.string().min(1, 'Filter type is required'),
-  operator: z.enum(sharingRuleOperatorValues), // Changed to z.enum
-  filter_value: z.string().min(1, 'Filter value is required'),
-});
-
-const sharingPolicySchema = z.object({
-  name: z.string().min(3, 'Policy name must be at least 3 characters'),
+// Zod Schema for Validation (built with translated messages)
+const buildSharingPolicySchema = (t: TFunction) => z.object({
+  name: z.string().min(3, t('estates:sharingPolicy.validation.nameMin')),
   description: z.string().optional(),
   resource_type: z.enum(sharingResourceTypeValues), // Changed to z.enum
-  rules: z.array(sharingRuleSchema).min(1, 'At least one rule is required'),
+  rules: z.array(z.object({
+    filter_type: z.string().min(1, t('estates:sharingPolicy.validation.filterTypeRequired')),
+    operator: z.enum(sharingRuleOperatorValues), // Changed to z.enum
+    filter_value: z.string().min(1, t('estates:sharingPolicy.validation.filterValueRequired')),
+  })).min(1, t('estates:sharingPolicy.validation.rulesMin')),
   is_enabled: z.boolean(),
 });
 
-type SharingPolicyFormData = z.infer<typeof sharingPolicySchema>;
+type SharingPolicyFormData = z.infer<ReturnType<typeof buildSharingPolicySchema>>;
 
 interface AddSharingPolicyDialogProps {
   isOpen: boolean;
@@ -58,7 +58,9 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
   onSaveSuccess,
   currentPolicies: _currentPolicies, // Kept for potential validation
 }) => {
+  const { t } = useTranslation(['estates', 'common']);
   const { toast } = useToast();
+  const sharingPolicySchema = useMemo(() => buildSharingPolicySchema(t), [t]);
   const { control, handleSubmit, register, formState: { errors }, reset, watch: _watch } = useForm<SharingPolicyFormData>({
     resolver: zodResolver(sharingPolicySchema),
     defaultValues: {
@@ -91,16 +93,16 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
         
         // Toast and reset are good here as the dialog is closing.
         toast({
-            title: 'Policy Submitted', // Changed title as actual save happens in parent
-            description: `Sharing policy "${data.name}" is being processed.`,
+            title: t('estates:sharingPolicy.toast.submittedTitle'), // Changed title as actual save happens in parent
+            description: t('estates:sharingPolicy.toast.submittedDescription', { name: data.name }),
         });
         reset(); // Reset form fields
         onOpenChange(false); // Close dialog
     } catch (error) {
         console.error("Error saving new policy:", error);
         toast({
-            title: 'Error',
-            description: 'Failed to add sharing policy. Check console for details.',
+            title: t('common:toast.error'),
+            description: t('estates:sharingPolicy.toast.addErrorDescription'),
             variant: 'destructive',
         });
     }
@@ -113,33 +115,33 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
     }}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add New Sharing Policy</DialogTitle>
+          <DialogTitle>{t('estates:sharingPolicy.dialogTitle')}</DialogTitle>
           <DialogDescription>
-            Define a new policy to share resources from or with this estate.
+            {t('estates:sharingPolicy.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2 pb-4">
           <div>
-            <Label htmlFor="name">Policy Name</Label>
-            <Input id="name" {...register('name')} placeholder="e.g., Share Production Data Products" />
+            <Label htmlFor="name">{t('estates:sharingPolicy.fields.name')}</Label>
+            <Input id="name" {...register('name')} placeholder={t('estates:sharingPolicy.placeholders.name')} />
             {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name.message}</p>}
           </div>
 
           <div>
-            <Label htmlFor="description">Description (Optional)</Label>
-            <Textarea id="description" {...register('description')} placeholder="Detailed description of the policy's purpose..." />
+            <Label htmlFor="description">{t('estates:sharingPolicy.fields.description')}</Label>
+            <Textarea id="description" {...register('description')} placeholder={t('estates:sharingPolicy.placeholders.description')} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="resource_type">Resource Type</Label>
+              <Label htmlFor="resource_type">{t('estates:sharingPolicy.fields.resourceType')}</Label>
               <Controller
                 name="resource_type"
                 control={control}
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select resource type" />
+                      <SelectValue placeholder={t('estates:sharingPolicy.placeholders.resourceType')} />
                     </SelectTrigger>
                     <SelectContent>
                       {sharingResourceTypeValues.map(val => <SelectItem key={val} value={val}>{val.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</SelectItem>)}
@@ -162,17 +164,17 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
                             />
                         )}
                     />
-                    <Label htmlFor="is_enabled">Enable Policy</Label>
+                    <Label htmlFor="is_enabled">{t('estates:sharingPolicy.fields.enablePolicy')}</Label>
                 </div>
             </div>
           </div>
           
           <div className="space-y-3">
-            <h4 className="text-md font-medium">Rules</h4>
+            <h4 className="text-md font-medium">{t('estates:sharingPolicy.rulesHeading')}</h4>
             {fields.map((item, index) => (
               <div key={item.id} className="p-3 border rounded-md space-y-2 bg-muted/50">
                 <div className="flex justify-between items-center">
-                  <Label className="text-sm font-semibold">Rule {index + 1}</Label>
+                  <Label className="text-sm font-semibold">{t('estates:sharingPolicy.ruleLabel', { number: index + 1 })}</Label>
                   {fields.length > 1 && (
                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => remove(index)}>
                       <Trash2 className="h-4 w-4" />
@@ -181,19 +183,19 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <Label htmlFor={`rules.${index}.filter_type`}>Filter Type</Label>
-                    <Input {...register(`rules.${index}.filter_type`)} placeholder="e.g., tag, domain, status"/>
+                    <Label htmlFor={`rules.${index}.filter_type`}>{t('estates:sharingPolicy.fields.filterType')}</Label>
+                    <Input {...register(`rules.${index}.filter_type`)} placeholder={t('estates:sharingPolicy.placeholders.filterType')}/>
                     {errors.rules && errors.rules[index] && errors.rules[index]!.filter_type && <p className="text-sm text-red-500 mt-1">{errors.rules[index]!.filter_type!.message}</p>}
                   </div>
                   <div>
-                    <Label htmlFor={`rules.${index}.operator`}>Operator</Label>
+                    <Label htmlFor={`rules.${index}.operator`}>{t('estates:sharingPolicy.fields.operator')}</Label>
                     <Controller
                       name={`rules.${index}.operator`}
                       control={control}
                       render={({ field }) => (
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select operator" />
+                            <SelectValue placeholder={t('estates:sharingPolicy.placeholders.operator')} />
                           </SelectTrigger>
                           <SelectContent>
                             {sharingRuleOperatorValues.map(val => <SelectItem key={val} value={val}>{val.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</SelectItem>)}
@@ -204,8 +206,8 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
                     {errors.rules && errors.rules[index] && errors.rules[index]!.operator && <p className="text-sm text-red-500 mt-1">{errors.rules[index]!.operator!.message}</p>}
                   </div>
                   <div>
-                    <Label htmlFor={`rules.${index}.filter_value`}>Value</Label>
-                    <Input {...register(`rules.${index}.filter_value`)} placeholder="e.g., finance, Active" />
+                    <Label htmlFor={`rules.${index}.filter_value`}>{t('estates:sharingPolicy.fields.value')}</Label>
+                    <Input {...register(`rules.${index}.filter_value`)} placeholder={t('estates:sharingPolicy.placeholders.value')} />
                     {errors.rules && errors.rules[index] && errors.rules[index]!.filter_value && <p className="text-sm text-red-500 mt-1">{errors.rules[index]!.filter_value!.message}</p>}
                   </div>
                 </div>
@@ -220,15 +222,15 @@ const AddSharingPolicyDialog: React.FC<AddSharingPolicyDialogProps> = ({
               size="sm"
               onClick={() => append({ filter_type: '', operator: 'equals', filter_value: '' })}
             >
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Rule
+              <PlusCircle className="mr-2 h-4 w-4" /> {t('estates:sharingPolicy.addRule')}
             </Button>
           </div>
 
           <DialogFooter>
             <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">{t('common:actions.cancel')}</Button>
             </DialogClose>
-            <Button type="submit">Add Policy</Button>
+            <Button type="submit">{t('estates:sharingPolicy.submit')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 
 interface DeletePreviewItem {
   id: string;
@@ -77,6 +78,7 @@ export function AssetDeleteDialog({
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const { get: apiGet, post: apiPost } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['assets', 'common']);
 
   const fetchPreview = useCallback(async () => {
     if (!assetId) return;
@@ -89,7 +91,7 @@ export function AssetDeleteDialog({
         setCheckedIds(new Set(flattenTree(response.data)));
       }
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message || 'Failed to load delete preview' });
+      toast({ variant: 'destructive', title: t('common:states.error'), description: err.message || t('assets:cascadeDelete.loadPreviewError') });
       setPreview(null);
     } finally {
       setIsLoadingPreview(false);
@@ -136,22 +138,22 @@ export function AssetDeleteDialog({
       if (data) {
         if (data.deleted.length > 0) {
           toast({
-            title: 'Assets deleted',
-            description: `Successfully deleted ${data.deleted.length} asset(s).`,
+            title: t('assets:cascadeDelete.deletedTitle'),
+            description: t('assets:cascadeDelete.deletedDescription', { count: data.deleted.length }),
           });
         }
         if (data.failed.length > 0) {
           toast({
             variant: 'destructive',
-            title: 'Some deletions failed',
-            description: `${data.failed.length} asset(s) failed to delete.`,
+            title: t('assets:cascadeDelete.failedTitle'),
+            description: t('assets:cascadeDelete.failedDescription', { count: data.failed.length }),
           });
         }
       }
       onOpenChange(false);
       onDeleted();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Delete failed', description: err.message });
+      toast({ variant: 'destructive', title: t('assets:cascadeDelete.deleteFailedTitle'), description: err.message });
     } finally {
       setIsDeleting(false);
     }
@@ -206,29 +208,29 @@ export function AssetDeleteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trash2 className="h-5 w-5 text-destructive" />
-            Delete Asset
+            {t('assets:cascadeDelete.title')}
           </DialogTitle>
           <DialogDescription>
             {hasChildren
-              ? `"${assetName}" has child assets. Select which ones to delete.`
-              : `Are you sure you want to delete "${assetName}"? This action cannot be undone.`}
+              ? t('assets:cascadeDelete.hasChildrenDescription', { name: assetName })
+              : t('assets:cascadeDelete.confirmDescription', { name: assetName })}
           </DialogDescription>
         </DialogHeader>
 
         {isLoadingPreview ? (
           <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Loading related assets...</span>
+            <span className="text-sm">{t('assets:cascadeDelete.loadingRelated')}</span>
           </div>
         ) : preview && hasChildren ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-md p-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>Deleting a parent asset will also delete selected children.</span>
+              <span>{t('assets:cascadeDelete.childrenWarning')}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">
-                {checkedIds.size} of {totalCount} asset(s) selected
+                {t('assets:cascadeDelete.selectedCount', { checked: checkedIds.size, total: totalCount })}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -237,7 +239,7 @@ export function AssetDeleteDialog({
                   className="h-7 text-xs px-2"
                   onClick={() => preview && setCheckedIds(new Set(flattenTree(preview)))}
                 >
-                  Select All
+                  {t('assets:cascadeDelete.selectAll')}
                 </Button>
                 <Button
                   variant="outline"
@@ -245,7 +247,7 @@ export function AssetDeleteDialog({
                   className="h-7 text-xs px-2"
                   onClick={() => preview && setCheckedIds(new Set([preview.id]))}
                 >
-                  Select None
+                  {t('assets:cascadeDelete.selectNone')}
                 </Button>
               </div>
             </div>
@@ -257,7 +259,7 @@ export function AssetDeleteDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isDeleting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -265,7 +267,9 @@ export function AssetDeleteDialog({
             disabled={isDeleting || isLoadingPreview || checkedIds.size === 0}
           >
             {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Delete {checkedIds.size > 1 ? `${checkedIds.size} Assets` : 'Asset'}
+            {checkedIds.size > 1
+              ? t('assets:cascadeDelete.deleteButtonMany', { count: checkedIds.size })
+              : t('assets:cascadeDelete.deleteButtonOne')}
           </Button>
         </DialogFooter>
       </DialogContent>

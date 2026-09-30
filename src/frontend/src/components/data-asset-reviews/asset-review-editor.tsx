@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from '@/components/ui/textarea';
@@ -71,6 +72,7 @@ export default function AssetReviewEditor({
     currentIndex,
     totalCount,
 }: AssetReviewEditorProps) {
+    const { t } = useTranslation(['data-asset-reviews', 'common']);
     const { get, put, post } = api;
     const { toast } = useToast();
 
@@ -126,7 +128,7 @@ export default function AssetReviewEditor({
                     const response = await fetch(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/definition`);
                     if (!response.ok) {
                         const errorText = await response.text();
-                        throw new Error(errorText || `Failed to fetch definition (${response.status})`);
+                        throw new Error(errorText || t('data-asset-reviews:editor.messages.fetchDefinitionFailed', { status: response.status }));
                     }
                     const textDefinition = await response.text();
                     setDefinition(textDefinition);
@@ -138,7 +140,7 @@ export default function AssetReviewEditor({
                 }
             } catch (err: any) {
                 console.error('Error fetching asset content:', err);
-                setContentError(err.message || 'Failed to load asset content');
+                setContentError(err.message || t('data-asset-reviews:editor.messages.loadContentFailed'));
             } finally {
                 setIsLoadingContent(false);
             }
@@ -158,11 +160,11 @@ export default function AssetReviewEditor({
         try {
             const response = await put<ReviewedAsset>(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/status`, payload);
             const updatedAsset = checkApiResponse(response, 'Update Asset Status');
-            toast({ title: 'Success', description: `Review for ${asset.asset_fqn} saved.` });
+            toast({ title: t('common:toast.success'), description: t('data-asset-reviews:editor.messages.reviewSaved', { fqn: asset.asset_fqn }) });
             onReviewSave(updatedAsset);
         } catch (err: any) {
             // Display error related to saving the review, not to be confused with contentError
-            toast({ title: 'Error Saving Review', description: `Failed to save review: ${err.message}`, variant: 'destructive' });
+            toast({ title: t('data-asset-reviews:editor.messages.saveErrorTitle'), description: t('data-asset-reviews:editor.messages.saveError', { error: err.message }), variant: 'destructive' });
         } finally {
             setIsSaving(false);
         }
@@ -172,8 +174,8 @@ export default function AssetReviewEditor({
         // Check if LLM is enabled
         if (!llmConfig || !llmConfig.enabled) {
             toast({
-                title: 'AI Features Disabled',
-                description: 'AI-powered analysis is currently disabled in settings.',
+                title: t('data-asset-reviews:editor.messages.aiDisabledTitle'),
+                description: t('data-asset-reviews:editor.messages.aiDisabled'),
                 variant: 'destructive'
             });
             return;
@@ -202,10 +204,10 @@ export default function AssetReviewEditor({
             );
             const result = checkApiResponse(response, 'AI Analysis');
             setAnalysisResult(result);
-            toast({ title: 'AI Analysis Complete', description: 'Review summary generated.' });
+            toast({ title: t('data-asset-reviews:editor.messages.aiCompleteTitle'), description: t('data-asset-reviews:editor.messages.aiComplete') });
         } catch (err: any) {
-            setAnalysisError(err.message || 'Failed to perform AI analysis.');
-            toast({ title: 'AI Analysis Error', description: err.message, variant: 'destructive' });
+            setAnalysisError(err.message || t('data-asset-reviews:editor.messages.aiFailed'));
+            toast({ title: t('data-asset-reviews:editor.messages.aiErrorTitle'), description: err.message, variant: 'destructive' });
         } finally {
             setIsAnalyzing(false);
         }
@@ -259,10 +261,10 @@ export default function AssetReviewEditor({
         }
 
         if (asset.asset_type === AssetType.MODEL) {
-            return <p className="text-sm text-muted-foreground">Model review details not yet implemented.</p>;
+            return <p className="text-sm text-muted-foreground">{t('data-asset-reviews:editor.modelReviewNotImplemented')}</p>;
         }
 
-        return <p className="text-sm text-muted-foreground">No preview or definition available for this asset type, or content is still loading.</p>;
+        return <p className="text-sm text-muted-foreground">{t('data-asset-reviews:editor.noPreviewAvailable')}</p>;
     };
 
     // Handle MDM Match assets with specialized component
@@ -323,28 +325,28 @@ export default function AssetReviewEditor({
         <div className="px-1 pb-1">
              {/* Asset Details */}
              <div>
-                 <h4 className="font-medium text-lg mb-2">Asset Details</h4>
-                 <p className="text-sm"><span className="font-semibold">FQN:</span> <span className="font-mono text-xs">{asset.asset_fqn}</span></p>
-                 <p className="text-sm"><span className="font-semibold">Type:</span> <Badge variant="secondary">{asset.asset_type}</Badge></p>
+                 <h4 className="font-medium text-lg mb-2">{t('data-asset-reviews:editor.assetDetails')}</h4>
+                 <p className="text-sm"><span className="font-semibold">{t('data-asset-reviews:editor.fqnLabel')}</span> <span className="font-mono text-xs">{asset.asset_fqn}</span></p>
+                 <p className="text-sm"><span className="font-semibold">{t('data-asset-reviews:editor.typeLabel')}</span> <Badge variant="secondary">{asset.asset_type}</Badge></p>
              </div>
 
             {/* Content Viewer */}
             <div className="space-y-2 mt-6">
-                 <h4 className="font-medium text-lg">Content Preview / Definition</h4>
+                 <h4 className="font-medium text-lg">{t('data-asset-reviews:editor.contentPreview')}</h4>
                 {renderAssetContent()}
             </div>
 
             {/* Review Form */}
             <div className="space-y-3 mt-6 border-t">
-                <h4 className="font-medium text-lg">Your Review</h4>
+                <h4 className="font-medium text-lg">{t('data-asset-reviews:editor.yourReview')}</h4>
                 <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="asset-status" className="text-right">Status *</Label>
+                    <Label htmlFor="asset-status" className="text-right">{t('data-asset-reviews:editor.statusLabel')}</Label>
                      <Select
                         value={currentStatus}
                         onValueChange={(value) => setCurrentStatus(value as ReviewedAssetStatus)}
                     >
                         <SelectTrigger id="asset-status" className="col-span-3">
-                            <SelectValue placeholder="Set status" />
+                            <SelectValue placeholder={t('data-asset-reviews:editor.statusPlaceholder')} />
                         </SelectTrigger>
                         <SelectContent>
                             {Object.values(ReviewedAssetStatus).map((status) => (
@@ -354,12 +356,12 @@ export default function AssetReviewEditor({
                     </Select>
                 </div>
                  <div className="grid grid-cols-4 items-start gap-4">
-                    <Label htmlFor="comments" className="text-right pt-2">Comments</Label>
+                    <Label htmlFor="comments" className="text-right pt-2">{t('data-asset-reviews:details.comments')}</Label>
                     <Textarea
                         id="comments"
                         value={comments}
                         onChange={(e) => setComments(e.target.value)}
-                        placeholder="Add your review comments here..."
+                        placeholder={t('data-asset-reviews:editor.commentsPlaceholder')}
                         className="col-span-3 min-h-[80px]"
                     />
                 </div>
@@ -372,14 +374,14 @@ export default function AssetReviewEditor({
                  {/* Save button is added here, within the form section */}
                  <div className="flex justify-end pt-2">
                      <Button onClick={handleSaveReview} disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Review
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t('data-asset-reviews:editor.saveReview')}
                      </Button>
                  </div>
             </div>
             {/* Button for automated checks (placeholder) */}
              {asset.asset_type === AssetType.TABLE && (
                  <div className="pt-4 border-t">
-                    <Button variant="outline" disabled>Run Automated Checks (Not Implemented)</Button>
+                    <Button variant="outline" disabled>{t('data-asset-reviews:editor.runAutomatedChecks')}</Button>
                 </div>
              )}
 
@@ -387,15 +389,15 @@ export default function AssetReviewEditor({
             {llmConfig && llmConfig.enabled && (asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) && (
                 <div className="mt-6 border-t space-y-3">
                     <h4 className="font-medium text-lg flex items-center">
-                        <SparklesIcon className="w-5 h-5 mr-2 text-purple-500" /> AI Assisted Review
+                        <SparklesIcon className="w-5 h-5 mr-2 text-purple-500" /> {t('data-asset-reviews:editor.aiAssistedReview')}
                     </h4>
                     <Button
                         onClick={handleAiAnalysisClick}
                         disabled={isAnalyzing || isLoadingContent || !definition}
-                        title={!definition && !isLoadingContent ? "Asset content (definition) must be loaded to run AI analysis." : ""}
+                        title={!definition && !isLoadingContent ? t('data-asset-reviews:editor.aiContentRequired') : ""}
                     >
                         {isAnalyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {analysisResult ? 'Re-run AI Analysis' : 'Run AI Analysis'}
+                        {analysisResult ? t('data-asset-reviews:editor.rerunAiAnalysis') : t('data-asset-reviews:editor.runAiAnalysis')}
                     </Button>
                     {analysisError && (
                         <Alert variant="destructive">
@@ -407,14 +409,14 @@ export default function AssetReviewEditor({
                         <Card className="mt-2">
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-base">
-                                    AI Analysis Summary
+                                    {t('data-asset-reviews:editor.aiAnalysisSummary')}
                                     {!analysisResult.phase1_passed && (
-                                        <Badge variant="destructive" className="ml-2">Security Warning</Badge>
+                                        <Badge variant="destructive" className="ml-2">{t('data-asset-reviews:editor.securityWarning')}</Badge>
                                     )}
                                 </CardTitle>
                                 <p className="text-xs text-muted-foreground">
-                                    Model: {analysisResult.model_used || 'N/A'} |
-                                    Generated: <RelativeDate date={analysisResult.timestamp} />
+                                    {t('data-asset-reviews:editor.modelLabel')}: {analysisResult.model_used || t('common:states.notAvailable')} |
+                                    {t('data-asset-reviews:editor.generatedLabel')}: <RelativeDate date={analysisResult.timestamp} />
                                 </p>
                             </CardHeader>
                             <CardContent>

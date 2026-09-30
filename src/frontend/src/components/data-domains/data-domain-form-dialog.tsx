@@ -1,4 +1,6 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -40,12 +42,14 @@ interface DataDomainFormDialogProps {
 
 const NO_PARENT_VALUE = "__NO_PARENT_SELECTED__"; // Constant for "No Parent" option
 
-const formSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters." }).max(100),
-  description: z.string().max(500, { message: "Description must not exceed 500 characters." }).optional().nullable(),
+const buildSchema = (t: TFunction) => z.object({
+  name: z.string().min(2, { message: t('data-domains:form.validation.nameMin') }).max(100),
+  description: z.string().max(500, { message: t('data-domains:form.validation.descriptionMax') }).optional().nullable(),
   tags: z.array(z.any()).optional(),
   parent_id: z.string().uuid().optional().nullable().or(z.literal(NO_PARENT_VALUE)), // Allow NO_PARENT_VALUE
 });
+
+type DataDomainFormValues = z.infer<ReturnType<typeof buildSchema>>;
 
 export function DataDomainFormDialog({
   domain,
@@ -55,12 +59,15 @@ export function DataDomainFormDialog({
   trigger,
   allDomains,
 }: DataDomainFormDialogProps) {
+  const { t } = useTranslation(['data-domains', 'common']);
   const api = useApi();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = React.useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const formSchema = React.useMemo(() => buildSchema(t), [t]);
+
+  const form = useForm<DataDomainFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: domain?.name || "",
@@ -95,7 +102,7 @@ export function DataDomainFormDialog({
     onOpenChange(false);
   };
 
-  const handleFormSubmit = async (values: z.infer<typeof formSchema>) => {
+  const handleFormSubmit = async (values: DataDomainFormValues) => {
     setIsSubmitting(true);
     let result;
 
@@ -119,23 +126,23 @@ export function DataDomainFormDialog({
        throw new Error('No data returned from API.');
     }
 
-    toast({ title: domain ? "Domain Updated" : "Domain Created", description: `Successfully saved '${result.data.name}'.` });
+    toast({ title: domain ? t('form.toasts.updated') : t('form.toasts.created'), description: t('form.toasts.saveSuccess', { name: result.data.name }) });
     onSubmitSuccess(result.data);
     onOpenChange(false);
 
     try {
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error Saving Domain", description: error.message || 'An unknown error occurred.' });
+      toast({ variant: "destructive", title: t('form.toasts.saveError'), description: error.message || t('common:errors.unknownError') });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const dialogTitle = domain ? "Edit Data Domain" : "Create New Data Domain";
+  const dialogTitle = domain ? t('form.editTitle') : t('form.createTitle');
   const dialogDescription = domain
-    ? "Make changes to the existing data domain."
-    : "Add a new data domain to the system.";
-  const submitButtonText = domain ? "Save Changes" : "Create Domain";
+    ? t('form.editDescription')
+    : t('form.createDescription');
+  const submitButtonText = domain ? t('common:actions.saveChanges') : t('form.createSubmit');
 
   const parentDomainOptions = allDomains.filter(d => d.id !== domain?.id);
 
@@ -159,9 +166,9 @@ export function DataDomainFormDialog({
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Name *</FormLabel>
+                <FormLabel>{t('form.nameLabel')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., Sales Analytics" {...field} />
+                  <Input placeholder={t('form.namePlaceholder')} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -172,10 +179,10 @@ export function DataDomainFormDialog({
             name="description"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Description</FormLabel>
+                <FormLabel>{t('form.descriptionLabel')}</FormLabel>
                 <FormControl>
                   <Textarea
-                    placeholder="Describe the purpose of this domain..."
+                    placeholder={t('form.descriptionPlaceholder')}
                     className="resize-none"
                     {...field}
                     value={field.value ?? ''}
@@ -190,12 +197,12 @@ export function DataDomainFormDialog({
             name="tags"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Tags</FormLabel>
+                <FormLabel>{t('form.tagsLabel')}</FormLabel>
                 <FormControl>
                   <TagSelector
                     value={field.value || []}
                     onChange={field.onChange}
-                    placeholder="Search and select tags for this data domain..."
+                    placeholder={t('form.tagsPlaceholder')}
                     allowCreate={true}
                   />
                 </FormControl>
@@ -208,18 +215,18 @@ export function DataDomainFormDialog({
             name="parent_id"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Parent Domain</FormLabel>
+                <FormLabel>{t('form.parentLabel')}</FormLabel>
                 <Select
                   onValueChange={field.onChange}
                   value={field.value ?? NO_PARENT_VALUE}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a parent domain (optional)" />
+                      <SelectValue placeholder={t('form.parentPlaceholder')} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value={NO_PARENT_VALUE}>No Parent</SelectItem>
+                    <SelectItem value={NO_PARENT_VALUE}>{t('form.noParent')}</SelectItem>
                     {parentDomainOptions.map((d) => (
                       <SelectItem key={d.id} value={d.id}>
                         {d.name}
@@ -233,7 +240,7 @@ export function DataDomainFormDialog({
           />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleCloseAttempt} disabled={isSubmitting}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
@@ -256,14 +263,14 @@ export function DataDomainFormDialog({
         <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+              <AlertDialogTitle>{t('common:confirmations.discardChanges')}</AlertDialogTitle>
               <AlertDialogDescription>
-                You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?
+                {t('form.discardDescription')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Continue Editing</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+              <AlertDialogCancel>{t('form.continueEditing')}</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmDiscard}>{t('form.discardChanges')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -280,14 +287,14 @@ export function DataDomainFormDialog({
       <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogTitle>{t('common:confirmations.discardChanges')}</AlertDialogTitle>
             <AlertDialogDescription>
-              You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?
+              {t('form.discardDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Continue Editing</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+            <AlertDialogCancel>{t('form.continueEditing')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDiscard}>{t('form.discardChanges')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

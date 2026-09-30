@@ -5,5 +5,25 @@
     "build": "Build",
     "govern": "Govern",
     "deploy": "Deploy"
+  },
+  "dbDown": {
+    "title": "Database unavailable",
+    "body": "The application cannot reach its metadata database. Most features will return errors until the connection is restored.",
+    "retrying": "Retrying…",
+    "retryConnection": "Retry connection",
+    "retryFailed": "Retry failed",
+    "autoRetrying": "Auto-retrying every {{seconds}} seconds",
+    "pausedTitle": "Application paused",
+    "pausedBodyBefore": "The metadata database is unreachable, so navigation and data views are disabled to avoid showing inconsistent state. Use",
+    "pausedBodyAfter": "above (or wait for the next auto-retry) to resume."
+  },
+  "warning": {
+    "title": "System Warning",
+    "workspaceFailed": "Databricks workspace connection failed. Some features may be unavailable."
+  },
+  "routeError": {
+    "title": "Something went wrong",
+    "body": "An unexpected error occurred while rendering this page. You can try again or go back to the home page.",
+    "goHome": "Go Home"
   }
 }

@@ -32,7 +32,7 @@ interface MarketplaceViewProps {
 }
 
 export default function MarketplaceView({ className }: MarketplaceViewProps) {
-  const { t } = useTranslation('home');
+  const { t } = useTranslation(['home', 'common']);
   const navigate = useNavigate();
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
   const { userInfo } = useUserStore();
@@ -118,7 +118,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
         setAllProducts(Array.isArray(data) ? data : []);
         setProductsError(null);
       } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : 'Failed to load products';
+        const message = e instanceof Error ? e.message : t('marketplace.loadError');
         setProductsError(message);
         setAllProducts([]);
       } finally {
@@ -422,7 +422,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Package className="h-4 w-4 text-primary flex-shrink-0" />
-              <CardTitle className="text-base truncate">{product.name || 'Untitled'}</CardTitle>
+              <CardTitle className="text-base truncate">{product.name || t('marketplace.products.untitled')}</CardTitle>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {isSubscribed && (
@@ -707,7 +707,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
           ) : (
             <>
               <div className="text-sm text-muted-foreground mb-4">
-                {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} available
+                {t('marketplace.products.available', { count: filteredProducts.length })}
               </div>
               <div className={gridClass}>
                 {filteredProducts.map(p => renderProductCard(p, subscribedProductIds.has(p.id || '')))}
@@ -770,7 +770,7 @@ export default function MarketplaceView({ className }: MarketplaceViewProps) {
             if (!open) setSelectedProduct(null);
           }}
           productId={selectedProduct.id || ''}
-          productName={selectedProduct.name || 'Unknown Product'}
+          productName={selectedProduct.name || t('marketplace.products.unknownProduct')}
           onSuccess={handleProductSubscriptionSuccess}
         />
       )}

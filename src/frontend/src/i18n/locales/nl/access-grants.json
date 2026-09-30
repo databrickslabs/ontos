@@ -2,16 +2,23 @@
   "request": {
     "title": "Toegang Aanvragen",
     "description": "Vraag toestemming aan om deze {{entityType}} te bekijken en gebruiken.",
+    "dialogTitle": "Tijdsgebonden toegang aanvragen",
+    "dialogDescription": "Dien een verzoek in voor tijdelijke toegang tot deze {{entityType}}. Selecteer hoe lang u toegang nodig hebt en geef een reden op.",
+    "permissionLabel": "Machtigingsniveau",
     "reason": {
       "label": "Reden voor Toegang",
+      "fullLabel": "Reden voor toegangsverzoek",
       "placeholder": "Leg uit waarom je toegang nodig hebt tot deze {{entityType}}...",
+      "detailedPlaceholder": "Leg uit waarom u toegang nodig hebt tot deze resource. Vermeld details over uw beoogde use case, projectvereisten of zakelijke rechtvaardiging...",
       "required": "Geef alstublieft een reden op voor het aanvragen van toegang",
-      "minLength": "Geef alstublieft een meer gedetailleerde reden op (minimaal 10 tekens)"
+      "minLength": "Geef alstublieft een meer gedetailleerde reden op (minimaal 10 tekens)",
+      "help": "Minimaal 10 tekens vereist. Deze informatie wordt beoordeeld door beheerders."
     },
     "duration": {
       "label": "Toegangsduur",
       "placeholder": "Selecteer duur",
       "helpText": "Toegang verloopt na de geselecteerde duur. Je kunt verlenging aanvragen voordat het verloopt.",
+      "help": "Uw toegang verloopt automatisch na deze periode.",
       "days": "{{count}} dag",
       "days_plural": "{{count}} dagen",
       "months": "{{count}} maand",
@@ -21,7 +28,13 @@
     },
     "submit": "Verzoek Verzenden",
     "submitting": "Verzoek Verzenden...",
-    "success": "Je toegangsverzoek is ingediend en je wordt op de hoogte gebracht van de beslissing."
+    "submitButtonWithDuration": "Toegang aanvragen voor {{duration}}",
+    "success": "Je toegangsverzoek is ingediend en je wordt op de hoogte gebracht van de beslissing.",
+    "submittedTitle": "Verzoek ingediend",
+    "submittedDescription_one": "Uw toegangsverzoek voor {{count}} dag is ingediend. U wordt op de hoogte gebracht van de beslissing.",
+    "submittedDescription_other": "Uw toegangsverzoek voor {{count}} dagen is ingediend. U wordt op de hoogte gebracht van de beslissing.",
+    "cancel": "Annuleren",
+    "error": "Indienen van toegangsverzoek mislukt"
   },
   "panel": {
     "title": "Toegangsrechten",
@@ -31,31 +44,120 @@
     "requestButton": "Toegang Aanvragen",
     "refresh": "Vernieuwen",
     "activeGrants": "Actieve Rechten",
+    "activeGrantsCount": "Actieve rechten ({{count}})",
     "pendingRequests": "Openstaande Verzoeken",
+    "pendingRequestsCount": "Openstaande verzoeken ({{count}})",
     "expiresAt": "Verloopt",
     "grantedAt": "Verleend",
     "requestedAt": "Aangevraagd",
     "revoke": "Intrekken",
     "revokeConfirm": "Weet je zeker dat je de toegang voor {{user}} wilt intrekken?",
+    "revokeConfirmDetailed": "Weet u zeker dat u de toegang voor <bold>{{user}}</bold> wilt intrekken? Deze actie kan niet ongedaan worden gemaakt.",
+    "revokeTitle": "Toegang intrekken",
     "revokeSuccess": "Toegang succesvol ingetrokken",
-    "handle": "Verzoek Behandelen"
+    "revokedTitle": "Toegang ingetrokken",
+    "revokedDescription": "Toegang voor {{user}} is ingetrokken.",
+    "revokeError": "Intrekken van toegang mislukt",
+    "review": "Beoordelen",
+    "expiringBadge": "{{count}} verlopen binnenkort",
+    "expiringSoonTooltip_one": "{{count}} recht verloopt binnenkort",
+    "expiringSoonTooltip_other": "{{count}} rechten verlopen binnenkort",
+    "durationDays_one": "{{count}} dag",
+    "durationDays_other": "{{count}} dagen",
+    "expiresTooltip": "Verloopt: {{date}}",
+    "handle": "Verzoek Behandelen",
+    "columns": {
+      "actions": "Acties",
+      "expires": "Verloopt",
+      "granted": "Verleend",
+      "grantedBy": "Verleend door",
+      "permission": "Machtigingsniveau",
+      "user": "Gebruiker",
+      "requester": "Aanvrager",
+      "duration": "Duur"
+    },
+    "expiry": {
+      "unknown": "Onbekend",
+      "expired": "Verlopen",
+      "today": "Vandaag",
+      "days_one": "{{count}} dag",
+      "days_other": "{{count}} dagen",
+      "weeks_one": "{{count}} week",
+      "weeks_other": "{{count}} weken",
+      "months_one": "{{count}} maand",
+      "months_other": "{{count}} maanden"
+    }
   },
   "handle": {
     "title": "Toegangsverzoek Behandelen",
+    "description": "Beoordeel dit toegangsverzoek en keur het goed of wijs het af.",
     "approve": "Goedkeuren",
+    "approveWithDuration": "Goedkeuren ({{duration}})",
     "deny": "Afwijzen",
     "clarify": "Verduidelijking Vragen",
     "grantDuration": "Toegangsduur",
+    "durationToGrant": "Te verlenen duur",
+    "permissionToGrant": "Te verlenen machtigingsniveau",
+    "requestedSuffix": " (aangevraagd)",
     "response": "Reactie Bericht",
     "responsePlaceholder": "Geef feedback of aanvullende informatie...",
+    "messageLabel": "Bericht aan aanvrager (optioneel)",
+    "messagePlaceholder": "Voeg een bericht toe voor de aanvrager (bijv. voorwaarden voor goedkeuring, reden voor afwijzing)...",
+    "adjustNote": "Bij goedkeuring kunt u de verleende toegang aanpassen:",
+    "approvedTitle": "Verzoek goedgekeurd",
+    "deniedTitle": "Verzoek afgewezen",
+    "approvedDescription": "Toegang verleend voor {{duration}}.",
+    "deniedDescription": "De aanvrager is op de hoogte gebracht.",
+    "error": "Verwerken van beslissing mislukt",
     "approveSuccess": "Toegangsverzoek goedgekeurd",
     "denySuccess": "Toegangsverzoek afgewezen",
-    "clarifySuccess": "Verduidelijking gevraagd"
+    "clarifySuccess": "Verduidelijking gevraagd",
+    "fields": {
+      "requester": "Aanvrager:",
+      "resource": "Resource:",
+      "requestedDuration": "Aangevraagde duur:",
+      "requestedPermission": "Aangevraagde machtiging:",
+      "submitted": "Ingediend:",
+      "reason": "Reden:"
+    }
   },
   "entityTypes": {
     "data_product": "dataproduct",
     "dataset": "dataset",
     "data_contract": "datacontract"
+  },
+  "entityTypeLabels": {
+    "data_product": "Dataproduct",
+    "data_contract": "Datacontract",
+    "table": "Tabel",
+    "schema": "Schema",
+    "catalog": "Catalogus"
+  },
+  "permissionLevels": {
+    "READ": "Lezen",
+    "WRITE": "Schrijven",
+    "MANAGE": "Beheren"
+  },
+  "permissionOptions": {
+    "READ": "Alleen-lezen",
+    "WRITE": "Lezen en schrijven",
+    "MANAGE": "Volledige toegang (Beheren)"
+  },
+  "permissionSelectPlaceholder": "Selecteer machtigingsniveau",
+  "statuses": {
+    "active": "Actief",
+    "expired": "Verlopen",
+    "revoked": "Ingetrokken",
+    "pending": "In behandeling"
+  },
+  "resource": "resource",
+  "resourceCapitalized": "Resource",
+  "duration": {
+    "days_one": "{{count}} dag",
+    "days_other": "{{count}} dagen",
+    "months_one": "{{count}} maand",
+    "months_other": "{{count}} maanden",
+    "years_one": "{{count}} jaar",
+    "years_other": "{{count}} jaren"
   }
 }
-

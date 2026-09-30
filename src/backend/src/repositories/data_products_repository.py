@@ -49,6 +49,22 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _serialize_custom_property_value(value: Any) -> Optional[str]:
+    """Serialize an ODPS custom-property value for the TEXT column.
+
+    A null value is persisted as SQL NULL rather than the literal string
+    ``"null"`` — ``json.dumps(None)`` would otherwise yield ``"null"``, which
+    read back as a bogus string (e.g. UNRESOLVED placeholders imported with
+    ``value: null``). Strings are stored verbatim; every other type is
+    JSON-encoded to survive the round-trip.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
+
+
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
     """Repository for ODPS v1.0.0 DataProduct CRUD operations."""
 
@@ -120,8 +136,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             # 4. Create Custom Properties (One-to-Many)
             if obj_in.customProperties:
                 for custom_prop in obj_in.customProperties:
-                    # Store value as JSON string to support any type
-                    value_str = json.dumps(custom_prop.value) if not isinstance(custom_prop.value, str) else custom_prop.value
+                    # Store value as JSON string to support any type. A null value
+                    # is stored as SQL NULL rather than the literal string "null"
+                    # (json.dumps(None) == "null"), so absent values round-trip as
+                    # null instead of a bogus "null" string.
+                    value_str = _serialize_custom_property_value(custom_prop.value)
                     prop_obj = CustomPropertyDb(
                         property=custom_prop.property,
                         value=value_str,
@@ -320,7 +339,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             if 'customProperties' in update_data:
                 db_obj.custom_properties.clear()
                 for prop_dict in update_data['customProperties'] or []:
-                    value_str = json.dumps(prop_dict['value']) if not isinstance(prop_dict['value'], str) else prop_dict['value']
+                    value_str = _serialize_custom_property_value(prop_dict.get('value'))
                     prop_obj = CustomPropertyDb(
                         property=prop_dict['property'],
                         value=value_str,

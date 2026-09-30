@@ -1,0 +1,173 @@
+{
+  "title": "Catalogue de données",
+  "subtitle": "Parcourez toutes les colonnes des tables et vues Unity Catalog",
+  "searchPlaceholder": "Rechercher des colonnes...",
+  "noResults": "Aucune colonne trouvée",
+  "tryDifferentSearch": "Essayez un autre terme de recherche",
+  "noTablesAccessible": "Aucune table accessible dans Unity Catalog",
+  "showingColumns": "Affichage de {{count}} colonnes",
+  "matchingSearch": "correspondant",
+  "tableCountBadge": "({{count}} tables)",
+  "columns": {
+    "label": "Libellé",
+    "description": "Description",
+    "columnName": "Nom de la colonne",
+    "type": "Type",
+    "tableName": "Table",
+    "businessTerms": "Termes métier",
+    "source": "Source"
+  },
+  "filters": {
+    "assetType": "Type d'actif",
+    "allTypes": "Tous les types",
+    "system": "Système",
+    "allSystems": "Tous les systèmes",
+    "catalog": "Catalogue",
+    "allCatalogs": "Tous les catalogues",
+    "schema": "Schéma",
+    "allSchemas": "Tous les schémas"
+  },
+  "sourceBadges": {
+    "both": "Les deux",
+    "asset": "Actif",
+    "contract": "Contrat"
+  },
+  "pagination": {
+    "showing": "Affichage de {{from}}–{{to}} sur {{total}} colonnes",
+    "matching": " correspondant à \"{{query}}\"",
+    "perPage": "Par page :",
+    "pageOf": "Page {{current}} sur {{total}}"
+  },
+  "tabs": {
+    "overview": "Aperçu",
+    "dataDetails": "Détails des données",
+    "lineage": "Traçabilité"
+  },
+  "overview": {
+    "basicInfo": "Informations de base",
+    "catalog": "Catalogue",
+    "schema": "Schéma",
+    "owner": "Propriétaire",
+    "type": "Type",
+    "created": "Créé",
+    "updated": "Mis à jour",
+    "storage": "Stockage et statistiques",
+    "columns": "Colonnes",
+    "rows": "Lignes",
+    "size": "Taille",
+    "format": "Format",
+    "location": "Emplacement de stockage",
+    "description": "Description",
+    "tags": "Étiquettes"
+  },
+  "details": {
+    "backToList": "Retour à la liste",
+    "by": "par {{user}}",
+    "fallbackTitle": "Détails"
+  },
+  "dataDetails": {
+    "title": "Colonnes",
+    "description": "Description",
+    "columnName": "Nom de la colonne",
+    "type": "Type",
+    "nullable": "Nullable",
+    "partition": "Partition {{index}}",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "lineage": {
+    "title": "Traçabilité des données",
+    "description": "Visualisez les dépendances en amont et en aval",
+    "noLineage": "Aucune information de traçabilité disponible",
+    "noLineageHint": "Cette table n'a peut-être aucune dépendance en amont ou en aval",
+    "noDataAvailable": "Aucune donnée de traçabilité disponible",
+    "loadingLineage": "Chargement de la traçabilité…",
+    "both": "Les deux directions",
+    "upstream": "Amont uniquement",
+    "downstream": "Aval uniquement",
+    "legend": "Légende",
+    "impactSummary": "Résumé d'impact",
+    "impactWarning": "Les modifications de cette table peuvent affecter :",
+    "notifyOwners": "Propriétaires à notifier",
+    "impactedTables_one": "{{count}} table",
+    "impactedTables_other": "{{count}} tables",
+    "impactedViews_one": "{{count}} vue",
+    "impactedViews_other": "{{count}} vues",
+    "impactedExternal_one": "{{count}} externe",
+    "impactedExternal_other": "{{count}} externes",
+    "toolbar": {
+      "upstream": "Amont",
+      "both": "Les deux",
+      "downstream": "Aval",
+      "breadth": "Largeur :",
+      "nesting": "Imbrication :",
+      "entitiesEdges": "{{nodes}} entités · {{edges}} arêtes"
+    },
+    "legendPanel": {
+      "entityTypes": "Types d'entités",
+      "edgeStyles": "Styles d'arêtes",
+      "dataFlow": "Flux de données",
+      "containment": "Confinement",
+      "governance": "Gouvernance",
+      "semantic": "Sémantique"
+    },
+    "dev": {
+      "entityTypeLabel": "Type d'entité :",
+      "entityTypePlaceholder": "par ex. DataProduct",
+      "entityIdLabel": "ID d'entité :",
+      "entityIdPlaceholder": "par ex. uuid",
+      "load": "Charger",
+      "emptyHint": "Saisissez un type et un ID d'entité ci-dessus, puis cliquez sur Charger"
+    }
+  },
+  "hierarchy": {
+    "browserTitle": "Navigateur de hiérarchie",
+    "browserSubtitle": "Naviguez dans les hiérarchies de données, des systèmes et domaines jusqu'aux tables et colonnes",
+    "browse": "Parcourir",
+    "filterPlaceholder": "Filtrer...",
+    "noMatches": "Aucune correspondance trouvée",
+    "noRoots": "Aucune entité racine trouvée",
+    "rootsLoadFailed": "Échec du chargement des racines de la hiérarchie",
+    "permissionDenied": "Permission refusée",
+    "noAccess": "Vous n'avez pas accès à la navigation dans la hiérarchie.",
+    "selectEntity": "Sélectionner une entité",
+    "selectEntityHint": "Cliquez sur un élément de l'arborescence pour voir sa hiérarchie",
+    "childCount_one": "{{count}} enfant",
+    "childCount_other": "{{count}} enfants",
+    "maxDepthTooltip": "Profondeur maximale de la hiérarchie",
+    "treeView": "Vue arborescente",
+    "graphView": "Vue graphe",
+    "viewDetail": "Voir le détail",
+    "viewDetails": "Voir les détails",
+    "show": "Afficher :",
+    "showAll": "Tout afficher",
+    "heading": "Hiérarchie",
+    "noChildren": "Aucun enfant dans la hiérarchie",
+    "noChildrenFound": "Aucun enfant trouvé",
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "levelsOption": "{{count}} niveaux",
+    "allLevels": "Tous",
+    "rootType": {
+      "domain": "Domaine",
+      "product": "Produit"
+    }
+  },
+  "preview": {
+    "title": "Aperçu",
+    "notAvailable": "Aperçu non disponible pour ce fichier.",
+    "fetchFailed": "Échec de la récupération du contenu de l'aperçu.",
+    "loadImageFailed": "Échec du chargement de l'image",
+    "pdfNotSupported": "Aperçu PDF non pris en charge.",
+    "textPreviewTitle": "Aperçu du texte",
+    "noInlinePreview": "Aucun aperçu en ligne pour ce type de fichier.",
+    "noPreviewUrl": "Aucune URL d'aperçu disponible. Nom de fichier : {{filename}} • Chemin : {{path}}"
+  },
+  "errors": {
+    "fetchFailed": "Échec de la récupération des données",
+    "tableNotFound": "Table introuvable",
+    "fetchTableFailed": "Échec de la récupération de la table : {{status}}",
+    "fetchLineageFailed": "Échec de la récupération de la traçabilité",
+    "loadLineageFailed": "Échec du chargement de la traçabilité"
+  }
+}

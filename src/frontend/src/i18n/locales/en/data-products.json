@@ -24,7 +24,8 @@
     "noEdit": "You do not have permission to edit data products.",
     "noDelete": "You do not have permission to delete data products.",
     "noBulkDelete": "You do not have permission to bulk delete.",
-    "noGenieSpace": "You do not have permission to create Genie Spaces."
+    "noGenieSpace": "You do not have permission to create Genie Spaces.",
+    "noUpload": "You do not have permission to upload data products."
   },
   "bulk": {
     "deleteConfirm": "Are you sure you want to delete {{count}} selected product(s)?",
@@ -54,7 +55,8 @@
     "uploading": "Uploading...",
     "tooltipTitle": "Upload Data Product (ODPS format)",
     "tooltipDescription": "Accepts YAML or JSON files following the ODPS (Open Data Product Standard) schema.",
-    "tooltipHint": "For Data Contracts (ODCS), use the Data Contracts page instead."
+    "tooltipHint": "For Data Contracts (ODCS), use the Data Contracts page instead.",
+    "odcsHint": "Hint: This page is for Data Products (ODPS format). If you're trying to upload a Data Contract (ODCS format), please use the Data Contracts page instead."
   },
   "genie": {
     "noSelection": "No Selection",
@@ -85,7 +87,11 @@
     "viewDetails": "View details",
     "editProduct": "Edit product",
     "deleteProduct": "Delete product",
-    "subscribed": "Subscribed"
+    "subscribed": "Subscribed",
+    "unnamedProduct": "Unnamed Product",
+    "previewMetadata": "Preview Metadata",
+    "editDenied": "Edit (Permission Denied)",
+    "deleteDenied": "Delete (Permission Denied)"
   },
   "messages": {
     "deleteConfirm": "Are you sure you want to delete this data product?",
@@ -95,7 +101,13 @@
     "importSuccess": "Data product imported successfully",
     "importError": "Failed to import data product",
     "success": "Success",
-    "error": "Error"
+    "error": "Error",
+    "validationErrors": "{{count}} validation error(s) occurred",
+    "validationTitle": "Validation Error",
+    "loadInitialError": "Failed to load initial data",
+    "refreshError": "Failed to refresh products list",
+    "unknownError": "Unknown error",
+    "unknownErrorFormat": "Unknown error format"
   },
   "status": {
     "draft": "Draft",
@@ -108,7 +120,8 @@
     "certified": "Certified",
     "deprecated": "Deprecated",
     "retired": "Retired",
-    "published": "Published"
+    "published": "Published",
+    "personalDraft": "Personal Draft"
   },
   "viewMode": {
     "table": "Table",
@@ -135,7 +148,15 @@
       "updated": "Updated",
       "tags": "Tags",
       "noTags": "No tags",
-      "notAssigned": "Not assigned"
+      "notAssigned": "Not assigned",
+      "project": "Project",
+      "tenant": "Tenant",
+      "ownerTeam": "Team",
+      "apiVersion": "API Ver",
+      "certification": "Cert",
+      "publishedLabel": "Published",
+      "quality": "Quality",
+      "linkedConcepts": "Linked Business Concepts"
     },
     "sections": {
       "overview": "Overview",
@@ -172,7 +193,9 @@
         "email": "Email",
         "subscribed": "Subscribed",
         "reason": "Reason"
-      }
+      },
+      "titleWithCount": "Subscribers ({{count}})",
+      "notificationSubtitle": "Users subscribed to this product will receive notifications about status changes, compliance issues, and new versions."
     },
     "subscription": {
       "subscribed": "Subscribed",
@@ -183,7 +206,155 @@
     },
     "deleteConfirm": "Are you sure you want to delete \"{{name}}\"?",
     "deleteSuccess": "Data product deleted successfully",
-    "deleteError": "Failed to delete data product"
+    "deleteError": "Failed to delete data product",
+    "unnamedProduct": "Unnamed Product",
+    "ratings": {
+      "title": "Ratings & Reviews"
+    },
+    "actions": {
+      "requestAccess": "Request...",
+      "certify": "Certify",
+      "createGenieSpace": "Create Genie Space",
+      "cloneForEditing": "Clone for Editing",
+      "commitChanges": "Commit Changes",
+      "discardDraft": "Discard Draft",
+      "newVersion": "New Version",
+      "exportODPS": "Export ODPS",
+      "manageLineage": "Manage Lineage"
+    },
+    "banners": {
+      "personalDraftTitle": "Personal Draft",
+      "personalDraftMessage": "This is your personal draft. Only you can see it. Commit changes to share with your team.",
+      "readOnlyTitle": "Read-Only",
+      "readOnlyMessage": "This product is {{status}}. Clone to create a personal draft for editing."
+    },
+    "contacts": {
+      "title": "Contacts",
+      "fromImportedData": "From imported data",
+      "teamAssignmentOnly": "Team assignment only",
+      "defaultRole": "Owner",
+      "teamRole": "Team",
+      "importedContactsLabel": "Imported Contacts",
+      "noContactsAssigned": "No contacts assigned"
+    },
+    "deliverables": {
+      "titleWithCount": "Deliverables ({{count}})",
+      "addDeliverable": "Add Deliverable",
+      "subtitle": "Define deliverables and their delivery methods. Link assets and contracts to each deliverable.",
+      "noDeliverables": "No deliverables defined.",
+      "noDeliverablesWithEdit": "No deliverables defined. Add deliverables and link assets when ready.",
+      "contractLabel": "Contract: {{name}}",
+      "editTitle": "Edit deliverable",
+      "deleteTitle": "Delete deliverable",
+      "linkAsset": "Link Asset",
+      "linkAssetsTitle": "Link Assets to \"{{portName}}\"",
+      "linkAssetsDescription": "Only deliverable asset types (Table, View, Dataset, API Endpoint, ML Model) can be linked to an output port.",
+      "linkedToPort": "linked to port",
+      "assetsLinkedTitle": "Assets linked",
+      "assetsLinked": "{{count}} asset(s) linked to {{portName}}",
+      "assetUnlinked": "Asset unlinked",
+      "linkAssetsFailed": "Failed to link assets",
+      "unlinkAssetFailed": "Failed to unlink asset"
+    },
+    "description": {
+      "purposeLabel": "Purpose",
+      "limitationsLabel": "Limitations",
+      "usageLabel": "Usage"
+    },
+    "lineage": {
+      "businessLineageTitle": "Business Lineage"
+    },
+    "consumables": {
+      "titleWithCount": "Consumables ({{count}})",
+      "addConsumable": "Add Consumable",
+      "contractLabel": "Contract: {{contractId}}",
+      "noConsumables": "No consumables defined"
+    },
+    "managementPorts": {
+      "titleWithCount": "Management Ports ({{count}})",
+      "addManagementPort": "Add Management Port",
+      "subtitle": "Observability, control, and discoverability endpoints",
+      "contentLabel": "Content",
+      "urlLabel": "URL",
+      "noManagementPorts": "No management ports defined"
+    },
+    "teamMetadata": {
+      "titleWithCount": "ODPS Team Metadata ({{count}} members)",
+      "subtitle": "Read-only provenance from imported product YAML. Manage ownership via the Owners panel above.",
+      "defaultRole": "Member"
+    },
+    "supportChannels": {
+      "titleWithCount": "Support Channels ({{count}})",
+      "addChannel": "Add Channel",
+      "toolLabel": "Tool",
+      "noChannels": "No support channels defined"
+    },
+    "relatedEntities": {
+      "title": "Related Entities"
+    },
+    "toasts": {
+      "loadError": "Failed to load data: {{error}}",
+      "certifyTitle": "Certified",
+      "certifySuccess": "Certification level has been applied.",
+      "publishTitle": "Publication updated",
+      "publishSuccess": "Publication scope has been saved.",
+      "deleteError": "Failed to delete: {{error}}",
+      "draftCreatedTitle": "Draft Created",
+      "draftCreatedMessage": "Personal draft created. You can now edit it.",
+      "draftDiscardedTitle": "Draft Discarded",
+      "draftDiscardedMessage": "Personal draft has been discarded.",
+      "approvalNotConfiguredTitle": "Approval workflow not configured",
+      "approvalNotConfiguredMessage": "Subscribing directly. Load default workflows in Settings to use the approval flow.",
+      "subscribedTitle": "Subscribed",
+      "subscribedMessage": "You will now receive notifications about this product.",
+      "unsubscribedTitle": "Unsubscribed",
+      "unsubscribedMessage": "You will no longer receive notifications about this product.",
+      "updatedTitle": "Updated",
+      "updatedMessage": "Product updated successfully.",
+      "createNewVersionTitle": "Create New Version",
+      "createNewVersionMessage": "Creating a new version will clone this product. Apply your changes to the new version after creation.",
+      "creatingVersionTitle": "Creating New Version",
+      "creatingVersionMessage": "Creating version {{version}}...",
+      "versionCreatedMessage": "Version {{version}} created!",
+      "consumableUpdatedTitle": "Consumable Updated",
+      "consumableUpdatedMessage": "Consumable updated successfully.",
+      "consumableDeletedTitle": "Consumable Deleted",
+      "consumableDeletedMessage": "Consumable deleted successfully.",
+      "deliverableUpdatedTitle": "Deliverable Updated",
+      "deliverableUpdatedMessage": "Deliverable updated successfully.",
+      "deliverableDeletedTitle": "Deliverable Deleted",
+      "deliverableDeletedMessage": "Deliverable deleted successfully.",
+      "managementPortUpdatedTitle": "Management Port Updated",
+      "managementPortUpdatedMessage": "Management port updated successfully.",
+      "managementPortDeletedTitle": "Management Port Deleted",
+      "managementPortDeletedMessage": "Management port deleted successfully.",
+      "teamMemberAddedTitle": "Team Member Added",
+      "teamMemberAddedMessage": "Team member added successfully.",
+      "teamMemberUpdatedTitle": "Team Member Updated",
+      "teamMemberUpdatedMessage": "Team member updated successfully.",
+      "supportChannelUpdatedTitle": "Support Channel Updated",
+      "supportChannelUpdatedMessage": "Support channel updated successfully.",
+      "supportChannelDeletedTitle": "Support Channel Deleted",
+      "supportChannelDeletedMessage": "Support channel deleted successfully.",
+      "contractUnlinkedTitle": "Contract Unlinked",
+      "contractUnlinkedMessage": "Contract successfully unlinked from deliverable",
+      "iriLinkedTitle": "Linked",
+      "iriLinkedMessage": "IRI linked to data product.",
+      "iriRemovedTitle": "Removed",
+      "iriRemovedMessage": "IRI link removed.",
+      "genieSpaceRequesting": "Requesting Genie Space creation...",
+      "genieSpaceInitiated": "Genie Space creation initiated."
+    },
+    "confirms": {
+      "deleteProduct": "Delete data product \"{{name}}\"?",
+      "discardDraft": "Discard this draft? This action cannot be undone.",
+      "deleteConsumable": "Delete this consumable?",
+      "deleteDeliverable": "Delete this deliverable?",
+      "deleteManagementPort": "Delete this management port?",
+      "deleteSupportChannel": "Delete this support channel?",
+      "unlinkContract": "Unlink contract from this deliverable?",
+      "createGenieSpace": "Create a Genie Space for \"{{name}}\"?"
+    }
   },
   "form": {
     "createTitle": "Create Data Product",
@@ -214,7 +385,144 @@
     "createSuccess": "Data product created successfully",
     "updateSuccess": "Data product updated successfully",
     "createError": "Failed to create data product",
-    "updateError": "Failed to update data product"
+    "updateError": "Failed to update data product",
+    "dialogDescription": "Fill in the details for the data product. Use the tabs to switch between UI and JSON editors.",
+    "loadingDetails": "Loading product details...",
+    "tabs": {
+      "uiEditor": "UI Editor",
+      "jsonEditor": "JSON Editor"
+    },
+    "fields": {
+      "id": "ID (unique identifier)",
+      "title": "Title *",
+      "owner": "Owner *",
+      "productType": "Product Type *",
+      "project": "Project",
+      "domains": "Domains",
+      "archetype": "Archetype"
+    },
+    "placeholders": {
+      "systemId": "(System ID)",
+      "productIdOptional": "e.g., my-unique-product (optional)",
+      "selectProductType": "Select product type",
+      "selectProject": "Select project (optional)",
+      "selectDomains": "Select domains...",
+      "selectArchetype": "Select archetype",
+      "selectStatus": "Select status"
+    },
+    "projectTeamCount": "({{count}} teams)",
+    "projectMemberHint": "You can only select projects you are a member of",
+    "sections": {
+      "info": "Info",
+      "infoDescription": "Basic information about the data product.",
+      "consumables": "Consumables",
+      "consumablesDescription": "Sources feeding this product. Select tables from the metastore.",
+      "deliverables": "Deliverables",
+      "deliverablesDescription": "Outputs provided by this data product.",
+      "tagsDescription": "Add relevant tags (comma-separated).",
+      "consumerGroups": "Consumer Groups",
+      "consumerGroupsDescriptionPart1": "Workspace groups that represent the expected consumers of this product. Each entry is stored as a typed principal ",
+      "consumerGroupsDescriptionPart2": "; surfaced to subscribe webhooks via ",
+      "links": "Links",
+      "linksDescription": "Add relevant links (e.g., documentation, dashboards).",
+      "customProperties": "Custom Properties",
+      "customPropertiesDescription": "Add custom key-value metadata."
+    },
+    "validation": {
+      "titleRequired": "Title is required",
+      "ownerRequired": "Owner is required",
+      "productTypeRequired": "Product Type is required",
+      "loadingSchema": "Loading schema...",
+      "schemaReady": "Schema ready.",
+      "schemaError": "Schema Error",
+      "schemaNotReady": "Schema not ready.",
+      "schemaValid": "Schema Valid",
+      "schemaErrors": "{{count}} schema validation error(s)",
+      "invalidJsonSyntax": "Invalid JSON syntax",
+      "dataFailedValidation": "Data failed schema validation. Please check the highlighted fields or the JSON editor."
+    },
+    "consumable": {
+      "idLabel": "Consumable ID *",
+      "idRequired": "Consumable ID is required",
+      "nameLabel": "Consumable Name *",
+      "nameRequired": "Consumable Name is required",
+      "sourceTableLabel": "Source Table (Metastore) *",
+      "sourceTableRequired": "Source Table is required",
+      "selectSourceTable": "Select source table...",
+      "searchMetastore": "Search metastore tables...",
+      "searching": "Searching...",
+      "noTablesFound": "No tables found.",
+      "tagsPlaceholder": "Search and select tags for this consumable...",
+      "defaultName": "New Consumable",
+      "add": "Add Consumable",
+      "removeTitle": "Remove Consumable"
+    },
+    "deliverable": {
+      "idLabel": "Deliverable ID *",
+      "idRequired": "Deliverable ID is required",
+      "nameLabel": "Deliverable Name *",
+      "nameRequired": "Deliverable Name is required",
+      "tagsPlaceholder": "Search and select tags for this deliverable...",
+      "defaultName": "New Deliverable",
+      "add": "Add Deliverable",
+      "removeTitle": "Remove Deliverable"
+    },
+    "tagsProductPlaceholder": "Search and select tags for this data product...",
+    "links": {
+      "keyPlaceholder": "Link Key (e.g., docs)",
+      "urlPlaceholder": "URL *",
+      "descriptionPlaceholder": "Description",
+      "removeTitle": "Remove Link",
+      "add": "Add Link"
+    },
+    "customProps": {
+      "keyPlaceholder": "Property Key",
+      "valuePlaceholder": "Property Value (string)",
+      "removeTitle": "Remove Property",
+      "add": "Add Custom Property"
+    },
+    "portEditor": {
+      "portLinks": "Port Links",
+      "linkKey": "Link Key",
+      "url": "URL",
+      "removeLink": "Remove Link",
+      "addLink": "Add Link",
+      "portCustomProperties": "Port Custom Properties",
+      "propertyKey": "Property Key",
+      "propertyValue": "Property Value",
+      "removeProperty": "Remove Property",
+      "addCustomProperty": "Add Custom Property"
+    },
+    "buttons": {
+      "updateProduct": "Update Product",
+      "createProduct": "Create Product",
+      "updateViaJson": "Update via JSON",
+      "createViaJson": "Create via JSON"
+    },
+    "jsonPayloadLabel": "JSON Payload",
+    "jsonPlaceholder": "Enter or edit the Data Product JSON...",
+    "validationStatusLabel": "Validation Status:",
+    "showValidationDetails": "Show {{count}} validation details",
+    "confirmUnsavedClose": "You have unsaved changes. Are you sure you want to close?",
+    "messages": {
+      "syncError": "Sync Error",
+      "couldNotSyncUiToJson": "Could not sync UI state to JSON editor.",
+      "invalidJson": "Invalid JSON",
+      "invalidJsonDescription": "Cannot switch to UI editor. Please fix schema validation errors first.",
+      "couldNotParseJson": "Could not parse JSON: {{message}}",
+      "validationError": "Validation Error",
+      "pleaseFixValidation": "Please fix validation errors before saving.",
+      "jsonDataFailedValidation": "JSON data failed schema validation. Cannot save.",
+      "saveError": "Save Error",
+      "errorLoadingData": "Error Loading Data",
+      "couldNotFetchDetails": "Could not fetch details. {{message}}",
+      "failedToLoadDetails": "Failed to load product details: {{message}}",
+      "invalidJsonError": "Invalid JSON: {{message}}",
+      "couldNotLoadSchema": "Could not load schema: {{message}}",
+      "failedToSerialize": "Failed to serialize UI state to JSON.",
+      "unexpectedError": "An unexpected error occurred."
+    },
+    "syntaxErrorLabel": "Syntax Error:"
   },
   "import": {
     "title": "Import Data Product",
@@ -224,6 +532,621 @@
     "cancel": "Cancel",
     "import": "Import",
     "importing": "Importing..."
+  },
+  "versionFamily": {
+    "showAllVersions": "Show all versions"
+  },
+  "authoritativeDefinitionForm": {
+    "editTitle": "Edit Authoritative Definition",
+    "addTitle": "Add Authoritative Definition",
+    "dialogDescription": "Link to authoritative sources like business definitions, implementations, or tutorials (ODPS v1.0.0).",
+    "typeLabel": "Type",
+    "typeHint": "Type of authoritative source",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://docs.example.com/definitions/customer",
+    "urlHint": "Full URL to the authoritative source",
+    "descriptionPlaceholder": "Describe what information this source provides",
+    "addButton": "Add Definition",
+    "validationTypeRequired": "Type is required",
+    "validationUrlRequired": "URL is required",
+    "validationUrlInvalid": "Please enter a valid URL",
+    "successAdded": "Authoritative definition added",
+    "successUpdated": "Authoritative definition updated",
+    "saveError": "Failed to save authoritative definition"
+  },
+  "consumerGroups": {
+    "searchPlaceholder": "Search workspace groups…",
+    "removeAriaLabel": "Remove {{name}}",
+    "loadError": "Could not load workspace groups ({{error}}). You can still add groups by typing the name and pressing Enter."
+  },
+  "customProperty": {
+    "editTitle": "Edit Custom Property",
+    "addTitle": "Add Custom Property",
+    "dialogDescription": "Add custom metadata to extend the ODPS v1.0.0 data product schema.",
+    "propertyNameLabel": "Property Name",
+    "propertyNamePlaceholder": "e.g., internalId, deploymentRegion",
+    "propertyNameHint": "Must be in camelCase (ODPS requirement)",
+    "propertyValueLabel": "Property Value",
+    "propertyValuePlaceholder": "Simple text or JSON: {\"key\": \"value\"}",
+    "propertyValueHint": "Can be any type: string, number, boolean, object, or array. JSON values will be parsed automatically.",
+    "descriptionPlaceholder": "Explain the purpose of this custom property",
+    "addButton": "Add Property",
+    "validationNameRequired": "Property name is required",
+    "validationValueRequired": "Property value is required",
+    "validationCamelCase": "Property name must be in camelCase (start with lowercase letter)",
+    "successAdded": "Custom property added",
+    "successUpdated": "Custom property updated",
+    "saveError": "Failed to save custom property"
+  },
+  "teamMemberForm": {
+    "editTitle": "Edit Team Member",
+    "addTitle": "Add Team Member",
+    "dialogDescription": "Add a team member responsible for this data product (ODPS v1.0.0).",
+    "usernameLabel": "Username",
+    "usernamePlaceholder": "e.g., user@example.com or username",
+    "usernameHint": "User's username or email address (REQUIRED in ODPS)",
+    "fullNameLabel": "Full Name",
+    "fullNamePlaceholder": "Full name (optional)",
+    "roleLabel": "Role",
+    "rolePlaceholder": "e.g., owner, data steward, contributor",
+    "roleHint": "User's role in the team (e.g., owner, data steward, contributor)",
+    "descriptionPlaceholder": "Additional information about this team member",
+    "dateJoinedLabel": "Date Joined",
+    "dateLeftLabel": "Date Left",
+    "addButton": "Add Member",
+    "validationUsernameRequired": "Username is required",
+    "successAdded": "Team member added",
+    "successUpdated": "Team member updated",
+    "saveError": "Failed to save team member"
+  },
+  "readiness": {
+    "title": "Production Readiness",
+    "checking": "Checking readiness...",
+    "loadError": "Failed to load readiness report",
+    "loadFallbackError": "Unable to load readiness report",
+    "passCount": "{{passed}}/{{total}} passed",
+    "retry": "Retry",
+    "status": {
+      "ready": "Ready",
+      "notReady": "Not Ready",
+      "partial": "Partially Ready"
+    }
+  },
+  "requestAction": {
+    "types": {
+      "access": {
+        "title": "Request Access to Product",
+        "description": "Request permission to view and use this data product."
+      },
+      "review": {
+        "title": "Request Data Steward Review",
+        "description": "Submit this product for review by a data steward (transitions to PROPOSED status)."
+      },
+      "publish": {
+        "title": "Request Publish to Marketplace",
+        "description": "Request to publish this approved product to the organization-wide marketplace."
+      },
+      "certify": {
+        "title": "Request Certification",
+        "description": "Request that this product be certified at a specific level."
+      },
+      "statusChange": {
+        "titleDirect": "Change Status",
+        "titleRequest": "Request Status Change",
+        "descriptionDirect": "Directly change the lifecycle status of this product.",
+        "descriptionRequest": "Request approval to change the lifecycle status of this product."
+      }
+    },
+    "transitions": {
+      "moveToSandbox": "Move to Sandbox",
+      "submitForReview": "Submit for Review",
+      "returnToDraft": "Return to Draft",
+      "startReview": "Start Review",
+      "approve": "Approve",
+      "rejectReturnToDraft": "Reject (Return to Draft)",
+      "publishActivate": "Publish/Activate",
+      "deprecate": "Deprecate",
+      "retire": "Retire",
+      "reactivate": "Reactivate"
+    },
+    "validation": {
+      "reasonRequired": "Please provide a reason for requesting access",
+      "reasonTooShort": "Please provide a more detailed reason (at least 10 characters)",
+      "targetStatusRequired": "Please select a target status",
+      "justificationRequired": "Please provide a justification for the status change",
+      "justificationTooShort": "Please provide a more detailed justification (at least 20 characters)",
+      "certLevelRequired": "Please select a certification level"
+    },
+    "errors": {
+      "cannotRequest": "Cannot request {{requestType}} for a product with status '{{productStatus}}'",
+      "failedToSubmit": "Failed to submit request"
+    },
+    "toast": {
+      "statusChanged": "Status Changed",
+      "statusChangedDesc": "Product status changed from \"{{fromStatus}}\" to \"{{toStatus}}\".",
+      "requestSubmitted": "Request Submitted",
+      "requestSubmittedDesc": "Your {{type}} request has been submitted and you will be notified of the decision."
+    },
+    "labels": {
+      "requestType": "Request Type",
+      "targetStatus": "Target Status",
+      "justification": "Justification",
+      "justificationOptional": "Justification (optional)",
+      "messageOptional": "Message (optional)",
+      "publicationScope": "Publication Scope",
+      "certLevel": "Certification Level"
+    },
+    "placeholders": {
+      "selectRequestType": "Select request type",
+      "selectTargetStatus": "Select target status",
+      "justification": "Explain why this status change is needed and any relevant context...",
+      "reviewMessage": "Add any notes for the reviewer...",
+      "publishJustification": "Why should this product be published?",
+      "certMessage": "Why should this product be certified?",
+      "selectCertLevel": "Select certification level"
+    },
+    "selectItems": {
+      "review": "Request Review",
+      "publish": "Request Publish",
+      "certify": "Request Certification",
+      "access": "Request Access"
+    },
+    "scopes": {
+      "organization": "Organization",
+      "external": "External"
+    },
+    "wizard": {
+      "noticeBefore": "A multi-step wizard is configured for this request. Click",
+      "noticeAfter": "to begin."
+    },
+    "hints": {
+      "noTransitionsAvailable": "No status transitions available from current status.",
+      "justificationMinChars": "Minimum 20 characters required. This will be reviewed by an admin."
+    },
+    "buttons": {
+      "changingStatus": "Changing Status...",
+      "opening": "Opening...",
+      "sendingRequest": "Sending Request...",
+      "continue": "Continue",
+      "sendRequest": "Send Request"
+    }
+  },
+  "statusTransition": {
+    "title": "Change Product Status",
+    "description": "Transition the lifecycle status of {{name}} (ODPS v1.0.0)",
+    "thisProduct": "this data product",
+    "currentStatus": "Current Status:",
+    "recommended": "Recommended:",
+    "selectTargetStatus": "Select Target Status",
+    "terminalState": "Terminal State:",
+    "terminalDesc": "No transitions available from {{statusLabel}} status. This product cannot be changed to any other status.",
+    "notesLabel": "Transition Notes (Optional)",
+    "notesPlaceholder": "Add notes about why this status change is being made...",
+    "notesHint": "These notes will be logged for audit purposes",
+    "lifecycleTitle": "ODPS v1.0.0 Lifecycle Flow:",
+    "lifecycleHint": "Current status is highlighted. Emergency deprecation is allowed from any status.",
+    "toast": {
+      "validationError": "Validation Error",
+      "selectTargetStatus": "Please select a target status",
+      "invalidTransition": "Invalid Transition",
+      "transitionFailed": "Transition Failed",
+      "failedToUpdate": "Failed to update product status"
+    },
+    "buttons": {
+      "updating": "Updating...",
+      "updateStatus": "Update Status"
+    }
+  },
+  "outputPortForm": {
+    "addTitle": "Add Deliverable",
+    "editTitle": "Edit Deliverable",
+    "description": "Define a deliverable for this data product. Assets can be linked after creation.",
+    "labels": {
+      "deliveryMethod": "Delivery Method",
+      "contractAssignment": "Contract Assignment",
+      "accessAndPrivacy": "Access & Privacy",
+      "containsPii": "Contains PII",
+      "autoApprove": "Auto Approve"
+    },
+    "placeholders": {
+      "name": "e.g., Daily Churn Rate",
+      "deliveryMethod": "Select delivery method...",
+      "description": "Describe what this deliverable provides",
+      "type": "e.g., table, api, stream",
+      "status": "e.g., active, draft",
+      "chooseContract": "Choose a contract..."
+    },
+    "contractOptions": {
+      "noContract": "No Contract",
+      "selectExisting": "Select Existing Contract",
+      "createNew": "Create New Contract"
+    },
+    "hints": {
+      "deliveryMethodHint": "How this deliverable serves data to consumers (e.g., Table Access, Serving Endpoint)",
+      "onlyActiveContracts": "Only showing active/approved/certified contracts",
+      "containsPiiHint": "Does this deliverable contain personally identifiable information?",
+      "autoApproveHint": "Automatically approve access requests for this deliverable?",
+      "afterCreation": "After creating this deliverable, you can link assets (tables, views, datasets, etc.) to it from the detail page."
+    },
+    "messages": {
+      "noActiveContracts": "No active/approved contracts available",
+      "contractCreated": "Contract created:",
+      "deliverableAdded": "Deliverable added",
+      "deliverableUpdated": "Deliverable updated"
+    },
+    "validation": {
+      "error": "Validation Error",
+      "nameRequired": "Name is required",
+      "versionRequired": "Version is required"
+    },
+    "errors": {
+      "failedToLoadContracts": "Failed to load contracts",
+      "failedToSaveDeliverable": "Failed to save deliverable"
+    },
+    "actions": {
+      "addDeliverable": "Add Deliverable"
+    },
+    "warnings": {
+      "couldNotLoadDeliveryMethods": "Could not load delivery methods"
+    }
+  },
+  "inputPortForm": {
+    "addTitle": "Add Consumable",
+    "editTitle": "Edit Consumable",
+    "description": "Define an input data dependency for this data product (ODPS v1.0.0).",
+    "labels": {
+      "consumableName": "Consumable Name",
+      "contractId": "Contract ID",
+      "databricksExtensions": "Databricks Extensions (Optional)",
+      "assetType": "Asset Type",
+      "assetIdentifier": "Asset Identifier"
+    },
+    "placeholders": {
+      "name": "e.g., customer-data-input",
+      "contractId": "e.g., customer-data-contract-v1",
+      "assetType": "e.g., table, notebook, job",
+      "assetIdentifier": "e.g., catalog.schema.table, /path/to/notebook"
+    },
+    "hints": {
+      "versionHint": "Version of this consumable (e.g., 1.0.0, 2.1.3)",
+      "contractIdHint": "Reference to the data contract ID (REQUIRED in ODPS v1.0.0)",
+      "assetTypeHint": "Type of Databricks asset",
+      "assetIdentifierHint": "Unique identifier for the Databricks asset"
+    },
+    "messages": {
+      "consumableAdded": "Consumable added",
+      "consumableUpdated": "Consumable updated"
+    },
+    "validation": {
+      "error": "Validation Error",
+      "portNameRequired": "Port name is required",
+      "portVersionRequired": "Port version is required",
+      "contractIdRequired": "Contract ID is required (ODPS v1.0.0 requirement)"
+    },
+    "errors": {
+      "failedToSaveConsumable": "Failed to save consumable"
+    },
+    "actions": {
+      "addConsumable": "Add Consumable"
+    }
+  },
+  "managementPortForm": {
+    "addTitle": "Add Management Port",
+    "editTitle": "Edit Management Port",
+    "description": "Management ports provide access to observability, control, discoverability, and data dictionary endpoints (ODPS v1.0.0).",
+    "labels": {
+      "portName": "Port Name",
+      "contentType": "Content Type",
+      "portType": "Port Type",
+      "url": "URL",
+      "channel": "Channel"
+    },
+    "placeholders": {
+      "name": "e.g., observability-endpoint, data-dictionary",
+      "url": "https://observability.example.com/metrics",
+      "channel": "e.g., prometheus-metrics, openapi-spec",
+      "description": "Describe the purpose and usage of this management port"
+    },
+    "hints": {
+      "contentTypeHint": "Purpose of this management port",
+      "urlHint": "Access URL for this management port",
+      "channelHint": "Communication channel identifier"
+    },
+    "messages": {
+      "portAdded": "Management port added",
+      "portUpdated": "Management port updated"
+    },
+    "validation": {
+      "error": "Validation Error",
+      "portNameRequired": "Port name is required",
+      "contentTypeRequired": "Content type is required",
+      "invalidUrl": "Please enter a valid URL"
+    },
+    "errors": {
+      "failedToSave": "Failed to save management port"
+    },
+    "actions": {
+      "addPort": "Add Port"
+    }
+  },
+  "linkContract": {
+    "title": "Link Contract to Deliverable",
+    "descriptionPrefix": "Select an existing contract or create a new one to link to",
+    "thisDeliverable": "this deliverable",
+    "labels": {
+      "deliverable": "Deliverable",
+      "selectContract": "Select Contract",
+      "or": "OR"
+    },
+    "placeholders": {
+      "chooseContract": "Choose a contract…"
+    },
+    "hints": {
+      "contractFilter": "Only showing contracts with 'active', 'approved', or 'certified' status. Pick a specific version — same-named contracts now show their version inline."
+    },
+    "messages": {
+      "contractLinked": "Contract Linked",
+      "contractLinkedDescription": "Contract successfully linked to deliverable"
+    },
+    "validation": {
+      "error": "Validation Error",
+      "selectContract": "Please select a contract"
+    },
+    "errors": {
+      "failedToLink": "Failed to link contract"
+    },
+    "actions": {
+      "createNewContract": "Create New Contract",
+      "linkContract": "Link Contract",
+      "linking": "Linking..."
+    }
+  },
+  "hierarchy": {
+    "title": "Data Hierarchy",
+    "loadFailed": "Failed to load hierarchy",
+    "noDatasets": "No datasets linked to this data product yet.",
+    "noTablesOrViews": "No tables or views linked",
+    "contract": "Contract",
+    "governedByContract": "Governed by contract {{id}}",
+    "objectCount_one": "{{count}} object",
+    "objectCount_other": "{{count}} objects",
+    "datasetCount_one": "{{count}} dataset",
+    "datasetCount_other": "{{count}} datasets",
+    "colCount_one": "{{count}} col",
+    "colCount_other": "{{count}} cols"
+  },
+  "commitDraft": {
+    "title": "Commit Draft Changes",
+    "description": "Commit your personal draft to make it visible to your team.",
+    "analyzing": "Analyzing changes...",
+    "changeAnalysisTitle": "Change Analysis",
+    "changeAnalysisDescription": "Based on your changes, we recommend a {{bump}} version bump.",
+    "selectVersion": "Select Version",
+    "patch": "Patch",
+    "patchDescription": "Bug fixes",
+    "minor": "Minor",
+    "minorDescription": "New features",
+    "major": "Major",
+    "majorDescription": "Breaking changes",
+    "customVersion": "Custom version",
+    "customVersionPlaceholder": "e.g., 2.0.0",
+    "changeSummaryLabel": "Change Summary *",
+    "changeSummaryPlaceholder": "Describe the changes made in this version...",
+    "validationInvalidVersion": "Please enter a valid version number (e.g., 1.0.0)",
+    "validationNoSummary": "Please provide a summary of changes",
+    "errorAnalyze": "Failed to analyze changes",
+    "errorCommit": "Failed to commit draft",
+    "toastCommittedTitle": "Draft Committed",
+    "toastCommittedDescription": "Product version {{version}} is now visible to your team.",
+    "committing": "Committing...",
+    "commitButton": "Commit Draft"
+  },
+  "supportChannelForm": {
+    "titleAdd": "Add Support Channel",
+    "titleEdit": "Edit Support Channel",
+    "description": "Define a support channel for users of this data product (ODPS v1.0.0).",
+    "channelName": "Channel Name",
+    "channelNamePlaceholder": "e.g., data-product-support",
+    "accessUrl": "Access URL",
+    "accessUrlPlaceholder": "https://slack.com/channels/data-product-support",
+    "accessUrlHint": "URL to access this support channel",
+    "tool": "Tool",
+    "scope": "Scope",
+    "invitationUrl": "Invitation URL",
+    "invitationUrlPlaceholder": "https://slack.com/invite/...",
+    "invitationUrlHint": "Optional invitation link for new members",
+    "descriptionPlaceholder": "Describe how users should use this support channel",
+    "addChannel": "Add Channel",
+    "validationErrorTitle": "Validation Error",
+    "channelRequired": "Channel name is required",
+    "urlRequired": "URL is required",
+    "invalidUrl": "Please enter a valid URL",
+    "invalidInvitationUrl": "Please enter a valid invitation URL",
+    "successUpdated": "Support channel updated",
+    "successAdded": "Support channel added",
+    "errorSave": "Failed to save support channel"
+  },
+  "maturity": {
+    "title": "Maturity",
+    "evaluating": "Evaluating maturity...",
+    "loadFailed": "Failed to load maturity report",
+    "unableToLoad": "Unable to load maturity report",
+    "gatesPassed": "{{passed}}/{{total}} gates passed",
+    "reevaluate": "Re-evaluate maturity",
+    "gates": "{{passed}}/{{total}} gates",
+    "required": "Required",
+    "advisory": "Advisory",
+    "overTime": "Maturity over time",
+    "retry": "Retry"
+  },
+  "createDialog": {
+    "editTitle": "Edit Data Product Metadata",
+    "createTitle": "Create Data Product (ODPS v1.0.0)",
+    "editDescription": "Update the core metadata for this data product.",
+    "createDescription": "Create a new data product with essential information. You can add ports, team members, and support channels in the details view.",
+    "productNameLabel": "Product Name",
+    "productNamePlaceholder": "e.g., Customer Analytics Data",
+    "versionPlaceholder": "0.0.1",
+    "productTypeLabel": "Product Type",
+    "productTypePlaceholder": "Select product type...",
+    "productTypeHint": "Position in the data value chain",
+    "selectTeamPlaceholder": "Select team...",
+    "loadingTeams": "Loading teams...",
+    "ownerTeamHint": "Team responsible for this product",
+    "projectLabel": "Project",
+    "selectProjectPlaceholder": "Select project (optional)",
+    "projectOption_one": "{{name}} ({{count}} team)",
+    "projectOption_other": "{{name}} ({{count}} teams)",
+    "projectMemberHint": "You can only select projects you are a member of",
+    "domainsLabel": "Domains",
+    "domainsPlaceholder": "Select domains...",
+    "tenantLabel": "Tenant/Organization",
+    "tenantPlaceholder": "e.g., acme-corp",
+    "descriptionSectionTitle": "Description (ODPS Structured)",
+    "purposePlaceholder": "What is the intended purpose of this data?",
+    "limitationsLabel": "Limitations",
+    "limitationsPlaceholder": "Technical, compliance, and legal limitations",
+    "usagePlaceholder": "Recommended usage of this data",
+    "tagsPlaceholder": "Search and select tags for this data product...",
+    "tagsHint": "Add tags to categorize and organize this data product",
+    "consumerGroupsLabel": "Consumer Groups",
+    "createProductButton": "Create Product",
+    "discardDescription": "You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?",
+    "continueEditing": "Continue Editing",
+    "discardChanges": "Discard Changes",
+    "messages": {
+      "createSuccessDesc": "Data product created successfully. Add ports and team in the details view."
+    },
+    "validation": {
+      "nameRequired": "Product name is required",
+      "versionRequired": "Version is required",
+      "statusRequired": "Status is required"
+    }
+  },
+  "createFromContract": {
+    "title": "Create Data Product from Contract",
+    "description": "Create a new Data Product that uses this contract to govern one deliverable. The product will inherit the contract's domain, owner team, and project.",
+    "contractLabel": "Contract:",
+    "productNameLabel": "Product Name *",
+    "productNamePlaceholder": "e.g., Customer Analytics Product",
+    "productTypeLabel": "Product Type *",
+    "productTypePlaceholder": "Select product type",
+    "versionLabel": "Version *",
+    "versionPlaceholder": "e.g., v1.0.0",
+    "deliverableNameLabel": "Deliverable Name (Optional)",
+    "deliverableNamePlaceholder": "Defaults to: {{contractName}}",
+    "deliverableNameHint": "If not specified, the deliverable will use the contract name",
+    "creating": "Creating...",
+    "createButton": "Create Product",
+    "errors": {
+      "nameRequired": "Product name is required",
+      "versionRequired": "Version is required",
+      "typeRequired": "Product type is required",
+      "createError": "Failed to create product from contract"
+    },
+    "messages": {
+      "productCreated": "Product Created",
+      "productCreatedDesc": "Data Product \"{{productName}}\" created successfully from contract."
+    }
+  },
+  "createVersion": {
+    "title": "Create New Version",
+    "description": "Enter the new version identifier for data product \"{{productTitle}}\". It's often helpful to increment based on the current version ({{currentVersion}}).",
+    "versionLabel": "New Version String",
+    "versionPlaceholder": "e.g., v1.1, v2.0-beta",
+    "createButton": "Create Version",
+    "errors": {
+      "versionEmpty": "Version string cannot be empty."
+    }
+  },
+  "graphView": {
+    "unnamedProduct": "Unnamed Product",
+    "switchToTableView": "Switch to Table View",
+    "switchToGraphView": "Switch to Graph View",
+    "inputPortLabel": "{{name}} (Consumable)",
+    "outputPortLabel": "{{name}} (Deliverable)",
+    "labels": {
+      "contract": "Contract"
+    }
+  },
+  "importExport": {
+    "title": "ODPS v1.0.0 Import/Export",
+    "description": "Import or export data products in Open Data Product Standard v1.0.0 JSON format",
+    "pasteLabel": "Paste ODPS v1.0.0 JSON",
+    "validationErrors": "Validation Errors:",
+    "validate": "Validate",
+    "validationFailed": "Validation Failed",
+    "errorsFound_one": "Found {{count}} error",
+    "errorsFound_other": "Found {{count}} errors",
+    "validationPassed": "Validation Passed",
+    "validationPassedDesc": "JSON is valid ODPS v1.0.0 format",
+    "invalidJson": "Invalid JSON",
+    "cannotImportErrors_one": "Cannot import: {{count}} error found",
+    "cannotImportErrors_other": "Cannot import: {{count}} errors found",
+    "importSuccessful": "Import Successful",
+    "importSuccessfulDesc": "Data product \"{{name}}\" imported successfully",
+    "importFailed": "Import Failed",
+    "noProductSelected": "No Product Selected",
+    "noProductSelectedDesc": "Cannot export without a product",
+    "exportSuccessful": "Export Successful",
+    "exportSuccessfulDesc": "Downloaded {{filename}}",
+    "exportFailed": "Export Failed",
+    "exportFailedDesc": "Failed to export data product",
+    "exportDescription": "Clicking \"Export\" will download this product as an ODPS v1.0.0 compliant JSON file. Audit fields (created_at, updated_at) will be excluded for portability.",
+    "exportAsJson": "Export as JSON",
+    "currentProduct": "Current Product",
+    "unnamed": "Unnamed",
+    "noProductDesc": "No product selected. Open this dialog from a product details page to export."
+  },
+  "subscribeDialog": {
+    "title": "Subscribe to Data Product",
+    "descriptionPre": "Subscribe to",
+    "descriptionPost": "to receive notifications about updates, changes, and compliance status.",
+    "subscribeAs": "Subscribe as",
+    "forMyself": "For myself",
+    "forMyGroup": "For a group I'm part of",
+    "noGroupsAvailable": "(no groups available)",
+    "selectGroup": "Select one of your groups",
+    "otherGroupOrSP": "Other group or service principal",
+    "groupDisplayName": "Group (display name)",
+    "spDisplayName": "Service principal (display name or applicationId)",
+    "groupPlaceholder": "e.g., sales_consumers",
+    "spPlaceholder": "e.g., 11111111-2222-3333-4444-555555555555",
+    "validationNote": "Will be validated against the workspace directory before the request is recorded.",
+    "reasonLabel": "Why are you subscribing?",
+    "optional": "(optional)",
+    "reasonPlaceholder": "E.g., Need this data for quarterly reporting, building a dashboard, etc.",
+    "reasonHint": "This helps data owners understand how their products are being used.",
+    "subscribedTitle": "Subscribed!",
+    "subscribedDesc": "You are now subscribed to \"{{productName}}\". You'll receive notifications about updates and changes.",
+    "subscribedOnBehalfGroup": "You are now subscribed to \"{{productName}}\" on behalf of group \"{{value}}\".",
+    "subscribedOnBehalfSP": "You are now subscribed to \"{{productName}}\" on behalf of service principal \"{{value}}\".",
+    "subscriptionFailed": "Subscription Failed",
+    "failedToSubscribe": "Failed to subscribe",
+    "subscribing": "Subscribing..."
+  },
+  "myProductsView": {
+    "retry": "Retry",
+    "untitled": "Untitled",
+    "productsAvailable_one": "{{count}} product available",
+    "productsAvailable_other": "{{count}} products available"
+  },
+  "ownerConsumers": {
+    "breadcrumb": "Consumers",
+    "totalProducts": "Total Products",
+    "activeProducts": "Active Products",
+    "totalSubscribers": "Total Subscribers",
+    "products": "Products",
+    "noProducts": "No products found",
+    "noDomain": "No domain",
+    "subscribersFor": "Subscribers — {{name}}",
+    "selectProduct": "Select a product",
+    "filterPlaceholder": "Filter subscribers...",
+    "selectProductHint": "Select a product to view its subscribers",
+    "noSubscribersMatch": "No subscribers match your filter",
+    "noSubscribers": "No subscribers yet",
+    "colSubscriber": "Subscriber",
+    "colSubscribed": "Subscribed",
+    "colReason": "Reason"
   }
 }
-

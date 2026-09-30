@@ -93,10 +93,11 @@ Authoring rules for citation-ready sections:
 | [asset-model.md](asset-model.md) | One-pager: unified Asset entity, ontology-driven AssetType, AssetTypeCategory, entity relationships, asset reviews |
 | [delivery-and-propagation.md](delivery-and-propagation.md) | Delivery Method vs Delivery Mode, Direct/Indirect/Manual modes, change-type taxonomy, concept→UC tag flow, integration with grant_permissions, common questions |
 | [mcp-and-ask-ontos.md](mcp-and-ask-ontos.md) | In-product Ask Ontos copilot (grounding, permissions, refusals) vs the external MCP server (tokens, scopes, JSON-RPC), common questions |
+| [genie-one-mcp-setup.md](genie-one-mcp-setup.md) | Step-by-step: connect Genie One (and other Databricks agents) to the Ontos MCP server via a single-credential Unity Catalog HTTP connection + keyless-default MCP token; notebook SDK setup, Genie UI steps, troubleshooting |
 | [data-quality.md](data-quality.md) | ODCS quality definitions, per-entity quality items, DQX end-to-end flow, source enums, surfacing, common questions |
 | [end-to-end-flows.md](end-to-end-flows.md) | Bottom-up flow (UC → product → contract → concept), top-down flow (ontology → assets → tags), where they meet, common questions |
 | [entities-glossary.md](entities-glossary.md) | One-paragraph definitions of every first-class entity |
 | [installation-and-troubleshooting.md](installation-and-troubleshooting.md) | Distribution channels (Marketplace vs Git), first-install prerequisites, update workflow, alembic discipline, common UI errors users hit (request-role prompt, 403s, scope-missing, grant_permissions, sync layout), common questions |
 | [personas-quick-reference.md](personas-quick-reference.md) | Plain-language persona framings, pages they touch, what they ask Ask Ontos |
 
-_Last verified against codebase: 2026-05-29_
+_Last verified against codebase: 2026-09-19_

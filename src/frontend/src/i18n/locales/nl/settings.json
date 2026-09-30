@@ -1,12 +1,103 @@
 {
+  "personaNav": {
+    "home": "Home",
+    "marketplace": "Marktplaats",
+    "dataCatalog": "Datacatalogus",
+    "businessGlossary": "Conceptbrowser",
+    "mySubscriptions": "Mijn Abonnementen",
+    "accessRequests": "Toegangsverzoeken",
+    "dataProducts": "Dataproducten",
+    "dataContracts": "Datacontracten",
+    "dataAssets": "Data-assets",
+    "qualityCompliance": "Kwaliteit & Compliance",
+    "myConsumers": "Mijn Afnemers",
+    "reviewsApprovals": "Beoordelingen & Goedkeuringen",
+    "assetExplorer": "Asset-verkenner",
+    "compliance": "Compliance",
+    "masterData": "Masterdata",
+    "catalogCommander": "Catalog Commander",
+    "domains": "Domeinen",
+    "teams": "Teams",
+    "ownership": "Eigenaarschap",
+    "policies": "Beleidsregels",
+    "workflows": "Workflows",
+    "audit": "Auditlogboek",
+    "estateManager": "Estate Manager",
+    "searchConcepts": "Concepten Zoeken",
+    "viewGraph": "Grafiek Bekijken",
+    "searchGraph": "Grafiek Zoeken",
+    "assetTypes": "Asset-types",
+    "tags": "Tags",
+    "entitlements": "Rechten",
+    "securityFeatures": "Beveiligingsfuncties",
+    "entitlementsSync": "Rechten Synchroniseren",
+    "general": "Algemeen",
+    "uiCustomization": "UI-aanpassing",
+    "connectors": "Connectors",
+    "schemaImporter": "Schema-importer",
+    "jobs": "Jobs",
+    "deliveryModes": "Leveringsmodi",
+    "git": "Git-integratie",
+    "appRoles": "Applicatierollen",
+    "businessRoles": "Bedrijfsrollen",
+    "businessOwners": "Bedrijfseigenaren",
+    "searchSettings": "Zoekinstellingen",
+    "mcpSettings": "MCP-instellingen",
+    "collections": "Collecties",
+    "rdfSources": "RDF-bronnen",
+    "about": "Over",
+    "hierarchyBrowser": "Hiërarchiebrowser"
+  },
+  "navGroups": {
+    "discover": "Ontdekken",
+    "myData": "Mijn Data",
+    "build": "Bouwen",
+    "monitor": "Monitoren",
+    "tasks": "Taken",
+    "catalog": "Catalogus",
+    "govern": "Besturen",
+    "tools": "Tools",
+    "organize": "Organiseren",
+    "standards": "Standaarden",
+    "oversight": "Toezicht",
+    "advanced": "Geavanceerd",
+    "accessControl": "Toegangscontrole",
+    "monitoring": "Monitoring",
+    "configuration": "Configuratie",
+    "automation": "Automatisering",
+    "access": "Toegang",
+    "system": "Systeem"
+  },
+  "personas": {
+    "data_consumer": "Dataconsument",
+    "data_producer": "Dataproducent",
+    "data_steward": "Data Steward",
+    "data_governance_officer": "Data Governor",
+    "security_officer": "Beveiligingsfunctionaris",
+    "administrator": "Beheerder"
+  },
+  "personaDescriptions": {
+    "data_consumer": "Bladeren door en abonneren op dataproducten",
+    "data_producer": "Dataproducten bouwen, publiceren en monitoren",
+    "data_steward": "Catalogus cureren en datakwaliteit waarborgen",
+    "data_governance_officer": "Beleid, domeinen en eigenaarschap",
+    "security_officer": "Toegangscontrole en beveiliging",
+    "administrator": "Systeemconfiguratie en -beheer"
+  },
+  "personaSwitcher": {
+    "switchPersona": "Persona Wisselen",
+    "currentPersona": "Huidige persona"
+  },
   "title": "Instellingen",
   "tabs": {
     "general": "Algemeen",
     "databricks": "Databricks",
     "git": "Git",
+    "delivery": "Leveringsmodi",
     "jobs": "Jobs",
     "audit": "Auditlogboek",
     "businessRoles": "Zakelijke rollen",
+    "deliveryMethods": "Leveringsmethoden",
     "assetTypes": "Asset types",
     "dataDomains": "Domeinen",
     "teams": "Teams",
@@ -17,7 +108,11 @@
     "search": "Zoeken",
     "mcpTokens": "MCP Tokens",
     "workflows": "Workflows",
-    "uiCustomization": "UI-aanpassing"
+    "uiCustomization": "UI-aanpassing",
+    "connectors": "Connectors",
+    "schemaImporter": "Schema-importer",
+    "certificationLevels": "Certificeringsniveaus",
+    "maturityLevels": "Volwassenheidsniveaus"
   },
   "accessDenied": {
     "title": "Toegang Geweigerd",
@@ -108,13 +203,54 @@
     "labels": {
       "repoUrl": "Repository URL",
       "branch": "Branch",
-      "token": "Token"
+      "token": "Token",
+      "username": "Gebruikersnaam"
     },
     "placeholders": {
       "repoUrl": "https://github.com/jouw-org/jouw-repo.git",
       "branch": "main",
-      "token": "ghp_... of vergelijkbaar"
-    }
+      "token": "ghp_... of vergelijkbaar",
+      "username": "x-access-token"
+    },
+    "cloneButton": "Repository Klonen",
+    "currentCommit": "Commit",
+    "diff": {
+      "collapseAll": "Alles Inklappen",
+      "commitAndPush": "Committen & Pushen",
+      "commitMessage": "Commit-bericht (optioneel)",
+      "expandAll": "Alles Uitklappen",
+      "fileCount": "{{count}} bestand(en) gewijzigd",
+      "newFile": "Nieuw bestand",
+      "noChanges": "Geen openstaande wijzigingen",
+      "noDiff": "Geen diff beschikbaar",
+      "title": "Openstaande Wijzigingen"
+    },
+    "errorTitle": "Fout",
+    "lastSync": "Laatste Synchronisatie",
+    "messages": {
+      "cloneError": "Kon repository niet klonen",
+      "cloneSuccess": "Repository succesvol gekloond",
+      "pullError": "Kon wijzigingen niet pullen",
+      "pullSuccess": "Repository bijgewerkt",
+      "pushError": "Kon wijzigingen niet pushen",
+      "pushSuccess": "Wijzigingen succesvol gepusht",
+      "saveError": "Kon Git-instellingen niet opslaan",
+      "saveSuccess": "Git-instellingen opgeslagen"
+    },
+    "pendingChanges": "Openstaande Wijzigingen",
+    "pullButton": "Pullen",
+    "pushButton": "Pushen",
+    "repoStatus": "Repositorystatus",
+    "saveButton": "Instellingen Opslaan",
+    "status": {
+      "cloned": "Gekloond",
+      "cloning": "Klonen...",
+      "error": "Fout",
+      "notCloned": "Niet Gekloond",
+      "notConfigured": "Niet Geconfigureerd"
+    },
+    "viewChangesButton": "Wijzigingen Bekijken",
+    "volumePath": "Volumepad"
   },
   "nav": {
     "groups": {
@@ -146,7 +282,36 @@
     "saveButton": "Configuratie Opslaan",
     "messages": {
       "saveSuccess": "Instellingen succesvol opgeslagen",
-      "saveError": "Kon instellingen niet opslaan"
+      "saveError": "Kon instellingen niet opslaan",
+      "statusFetchError": "Kon workflowstatussen niet ophalen",
+      "saveFailed": "Kon niet opslaan",
+      "startedRun": "Uitvoering gestart",
+      "startFailed": "Kon niet starten",
+      "stoppedRun": "Uitvoering gestopt",
+      "stopFailed": "Kon niet stoppen",
+      "pausedSchedule": "Planning gepauzeerd",
+      "pauseFailed": "Kon niet pauzeren",
+      "resumedSchedule": "Planning hervat",
+      "resumeFailed": "Kon niet hervatten"
+    },
+    "aria": {
+      "history": "Geschiedenis",
+      "configure": "Configureren"
+    },
+    "configureTooltip": "Workflowparameters configureren",
+    "table": {
+      "actions": "Acties",
+      "canceled": "Geannuleerd",
+      "description": "Beschrijving",
+      "enabled": "Ingeschakeld",
+      "failed": "Mislukt",
+      "idle": "Inactief",
+      "name": "Naam",
+      "notInstalled": "Niet Geïnstalleerd",
+      "running": "Lopend",
+      "status": "Status",
+      "success": "Succes",
+      "timedOut": "Time-out"
     }
   },
   "jobsActions": {
@@ -176,7 +341,10 @@
       "running": "Lopend",
       "pending": "In Afwachting",
       "unknown": "Onbekend"
-    }
+    },
+    "expandDetails": "Details uitklappen",
+    "collapseDetails": "Details inklappen",
+    "stateMessage": "Statusbericht:"
   },
   "roles": {
     "title": "Rolgebaseerde Toegangscontrole",
@@ -194,7 +362,8 @@
     "dialog": {
       "createTitle": "Rol Aanmaken",
       "editTitle": "Rol Bewerken: {{name}}",
-      "description": "Definieer de rolnaam, toegewezen groepen, functie machtigingen en goedkeuringsprivileges."
+      "description": "Definieer de rolnaam, toegewezen groepen, functie machtigingen en goedkeuringsprivileges.",
+      "defaultRoleName": "Rol"
     },
     "tabs": {
       "general": "Algemeen",
@@ -219,6 +388,15 @@
       "approvalPrivileges": {
         "title": "Goedkeuringsprivileges",
         "description": "Verleen deze rol de mogelijkheid om specifieke soorten verzoeken goed te keuren."
+      },
+      "allowedPersonas": {
+        "title": "Persona's die deze rol kan gebruiken",
+        "description": "Selecteer welke persona-weergaven gebruikers met deze rol in de UI kunnen gebruiken."
+      },
+      "adminRole": {
+        "title": "Beheerdersrol",
+        "description": "Markeer deze rol als de beheerdersrol. Slechts één rol mag als beheerder worden gemarkeerd.",
+        "label": "Dit is de beheerdersrol"
       }
     },
     "permissions": {
@@ -233,7 +411,18 @@
         "deploy": "Implementeren",
         "settings": "Instellingen",
         "other": "Overig"
-      }
+      },
+      "crossCutting": "Achtergrond",
+      "settingsSubGroups": {
+        "referenceData": "Referentiegegevens",
+        "configuration": "Configuratie",
+        "integrations": "Integraties",
+        "operations": "Operaties",
+        "accessControl": "Toegangscontrole"
+      },
+      "selectAccessPlaceholder": "Selecteer toegang",
+      "noLevels": "Geen niveaus",
+      "noFeaturesLoaded": "Geen functieconfiguratie geladen."
     },
     "deployment": {
       "title": "Deployment Beleid",
@@ -282,7 +471,55 @@
       "addRole": "Rol Toevoegen",
       "actions": "Acties",
       "editRole": "Rol Bewerken",
-      "deleteRole": "Rol Verwijderen"
+      "deleteRole": "Rol Verwijderen",
+      "cannotDeleteAdmin": "Kan de beheerdersrol niet verwijderen"
+    },
+    "messages": {
+      "loadFailed": "Kon rolconfiguratie niet laden.",
+      "deleteFailed": "Kon rol niet verwijderen.",
+      "permissionDeniedTitle": "Geen Toegang",
+      "cannotEditRoles": "Je hebt geen toestemming om rollen te bewerken.",
+      "cannotDeleteRoles": "Je hebt geen toestemming om rollen te verwijderen.",
+      "permissionsUpdatedTitle": "Machtigingen Bijgewerkt",
+      "permissionsUpdated": "Gebruikersmachtigingen en beschikbare rollen vernieuwd.",
+      "refreshFailedTitle": "Vernieuwen Mislukt",
+      "refreshFailed": "Kon machtigingen/rollen niet vernieuwen: {{error}}",
+      "deleteConfirm": "Weet je zeker dat je de rol \"{{name}}\" wilt verwijderen?",
+      "roleDeleted": "Rol \"{{name}}\" verwijderd.",
+      "roleCreated": "Rol \"{{name}}\" aangemaakt.",
+      "roleUpdated": "Rol \"{{name}}\" bijgewerkt.",
+      "saveErrorTitle": "Fout bij Opslaan",
+      "unexpectedError": "Er is een onverwachte fout opgetreden.",
+      "unsavedChangesConfirm": "Je hebt niet-opgeslagen wijzigingen. Weet je zeker dat je wilt sluiten?"
+    },
+    "confirmRequest": {
+      "title": "Rol-toegangsverzoek Afhandelen",
+      "reviewPrompt": "Beoordeel het verzoek van <strong>{{email}}</strong> voor de rol <strong>{{role}}</strong>.",
+      "requesterReasonLabel": "Reden van Aanvrager",
+      "messageLabel": "Optioneel Bericht aan Aanvrager",
+      "messagePlaceholder": "Geef een reden voor goedkeuring of afwijzing (optioneel)",
+      "deny": "Verzoek Afwijzen",
+      "approve": "Verzoek Goedkeuren",
+      "approvedTitle": "Verzoek Goedgekeurd",
+      "deniedTitle": "Verzoek Afgewezen",
+      "decisionSubmitted": "Beslissing voor het verzoek van {{email}} voor rol {{role}} ingediend.",
+      "submissionFailed": "Indienen Mislukt",
+      "submissionFailedDescription": "Kon de beslissing niet indienen."
+    },
+    "requestAccess": {
+      "title": "Rol-toegang Aanvragen",
+      "description": "Dien een verzoek in voor toegang tot deze applicatierol. Geef een gedetailleerde reden voor je verzoek.",
+      "roleLabel": "Rol:",
+      "reasonLabel": "Reden voor Rol-toegangsverzoek *",
+      "reasonPlaceholder": "Leg uit waarom je deze rol nodig hebt. Vermeld details over je verantwoordelijkheden, projectvereisten of zakelijke rechtvaardiging...",
+      "reasonHelp": "Minimaal 10 tekens vereist. Deze informatie wordt gedeeld met beheerders.",
+      "reasonRequired": "Geef een reden op voor het aanvragen van deze rol",
+      "reasonTooShort": "Geef een meer gedetailleerde reden op (minimaal 10 tekens)",
+      "submittedTitle": "Verzoek Ingediend",
+      "submittedDescription": "Je verzoek voor de rol \"{{role}}\" is ingediend en je wordt op de hoogte gebracht van de beslissing.",
+      "submitFailed": "Kon rol-toegangsverzoek niet indienen",
+      "sending": "Verzoek verzenden...",
+      "send": "Verzoek Verzenden"
     }
   },
   "mcpTokens": {
@@ -380,7 +617,8 @@
       "invalidUrl": "Voer een geldige HTTP of HTTPS URL in",
       "preview": "Voorbeeld:",
       "loadError": "Afbeelding kon niet worden geladen",
-      "openInNewTab": "Open in nieuw tabblad"
+      "openInNewTab": "Open in nieuw tabblad",
+      "previewAlt": "Logo-voorbeeld"
     },
     "about": {
       "title": "Aangepaste Over-pagina inhoud",
@@ -403,7 +641,680 @@
       "saveSuccess": "UI-aanpassingsinstellingen opgeslagen",
       "saveError": "Kon instellingen niet opslaan",
       "reloadRequired": "Herlaad de pagina om sommige wijzigingen te zien."
+    },
+    "branding": {
+      "help": "De weergavenaam overschrijft de productnaam in welkom-/over-/copilot-teksten en in de titel van het browsertabblad. De PWA-manifestnaam en de statische paginatitel die bij het bouwen zijn ingesteld, worden niet bijgewerkt door deze instellingen.",
+      "displayNameHelp": "Laat leeg om de standaard productnaam ({{defaultName}}) te gebruiken. Maximaal {{max}} tekens.",
+      "shortNamePlaceholder": "bijv. een acroniem voor compacte UI",
+      "shortNameHelp": "Gebruikt in krappe ruimtes (bijv. \"Vraag {{shortName}}\"). Valt terug op de weergavenaam indien leeg. Maximaal {{max}} tekens.",
+      "displayNameLabel": "Weergavenaam",
+      "shortNameLabel": "Korte naam (optioneel)",
+      "title": "Branding"
+    },
+    "favicon": {
+      "previewAlt": "Favicon-voorbeeld",
+      "urlPlaceholder": "https://example.com/favicon.svg",
+      "help": "Wordt tijdens runtime toegepast op het browsertabblad. De statische <link rel=\"icon\"> in de meegeleverde index.html en het PWA-manifest worden niet bijgewerkt door deze instelling.",
+      "invalidUrl": "Voer een geldige HTTP- of HTTPS-URL in",
+      "loadError": "Kon afbeelding niet laden",
+      "openInNewTab": "Openen in nieuw tabblad",
+      "preview": "Voorbeeld:",
+      "title": "Browser-favicon",
+      "urlLabel": "Favicon-URL"
+    }
+  },
+  "connectors": {
+    "title": "Verbindingen",
+    "description": "Beheer verbindingen met externe dataplatformen voor asset-detectie en het ophalen van metadata.",
+    "addConnection": "Verbinding Toevoegen",
+    "testConnection": "Verbinding Testen",
+    "editTitle": "Verbinding Bewerken",
+    "editDescription": "Verbindingsinstellingen bijwerken.",
+    "createTitle": "Nieuwe Verbinding",
+    "createDescription": "Configureer een nieuwe verbinding met een extern dataplatform.",
+    "deleteTitle": "Verbinding Verwijderen",
+    "deleteDescription": "Weet je zeker dat je deze verbinding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+    "columns": {
+      "name": "Naam",
+      "type": "Type",
+      "description": "Beschrijving",
+      "status": "Status",
+      "updated": "Bijgewerkt"
+    },
+    "form": {
+      "connectorType": "Connectortype",
+      "name": "Naam",
+      "description": "Beschrijving",
+      "enabled": "Ingeschakeld",
+      "isDefault": "Standaard",
+      "systemAssetHelp": "Koppel aan een bestaande System-asset of laat leeg om er bij de eerste import automatisch een aan te maken.",
+      "connectorTypePlaceholder": "Selecteer een connectortype...",
+      "namePlaceholder": "bijv. Production BQ - Analytics",
+      "descriptionPlaceholder": "Optionele beschrijving...",
+      "autoCreateOnImport": "Automatisch aanmaken bij eerste import",
+      "systemAsset": "Gekoppelde System-asset"
+    },
+    "bigquery": {
+      "configTitle": "BigQuery-configuratie",
+      "ucConnectionName": "UC-verbindingsnaam",
+      "ucConnectionNameHelp": "Optioneel. Levert GCP-project-ID uit UC-verbindingsmetadata.",
+      "projectId": "GCP-project-ID",
+      "projectIdHelp": "Optioneel. Afgeleid uit referenties indien niet ingesteld.",
+      "location": "Locatie",
+      "locationHelp": "bijv. US, EU, us-central1",
+      "authSectionTitle": "Authenticatie",
+      "authSectionHelp": "Sla de JSON-sleutel van het GCP-serviceaccount op als een Databricks Secret en verwijs hieronder naar de scope en sleutelnaam.",
+      "secretScope": "Secret Scope",
+      "secretKey": "Secret Key",
+      "credentialsPath": "Pad naar Referentiebestand",
+      "credentialsPathHelp": "Dev-fallback: lokaal pad naar een JSON-sleutelbestand van een serviceaccount.",
+      "projectIdPlaceholder": "my-gcp-project",
+      "locationPlaceholder": "US",
+      "ucConnectionNamePlaceholder": "my-bigquery-connection",
+      "secretScopePlaceholder": "ontos-connectors",
+      "secretKeyPlaceholder": "bigquery-sa-key",
+      "credentialsPathPlaceholder": "/path/to/service-account-key.json"
+    },
+    "snowflake": {
+      "configTitle": "Snowflake-configuratie",
+      "account": "Account-identifier",
+      "accountHelp": "bijv. myorg-myaccount of xy12345.us-east-1",
+      "user": "Gebruiker",
+      "warehouse": "Warehouse",
+      "role": "Rol",
+      "roleHelp": "Optioneel. Rol die voor queries wordt aangenomen.",
+      "database": "Standaarddatabase",
+      "defaultSchema": "Standaardschema",
+      "accountPlaceholder": "myorg-myaccount",
+      "userPlaceholder": "ONTOS_SVC",
+      "warehousePlaceholder": "COMPUTE_WH",
+      "rolePlaceholder": "SYSADMIN",
+      "databasePlaceholder": "ANALYTICS",
+      "defaultSchemaPlaceholder": "PUBLIC"
+    },
+    "databricks": {
+      "systemNote": "Deze verbinding wordt automatisch geconfigureerd op basis van omgevingsvariabelen en kan niet worden gewijzigd."
+    },
+    "messages": {
+      "saveSuccess": "Verbinding opgeslagen",
+      "saveError": "Kon verbinding niet opslaan",
+      "testSuccess": "Verbinding succesvol",
+      "testFailed": "Verbinding mislukt",
+      "testError": "Fout bij verbindingstest",
+      "deleteSuccess": "Verbinding verwijderd",
+      "testSuccessProject": "Project: {{project}}",
+      "deleteFailed": "Verwijderen mislukt"
+    },
+    "badges": {
+      "system": "Systeem",
+      "default": "Standaard"
+    }
+  },
+  "schemaImporter": {
+    "title": "Schema-importer",
+    "description": "Blader door externe systemen en importeer hun structuur als {{appName}}-assets."
+  },
+  "assetBulk": {
+    "title": "Asset importeren / exporteren",
+    "description": "Exporteer assets naar CSV/Excel voor offline bewerking, of importeer assets uit een bestand.",
+    "exportTab": "Exporteren",
+    "importTab": "Importeren",
+    "exportSettings": "Exportinstellingen",
+    "format": "Formaat",
+    "scope": "Scope",
+    "allAssetTypes": "Alle asset-types",
+    "exportAssets": "Assets Exporteren",
+    "exporting": "Exporteren...",
+    "downloadTemplate": "Sjabloon Downloaden",
+    "exportSuccess": "Export Geslaagd",
+    "exportFailed": "Export Mislukt",
+    "templateDownloaded": "Sjabloon Gedownload",
+    "selectFile": "Bestand Selecteren",
+    "preview": "Voorbeeld",
+    "previewFailed": "Voorbeeld Mislukt",
+    "importButton": "Importeren",
+    "importing": "Importeren...",
+    "importAssets": "{count} asset(s) importeren",
+    "importSuccess": "Import Geslaagd",
+    "importFailed": "Import Mislukt",
+    "importWithErrors": "Import Voltooid met Fouten",
+    "importComplete": "Import voltooid: {created} aangemaakt, {updated} bijgewerkt, {errors} fouten.",
+    "close": "Sluiten",
+    "row": "Rij",
+    "name": "Naam",
+    "type": "Type",
+    "action": "Actie",
+    "message": "Bericht",
+    "create": "Aanmaken",
+    "update": "Bijwerken",
+    "skip": "Overslaan",
+    "error": "Fout",
+    "importExport": "Importeren / Exporteren",
+    "exportHelp": "Het exportbestand bevat alle velden voor elke asset. Je kunt het offline bewerken en opnieuw importeren.",
+    "templateHelp": "Het sjabloon biedt een leeg bestand met de juiste kopteksten en een voorbeeldrij."
+  },
+  "workflows": {
+    "actions": {
+      "start": "Starten",
+      "stop": "Stoppen",
+      "pause": "Pauzeren",
+      "unpause": "Hervatten"
+    }
+  },
+  "workflowConfig": {
+    "title": "{{name}} Configureren",
+    "description": "Stel parameters in voor deze workflow. Deze waarden worden gebruikt wanneer de workflow wordt uitgevoerd.",
+    "loadError": "Kon configuratie niet laden",
+    "saveError": "Kon configuratie niet opslaan",
+    "saveSuccess": "Workflowconfiguratie succesvol opgeslagen",
+    "selectOption": "Selecteer een optie",
+    "noParameters": "Geen configureerbare parameters voor deze workflow.",
+    "saveButton": "Configuratie Opslaan"
+  },
+  "tags": {
+    "enable": "Inschakelen",
+    "title": "Tags",
+    "description": "Beheer tag-namespaces, configureer weergave-instellingen en organiseer tags in de hele applicatie.",
+    "columns": {
+      "group": "Groep",
+      "accessLevel": "Toegangsniveau"
+    },
+    "display": {
+      "title": "Tag-weergave-instellingen",
+      "description": "Configureer hoe tags in de hele applicatie worden weergegeven.",
+      "formatLabel": "Weergaveformaat:",
+      "formatPlaceholder": "Selecteer formaat",
+      "short": "Kort (alleen tagnaam)",
+      "long": "Lang (namespace/tagnaam)",
+      "help": "<strong>Kort:</strong> Toont alleen de tagnaam (bijv. \"pii\"). <br/> <strong>Lang:</strong> Toont namespace en tagnaam (bijv. \"compliance/pii\")."
+    },
+    "namespaces": {
+      "title": "Tag-namespaces",
+      "description": "Organiseer tags in logische namespaces voor beter beheer en betere machtigingen.",
+      "add": "Namespace Toevoegen",
+      "activeLabel": "Actieve Namespace:",
+      "selectPlaceholder": "Selecteer namespace"
+    },
+    "list": {
+      "description": "Beheer tags binnen de geselecteerde namespace.",
+      "add": "Tag Toevoegen"
+    },
+    "permissions": {
+      "title": "Namespace-machtigingen",
+      "description": "Bepaal welke groepen tags in deze namespace kunnen benaderen en wijzigen.",
+      "add": "Machtiging Toevoegen"
+    },
+    "namespaceDialog": {
+      "editTitle": "Namespace Bewerken",
+      "createTitle": "Namespace Aanmaken",
+      "editDescription": "Werk de namespace-details bij.",
+      "createDescription": "Maak een nieuwe namespace aan voor het organiseren van tags.",
+      "namePlaceholder": "bijv. finance, marketing, engineering",
+      "descriptionPlaceholder": "Optionele beschrijving voor de namespace"
+    },
+    "tagDialog": {
+      "editTitle": "Tag Bewerken",
+      "createTitle": "Tag Aanmaken",
+      "editDescription": "Werk de tagdetails bij.",
+      "createDescription": "Maak een nieuwe tag aan in de geselecteerde namespace.",
+      "namePlaceholder": "bijv. pii, sensitive, public",
+      "descriptionPlaceholder": "Beschrijf wat deze tag voorstelt",
+      "versionPlaceholder": "bijv. v1.0, 2023.1",
+      "parentLabel": "Bovenliggende Tag",
+      "possibleValuesLabel": "Mogelijke Waarden (JSON-array)",
+      "possibleValuesHelp": "Optioneel. JSON-array van toegestane waarden voor deze tag wanneer toegewezen aan entiteiten.",
+      "statuses": {
+        "active": "Actief",
+        "draft": "Concept",
+        "candidate": "Kandidaat",
+        "deprecated": "Verouderd",
+        "inactive": "Inactief",
+        "retired": "Buiten gebruik"
+      }
+    },
+    "permissionDialog": {
+      "editTitle": "Machtiging Bewerken",
+      "addTitle": "Machtiging Toevoegen",
+      "editDescription": "Werk de machtigingsdetails bij.",
+      "addDescription": "Verleen een groep toegang tot deze namespace.",
+      "groupLabel": "Groep",
+      "groupPlaceholder": "bijv. data-engineers, analysts"
+    },
+    "accessLevels": {
+      "readOnly": "Alleen-lezen",
+      "readWrite": "Lezen/Schrijven",
+      "admin": "Beheerder"
+    },
+    "deleteDialog": {
+      "title": "{{type}} Verwijderen",
+      "description": "Weet je zeker dat je \"{{name}}\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+      "namespaceWarning": "Alle tags en machtigingen in deze namespace worden ook verwijderd."
+    },
+    "toasts": {
+      "fetchNamespacesError": "Fout bij ophalen namespaces",
+      "fetchTagsError": "Fout bij ophalen tags",
+      "fetchPermissionsError": "Fout bij ophalen machtigingen",
+      "displayFormatUpdated": "Tag-weergaveformaat bijgewerkt",
+      "displayFormatError": "Fout bij opslaan weergaveformaat",
+      "namespaceUpdated": "Namespace succesvol bijgewerkt",
+      "namespaceCreated": "Namespace succesvol aangemaakt",
+      "namespaceSaveError": "Fout bij opslaan namespace",
+      "tagUpdated": "Tag succesvol bijgewerkt",
+      "tagCreated": "Tag succesvol aangemaakt",
+      "tagSaveError": "Fout bij opslaan tag",
+      "permissionUpdated": "Machtiging succesvol bijgewerkt",
+      "permissionCreated": "Machtiging succesvol aangemaakt",
+      "permissionSaveError": "Fout bij opslaan machtiging",
+      "deleteSuccess": "{{type}} succesvol verwijderd",
+      "deleteError": "Fout bij verwijderen item"
+    },
+    "syncConfigs": {
+      "errors": {
+        "empty": "Tag-sleutel mag niet leeg zijn",
+        "spaces": "Tag-sleutel mag geen voorloop-/achterspaties hebben",
+        "invalidChar": "Tag-sleutel mag geen '{{char}}' bevatten"
+      },
+      "introBefore": "Configureer welke metadata naar Unity Catalog-tags wordt gesynchroniseerd en pas de indeling van tag-sleutels/-waarden aan. Gebruik",
+      "introAfter": "placeholders voor dynamische waarden.",
+      "invalidCharsBefore": "UC-tag-sleutels mogen niet bevatten:",
+      "invalidCharsAfter": "of voorloop-/achterspaties hebben",
+      "cardDescription": "Configureer tag-indeling voor {{type}}",
+      "availableVariables": "Beschikbare Variabelen",
+      "keyFormatLabel": "Indeling Tag-sleutel",
+      "keyFormatPlaceholder": "bijv. ontos_{VARIABLE}",
+      "example": "Voorbeeld:",
+      "valueFormatLabel": "Indeling Tag-waarde",
+      "valueFormatPlaceholder": "bijv. {VARIABLE}",
+      "valueFormatHelp": "De waarde die aan de tag wordt toegewezen",
+      "variables": {
+        "linkIri": "Volledige IRI van de semantische link",
+        "linkLabel": "Label van de semantische link",
+        "linkSlug": "Geslugificeerde IRI (bijv. \"customer\")",
+        "domainId": "Domein-UUID",
+        "domainName": "Domeinnaam",
+        "contractId": "Contract-UUID",
+        "contractName": "Contractnaam",
+        "contractVersion": "Contractversie",
+        "contractStatus": "Contractstatus",
+        "productId": "Product-UUID",
+        "productName": "Productnaam",
+        "productVersion": "Productversie",
+        "productStatus": "Productstatus"
+      }
+    },
+    "entityPatterns": {
+      "intro": "Configureer tag-patronen voor het ontdekken en importeren van entiteiten uit Unity Catalog. Gebruik reguliere expressies om tag-sleutels te matchen en entiteitsnamen te extraheren.",
+      "discoveryTitle": "{{type}}-detectie",
+      "cardDescription": "Configureer patronen om {{type}}s te ontdekken uit UC-tags",
+      "filterPatternOptional": "Filterpatroon (Optioneel)",
+      "filterHelp": "Filter optioneel welke objecten in aanmerking komen door aanvullende tag-patronen te matchen",
+      "filterSource": "Filterbron",
+      "tagKey": "Tag-sleutel",
+      "tagValue": "Tag-waarde",
+      "filterPatternRegex": "Filterpatroon (Regex)",
+      "keyPatternRequired": "Sleutelpatroon (Vereist)",
+      "keyPatternHelp": "Regex-patroon om tag-sleutels te matchen die dit entiteitstype identificeren",
+      "valueExtractionRequired": "Waarde-extractie (Vereist)",
+      "valueExtractionHelp": "Extraheer de {{type}}-naam uit de gematchte tag",
+      "extractionSource": "Extractiebron",
+      "extractionPatternLabel": "Extractiepatroon (Regex met Capture Group)",
+      "extractionExampleBefore": "Gebruik haakjes () om de {{type}}-naam vast te leggen. Voorbeeld:",
+      "extractionExampleAfter": "extraheert \"ABC\" uit \"data-{{type}}-ABC\""
+    }
+  },
+  "search": {
+    "title": "Zoekconfiguratie",
+    "description": "Configureer hoe de globale zoekfunctie resultaten indexeert en rangschikt over verschillende asset-types.",
+    "unsavedChanges": "Je hebt niet-opgeslagen wijzigingen. Sla op om je configuratie te bewaren.",
+    "loadFailedAlert": "Kon zoekconfiguratie niet laden. Vernieuw de pagina.",
+    "matchTypes": {
+      "prefix": "Prefix (begin van woord)",
+      "substring": "Substring (overal)",
+      "exact": "Alleen exacte overeenkomst",
+      "fuzzy": "Fuzzy (typefouten toestaan)"
+    },
+    "sortFields": {
+      "matchPriority": "Veldprioriteit (titel > beschrijving > tags)",
+      "boostScore": "Boost-score (gewogen relevantie)",
+      "titleAsc": "Titel (A → Z)",
+      "titleDesc": "Titel (Z → A)"
+    },
+    "assetTypes": {
+      "dataProduct": "Dataproducten",
+      "dataContract": "Datacontracten",
+      "glossaryTerm": "Glossary Termen",
+      "dataAssetReview": "Asset-beoordelingen",
+      "tag": "Tags",
+      "dataDomain": "Datadomeinen"
+    },
+    "fieldEditor": {
+      "sourceBadge": "bron: {{source}}",
+      "indexed": "Geïndexeerd",
+      "matchType": "Overeenkomsttype",
+      "priorityLabel": "Prioriteit (1-100)",
+      "priorityHelp": "Lager = hoger belang",
+      "boostLabel": "Boost (0-10)",
+      "boostHelp": "Scorevermenigvuldiger voor rangschikking"
+    },
+    "tabs": {
+      "defaultFields": "Standaardvelden",
+      "assetTypes": "Asset-types",
+      "ranking": "Rangschikking"
+    },
+    "defaults": {
+      "description": "Deze instellingen zijn standaard van toepassing op alle asset-types. Individuele asset-types kunnen deze instellingen overschrijven."
+    },
+    "assetTypesTab": {
+      "description": "Configureer het zoekgedrag voor elk asset-type. Schakel indexering in/uit en pas extra velden aan.",
+      "enableIndexing": "Indexering inschakelen",
+      "inheritDefaults": "Standaard veldinstellingen overnemen",
+      "extraFieldsTitle": "Extra Velden",
+      "extraFieldsDescription": "Aanvullende velden specifiek voor dit asset-type.",
+      "extraFieldsBadge": "+{{count}} extra velden"
+    },
+    "ranking": {
+      "description": "Configureer hoe zoekresultaten worden gesorteerd. Resultaten die overeenkomen met velden met hogere prioriteit verschijnen eerst.",
+      "primarySort": "Primaire Sortering",
+      "primarySortHelp": "Het hoofdcriterium dat wordt gebruikt om resultaten te ordenen.",
+      "secondarySort": "Secundaire Sortering (beslissingscriterium)",
+      "secondarySortHelp": "Gebruikt wanneer primaire sorteerwaarden gelijk zijn.",
+      "tertiarySort": "Tertiaire Sortering",
+      "tertiarySortHelp": "Laatste beslissingscriterium voor resultaten met gelijke primaire en secundaire waarden."
+    },
+    "buttons": {
+      "rebuildIndex": "Zoekindex Herbouwen",
+      "save": "Configuratie Opslaan"
+    },
+    "messages": {
+      "loadErrorTitle": "Fout bij laden configuratie",
+      "loadErrorDescription": "Kon zoekconfiguratie niet laden. Probeer het opnieuw.",
+      "saveSuccessTitle": "Configuratie opgeslagen",
+      "saveSuccessDescription": "Zoekconfiguratie is bijgewerkt. Overweeg de index te herbouwen om wijzigingen toe te passen.",
+      "saveErrorTitle": "Fout bij opslaan configuratie",
+      "saveErrorDescription": "Kon zoekconfiguratie niet opslaan. Probeer het opnieuw.",
+      "rebuildSuccessTitle": "Index herbouwd",
+      "rebuildSuccessDescription": "Zoekindex herbouwd met {{count}} items.",
+      "rebuildErrorTitle": "Fout bij herbouwen index",
+      "rebuildErrorDescription": "Kon zoekindex niet herbouwen. Probeer het opnieuw."
+    },
+    "matchType": {
+      "prefix": "Prefix (begin van woord)",
+      "substring": "Substring (overal)",
+      "exact": "Alleen exacte overeenkomst",
+      "fuzzy": "Fuzzy (typefouten toestaan)"
+    },
+    "sortField": {
+      "matchPriority": "Veldprioriteit (titel > beschrijving > tags)",
+      "boostScore": "Boost-score (gewogen relevantie)",
+      "titleAsc": "Titel (A → Z)",
+      "titleDesc": "Titel (Z → A)"
+    },
+    "assetType": {
+      "dataProduct": "Dataproducten",
+      "dataContract": "Datacontracten",
+      "glossaryTerm": "Glossary Termen",
+      "dataAssetReview": "Asset-beoordelingen",
+      "tag": "Tags",
+      "dataDomain": "Datadomeinen"
+    }
+  },
+  "ontologyLibrary": {
+    "title": "Ontologiebibliotheek voor Sectoren",
+    "description": "Blader door en importeer sectorstandaard-ontologieën georganiseerd per branche.",
+    "verticalsHeading": "Sectorbranches",
+    "ontologiesHeading": "Ontologieën",
+    "filterPlaceholder": "Filteren...",
+    "noOntologiesFound": "Geen ontologieën gevonden",
+    "selectVertical": "Selecteer een branche",
+    "foundationBadge": "Foundation",
+    "licenseBadge": "Licentie",
+    "modulesHeading": "Modules",
+    "website": "Website",
+    "selectOntologyPrompt": "Selecteer een ontologie om de modules te zien",
+    "noModulesAvailable": "Geen modules beschikbaar",
+    "moduleCount_one": "{{count}} module",
+    "moduleCount_other": "{{count}} modules",
+    "footer": {
+      "selected_one": "Geselecteerd: <strong>{{count}}</strong> module",
+      "selected_other": "Geselecteerd: <strong>{{count}}</strong> modules",
+      "selectedFrom_one": "Geselecteerd: <strong>{{count}}</strong> module uit {{ontology}}",
+      "selectedFrom_other": "Geselecteerd: <strong>{{count}}</strong> modules uit {{ontology}}",
+      "selectPrompt": "Selecteer modules om te importeren"
+    },
+    "license": {
+      "acceptLabel": "Ik accepteer de <terms>licentievoorwaarden</terms> voor {{name}}{{license}}"
+    },
+    "buttons": {
+      "importing": "Importeren...",
+      "import": "Geselecteerde Modules Importeren"
+    },
+    "messages": {
+      "loadVerticalsFailed": "Kon sectorbranches niet laden",
+      "loadOntologiesFailed": "Kon ontologieën niet laden",
+      "loadModulesFailed": "Kon modules niet laden",
+      "noModulesTitle": "Geen modules geselecteerd",
+      "noModulesDescription": "Selecteer ten minste één module om te importeren.",
+      "licenseRequiredTitle": "Licentieovereenkomst vereist",
+      "licenseRequiredDescription": "Accepteer de licentievoorwaarden om door te gaan.",
+      "importFailed": "Import mislukt",
+      "importSuccessTitle": "Import geslaagd",
+      "importSuccessDescription": "{{count}} triples geïmporteerd als \"{{name}}\"",
+      "warningTitle": "Waarschuwing",
+      "importErrorTitle": "Importfout",
+      "importErrorDescription": "Kon ontologie niet importeren"
+    }
+  },
+  "delivery": {
+    "description": "Configureer hoe governance-wijzigingen worden doorgegeven aan externe systemen. Meerdere modi kunnen tegelijk actief zijn.",
+    "direct": {
+      "description": "Pas wijzigingen rechtstreeks toe op Unity Catalog via SDK (GRANTs, tag-toewijzingen).",
+      "dryRun": "Dry-run-modus (wijzigingen loggen zonder toe te passen)",
+      "label": "Directe Modus"
+    },
+    "indirect": {
+      "description": "Leg wijzigingen vast als YAML-bestanden in een Git-repository voor CI/CD-integratie.",
+      "gitInfo": "Configureer de Git-repository op het Git-tabblad. Wijzigingen worden geëxporteerd naar het geconfigureerde UC-volume onder /git-export/.",
+      "label": "Indirecte Modus"
+    },
+    "manual": {
+      "description": "Genereer meldingen voor beheerders om wijzigingen handmatig toe te passen in externe systemen.",
+      "label": "Handmatige Modus"
+    },
+    "saveButton": "Leveringsinstellingen succesvol opgeslagen",
+    "title": "Leveringsmodi"
+  },
+  "certificationLevels": {
+    "title": "Certificeringsniveaus",
+    "description": "Definieer de certificeringsniveaus die beschikbaar zijn voor dataproducten, contracten en assets.",
+    "addLevel": "Niveau Toevoegen",
+    "table": {
+      "order": "Volgorde",
+      "preview": "Voorbeeld"
+    },
+    "emptyState": "Geen certificeringsniveaus geconfigureerd. Klik op \"Niveau Toevoegen\" om er een aan te maken.",
+    "dialog": {
+      "editTitle": "Certificeringsniveau Bewerken",
+      "createTitle": "Certificeringsniveau Toevoegen",
+      "editDescription": "Werk de details van het certificeringsniveau bij.",
+      "createDescription": "Maak een nieuw certificeringsniveau aan."
+    },
+    "form": {
+      "namePlaceholder": "bijv. Gold",
+      "descriptionPlaceholder": "Wat dit niveau voorstelt...",
+      "colorLabel": "Kleur",
+      "previewLabel": "Voorbeeld",
+      "levelNamePreview": "Niveaunaam"
+    },
+    "delete": {
+      "title": "Certificeringsniveau verwijderen?",
+      "description": "Weet je zeker dat je \"{{name}}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt. Als er entiteiten op dit niveau gecertificeerd zijn, wordt verwijderen geblokkeerd."
+    },
+    "messages": {
+      "updated": "Certificeringsniveau \"{{name}}\" bijgewerkt.",
+      "created": "Certificeringsniveau \"{{name}}\" aangemaakt.",
+      "deleted": "Certificeringsniveau \"{{name}}\" verwijderd.",
+      "cannotDeleteTitle": "Kan niet verwijderen",
+      "reorderFailed": "Kon volgorde niet wijzigen"
+    }
+  },
+  "maturityLevels": {
+    "title": "Volwassenheidsniveaus",
+    "description": "Definieer de volwassenheidsladder voor dataproducten en contracten. Elk niveau wordt afgeschermd door compliance-beleid.",
+    "addLevel": "Niveau Toevoegen",
+    "allTypes": "Alle types",
+    "gateCount_one": "{{count}} poort",
+    "gateCount_other": "{{count}} poorten",
+    "complianceGates": "Compliance-beleidspoorten",
+    "noDescription": "Geen beschrijving",
+    "required": "Vereist",
+    "advisory": "Adviserend",
+    "viewInCompliance": "Bekijken in Compliance",
+    "selectPolicyPlaceholder": "Selecteer compliance-beleid...",
+    "addGate": "Poort Toevoegen",
+    "emptyState": "Geen volwassenheidsniveaus geconfigureerd. Klik op \"Niveau Toevoegen\" om er een aan te maken.",
+    "dialog": {
+      "editTitle": "Volwassenheidsniveau Bewerken",
+      "createTitle": "Volwassenheidsniveau Toevoegen",
+      "editDescription": "Werk de details van het volwassenheidsniveau bij.",
+      "createDescription": "Maak een nieuw volwassenheidsniveau aan."
+    },
+    "form": {
+      "namePlaceholder": "bijv. Trusted",
+      "descriptionPlaceholder": "Wat dit niveau voorstelt...",
+      "entityTypeLabel": "Entiteitstype",
+      "iconLabel": "Pictogram",
+      "colorLabel": "Kleur",
+      "previewLabel": "Voorbeeld",
+      "levelNamePreview": "Niveaunaam"
+    },
+    "entityTypes": {
+      "all": "Alle Entiteitstypes",
+      "DataProduct": "Dataproducten",
+      "DataContract": "Datacontracten"
+    },
+    "delete": {
+      "title": "Volwassenheidsniveau verwijderen?",
+      "description": "Weet je zeker dat je \"{{name}}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt. Als snapshots naar dit niveau verwijzen, wordt verwijderen geblokkeerd."
+    },
+    "messages": {
+      "updated": "Volwassenheidsniveau \"{{name}}\" bijgewerkt.",
+      "created": "Volwassenheidsniveau \"{{name}}\" aangemaakt.",
+      "deleted": "Volwassenheidsniveau \"{{name}}\" verwijderd.",
+      "cannotDeleteTitle": "Kan niet verwijderen"
+    }
+  },
+  "directory": {
+    "title": "Directory",
+    "intro": "Verbind een principal-directory zodat gebruikers en groepen in de hele app kunnen worden geselecteerd. v1 ondersteunt Microsoft Entra ID (via een UC HTTP-verbinding), een Postgres/Lakebase-tabel, of een lokaal CSV-bestand voor tests en demo's.",
+    "providerLabel": "Provider",
+    "providerPlaceholder": "Selecteer een provider…",
+    "providers": {
+      "entra": "Microsoft Entra ID",
+      "lakebase": "Lakebase-tabel",
+      "file": "CSV-bestand (test / demo)"
+    },
+    "testConnection": "Verbinding testen",
+    "statusLabel": "Status:",
+    "configured": "Geconfigureerd ({{provider}})",
+    "notConfigured": "Niet geconfigureerd",
+    "messages": {
+      "saveSuccess": "Directory-instellingen opgeslagen",
+      "saveFailed": "Kon niet opslaan",
+      "testSuccess": "Directory-test geslaagd",
+      "testFailed": "Directory-test mislukt",
+      "unknownError": "Onbekende fout",
+      "clearSuccess": "Directory-instellingen gewist",
+      "clearFailed": "Kon niet wissen"
+    },
+    "entra": {
+      "connectionLabel": "UC HTTP-verbinding",
+      "loadingConnections": "Verbindingen laden…",
+      "noConnections": "Geen HTTP-verbindingen gevonden",
+      "selectConnection": "Selecteer een verbinding…",
+      "setupTitle": "Entra ID-verbinding instellen",
+      "setupBody": "Maak een Unity Catalog HTTP-verbinding met Microsoft Graph met client_credentials. De enterprise-app van de applicatie moet ten minste de application scopes <code>User.Read.All</code> en <code>GroupMember.Read.All</code> (of <code>Group.Read.All</code>) hebben.",
+      "helpLabels": {
+        "tokenUrl": "Token-URL",
+        "baseUrl": "Basis-URL",
+        "scope": "Scope",
+        "grantType": "Grant type"
+      }
+    },
+    "lakebase": {
+      "tableLabel": "Lakebase-tabel",
+      "tablePlaceholder": "catalog.schema.table",
+      "tableHelp": "Volledig gekwalificeerde naam van een Postgres-tabel op de primaire Lakebase-database van de app. Identifier-segmenten mogen alleen letters, cijfers en underscores bevatten.",
+      "schemaTitle": "Vereist schema",
+      "schemaBody": "Vul deze tabel vanuit je IdP-synchronisatiepijplijn. Indexen op kolommen in kleine letters zijn optioneel maar aanbevolen voor snelle prefix-zoekopdrachten."
+    },
+    "file": {
+      "pathLabel": "Pad naar CSV-bestand",
+      "pathPlaceholder": "/etc/ontos/principals.csv",
+      "pathHelp": "Absoluut pad naar een CSV-bestand dat leesbaar is voor het app-proces. Wordt automatisch opnieuw gelezen wanneer de mtime van het bestand vooruitgaat; geen herstart nodig.",
+      "formatTitle": "CSV-formaat",
+      "formatBody": "Vereiste kolommen: <code>type</code>, <code>id</code>, <code>display_name</code>. De kolom <code>sub_label</code> is optioneel. <code>type</code> moet <code>user</code> of <code>group</code> zijn."
+    }
+  },
+  "semanticModels": {
+    "page": {
+      "title": "RDF-bronnen",
+      "description": "Upload en beheer RDF-ontologie- en taxonomiebestanden (RDFS, SKOS, OWL)."
+    },
+    "actions": {
+      "industryLibrary": "Sectorbibliotheek",
+      "uploading": "Uploaden...",
+      "refreshListTooltip": "Lijst vernieuwen"
+    },
+    "table": {
+      "sourceHeader": "Bron",
+      "sizeHeader": "Grootte",
+      "sizeKb": "{{value}} KB",
+      "enabledHeader": "Ingeschakeld",
+      "alwaysOn": "Altijd Aan",
+      "viewContentTooltip": "Inhoud bekijken",
+      "deleteModelTooltip": "Model verwijderen"
+    },
+    "source": {
+      "unknown": "Onbekend",
+      "system": "Systeem",
+      "file": "Bestand",
+      "schema": "Schema",
+      "upload": "Uploaden"
+    },
+    "deleteDialog": {
+      "title": "RDF-bron Verwijderen",
+      "description": "Weet je zeker dat je <strong>{{name}}</strong> wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt en verwijdert het model uit de semantische grafiek."
+    },
+    "viewDialog": {
+      "titleFallback": "Ontologie Bekijken",
+      "loadingContent": "Inhoud laden...",
+      "noContent": "Geen inhoud beschikbaar.",
+      "loadContentFailed": "Kon inhoud niet laden.",
+      "copied": "Gekopieerd!",
+      "copyToClipboard": "Kopiëren naar Klembord"
+    },
+    "messages": {
+      "loadModelsError": "Kon modellen niet laden",
+      "graphRefreshed": "Kennisgraaf succesvol vernieuwd",
+      "graphRefreshError": "Kon kennisgraaf niet vernieuwen",
+      "uploadFailedTitle": "Upload Mislukt",
+      "modelUploaded": "Semantisch model succesvol geüpload",
+      "uploadErrorTitle": "Uploadfout",
+      "uploadFileError": "Kon bestand niet uploaden",
+      "modelToggled": "Model succesvol {{state}}",
+      "enabledState": "ingeschakeld",
+      "disabledState": "uitgeschakeld",
+      "updateModelError": "Kon model niet bijwerken",
+      "loadContentError": "Kon inhoud niet laden",
+      "copyClipboardError": "Kon niet naar klembord kopiëren",
+      "deleteFailedTitle": "Verwijderen Mislukt",
+      "modelDeleted": "Semantisch model succesvol verwijderd",
+      "deleteErrorTitle": "Fout bij Verwijderen",
+      "deleteModelError": "Kon model niet verwijderen",
+      "updateTitleError": "Kon titel niet bijwerken",
+      "saveError": "Kon niet opslaan",
+      "clearTitleError": "Kon titel niet wissen",
+      "clearError": "Kon niet wissen"
     }
   }
 }
-

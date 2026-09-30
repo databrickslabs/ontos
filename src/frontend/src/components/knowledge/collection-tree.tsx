@@ -89,7 +89,7 @@ const CollectionNode: React.FC<CollectionNodeProps> = ({
   expandedCollections,
   toggleExpand,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['semantic-models', 'common']);
   const isExpanded = expandedCollections.has(collection.iri);
   const isSelected = selectedCollection === collection.iri;
   const hasChildren = collection.child_collections && collection.child_collections.length > 0;
@@ -148,7 +148,7 @@ const CollectionNode: React.FC<CollectionNodeProps> = ({
                   <Lock className="h-3 w-3 text-muted-foreground" />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{t('Read-only collection')}</p>
+                  <p>{t('semantic-models:collectionTree.readOnly')}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -157,7 +157,7 @@ const CollectionNode: React.FC<CollectionNodeProps> = ({
           {/* Source type badge for imported */}
           {collection.source_type === 'imported' && (
             <Badge variant="outline" className="text-xs px-1 py-0">
-              {t('imported')}
+              {t('semantic-models:badges.imported')}
             </Badge>
           )}
 
@@ -183,19 +183,19 @@ const CollectionNode: React.FC<CollectionNodeProps> = ({
               {collection.is_editable && onEditCollection && (
                 <DropdownMenuItem onClick={() => onEditCollection(collection)}>
                   <Pencil className="h-4 w-4 mr-2" />
-                  {t('Edit')}
+                  {t('common:actions.edit')}
                 </DropdownMenuItem>
               )}
               {onExportCollection && (
                 <DropdownMenuItem onClick={() => onExportCollection(collection)}>
                   <Download className="h-4 w-4 mr-2" />
-                  {t('Export')}
+                  {t('common:actions.export')}
                 </DropdownMenuItem>
               )}
               {collection.is_editable && onImportToCollection && (
                 <DropdownMenuItem onClick={() => onImportToCollection(collection)}>
                   <Import className="h-4 w-4 mr-2" />
-                  {t('Import')}
+                  {t('common:actions.import')}
                 </DropdownMenuItem>
               )}
               {collection.is_editable && collection.source_type === 'custom' && onDeleteCollection && (
@@ -206,7 +206,7 @@ const CollectionNode: React.FC<CollectionNodeProps> = ({
                     className="text-destructive"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    {t('Delete')}
+                    {t('common:actions.delete')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -251,7 +251,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
   onExportCollection,
   canEdit = false,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['semantic-models', 'common']);
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(
     new Set(collections.map((c) => c.iri)) // Start with all expanded
   );
@@ -274,7 +274,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
       {canEdit && onCreateCollection && (
         <div className="flex items-center justify-between px-2 py-2 border-b">
           <span className="text-sm font-semibold text-muted-foreground">
-            {t('Collections')}
+            {t('semantic-models:collections.title')}
           </span>
           <Button
             variant="ghost"
@@ -292,7 +292,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
         {collections.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
             <Folder className="h-8 w-8 mb-2 opacity-50" />
-            <p className="text-sm">{t('No collections yet')}</p>
+            <p className="text-sm">{t('semantic-models:collectionTree.noCollectionsYet')}</p>
             {canEdit && onCreateCollection && (
               <Button
                 variant="outline"
@@ -301,7 +301,7 @@ export const CollectionTree: React.FC<CollectionTreeProps> = ({
                 onClick={onCreateCollection}
               >
                 <Plus className="h-4 w-4 mr-1" />
-                {t('Create Collection')}
+                {t('semantic-models:actions.createCollection')}
               </Button>
             )}
           </div>

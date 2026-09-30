@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Copy, Search, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +63,7 @@ function VariableRow({
   // so authors can see which namespace a hit came from.
   groupLabel?: string;
 }) {
+  const { t } = useTranslation(['workflows', 'common']);
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
@@ -73,14 +75,14 @@ function VariableRow({
       await navigator.clipboard.writeText(placeholder);
       setCopied(true);
       toast({
-        title: 'Copied',
-        description: `${placeholder} copied to clipboard.`,
+        title: t('common:copied'),
+        description: t('workflows:templateVars.copiedToClipboard', { placeholder }),
       });
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       toast({
-        title: 'Copy failed',
-        description: 'Browser blocked clipboard access.',
+        title: t('workflows:templateVars.copyFailed'),
+        description: t('workflows:templateVars.copyBlocked'),
         variant: 'destructive',
       });
     }
@@ -99,8 +101,8 @@ function VariableRow({
           variant="ghost"
           size="sm"
           onClick={handleCopy}
-          aria-label={`Copy ${placeholder}`}
-          title={`Copy ${placeholder}`}
+          aria-label={t('workflows:templateVars.copyPlaceholder', { placeholder })}
+          title={t('workflows:templateVars.copyPlaceholder', { placeholder })}
           className="shrink-0 h-6 w-6 p-0"
         >
           {copied ? (
@@ -131,7 +133,7 @@ function VariableRow({
           className="text-xs text-muted-foreground/80 mt-0.5 font-mono truncate"
           title={sample}
         >
-          e.g. {truncate(sample)}
+          {t('workflows:templateVars.sampleLabel', { sample: truncate(sample) })}
         </p>
       )}
     </div>
@@ -180,6 +182,7 @@ export default function TemplateVarsInspector({
   triggerType,
   entityType,
 }: TemplateVarsInspectorProps) {
+  const { t } = useTranslation(['workflows', 'common']);
   const { get } = useApi();
   const [data, setData] = useState<TemplateVarsResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -210,7 +213,7 @@ export default function TemplateVarsInspector({
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load variables');
+        setError(err instanceof Error ? err.message : t('workflows:templateVars.loadFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -239,8 +242,8 @@ export default function TemplateVarsInspector({
     return (
       <div className="rounded-md border bg-muted/30 p-3">
         <p className="text-xs text-muted-foreground">
-          Pick a trigger and entity type to see the variables available for{' '}
-          <code className="font-mono">{'${...}'}</code> substitution.
+          {t('workflows:templateVars.pickTriggerBefore')}{' '}
+          <code className="font-mono">{'${...}'}</code> {t('workflows:templateVars.pickTriggerAfter')}
         </p>
       </div>
     );
@@ -249,7 +252,7 @@ export default function TemplateVarsInspector({
   if (loading) {
     return (
       <div className="rounded-md border p-3">
-        <p className="text-xs text-muted-foreground">Loading variables…</p>
+        <p className="text-xs text-muted-foreground">{t('workflows:templateVars.loadingVariables')}</p>
       </div>
     );
   }
@@ -257,7 +260,7 @@ export default function TemplateVarsInspector({
   if (error) {
     return (
       <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
-        <p className="text-xs text-destructive">Failed to load variables: {error}</p>
+        <p className="text-xs text-destructive">{t('workflows:templateVars.loadFailedWithError', { error })}</p>
       </div>
     );
   }
@@ -266,11 +269,9 @@ export default function TemplateVarsInspector({
     return (
       <div className="rounded-md border p-3">
         <p className="text-xs text-muted-foreground">
-          No variable descriptors are registered for this trigger and
-          entity type yet. You can still use the universal placeholders
-          ({' '}
+          {t('workflows:templateVars.noDescriptors')}{' '}
           <code className="font-mono">{'${entity_name}'}</code>,{' '}
-          <code className="font-mono">{'${user_email}'}</code>, etc.).
+          <code className="font-mono">{'${user_email}'}</code>{t('workflows:templateVars.noDescriptorsSuffix')}
         </p>
       </div>
     );
@@ -284,9 +285,9 @@ export default function TemplateVarsInspector({
   return (
     <div className="rounded-md border overflow-hidden flex flex-col">
       <div className="px-3 py-2 border-b bg-muted/30">
-        <p className="text-xs font-medium">Available variables</p>
+        <p className="text-xs font-medium">{t('workflows:templateVars.availableVariables')}</p>
         <p className="text-xs text-muted-foreground">
-          Click the copy icon to grab a placeholder.
+          {t('workflows:templateVars.copyHint')}
         </p>
       </div>
       <div className="px-3 py-2 border-b">
@@ -295,15 +296,15 @@ export default function TemplateVarsInspector({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by name or description…"
+            placeholder={t('workflows:templateVars.filterPlaceholder')}
             className="h-8 text-xs pl-7 pr-7"
-            aria-label="Search template variables"
+            aria-label={t('workflows:templateVars.searchAriaLabel')}
           />
           {isSearching && (
             <button
               type="button"
               onClick={() => setQuery('')}
-              aria-label="Clear search"
+              aria-label={t('workflows:templateVars.clearSearchAriaLabel')}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
@@ -312,7 +313,7 @@ export default function TemplateVarsInspector({
         </div>
         {isSearching && (
           <p className="text-[11px] text-muted-foreground mt-1">
-            {totalMatches} match{totalMatches === 1 ? '' : 'es'}
+            {t('workflows:templateVars.matches', { count: totalMatches })}
           </p>
         )}
       </div>
@@ -323,7 +324,7 @@ export default function TemplateVarsInspector({
         <div className="px-3">
           {totalMatches === 0 ? (
             <p className="text-xs text-muted-foreground py-3">
-              No variables match <code className="font-mono">{query}</code>.
+              {t('workflows:templateVars.noMatch')} <code className="font-mono">{query}</code>.
             </p>
           ) : (
             filteredGroups.flatMap((group) =>

@@ -1,0 +1,78 @@
+{
+  "title": "Roles de negocio",
+  "subtitle": "Roles con nombre que se pueden asignar a los usuarios como propietarios de diversos objetos.",
+  "addNew": "Añadir rol",
+  "editRole": "Editar rol",
+  "deleteRole": "Eliminar rol",
+  "systemBadge": "Sistema",
+  "openMenu": "Abrir menú",
+  "table": {
+    "name": "Nombre",
+    "description": "Descripción",
+    "category": "Categoría",
+    "status": "Estado",
+    "system": "Sistema",
+    "lastUpdated": "Última actualización",
+    "actions": "Acciones"
+  },
+  "categories": {
+    "governance": "Gobernanza",
+    "technical": "Técnico",
+    "business": "Negocio",
+    "operational": "Operativo"
+  },
+  "statuses": {
+    "active": "Activo",
+    "deprecated": "Obsoleto"
+  },
+  "permissions": {
+    "deniedView": "No tienes permiso para ver los roles de negocio.",
+    "deniedCreate": "No tienes permiso para crear roles de negocio.",
+    "deniedEdit": "No tienes permiso para editar roles de negocio.",
+    "deniedDelete": "No tienes permiso para eliminar roles de negocio.",
+    "permissionDenied": "Permiso denegado"
+  },
+  "messages": {
+    "errorFetching": "Error al obtener los roles de negocio",
+    "loadFailed": "No se pudieron cargar los roles de negocio",
+    "errorDeleting": "Error al eliminar el rol de negocio",
+    "deleted": "Rol de negocio eliminado",
+    "deletedSuccess": "El rol de negocio se eliminó correctamente.",
+    "errorLoadingData": "Error al cargar los datos"
+  },
+  "deleteDialog": {
+    "title": "¿Eliminar el rol de negocio?",
+    "description": "Esta acción no se puede deshacer. Las asignaciones de propietario existentes que usan este rol pueden quedar huérfanas.",
+    "cancel": "Cancelar",
+    "delete": "Eliminar"
+  },
+  "emptyState": {
+    "title": "Aún no hay roles de negocio definidos",
+    "description": "Crea tu primer rol de negocio (p. ej., propietario de datos, propietario de dominio)."
+  },
+  "form": {
+    "createTitle": "Crear rol de negocio",
+    "createDescription": "Añade un nuevo rol de negocio que se pueda asignar a los usuarios.",
+    "editTitle": "Editar rol de negocio",
+    "editDescription": "Actualiza los detalles de este rol de negocio.",
+    "create": "Crear",
+    "update": "Guardar cambios",
+    "noCategory": "Sin categoría",
+    "isApprover": "Aprobador de flujo de trabajo",
+    "isApproverDescription": "Mostrar este rol en los menús desplegables de aprobador de flujo de trabajo y destinatario de notificaciones.",
+    "isApproverInUse": "No se puede deshabilitar — se usa en {{count}} flujo(s) de trabajo: {{workflows}}.",
+    "placeholders": {
+      "name": "p. ej., propietario de datos",
+      "description": "Describe las responsabilidades de este rol...",
+      "category": "Selecciona una categoría"
+    },
+    "toasts": {
+      "created": "Rol de negocio creado",
+      "createdDescription": "\"{{name}}\" se ha creado.",
+      "updated": "Rol de negocio actualizado",
+      "updatedDescription": "\"{{name}}\" se ha actualizado.",
+      "createFailed": "No se pudo crear",
+      "updateFailed": "No se pudo actualizar"
+    }
+  }
+}

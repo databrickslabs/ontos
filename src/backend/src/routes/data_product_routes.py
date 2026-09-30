@@ -1588,7 +1588,13 @@ async def get_my_subscriptions(
     )
 
 
-@router.post("/data-products/upload", response_model=List[DataProduct], status_code=201)
+# response_model_by_alias=False forces field-name (camelCase) serialization
+# — customProperties, outputPorts, apiVersion, … — matching the GET routes
+# (which model_dump(by_alias=False)) and the frontend TS types. Without it
+# FastAPI serializes response models by_alias=True, emitting the snake_case
+# validation aliases (custom_properties, output_ports, …) that the frontend
+# never reads. See the DataProduct model's alias/serialization_alias split.
+@router.post("/data-products/upload", response_model=List[DataProduct], response_model_by_alias=False, status_code=201)
 async def upload_data_products(
     request: Request,
     db: DBSessionDep,

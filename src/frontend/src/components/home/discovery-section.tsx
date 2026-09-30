@@ -22,7 +22,7 @@ interface DiscoverySectionProps {
 }
 
 export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProps) {
-  const { t } = useTranslation('home');
+  const { t } = useTranslation(['home', 'common']);
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [selectedDomainDetails, setSelectedDomainDetails] = useState<DataDomain | null>(null);
@@ -289,7 +289,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Bell className="h-5 w-5 text-primary" />
-            <span className="font-medium">My Subscriptions ({subscribedProducts.length})</span>
+            <span className="font-medium">{t('discoverySection.mySubscriptions', { count: subscribedProducts.length })}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {subscribedProducts.slice(0, 4).map(p => {
@@ -331,7 +331,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground mb-2 truncate">
-                        Owner: {owner}
+                        {t('discoverySection.owner')}: {owner}
                       </div>
                       <Button
                         variant="outline"
@@ -340,7 +340,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                         asChild
                       >
                         <Link to={p.id ? `/data-products/${p.id}` : '/data-products'}>
-                          Manage
+                          {t('discoverySection.manage')}
                         </Link>
                       </Button>
                     </CardContent>
@@ -352,7 +352,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
           {subscribedProducts.length > 4 && (
             <div className="text-center mt-3">
               <Link to="/data-products" className="text-sm text-primary hover:underline">
-                View all {subscribedProducts.length} subscribed products →
+                {t('discoverySection.viewAllSubscribed', { count: subscribedProducts.length })} →
               </Link>
             </div>
           )}
@@ -429,7 +429,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground mb-2 truncate">
-                          Owner: {owner}
+                          {t('discoverySection.owner')}: {owner}
                         </div>
                         {subscribedProductIds.has(p.id || '') ? (
                           <Button
@@ -439,7 +439,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                             disabled
                           >
                             <Bell className="h-3.5 w-3.5 mr-1" />
-                            Subscribed
+                            {t('discoverySection.subscribed')}
                           </Button>
                         ) : (
                           <Button
@@ -452,7 +452,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                               handleSubscribeClick(p);
                             }}
                           >
-                            Subscribe
+                            {t('discoverySection.subscribe')}
                           </Button>
                         )}
                       </CardContent>
@@ -500,7 +500,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
             if (!open) setSelectedProduct(null);
           }}
           productId={selectedProduct.id || ''}
-          productName={selectedProduct.name || 'Unknown Product'}
+          productName={selectedProduct.name || t('discoverySection.unknownProduct')}
           onSuccess={handleSubscriptionSuccess}
         />
       )}

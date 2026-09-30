@@ -64,7 +64,7 @@ export function OwnershipPanel({
   canAssign = false,
   className,
   importedContacts,
-  importedContactsLabel = 'Imported Contacts',
+  importedContactsLabel,
   onImportAsOwners,
   ownerTeamId,
   ownerTeamName,
@@ -174,10 +174,10 @@ export function OwnershipPanel({
                   variant="outline"
                   size="sm"
                   onClick={() => setCopyFromTeamOpen(true)}
-                  title={ownerTeamName ? `Copy members from ${ownerTeamName}` : 'Copy from assigned team'}
+                  title={ownerTeamName ? t('common:ownership.copyMembersFrom', { name: ownerTeamName }) : t('common:ownership.copyFromAssignedTeam')}
                 >
                   <Copy className="h-4 w-4 mr-1" />
-                  Copy from Team
+                  {t('common:ownership.copyFromTeam')}
                 </Button>
               )}
               {canAssign && (
@@ -276,7 +276,7 @@ export function OwnershipPanel({
                         <ChevronRight className="h-4 w-4 mr-1" />
                       )}
                       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        {importedContactsLabel} ({importedContacts!.length})
+                        {importedContactsLabel ?? t('common:ownership.importedContacts')} ({importedContacts!.length})
                       </span>
                     </Button>
                   </CollapsibleTrigger>
@@ -288,7 +288,7 @@ export function OwnershipPanel({
                       onClick={() => onImportAsOwners(importedContacts!)}
                     >
                       <Import className="h-3.5 w-3.5 mr-1" />
-                      Import as Owners
+                      {t('common:ownership.importAsOwners')}
                     </Button>
                   )}
                 </div>
@@ -296,9 +296,9 @@ export function OwnershipPanel({
                   <div className="space-y-2">
                     {importedContacts!.map((contact, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-sm">
-                        <span className="font-medium">{contact.name || contact.username || contact.email || 'Unknown'}</span>
+                        <span className="font-medium">{contact.name || contact.username || contact.email || t('common:states.unknown')}</span>
                         <Badge variant="outline" className="text-xs">
-                          {contact.role || 'member'}
+                          {contact.role || t('common:ownership.memberRole')}
                         </Badge>
                       </div>
                     ))}
@@ -354,9 +354,9 @@ export function OwnershipPanel({
       <Dialog open={copyFromTeamOpen} onOpenChange={setCopyFromTeamOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Copy from Team{ownerTeamName ? `: ${ownerTeamName}` : ''}</DialogTitle>
+            <DialogTitle>{t('common:ownership.copyFromTeam')}{ownerTeamName ? `: ${ownerTeamName}` : ''}</DialogTitle>
             <DialogDescription>
-              Select team members to add as business owners. They will be assigned via the "Assign Owner" flow where you can choose a role.
+              {t('common:ownership.copyFromTeamDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 max-h-[300px] overflow-y-auto">
@@ -365,7 +365,7 @@ export function OwnershipPanel({
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : teamMembers.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No team members found.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t('common:ownership.noTeamMembers')}</p>
             ) : (
               <div className="space-y-2">
                 {teamMembers.map((member) => {
@@ -379,7 +379,7 @@ export function OwnershipPanel({
                         <span className="text-sm">{member.member_name || member.member_identifier}</span>
                       </div>
                       {alreadyOwner ? (
-                        <Badge variant="secondary" className="text-xs">Already owner</Badge>
+                        <Badge variant="secondary" className="text-xs">{t('common:ownership.alreadyOwner')}</Badge>
                       ) : (
                         <Button
                           size="sm"
@@ -392,7 +392,7 @@ export function OwnershipPanel({
                           }}
                         >
                           <UserPlus className="h-3.5 w-3.5 mr-1" />
-                          Assign
+                          {t('common:actions.assign')}
                         </Button>
                       )}
                     </div>
@@ -403,7 +403,7 @@ export function OwnershipPanel({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCopyFromTeamOpen(false)}>
-              Close
+              {t('common:actions.close')}
             </Button>
           </DialogFooter>
         </DialogContent>

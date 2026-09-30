@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Play, Square, Pause, Loader2, CheckCircle2, XCircle, Clock, Minus } from 'lucide-react';
@@ -12,6 +13,7 @@ interface WorkflowActionsProps {
 }
 
 export function WorkflowActions({ status, onStart, onStop, onPause, onResume }: WorkflowActionsProps) {
+  const { t } = useTranslation(['settings', 'common']);
   const renderLastResultIcon = () => {
     if (status.is_running) return null;
     switch (status.last_result) {
@@ -43,7 +45,7 @@ export function WorkflowActions({ status, onStart, onStop, onPause, onResume }: 
                 <Square className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Stop</TooltipContent>
+            <TooltipContent>{t('settings:workflows.actions.stop')}</TooltipContent>
           </Tooltip>
         ) : status.supports_pause ? (
           status.pause_status === 'PAUSED' ? (
@@ -54,7 +56,7 @@ export function WorkflowActions({ status, onStart, onStop, onPause, onResume }: 
                     <Play className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Start</TooltipContent>
+                <TooltipContent>{t('settings:workflows.actions.start')}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -62,7 +64,7 @@ export function WorkflowActions({ status, onStart, onStop, onPause, onResume }: 
                     <Play className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Unpause</TooltipContent>
+                <TooltipContent>{t('settings:workflows.actions.unpause')}</TooltipContent>
               </Tooltip>
             </div>
           ) : (
@@ -72,7 +74,7 @@ export function WorkflowActions({ status, onStart, onStop, onPause, onResume }: 
                   <Pause className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Pause</TooltipContent>
+              <TooltipContent>{t('settings:workflows.actions.pause')}</TooltipContent>
             </Tooltip>
           )
         ) : (
@@ -82,7 +84,7 @@ export function WorkflowActions({ status, onStart, onStop, onPause, onResume }: 
                 <Play className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Start</TooltipContent>
+            <TooltipContent>{t('settings:workflows.actions.start')}</TooltipContent>
           </Tooltip>
         )}
 

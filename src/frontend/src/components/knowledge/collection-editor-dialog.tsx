@@ -50,7 +50,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
   collections = [],
   onSave,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['semantic-models', 'common']);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     label: '',
@@ -145,28 +145,28 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
           <div className="grid gap-4 py-4">
             {/* Name */}
             <div className="grid gap-2">
-              <Label htmlFor="label">{t('Name')}</Label>
+              <Label htmlFor="label">{t('common:labels.name')}</Label>
               <Input
                 id="label"
                 value={formData.label}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, label: e.target.value }))
                 }
-                placeholder={t('e.g., Finance Glossary')}
+                placeholder={t('semantic-models:collectionEditor.namePlaceholder')}
                 required
               />
             </div>
 
             {/* Description */}
             <div className="grid gap-2">
-              <Label htmlFor="description">{t('Description')}</Label>
+              <Label htmlFor="description">{t('common:labels.description')}</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, description: e.target.value }))
                 }
-                placeholder={t('Optional description...')}
+                placeholder={t('semantic-models:collectionEditor.descriptionPlaceholder')}
                 rows={3}
               />
             </div>
@@ -198,9 +198,9 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="glossary">{t('Glossary')}</SelectItem>
-                    <SelectItem value="taxonomy">{t('Taxonomy')}</SelectItem>
-                    <SelectItem value="ontology">{t('Ontology')}</SelectItem>
+                    <SelectItem value="glossary">{t('semantic-models:collections.glossary')}</SelectItem>
+                    <SelectItem value="taxonomy">{t('semantic-models:collections.taxonomy')}</SelectItem>
+                    <SelectItem value="ontology">{t('semantic-models:collections.ontology')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -208,7 +208,7 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
 
             {/* Scope Level */}
             <div className="grid gap-2">
-              <Label htmlFor="scope_level">{t('Scope')}</Label>
+              <Label htmlFor="scope_level">{t('semantic-models:fields.scope')}</Label>
               <Select
                 value={formData.scope_level}
                 onValueChange={(value: ScopeLevel) =>
@@ -219,19 +219,19 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="enterprise">{t('Enterprise')}</SelectItem>
-                  <SelectItem value="domain">{t('Domain')}</SelectItem>
-                  <SelectItem value="department">{t('Department')}</SelectItem>
-                  <SelectItem value="team">{t('Team')}</SelectItem>
-                  <SelectItem value="project">{t('Project')}</SelectItem>
-                  <SelectItem value="external">{t('External')}</SelectItem>
+                  <SelectItem value="enterprise">{t('semantic-models:scopes.enterprise')}</SelectItem>
+                  <SelectItem value="domain">{t('semantic-models:scopes.domain')}</SelectItem>
+                  <SelectItem value="department">{t('semantic-models:scopes.department')}</SelectItem>
+                  <SelectItem value="team">{t('semantic-models:scopes.team')}</SelectItem>
+                  <SelectItem value="project">{t('semantic-models:scopes.project')}</SelectItem>
+                  <SelectItem value="external">{t('semantic-models:scopes.external')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Parent Collection */}
             <div className="grid gap-2">
-              <Label htmlFor="parent">{t('Parent Collection')}</Label>
+              <Label htmlFor="parent">{t('semantic-models:collectionEditor.parentCollection')}</Label>
               <Select
                 value={formData.parent_collection_iri || '_none'}
                 onValueChange={(value) =>
@@ -242,10 +242,10 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t('None (root collection)')} />
+                  <SelectValue placeholder={t('semantic-models:collectionEditor.noneRootCollection')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">{t('None (root collection)')}</SelectItem>
+                  <SelectItem value="_none">{t('semantic-models:collectionEditor.noneRootCollection')}</SelectItem>
                   {flatParentOptions.map((opt) => (
                     <SelectItem key={opt.iri} value={opt.iri}>
                       {'—'.repeat(opt.level)} {opt.label}
@@ -258,9 +258,9 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
             {/* Editable Toggle */}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="is_editable">{t('Editable')}</Label>
+                <Label htmlFor="is_editable">{t('semantic-models:collectionEditor.editable')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  {t('Allow creating and editing concepts in this collection')}
+                  {t('semantic-models:collectionEditor.editableHelp')}
                 </p>
               </div>
               <Switch
@@ -280,11 +280,11 @@ export const CollectionEditorDialog: React.FC<CollectionEditorDialogProps> = ({
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
             >
-              {t('Cancel')}
+              {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={isLoading || !formData.label}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isNew ? t('Create') : t('Save')}
+              {isNew ? t('common:actions.create') : t('common:actions.save')}
             </Button>
           </DialogFooter>
         </form>

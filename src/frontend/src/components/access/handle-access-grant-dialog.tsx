@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -58,8 +59,9 @@ export default function HandleAccessGrantDialog({
 }: HandleAccessGrantDialogProps) {
   const { get, post } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['access-grants', 'common']);
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
-  
+
   const [message, setMessage] = useState('');
   const [grantedDuration, setGrantedDuration] = useState<number>(request.requested_duration_days);
   const [grantedPermission, setGrantedPermission] = useState<PermissionLevel>(
@@ -116,10 +118,15 @@ export default function HandleAccessGrantDialog({
       }
 
       toast({
-        title: approved ? 'Request Approved' : 'Request Denied',
-        description: approved 
-          ? `Access granted for ${formatDuration(grantedDuration)}.`
-          : 'The requester has been notified.',
+        title: approved
+          ? t('access-grants:handle.approvedTitle', 'Request Approved')
+          : t('access-grants:handle.deniedTitle', 'Request Denied'),
+        description: approved
+          ? t('access-grants:handle.approvedDescription', {
+              duration: formatDuration(grantedDuration),
+              defaultValue: 'Access granted for {{duration}}.',
+            })
+          : t('access-grants:handle.deniedDescription', 'The requester has been notified.'),
       });
 
       refreshNotifications();
@@ -132,8 +139,8 @@ export default function HandleAccessGrantDialog({
 
     } catch (e: any) {
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to process decision',
+        title: t('common:toast.error', 'Error'),
+        description: e.message || t('access-grants:handle.error', 'Failed to process decision'),
         variant: 'destructive'
       });
     } finally {
@@ -142,13 +149,13 @@ export default function HandleAccessGrantDialog({
   };
 
   const formatDuration = (days: number): string => {
-    if (days < 30) return `${days} day${days !== 1 ? 's' : ''}`;
-    if (days === 30) return '1 month';
-    if (days === 60) return '2 months';
-    if (days === 90) return '3 months';
-    if (days === 180) return '6 months';
-    if (days === 365) return '1 year';
-    return `${days} days`;
+    if (days < 30) return t('access-grants:duration.days', { count: days });
+    if (days === 30) return t('access-grants:duration.months', { count: 1 });
+    if (days === 60) return t('access-grants:duration.months', { count: 2 });
+    if (days === 90) return t('access-grants:duration.months', { count: 3 });
+    if (days === 180) return t('access-grants:duration.months', { count: 6 });
+    if (days === 365) return t('access-grants:duration.years', { count: 1 });
+    return t('access-grants:duration.days', { count: days });
   };
 
   const formatDate = (dateString: string): string => {
@@ -161,10 +168,10 @@ export default function HandleAccessGrantDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Handle Access Request
+            {t('access-grants:handle.title', 'Handle Access Request')}
           </DialogTitle>
           <DialogDescription>
-            Review this access request and approve or deny it.
+            {t('access-grants:handle.description', 'Review this access request and approve or deny it.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -173,42 +180,42 @@ export default function HandleAccessGrantDialog({
           <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Requester:</span>
+              <span className="text-sm font-medium">{t('access-grants:handle.fields.requester', 'Requester:')}</span>
               <span className="text-sm">{request.requester_email}</span>
             </div>
-            
+
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Resource:</span>
+              <span className="text-sm font-medium">{t('access-grants:handle.fields.resource', 'Resource:')}</span>
               <Badge variant="outline">{request.entity_type}</Badge>
               <span className="text-sm font-mono">{request.entity_name || request.entity_id}</span>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Requested Duration:</span>
+              <span className="text-sm font-medium">{t('access-grants:handle.fields.requestedDuration', 'Requested Duration:')}</span>
               <Badge variant="secondary">{formatDuration(request.requested_duration_days)}</Badge>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Shield className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Requested Permission:</span>
+              <span className="text-sm font-medium">{t('access-grants:handle.fields.requestedPermission', 'Requested Permission:')}</span>
               <Badge variant="secondary">
-                {PERMISSION_LABELS[request.permission_level as PermissionLevel] || request.permission_level}
+                {t(`access-grants:permissionOptions.${request.permission_level}`, PERMISSION_LABELS[request.permission_level as PermissionLevel] || request.permission_level)}
               </Badge>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Submitted:</span>
+              <span className="text-sm font-medium">{t('access-grants:handle.fields.submitted', 'Submitted:')}</span>
               <span className="text-sm text-muted-foreground">{formatDate(request.created_at)}</span>
             </div>
-            
+
             {request.reason && (
               <div className="pt-2 border-t">
                 <div className="flex items-start gap-2">
                   <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div>
-                    <span className="text-sm font-medium">Reason:</span>
+                    <span className="text-sm font-medium">{t('access-grants:handle.fields.reason', 'Reason:')}</span>
                     <p className="text-sm text-muted-foreground mt-1">{request.reason}</p>
                   </div>
                 </div>
@@ -219,13 +226,13 @@ export default function HandleAccessGrantDialog({
           {/* Grant Settings (only shown for approval) */}
           <div className="space-y-3 p-4 border rounded-lg bg-green-50 dark:bg-green-950/20">
             <div className="text-sm font-medium text-green-700 dark:text-green-300">
-              If approving, you can adjust the granted access:
+              {t('access-grants:handle.adjustNote', 'If approving, you can adjust the granted access:')}
             </div>
-            
+
             {/* Duration to Grant */}
             <div className="space-y-1">
               <Label htmlFor="granted-duration" className="text-sm">
-                Duration to Grant
+                {t('access-grants:handle.durationToGrant', 'Duration to Grant')}
               </Label>
               <Select
                 value={grantedDuration.toString()}
@@ -233,13 +240,13 @@ export default function HandleAccessGrantDialog({
                 disabled={submitting || loadingConfig}
               >
                 <SelectTrigger id="granted-duration">
-                  <SelectValue placeholder="Select duration" />
+                  <SelectValue placeholder={t('access-grants:request.duration.placeholder', 'Select duration')} />
                 </SelectTrigger>
                 <SelectContent>
                   {durationOptions.map((d) => (
                     <SelectItem key={d} value={d.toString()}>
                       {formatDuration(d)}
-                      {d === request.requested_duration_days && ' (requested)'}
+                      {d === request.requested_duration_days && t('access-grants:handle.requestedSuffix', ' (requested)')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -249,7 +256,7 @@ export default function HandleAccessGrantDialog({
             {/* Permission Level to Grant */}
             <div className="space-y-1">
               <Label htmlFor="granted-permission" className="text-sm">
-                Permission Level to Grant
+                {t('access-grants:handle.permissionToGrant', 'Permission Level to Grant')}
               </Label>
               <Select
                 value={grantedPermission}
@@ -257,13 +264,13 @@ export default function HandleAccessGrantDialog({
                 disabled={submitting}
               >
                 <SelectTrigger id="granted-permission">
-                  <SelectValue placeholder="Select permission level" />
+                  <SelectValue placeholder={t('access-grants:permissionSelectPlaceholder', 'Select permission level')} />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(PERMISSION_LABELS).map(([level, label]) => (
                     <SelectItem key={level} value={level}>
-                      {label}
-                      {level === request.permission_level && ' (requested)'}
+                      {t(`access-grants:permissionOptions.${level}`, label)}
+                      {level === request.permission_level && t('access-grants:handle.requestedSuffix', ' (requested)')}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -274,13 +281,13 @@ export default function HandleAccessGrantDialog({
           {/* Message to Requester */}
           <div className="space-y-2">
             <Label htmlFor="admin-message" className="text-sm font-medium">
-              Message to Requester (Optional)
+              {t('access-grants:handle.messageLabel', 'Message to Requester (Optional)')}
             </Label>
             <Textarea
               id="admin-message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Add a message for the requester (e.g., approval conditions, denial reason)..."
+              placeholder={t('access-grants:handle.messagePlaceholder', 'Add a message for the requester (e.g., approval conditions, denial reason)...')}
               className="min-h-[80px] resize-none"
               disabled={submitting}
             />
@@ -293,7 +300,7 @@ export default function HandleAccessGrantDialog({
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
-            Cancel
+            {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -302,7 +309,7 @@ export default function HandleAccessGrantDialog({
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <XCircle className="mr-2 h-4 w-4" />
-            Deny
+            {t('access-grants:handle.deny', 'Deny')}
           </Button>
           <Button
             variant="default"
@@ -311,7 +318,10 @@ export default function HandleAccessGrantDialog({
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <CheckCircle className="mr-2 h-4 w-4" />
-            Approve ({formatDuration(grantedDuration)})
+            {t('access-grants:handle.approveWithDuration', {
+              duration: formatDuration(grantedDuration),
+              defaultValue: 'Approve ({{duration}})',
+            })}
           </Button>
         </DialogFooter>
       </DialogContent>

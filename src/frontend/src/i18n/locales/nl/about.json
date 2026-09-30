@@ -9,10 +9,28 @@
   "noFeatures": "Geen functies beschikbaar voor de geselecteerde functievoorbeelden.",
   "techStack": "Technologie Stack",
   "stack": {
-    "frontend": { "title": "Frontend", "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite" },
-    "backend": { "title": "Backend", "desc": "Python, FastAPI" },
-    "database": { "title": "Database", "desc": "PostgreSQL" },
-    "platform": { "title": "Platform", "desc": "Databricks Apps" }
+    "frontend": {
+      "title": "Frontend",
+      "desc": "React, TypeScript, Shadcn UI, Tailwind CSS, Vite"
+    },
+    "backend": {
+      "title": "Backend",
+      "desc": "Python, FastAPI"
+    },
+    "database": {
+      "title": "Database",
+      "desc": "PostgreSQL"
+    },
+    "platform": {
+      "title": "Platform",
+      "desc": "Databricks Apps"
+    }
+  },
+  "userGuide": {
+    "title": "Gebruikershandleiding",
+    "tableOfContents": "Inhoudsopgave",
+    "loadError": "Laden van gebruikershandleiding mislukt: {{statusText}}",
+    "loadErrorGeneric": "Laden van gebruikershandleiding mislukt"
   },
   "learnMore": "Bijdragen & Meer Leren",
   "cta": {
@@ -27,52 +45,51 @@
       "• Volgt de BITOL Open Data Domain Standard (ODDS)."
     ],
     "data-contracts": [
-      "• Instrumenteer Dataproducten met technische metadata gebaseerd op de Open Data Contract Standard (ODCS).",
-      "• Schemavalidatie, kwaliteitscontroles, toegangscontrole verificatie, voorbeelddata weergave.",
-      "• Contracten kunnen tekstgebaseerd zijn (bijv. JSON/YAML); ondersteunt BITOL ODCS JSON schema."
+      "• Instrumenteer dataproducten met technische metadata op basis van de Open Data Contract Standard (ODCS).",
+      "• Schemavalidatie, kwaliteitscontroles, verificatie van toegangscontrole, weergave van voorbeeldgegevens.",
+      "• Contracten kunnen tekstgebaseerd zijn (bijv. JSON/YAML); ondersteunt het BITOL ODCS JSON-schema."
     ],
     "data-products": [
-      "• Groepeer Databricks assets (tabellen, views, functies, modellen, dashboards, jobs, notebooks).",
+      "• Groepeer Databricks-assets (tabellen, views, functies, modellen, dashboards, jobs, notebooks).",
       "• Gebruik tags (bijv. data-product-name, data-product-domain)."
     ],
     "business-glossary": [
       "• Hiërarchische woordenlijsten per organisatie-eenheid (bedrijf, LOB, afdeling, team, project).",
-      "• Bottom-up samengevoegd voor gebruikers, met mogelijkheid tot overschrijven.",
-      "• Termen hebben tags, markdown beschrijvingen, levenscyclusstatus, toegewezen assets."
+      "• Van onder naar boven samengevoegd voor gebruikers, met mogelijkheid tot overschrijvingen.",
+      "• Termen hebben tags, markdown-beschrijvingen, levenscyclusstatus en toegewezen assets."
     ],
     "master-data": [
       "• Integreert met Zingg.ai voor MDM-mogelijkheden."
     ],
     "compliance": [
-      "• Definieer en verifieer compliance regels.",
-      "• Bereken een algemene compliance score."
+      "• Definieer en verifieer compliance-regels.",
+      "• Bereken een algemene compliance-score."
     ],
     "estate-manager": [
       "• Centraal overzicht van meerdere workspaces.",
-      "• Monitor resource gebruik en kosten.",
-      "• Beheer configuraties over estates."
+      "• Bewaak resourcegebruik en kosten.",
+      "• Beheer configuraties over meerdere estates."
     ],
     "security": [
-      "• Schakel geavanceerde beveiligingsfuncties in (bijv. differential privacy) op assets."
+      "• Schakel geavanceerde beveiligingsfuncties (bijv. differentiële privacy) in op assets."
     ],
     "entitlements": [
       "• Definieer herbruikbare persona's (bijv. Analist, Engineer).",
-      "• Wijs persona's toe aan Databricks groepen.",
-      "• Vereenvoudig privilege beheer op schaal."
+      "• Wijs persona's toe aan Databricks-groepen.",
+      "• Vereenvoudig het beheer van rechten op schaal."
     ],
     "entitlements-sync": [
-      "• Houd rechten gesynchroniseerd met externe systemen (bijv. IDP).",
+      "• Houd entitlements afgestemd op externe systemen (bijv. IDP).",
       "• Detecteer en los synchronisatieconflicten op.",
-      "• Onderhoud audit logs van alle wijzigingen."
+      "• Houd auditlogboeken bij van alle wijzigingen."
     ],
     "catalog-commander": [
-      "• Norton Commander-geïnspireerde dual-pane verkenner voor catalogus asset beheer.",
+      "• Door Norton Commander geïnspireerde verkenner met twee panelen voor het beheren van catalogusassets.",
       "• Kopieer/verplaats tabellen en schema's eenvoudig."
     ],
     "data-asset-reviews": [
       "• Workflow voor het beoordelen en goedkeuren van assets (tabellen, views, functies).",
-      "• Inclusief notificaties voor reviewers en aanvragers."
+      "• Bevat meldingen voor beoordelaars en aanvragers."
     ]
   }
 }
-

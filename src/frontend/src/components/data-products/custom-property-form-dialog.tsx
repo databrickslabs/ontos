@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,7 @@ type CustomPropertyFormProps = {
 };
 
 export default function CustomPropertyFormDialog({ isOpen, onOpenChange, onSubmit, initial }: CustomPropertyFormProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,20 +38,20 @@ export default function CustomPropertyFormDialog({ isOpen, onOpenChange, onSubmi
 
   const handleSubmit = async () => {
     if (!property.trim()) {
-      toast({ title: 'Validation Error', description: 'Property name is required', variant: 'destructive' });
+      toast({ title: t('data-products:messages.validationTitle'), description: t('data-products:customProperty.validationNameRequired'), variant: 'destructive' });
       return;
     }
 
     if (!value.trim()) {
-      toast({ title: 'Validation Error', description: 'Property value is required', variant: 'destructive' });
+      toast({ title: t('data-products:messages.validationTitle'), description: t('data-products:customProperty.validationValueRequired'), variant: 'destructive' });
       return;
     }
 
     // Validate camelCase naming
     if (!/^[a-z][a-zA-Z0-9]*$/.test(property.trim())) {
       toast({
-        title: 'Validation Error',
-        description: 'Property name must be in camelCase (start with lowercase letter)',
+        title: t('data-products:messages.validationTitle'),
+        description: t('data-products:customProperty.validationCamelCase'),
         variant: 'destructive'
       });
       return;
@@ -74,13 +76,13 @@ export default function CustomPropertyFormDialog({ isOpen, onOpenChange, onSubmi
       await onSubmit(customProperty);
       onOpenChange(false);
       toast({
-        title: 'Success',
-        description: initial ? 'Custom property updated' : 'Custom property added',
+        title: t('common:toast.success'),
+        description: initial ? t('data-products:customProperty.successUpdated') : t('data-products:customProperty.successAdded'),
       });
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save custom property',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-products:customProperty.saveError'),
         variant: 'destructive',
       });
     } finally {
@@ -92,52 +94,52 @@ export default function CustomPropertyFormDialog({ isOpen, onOpenChange, onSubmi
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Custom Property' : 'Add Custom Property'}</DialogTitle>
+          <DialogTitle>{initial ? t('data-products:customProperty.editTitle') : t('data-products:customProperty.addTitle')}</DialogTitle>
           <DialogDescription>
-            Add custom metadata to extend the ODPS v1.0.0 data product schema.
+            {t('data-products:customProperty.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="property">
-              Property Name <span className="text-destructive">*</span>
+              {t('data-products:customProperty.propertyNameLabel')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="property"
               value={property}
               onChange={(e) => setProperty(e.target.value)}
-              placeholder="e.g., internalId, deploymentRegion"
+              placeholder={t('data-products:customProperty.propertyNamePlaceholder')}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              Must be in camelCase (ODPS requirement)
+              {t('data-products:customProperty.propertyNameHint')}
             </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="value">
-              Property Value <span className="text-destructive">*</span>
+              {t('data-products:customProperty.propertyValueLabel')} <span className="text-destructive">*</span>
             </Label>
             <Textarea
               id="value"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder='Simple text or JSON: {"key": "value"}'
+              placeholder={t('data-products:customProperty.propertyValuePlaceholder')}
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
-              Can be any type: string, number, boolean, object, or array. JSON values will be parsed automatically.
+              {t('data-products:customProperty.propertyValueHint')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('common:labels.description')}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Explain the purpose of this custom property"
+              placeholder={t('data-products:customProperty.descriptionPlaceholder')}
               rows={2}
             />
           </div>
@@ -145,10 +147,10 @@ export default function CustomPropertyFormDialog({ isOpen, onOpenChange, onSubmi
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : initial ? 'Save Changes' : 'Add Property'}
+            {isSubmitting ? t('common:actions.saving') : initial ? t('common:actions.saveChanges') : t('data-products:customProperty.addButton')}
           </Button>
         </DialogFooter>
       </DialogContent>

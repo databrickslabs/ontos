@@ -1,0 +1,73 @@
+{
+  "trigger": {
+    "button": "Opmerkingen"
+  },
+  "timeline": {
+    "heading": "Activiteitentijdlijn",
+    "edited": "(bewerkt)",
+    "loadError": "Laden van tijdlijn mislukt: {{error}}"
+  },
+  "project": {
+    "label": "Project: {{name}}",
+    "noContext": "Geen projectcontext (globaal)"
+  },
+  "filter": {
+    "label": "Filter:",
+    "comments": "Opmerkingen",
+    "changes": "Wijzigingen"
+  },
+  "actions": {
+    "addComment": "Opmerking toevoegen"
+  },
+  "form": {
+    "titleLabel": "Titel (optioneel)",
+    "titlePlaceholder": "Voeg een titel toe voor deze opmerking...",
+    "commentLabel": "Opmerking",
+    "commentPlaceholder": "Schrijf uw opmerking...",
+    "postInProject": "Plaatsen in project",
+    "projectOverrideTooltip": "U plaatst onder een ander project dan de hoofdweergave. De tijdlijnlijst blijft ongewijzigd.",
+    "globalNoProject": "Globaal (geen project)",
+    "audienceHelp": "Richt op specifieke teams of rollen (optioneel). Laat leeg voor zichtbaarheid voor alle projectleden.",
+    "teamsLabel": "Teams",
+    "noTeams": "Geen teams beschikbaar in huidig project",
+    "appRolesLabel": "App-rollen",
+    "usersGroupsLabel": "Gebruikers en groepen",
+    "principalsPlaceholder": "Gebruikers of groepen toevoegen…",
+    "principalsAria": "Doelgroep gebruikers en groepen",
+    "post": "Plaatsen"
+  },
+  "badge": {
+    "team": "Team: {{name}}",
+    "role": "Rol: {{name}}"
+  },
+  "change": {
+    "requesterLabel": "Aanvrager:",
+    "decisionLabel": "Beslissing:",
+    "messageLabel": "Bericht:",
+    "iriLabel": "IRI:",
+    "linkIdLabel": "Koppelings-ID:",
+    "operationLabel": "Bewerking:",
+    "operationLinked": "gekoppeld",
+    "operationUnlinked": "ontkoppeld"
+  },
+  "validation": {
+    "commentRequired": "Inhoud van opmerking is vereist"
+  },
+  "confirmDelete": "Weet u zeker dat u deze opmerking wilt verwijderen?",
+  "toast": {
+    "createSuccess": "Opmerking succesvol aangemaakt",
+    "createError": "Aanmaken van opmerking mislukt: {{error}}",
+    "updateSuccess": "Opmerking succesvol bijgewerkt",
+    "updateError": "Bijwerken van opmerking mislukt: {{error}}",
+    "deleteSuccess": "Opmerking succesvol verwijderd",
+    "deleteError": "Verwijderen van opmerking mislukt: {{error}}"
+  },
+  "empty": {
+    "commentsTitle": "Nog geen opmerkingen",
+    "commentsSubtitle": "Wees de eerste om een opmerking toe te voegen!",
+    "changesTitle": "Geen wijzigingen geregistreerd",
+    "changesSubtitle": "Wijzigingen verschijnen hier wanneer ze plaatsvinden",
+    "allTitle": "Nog geen activiteit",
+    "allSubtitle": "Opmerkingen en wijzigingen verschijnen hier"
+  }
+}

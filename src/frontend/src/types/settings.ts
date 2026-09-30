@@ -77,6 +77,8 @@ export interface AppRole {
     name: string;
     description?: string | null;
     assigned_groups: string[];
+    /** Individual users (by email) assigned to this role, parallel to assigned_groups (#196/#760). */
+    assigned_users?: string[];
     feature_permissions: Record<string, FeatureAccessLevel>;
     home_sections?: HomeSection[];
     approval_privileges?: ApprovalPrivileges;

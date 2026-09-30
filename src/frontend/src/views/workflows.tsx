@@ -102,7 +102,7 @@ const getStatusBadge = (status: ExecutionStatus) => {
 };
 
 export default function Workflows() {
-  const { t } = useTranslation(['common']);
+  const { t } = useTranslation(['workflows', 'common']);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -155,7 +155,7 @@ export default function Workflows() {
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to load workflows',
+        description: t('workflows:view.messages.loadFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -202,8 +202,8 @@ export default function Workflows() {
   const handleToggleWorkflowActive = async (workflow: ProcessWorkflow) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to modify workflows.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.modifyWorkflows'),
         variant: 'destructive',
       });
       return;
@@ -220,13 +220,15 @@ export default function Workflows() {
         );
         toast({
           title: t('common:toast.success'),
-          description: `Workflow ${response.data.is_active ? 'enabled' : 'disabled'}`,
+          description: response.data.is_active
+            ? t('workflows:view.messages.workflowEnabled')
+            : t('workflows:view.messages.workflowDisabled'),
         });
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to update workflow status',
+        description: t('workflows:view.messages.updateStatusFailed'),
         variant: 'destructive',
       });
     }
@@ -245,7 +247,7 @@ export default function Workflows() {
         setWorkflows(prev => [...prev, response.data!]);
         toast({
           title: t('common:toast.success'),
-          description: 'Workflow duplicated successfully',
+          description: t('workflows:view.messages.duplicateSuccess'),
         });
         setDuplicateDialogOpen(false);
         setDuplicatingWorkflow(null);
@@ -254,7 +256,7 @@ export default function Workflows() {
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to duplicate workflow',
+        description: t('workflows:view.messages.duplicateFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -265,8 +267,8 @@ export default function Workflows() {
   const handleDeleteWorkflow = async (workflow: ProcessWorkflow) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to delete workflows.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.deleteWorkflows'),
         variant: 'destructive',
       });
       return;
@@ -274,8 +276,8 @@ export default function Workflows() {
     
     if (workflow.is_default) {
       toast({
-        title: 'Cannot Delete',
-        description: 'Default workflows cannot be deleted. Disable them instead.',
+        title: t('workflows:view.messages.cannotDelete'),
+        description: t('workflows:view.messages.cannotDeleteDefault'),
         variant: 'destructive',
       });
       return;
@@ -286,12 +288,12 @@ export default function Workflows() {
       setWorkflows(prev => prev.filter(w => w.id !== workflow.id));
       toast({
         title: t('common:toast.success'),
-        description: 'Workflow deleted',
+        description: t('workflows:view.messages.deleteSuccess'),
       });
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to delete workflow',
+        description: t('workflows:view.messages.deleteFailed'),
         variant: 'destructive',
       });
     }
@@ -304,8 +306,8 @@ export default function Workflows() {
   const handleLoadDefaultWorkflows = async (updateExisting: boolean = false) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to load default workflows.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.loadDefaults'),
         variant: 'destructive',
       });
       return;
@@ -326,7 +328,7 @@ export default function Workflows() {
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to load default workflows',
+        description: t('workflows:view.messages.loadDefaultsFailed'),
         variant: 'destructive',
       });
     }
@@ -336,8 +338,8 @@ export default function Workflows() {
   const handleCancelExecution = async (execution: WorkflowExecution) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to cancel executions.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.cancelExecutions'),
         variant: 'destructive',
       });
       return;
@@ -349,14 +351,14 @@ export default function Workflows() {
       if (response.data) {
         toast({
           title: t('common:toast.success'),
-          description: 'Execution cancelled successfully',
+          description: t('workflows:view.messages.cancelSuccess'),
         });
         loadExecutions();
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to cancel execution',
+        description: t('workflows:view.messages.cancelFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -367,8 +369,8 @@ export default function Workflows() {
   const handleRetryExecution = async (execution: WorkflowExecution) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to retry executions.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.retryExecutions'),
         variant: 'destructive',
       });
       return;
@@ -380,14 +382,14 @@ export default function Workflows() {
       if (response.data) {
         toast({
           title: t('common:toast.success'),
-          description: 'Execution retry started',
+          description: t('workflows:view.messages.retryStarted'),
         });
         loadExecutions();
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to retry execution',
+        description: t('workflows:view.messages.retryFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -403,7 +405,7 @@ export default function Workflows() {
       await apiDeleteApi(`/api/workflows/executions/${executionToDelete.id}`);
       toast({
         title: t('common:toast.success'),
-        description: 'Execution deleted successfully',
+        description: t('workflows:view.messages.executionDeleteSuccess'),
       });
       setDeleteExecutionDialogOpen(false);
       setExecutionToDelete(null);
@@ -411,7 +413,7 @@ export default function Workflows() {
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to delete execution',
+        description: t('workflows:view.messages.executionDeleteFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -428,8 +430,8 @@ export default function Workflows() {
   const handleForceApprove = async (execution: WorkflowExecution) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to override workflow approvals.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.overrideApprovals'),
         variant: 'destructive',
       });
       return;
@@ -439,19 +441,19 @@ export default function Workflows() {
     try {
       const response = await apiPost<{ message: string }>(
         `/api/workflows/executions/${execution.id}/resume`,
-        { approved: true, message: 'Force approved by administrator' }
+        { approved: true, message: t('workflows:view.messages.forceApprovedByAdmin') }
       );
       if (response.data) {
         toast({
           title: t('common:toast.success'),
-          description: 'Workflow approved and resumed',
+          description: t('workflows:view.messages.approveResumeSuccess'),
         });
         loadExecutions();
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to approve workflow',
+        description: t('workflows:view.messages.approveFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -462,8 +464,8 @@ export default function Workflows() {
   const handleForceReject = async (execution: WorkflowExecution) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to override workflow approvals.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.overrideApprovals'),
         variant: 'destructive',
       });
       return;
@@ -473,19 +475,19 @@ export default function Workflows() {
     try {
       const response = await apiPost<{ message: string }>(
         `/api/workflows/executions/${execution.id}/resume`,
-        { approved: false, message: 'Force rejected by administrator' }
+        { approved: false, message: t('workflows:view.messages.forceRejectedByAdmin') }
       );
       if (response.data) {
         toast({
           title: t('common:toast.success'),
-          description: 'Workflow rejected and resumed',
+          description: t('workflows:view.messages.rejectResumeSuccess'),
         });
         loadExecutions();
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to reject workflow',
+        description: t('workflows:view.messages.rejectFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -497,8 +499,8 @@ export default function Workflows() {
   const handleBulkToggleWorkflows = async (workflows: ProcessWorkflow[], enable: boolean) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to modify workflows.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.modifyWorkflows'),
         variant: 'destructive',
       });
       return;
@@ -507,8 +509,10 @@ export default function Workflows() {
     const toUpdate = workflows.filter(w => w.is_active !== enable);
     if (toUpdate.length === 0) {
       toast({
-        title: 'No Changes',
-        description: `All selected workflows are already ${enable ? 'enabled' : 'disabled'}.`,
+        title: t('workflows:view.messages.noChanges'),
+        description: enable
+          ? t('workflows:view.messages.allAlreadyEnabled')
+          : t('workflows:view.messages.allAlreadyDisabled'),
       });
       return;
     }
@@ -525,21 +529,23 @@ export default function Workflows() {
       if (successes > 0) {
         toast({
           title: t('common:toast.success'),
-          description: `${successes} workflow(s) ${enable ? 'enabled' : 'disabled'}.`,
+          description: enable
+            ? t('workflows:view.messages.workflowsEnabled', { count: successes })
+            : t('workflows:view.messages.workflowsDisabled', { count: successes }),
         });
         loadWorkflows();
       }
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: `${failures} workflow(s) failed to update.`,
+          description: t('workflows:view.messages.workflowsFailedUpdate', { count: failures }),
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to update workflows',
+        description: t('workflows:view.messages.updateWorkflowsFailed'),
         variant: 'destructive',
       });
     }
@@ -548,8 +554,8 @@ export default function Workflows() {
   const handleBulkDeleteWorkflows = async (workflows: ProcessWorkflow[]) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to delete workflows.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.deleteWorkflows'),
         variant: 'destructive',
       });
       return;
@@ -560,14 +566,14 @@ export default function Workflows() {
 
     if (deletable.length === 0) {
       toast({
-        title: 'Cannot Delete',
-        description: 'All selected workflows are defaults and cannot be deleted.',
+        title: t('workflows:view.messages.cannotDelete'),
+        description: t('workflows:view.messages.allDefaultsCannotDelete'),
         variant: 'destructive',
       });
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${deletable.length} workflow(s)?${skipped > 0 ? ` (${skipped} default workflow(s) will be skipped)` : ''}`)) {
+    if (!confirm(`${t('workflows:view.confirm.deleteWorkflows', { count: deletable.length })}${skipped > 0 ? t('workflows:view.confirm.deleteWorkflowsSkipped', { count: skipped }) : ''}`)) {
       return;
     }
 
@@ -581,21 +587,21 @@ export default function Workflows() {
       if (successes > 0) {
         toast({
           title: t('common:toast.success'),
-          description: `${successes} workflow(s) deleted.`,
+          description: t('workflows:view.messages.workflowsDeleted', { count: successes }),
         });
         loadWorkflows();
       }
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: `${failures} workflow(s) failed to delete.`,
+          description: t('workflows:view.messages.workflowsFailedDelete', { count: failures }),
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to delete workflows',
+        description: t('workflows:view.messages.deleteWorkflowsFailed'),
         variant: 'destructive',
       });
     }
@@ -605,8 +611,8 @@ export default function Workflows() {
   const handleBulkCancelExecutions = async (executions: WorkflowExecution[]) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to cancel executions.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.cancelExecutions'),
         variant: 'destructive',
       });
       return;
@@ -615,8 +621,8 @@ export default function Workflows() {
     const cancellable = executions.filter(e => e.status === 'running' || e.status === 'paused');
     if (cancellable.length === 0) {
       toast({
-        title: 'No Cancellable Executions',
-        description: 'None of the selected executions can be cancelled.',
+        title: t('workflows:view.messages.noCancellable'),
+        description: t('workflows:view.messages.noCancellableDesc'),
       });
       return;
     }
@@ -631,21 +637,21 @@ export default function Workflows() {
       if (successes > 0) {
         toast({
           title: t('common:toast.success'),
-          description: `${successes} execution(s) cancelled.`,
+          description: t('workflows:view.messages.executionsCancelled', { count: successes }),
         });
         loadExecutions();
       }
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: `${failures} execution(s) failed to cancel.`,
+          description: t('workflows:view.messages.executionsFailedCancel', { count: failures }),
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to cancel executions',
+        description: t('workflows:view.messages.cancelExecutionsFailed'),
         variant: 'destructive',
       });
     }
@@ -654,8 +660,8 @@ export default function Workflows() {
   const handleBulkRetryExecutions = async (executions: WorkflowExecution[]) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to retry executions.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.retryExecutions'),
         variant: 'destructive',
       });
       return;
@@ -664,8 +670,8 @@ export default function Workflows() {
     const retriable = executions.filter(e => e.status === 'failed' || e.status === 'cancelled');
     if (retriable.length === 0) {
       toast({
-        title: 'No Retriable Executions',
-        description: 'None of the selected executions can be retried.',
+        title: t('workflows:view.messages.noRetriable'),
+        description: t('workflows:view.messages.noRetriableDesc'),
       });
       return;
     }
@@ -680,21 +686,21 @@ export default function Workflows() {
       if (successes > 0) {
         toast({
           title: t('common:toast.success'),
-          description: `${successes} execution(s) retry started.`,
+          description: t('workflows:view.messages.executionsRetryStarted', { count: successes }),
         });
         loadExecutions();
       }
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: `${failures} execution(s) failed to retry.`,
+          description: t('workflows:view.messages.executionsFailedRetry', { count: failures }),
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to retry executions',
+        description: t('workflows:view.messages.retryExecutionsFailed'),
         variant: 'destructive',
       });
     }
@@ -703,8 +709,8 @@ export default function Workflows() {
   const handleBulkDeleteExecutions = async (executions: WorkflowExecution[]) => {
     if (!canEdit) {
       toast({
-        title: 'Permission Denied',
-        description: 'You do not have permission to delete executions.',
+        title: t('workflows:view.permission.denied'),
+        description: t('workflows:view.permission.deleteExecutions'),
         variant: 'destructive',
       });
       return;
@@ -715,14 +721,14 @@ export default function Workflows() {
 
     if (deletable.length === 0) {
       toast({
-        title: 'Cannot Delete',
-        description: 'Running or paused executions cannot be deleted.',
+        title: t('workflows:view.messages.cannotDelete'),
+        description: t('workflows:view.messages.runningCannotDelete'),
         variant: 'destructive',
       });
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${deletable.length} execution(s)?${skipped > 0 ? ` (${skipped} running/paused execution(s) will be skipped)` : ''}`)) {
+    if (!confirm(`${t('workflows:view.confirm.deleteExecutions', { count: deletable.length })}${skipped > 0 ? t('workflows:view.confirm.deleteExecutionsSkipped', { count: skipped }) : ''}`)) {
       return;
     }
 
@@ -736,21 +742,21 @@ export default function Workflows() {
       if (successes > 0) {
         toast({
           title: t('common:toast.success'),
-          description: `${successes} execution(s) deleted.`,
+          description: t('workflows:view.messages.executionsDeleted', { count: successes }),
         });
         loadExecutions();
       }
       if (failures > 0) {
         toast({
           title: t('common:toast.error'),
-          description: `${failures} execution(s) failed to delete.`,
+          description: t('workflows:view.messages.executionsFailedDelete', { count: failures }),
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
         title: t('common:toast.error'),
-        description: 'Failed to delete executions',
+        description: t('workflows:view.messages.deleteExecutionsFailed'),
         variant: 'destructive',
       });
     }
@@ -775,12 +781,12 @@ export default function Workflows() {
             {row.original.name}
           </button>
           {row.original.is_default && (
-            <Badge variant="secondary" className="text-xs">Default</Badge>
+            <Badge variant="secondary" className="text-xs">{t('workflows:view.badges.default')}</Badge>
           )}
           {row.original.workflow_type === 'approval' ? (
-            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Approval</Badge>
+            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{t('workflows:view.badges.approval')}</Badge>
           ) : (
-            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">Process</Badge>
+            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">{t('workflows:view.badges.process')}</Badge>
           )}
         </div>
       ),
@@ -801,7 +807,7 @@ export default function Workflows() {
     },
     {
       accessorKey: 'steps',
-      header: 'Steps',
+      header: t('workflows:view.columns.steps'),
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
@@ -858,18 +864,18 @@ export default function Workflows() {
             {row.original.workflow_type === 'approval' && (
               <DropdownMenuItem onClick={() => setPreviewingWorkflow(row.original)}>
                 <Eye className="h-4 w-4 mr-2" />
-                Preview wizard
+                {t('workflows:view.actions.previewWizard')}
               </DropdownMenuItem>
             )}
             {canEdit && (
               <>
                 <DropdownMenuItem onClick={() => {
                   setDuplicatingWorkflow(row.original);
-                  setDuplicateName(`${row.original.name} (Copy)`);
+                  setDuplicateName(t('workflows:view.copyNameSuffix', { name: row.original.name }));
                   setDuplicateDialogOpen(true);
                 }}>
                   <Copy className="h-4 w-4 mr-2" />
-                  Duplicate
+                  {t('workflows:view.actions.duplicate')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -893,7 +899,7 @@ export default function Workflows() {
       accessorKey: 'workflow_name',
       header: ({ column }: { column: Column<WorkflowExecution, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Workflow
+          {t('workflows:view.columns.workflow')}
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -905,9 +911,9 @@ export default function Workflows() {
             <GitBranch className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium">{row.original.workflow_name}</span>
             {wfType === 'approval' ? (
-              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">Approval</Badge>
+              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">{t('workflows:view.badges.approval')}</Badge>
             ) : (
-              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">Process</Badge>
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">{t('workflows:view.badges.process')}</Badge>
             )}
           </div>
         );
@@ -915,7 +921,7 @@ export default function Workflows() {
     },
     {
       accessorKey: 'entity_name',
-      header: 'Entity',
+      header: t('workflows:view.columns.entity'),
       enableSorting: false,
       cell: ({ row }) => {
         const { entity_type, entity_name, entity_id } = row.original;
@@ -942,7 +948,7 @@ export default function Workflows() {
     },
     {
       accessorKey: 'current_step_name',
-      header: 'Current Step',
+      header: t('workflows:view.columns.currentStep'),
       enableSorting: false,
       cell: ({ row }) => {
         const { status, current_step_name, current_step_id } = row.original;
@@ -959,7 +965,7 @@ export default function Workflows() {
       accessorKey: 'started_at',
       header: ({ column }: { column: Column<WorkflowExecution, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Started
+          {t('workflows:view.columns.started')}
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -974,7 +980,7 @@ export default function Workflows() {
       accessorKey: 'finished_at',
       header: ({ column }: { column: Column<WorkflowExecution, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Completed
+          {t('workflows:view.columns.completed')}
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -987,7 +993,7 @@ export default function Workflows() {
     },
     {
       accessorKey: 'error_message',
-      header: 'Error',
+      header: t('workflows:view.columns.error'),
       enableSorting: false,
       cell: ({ row }) => {
         const errorMessage = row.original.error_message;
@@ -1002,7 +1008,7 @@ export default function Workflows() {
                 type="button"
                 className="text-left text-sm text-destructive line-clamp-2 max-w-[280px] hover:underline focus:outline-none focus:ring-1 focus:ring-destructive/40 rounded-sm"
                 onClick={(e) => e.stopPropagation()}
-                title="Click to see full error"
+                title={t('workflows:view.tooltips.clickFullError')}
               >
                 {errorMessage}
               </button>
@@ -1014,19 +1020,19 @@ export default function Workflows() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b px-3 py-2">
-                <span className="text-xs font-medium text-muted-foreground">Error details</span>
+                <span className="text-xs font-medium text-muted-foreground">{t('workflows:view.errorDetails')}</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 text-xs"
                   onClick={() => {
                     void navigator.clipboard?.writeText(errorMessage).then(() => {
-                      toast({ title: 'Copied', description: 'Error copied to clipboard.' });
+                      toast({ title: t('common:copied'), description: t('workflows:view.messages.errorCopied') });
                     });
                   }}
                 >
                   <Copy className="h-3 w-3 mr-1" />
-                  Copy
+                  {t('common:actions.copy')}
                 </Button>
               </div>
               <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap break-words p-3 text-xs text-destructive">
@@ -1060,7 +1066,7 @@ export default function Workflows() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('common:labels.actions')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {isPaused && (
                 <>
@@ -1069,14 +1075,14 @@ export default function Workflows() {
                     disabled={isActionInProgress}
                   >
                     <CheckCircle className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
-                    Force Approve
+                    {t('workflows:view.actions.forceApprove')}
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={() => handleForceReject(execution)}
                     disabled={isActionInProgress}
                   >
                     <XCircle className="h-4 w-4 mr-2 text-red-600 dark:text-red-400" />
-                    Force Reject
+                    {t('workflows:view.actions.forceReject')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -1086,7 +1092,7 @@ export default function Workflows() {
                   disabled={isActionInProgress}
                 >
                   <XCircle className="h-4 w-4 mr-2" />
-                  Cancel
+                  {t('common:actions.cancel')}
                 </DropdownMenuItem>
               )}
               {canRetry && (
@@ -1095,7 +1101,7 @@ export default function Workflows() {
                   disabled={isActionInProgress}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Retry
+                  {t('common:retry')}
                 </DropdownMenuItem>
               )}
               {canDelete && (
@@ -1107,7 +1113,7 @@ export default function Workflows() {
                     disabled={isActionInProgress}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
+                    {t('common:actions.delete')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -1145,14 +1151,14 @@ export default function Workflows() {
     return approvalSessions.map((s): WorkflowExecution => ({
       id: s.id,
       workflow_id: s.workflow_id,
-      workflow_name: s.workflow_name || 'Approval Workflow',
+      workflow_name: s.workflow_name || t('workflows:view.approvalWorkflowFallback'),
       status: s.status === 'completed' ? 'succeeded' : s.status === 'abandoned' ? 'cancelled' : 'running',
       entity_type: s.entity_type,
       entity_id: s.entity_id,
       entity_name: s.entity_id,
       started_at: s.created_at,
       finished_at: s.updated_at,
-      current_step_name: s.status === 'in_progress' ? `Step ${(s.current_step_index || 0) + 1}` : undefined,
+      current_step_name: s.status === 'in_progress' ? t('workflows:view.stepLabel', { number: (s.current_step_index || 0) + 1 }) : undefined,
       success_count: s.status === 'completed' ? 1 : 0,
       failure_count: s.status === 'abandoned' ? 1 : 0,
       step_executions: [],
@@ -1204,7 +1210,7 @@ export default function Workflows() {
               {t('common:labels.workflows', 'Workflows')}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Configure automated workflows for validation, approval, and notifications.
+              {t('workflows:view.subtitle')}
             </p>
           </div>
           {canEdit && (
@@ -1213,25 +1219,25 @@ export default function Workflows() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">
                     <Clock className="h-4 w-4 mr-2" />
-                    Load Defaults
+                    {t('workflows:view.actions.loadDefaults')}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Default Workflows</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t('workflows:view.loadDefaults.menuLabel')}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleLoadDefaultWorkflows(false)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Load New Only
+                    {t('workflows:view.loadDefaults.newOnly')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleLoadDefaultWorkflows(true)}>
                     <RotateCcw className="h-4 w-4 mr-2" />
-                    Reload All Defaults
+                    {t('workflows:view.loadDefaults.reloadAll')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button onClick={() => navigate(`${pathname}/new${workflowTypeFilter !== 'all' ? `?type=${workflowTypeFilter}` : ''}`)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Workflow
+                {t('workflows:view.actions.createWorkflow')}
               </Button>
             </div>
           )}
@@ -1241,13 +1247,13 @@ export default function Workflows() {
             <div className="flex items-center gap-3">
               <TabsList className="h-auto p-1">
                 <TabsTrigger value="all" className="px-4 py-2">
-                  <span>All</span>
+                  <span>{t('common:states.all')}</span>
                 </TabsTrigger>
                 <TabsTrigger value="process" className="px-4 py-2">
-                  <span>Process</span>
+                  <span>{t('workflows:view.badges.process')}</span>
                 </TabsTrigger>
                 <TabsTrigger value="approval" className="px-4 py-2">
-                  <span>Approval</span>
+                  <span>{t('workflows:view.badges.approval')}</span>
                 </TabsTrigger>
               </TabsList>
               <TooltipProvider>
@@ -1257,9 +1263,9 @@ export default function Workflows() {
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-xs">
                     <ul className="text-xs space-y-1 list-disc pl-3">
-                      <li>Process: runs after events (notify, tag, validate)</li>
-                      <li>Approval: pops up before actions (consent, terms)</li>
-                      <li>They chain: approval first, then process</li>
+                      <li>{t('workflows:view.help.process')}</li>
+                      <li>{t('workflows:view.help.approval')}</li>
+                      <li>{t('workflows:view.help.chain')}</li>
                     </ul>
                   </TooltipContent>
                 </Tooltip>
@@ -1276,18 +1282,18 @@ export default function Workflows() {
           onClick={() => setStatsFilter(prev => prev === 'active' ? 'all' : 'active')}
         >
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Active Workflows</CardTitle>
+            <CardTitle className="text-lg">{t('workflows:view.stats.activeWorkflows')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 dark:text-green-400">{activeWorkflows}</div>
             <p className="text-sm text-muted-foreground mt-1">
-              of {totalWorkflows} total
+              {t('workflows:view.stats.ofTotal', { count: totalWorkflows })}
               {totalWorkflows - activeWorkflows > 0 && (
                 <button
                   className="ml-1 text-amber-600 hover:underline"
                   onClick={(e) => { e.stopPropagation(); setStatsFilter(prev => prev === 'inactive' ? 'all' : 'inactive'); }}
                 >
-                  ({totalWorkflows - activeWorkflows} inactive)
+                  {t('workflows:view.stats.inactiveCount', { count: totalWorkflows - activeWorkflows })}
                 </button>
               )}
             </p>
@@ -1298,11 +1304,11 @@ export default function Workflows() {
           onClick={() => setStatsFilter(prev => prev === 'default' ? 'all' : 'default')}
         >
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Default Workflows</CardTitle>
+            <CardTitle className="text-lg">{t('workflows:view.stats.defaultWorkflows')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{typeFilteredWorkflows.filter(w => w.is_default).length}</div>
-            <p className="text-sm text-muted-foreground mt-1">built-in workflows</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('workflows:view.stats.builtInWorkflows')}</p>
           </CardContent>
         </Card>
         <Card
@@ -1310,11 +1316,11 @@ export default function Workflows() {
           onClick={() => setStatsFilter(prev => prev === 'running' ? 'all' : 'running')}
         >
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">In Progress</CardTitle>
+            <CardTitle className="text-lg">{t('workflows:view.stats.inProgress')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600">{runningExecutions}</div>
-            <p className="text-sm text-muted-foreground mt-1">running or paused</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('workflows:view.stats.runningOrPaused')}</p>
           </CardContent>
         </Card>
         <Card
@@ -1322,13 +1328,13 @@ export default function Workflows() {
           onClick={() => setStatsFilter(prev => prev === 'failed' ? 'all' : 'failed')}
         >
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Recent Failures</CardTitle>
+            <CardTitle className="text-lg">{t('workflows:view.stats.recentFailures')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className={`text-3xl font-bold ${recentFailures > 0 ? 'text-red-600' : ''}`}>
               {recentFailures}
             </div>
-            <p className="text-sm text-muted-foreground mt-1">in last 50 runs</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('workflows:view.stats.inLast50Runs')}</p>
           </CardContent>
         </Card>
       </div>
@@ -1337,10 +1343,10 @@ export default function Workflows() {
       {statsFilter !== 'all' && (
         <div className="flex items-center gap-2 mb-4">
           <Badge variant="outline" className="text-sm">
-            Filtered: {statsFilter === 'active' ? 'Active workflows' : statsFilter === 'inactive' ? 'Inactive workflows' : statsFilter === 'default' ? 'Default workflows' : statsFilter === 'running' ? 'Running executions' : 'Failed executions'}
+            {t('workflows:view.filter.label', { filter: statsFilter === 'active' ? t('workflows:view.filter.active') : statsFilter === 'inactive' ? t('workflows:view.filter.inactive') : statsFilter === 'default' ? t('workflows:view.filter.default') : statsFilter === 'running' ? t('workflows:view.filter.running') : t('workflows:view.filter.failed') })}
           </Badge>
           <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setStatsFilter('all')}>
-            Clear filter
+            {t('workflows:view.filter.clear')}
           </button>
         </div>
       )}
@@ -1351,12 +1357,12 @@ export default function Workflows() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <GitBranch className="h-5 w-5" />
-              Workflow Definitions
+              {t('workflows:view.sections.definitionsTitle')}
             </CardTitle>
             <CardDescription>
-              Configure automated workflows for validation, approval, and notifications.
+              {t('workflows:view.subtitle')}
               {!canEdit && (
-                <span className="text-yellow-600 ml-2">(Read-only access)</span>
+                <span className="text-yellow-600 ml-2">{t('workflows:view.readOnlyAccess')}</span>
               )}
             </CardDescription>
           </div>
@@ -1367,9 +1373,9 @@ export default function Workflows() {
           ) : workflows.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <GitBranch className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>No workflows configured yet.</p>
+              <p>{t('workflows:view.empty.noWorkflows')}</p>
               {canEdit && (
-                <p className="text-sm">Click "Load Defaults" to get started with default workflows.</p>
+                <p className="text-sm">{t('workflows:view.empty.noWorkflowsHint')}</p>
               )}
             </div>
           ) : (
@@ -1387,7 +1393,7 @@ export default function Workflows() {
                     onClick={() => handleBulkToggleWorkflows(selectedRows, true)}
                   >
                     <Power className="w-4 h-4 mr-1" />
-                    Enable ({selectedRows.length})
+                    {t('workflows:view.bulk.enable', { count: selectedRows.length })}
                   </Button>
                   <Button
                     variant="outline"
@@ -1396,7 +1402,7 @@ export default function Workflows() {
                     onClick={() => handleBulkToggleWorkflows(selectedRows, false)}
                   >
                     <PowerOff className="w-4 h-4 mr-1" />
-                    Disable ({selectedRows.length})
+                    {t('workflows:view.bulk.disable', { count: selectedRows.length })}
                   </Button>
                   <Button
                     variant="destructive"
@@ -1405,7 +1411,7 @@ export default function Workflows() {
                     onClick={() => handleBulkDeleteWorkflows(selectedRows)}
                   >
                     <Trash2 className="w-4 h-4 mr-1" />
-                    Delete ({selectedRows.length})
+                    {t('workflows:view.bulk.delete', { count: selectedRows.length })}
                   </Button>
                 </>
               ) : undefined}
@@ -1420,10 +1426,10 @@ export default function Workflows() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Play className="h-5 w-5" />
-              Recent Executions
+              {t('workflows:view.sections.executionsTitle')}
             </CardTitle>
             <CardDescription>
-              Monitor workflow executions and their status.
+              {t('workflows:view.sections.executionsDescription')}
             </CardDescription>
           </div>
         </CardHeader>
@@ -1433,8 +1439,8 @@ export default function Workflows() {
           ) : executions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Play className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>No workflow executions yet.</p>
-              <p className="text-sm">Executions will appear here when workflows are triggered.</p>
+              <p>{t('workflows:view.empty.noExecutions')}</p>
+              <p className="text-sm">{t('workflows:view.empty.noExecutionsHint')}</p>
             </div>
           ) : (
             <DataTable
@@ -1455,7 +1461,7 @@ export default function Workflows() {
                     onClick={() => handleBulkCancelExecutions(selectedRows)}
                   >
                     <XCircle className="w-4 h-4 mr-1" />
-                    Cancel ({selectedRows.filter(e => e.status === 'running' || e.status === 'paused').length})
+                    {t('workflows:view.bulk.cancel', { count: selectedRows.filter(e => e.status === 'running' || e.status === 'paused').length })}
                   </Button>
                   <Button
                     variant="outline"
@@ -1464,7 +1470,7 @@ export default function Workflows() {
                     onClick={() => handleBulkRetryExecutions(selectedRows)}
                   >
                     <RotateCcw className="w-4 h-4 mr-1" />
-                    Retry ({selectedRows.filter(e => e.status === 'failed' || e.status === 'cancelled').length})
+                    {t('workflows:view.bulk.retry', { count: selectedRows.filter(e => e.status === 'failed' || e.status === 'cancelled').length })}
                   </Button>
                   <Button
                     variant="destructive"
@@ -1473,7 +1479,7 @@ export default function Workflows() {
                     onClick={() => handleBulkDeleteExecutions(selectedRows)}
                   >
                     <Trash2 className="w-4 h-4 mr-1" />
-                    Delete ({selectedRows.filter(e => e.status !== 'running' && e.status !== 'paused').length})
+                    {t('workflows:view.bulk.delete', { count: selectedRows.filter(e => e.status !== 'running' && e.status !== 'paused').length })}
                   </Button>
                 </>
               ) : undefined}
@@ -1488,14 +1494,14 @@ export default function Workflows() {
       <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Duplicate Workflow</DialogTitle>
+            <DialogTitle>{t('workflows:view.dialogs.duplicateTitle')}</DialogTitle>
             <DialogDescription>
-              Create a copy of "{duplicatingWorkflow?.name}" with a new name.
+              {t('workflows:view.dialogs.duplicateDescription', { name: duplicatingWorkflow?.name })}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Input
-              placeholder="New workflow name"
+              placeholder={t('workflows:view.placeholders.newWorkflowName')}
               value={duplicateName}
               onChange={(e) => setDuplicateName(e.target.value)}
             />
@@ -1506,7 +1512,7 @@ export default function Workflows() {
             </Button>
             <Button onClick={handleDuplicateWorkflow} disabled={isDuplicating || !duplicateName.trim()}>
               {isDuplicating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Duplicate
+              {t('workflows:view.actions.duplicate')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1538,24 +1544,24 @@ export default function Workflows() {
       <Dialog open={deleteExecutionDialogOpen} onOpenChange={setDeleteExecutionDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Execution</DialogTitle>
+            <DialogTitle>{t('workflows:view.dialogs.deleteExecutionTitle')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this workflow execution? This action cannot be undone.
+              {t('workflows:view.dialogs.deleteExecutionDescription')}
             </DialogDescription>
           </DialogHeader>
           {executionToDelete && (
             <div className="py-4 space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Workflow:</span>
+                <span className="text-sm font-medium">{t('workflows:view.detail.workflow')}</span>
                 <span className="text-sm text-muted-foreground">{executionToDelete.workflow_name}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Status:</span>
+                <span className="text-sm font-medium">{t('workflows:view.detail.status')}</span>
                 {getStatusBadge(executionToDelete.status)}
               </div>
               {executionToDelete.entity_name && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Entity:</span>
+                  <span className="text-sm font-medium">{t('workflows:view.detail.entity')}</span>
                   <span className="text-sm text-muted-foreground">{executionToDelete.entity_name}</span>
                 </div>
               )}
@@ -1571,7 +1577,7 @@ export default function Workflows() {
               disabled={isActionInProgress}
             >
               {isActionInProgress && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Delete
+              {t('common:actions.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

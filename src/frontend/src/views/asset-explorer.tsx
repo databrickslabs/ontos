@@ -83,7 +83,7 @@ export default function AssetExplorerView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { get: apiGet, delete: apiDelete, loading: apiIsLoading } = useApi();
   const { toast } = useToast();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation(['assets', 'common']);
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
@@ -124,8 +124,8 @@ export default function AssetExplorerView() {
         }
       }
     } catch (err: any) {
-      setComponentError(err.message || 'Failed to load asset types');
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
+      setComponentError(err.message || t('assets:explorer.loadTypesError'));
+      toast({ variant: 'destructive', title: t('common:states.error'), description: err.message });
     }
   }, [canRead, permissionsLoading, apiGet, toast, searchParams, selectedTypeId]);
 
@@ -151,7 +151,7 @@ export default function AssetExplorerView() {
     } catch (err: any) {
       setAssets([]);
       setAssetsTotal(0);
-      toast({ variant: 'destructive', title: 'Error loading assets', description: err.message });
+      toast({ variant: 'destructive', title: t('assets:explorer.errorLoadingAssets'), description: err.message });
     } finally {
       setAssetsLoading(false);
     }
@@ -177,7 +177,7 @@ export default function AssetExplorerView() {
     fetchAssetTypes();
     fetchOntologyTypes();
     setStaticSegments([]);
-    setDynamicTitle('Asset Explorer');
+    setDynamicTitle(t('assets:explorer.title'));
     return () => { setStaticSegments([]); setDynamicTitle(null); };
   }, [fetchAssetTypes, fetchOntologyTypes, setStaticSegments, setDynamicTitle]);
 
@@ -225,7 +225,7 @@ export default function AssetExplorerView() {
 
   const openDeleteDialog = (id: string) => {
     if (!canAdmin) {
-      toast({ variant: 'destructive', title: 'Permission denied', description: 'Admin access required to delete assets' });
+      toast({ variant: 'destructive', title: t('common:errors.permissionDenied'), description: t('assets:explorer.adminRequiredDelete') });
       return;
     }
     setDeletingId(id);
@@ -234,12 +234,12 @@ export default function AssetExplorerView() {
 
   const handleBulkDelete = async (selectedRows: AssetRead[]) => {
     if (!canAdmin) {
-      toast({ variant: 'destructive', title: 'Permission denied', description: 'Admin access required to delete assets' });
+      toast({ variant: 'destructive', title: t('common:errors.permissionDenied'), description: t('assets:explorer.adminRequiredDelete') });
       return;
     }
     const selectedIds = selectedRows.map(r => r.id).filter((id): id is string => !!id);
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} asset(s)? This action cannot be undone.`)) return;
+    if (!confirm(t('assets:explorer.confirmBulkDelete', { count: selectedIds.length }))) return;
 
     const results = await Promise.allSettled(selectedIds.map(async (id) => {
       const response = await apiDelete(`/api/assets/${id}`);
@@ -251,11 +251,11 @@ export default function AssetExplorerView() {
     const failures = results.filter(r => r.status === 'rejected').length;
 
     if (successes > 0) {
-      toast({ title: 'Assets deleted', description: `Successfully deleted ${successes} asset(s).` });
+      toast({ title: t('assets:explorer.assetsDeletedTitle'), description: t('assets:explorer.deletedCount', { count: successes }) });
     }
     if (failures > 0) {
-      const firstError = (results.find(r => r.status === 'rejected') as PromiseRejectedResult)?.reason?.message || 'Unknown error';
-      toast({ variant: 'destructive', title: 'Some deletions failed', description: `${failures} asset(s) failed to delete: ${firstError}` });
+      const firstError = (results.find(r => r.status === 'rejected') as PromiseRejectedResult)?.reason?.message || t('common:errors.unknownError');
+      toast({ variant: 'destructive', title: t('assets:explorer.someFailedTitle'), description: t('assets:explorer.failedCountDetail', { count: failures, error: firstError }) });
     }
     setRowSelection({});
     fetchAssets(selectedTypeId, pagination, debouncedNameFilter);
@@ -268,7 +268,7 @@ export default function AssetExplorerView() {
       accessorKey: 'name',
       header: ({ column }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Name <ChevronDown className="ml-2 h-4 w-4" />
+          {t('common:labels.name')} <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => (
@@ -282,7 +282,7 @@ export default function AssetExplorerView() {
                 if (row.original.parent_id) navigate(`/assets/${row.original.parent_id}`);
               }}
             >
-              in {row.original.parent_name}
+              {t('assets:explorer.inParent', { parent: row.original.parent_name })}
             </div>
           )}
           {!row.original.parent_name && row.original.description && (
@@ -293,7 +293,7 @@ export default function AssetExplorerView() {
     },
     ...(!selectedTypeId ? [{
       accessorKey: 'asset_type_name',
-      header: 'Type',
+      header: t('common:labels.type'),
       cell: ({ row }: { row: any }) => (
         <Badge variant="outline" className="text-xs">
           {row.original.asset_type_name || '-'}
@@ -302,14 +302,14 @@ export default function AssetExplorerView() {
     } as ColumnDef<AssetRead>] : []),
     {
       accessorKey: 'platform',
-      header: 'Platform',
+      header: t('assets:table.platform'),
       cell: ({ row }) => row.original.platform
         ? <Badge variant="outline">{row.original.platform}</Badge>
         : <span className="text-muted-foreground">-</span>,
     },
     {
       accessorKey: 'location',
-      header: 'Location',
+      header: t('assets:table.location'),
       cell: ({ row }) => (
         <div className="truncate max-w-xs text-sm text-muted-foreground font-mono">
           {row.original.location || '-'}
@@ -318,7 +318,7 @@ export default function AssetExplorerView() {
     },
     {
       accessorKey: 'status',
-      header: 'Status',
+      header: t('common:labels.status'),
       cell: ({ row }) => (
         <Badge variant={STATUS_VARIANT[row.original.status] ?? 'outline'}>
           {row.original.status}
@@ -327,7 +327,7 @@ export default function AssetExplorerView() {
     },
     {
       id: 'tags',
-      header: 'Tags',
+      header: t('common:labels.tags'),
       cell: ({ row }) => {
         const tags = row.original.tags;
         if (!tags || tags.length === 0) return <span className="text-muted-foreground">-</span>;
@@ -360,7 +360,7 @@ export default function AssetExplorerView() {
       accessorKey: 'updated_at',
       header: ({ column }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-          Updated <ChevronDown className="ml-2 h-4 w-4" />
+          {t('common:labels.updated')} <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => row.original.updated_at
@@ -379,22 +379,22 @@ export default function AssetExplorerView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('common:labels.actions')}</DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={() => navigate(`/assets/${row.original.id}`)}
               >
-                View details
+                {t('assets:explorer.viewDetails')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => { setPreviewAssetId(row.original.id ?? null); setPreviewAssetTitle(row.original.name ?? ''); }}
               >
-                <Eye className="mr-2 h-4 w-4" /> Preview metadata
+                <Eye className="mr-2 h-4 w-4" /> {t('assets:explorer.previewMetadata')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!canWrite}
                 onClick={() => { setEditingAsset(row.original); setIsFormOpen(true); }}
               >
-                Edit
+                {t('common:actions.edit')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -402,7 +402,7 @@ export default function AssetExplorerView() {
                 className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:bg-red-950"
                 disabled={!canAdmin}
               >
-                Delete
+                {t('common:actions.delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -433,8 +433,8 @@ export default function AssetExplorerView() {
       <div className="py-6">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Permission Denied</AlertTitle>
-          <AlertDescription>You don't have access to view assets.</AlertDescription>
+          <AlertTitle>{t('assets:permissions.permissionDenied')}</AlertTitle>
+          <AlertDescription>{t('assets:explorer.noAccessView')}</AlertDescription>
         </Alert>
       </div>
     );
@@ -445,17 +445,17 @@ export default function AssetExplorerView() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Box className="w-8 h-8" />
-          Asset Explorer
+          {t('assets:explorer.title')}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Browse and manage all governed assets across {visibleAssetTypes.length} types ({totalAssetCount} total assets)
+          {t('assets:explorer.subtitle', { types: visibleAssetTypes.length, count: totalAssetCount })}
         </p>
       </div>
 
       {componentError && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>{t('common:states.error')}</AlertTitle>
           <AlertDescription>{componentError}</AlertDescription>
         </Alert>
       )}
@@ -465,9 +465,9 @@ export default function AssetExplorerView() {
         <div className="w-72 flex-shrink-0">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Asset Types</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('assets:explorer.assetTypes')}</CardTitle>
               <CardDescription className="text-xs">
-                {assetTypes.length} types across {groupedTypes.length} categories
+                {t('assets:explorer.typesAcrossCategories', { types: assetTypes.length, categories: groupedTypes.length })}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -484,7 +484,7 @@ export default function AssetExplorerView() {
                     )}
                   >
                     <Shapes className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1 text-left">All Assets</span>
+                    <span className="flex-1 text-left">{t('assets:explorer.allAssets')}</span>
                     <Badge variant={!selectedTypeId ? 'secondary' : 'outline'} className="text-xs ml-auto">
                       {totalAssetCount}
                     </Badge>
@@ -501,7 +501,7 @@ export default function AssetExplorerView() {
                       <div key={category} className="mb-3">
                         <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                           <CategoryIcon className="h-3.5 w-3.5" />
-                          {meta.label}
+                          {t(`assets:explorer.categories.${category}`, meta.label)}
                           <span className="ml-auto text-xs font-normal">{categoryCount}</span>
                         </div>
                         {types
@@ -552,7 +552,7 @@ export default function AssetExplorerView() {
                   })()}
                   <div>
                     <CardTitle className="text-lg">
-                      {selectedType ? selectedType.name : 'All Assets'}
+                      {selectedType ? selectedType.name : t('assets:explorer.allAssets')}
                     </CardTitle>
                     {selectedType?.description && (
                       <CardDescription className="text-xs mt-0.5">
@@ -564,10 +564,10 @@ export default function AssetExplorerView() {
                 <div className="flex items-center gap-2">
                   {selectedType?.category && (
                     <Badge variant="outline" className="text-xs">
-                      {CATEGORY_META[selectedType.category]?.label || selectedType.category}
+                      {t(`assets:explorer.categories.${selectedType.category}`, CATEGORY_META[selectedType.category]?.label || selectedType.category)}
                     </Badge>
                   )}
-                  <Badge variant="secondary">{selectedType ? selectedType.asset_count : totalAssetCount} assets</Badge>
+                  <Badge variant="secondary">{t('assets:explorer.assetsCount', { count: selectedType ? selectedType.asset_count : totalAssetCount })}</Badge>
                 </div>
               </div>
             </CardHeader>
@@ -597,7 +597,7 @@ export default function AssetExplorerView() {
                           onClick={() => navigate('/schema-importer')}
                         >
                           <FileInput className="mr-2 h-4 w-4" />
-                          Schema Importer
+                          {t('assets:explorer.schemaImporter')}
                         </Button>
                       )}
                       {canRead && (
@@ -608,7 +608,7 @@ export default function AssetExplorerView() {
                           onClick={() => setIsImportExportOpen(true)}
                         >
                           <FileSpreadsheet className="mr-2 h-4 w-4" />
-                          {hasSelection ? `Export ${selectedAssetIds.length} Selected` : 'Import / Export'}
+                          {hasSelection ? t('assets:explorer.exportSelected', { count: selectedAssetIds.length }) : t('assets:explorer.importExport')}
                         </Button>
                       )}
                       {canWrite && selectedType && (
@@ -618,7 +618,7 @@ export default function AssetExplorerView() {
                           onClick={() => { setEditingAsset(null); setIsFormOpen(true); }}
                         >
                           <PlusCircle className="mr-2 h-4 w-4" />
-                          Add {selectedType.name}
+                          {t('assets:explorer.addType', { type: selectedType.name })}
                         </Button>
                       )}
                     </div>
@@ -630,10 +630,10 @@ export default function AssetExplorerView() {
                       className="h-9 gap-1"
                       onClick={() => handleBulkDelete(selectedRows)}
                       disabled={selectedRows.length === 0 || !canAdmin}
-                      title={canAdmin ? 'Delete selected assets' : 'Admin access required'}
+                      title={canAdmin ? t('assets:explorer.deleteSelectedAssets') : t('assets:explorer.adminRequired')}
                     >
                       <Trash2 className="w-4 h-4 mr-1" />
-                      Delete {selectedRows.length} Selected
+                      {t('assets:explorer.deleteCountSelected', { count: selectedRows.length })}
                     </Button>
                   )}
                 />

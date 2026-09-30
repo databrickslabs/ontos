@@ -5,5 +5,25 @@
     "build": "Erstellen",
     "govern": "Steuern",
     "deploy": "Bereitstellen"
+  },
+  "dbDown": {
+    "title": "Datenbank nicht verfügbar",
+    "body": "Die Anwendung kann ihre Metadaten-Datenbank nicht erreichen. Die meisten Funktionen geben Fehler zurück, bis die Verbindung wiederhergestellt ist.",
+    "retrying": "Erneuter Versuch…",
+    "retryConnection": "Verbindung erneut versuchen",
+    "retryFailed": "Erneuter Versuch fehlgeschlagen",
+    "autoRetrying": "Automatischer erneuter Versuch alle {{seconds}} Sekunden",
+    "pausedTitle": "Anwendung pausiert",
+    "pausedBodyBefore": "Die Metadaten-Datenbank ist nicht erreichbar, daher sind Navigation und Datenansichten deaktiviert, um einen inkonsistenten Zustand zu vermeiden. Verwenden Sie",
+    "pausedBodyAfter": "oben (oder warten Sie auf den nächsten automatischen Versuch), um fortzufahren."
+  },
+  "warning": {
+    "title": "Systemwarnung",
+    "workspaceFailed": "Verbindung zum Databricks-Workspace fehlgeschlagen. Einige Funktionen sind möglicherweise nicht verfügbar."
+  },
+  "routeError": {
+    "title": "Etwas ist schiefgelaufen",
+    "body": "Beim Rendern dieser Seite ist ein unerwarteter Fehler aufgetreten. Sie können es erneut versuchen oder zur Startseite zurückkehren.",
+    "goHome": "Zur Startseite"
   }
 }

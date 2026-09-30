@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useApi } from '@/hooks/use-api';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { AssetTypeRead } from '@/types/asset';
 
@@ -68,12 +69,12 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Server, Shield, BookOpen, Database, FolderOpen, Shapes, Box,
 };
 
-const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; order: number }> = {
-  data: { label: 'Data Assets', icon: Database, order: 1 },
-  analytics: { label: 'Analytics', icon: LayoutDashboard, order: 2 },
-  integration: { label: 'Integration', icon: Globe, order: 3 },
-  system: { label: 'Systems', icon: Server, order: 4 },
-  custom: { label: 'Custom', icon: Shapes, order: 5 },
+const CATEGORY_META: Record<string, { labelKey: string; icon: React.ElementType; order: number }> = {
+  data: { labelKey: 'assetSelector.categories.data', icon: Database, order: 1 },
+  analytics: { labelKey: 'assetSelector.categories.analytics', icon: LayoutDashboard, order: 2 },
+  integration: { labelKey: 'assetSelector.categories.integration', icon: Globe, order: 3 },
+  system: { labelKey: 'assetSelector.categories.system', icon: Server, order: 4 },
+  custom: { labelKey: 'assetSelector.categories.custom', icon: Shapes, order: 5 },
 };
 
 function getAssetIcon(typeName?: string) {
@@ -93,6 +94,7 @@ function AssetResultRow({ asset, isSelected, onToggle }: {
   isSelected: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation('common');
   const Icon = getAssetIcon(asset.asset_type_name);
   return (
     <button
@@ -111,7 +113,7 @@ function AssetResultRow({ asset, isSelected, onToggle }: {
         )}
       </div>
       <Badge variant="outline" className="text-xs flex-shrink-0">
-        {asset.asset_type_name || 'Asset'}
+        {asset.asset_type_name || t('common:assetSelector.assetFallback')}
       </Badge>
       {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
     </button>
@@ -159,7 +161,7 @@ export function AssetSelector({
   relationshipLabel,
   targetAssetTypes,
   excludeAssetIds = [],
-  title = 'Link Assets',
+  title,
   description,
   confirmLabel,
   closeOnConfirm = true,
@@ -167,6 +169,7 @@ export function AssetSelector({
 }: AssetSelectorProps) {
   const hasNarrowTypeFilter = !!targetAssetTypes && targetAssetTypes.length > 0 && targetAssetTypes.length <= 2;
 
+  const { t } = useTranslation('common');
   const [mode, setMode] = useState<'search' | 'browse'>(hasNarrowTypeFilter ? 'search' : 'browse');
   const [selected, setSelected] = useState<Map<string, AssetSearchResult>>(new Map());
   const { get: apiGet } = useApi();
@@ -202,13 +205,13 @@ export function AssetSelector({
     return Object.entries(groups)
       .map(([cat, types]) => ({
         category: cat,
-        label: CATEGORY_META[cat]?.label || cat,
+        label: CATEGORY_META[cat]?.labelKey ? t(`common:${CATEGORY_META[cat].labelKey}`) : cat,
         icon: CATEGORY_META[cat]?.icon || Shapes,
         order: CATEGORY_META[cat]?.order || 99,
         types: types.sort((a, b) => a.name.localeCompare(b.name)),
       }))
       .sort((a, b) => a.order - b.order);
-  }, [assetTypes, targetAssetTypes]);
+  }, [assetTypes, targetAssetTypes, t]);
 
   // --- Search mode ---
 
@@ -359,8 +362,8 @@ export function AssetSelector({
   }, []);
 
   const descText = description || (relationshipLabel || relationshipType
-    ? `Search and select assets to link via "${relationshipLabel || relationshipType}"`
-    : 'Search and select assets');
+    ? t('common:assetSelector.descWithRel', { rel: relationshipLabel || relationshipType })
+    : t('common:assetSelector.descDefault'));
   const selectedTypeName = assetTypes.find(t => t.id === selectedTypeId)?.name;
 
   return (
@@ -370,7 +373,7 @@ export function AssetSelector({
           {/* Header */}
           <div className="px-6 pt-6 pb-2">
             <DialogHeader>
-              <DialogTitle>{title}</DialogTitle>
+              <DialogTitle>{title || t('common:assetSelector.title')}</DialogTitle>
               <DialogDescription>{descText}</DialogDescription>
             </DialogHeader>
           </div>
@@ -381,11 +384,11 @@ export function AssetSelector({
               <TabsList className="w-fit">
                 <TabsTrigger value="search" className="gap-1.5">
                   <Search className="h-3.5 w-3.5" />
-                  Search
+                  {t('common:actions.search')}
                 </TabsTrigger>
                 <TabsTrigger value="browse" className="gap-1.5">
                   <FolderTree className="h-3.5 w-3.5" />
-                  Browse
+                  {t('common:actions.browse')}
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -399,7 +402,7 @@ export function AssetSelector({
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     ref={searchInputRef}
-                    placeholder="Search assets by name..."
+                    placeholder={t('common:assetSelector.searchPlaceholder')}
                     value={searchQuery}
                     onChange={(e) => handleSearchQueryChange(e.target.value)}
                     className="pl-9"
@@ -416,8 +419,8 @@ export function AssetSelector({
                     onToggle={toggleSelect}
                     emptyMessage={
                       searchQuery.length >= 2
-                        ? (searchLoading ? undefined : 'No assets found')
-                        : 'Type at least 2 characters to search'
+                        ? (searchLoading ? undefined : t('common:assetSelector.noAssetsFound'))
+                        : t('common:assetSelector.typeToSearchHint')
                     }
                   />
                 </ScrollArea>
@@ -432,7 +435,7 @@ export function AssetSelector({
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       </div>
                     ) : groupedTypes.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">No asset types</p>
+                      <p className="text-xs text-muted-foreground text-center py-4">{t('common:assetSelector.noAssetTypes')}</p>
                     ) : (
                       groupedTypes.map(group => (
                         <div key={group.category} className="mb-2">
@@ -477,7 +480,7 @@ export function AssetSelector({
                         <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
                           ref={browseFilterRef}
-                          placeholder={`Filter ${selectedTypeName || 'assets'}...`}
+                          placeholder={t('common:assetSelector.filterPlaceholder', { type: selectedTypeName || t('common:assetSelector.assetsFallback') })}
                           value={browseFilter}
                           onChange={(e) => handleBrowseFilterChange(e.target.value)}
                           className="pl-8 h-8 text-sm"
@@ -492,14 +495,14 @@ export function AssetSelector({
                             onToggle={toggleSelect}
                             emptyMessage={
                               browseFilter.length >= 2
-                                ? 'No matching assets'
-                                : 'No assets of this type'
+                                ? t('common:assetSelector.noMatchingAssets')
+                                : t('common:assetSelector.noAssetsOfType')
                             }
                           />
                         </div>
                         {browseTotal > 50 && !browseLoading && (
                           <p className="text-xs text-muted-foreground text-center py-2">
-                            Showing 50 of {browseTotal} — use the filter to narrow down
+                            {t('common:assetSelector.showingLimit', { total: browseTotal })}
                           </p>
                         )}
                       </ScrollArea>
@@ -508,7 +511,7 @@ export function AssetSelector({
                     <div className="flex-1 flex items-center justify-center">
                       <div className="text-center text-muted-foreground">
                         <FolderTree className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                        <p className="text-sm">Select an asset type to browse</p>
+                        <p className="text-sm">{t('common:assetSelector.selectTypeToBrowse')}</p>
                       </div>
                     </div>
                   )}
@@ -546,9 +549,9 @@ export function AssetSelector({
           {/* Footer */}
           <div className="px-6 pb-6 pt-3">
             <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common:actions.cancel')}</Button>
               <Button onClick={handleConfirm} disabled={selected.size === 0 || confirmDisabled}>
-                {confirmLabel || `Link ${selected.size > 0 ? `${selected.size} Asset${selected.size > 1 ? 's' : ''}` : 'Assets'}`}
+                {confirmLabel || (selected.size > 0 ? t('common:assetSelector.linkCount', { count: selected.size }) : t('common:assetSelector.linkEmpty'))}
               </Button>
             </DialogFooter>
           </div>

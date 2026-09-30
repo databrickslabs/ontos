@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -47,6 +48,7 @@ export default function RequestContractActionDialog({
   onSuccess,
   canDirectStatusChange = false
 }: RequestContractActionDialogProps) {
+  const { t } = useTranslation(['data-contracts', 'common']);
   const { post, get } = useApi();
   const { toast } = useToast();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
@@ -87,32 +89,32 @@ export default function RequestContractActionDialog({
       case 'access':
         return {
           icon: <Eye className="h-5 w-5" />,
-          title: 'Request Access to Contract',
-          description: 'Request permission to view and use this data contract.',
+          title: t('data-contracts:requests.access.title', 'Request Access to Contract'),
+          description: t('data-contracts:requests.access.description', 'Request permission to view and use this data contract.'),
           enabled: true,
           endpoint: '/api/access-grants/request',
         };
       case 'review':
         return {
           icon: <FileText className="h-5 w-5" />,
-          title: 'Request Data Steward Review',
-          description: 'Submit this contract for review by a data steward (transitions to PROPOSED status).',
+          title: t('data-contracts:requests.review.title', 'Request Data Steward Review'),
+          description: t('data-contracts:requests.review.description', 'Submit this contract for review by a data steward (transitions to PROPOSED status).'),
           enabled: contractStatus?.toLowerCase() === 'draft',
           endpoint: `/api/data-contracts/${contractId}/request-review`,
         };
       case 'deploy':
         return {
           icon: <Database className="h-5 w-5" />,
-          title: 'Request Deploy to Unity Catalog',
-          description: 'Request approval to deploy this contract to Unity Catalog.',
+          title: t('data-contracts:requests.deploy.title', 'Request Deploy to Unity Catalog'),
+          description: t('data-contracts:requests.deploy.description', 'Request approval to deploy this contract to Unity Catalog.'),
           enabled: true,
           endpoint: `/api/data-contracts/${contractId}/request-deploy`,
         };
       case 'publish':
         return {
           icon: <Rocket className="h-5 w-5" />,
-          title: 'Request Publish',
-          description: 'Request to publish this contract with a defined visibility scope.',
+          title: t('data-contracts:requests.publish.title', 'Request Publish'),
+          description: t('data-contracts:requests.publish.description', 'Request to publish this contract with a defined visibility scope.'),
           enabled:
             contractStatus?.toLowerCase() === 'approved' ||
             contractStatus?.toLowerCase() === 'active',
@@ -121,8 +123,8 @@ export default function RequestContractActionDialog({
       case 'certify':
         return {
           icon: <ShieldCheck className="h-5 w-5" />,
-          title: 'Request Certification',
-          description: 'Request that this contract be certified at a specific level.',
+          title: t('data-contracts:requests.certify.title', 'Request Certification'),
+          description: t('data-contracts:requests.certify.description', 'Request that this contract be certified at a specific level.'),
           enabled: true,
           endpoint: `/api/data-contracts/${contractId}/request-certify`,
         };
@@ -130,10 +132,12 @@ export default function RequestContractActionDialog({
         const allowedTransitions = contractStatus ? getAllowedTransitions(contractStatus) : [];
         return {
           icon: <RefreshCw className="h-5 w-5" />,
-          title: canDirectStatusChange ? 'Change Status' : 'Request Status Change',
-          description: canDirectStatusChange 
-            ? 'Directly change the lifecycle status of this contract.'
-            : 'Request approval to change the lifecycle status of this contract.',
+          title: canDirectStatusChange
+            ? t('data-contracts:requests.statusChange.changeTitle', 'Change Status')
+            : t('data-contracts:requests.statusChange.requestTitle', 'Request Status Change'),
+          description: canDirectStatusChange
+            ? t('data-contracts:requests.statusChange.changeDescription', 'Directly change the lifecycle status of this contract.')
+            : t('data-contracts:requests.statusChange.requestDescription', 'Request approval to change the lifecycle status of this contract.'),
           enabled: allowedTransitions.length > 0,
           endpoint: canDirectStatusChange 
             ? `/api/data-contracts/${contractId}/change-status`
@@ -147,11 +151,11 @@ export default function RequestContractActionDialog({
     
     if (requestType === 'access') {
       if (!message.trim()) {
-        setError('Please provide a reason for requesting access');
+        setError(t('data-contracts:requests.validation.accessReasonRequired', 'Please provide a reason for requesting access'));
         return false;
       }
       if (message.trim().length < 10) {
-        setError('Please provide a more detailed reason (at least 10 characters)');
+        setError(t('data-contracts:requests.validation.accessReasonTooShort', 'Please provide a more detailed reason (at least 10 characters)'));
         return false;
       }
     }
@@ -166,17 +170,17 @@ export default function RequestContractActionDialog({
     
     if (requestType === 'status_change') {
       if (!targetStatus) {
-        setError('Please select a target status');
+        setError(t('data-contracts:requests.validation.targetStatusRequired', 'Please select a target status'));
         return false;
       }
       // Justification is only required for approval requests, not direct changes
       if (!canDirectStatusChange) {
         if (!justification.trim()) {
-          setError('Please provide a justification for the status change');
+          setError(t('data-contracts:requests.validation.justificationRequired', 'Please provide a justification for the status change'));
           return false;
         }
         if (justification.trim().length < 20) {
-          setError('Please provide a more detailed justification (at least 20 characters)');
+          setError(t('data-contracts:requests.validation.justificationTooShort', 'Please provide a more detailed justification (at least 20 characters)'));
           return false;
         }
       }
@@ -184,7 +188,7 @@ export default function RequestContractActionDialog({
 
     if (requestType === 'certify') {
       if (!certificationLevel) {
-        setError('Please select a certification level');
+        setError(t('data-contracts:requests.validation.certLevelRequired', 'Please select a certification level'));
         return false;
       }
     }
@@ -199,7 +203,7 @@ export default function RequestContractActionDialog({
 
     const config = getRequestTypeConfig(requestType);
     if (!config.enabled) {
-      setError(`Cannot request ${requestType} for a contract with status '${contractStatus}'`);
+      setError(t('data-contracts:requests.cannotRequest', "Cannot request {{type}} for a contract with status '{{status}}'", { type: requestType, status: contractStatus }));
       return;
     }
 
@@ -235,7 +239,7 @@ export default function RequestContractActionDialog({
         };
       } else if (requestType === 'certify') {
         if (!certificationLevel) {
-          setError('Please select a certification level');
+          setError(t('data-contracts:requests.validation.certLevelRequired', 'Please select a certification level'));
           setSubmitting(false);
           return;
         }
@@ -268,13 +272,13 @@ export default function RequestContractActionDialog({
       // Different success messages for direct changes vs requests
       if (requestType === 'status_change' && canDirectStatusChange) {
         toast({
-          title: 'Status Changed',
-          description: `Contract status changed from "${contractStatus}" to "${targetStatus}".`
+          title: t('data-contracts:requests.toast.statusChangedTitle', 'Status Changed'),
+          description: t('data-contracts:requests.toast.statusChangedDescription', 'Contract status changed from "{{from}}" to "{{to}}".', { from: contractStatus, to: targetStatus })
         });
       } else {
         toast({
-          title: 'Request Submitted',
-          description: `Your ${requestType} request has been submitted and you will be notified of the decision.`
+          title: t('data-contracts:requests.toast.submittedTitle', 'Request Submitted'),
+          description: t('data-contracts:requests.toast.submittedDescription', 'Your {{type}} request has been submitted and you will be notified of the decision.', { type: requestType })
         });
       }
 
@@ -297,10 +301,10 @@ export default function RequestContractActionDialog({
       onOpenChange(false);
 
     } catch (e: any) {
-      setError(e.message || 'Failed to submit request');
+      setError(e.message || t('data-contracts:requests.errors.submitFailed', 'Failed to submit request'));
       toast({
-        title: 'Error',
-        description: e.message || 'Failed to submit request',
+        title: t('common:toast.error', 'Error'),
+        description: e.message || t('data-contracts:requests.errors.submitFailed', 'Failed to submit request'),
         variant: 'destructive'
       });
     } finally {
@@ -343,7 +347,7 @@ export default function RequestContractActionDialog({
             setSchema(policy.default_schema);
           }
         } catch (e: any) {
-          setPolicyError(e.message || 'Failed to load deployment policy');
+          setPolicyError(e.message || t('data-contracts:requests.errors.loadPolicyFailed', 'Failed to load deployment policy'));
           console.error('Error fetching deployment policy:', e);
         } finally {
           setLoadingPolicy(false);
@@ -361,10 +365,10 @@ export default function RequestContractActionDialog({
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Request Action
+            {t('data-contracts:requests.dialogTitle', 'Request Action')}
           </DialogTitle>
           <DialogDescription>
-            Select the type of request you want to submit for this data contract.
+            {t('data-contracts:requests.dialogDescription', 'Select the type of request you want to submit for this data contract.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -372,7 +376,7 @@ export default function RequestContractActionDialog({
           {/* Contract Information */}
           <div className="p-3 bg-muted/50 rounded-lg border">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-medium">Contract:</span>
+              <span className="font-medium">{t('data-contracts:requests.contractLabel', 'Contract:')}</span>
               <span className="font-mono">{contractId}</span>
             </div>
             {contractName && (
@@ -380,14 +384,14 @@ export default function RequestContractActionDialog({
             )}
             {contractStatus && (
               <div className="text-xs text-muted-foreground mt-1">
-                Status: <span className="uppercase">{contractStatus}</span>
+                {t('data-contracts:requests.statusLabel', 'Status:')} <span className="uppercase">{contractStatus}</span>
               </div>
             )}
           </div>
 
           {/* Request Type Selection */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium">Request Type *</Label>
+            <Label className="text-sm font-medium">{t('data-contracts:requests.requestTypeLabel', 'Request Type *')}</Label>
             <Select value={requestType} onValueChange={(value) => setRequestType(value as RequestType)}>
               <SelectTrigger>
                 <SelectValue>
@@ -424,7 +428,7 @@ export default function RequestContractActionDialog({
               <p className="text-muted-foreground">{currentConfig.description}</p>
               {!currentConfig.enabled && (
                 <p className="text-destructive mt-2 text-xs">
-                  Not available for status '{contractStatus}'
+                  {t('data-contracts:requests.notAvailableForStatus', "Not available for status '{{status}}'", { status: contractStatus })}
                 </p>
               )}
             </div>
@@ -445,13 +449,13 @@ export default function RequestContractActionDialog({
           {requestType === 'review' && (
             <div className="space-y-2">
               <Label htmlFor="review-message" className="text-sm font-medium">
-                Message (Optional)
+                {t('data-contracts:requests.messageOptionalLabel', 'Message (Optional)')}
               </Label>
               <Textarea
                 id="review-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Add any notes for the data steward reviewing this contract..."
+                placeholder={t('data-contracts:requests.review.messagePlaceholder', 'Add any notes for the data steward reviewing this contract...')}
                 className="min-h-[80px] resize-none"
                 disabled={submitting}
               />
@@ -462,28 +466,28 @@ export default function RequestContractActionDialog({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="contract-pub-scope" className="text-sm font-medium">
-                  Publication Scope *
+                  {t('data-contracts:requests.publish.scopeLabel', 'Publication Scope *')}
                 </Label>
                 <Select value={publicationScope} onValueChange={setPublicationScope} disabled={submitting}>
                   <SelectTrigger id="contract-pub-scope">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="domain">Domain</SelectItem>
-                    <SelectItem value="organization">Organization</SelectItem>
-                    <SelectItem value="external">External</SelectItem>
+                    <SelectItem value="domain">{t('data-contracts:requests.publish.scopeDomain', 'Domain')}</SelectItem>
+                    <SelectItem value="organization">{t('data-contracts:requests.publish.scopeOrganization', 'Organization')}</SelectItem>
+                    <SelectItem value="external">{t('data-contracts:requests.publish.scopeExternal', 'External')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="contract-publish-justification" className="text-sm font-medium">
-                  Justification (optional)
+                  {t('data-contracts:requests.publish.justificationLabel', 'Justification (optional)')}
                 </Label>
                 <Textarea
                   id="contract-publish-justification"
                   value={justification}
                   onChange={(e) => setJustification(e.target.value)}
-                  placeholder="Why should this contract be published?"
+                  placeholder={t('data-contracts:requests.publish.justificationPlaceholder', 'Why should this contract be published?')}
                   className="min-h-[80px] resize-none"
                   rows={3}
                   disabled={submitting}
@@ -496,7 +500,7 @@ export default function RequestContractActionDialog({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="contract-cert-level" className="text-sm font-medium">
-                  Certification Level *
+                  {t('data-contracts:requests.certify.levelLabel', 'Certification Level *')}
                 </Label>
                 <Select
                   value={certificationLevel !== null ? certificationLevel.toString() : ''}
@@ -504,7 +508,7 @@ export default function RequestContractActionDialog({
                   disabled={submitting}
                 >
                   <SelectTrigger id="contract-cert-level">
-                    <SelectValue placeholder="Select certification level" />
+                    <SelectValue placeholder={t('data-contracts:requests.certify.levelPlaceholder', 'Select certification level')} />
                   </SelectTrigger>
                   <SelectContent>
                     {certificationLevels.map((l) => (
@@ -517,13 +521,13 @@ export default function RequestContractActionDialog({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="contract-cert-message" className="text-sm font-medium">
-                  Message (optional)
+                  {t('data-contracts:requests.certify.messageLabel', 'Message (optional)')}
                 </Label>
                 <Textarea
                   id="contract-cert-message"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Why should this contract be certified?"
+                  placeholder={t('data-contracts:requests.certify.messagePlaceholder', 'Why should this contract be certified?')}
                   className="min-h-[80px] resize-none"
                   rows={3}
                   disabled={submitting}
@@ -538,7 +542,7 @@ export default function RequestContractActionDialog({
               {loadingPolicy && (
                 <Alert>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <AlertDescription>Loading deployment policy...</AlertDescription>
+                  <AlertDescription>{t('data-contracts:requests.deploy.loadingPolicy', 'Loading deployment policy...')}</AlertDescription>
                 </Alert>
               )}
               
@@ -555,13 +559,13 @@ export default function RequestContractActionDialog({
                 <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
                   <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   <AlertDescription className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Deployment Policy:</strong> You can deploy to{' '}
-                    {deploymentPolicy.allowed_catalogs.length === 0 
-                      ? 'no catalogs (contact admin)'
+                    <strong>{t('data-contracts:requests.deploy.policyLabel', 'Deployment Policy:')}</strong> {t('data-contracts:requests.deploy.youCanDeployTo', 'You can deploy to')}{' '}
+                    {deploymentPolicy.allowed_catalogs.length === 0
+                      ? t('data-contracts:requests.deploy.noCatalogsContactAdmin', 'no catalogs (contact admin)')
                       : deploymentPolicy.allowed_catalogs.length === 1
                       ? `${deploymentPolicy.allowed_catalogs[0]}`
-                      : `${deploymentPolicy.allowed_catalogs.length} allowed catalogs`}
-                    {deploymentPolicy.require_approval && ' (requires approval)'}
+                      : t('data-contracts:requests.deploy.allowedCatalogsCount', '{{count}} allowed catalogs', { count: deploymentPolicy.allowed_catalogs.length })}
+                    {deploymentPolicy.require_approval && t('data-contracts:requests.deploy.requiresApprovalSuffix', ' (requires approval)')}
                   </AlertDescription>
                 </Alert>
               )}
@@ -570,7 +574,7 @@ export default function RequestContractActionDialog({
                 {/* Catalog Dropdown or Input */}
                 <div className="space-y-2">
                   <Label htmlFor="deploy-catalog" className="text-sm font-medium">
-                    Target Catalog (Optional)
+                    {t('data-contracts:requests.deploy.targetCatalogLabel', 'Target Catalog (Optional)')}
                   </Label>
                   {deploymentPolicy && deploymentPolicy.allowed_catalogs.length > 0 && deploymentPolicy.allowed_catalogs.includes('*') ? (
                     // Wildcard - allow any catalog via text input
@@ -578,7 +582,7 @@ export default function RequestContractActionDialog({
                       id="deploy-catalog"
                       value={catalog}
                       onChange={(e) => setCatalog(e.target.value)}
-                      placeholder={deploymentPolicy.default_catalog || "Enter catalog name..."}
+                      placeholder={deploymentPolicy.default_catalog || t('data-contracts:requests.deploy.enterCatalogPlaceholder', 'Enter catalog name...')}
                       disabled={submitting || loadingPolicy}
                     />
                   ) : deploymentPolicy && deploymentPolicy.allowed_catalogs.length > 0 ? (
@@ -589,7 +593,7 @@ export default function RequestContractActionDialog({
                       disabled={submitting || loadingPolicy}
                     >
                       <SelectTrigger id="deploy-catalog">
-                        <SelectValue placeholder="Select catalog..." />
+                        <SelectValue placeholder={t('data-contracts:requests.deploy.selectCatalogPlaceholder', 'Select catalog...')} />
                       </SelectTrigger>
                       <SelectContent>
                         {deploymentPolicy.allowed_catalogs.map((cat) => (
@@ -603,20 +607,20 @@ export default function RequestContractActionDialog({
                     // No catalogs available
                     <Select disabled>
                       <SelectTrigger>
-                        <SelectValue placeholder="No catalogs available" />
+                        <SelectValue placeholder={t('data-contracts:requests.deploy.noCatalogsAvailable', 'No catalogs available')} />
                       </SelectTrigger>
                     </Select>
                   )}
                   {deploymentPolicy?.default_catalog && catalog === deploymentPolicy.default_catalog && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Info className="h-3 w-3" />
-                      Default catalog for your role
+                      {t('data-contracts:requests.deploy.defaultCatalogForRole', 'Default catalog for your role')}
                     </div>
                   )}
                   {deploymentPolicy?.allowed_catalogs.includes('*') && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Info className="h-3 w-3" />
-                      You can deploy to any catalog
+                      {t('data-contracts:requests.deploy.anyCatalog', 'You can deploy to any catalog')}
                     </div>
                   )}
                 </div>
@@ -624,7 +628,7 @@ export default function RequestContractActionDialog({
                 {/* Schema Dropdown or Input */}
                 <div className="space-y-2">
                   <Label htmlFor="deploy-schema" className="text-sm font-medium">
-                    Target Schema (Optional)
+                    {t('data-contracts:requests.deploy.targetSchemaLabel', 'Target Schema (Optional)')}
                   </Label>
                   {deploymentPolicy && deploymentPolicy.allowed_schemas.length > 0 && deploymentPolicy.allowed_schemas.includes('*') ? (
                     // Wildcard - allow any schema via text input
@@ -632,7 +636,7 @@ export default function RequestContractActionDialog({
                       id="deploy-schema"
                       value={schema}
                       onChange={(e) => setSchema(e.target.value)}
-                      placeholder={deploymentPolicy.default_schema || "Enter schema name..."}
+                      placeholder={deploymentPolicy.default_schema || t('data-contracts:requests.deploy.enterSchemaPlaceholder', 'Enter schema name...')}
                       disabled={submitting || loadingPolicy}
                     />
                   ) : deploymentPolicy && deploymentPolicy.allowed_schemas.length > 0 ? (
@@ -643,7 +647,7 @@ export default function RequestContractActionDialog({
                       disabled={submitting || loadingPolicy}
                     >
                       <SelectTrigger id="deploy-schema">
-                        <SelectValue placeholder="Select schema..." />
+                        <SelectValue placeholder={t('data-contracts:requests.deploy.selectSchemaPlaceholder', 'Select schema...')} />
                       </SelectTrigger>
                       <SelectContent>
                         {deploymentPolicy.allowed_schemas.map((sch) => (
@@ -659,20 +663,20 @@ export default function RequestContractActionDialog({
                       id="deploy-schema"
                       value={schema}
                       onChange={(e) => setSchema(e.target.value)}
-                      placeholder={deploymentPolicy?.default_schema || "Enter schema name..."}
+                      placeholder={deploymentPolicy?.default_schema || t('data-contracts:requests.deploy.enterSchemaPlaceholder', 'Enter schema name...')}
                       disabled={submitting || loadingPolicy}
                     />
                   )}
                   {deploymentPolicy?.default_schema && schema === deploymentPolicy.default_schema && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Info className="h-3 w-3" />
-                      Default schema for your role
+                      {t('data-contracts:requests.deploy.defaultSchemaForRole', 'Default schema for your role')}
                     </div>
                   )}
                   {deploymentPolicy && (deploymentPolicy.allowed_schemas.length === 0 || deploymentPolicy.allowed_schemas.includes('*')) && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Info className="h-3 w-3" />
-                      You can deploy to any schema
+                      {t('data-contracts:requests.deploy.anySchema', 'You can deploy to any schema')}
                     </div>
                   )}
                 </div>
@@ -680,13 +684,13 @@ export default function RequestContractActionDialog({
               
               <div className="space-y-2">
                 <Label htmlFor="deploy-message" className="text-sm font-medium">
-                  Message (Optional)
+                  {t('data-contracts:requests.messageOptionalLabel', 'Message (Optional)')}
                 </Label>
                 <Textarea
                   id="deploy-message"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Add any deployment notes or requirements..."
+                  placeholder={t('data-contracts:requests.deploy.messagePlaceholder', 'Add any deployment notes or requirements...')}
                   className="min-h-[60px] resize-none"
                   disabled={submitting}
                 />
@@ -700,7 +704,7 @@ export default function RequestContractActionDialog({
               {contractStatus && (
                 <div className="rounded-lg border bg-muted/50 p-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <Label className="text-sm font-semibold">Current Status:</Label>
+                    <Label className="text-sm font-semibold">{t('data-contracts:requests.statusChange.currentStatusLabel', 'Current Status:')}</Label>
                     <span className="text-lg">{getStatusConfig(contractStatus).icon}</span>
                     <span className="font-medium">{getStatusConfig(contractStatus).label}</span>
                   </div>
@@ -713,7 +717,7 @@ export default function RequestContractActionDialog({
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription className="text-sm">
-                    <strong>Recommended:</strong> {getRecommendedAction(contractStatus)}
+                    <strong>{t('data-contracts:requests.statusChange.recommendedLabel', 'Recommended:')}</strong> {getRecommendedAction(contractStatus)}
                   </AlertDescription>
                 </Alert>
               )}
@@ -721,10 +725,10 @@ export default function RequestContractActionDialog({
               {/* Target Status Selection */}
               {contractStatus && getAllowedTransitions(contractStatus).length > 0 ? (
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Select Target Status *</Label>
+                  <Label className="text-sm font-medium">{t('data-contracts:requests.statusChange.selectTargetLabel', 'Select Target Status *')}</Label>
                   <Select value={targetStatus} onValueChange={setTargetStatus}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Choose target status...">
+                      <SelectValue placeholder={t('data-contracts:requests.statusChange.chooseTargetPlaceholder', 'Choose target status...')}>
                         {targetStatus && (
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{getStatusConfig(targetStatus).icon}</span>
@@ -757,7 +761,7 @@ export default function RequestContractActionDialog({
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>Terminal State:</strong> No transitions available from {contractStatus ? getStatusConfig(contractStatus).label : 'current'} status.
+                    <strong>{t('data-contracts:requests.statusChange.terminalStateLabel', 'Terminal State:')}</strong> {t('data-contracts:requests.statusChange.noTransitions', 'No transitions available from {{status}} status.', { status: contractStatus ? getStatusConfig(contractStatus).label : 'current' })}
                   </AlertDescription>
                 </Alert>
               )}
@@ -766,25 +770,25 @@ export default function RequestContractActionDialog({
               {!canDirectStatusChange && (
                 <div className="space-y-2">
                   <Label htmlFor="status-justification" className="text-sm font-medium">
-                    Justification *
+                    {t('data-contracts:requests.statusChange.justificationLabel', 'Justification *')}
                   </Label>
                   <Textarea
                     id="status-justification"
                     value={justification}
                     onChange={(e) => setJustification(e.target.value)}
-                    placeholder="Explain why this status change is needed and any relevant context..."
+                    placeholder={t('data-contracts:requests.statusChange.justificationPlaceholder', 'Explain why this status change is needed and any relevant context...')}
                     className="min-h-[100px] resize-none"
                     disabled={submitting}
                   />
                   <div className="text-xs text-muted-foreground">
-                    Minimum 20 characters required. This will be reviewed by an admin.
+                    {t('data-contracts:requests.statusChange.justificationHint', 'Minimum 20 characters required. This will be reviewed by an admin.')}
                   </div>
                 </div>
               )}
 
               {/* Lifecycle Diagram */}
               <div className="rounded-lg border p-3 bg-muted/20">
-                <Label className="text-xs font-semibold mb-2 block">ODCS Lifecycle Flow:</Label>
+                <Label className="text-xs font-semibold mb-2 block">{t('data-contracts:requests.statusChange.lifecycleFlowLabel', 'ODCS Lifecycle Flow:')}</Label>
                 <div className="flex items-center gap-1 text-xs font-mono flex-wrap">
                   <span className={contractStatus?.toLowerCase() === 'draft' ? 'font-bold text-primary' : ''}>draft</span>
                   <span>→</span>
@@ -803,7 +807,7 @@ export default function RequestContractActionDialog({
                   <span className={contractStatus?.toLowerCase() === 'retired' ? 'font-bold text-primary' : ''}>retired</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Current status is highlighted. Emergency deprecation allowed from any status.
+                  {t('data-contracts:requests.statusChange.lifecycleNote', 'Current status is highlighted. Emergency deprecation allowed from any status.')}
                 </p>
               </div>
             </div>
@@ -824,16 +828,16 @@ export default function RequestContractActionDialog({
             onClick={handleCancel}
             disabled={submitting}
           >
-            Cancel
+            {t('common:actions.cancel', 'Cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={submitting || !currentConfig.enabled}
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {submitting 
-              ? (requestType === 'status_change' && canDirectStatusChange ? 'Changing Status...' : 'Sending Request...') 
-              : (requestType === 'status_change' && canDirectStatusChange ? 'Change Status' : 'Send Request')}
+            {submitting
+              ? (requestType === 'status_change' && canDirectStatusChange ? t('data-contracts:requests.changingStatus', 'Changing Status...') : t('data-contracts:requests.sendingRequest', 'Sending Request...'))
+              : (requestType === 'status_change' && canDirectStatusChange ? t('data-contracts:requests.statusChange.changeTitle', 'Change Status') : t('data-contracts:requests.sendRequest', 'Send Request'))}
           </Button>
         </DialogFooter>
       </DialogContent>

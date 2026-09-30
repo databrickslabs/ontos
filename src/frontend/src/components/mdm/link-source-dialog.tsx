@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -95,13 +96,11 @@ interface DataContract {
   customProperties?: Record<string, any>;
 }
 
-const formSchema = z.object({
-  source_contract_id: z.string().min(1, 'Source contract is required'),
-  key_column: z.string().min(1, 'Key column is required'),
-  priority: z.coerce.number().min(0).max(100),
-});
-
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = {
+  source_contract_id: string;
+  key_column: string;
+  priority: number;
+};
 
 interface LinkSourceDialogProps {
   isOpen: boolean;
@@ -124,8 +123,19 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
   const [masterColumns, setMasterColumns] = useState<string[]>([]);
   const [loadingSchema, setLoadingSchema] = useState(false);
 
+  const { t } = useTranslation(['mdm', 'common']);
   const { get, post } = useApi();
   const { toast } = useToast();
+
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        source_contract_id: z.string().min(1, t('mdm:link.sourceContractRequired')),
+        key_column: z.string().min(1, t('mdm:link.keyColumnRequired')),
+        priority: z.coerce.number().min(0).max(100),
+      }),
+    [t]
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -253,8 +263,8 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
             if (Object.keys(newMappings).length > 0) {
               setColumnMapping(newMappings);
               toast({
-                title: 'MDM Config Loaded',
-                description: `Loaded ${Object.keys(newMappings).length} pre-defined column mappings from contract.`,
+                title: t('mdm:link.configLoadedTitle'),
+                description: t('mdm:link.mappingsLoaded', { count: Object.keys(newMappings).length }),
               });
             }
           }
@@ -297,13 +307,13 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
     if (Object.keys(suggestions).length > 0) {
       setColumnMapping(prev => ({ ...prev, ...suggestions }));
       toast({
-        title: 'Mappings Suggested',
-        description: `Found ${Object.keys(suggestions).length} column mapping(s).`,
+        title: t('mdm:link.mappingsSuggestedTitle'),
+        description: t('mdm:link.mappingsFound', { count: Object.keys(suggestions).length }),
       });
     } else {
       toast({
-        title: 'No Suggestions',
-        description: 'No matching columns found.',
+        title: t('mdm:link.noSuggestionsTitle'),
+        description: t('mdm:link.noMatchingColumns'),
         variant: 'destructive',
       });
     }
@@ -340,13 +350,13 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
 
       const response = await post(`/api/mdm/configs/${configId}/sources`, data);
       if (response.data) {
-        toast({ title: 'Success', description: 'Source contract linked successfully' });
+        toast({ title: t('common:status.success'), description: t('mdm:link.linkSuccess') });
         onSuccess();
       }
     } catch (err: any) {
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to link source contract',
+        title: t('common:status.error'),
+        description: err.message || t('mdm:link.linkFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -358,15 +368,15 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Link Source Contract</DialogTitle>
+          <DialogTitle>{t('mdm:configDetails.linkSource')}</DialogTitle>
           <DialogDescription>
-            Link a source data contract to compare against the master.
+            {t('mdm:link.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="source_contract">Source Data Contract</Label>
+            <Label htmlFor="source_contract">{t('mdm:link.sourceContractLabel')}</Label>
             <Select
               value={form.watch('source_contract_id')}
               onValueChange={(value) => form.setValue('source_contract_id', value)}
@@ -376,10 +386,10 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading...
+                    {t('common:states.loading')}
                   </span>
                 ) : (
-                  <SelectValue placeholder="Select source contract" />
+                  <SelectValue placeholder={t('mdm:link.selectSourceContract')} />
                 )}
               </SelectTrigger>
               <SelectContent>
@@ -390,7 +400,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                 ))}
                 {contracts.length === 0 && !loading && (
                   <SelectItem value="_none" disabled>
-                    No active contracts available
+                    {t('mdm:messages.noActiveContracts')}
                   </SelectItem>
                 )}
               </SelectContent>
@@ -404,7 +414,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="key_column">Key Column</Label>
+              <Label htmlFor="key_column">{t('mdm:sourcesTab.keyColumn')}</Label>
               {sourceColumns.length > 0 ? (
                 <Select
                   value={form.watch('key_column')}
@@ -415,10 +425,10 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                     {loadingSchema ? (
                       <span className="flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading...
+                        {t('common:states.loading')}
                       </span>
                     ) : (
-                      <SelectValue placeholder="Select key column" />
+                      <SelectValue placeholder={t('mdm:link.selectKeyColumn')} />
                     )}
                   </SelectTrigger>
                   <SelectContent>
@@ -432,7 +442,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
               ) : (
                 <Input
                   id="key_column"
-                  placeholder="Select source contract first"
+                  placeholder={t('mdm:link.selectSourceFirst')}
                   disabled={!selectedSourceId}
                   {...form.register('key_column')}
                 />
@@ -443,7 +453,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
+              <Label htmlFor="priority">{t('common:labels.priority')}</Label>
               <Input
                 id="priority"
                 type="number"
@@ -452,7 +462,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                 {...form.register('priority')}
               />
               <p className="text-xs text-muted-foreground">
-                Higher priority sources are preferred for survivorship
+                {t('mdm:link.priorityHint')}
               </p>
             </div>
           </div>
@@ -460,9 +470,9 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <Label>Column Mapping (Source → Master)</Label>
+                <Label>{t('mdm:link.columnMappingLabel')}</Label>
                 <p className="text-xs text-muted-foreground">
-                  Map source column names to master column names when they differ
+                  {t('mdm:link.columnMappingHint')}
                 </p>
               </div>
               <TooltipProvider>
@@ -476,11 +486,11 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                       disabled={sourceColumns.length === 0 || masterColumns.length === 0}
                     >
                       <Wand2 className="h-4 w-4 mr-1" />
-                      Suggest
+                      {t('mdm:link.suggest')}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Auto-suggest mappings using fuzzy column name matching</p>
+                    <p>{t('mdm:link.suggestTooltip')}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -510,7 +520,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                   onValueChange={setNewMappingSource}
                 >
                   <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Source column" />
+                    <SelectValue placeholder={t('mdm:link.sourceColumn')} />
                   </SelectTrigger>
                   <SelectContent>
                     {sourceColumns
@@ -528,7 +538,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                   onValueChange={setNewMappingTarget}
                 >
                   <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Master column" />
+                    <SelectValue placeholder={t('mdm:link.masterColumn')} />
                   </SelectTrigger>
                   <SelectContent>
                     {masterColumns.map((col) => (
@@ -551,7 +561,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
             ) : (
               <div className="flex gap-2">
                 <Input
-                  placeholder="Source column"
+                  placeholder={t('mdm:link.sourceColumn')}
                   value={newMappingSource}
                   onChange={(e) => setNewMappingSource(e.target.value)}
                   className="flex-1"
@@ -559,7 +569,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
                 />
                 <span className="flex items-center text-muted-foreground">→</span>
                 <Input
-                  placeholder="Master column"
+                  placeholder={t('mdm:link.masterColumn')}
                   value={newMappingTarget}
                   onChange={(e) => setNewMappingTarget(e.target.value)}
                   className="flex-1"
@@ -581,7 +591,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
               <Alert variant="destructive" className="mt-2">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Could not load schema from source contract. Ensure the contract has a schema defined.
+                  {t('mdm:link.schemaLoadError')}
                 </AlertDescription>
               </Alert>
             )}
@@ -590,8 +600,7 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
               <Alert className="mt-2">
                 <Info className="h-4 w-4" />
                 <AlertDescription>
-                  {Object.keys(columnMapping).length} column mapping(s) configured. 
-                  Only map columns with different names between source and master.
+                  {t('mdm:link.mappingsConfigured', { count: Object.keys(columnMapping).length })}
                 </AlertDescription>
               </Alert>
             )}
@@ -599,11 +608,11 @@ export default function LinkSourceDialog({ isOpen, configId, masterContractId, o
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Link Source
+              {t('mdm:link.submitButton')}
             </Button>
           </DialogFooter>
         </form>

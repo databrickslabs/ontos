@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactFlow, {
     Node,
     Edge,
@@ -40,6 +41,7 @@ interface DataProductNodeData {
 }
 
 const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => {
+    const { t } = useTranslation(['data-products', 'common']);
     const handleHeight = 10;
     const handleWidth = 10;
     const inputBaseTopOffset = 25;
@@ -73,10 +75,10 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
                                     onClick={(e) => e.stopPropagation()} // Keep stopPropagation
                                 />
                                 <TooltipContent side="left">
-                                    <p className="font-semibold">{port.name} (Consumable)</p>
+                                    <p className="font-semibold">{t('data-products:graphView.inputPortLabel', { name: port.name })}</p>
                                     {(port as any).description && <p className="text-xs text-muted-foreground">{(port as any).description}</p>}
-                                    <p className="text-xs"><span className="text-muted-foreground">Contract:</span> {port.contractId}</p>
-                                    <p className="text-xs"><span className="text-muted-foreground">Version:</span> {port.version}</p>
+                                    <p className="text-xs"><span className="text-muted-foreground">{t('data-products:graphView.labels.contract')}:</span> {port.contractId}</p>
+                                    <p className="text-xs"><span className="text-muted-foreground">{t('common:labels.version')}:</span> {port.version}</p>
                                 </TooltipContent>
                             </Tooltip>
                             {/* Render the Handle itself */}
@@ -101,7 +103,7 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
                     );
                  })}
             {/* </TooltipProvider> */}
-            
+
             {/* Output Port Handles (Right) - With Tooltips, NO Provider here */}
              {/* <TooltipProvider delayDuration={100}> */}
                 {Array.isArray(data.outputPorts) && data.outputPorts.map((port, index) => {
@@ -128,10 +130,10 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
                                     onClick={(e) => e.stopPropagation()} // Keep stopPropagation
                                 />
                                 <TooltipContent side="right">
-                                    <p className="font-semibold">{port.name} (Deliverable)</p>
+                                    <p className="font-semibold">{t('data-products:graphView.outputPortLabel', { name: port.name })}</p>
                                     {port.description && <p className="text-xs text-muted-foreground">{port.description}</p>}
-                                    {port.contractId && <p className="text-xs"><span className="text-muted-foreground">Contract:</span> {port.contractId}</p>}
-                                    <p className="text-xs"><span className="text-muted-foreground">Version:</span> {port.version}</p>
+                                    {port.contractId && <p className="text-xs"><span className="text-muted-foreground">{t('data-products:graphView.labels.contract')}:</span> {port.contractId}</p>}
+                                    <p className="text-xs"><span className="text-muted-foreground">{t('common:labels.version')}:</span> {port.version}</p>
                                 </TooltipContent>
                             </Tooltip>
                              {/* Render the Handle itself */}
@@ -157,8 +159,8 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
                  })}
             {/* </TooltipProvider> */}
 
-            <div 
-                className="cursor-pointer" 
+            <div
+                className="cursor-pointer"
                 onClick={(e) => {
                     e.stopPropagation();
                     data.navigate(`/data-products/${data.nodeId}`);
@@ -169,7 +171,7 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
                     if (e.key === 'Enter' || e.key === ' ') {
                          data.navigate(`/data-products/${data.nodeId}`);
                     }
-                }} 
+                }}
             >
                 <Card className="w-64 shadow-md border-2 border-primary/50 bg-card hover:border-primary transition-colors">
                     <CardContent className="p-3 text-center">
@@ -202,9 +204,9 @@ const ExternalSourceNode: React.FC<NodeProps<ExternalSourceNodeData>> = ({ data 
                 </CardContent>
             </Card>
              {/* Single Source Handle for external node */}
-            <Handle 
-                type="source" 
-                position={Position.Right} 
+            <Handle
+                type="source"
+                position={Position.Right}
                 id="external-source-handle" // Specific ID for this handle
                 isConnectable={false}
                 style={{ top: '50%', background: '#aaaaaa' }} // Grey color
@@ -266,6 +268,7 @@ interface DataProductGraphViewProps {
 }
 
 const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, viewMode, setViewMode, navigate }) => {
+    const { t } = useTranslation(['data-products', 'common']);
     // Detect dark mode
     const isDarkMode = document.documentElement.classList.contains('dark');
 
@@ -282,9 +285,9 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
                 type: 'dataProduct',
                 position: { x: 0, y: 0 },
                 data: {
-                    label: product.name || 'Unnamed Product', // ODPS v1.0.0: use name field
+                    label: product.name || t('data-products:graphView.unnamedProduct'), // ODPS v1.0.0: use name field
                     productType: firstOutputType, // ODPS v1.0.0: use first output port type
-                    version: product.version || 'N/A',
+                    version: product.version || t('common:states.notAvailable'),
                     status: product.status, // ODPS v1.0.0: status is at root level
                     inputPorts: product.inputPorts || [],
                     outputPorts: product.outputPorts || [],
@@ -356,7 +359,7 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
         // Pass 2: Apply layout to ALL nodes and edges
         return getLayoutedElements(allInitialNodes, initialEdges);
 
-    }, [products, navigate]);
+    }, [products, navigate, t]);
 
     // Reinstate state hooks for controlled component
     const [nodes, _setNodes, onNodesChange] = useNodesState(initialElements.nodes);
@@ -373,7 +376,7 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
                     size="sm"
                     onClick={() => setViewMode('table')}
                     className="h-8 px-2"
-                    title="Switch to Table View"
+                    title={t('data-products:graphView.switchToTableView')}
                 >
                     <Table className="h-4 w-4" />
                 </Button>
@@ -382,7 +385,7 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
                     size="sm"
                     onClick={() => setViewMode('graph')}
                     className="h-8 px-2"
-                    title="Switch to Graph View"
+                    title={t('data-products:graphView.switchToGraphView')}
                     disabled
                 >
                     <Workflow className="h-4 w-4" />
@@ -419,4 +422,4 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
     );
 };
 
-export default DataProductGraphView; 
+export default DataProductGraphView;

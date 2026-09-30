@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -22,12 +23,10 @@ import { MdmCreateReviewRequest, MdmCreateReviewResponse } from '@/types/mdm';
 import { PrincipalPicker } from '@/components/common/principal-picker';
 import { Controller } from 'react-hook-form';
 
-const formSchema = z.object({
-  reviewer_email: z.string().email('Valid email is required'),
-  notes: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = {
+  reviewer_email: string;
+  notes?: string;
+};
 
 interface CreateReviewDialogProps {
   isOpen: boolean;
@@ -46,8 +45,18 @@ export default function CreateReviewDialog({
 }: CreateReviewDialogProps) {
   const [submitting, setSubmitting] = useState(false);
 
+  const { t } = useTranslation(['mdm', 'common']);
   const { post } = useApi();
   const { toast } = useToast();
+
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        reviewer_email: z.string().email(t('mdm:review.emailRequired')),
+        notes: z.string().optional(),
+      }),
+    [t]
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -75,7 +84,7 @@ export default function CreateReviewDialog({
       // Check for errors first (useApi returns empty object on error, not null)
       if (response.error) {
         toast({
-          title: 'Error',
+          title: t('common:status.error'),
           description: response.error,
           variant: 'destructive',
         });
@@ -85,21 +94,21 @@ export default function CreateReviewDialog({
       // Verify we have a valid review_id before navigating
       if (response.data && response.data.review_id) {
         toast({
-          title: 'Success',
-          description: `Review request created with ${response.data.candidate_count} candidates`,
+          title: t('common:status.success'),
+          description: t('mdm:review.createdWithCount', { count: response.data.candidate_count }),
         });
         onSuccess(response.data.review_id);
       } else {
         toast({
-          title: 'Error',
-          description: 'Failed to create review request - no review ID returned',
+          title: t('common:status.error'),
+          description: t('mdm:review.noReviewId'),
           variant: 'destructive',
         });
       }
     } catch (err: any) {
       toast({
-        title: 'Error',
-        description: err.message || 'Failed to create review request',
+        title: t('common:status.error'),
+        description: err.message || t('mdm:review.createFailed'),
         variant: 'destructive',
       });
     } finally {
@@ -113,24 +122,24 @@ export default function CreateReviewDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileCheck className="h-5 w-5" />
-            Create Match Review
+            {t('mdm:review.dialogTitle')}
           </DialogTitle>
           <DialogDescription>
-            Create a data asset review request for stewards to approve or reject match candidates.
+            {t('mdm:review.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">
-              This will create a review request for{' '}
-              <span className="font-medium text-foreground">{candidateCount}</span> pending match
-              candidates.
+              {t('mdm:review.willCreatePrefix')}{' '}
+              <span className="font-medium text-foreground">{candidateCount}</span>{' '}
+              {t('mdm:review.willCreateSuffix')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="reviewer_email">Reviewer</Label>
+            <Label htmlFor="reviewer_email">{t('common:labels.reviewer')}</Label>
             <Controller
               name="reviewer_email"
               control={form.control}
@@ -140,8 +149,8 @@ export default function CreateReviewDialog({
                   accepts={['user']}
                   value={field.value || null}
                   onChange={(next) => field.onChange(next ?? '')}
-                  placeholder="data-steward@company.com"
-                  aria-label="Reviewer"
+                  placeholder={t('mdm:review.reviewerPlaceholder')}
+                  aria-label={t('common:labels.reviewer')}
                 />
               )}
             />
@@ -153,10 +162,10 @@ export default function CreateReviewDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes for Reviewer</Label>
+            <Label htmlFor="notes">{t('mdm:review.notesLabel')}</Label>
             <Textarea
               id="notes"
-              placeholder="Any additional context or instructions for the reviewer..."
+              placeholder={t('mdm:review.notesPlaceholder')}
               rows={3}
               {...form.register('notes')}
             />
@@ -164,11 +173,11 @@ export default function CreateReviewDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Review Request
+              {t('mdm:candidates.createReview')}
             </Button>
           </DialogFooter>
         </form>

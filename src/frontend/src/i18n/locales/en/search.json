@@ -62,7 +62,18 @@
     "resourcesWithLabel": "Resources with rdfs:label",
     "subjectsAndTypes": "Subjects and their types",
     "topPredicates": "Top predicates by frequency",
-    "mostLinkedSeeAlso": "Most linked via rdfs:seeAlso"
+    "mostLinkedSeeAlso": "Most linked via rdfs:seeAlso",
+    "resourceDetail": "Resource detail",
+    "prefixPlaceholder": "e.g., example.org/banking",
+    "resourceLoading": "Loading…",
+    "noTriples": "No triples for this resource.",
+    "blankNodeExpanded": "(blank node, expanded below)",
+    "hover": {
+      "type": "Type: {{type}}",
+      "id": "ID: {{id}}",
+      "owner": "Owner: {{owner}}",
+      "status": "Status: {{status}}"
+    }
   },
   "index": {
     "title": "Index Search",
@@ -135,7 +146,10 @@
       "property": "Property",
       "selectProperty": "Select property...",
       "browseUCColumn": "Browse UC table and select column...",
-      "ucColumnTitle": "Select UC Column"
+      "ucColumnTitle": "Select UC Column",
+      "asset": "Asset",
+      "noColumnAssets": "No Column or Logical Attribute assets found",
+      "selectAsset": "Select asset"
     },
     "messages": {
       "selectPropertyTarget": "Please select a contract, schema, and property.",
@@ -177,6 +191,31 @@
       "loadSessionFailed": "Failed to load session",
       "deleteSessionFailed": "Failed to delete session",
       "loadFailed": "Failed to load LLM search. Please try again later."
+    },
+    "debug": {
+      "title": "Debug",
+      "toolCallCount_one": "{{count}} tool call",
+      "toolCallCount_other": "{{count}} tool calls",
+      "priorResults": "({{count}} prior)",
+      "followUp": "Follow-up: LLM has {{messages}} prior messages ({{results}} tool results) in conversation history",
+      "queryClassification": "Query Classification",
+      "query": "Query:",
+      "categories": "Categories:",
+      "toolsProvided": "Tools provided:",
+      "model": "Model:",
+      "iterations": "Iterations:",
+      "total": "total",
+      "toolExecutions": "Tool Executions",
+      "llmIterations": "LLM Iterations",
+      "messagesSent": "{{count}} msgs",
+      "toolCallsShort": "{{count}} tool call(s)",
+      "args": "Args:",
+      "showResult": "Show result",
+      "hideResult": "Hide result",
+      "modeEnabled": "Debug mode enabled",
+      "modeDisabled": "Debug mode disabled",
+      "modeEnabledDesc": "LLM intermediate steps will be shown",
+      "clickToDisable": "Click to disable debug mode"
     }
   },
   "copilot": {
@@ -190,7 +229,7 @@
     "scopeGeneral": "Ontos (general)",
     "scopeThisPage": "This page",
     "inputPlaceholder": "Ask {{shortName}} anything...",
-    "messageSendFailed": "Failed to send message"
+    "messageSendFailed": "Failed to send message",
+    "resizeHandle": "Resize Ask Ontos panel"
   }
 }
-

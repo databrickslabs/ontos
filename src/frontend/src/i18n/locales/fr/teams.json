@@ -1,6 +1,7 @@
 {
   "title": "Équipes",
   "subtitle": "Gérez les équipes et leurs membres dans votre organisation.",
+  "openMenu": "Ouvrir le menu",
   "addNewTeam": "Ajouter une nouvelle équipe",
   "editTeam": "Modifier l'équipe",
   "deleteTeam": "Supprimer l'équipe",

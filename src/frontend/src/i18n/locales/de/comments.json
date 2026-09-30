@@ -1,0 +1,73 @@
+{
+  "trigger": {
+    "button": "Kommentare"
+  },
+  "timeline": {
+    "heading": "Aktivitätsverlauf",
+    "edited": "(bearbeitet)",
+    "loadError": "Verlauf konnte nicht geladen werden: {{error}}"
+  },
+  "project": {
+    "label": "Projekt: {{name}}",
+    "noContext": "Kein Projektkontext (global)"
+  },
+  "filter": {
+    "label": "Filter:",
+    "comments": "Kommentare",
+    "changes": "Änderungen"
+  },
+  "actions": {
+    "addComment": "Kommentar hinzufügen"
+  },
+  "form": {
+    "titleLabel": "Titel (optional)",
+    "titlePlaceholder": "Fügen Sie einen Titel für diesen Kommentar hinzu...",
+    "commentLabel": "Kommentar",
+    "commentPlaceholder": "Schreiben Sie Ihren Kommentar...",
+    "postInProject": "Im Projekt veröffentlichen",
+    "projectOverrideTooltip": "Sie veröffentlichen unter einem anderen Projekt als der Hauptansicht. Die Verlaufsliste ist davon nicht betroffen.",
+    "globalNoProject": "Global (kein Projekt)",
+    "audienceHelp": "Bestimmte Teams oder Rollen ansprechen (optional). Leer lassen, um für alle Projektmitglieder sichtbar zu sein.",
+    "teamsLabel": "Teams",
+    "noTeams": "Keine Teams im aktuellen Projekt verfügbar",
+    "appRolesLabel": "App-Rollen",
+    "usersGroupsLabel": "Benutzer & Gruppen",
+    "principalsPlaceholder": "Benutzer oder Gruppen hinzufügen…",
+    "principalsAria": "Zielgruppe: Benutzer und Gruppen",
+    "post": "Veröffentlichen"
+  },
+  "badge": {
+    "team": "Team: {{name}}",
+    "role": "Rolle: {{name}}"
+  },
+  "change": {
+    "requesterLabel": "Antragsteller:",
+    "decisionLabel": "Entscheidung:",
+    "messageLabel": "Nachricht:",
+    "iriLabel": "IRI:",
+    "linkIdLabel": "Link-ID:",
+    "operationLabel": "Vorgang:",
+    "operationLinked": "verknüpft",
+    "operationUnlinked": "Verknüpfung aufgehoben"
+  },
+  "validation": {
+    "commentRequired": "Kommentarinhalt ist erforderlich"
+  },
+  "confirmDelete": "Sind Sie sicher, dass Sie diesen Kommentar löschen möchten?",
+  "toast": {
+    "createSuccess": "Kommentar erfolgreich erstellt",
+    "createError": "Kommentar konnte nicht erstellt werden: {{error}}",
+    "updateSuccess": "Kommentar erfolgreich aktualisiert",
+    "updateError": "Kommentar konnte nicht aktualisiert werden: {{error}}",
+    "deleteSuccess": "Kommentar erfolgreich gelöscht",
+    "deleteError": "Kommentar konnte nicht gelöscht werden: {{error}}"
+  },
+  "empty": {
+    "commentsTitle": "Noch keine Kommentare",
+    "commentsSubtitle": "Seien Sie der Erste, der einen Kommentar hinzufügt!",
+    "changesTitle": "Keine Änderungen erfasst",
+    "changesSubtitle": "Änderungen werden hier angezeigt, sobald sie auftreten",
+    "allTitle": "Noch keine Aktivität",
+    "allSubtitle": "Kommentare und Änderungen werden hier angezeigt"
+  }
+}

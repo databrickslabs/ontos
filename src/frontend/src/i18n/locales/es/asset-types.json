@@ -1,0 +1,80 @@
+{
+  "title": "Tipos de activo",
+  "subtitle": "Plantillas reutilizables que definen cómo se estructuran los distintos tipos de activos.",
+  "addNew": "Añadir tipo de activo",
+  "editAssetType": "Editar tipo de activo",
+  "deleteAssetType": "Eliminar tipo de activo",
+  "systemBadge": "Sistema",
+  "openMenu": "Abrir menú",
+  "table": {
+    "name": "Nombre",
+    "description": "Descripción",
+    "category": "Categoría",
+    "status": "Estado",
+    "assetCount": "Activos",
+    "lastUpdated": "Última actualización",
+    "actions": "Acciones"
+  },
+  "categories": {
+    "data": "Datos",
+    "analytics": "Analítica",
+    "integration": "Integración",
+    "system": "Sistema",
+    "custom": "Personalizado"
+  },
+  "statuses": {
+    "active": "Activo",
+    "deprecated": "Obsoleto"
+  },
+  "permissions": {
+    "deniedView": "No tienes permiso para ver los tipos de activo.",
+    "deniedCreate": "No tienes permiso para crear tipos de activo.",
+    "deniedEdit": "No tienes permiso para editar tipos de activo.",
+    "deniedDelete": "No tienes permiso para eliminar tipos de activo.",
+    "permissionDenied": "Permiso denegado"
+  },
+  "messages": {
+    "errorFetching": "Error al obtener los tipos de activo",
+    "loadFailed": "Error al cargar los tipos de activo",
+    "errorDeleting": "Error al eliminar el tipo de activo",
+    "deleted": "Tipo de activo eliminado",
+    "deletedSuccess": "El tipo de activo se eliminó correctamente.",
+    "errorLoadingData": "Error al cargar los datos"
+  },
+  "deleteDialog": {
+    "title": "¿Eliminar el tipo de activo?",
+    "description": "Esta acción no se puede deshacer. Los activos existentes de este tipo podrían quedar huérfanos.",
+    "cancel": "Cancelar",
+    "delete": "Eliminar"
+  },
+  "emptyState": {
+    "title": "Aún no hay tipos de activo definidos",
+    "description": "Crea tu primer tipo de activo para empezar a definir plantillas de activos."
+  },
+  "form": {
+    "createTitle": "Crear tipo de activo",
+    "createDescription": "Añade una nueva plantilla de tipo de activo.",
+    "editTitle": "Editar tipo de activo",
+    "editDescription": "Actualiza los detalles de este tipo de activo.",
+    "create": "Crear",
+    "update": "Guardar cambios",
+    "noCategory": "Sin categoría",
+    "labels": {
+      "icon": "Icono"
+    },
+    "placeholders": {
+      "name": "p. ej., Panel",
+      "description": "Describe este tipo de activo...",
+      "category": "Selecciona una categoría",
+      "icon": "p. ej., BarChart"
+    },
+    "toasts": {
+      "created": "Tipo de activo creado",
+      "createdDescription": "Se ha creado \"{{name}}\".",
+      "updated": "Tipo de activo actualizado",
+      "updatedDescription": "Se ha actualizado \"{{name}}\".",
+      "createFailed": "Error al crear",
+      "updateFailed": "Error al actualizar"
+    }
+  }
+}

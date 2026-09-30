@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,7 @@ type SLAFormProps = {
 }
 
 export default function SLAFormDialog({ isOpen, onOpenChange, onSubmit, initial }: SLAFormProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -50,8 +52,8 @@ export default function SLAFormDialog({ isOpen, onOpenChange, onSubmit, initial 
       onOpenChange(false)
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error?.message || 'Failed to save SLA requirements',
+        title: t('common:toast.error'),
+        description: error?.message || t('data-contracts:sla.saveError', 'Failed to save SLA requirements'),
         variant: 'destructive',
       })
     } finally {
@@ -63,15 +65,15 @@ export default function SLAFormDialog({ isOpen, onOpenChange, onSubmit, initial 
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit SLA Requirements</DialogTitle>
+          <DialogTitle>{t('data-contracts:sla.editTitle', 'Edit SLA Requirements')}</DialogTitle>
           <DialogDescription>
-            Define service level agreement requirements for this contract.
+            {t('data-contracts:sla.description', 'Define service level agreement requirements for this contract.')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="uptimeTarget">Uptime Target (%)</Label>
+            <Label htmlFor="uptimeTarget">{t('data-contracts:sla.uptimeTargetLabel', 'Uptime Target (%)')}</Label>
             <Input
               id="uptimeTarget"
               type="number"
@@ -80,57 +82,57 @@ export default function SLAFormDialog({ isOpen, onOpenChange, onSubmit, initial 
               max="100"
               value={uptimeTarget}
               onChange={(e) => setUptimeTarget(e.target.value)}
-              placeholder="e.g., 99.9"
+              placeholder={t('data-contracts:sla.uptimeTargetPlaceholder', 'e.g., 99.9')}
             />
-            <p className="text-xs text-muted-foreground">Expected uptime percentage (0-100)</p>
+            <p className="text-xs text-muted-foreground">{t('data-contracts:sla.uptimeTargetHelp', 'Expected uptime percentage (0-100)')}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="maxDowntimeMinutes">Max Downtime (minutes)</Label>
+            <Label htmlFor="maxDowntimeMinutes">{t('data-contracts:sla.maxDowntimeLabel', 'Max Downtime (minutes)')}</Label>
             <Input
               id="maxDowntimeMinutes"
               type="number"
               min="0"
               value={maxDowntimeMinutes}
               onChange={(e) => setMaxDowntimeMinutes(e.target.value)}
-              placeholder="e.g., 60"
+              placeholder={t('data-contracts:sla.maxDowntimePlaceholder', 'e.g., 60')}
             />
-            <p className="text-xs text-muted-foreground">Maximum acceptable downtime per month</p>
+            <p className="text-xs text-muted-foreground">{t('data-contracts:sla.maxDowntimeHelp', 'Maximum acceptable downtime per month')}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="queryResponseTimeMs">Query Response Time (ms)</Label>
+            <Label htmlFor="queryResponseTimeMs">{t('data-contracts:sla.queryResponseTimeLabel', 'Query Response Time (ms)')}</Label>
             <Input
               id="queryResponseTimeMs"
               type="number"
               min="0"
               value={queryResponseTimeMs}
               onChange={(e) => setQueryResponseTimeMs(e.target.value)}
-              placeholder="e.g., 1000"
+              placeholder={t('data-contracts:sla.queryResponseTimePlaceholder', 'e.g., 1000')}
             />
-            <p className="text-xs text-muted-foreground">Maximum query response time in milliseconds</p>
+            <p className="text-xs text-muted-foreground">{t('data-contracts:sla.queryResponseTimeHelp', 'Maximum query response time in milliseconds')}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="dataFreshnessMinutes">Data Freshness (minutes)</Label>
+            <Label htmlFor="dataFreshnessMinutes">{t('data-contracts:sla.dataFreshnessLabel', 'Data Freshness (minutes)')}</Label>
             <Input
               id="dataFreshnessMinutes"
               type="number"
               min="0"
               value={dataFreshnessMinutes}
               onChange={(e) => setDataFreshnessMinutes(e.target.value)}
-              placeholder="e.g., 15"
+              placeholder={t('data-contracts:sla.dataFreshnessPlaceholder', 'e.g., 15')}
             />
-            <p className="text-xs text-muted-foreground">How fresh the data should be (in minutes)</p>
+            <p className="text-xs text-muted-foreground">{t('data-contracts:sla.dataFreshnessHelp', 'How fresh the data should be (in minutes)')}</p>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : 'Save SLA'}
+            {isSubmitting ? t('common:actions.saving') : t('data-contracts:sla.saveButton', 'Save SLA')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,0 +1,78 @@
+{
+  "title": "Geschäftsrollen",
+  "subtitle": "Benannte Rollen, die Benutzern als Eigentümer verschiedener Objekte zugewiesen werden können.",
+  "addNew": "Rolle hinzufügen",
+  "editRole": "Rolle bearbeiten",
+  "deleteRole": "Rolle löschen",
+  "systemBadge": "System",
+  "openMenu": "Menü öffnen",
+  "table": {
+    "name": "Name",
+    "description": "Beschreibung",
+    "category": "Kategorie",
+    "status": "Status",
+    "system": "System",
+    "lastUpdated": "Zuletzt aktualisiert",
+    "actions": "Aktionen"
+  },
+  "categories": {
+    "governance": "Governance",
+    "technical": "Technisch",
+    "business": "Geschäftlich",
+    "operational": "Betrieblich"
+  },
+  "statuses": {
+    "active": "Aktiv",
+    "deprecated": "Veraltet"
+  },
+  "permissions": {
+    "deniedView": "Sie haben keine Berechtigung, Geschäftsrollen anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Geschäftsrollen zu erstellen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Geschäftsrollen zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Geschäftsrollen zu löschen.",
+    "permissionDenied": "Zugriff verweigert"
+  },
+  "messages": {
+    "errorFetching": "Fehler beim Abrufen der Geschäftsrollen",
+    "loadFailed": "Geschäftsrollen konnten nicht geladen werden",
+    "errorDeleting": "Fehler beim Löschen der Geschäftsrolle",
+    "deleted": "Geschäftsrolle gelöscht",
+    "deletedSuccess": "Die Geschäftsrolle wurde erfolgreich gelöscht.",
+    "errorLoadingData": "Fehler beim Laden der Daten"
+  },
+  "deleteDialog": {
+    "title": "Geschäftsrolle löschen?",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Bestehende Eigentümerzuweisungen mit dieser Rolle können verwaisen.",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  },
+  "emptyState": {
+    "title": "Noch keine Geschäftsrollen definiert",
+    "description": "Erstellen Sie Ihre erste Geschäftsrolle (z. B. Data Owner, Domain Owner)."
+  },
+  "form": {
+    "createTitle": "Geschäftsrolle erstellen",
+    "createDescription": "Fügen Sie eine neue Geschäftsrolle hinzu, die Benutzern zugewiesen werden kann.",
+    "editTitle": "Geschäftsrolle bearbeiten",
+    "editDescription": "Aktualisieren Sie die Details dieser Geschäftsrolle.",
+    "create": "Erstellen",
+    "update": "Änderungen speichern",
+    "noCategory": "Keine Kategorie",
+    "isApprover": "Workflow-Genehmiger",
+    "isApproverDescription": "Diese Rolle in den Dropdown-Listen für Workflow-Genehmiger und Benachrichtigungsempfänger anzeigen.",
+    "isApproverInUse": "Deaktivieren nicht möglich – verwendet in {{count}} Workflow(s): {{workflows}}.",
+    "placeholders": {
+      "name": "z. B. Data Owner",
+      "description": "Beschreiben Sie die Verantwortlichkeiten dieser Rolle...",
+      "category": "Kategorie auswählen"
+    },
+    "toasts": {
+      "created": "Geschäftsrolle erstellt",
+      "createdDescription": "\"{{name}}\" wurde erstellt.",
+      "updated": "Geschäftsrolle aktualisiert",
+      "updatedDescription": "\"{{name}}\" wurde aktualisiert.",
+      "createFailed": "Erstellen fehlgeschlagen",
+      "updateFailed": "Aktualisieren fehlgeschlagen"
+    }
+  }
+}

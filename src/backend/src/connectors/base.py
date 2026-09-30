@@ -140,7 +140,13 @@ class AssetConnector(ABC):
     
     # Description
     description: str = "Base connector class"
-    
+
+    # Whether this connector type is offered in the "Add Connection" UI.
+    # This is a static, implementation-status flag — distinct from the runtime
+    # ``is_available`` check (which reflects whether a *configured* connection
+    # can currently reach its backend). Stub/mockup connectors set this False.
+    is_selectable: bool = True
+
     # -------------------------------------------------------------------------
     # Instance attributes
     # -------------------------------------------------------------------------

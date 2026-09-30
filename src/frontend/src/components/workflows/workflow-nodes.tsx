@@ -161,7 +161,7 @@ interface TriggerNodeData {
 }
 
 export const TriggerNode = memo(({ data, selected }: NodeProps<TriggerNodeData>) => {
-  const { t } = useTranslation(['common']);
+  const { t } = useTranslation(['workflows', 'common']);
   const trigger = data.trigger;
   const styles = nodeColorStyles.trigger;
 
@@ -262,6 +262,7 @@ StepNodeBase.displayName = 'StepNodeBase';
 
 // Validation Node
 export const ValidationNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const styles = nodeColorStyles.validation;
   return (
     <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
@@ -269,7 +270,7 @@ export const ValidationNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Shield className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Validation'}
+          {props.data.step.name || t('common:workflows.stepTypes.validation')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -289,6 +290,7 @@ ValidationNode.displayName = 'ValidationNode';
 
 // Approval Node
 export const ApprovalNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const approversValue = (props.data.step.config as { approvers?: string })?.approvers;
   const displayName = resolveRecipientDisplay(approversValue, props.data.rolesMap || {});
   const styles = nodeColorStyles.approval;
@@ -299,11 +301,11 @@ export const ApprovalNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <UserCheck className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Request Approval'}
+          {props.data.step.name || t('common:workflows.stepTypes.approval')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <Badge variant="outline" className="text-xs dark:border-amber-400/50 dark:text-amber-200">request approval</Badge>
+        <Badge variant="outline" className="text-xs dark:border-amber-400/50 dark:text-amber-200">{t('workflows:nodes.requestApproval')}</Badge>
         {approversValue && (
           <div className={nodeTextStyles.description + " mt-1"}>
             {displayName}
@@ -319,6 +321,7 @@ ApprovalNode.displayName = 'ApprovalNode';
 
 // Notification Node
 export const NotificationNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const recipientsValue = (props.data.step.config as { recipients?: string })?.recipients;
   const displayName = resolveRecipientDisplay(recipientsValue, props.data.rolesMap || {});
   const styles = nodeColorStyles.notification;
@@ -329,14 +332,14 @@ export const NotificationNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Bell className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Notification'}
+          {props.data.step.name || t('common:workflows.stepTypes.notification')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <Badge variant="outline" className="text-xs dark:border-cyan-400/50 dark:text-cyan-200">notification</Badge>
         {recipientsValue && (
           <div className={nodeTextStyles.description + " mt-1"}>
-            To: {displayName}
+            {t('workflows:nodes.notificationTo', { recipient: displayName })}
           </div>
         )}
       </CardContent>
@@ -348,6 +351,7 @@ NotificationNode.displayName = 'NotificationNode';
 
 // User Action Node (approval workflows: collect reason, acceptances, etc.)
 export const UserActionNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const title = (props.data.step.config as { title?: string })?.title;
   const styles = nodeColorStyles.user_action;
   return (
@@ -356,7 +360,7 @@ export const UserActionNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <MessageSquare className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || title || 'User Action'}
+          {props.data.step.name || title || t('common:workflows.stepTypes.user_action')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -374,7 +378,7 @@ UserActionNode.displayName = 'UserActionNode';
 
 // Entity Action — certify, publish, etc. on the trigger entity
 export const EntityActionNode = memo((props: NodeProps<StepNodeData>) => {
-  const { t } = useTranslation(['common']);
+  const { t } = useTranslation(['workflows', 'common']);
   const action = (props.data.step.config as { action?: string })?.action;
   const styles = nodeColorStyles.entity_action;
   return (
@@ -391,10 +395,10 @@ export const EntityActionNode = memo((props: NodeProps<StepNodeData>) => {
           {getStepTypeLabel('entity_action', t)}
         </Badge>
         {action && (
-          <div className={nodeTextStyles.description + ' mt-1'}>Action: {action}</div>
+          <div className={nodeTextStyles.description + ' mt-1'}>{t('workflows:nodes.actionLabel', { action })}</div>
         )}
         {!action && (
-          <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">No action set</div>
+          <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('workflows:nodes.noActionSet')}</div>
         )}
       </CardContent>
       <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />
@@ -407,6 +411,7 @@ EntityActionNode.displayName = 'EntityActionNode';
 // Legal Document Node
 // On Behalf Of Node — first-step principal capture ()
 export const OnBehalfOfNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const title = (props.data.step.config as { title?: string })?.title;
   const styles = nodeColorStyles.on_behalf_of;
   return (
@@ -415,7 +420,7 @@ export const OnBehalfOfNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Users className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || title || 'On Behalf Of'}
+          {props.data.step.name || title || t('common:workflows.stepTypes.on_behalf_of')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -431,6 +436,7 @@ export const OnBehalfOfNode = memo((props: NodeProps<StepNodeData>) => {
 OnBehalfOfNode.displayName = 'OnBehalfOfNode';
 
 export const LegalDocumentNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const title = (props.data.step.config as { title?: string })?.title;
   const styles = nodeColorStyles.legal_document;
   return (
@@ -439,7 +445,7 @@ export const LegalDocumentNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <FileText className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || title || 'Legal Document'}
+          {props.data.step.name || title || t('common:workflows.stepTypes.legal_document')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -457,6 +463,7 @@ LegalDocumentNode.displayName = 'LegalDocumentNode';
 
 // Acknowledgement Checklist Node
 export const AcknowledgementChecklistNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const title = (props.data.step.config as { title?: string })?.title;
   const itemCount = ((props.data.step.config as { items?: unknown[] })?.items || []).length;
   const styles = nodeColorStyles.acknowledgement_checklist;
@@ -466,13 +473,13 @@ export const AcknowledgementChecklistNode = memo((props: NodeProps<StepNodeData>
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <ListChecks className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || title || 'Checklist'}
+          {props.data.step.name || title || t('workflows:nodes.checklistTitle')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <Badge variant="outline" className="text-xs dark:border-emerald-400/50 dark:text-emerald-200">checklist</Badge>
         {itemCount > 0 && (
-          <div className={nodeTextStyles.description + " mt-1"}>{itemCount} item{itemCount !== 1 ? 's' : ''}</div>
+          <div className={nodeTextStyles.description + " mt-1"}>{t('workflows:nodes.itemCount', { count: itemCount })}</div>
         )}
       </CardContent>
       <Handle type="source" position={Position.Bottom} id="pass" className="!bg-green-500 dark:!bg-green-400" style={{ left: '30%' }} />
@@ -484,6 +491,7 @@ AcknowledgementChecklistNode.displayName = 'AcknowledgementChecklistNode';
 
 // Co-Signers Node
 export const CoSignersNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const title = (props.data.step.config as { title?: string })?.title;
   const styles = nodeColorStyles.co_signers;
   return (
@@ -492,7 +500,7 @@ export const CoSignersNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Users className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || title || 'Co-Signers'}
+          {props.data.step.name || title || t('common:workflows.stepTypes.co_signers')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -510,6 +518,7 @@ CoSignersNode.displayName = 'CoSignersNode';
 
 // Persist Agreement Node (auto-advance, no fail)
 export const PersistAgreementNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const styles = nodeColorStyles.persist_agreement;
   return (
     <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
@@ -517,7 +526,7 @@ export const PersistAgreementNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Database className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Persist Agreement'}
+          {props.data.step.name || t('common:workflows.stepTypes.persist_agreement')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -531,6 +540,7 @@ PersistAgreementNode.displayName = 'PersistAgreementNode';
 
 // Generate PDF Node (auto-advance, no fail)
 export const GeneratePdfNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const styles = nodeColorStyles.generate_pdf;
   return (
     <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
@@ -538,7 +548,7 @@ export const GeneratePdfNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <FileOutput className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Generate PDF'}
+          {props.data.step.name || t('common:workflows.stepTypes.generate_pdf')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -552,6 +562,7 @@ GeneratePdfNode.displayName = 'GeneratePdfNode';
 
 // Deliver Node (notification-like, no fail)
 export const DeliverNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const channels = (props.data.step.config as { channels?: string[] })?.channels;
   const styles = nodeColorStyles.deliver;
   return (
@@ -560,7 +571,7 @@ export const DeliverNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Send className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Deliver'}
+          {props.data.step.name || t('common:workflows.stepTypes.deliver')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -577,6 +588,7 @@ DeliverNode.displayName = 'DeliverNode';
 
 // Grant Permissions Node
 export const GrantPermissionsNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const permType = (props.data.step.config as { permission_type?: string })?.permission_type;
   const styles = nodeColorStyles.grant_permissions;
   return (
@@ -585,7 +597,7 @@ export const GrantPermissionsNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <KeyRound className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Grant Permissions'}
+          {props.data.step.name || t('common:workflows.stepTypes.grant_permissions')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -603,6 +615,7 @@ GrantPermissionsNode.displayName = 'GrantPermissionsNode';
 
 // Default/unknown step node (fallback when step_type has no dedicated component)
 export const DefaultStepNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const step = props.data.step;
   return (
     <Card className={`${baseNodeClass} border-slate-500 bg-slate-50 dark:bg-slate-800/70 dark:border-slate-400 ${props.selected ? 'ring-2 ring-slate-500 dark:ring-slate-400' : ''}`}>
@@ -610,7 +623,7 @@ export const DefaultStepNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-          {step.name || step.step_type || 'Step'}
+          {step.name || step.step_type || t('workflows:nodes.stepFallback')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -627,6 +640,7 @@ DefaultStepNode.displayName = 'DefaultStepNode';
 
 // Assign Tag Node
 export const AssignTagNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const styles = nodeColorStyles.assignTag;
   return (
     <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
@@ -634,14 +648,14 @@ export const AssignTagNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Tag className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Assign Tag'}
+          {props.data.step.name || t('common:workflows.stepTypes.assign_tag')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <Badge variant="outline" className="text-xs dark:border-teal-400/50 dark:text-teal-200">assign_tag</Badge>
         {(props.data.step.config as { key?: string })?.key && (
           <div className={nodeTextStyles.description + " mt-1"}>
-            Key: {(props.data.step.config as { key?: string }).key}
+            {t('workflows:nodes.keyLabel', { key: (props.data.step.config as { key?: string }).key })}
           </div>
         )}
       </CardContent>
@@ -653,6 +667,7 @@ AssignTagNode.displayName = 'AssignTagNode';
 
 // Conditional Node
 export const ConditionalNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const styles = nodeColorStyles.conditional;
   return (
     <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
@@ -660,7 +675,7 @@ export const ConditionalNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <GitBranch className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Conditional'}
+          {props.data.step.name || t('common:workflows.stepTypes.conditional')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -680,6 +695,7 @@ ConditionalNode.displayName = 'ConditionalNode';
 
 // Script Node
 export const ScriptNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const styles = nodeColorStyles.script;
   return (
     <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
@@ -687,7 +703,7 @@ export const ScriptNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Code className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Script'}
+          {props.data.step.name || t('common:workflows.stepTypes.script')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -704,6 +720,7 @@ ScriptNode.displayName = 'ScriptNode';
 
 // End Node (Pass/Fail)
 export const EndNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const isPass = props.data.step.step_type === 'pass';
   const Icon = isPass ? CheckCircle : XCircle;
   const styles = isPass ? nodeColorStyles.pass : nodeColorStyles.fail;
@@ -714,7 +731,7 @@ export const EndNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Icon className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || (isPass ? 'Success' : 'Failure')}
+          {props.data.step.name || (isPass ? t('workflows:nodes.successTitle') : t('workflows:nodes.failureTitle'))}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -737,6 +754,7 @@ EndNode.displayName = 'EndNode';
 
 // Policy Check Node
 export const PolicyCheckNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const policyName = (props.data.step.config as { policy_name?: string })?.policy_name;
   const policyId = (props.data.step.config as { policy_id?: string })?.policy_id;
   const styles = nodeColorStyles.policyCheck;
@@ -747,24 +765,24 @@ export const PolicyCheckNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <ClipboardCheck className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Policy Check'}
+          {props.data.step.name || t('common:workflows.stepTypes.policy_check')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <Badge variant="outline" className="text-xs dark:border-indigo-400/50 dark:text-indigo-200">policy_check</Badge>
         {policyName && (
           <div className={nodeTextStyles.description + " mt-1"}>
-            Policy: {policyName}
+            {t('workflows:nodes.policyLabel', { name: policyName })}
           </div>
         )}
         {!policyName && policyId && (
           <div className={`${nodeTextStyles.description} mt-1 truncate max-w-[140px]`}>
-            ID: {policyId.slice(0, 8)}...
+            {t('workflows:nodes.idLabel', { id: policyId.slice(0, 8) })}...
           </div>
         )}
         {!policyName && !policyId && (
           <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-            No policy selected
+            {t('workflows:nodes.noPolicySelected')}
           </div>
         )}
       </CardContent>
@@ -776,6 +794,7 @@ export const PolicyCheckNode = memo((props: NodeProps<StepNodeData>) => {
 PolicyCheckNode.displayName = 'PolicyCheckNode';
 
 export const CreateAssetReviewNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const reviewerRole = (props.data.step.config as { reviewer_role?: string })?.reviewer_role;
   const reviewType = (props.data.step.config as { review_type?: string })?.review_type;
   const displayRole = resolveRecipientDisplay(reviewerRole, props.data.rolesMap || {});
@@ -787,12 +806,12 @@ export const CreateAssetReviewNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <FileSearch className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Asset Review'}
+          {props.data.step.name || t('workflows:nodes.assetReviewTitle')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0 space-y-1">
         <p className={`${nodeTextStyles.description} truncate`} title={displayRole}>
-          <span className="font-medium text-foreground">Reviewer:</span> {displayRole || 'Not set'}
+          <span className="font-medium text-foreground">{t('workflows:nodes.reviewerLabel')}</span> {displayRole || t('workflows:nodes.notSet')}
         </p>
         {reviewType && (
           <Badge variant="outline" className="text-xs dark:border-teal-400/50 dark:text-teal-200">
@@ -809,17 +828,18 @@ CreateAssetReviewNode.displayName = 'CreateAssetReviewNode';
 
 // Webhook Node - calls external HTTP endpoints
 export const WebhookNode = memo((props: NodeProps<StepNodeData>) => {
+  const { t } = useTranslation(['workflows', 'common']);
   const connectionName = (props.data.step.config as { connection_name?: string })?.connection_name;
   const url = (props.data.step.config as { url?: string })?.url;
   const method = (props.data.step.config as { method?: string })?.method || 'POST';
   const styles = nodeColorStyles.webhook;
   
   // Determine display text - prefer connection name, fallback to URL
-  const displayTarget = connectionName 
-    ? `Connection: ${connectionName}`
-    : url 
+  const displayTarget = connectionName
+    ? t('workflows:nodes.connectionLabel', { name: connectionName })
+    : url
       ? url.length > 30 ? url.slice(0, 27) + '...' : url
-      : 'Not configured';
+      : t('workflows:nodes.notConfigured');
   
   return (
     <Card className={`${baseNodeClass} ${styles.card} ${props.selected ? `ring-2 ${styles.ring}` : ''}`}>
@@ -827,7 +847,7 @@ export const WebhookNode = memo((props: NodeProps<StepNodeData>) => {
       <CardHeader className="p-3 pb-2">
         <CardTitle className={`${nodeTextStyles.title} flex items-center gap-2`}>
           <Globe className={`h-4 w-4 ${styles.icon}`} />
-          {props.data.step.name || 'Webhook'}
+          {props.data.step.name || t('common:workflows.stepTypes.webhook')}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0 space-y-1">
@@ -839,7 +859,7 @@ export const WebhookNode = memo((props: NodeProps<StepNodeData>) => {
         </p>
         {!connectionName && !url && (
           <div className="text-xs text-amber-600 dark:text-amber-400">
-            Configure URL or Connection
+            {t('workflows:nodes.configureUrlOrConnection')}
           </div>
         )}
       </CardContent>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { useToast } from '@/hooks/use-toast';
@@ -27,6 +28,7 @@ const GATE_ICON: Record<string, { icon: typeof CheckCircle2; cls: string }> = {
 };
 
 export function MaturityInline({ entityType, entityId, compact = false }: MaturityInlineProps) {
+  const { t } = useTranslation('common');
   const [report, setReport] = useState<MaturityReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
@@ -52,16 +54,16 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
         setReport(data);
         const passed = data.gates_passed ?? 0;
         const total = data.gates_total ?? 0;
-        const level = data.achieved_level_name || 'Not assessed';
+        const level = data.achieved_level_name || t('common:maturity.notAssessed');
         toast({
-          title: 'Maturity evaluated',
-          description: `${level} — ${passed}/${total} gates passed`,
+          title: t('common:maturity.evaluatedTitle'),
+          description: t('common:maturity.evaluatedDescription', { level, passed, total }),
         });
       } else {
-        toast({ title: 'Evaluation failed', description: `Server returned ${res.status}`, variant: 'destructive' });
+        toast({ title: t('common:maturity.evaluationFailed'), description: t('common:maturity.serverReturned', { status: res.status }), variant: 'destructive' });
       }
     } catch (e) {
-      toast({ title: 'Evaluation failed', description: String(e), variant: 'destructive' });
+      toast({ title: t('common:maturity.evaluationFailed'), description: String(e), variant: 'destructive' });
     }
     setIsEvaluating(false);
   }, [entityId, prefix, toast]);
@@ -77,7 +79,7 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
   }
 
   const achievedLevel = report.levels.find(l => l.achieved && l.level_order === report.achieved_level_order);
-  const levelName = report.achieved_level_name || 'Not assessed';
+  const levelName = report.achieved_level_name || t('common:maturity.notAssessed');
   const passed = report.gates_passed ?? 0;
   const total = report.gates_total ?? 0;
 
@@ -93,14 +95,14 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
               <button
                 className="inline-flex items-center justify-center h-4 w-4 rounded-sm hover:bg-muted transition-colors"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); evaluate(); }}
-                title="Re-evaluate maturity"
+                title={t('common:maturity.reEvaluate')}
               >
                 {isEvaluating
                   ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                   : <RefreshCw className="h-3 w-3 text-muted-foreground hover:text-foreground" />}
               </button>
             </div>
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Maturity</span>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('common:maturity.label')}</span>
           </div>
         </HoverCardTrigger>
         <HoverCardContent className="w-72" side="bottom" align="end">
@@ -136,7 +138,7 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
         className="h-5 w-5"
         onClick={evaluate}
         disabled={isEvaluating}
-        title="Re-evaluate maturity"
+        title={t('common:maturity.reEvaluate')}
       >
         {isEvaluating
           ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -149,12 +151,13 @@ export function MaturityInline({ entityType, entityId, compact = false }: Maturi
 function HoverDetail({ report, levelName, passed, total }: {
   report: MaturityReport; levelName: string; passed: number; total: number;
 }) {
+  const { t } = useTranslation('common');
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">Maturity: {levelName}</p>
+        <p className="text-sm font-semibold">{t('common:maturity.labelWithLevel', { level: levelName })}</p>
         <span className="text-xs text-muted-foreground">
-          {passed}/{total} gates
+          {t('common:maturity.gatesCount', { passed, total })}
         </span>
       </div>
       <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -164,7 +167,7 @@ function HoverDetail({ report, levelName, passed, total }: {
       </div>
       {report.evaluated_at && (
         <p className="text-[10px] text-muted-foreground pt-1 border-t">
-          Evaluated {new Date(report.evaluated_at).toLocaleString()}
+          {t('common:maturity.evaluatedAt', { date: new Date(report.evaluated_at).toLocaleString() })}
         </p>
       )}
     </div>

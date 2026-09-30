@@ -1,0 +1,65 @@
+{
+  "title": "ビジネスオーナー",
+  "subtitle": "誰が何に責任を持つかを追跡するオーナーシップの割り当てです。",
+  "addNew": "オーナーを割り当て",
+  "editOwner": "割り当てを編集",
+  "removeOwner": "オーナーを削除",
+  "table": {
+    "object": "オブジェクト",
+    "objectType": "オブジェクト種別",
+    "owner": "オーナー",
+    "role": "ロール",
+    "status": "ステータス",
+    "assignedAt": "割り当て日",
+    "removedAt": "削除日",
+    "actions": "アクション"
+  },
+  "objectTypes": {
+    "data_product": "データプロダクト",
+    "data_contract": "データコントラクト",
+    "dataset": "データセット",
+    "data_domain": "データドメイン",
+    "business_term": "ビジネス用語",
+    "policy": "ポリシー",
+    "asset": "アセット",
+    "tag": "タグ"
+  },
+  "statusLabels": {
+    "active": "有効",
+    "inactive": "無効"
+  },
+  "permissions": {
+    "deniedView": "ビジネスオーナーを表示する権限がありません。",
+    "deniedCreate": "オーナーを割り当てる権限がありません。",
+    "deniedEdit": "オーナーの割り当てを編集する権限がありません。",
+    "deniedDelete": "オーナーを削除する権限がありません。",
+    "permissionDenied": "権限が拒否されました"
+  },
+  "messages": {
+    "errorFetching": "ビジネスオーナーの取得エラー",
+    "errorRemoving": "ビジネスオーナーの削除エラー",
+    "removed": "オーナーを削除しました",
+    "removedSuccess": "オーナーシップの割り当てが正常に削除されました。",
+    "errorLoadingData": "データの読み込みエラー"
+  },
+  "removeDialog": {
+    "title": "オーナーを削除しますか？",
+    "description": "オーナーシップの割り当てが無効化されます。履歴は保持されます。",
+    "reasonLabel": "理由（任意）",
+    "reasonPlaceholder": "削除理由を入力...",
+    "cancel": "キャンセル",
+    "remove": "削除"
+  },
+  "emptyState": {
+    "title": "オーナーシップの割り当てはまだありません",
+    "description": "データプロダクト、コントラクト、その他のオブジェクトにビジネスオーナーを割り当てます。"
+  },
+  "panel": {
+    "title": "オーナー",
+    "currentOwners": "現在のオーナー",
+    "previousOwners": "以前のオーナー",
+    "noOwners": "オーナーが割り当てられていません",
+    "assignOwner": "オーナーを割り当て",
+    "history": "履歴を表示"
+  }
+}

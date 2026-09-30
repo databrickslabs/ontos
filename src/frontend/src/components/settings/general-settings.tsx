@@ -22,6 +22,7 @@ interface AppSettings {
   llmSystemPrompt: string;
   llmDisclaimerText: string;
   allowJobEnablementRequests: boolean;
+  schemaImportChildLimit: number;
 }
 
 export default function GeneralSettings() {
@@ -41,6 +42,7 @@ export default function GeneralSettings() {
     llmSystemPrompt: '',
     llmDisclaimerText: '',
     allowJobEnablementRequests: false,
+    schemaImportChildLimit: 500,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -62,6 +64,7 @@ export default function GeneralSettings() {
             llmSystemPrompt: data.llm_system_prompt || '',
             llmDisclaimerText: data.llm_disclaimer_text || '',
             allowJobEnablementRequests: data.allow_job_enablement_requests || false,
+            schemaImportChildLimit: data.schema_import_child_limit ?? 500,
           });
         }
       } catch (error) {
@@ -89,6 +92,7 @@ export default function GeneralSettings() {
           llm_system_prompt: settings.llmSystemPrompt,
           llm_disclaimer_text: settings.llmDisclaimerText,
           allow_job_enablement_requests: settings.allowJobEnablementRequests,
+          schema_import_child_limit: settings.schemaImportChildLimit,
         }),
       });
       if (response.ok) {
@@ -232,6 +236,41 @@ export default function GeneralSettings() {
               {t(
                 'settings:general.backgroundJobs.allowEnablementRequests.help',
                 'When a user hits a feature whose background job is not enabled, they can send a notification asking an administrator to enable it.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Schema Importer Settings */}
+        <div>
+          <h3 className="text-lg font-medium mb-3">
+            {t('settings:general.schemaImporter.title', 'Schema Importer')}
+          </h3>
+          <div className="space-y-2 max-w-xs">
+            <Label htmlFor="schemaImportChildLimit">
+              {t('settings:general.schemaImporter.childLimit.label', 'Max objects fetched per level')}
+            </Label>
+            <Input
+              id="schemaImportChildLimit"
+              name="schemaImportChildLimit"
+              type="number"
+              min={1}
+              max={10000}
+              value={settings.schemaImportChildLimit}
+              onChange={(e) =>
+                setSettings(prev => ({
+                  ...prev,
+                  schemaImportChildLimit: e.target.value === '' ? 0 : parseInt(e.target.value, 10),
+                }))
+              }
+              disabled={!hasWriteAccess || isLoading}
+            />
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'settings:general.schemaImporter.childLimit.help',
+                'Maximum number of tables/views/objects the importer fetches per catalog or schema when browsing (1–10000). Raise this for large estates; there is no pagination beyond this cap.'
               )}
             </p>
           </div>

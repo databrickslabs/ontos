@@ -1,0 +1,78 @@
+{
+  "title": "Bedrijfsrollen",
+  "subtitle": "Benoemde rollen die aan gebruikers kunnen worden toegewezen als eigenaren van diverse objecten.",
+  "addNew": "Rol Toevoegen",
+  "editRole": "Rol Bewerken",
+  "deleteRole": "Rol Verwijderen",
+  "systemBadge": "Systeem",
+  "openMenu": "Menu openen",
+  "table": {
+    "name": "Naam",
+    "description": "Beschrijving",
+    "category": "Categorie",
+    "status": "Status",
+    "system": "Systeem",
+    "lastUpdated": "Laatst Bijgewerkt",
+    "actions": "Acties"
+  },
+  "categories": {
+    "governance": "Governance",
+    "technical": "Technisch",
+    "business": "Zakelijk",
+    "operational": "Operationeel"
+  },
+  "statuses": {
+    "active": "Actief",
+    "deprecated": "Verouderd"
+  },
+  "permissions": {
+    "deniedView": "Je hebt geen toestemming om bedrijfsrollen te bekijken.",
+    "deniedCreate": "Je hebt geen toestemming om bedrijfsrollen aan te maken.",
+    "deniedEdit": "Je hebt geen toestemming om bedrijfsrollen te bewerken.",
+    "deniedDelete": "Je hebt geen toestemming om bedrijfsrollen te verwijderen.",
+    "permissionDenied": "Geen Toegang"
+  },
+  "messages": {
+    "errorFetching": "Fout bij ophalen bedrijfsrollen",
+    "loadFailed": "Kon bedrijfsrollen niet laden",
+    "errorDeleting": "Fout bij verwijderen bedrijfsrol",
+    "deleted": "Bedrijfsrol Verwijderd",
+    "deletedSuccess": "De bedrijfsrol is succesvol verwijderd.",
+    "errorLoadingData": "Fout bij Laden Data"
+  },
+  "deleteDialog": {
+    "title": "Bedrijfsrol Verwijderen?",
+    "description": "Deze actie kan niet ongedaan worden gemaakt. Bestaande eigenaartoewijzingen die deze rol gebruiken, kunnen verweesd raken.",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen"
+  },
+  "emptyState": {
+    "title": "Nog geen bedrijfsrollen gedefinieerd",
+    "description": "Maak je eerste bedrijfsrol aan (bijv. Data-eigenaar, Domeineigenaar)."
+  },
+  "form": {
+    "createTitle": "Bedrijfsrol Aanmaken",
+    "createDescription": "Voeg een nieuwe bedrijfsrol toe die aan gebruikers kan worden toegewezen.",
+    "editTitle": "Bedrijfsrol Bewerken",
+    "editDescription": "Werk de details van deze bedrijfsrol bij.",
+    "create": "Aanmaken",
+    "update": "Wijzigingen Opslaan",
+    "noCategory": "Geen categorie",
+    "isApprover": "Workflow-goedkeurder",
+    "isApproverDescription": "Toon deze rol in de dropdowns voor workflow-goedkeurders en meldingsontvangers.",
+    "isApproverInUse": "Kan niet uitschakelen — gebruikt in {{count}} workflow(s): {{workflows}}.",
+    "placeholders": {
+      "name": "bijv. Data-eigenaar",
+      "description": "Beschrijf de verantwoordelijkheden van deze rol...",
+      "category": "Selecteer een categorie"
+    },
+    "toasts": {
+      "created": "Bedrijfsrol Aangemaakt",
+      "createdDescription": "\"{{name}}\" is aangemaakt.",
+      "updated": "Bedrijfsrol Bijgewerkt",
+      "updatedDescription": "\"{{name}}\" is bijgewerkt.",
+      "createFailed": "Aanmaken Mislukt",
+      "updateFailed": "Bijwerken Mislukt"
+    }
+  }
+}

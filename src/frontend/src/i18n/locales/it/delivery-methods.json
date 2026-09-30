@@ -1,0 +1,75 @@
+{
+  "title": "Metodi di distribuzione",
+  "subtitle": "Definisci come i dati vengono distribuiti ai consumatori tramite i deliverable (ad es. accesso a tabella, endpoint di serving).",
+  "addNew": "Aggiungi metodo",
+  "editMethod": "Modifica metodo",
+  "deleteMethod": "Elimina metodo",
+  "systemBadge": "Sistema",
+  "openMenu": "Apri menu",
+  "table": {
+    "name": "Nome",
+    "description": "Descrizione",
+    "category": "Categoria",
+    "status": "Stato",
+    "system": "Sistema",
+    "lastUpdated": "Ultimo aggiornamento",
+    "actions": "Azioni"
+  },
+  "categories": {
+    "access": "Accesso",
+    "endpoint": "Endpoint",
+    "export": "Esporta",
+    "streaming": "Streaming"
+  },
+  "statuses": {
+    "active": "Attivo",
+    "deprecated": "Deprecato"
+  },
+  "permissions": {
+    "deniedView": "Non hai l'autorizzazione per visualizzare i metodi di distribuzione.",
+    "deniedCreate": "Non hai l'autorizzazione per creare metodi di distribuzione.",
+    "deniedEdit": "Non hai l'autorizzazione per modificare metodi di distribuzione.",
+    "deniedDelete": "Non hai l'autorizzazione per eliminare metodi di distribuzione.",
+    "permissionDenied": "Autorizzazione negata"
+  },
+  "messages": {
+    "errorFetching": "Errore nel recupero dei metodi di distribuzione",
+    "loadFailed": "Impossibile caricare i metodi di distribuzione",
+    "errorDeleting": "Errore nell'eliminazione del metodo di distribuzione",
+    "deleted": "Metodo di distribuzione eliminato",
+    "deletedSuccess": "Il metodo di distribuzione è stato eliminato con successo.",
+    "errorLoadingData": "Errore nel caricamento dei dati"
+  },
+  "deleteDialog": {
+    "title": "Eliminare il metodo di distribuzione?",
+    "description": "Questa azione non può essere annullata. I deliverable esistenti che utilizzano questo metodo potrebbero rimanere orfani.",
+    "cancel": "Annulla",
+    "delete": "Elimina"
+  },
+  "emptyState": {
+    "title": "Nessun metodo di distribuzione ancora definito",
+    "description": "Crea il tuo primo metodo di distribuzione (ad es. accesso a tabella, endpoint di serving, esportazione file)."
+  },
+  "form": {
+    "createTitle": "Crea metodo di distribuzione",
+    "createDescription": "Aggiungi un nuovo metodo di distribuzione dei dati.",
+    "editTitle": "Modifica metodo di distribuzione",
+    "editDescription": "Aggiorna i dettagli di questo metodo di distribuzione.",
+    "create": "Crea",
+    "update": "Salva le modifiche",
+    "noCategory": "Nessuna categoria",
+    "placeholders": {
+      "name": "ad es. accesso a tabella",
+      "description": "Descrivi come vengono distribuiti i dati...",
+      "category": "Seleziona una categoria"
+    },
+    "toasts": {
+      "created": "Metodo di distribuzione creato",
+      "createdDescription": "\"{{name}}\" è stato creato.",
+      "updated": "Metodo di distribuzione aggiornato",
+      "updatedDescription": "\"{{name}}\" è stato aggiornato.",
+      "createFailed": "Creazione non riuscita",
+      "updateFailed": "Aggiornamento non riuscito"
+    }
+  }
+}

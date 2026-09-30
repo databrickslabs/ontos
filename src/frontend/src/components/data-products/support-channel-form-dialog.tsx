@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ const SUPPORT_TOOLS = ['email', 'slack', 'teams', 'discord', 'ticket', 'other'];
 const SUPPORT_SCOPES = ['interactive', 'announcements', 'issues'];
 
 export default function SupportChannelFormDialog({ isOpen, onOpenChange, onSubmit, initial }: SupportChannelFormProps) {
+  const { t } = useTranslation(['data-products', 'common']);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -123,7 +125,7 @@ export default function SupportChannelFormDialog({ isOpen, onOpenChange, onSubmi
               id="channel"
               value={channel}
               onChange={(e) => setChannel(e.target.value)}
-              placeholder="e.g., data-product-support"
+              placeholder={t('data-products:supportChannelForm.channelNamePlaceholder')}
               autoFocus
             />
           </div>
@@ -137,7 +139,7 @@ export default function SupportChannelFormDialog({ isOpen, onOpenChange, onSubmi
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://slack.com/channels/data-product-support"
+              placeholder={t('data-products:supportChannelForm.accessUrlPlaceholder')}
             />
             <p className="text-xs text-muted-foreground">
               URL to access this support channel
@@ -146,7 +148,7 @@ export default function SupportChannelFormDialog({ isOpen, onOpenChange, onSubmi
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="tool">Tool</Label>
+              <Label htmlFor="tool">{t('data-products:supportChannelForm.tool')}</Label>
               <Select value={tool} onValueChange={setTool}>
                 <SelectTrigger id="tool">
                   <SelectValue />
@@ -162,7 +164,7 @@ export default function SupportChannelFormDialog({ isOpen, onOpenChange, onSubmi
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="scope">Scope</Label>
+              <Label htmlFor="scope">{t('data-products:supportChannelForm.scope')}</Label>
               <Select value={scope} onValueChange={setScope}>
                 <SelectTrigger id="scope">
                   <SelectValue />
@@ -179,13 +181,13 @@ export default function SupportChannelFormDialog({ isOpen, onOpenChange, onSubmi
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="invitationUrl">Invitation URL</Label>
+            <Label htmlFor="invitationUrl">{t('data-products:supportChannelForm.invitationUrl')}</Label>
             <Input
               id="invitationUrl"
               type="url"
               value={invitationUrl}
               onChange={(e) => setInvitationUrl(e.target.value)}
-              placeholder="https://slack.com/invite/..."
+              placeholder={t('data-products:supportChannelForm.invitationUrlPlaceholder')}
             />
             <p className="text-xs text-muted-foreground">
               Optional invitation link for new members
@@ -193,12 +195,12 @@ export default function SupportChannelFormDialog({ isOpen, onOpenChange, onSubmi
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">{t('common:labels.description')}</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe how users should use this support channel"
+              placeholder={t('data-products:supportChannelForm.descriptionPlaceholder')}
               rows={3}
             />
           </div>

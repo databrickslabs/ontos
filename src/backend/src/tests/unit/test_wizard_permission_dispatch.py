@@ -335,6 +335,18 @@ def test_user_with_no_groups_denied() -> None:
     request = _request_with_perms(effective={"access-grants": FeatureAccessLevel.ADMIN})
     with pytest.raises(HTTPException) as exc:
         _run(enforce_wizard_permission(
+            TriggerType.FOR_REQUEST_ACCESS.value, _user(groups=[], email=""), request
+        ))
+    assert exc.value.status_code == 403
+
+
+def test_user_no_groups_email_but_no_role_denied() -> None:
+    """No groups but has an email, and no role grants the feature → 403 via the
+    permission check (not the early guard). Confirms email-only users are still
+    denied when their email matches no role's assigned_users (#196/#760)."""
+    request = _request_with_perms(effective={})
+    with pytest.raises(HTTPException) as exc:
+        _run(enforce_wizard_permission(
             TriggerType.FOR_REQUEST_ACCESS.value, _user(groups=[]), request
         ))
     assert exc.value.status_code == 403

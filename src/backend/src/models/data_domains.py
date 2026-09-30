@@ -52,6 +52,7 @@ class DataDomainRead(DataDomainBase):
     created_by: str
     parent_name: Optional[str] = Field(None, description="Name of the parent data domain, if any.")
     children_count: int = Field(0, description="Number of direct child data domains.")
+    uc_domain_id: Optional[str] = Field(None, description="Unity Catalog domain id this domain is synced with, if any (#761).")
     parent_info: Optional[DataDomainBasicInfo] = Field(None, description="Basic info of the parent domain.")
     children_info: List[DataDomainBasicInfo] = Field(default_factory=list, description="List of basic info for direct child domains.")
 

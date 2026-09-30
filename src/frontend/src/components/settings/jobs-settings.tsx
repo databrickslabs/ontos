@@ -156,7 +156,7 @@ export default function JobsSettings() {
         }
       } catch (e) {
         if (!cancelled) {
-          toast({ title: t('common:status.error'), description: 'Failed to fetch workflow statuses', variant: 'destructive' });
+          toast({ title: t('common:status.error'), description: t('settings:jobs.messages.statusFetchError'), variant: 'destructive' });
         }
       }
     };
@@ -224,7 +224,7 @@ export default function JobsSettings() {
       });
       toast({ title: t('common:status.success'), description: t('settings:jobs.messages.saveSuccess') });
     } catch (e: any) {
-      toast({ title: t('common:status.error'), description: e?.message || 'Failed to save', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: e?.message || t('settings:jobs.messages.saveFailed'), variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -238,9 +238,9 @@ export default function JobsSettings() {
     try {
       const res = await post(`/api/jobs/workflows/${encodeURIComponent(workflowId)}/start`, {});
       if (res.error) throw new Error(res.error);
-      toast({ title: t('common:status.success'), description: 'Started run' });
+      toast({ title: t('common:status.success'), description: t('settings:jobs.messages.startedRun') });
     } catch (e: any) {
-      toast({ title: t('common:status.error'), description: e?.message || 'Failed to start', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: e?.message || t('settings:jobs.messages.startFailed'), variant: 'destructive' });
     }
   };
 
@@ -248,9 +248,9 @@ export default function JobsSettings() {
     try {
       const res = await post(`/api/jobs/workflows/${encodeURIComponent(workflowId)}/stop`, {});
       if (res.error) throw new Error(res.error);
-      toast({ title: t('common:status.success'), description: 'Stopped run' });
+      toast({ title: t('common:status.success'), description: t('settings:jobs.messages.stoppedRun') });
     } catch (e: any) {
-      toast({ title: t('common:status.error'), description: e?.message || 'Failed to stop', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: e?.message || t('settings:jobs.messages.stopFailed'), variant: 'destructive' });
     }
   };
 
@@ -258,9 +258,9 @@ export default function JobsSettings() {
     try {
       const res = await post(`/api/jobs/workflows/${encodeURIComponent(workflowId)}/pause`, {});
       if (res.error) throw new Error(res.error);
-      toast({ title: t('common:status.success'), description: 'Paused schedule' });
+      toast({ title: t('common:status.success'), description: t('settings:jobs.messages.pausedSchedule') });
     } catch (e: any) {
-      toast({ title: t('common:status.error'), description: e?.message || 'Failed to pause', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: e?.message || t('settings:jobs.messages.pauseFailed'), variant: 'destructive' });
     }
   };
 
@@ -268,9 +268,9 @@ export default function JobsSettings() {
     try {
       const res = await post(`/api/jobs/workflows/${encodeURIComponent(workflowId)}/resume`, {});
       if (res.error) throw new Error(res.error);
-      toast({ title: t('common:status.success'), description: 'Resumed schedule' });
+      toast({ title: t('common:status.success'), description: t('settings:jobs.messages.resumedSchedule') });
     } catch (e: any) {
-      toast({ title: t('common:status.error'), description: e?.message || 'Failed to resume', variant: 'destructive' });
+      toast({ title: t('common:status.error'), description: e?.message || t('settings:jobs.messages.resumeFailed'), variant: 'destructive' });
     }
   };
 
@@ -356,7 +356,7 @@ export default function JobsSettings() {
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => { setSelectedWorkflow({ id: wf.id, name: wf.name }); setJobRunsDialogOpen(true); }}
-                aria-label="History"
+                aria-label={t('settings:jobs.aria.history')}
                 title={t('settings:jobRuns.viewHistory')}
               >
                 <History className="h-4 w-4" />
@@ -369,8 +369,8 @@ export default function JobsSettings() {
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => { setSelectedWorkflow({ id: wf.id, name: wf.name }); setConfigDialogOpen(true); }}
-                aria-label="Configure"
-                title="Configure workflow parameters"
+                aria-label={t('settings:jobs.aria.configure')}
+                title={t('settings:jobs.configureTooltip')}
               >
                 <SettingsIcon className="h-4 w-4" />
               </Button>

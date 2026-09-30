@@ -33,7 +33,10 @@ interface UserInfoData {
 }
 
 // Helper function to get a display name for the highest access level
-const getHighestAccessLevelName = (userPermissions: Record<string, FeatureAccessLevel>): string => {
+const getHighestAccessLevelName = (
+    userPermissions: Record<string, FeatureAccessLevel>,
+    t: (key: string) => string,
+): string => {
     let maxLevel = FeatureAccessLevel.NONE;
     let maxLevelOrder = ACCESS_LEVEL_ORDER[maxLevel];
 
@@ -47,11 +50,11 @@ const getHighestAccessLevelName = (userPermissions: Record<string, FeatureAccess
     }
 
     switch (maxLevel) {
-        case FeatureAccessLevel.ADMIN: return 'Admin Access';
-        case FeatureAccessLevel.READ_WRITE: return 'Read/Write Access';
-        case FeatureAccessLevel.READ_ONLY: return 'Read-Only Access';
-        case FeatureAccessLevel.NONE: return 'No Access';
-        default: return 'Unknown Access';
+        case FeatureAccessLevel.ADMIN: return t('common:userInfo.accessLevel.admin');
+        case FeatureAccessLevel.READ_WRITE: return t('common:userInfo.accessLevel.readWrite');
+        case FeatureAccessLevel.READ_ONLY: return t('common:userInfo.accessLevel.readOnly');
+        case FeatureAccessLevel.NONE: return t('common:userInfo.accessLevel.none');
+        default: return t('common:userInfo.accessLevel.unknown');
     }
 };
 
@@ -212,22 +215,23 @@ export default function UserInfo() {
   // roles get a membership-scoped switcher. Single-role users still don't see the switcher.
   const canSwitchRoles = !permissionsLoading && (isLocalDev || isAdminActual || myRoles.length >= 2);
 
-  const displayName = userInfo?.user || userInfo?.username || userInfo?.email || 'Loading...';
-  const initials = displayName === 'Loading...' ? '?' : displayName.charAt(0).toUpperCase();
+  const loadingText = t('common:states.loading');
+  const displayName = userInfo?.user || userInfo?.username || userInfo?.email || loadingText;
+  const initials = displayName === loadingText ? '?' : displayName.charAt(0).toUpperCase();
   const userEmail = userInfo?.email;
 
-  let displayRoleName = 'Loading...';
-  let highestActualLevelName = 'Loading...'; // Store the display name for the actual level
+  let displayRoleName = loadingText;
+  let highestActualLevelName = loadingText; // Store the display name for the actual level
   // Canonical name available for future role display features
   // let highestActualCanonicalRoleName: string | null = null;
 
   if (!permissionsLoading) {
-      highestActualLevelName = getHighestAccessLevelName(permissions);
+      highestActualLevelName = getHighestAccessLevelName(permissions, t);
       // highestActualCanonicalRoleName = CANONICAL_ROLE_NAMES[highestActualLevelName];
 
       if (appliedRoleId) {
           const appliedRole = availableRoles.find(role => role.id === appliedRoleId);
-          displayRoleName = appliedRole?.name || 'Unknown Role';
+          displayRoleName = appliedRole?.name || t('common:userInfo.unknownRole');
       } else {
           // When no override is applied, show canonical role if available
           displayRoleName = canonicalActualRoleName || highestActualLevelName;
@@ -261,7 +265,7 @@ export default function UserInfo() {
             className="relative h-8 w-8 rounded-full"
             // Subtle persistent visual cue so testers don't forget they're
             // acting as someone else.
-            title={activeTestPersona ? `Acting as ${activeTestPersona.label} (test mode)` : undefined}
+            title={activeTestPersona ? t('common:userInfo.actingAs', { label: activeTestPersona.label }) : undefined}
         >
           <Avatar className={`h-8 w-8 ${activeTestPersona ? 'ring-2 ring-yellow-500' : ''}`}>
             <AvatarFallback>{initials}</AvatarFallback>
@@ -280,11 +284,11 @@ export default function UserInfo() {
             )}
             <p className="text-xs leading-none text-muted-foreground pt-1">
               {t('userMenu.role')}: {displayRoleName}
-              {appliedRoleId && ' (Override)'}
+              {appliedRoleId && t('common:userInfo.override')}
             </p>
-            {!userInfo && !error && <p className="text-xs text-muted-foreground">Loading info...</p>}
+            {!userInfo && !error && <p className="text-xs text-muted-foreground">{t('common:states.loadingInfo')}</p>}
             {error && (
-              <p className="text-xs text-destructive">Error: {error}</p>
+              <p className="text-xs text-destructive">{t('common:userInfo.error', { message: error })}</p>
             )}
           </div>
         </DropdownMenuLabel>
@@ -312,15 +316,15 @@ export default function UserInfo() {
                 <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 flex items-center justify-between">
                     <span className="flex items-center">
                         <TestTube2 className="mr-1.5 h-3.5 w-3.5" />
-                        Test persona
+                        {t('common:userInfo.testPersona')}
                     </span>
                     {activeTestPersona ? (
                         <Badge variant="outline" className="text-[10px] border-yellow-500 text-yellow-700 dark:text-yellow-400">
-                            Active
+                            {t('common:status.active')}
                         </Badge>
                     ) : !testToken ? (
                         <Badge variant="outline" className="text-[10px]" title="Set VITE_TEST_USER_TOKEN or localStorage['ucapp.testToken'] to enable">
-                            No token
+                            {t('common:userInfo.noToken')}
                         </Badge>
                     ) : null}
                 </DropdownMenuLabel>
@@ -331,7 +335,7 @@ export default function UserInfo() {
                     >
                         <DropdownMenuRadioItem value="none" disabled={!testToken}>
                             <UserIcon className="mr-1.5 h-3.5 w-3.5" />
-                            None (real identity)
+                            {t('common:userInfo.noneRealIdentity')}
                         </DropdownMenuRadioItem>
                         {testPersonas.map((p) => (
                             <DropdownMenuRadioItem
@@ -364,7 +368,7 @@ export default function UserInfo() {
                     <DropdownMenuRadioGroup value={radioValue} onValueChange={handleRoleChange}>
                         <DropdownMenuRadioItem value="actual">
                             <UserIcon className="mr-1.5 h-3.5 w-3.5" />
-                            {(canonicalActualRoleName || highestActualLevelName)} (Actual)
+                            {(canonicalActualRoleName || highestActualLevelName)}{t('common:userInfo.actual')}
                         </DropdownMenuRadioItem>
                         {filteredRolesForOverride.map((role: AppRole) => (
                             <DropdownMenuRadioItem

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { X, Info } from 'lucide-react';
 import {
@@ -83,6 +84,7 @@ const TagChip: React.FC<TagChipProps> = ({
   displayFormat,
 }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const { tagDisplayFormat: globalFormat, fetchSettings } = useAppSettingsStore();
   
   // Fetch global settings on first render
@@ -152,7 +154,7 @@ const TagChip: React.FC<TagChipProps> = ({
         <button
           onClick={handleRemove}
           className="flex-shrink-0 rounded-full p-0.5 hover:bg-background/20 transition-colors"
-          aria-label={`Remove ${tagName} tag`}
+          aria-label={t('common:tagChip.removeAria', { name: tagName })}
         >
           <X className="h-3 w-3" />
         </button>
@@ -171,16 +173,16 @@ const TagChip: React.FC<TagChipProps> = ({
           <div className="space-y-0.5">
             <div className="font-semibold text-xs mb-1">{tag.fully_qualified_name}</div>
             {tag.assigned_value && (
-              <div className="text-xs"><span className="text-muted-foreground">Value:</span> {tag.assigned_value}</div>
+              <div className="text-xs"><span className="text-muted-foreground">{t('common:tagChip.value')}</span> {tag.assigned_value}</div>
             )}
-            <div className="text-xs"><span className="text-muted-foreground">Status:</span> <span className="capitalize">{tag.status}</span></div>
-            <div className="text-xs"><span className="text-muted-foreground">Namespace:</span> {tag.namespace_name}</div>
+            <div className="text-xs"><span className="text-muted-foreground">{t('common:tagChip.status')}</span> <span className="capitalize">{tag.status}</span></div>
+            <div className="text-xs"><span className="text-muted-foreground">{t('common:tagChip.namespace')}</span> {tag.namespace_name}</div>
             {tag.assigned_by && (
-              <div className="text-xs"><span className="text-muted-foreground">By:</span> {tag.assigned_by}</div>
+              <div className="text-xs"><span className="text-muted-foreground">{t('common:tagChip.by')}</span> {tag.assigned_by}</div>
             )}
             <div className="text-xs text-muted-foreground">{new Date(tag.assigned_at).toLocaleDateString()}</div>
             {clickable && (
-              <div className="text-xs text-primary mt-1">Click to search</div>
+              <div className="text-xs text-primary mt-1">{t('common:tagChip.clickToSearch')}</div>
             )}
           </div>
         </TooltipContent>

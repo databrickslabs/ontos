@@ -143,7 +143,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 }) => {
     const { post, put } = useApi();
     const { toast } = useToast();
-    const { t } = useTranslation('settings');
+    const { t } = useTranslation(['settings', 'common']);
     const { availableRoles } = usePermissions();
     const isEditMode = !!initialRole;
     const [formError, setFormError] = useState<string | null>(null);
@@ -176,6 +176,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         name: initialRole?.name || '',
         description: initialRole?.description || '',
         assigned_groups: initialRole?.assigned_groups || [],
+        assigned_users: initialRole?.assigned_users || [],
         feature_permissions: initialRole?.feature_permissions || getDefaultPermissions(featuresConfig),
         home_sections: initialRole?.home_sections || [],
         approval_privileges: normalizeApprovalPrivileges(initialRole?.approval_privileges),
@@ -201,6 +202,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 name: initialRole.name || '',
                 description: initialRole.description || '',
                 assigned_groups: initialRole.assigned_groups || [],
+                assigned_users: initialRole.assigned_users || [],
                 feature_permissions: initialRole.feature_permissions || getDefaultPermissions(featuresConfig),
                 home_sections: initialRole.home_sections || [],
                 approval_privileges: normalizeApprovalPrivileges(initialRole.approval_privileges),
@@ -211,8 +213,9 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             } : { 
                 id: '', 
                 name: '', 
-                description: '', 
-                assigned_groups: [], 
+                description: '',
+                assigned_groups: [],
+                assigned_users: [],
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
                 approval_privileges: {},
@@ -246,8 +249,9 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             reset({ 
                 id: '', 
                 name: '', 
-                description: '', 
-                assigned_groups: [], 
+                description: '',
+                assigned_groups: [],
+                assigned_users: [],
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
                 approval_privileges: {},
@@ -262,7 +266,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
     const handleCloseDialog = (open: boolean) => {
         if (!open) {
             if (isDirty) {
-                if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+                if (!confirm(t('roles.messages.unsavedChangesConfirm'))) {
                     return; // Prevent closing
                 }
             }
@@ -314,6 +318,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         const basePayload: AppRole = {
             ...data,
             assigned_groups: assignedGroupsArray,
+            assigned_users: Array.isArray(data.assigned_users) ? data.assigned_users : [],
             approval_privileges: cleanedApprovalPrivileges,
             deployment_policy: cleanedDeploymentPolicy,
         } as AppRole;
@@ -337,7 +342,12 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             }
 
             const savedRoleData = response.data as AppRole;
-            toast({ title: 'Success', description: `Role "${savedRoleData.name}" ${isEditMode ? 'updated' : 'created'}.` });
+            toast({
+                title: t('common:status.success'),
+                description: isEditMode
+                    ? t('roles.messages.roleUpdated', { name: savedRoleData.name })
+                    : t('roles.messages.roleCreated', { name: savedRoleData.name }),
+            });
             reset(savedRoleData, { keepDirty: false });
             onSubmitSuccess();
             setTimeout(() => {
@@ -346,9 +356,9 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 
         } catch (err: any) {
             console.error('Error submitting role form:', err);
-            const errorMsg = err.message || 'An unexpected error occurred.';
+            const errorMsg = err.message || t('roles.messages.unexpectedError');
             setFormError(errorMsg);
-            toast({ title: 'Save Error', description: errorMsg, variant: 'destructive' });
+            toast({ title: t('roles.messages.saveErrorTitle'), description: errorMsg, variant: 'destructive' });
         }
     };
 
@@ -357,7 +367,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>
-                        {isEditMode ? t('roles.dialog.editTitle', { name: initialRole?.name || 'Role' }) : t('roles.dialog.createTitle')}
+                        {isEditMode ? t('roles.dialog.editTitle', { name: initialRole?.name || t('roles.dialog.defaultRoleName') }) : t('roles.dialog.createTitle')}
                     </DialogTitle>
                     <DialogDescription>
                         {t('roles.dialog.description')}
@@ -417,6 +427,29 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                         />
                                         {errors.assigned_groups && <p className="text-sm text-red-600 mt-1">{errors.assigned_groups.message}</p>}
                                         <p className="text-xs text-muted-foreground mt-1">{t('roles.general.assignedGroupsHelp')}</p>
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="assigned_users">{t('roles.general.assignedUsers', 'Assigned Users')}</Label>
+                                        <Controller
+                                            name="assigned_users"
+                                            control={control}
+                                            render={({ field }) => {
+                                                const value = Array.isArray(field.value) ? field.value : [];
+                                                return (
+                                                    <PrincipalPicker
+                                                        id="assigned_users"
+                                                        multiple
+                                                        accepts={['user']}
+                                                        value={value}
+                                                        onChange={(next) => field.onChange(next)}
+                                                        placeholder={t('roles.general.assignedUsersPlaceholder', 'Add users by email…')}
+                                                        aria-label={t('roles.general.assignedUsers', 'Assigned Users')}
+                                                    />
+                                                );
+                                            }}
+                                        />
+                                        <p className="text-xs text-muted-foreground mt-1">{t('roles.general.assignedUsersHelp', 'Individual users assigned to this role by email, in addition to any groups. Approving a role access request adds the requester here.')}</p>
                                     </div>
                                 </div>
                             </ScrollArea>
@@ -595,7 +628,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                                         disabled={allowedLevels.length === 0}
                                                                     >
                                                                         <SelectTrigger id={`permissions-${featureId}`} className="w-[180px]">
-                                                                            <SelectValue placeholder="Select access" />
+                                                                            <SelectValue placeholder={t('roles.permissions.selectAccessPlaceholder')} />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
                                                                             {allowedLevels.length > 0 ? (
@@ -607,7 +640,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                                                         </SelectItem>
                                                                                     ))
                                                                             ) : (
-                                                                                <SelectItem value="none" disabled>No levels</SelectItem>
+                                                                                <SelectItem value="none" disabled>{t('roles.permissions.noLevels')}</SelectItem>
                                                                             )}
                                                                         </SelectContent>
                                                                     </Select>
@@ -715,7 +748,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                             }
 
                                             if (Object.keys(featuresConfig).length === 0) {
-                                                return <p className="text-sm text-muted-foreground">No features configuration loaded.</p>;
+                                                return <p className="text-sm text-muted-foreground">{t('roles.permissions.noFeaturesLoaded')}</p>;
                                             }
                                             return sections;
                                         })()}

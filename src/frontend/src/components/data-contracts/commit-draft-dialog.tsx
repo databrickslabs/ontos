@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GitCommit, AlertCircle, CheckCircle2, Info, AlertTriangle } from 'lucide-react'
 import {
   Dialog,
@@ -36,6 +37,7 @@ export default function CommitDraftDialog({
   onSuccess,
 }: CommitDraftDialogProps) {
   const { toast } = useToast()
+  const { t } = useTranslation(['data-contracts', 'common'])
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [diffData, setDiffData] = useState<DiffFromParentResponse | null>(null)
@@ -70,11 +72,11 @@ export default function CommitDraftDialog({
         }
       } else {
         const errorData = await response.json().catch(() => ({}))
-        setError(errorData.detail || 'Failed to load diff data')
+        setError(errorData.detail || t('data-contracts:commit.loadDiffError', 'Failed to load diff data'))
       }
     } catch (err) {
       console.error('Error fetching diff:', err)
-      setError('Failed to load diff data')
+      setError(t('data-contracts:commit.loadDiffError', 'Failed to load diff data'))
     } finally {
       setIsLoading(false)
     }
@@ -114,12 +116,12 @@ export default function CommitDraftDialog({
     const newVersion = calculateNewVersion()
 
     if (!validateVersion(newVersion)) {
-      setError('Version must be in format X.Y.Z (e.g., 1.1.0)')
+      setError(t('data-contracts:commit.versionFormatError', 'Version must be in format X.Y.Z (e.g., 1.1.0)'))
       return
     }
 
     if (!changeSummary.trim()) {
-      setError('Please provide a change summary')
+      setError(t('data-contracts:commit.summaryRequired', 'Please provide a change summary'))
       return
     }
 
@@ -138,18 +140,18 @@ export default function CommitDraftDialog({
 
       if (response.ok) {
         toast({
-          title: 'Draft Committed',
-          description: `Version ${newVersion} is now visible to your team.`,
+          title: t('data-contracts:commit.committedTitle', 'Draft Committed'),
+          description: t('data-contracts:commit.committedDesc', 'Version {{version}} is now visible to your team.', { version: newVersion }),
         })
         onSuccess()
         onOpenChange(false)
       } else {
         const errorData = await response.json().catch(() => ({}))
-        setError(errorData.detail || 'Failed to commit draft')
+        setError(errorData.detail || t('data-contracts:commit.commitError', 'Failed to commit draft'))
       }
     } catch (err) {
       console.error('Error committing draft:', err)
-      setError('Failed to commit draft')
+      setError(t('data-contracts:commit.commitError', 'Failed to commit draft'))
     } finally {
       setIsSubmitting(false)
     }
@@ -165,11 +167,11 @@ export default function CommitDraftDialog({
   const getVersionBumpBadge = (bump: string) => {
     switch (bump) {
       case 'major':
-        return <Badge variant="destructive">MAJOR</Badge>
+        return <Badge variant="destructive">{t('data-contracts:commit.bumpMajor', 'MAJOR')}</Badge>
       case 'minor':
-        return <Badge className="bg-blue-500">MINOR</Badge>
+        return <Badge className="bg-blue-500">{t('data-contracts:commit.bumpMinor', 'MINOR')}</Badge>
       case 'patch':
-        return <Badge variant="secondary">PATCH</Badge>
+        return <Badge variant="secondary">{t('data-contracts:commit.bumpPatch', 'PATCH')}</Badge>
       default:
         return <Badge variant="outline">{bump.toUpperCase()}</Badge>
     }
@@ -181,10 +183,10 @@ export default function CommitDraftDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitCommit className="h-5 w-5" />
-            Commit Personal Draft
+            {t('data-contracts:commit.title', 'Commit Personal Draft')}
           </DialogTitle>
           <DialogDescription>
-            Review your changes and commit to make this version visible to your team.
+            {t('data-contracts:commit.description', 'Review your changes and commit to make this version visible to your team.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -195,7 +197,7 @@ export default function CommitDraftDialog({
         ) : error && !diffData ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>{t('common:states.error')}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : diffData ? (
@@ -203,15 +205,15 @@ export default function CommitDraftDialog({
             {/* Version Display */}
             <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
               <div className="text-center">
-                <p className="text-sm text-muted-foreground">Parent Version</p>
+                <p className="text-sm text-muted-foreground">{t('data-contracts:commit.parentVersion', 'Parent Version')}</p>
                 <p className="text-2xl font-bold">{diffData.parent_version}</p>
                 <Badge variant="outline" className="mt-1">{diffData.parent_status}</Badge>
               </div>
               <div className="text-4xl text-muted-foreground">→</div>
               <div className="text-center">
-                <p className="text-sm text-muted-foreground">New Version</p>
+                <p className="text-sm text-muted-foreground">{t('data-contracts:commit.newVersion', 'New Version')}</p>
                 <p className="text-2xl font-bold text-primary">{newVersion}</p>
-                <Badge className="mt-1">draft</Badge>
+                <Badge className="mt-1">{t('data-contracts:commit.draftLabel', 'draft')}</Badge>
               </div>
             </div>
 
@@ -220,10 +222,10 @@ export default function CommitDraftDialog({
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertTitle className="flex items-center gap-2">
-                  Suggested: {getVersionBumpBadge(diffData.suggested_bump)}
+                  {t('data-contracts:commit.suggested', 'Suggested:')} {getVersionBumpBadge(diffData.suggested_bump)}
                 </AlertTitle>
                 <AlertDescription>
-                  Based on the changes detected, we recommend a {diffData.suggested_bump} version bump.
+                  {t('data-contracts:commit.suggestedBumpDesc', 'Based on the changes detected, we recommend a {{bump}} version bump.', { bump: diffData.suggested_bump })}
                 </AlertDescription>
               </Alert>
             )}
@@ -232,10 +234,9 @@ export default function CommitDraftDialog({
             {hasBreakingChanges && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Breaking Changes Detected</AlertTitle>
+                <AlertTitle>{t('data-contracts:commit.breakingDetected', 'Breaking Changes Detected')}</AlertTitle>
                 <AlertDescription>
-                  This version contains changes that may impact existing consumers.
-                  Consider a major version bump.
+                  {t('data-contracts:commit.breakingDesc', 'This version contains changes that may impact existing consumers. Consider a major version bump.')}
                 </AlertDescription>
               </Alert>
             )}
@@ -244,20 +245,20 @@ export default function CommitDraftDialog({
             {analysis && (hasBreakingChanges || hasNewFeatures || hasFixes) && (
               <Tabs defaultValue="summary" className="w-full">
                 <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="summary">Summary</TabsTrigger>
+                  <TabsTrigger value="summary">{t('data-contracts:commit.tabSummary', 'Summary')}</TabsTrigger>
                   {hasBreakingChanges && (
                     <TabsTrigger value="breaking" className="text-red-600 dark:text-red-400">
-                      Breaking ({analysis.breaking_changes.length})
+                      {t('data-contracts:commit.tabBreaking', 'Breaking ({{count}})', { count: analysis.breaking_changes.length })}
                     </TabsTrigger>
                   )}
                   {hasNewFeatures && (
                     <TabsTrigger value="features" className="text-blue-600 dark:text-blue-400">
-                      Features ({analysis.new_features.length})
+                      {t('data-contracts:commit.tabFeatures', 'Features ({{count}})', { count: analysis.new_features.length })}
                     </TabsTrigger>
                   )}
                   {hasFixes && (
                     <TabsTrigger value="fixes">
-                      Fixes ({analysis.fixes.length})
+                      {t('data-contracts:commit.tabFixes', 'Fixes ({{count}})', { count: analysis.fixes.length })}
                     </TabsTrigger>
                   )}
                 </TabsList>
@@ -276,7 +277,7 @@ export default function CommitDraftDialog({
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
                           <AlertCircle className="h-4 w-4 text-red-600" />
-                          Breaking Changes
+                          {t('data-contracts:commit.breakingChanges', 'Breaking Changes')}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -299,7 +300,7 @@ export default function CommitDraftDialog({
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
                           <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          New Features
+                          {t('data-contracts:commit.newFeatures', 'New Features')}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -322,7 +323,7 @@ export default function CommitDraftDialog({
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
                           <Info className="h-4 w-4" />
-                          Improvements & Fixes
+                          {t('data-contracts:commit.improvementsFixes', 'Improvements & Fixes')}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -343,7 +344,7 @@ export default function CommitDraftDialog({
 
             {/* Version Bump Selection */}
             <div className="space-y-3">
-              <Label>Version Bump Type</Label>
+              <Label>{t('data-contracts:commit.versionBumpType', 'Version Bump Type')}</Label>
               <RadioGroup
                 value={versionBumpType}
                 onValueChange={(value) => setVersionBumpType(value as 'major' | 'minor' | 'patch' | 'custom')}
@@ -352,10 +353,10 @@ export default function CommitDraftDialog({
                   <RadioGroupItem value="major" id="major" />
                   <div className="flex-1">
                     <Label htmlFor="major" className="font-medium cursor-pointer">
-                      Major (Breaking Changes)
+                      {t('data-contracts:commit.majorLabel', 'Major (Breaking Changes)')}
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Incompatible changes that break existing integrations
+                      {t('data-contracts:commit.majorDesc', 'Incompatible changes that break existing integrations')}
                     </p>
                   </div>
                 </div>
@@ -364,10 +365,10 @@ export default function CommitDraftDialog({
                   <RadioGroupItem value="minor" id="minor" />
                   <div className="flex-1">
                     <Label htmlFor="minor" className="font-medium cursor-pointer">
-                      Minor (New Features)
+                      {t('data-contracts:commit.minorLabel', 'Minor (New Features)')}
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Backward-compatible new features or improvements
+                      {t('data-contracts:commit.minorDesc', 'Backward-compatible new features or improvements')}
                     </p>
                   </div>
                 </div>
@@ -376,10 +377,10 @@ export default function CommitDraftDialog({
                   <RadioGroupItem value="patch" id="patch" />
                   <div className="flex-1">
                     <Label htmlFor="patch" className="font-medium cursor-pointer">
-                      Patch (Bug Fixes)
+                      {t('data-contracts:commit.patchLabel', 'Patch (Bug Fixes)')}
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Backward-compatible bug fixes or minor improvements
+                      {t('data-contracts:commit.patchDesc', 'Backward-compatible bug fixes or minor improvements')}
                     </p>
                   </div>
                 </div>
@@ -388,10 +389,10 @@ export default function CommitDraftDialog({
                   <RadioGroupItem value="custom" id="custom" />
                   <div className="flex-1 space-y-2">
                     <Label htmlFor="custom" className="font-medium cursor-pointer">
-                      Custom Version
+                      {t('data-contracts:commit.customLabel', 'Custom Version')}
                     </Label>
                     <Input
-                      placeholder="e.g., 2.0.0"
+                      placeholder={t('data-contracts:commit.customPlaceholder', 'e.g., 2.0.0')}
                       value={customVersion}
                       onChange={(e) => setCustomVersion(e.target.value)}
                       disabled={versionBumpType !== 'custom'}
@@ -405,18 +406,18 @@ export default function CommitDraftDialog({
             {/* Change Summary */}
             <div className="space-y-2">
               <Label htmlFor="changeSummary">
-                Change Summary <span className="text-destructive">*</span>
+                {t('data-contracts:commit.changeSummary', 'Change Summary')} <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="changeSummary"
-                placeholder="Describe what changed in this version..."
+                placeholder={t('data-contracts:commit.summaryPlaceholder', 'Describe what changed in this version...')}
                 value={changeSummary}
                 onChange={(e) => setChangeSummary(e.target.value)}
                 rows={4}
                 className="resize-none"
               />
               <p className="text-xs text-muted-foreground">
-                This summary will help your team understand what changed.
+                {t('data-contracts:commit.summaryHint', 'This summary will help your team understand what changed.')}
               </p>
             </div>
 
@@ -424,7 +425,7 @@ export default function CommitDraftDialog({
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
+                <AlertTitle>{t('common:states.error')}</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
@@ -433,10 +434,10 @@ export default function CommitDraftDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={isLoading || isSubmitting || !diffData}>
-            {isSubmitting ? 'Committing...' : `Commit Version ${newVersion}`}
+            {isSubmitting ? t('data-contracts:commit.committing', 'Committing...') : t('data-contracts:commit.commitVersionButton', 'Commit Version {{version}}', { version: newVersion })}
           </Button>
         </DialogFooter>
       </DialogContent>

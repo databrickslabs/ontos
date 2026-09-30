@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -94,10 +95,11 @@ const createSchemaPropertyColumns = (
   contract: DataContract | null,
   selectedSchemaIndex: number,
   propertyLinks: Record<string, EntitySemanticLink[]>,
+  t: TFunction<readonly ["data-contracts", "common"]>,
 ): ColumnDef<SchemaProperty>[] => [
   {
     accessorKey: 'name',
-    header: 'Column Name',
+    header: t('data-contracts:detailsView.columns.name', 'Column Name'),
     cell: ({ row }) => {
       const property = row.original
       const schemaName = contract?.schema?.[selectedSchemaIndex]?.name || ''
@@ -109,7 +111,7 @@ const createSchemaPropertyColumns = (
         <div>
           <span className="font-mono font-medium">{property.name}</span>
           {property.stableId && (
-            <span className="ml-2 text-[10px] font-mono text-muted-foreground/60" title="ODCS StableId">{property.stableId}</span>
+            <span className="ml-2 text-[10px] font-mono text-muted-foreground/60" title={t('data-contracts:detailsView.stableIdTitle', 'ODCS StableId')}>{property.stableId}</span>
           )}
           {links.length > 0 && (
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
@@ -136,7 +138,7 @@ const createSchemaPropertyColumns = (
   },
   {
     accessorKey: 'logicalType',
-    header: 'Data Type',
+    header: t('data-contracts:detailsView.columns.dataType', 'Data Type'),
     cell: ({ row }) => {
       const property = row.original
       const logicalType = property.logicalType || (property as any).logical_type
@@ -149,7 +151,7 @@ const createSchemaPropertyColumns = (
   },
   {
     accessorKey: 'required',
-    header: 'Required',
+    header: t('data-contracts:detailsView.columns.required', 'Required'),
     cell: ({ row }) => (
       <span className="text-center block">
         {row.getValue('required') ? '✓' : '✗'}
@@ -158,7 +160,7 @@ const createSchemaPropertyColumns = (
   },
   {
     accessorKey: 'unique',
-    header: 'Unique',
+    header: t('data-contracts:detailsView.columns.unique', 'Unique'),
     cell: ({ row }) => (
       <span className="text-center block">
         {row.getValue('unique') ? '✓' : '✗'}
@@ -175,13 +177,13 @@ const createSchemaPropertyColumns = (
       return (
         <Popover>
           <PopoverTrigger asChild>
-            <span className="cursor-pointer" title="Foreign key relationship">
+            <span className="cursor-pointer" title={t('data-contracts:detailsView.columns.fkRelationship', 'Foreign key relationship')}>
               <Link2 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
             </span>
           </PopoverTrigger>
           <PopoverContent className="w-auto max-w-xs p-3" side="right">
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold">Relationships</p>
+              <p className="text-xs font-semibold">{t('data-contracts:detailsView.columns.relationships', 'Relationships')}</p>
               {rels.map((rel, i) => (
                 <div key={i} className="text-xs flex items-center gap-1.5">
                   <Badge variant="outline" className="text-[10px] px-1 py-0">{rel.type}</Badge>
@@ -196,7 +198,7 @@ const createSchemaPropertyColumns = (
   },
   {
     accessorKey: 'description',
-    header: 'Description',
+    header: t('common:labels.description', 'Description'),
     cell: ({ row }) => (
       <span className="text-muted-foreground text-sm">
         {row.getValue('description') || '-'}
@@ -543,14 +545,14 @@ export default function DataContractDetails() {
     if (!contractId) return
     setLoading(true)
     setError(null)
-    setDynamicTitle('Loading...')
+    setDynamicTitle(t('common:actions.loading', 'Loading...'))
     try {
       const [contractRes, linksRes] = await Promise.all([
         fetch(`/api/data-contracts/${contractId}`),
         fetch(`/api/semantic-links/entity/data_contract/${contractId}`)
       ])
 
-      if (!contractRes.ok) throw new Error('Failed to load contract')
+      if (!contractRes.ok) throw new Error(t('data-contracts:detailsView.errors.loadContractFailed', 'Failed to load contract'))
       const contractData: DataContract = await contractRes.json()
       console.log('[DEBUG] Contract data loaded:', {
         id: contractData.id,
@@ -584,8 +586,8 @@ export default function DataContractDetails() {
       // Schema and property semantic links are now fetched on-demand
       // when the user selects a schema (see fetchSchemaSemanticLinks)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load')
-      setDynamicTitle('Error')
+      setError(e instanceof Error ? e.message : t('data-contracts:detailsView.errors.loadFailed', 'Failed to load'))
+      setDynamicTitle(t('common:status.error', 'Error'))
     } finally {
       setLoading(false)
     }
@@ -599,14 +601,14 @@ export default function DataContractDetails() {
         certification_level: selectedCertifyLevel,
       })
       if (response.error) {
-        throw new Error(typeof response.error === 'string' ? response.error : 'Certify failed')
+        throw new Error(typeof response.error === 'string' ? response.error : t('data-contracts:detailsView.errors.certifyFailed', 'Certify failed'))
       }
-      toast({ title: 'Certified', description: 'Certification level has been applied.' })
+      toast({ title: t('data-contracts:detailsView.toast.certifiedTitle', 'Certified'), description: t('data-contracts:detailsView.toast.certifiedDesc', 'Certification level has been applied.') })
       setCertifyDialogOpen(false)
       await fetchDetails()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to certify'
-      toast({ title: 'Error', description: msg, variant: 'destructive' })
+      const msg = err instanceof Error ? err.message : t('data-contracts:detailsView.errors.certifyFailedGeneric', 'Failed to certify')
+      toast({ title: t('common:status.error', 'Error'), description: msg, variant: 'destructive' })
     } finally {
       setLifecycleActionSubmitting(false)
     }
@@ -620,14 +622,14 @@ export default function DataContractDetails() {
         scope: selectedPublishScope,
       })
       if (response.error) {
-        throw new Error(typeof response.error === 'string' ? response.error : 'Publish scope update failed')
+        throw new Error(typeof response.error === 'string' ? response.error : t('data-contracts:detailsView.errors.publishScopeUpdateFailed', 'Publish scope update failed'))
       }
-      toast({ title: 'Publication updated', description: 'Publication scope has been saved.' })
+      toast({ title: t('data-contracts:detailsView.toast.publicationUpdatedTitle', 'Publication updated'), description: t('data-contracts:detailsView.toast.publicationUpdatedDesc', 'Publication scope has been saved.') })
       setPublishDialogOpen(false)
       await fetchDetails()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to set publication scope'
-      toast({ title: 'Error', description: msg, variant: 'destructive' })
+      const msg = err instanceof Error ? err.message : t('data-contracts:detailsView.errors.publishScopeFailed', 'Failed to set publication scope')
+      toast({ title: t('common:status.error', 'Error'), description: msg, variant: 'destructive' })
     } finally {
       setLifecycleActionSubmitting(false)
     }
@@ -659,19 +661,19 @@ export default function DataContractDetails() {
             const suggestionsCount = latest.suggestion_counts?.pending || 0
             if (suggestionsCount > 0) {
               toast({
-                title: 'DQX Profiling Complete',
-                description: `${suggestionsCount} quality check ${suggestionsCount === 1 ? 'suggestion' : 'suggestions'} available for review.`
+                title: t('data-contracts:detailsView.toast.dqxCompleteTitle', 'DQX Profiling Complete'),
+                description: t('data-contracts:detailsView.toast.dqxSuggestionsAvailable', '{{count}} quality check suggestions available for review.', { count: suggestionsCount })
               })
             } else {
               toast({
-                title: 'DQX Profiling Complete',
-                description: 'Profiling completed but no suggestions were generated.'
+                title: t('data-contracts:detailsView.toast.dqxCompleteTitle', 'DQX Profiling Complete'),
+                description: t('data-contracts:detailsView.toast.dqxNoSuggestions', 'Profiling completed but no suggestions were generated.')
               })
             }
           } else if (wasRunning && !isRunning && latest.status === 'failed') {
             toast({
-              title: 'DQX Profiling Failed',
-              description: latest.error_message || 'Profiling failed. Check the job logs for details.',
+              title: t('data-contracts:detailsView.toast.dqxFailedTitle', 'DQX Profiling Failed'),
+              description: latest.error_message || t('data-contracts:detailsView.toast.dqxFailedDesc', 'Profiling failed. Check the job logs for details.'),
               variant: 'destructive'
             })
           }
@@ -785,14 +787,14 @@ export default function DataContractDetails() {
 
   const handleDelete = async () => {
     if (!contractId) return
-    if (!confirm('Delete this contract?')) return
+    if (!confirm(t('data-contracts:detailsView.confirm.deleteContract', 'Delete this contract?'))) return
     try {
       const res = await fetch(`/api/data-contracts/${contractId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Delete failed')
-      toast({ title: 'Deleted', description: 'Contract deleted.' })
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.deleteFailed', 'Delete failed'))
+      toast({ title: t('data-contracts:detailsView.toast.deletedTitle', 'Deleted'), description: t('data-contracts:detailsView.toast.contractDeleted', 'Contract deleted.') })
       navigate(listPath)
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToDelete', 'Failed to delete'), variant: 'destructive' })
     }
   }
 
@@ -805,30 +807,30 @@ export default function DataContractDetails() {
       })
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to create personal draft')
+        throw new Error(errorData.detail || t('data-contracts:detailsView.errors.createDraftFailed', 'Failed to create personal draft'))
       }
       const data = await res.json()
       toast({
-        title: 'Personal Draft Created',
-        description: 'You can now edit this draft. It will only be visible to you until committed.',
+        title: t('data-contracts:detailsView.toast.draftCreatedTitle', 'Personal Draft Created'),
+        description: t('data-contracts:detailsView.toast.draftCreatedDesc', 'You can now edit this draft. It will only be visible to you until committed.'),
       })
       // Navigate to the new draft
       navigate(`${listPath}/${data.id}`)
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to clone', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.cloneFailed', 'Failed to clone'), variant: 'destructive' })
     }
   }
 
   const handleDiscardDraft = async () => {
     if (!contractId) return
-    if (!confirm('Discard this personal draft? This cannot be undone.')) return
+    if (!confirm(t('data-contracts:detailsView.confirm.discardDraft', 'Discard this personal draft? This cannot be undone.'))) return
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/discard`, { method: 'DELETE' })
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to discard draft')
+        throw new Error(errorData.detail || t('data-contracts:detailsView.errors.discardDraftFailed', 'Failed to discard draft'))
       }
-      toast({ title: 'Draft Discarded', description: 'Your personal draft has been deleted.' })
+      toast({ title: t('data-contracts:detailsView.toast.draftDiscardedTitle', 'Draft Discarded'), description: t('data-contracts:detailsView.toast.draftDiscardedDesc', 'Your personal draft has been deleted.') })
       // Navigate back to contracts list or parent contract
       if (contract?.parentContractId) {
         navigate(`${listPath}/${contract.parentContractId}`)
@@ -836,7 +838,7 @@ export default function DataContractDetails() {
         navigate(listPath)
       }
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to discard', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.discardFailed', 'Failed to discard'), variant: 'destructive' })
     }
   }
 
@@ -849,7 +851,7 @@ export default function DataContractDetails() {
     if (!contractId || !contract) return
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/odcs/export`)
-      if (!res.ok) throw new Error('Export ODCS failed')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.exportOdcsFailed', 'Export ODCS failed'))
       const text = await res.text()
       const contentDisposition = res.headers.get('Content-Disposition') || ''
       const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
@@ -862,7 +864,7 @@ export default function DataContractDetails() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
-      toast({ title: 'Export failed', description: e instanceof Error ? e.message : 'Unable to export', variant: 'destructive' })
+      toast({ title: t('data-contracts:detailsView.toast.exportFailedTitle', 'Export failed'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.toast.exportFailedDesc', 'Unable to export'), variant: 'destructive' })
     }
   }
 
@@ -878,29 +880,29 @@ export default function DataContractDetails() {
           iri,
         })
       })
-      if (!res.ok) throw new Error('Failed to add concept')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.addConceptFailed', 'Failed to add concept'))
       await fetchDetails()
       setIriDialogOpen(false)
-      toast({ title: 'Linked', description: 'Business concept linked to data contract.' })
+      toast({ title: t('common:toast.linked', 'Linked'), description: t('data-contracts:detailsView.toast.conceptLinked', 'Business concept linked to data contract.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to link business concept', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.linkConceptFailed', 'Failed to link business concept'), variant: 'destructive' })
     }
   }
 
   const removeLink = async (linkId: string) => {
     try {
       const res = await fetch(`/api/semantic-links/${linkId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to remove concept')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.removeConceptFailed', 'Failed to remove concept'))
       await fetchDetails()
-      toast({ title: 'Unlinked', description: 'Business concept unlinked from data contract.' })
+      toast({ title: t('common:toast.unlinked', 'Unlinked'), description: t('data-contracts:detailsView.toast.conceptUnlinked', 'Business concept unlinked from data contract.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to unlink business concept', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.unlinkConceptFailed', 'Failed to unlink business concept'), variant: 'destructive' })
     }
   }
 
   const handleCreateNewVersion = () => {
     if (!contractId || !contract) {
-      toast({ title: 'Permission Denied or Data Missing', description: 'Cannot create new version.', variant: 'destructive' })
+      toast({ title: t('data-contracts:detailsView.toast.cannotVersionTitle', 'Permission Denied or Data Missing'), description: t('data-contracts:detailsView.toast.cannotVersionDesc', 'Cannot create new version.'), variant: 'destructive' })
       return
     }
     setIsVersionDialogOpen(true)
@@ -908,7 +910,7 @@ export default function DataContractDetails() {
 
   const submitNewVersion = async (newVersionString: string) => {
     if (!contractId) return
-    toast({ title: 'Creating New Version', description: `Creating version ${newVersionString}...` })
+    toast({ title: t('data-contracts:detailsView.toast.creatingVersionTitle', 'Creating New Version'), description: t('data-contracts:detailsView.toast.creatingVersionDesc', 'Creating version {{version}}...', { version: newVersionString }) })
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/versions`, {
         method: 'POST',
@@ -917,16 +919,16 @@ export default function DataContractDetails() {
       })
       if (!res.ok) {
         const text = await res.text().catch(() => '')
-        throw new Error(text || 'Failed to create new version.')
+        throw new Error(text || t('data-contracts:detailsView.errors.createVersionFailed', 'Failed to create new version.'))
       }
       const data = await res.json()
       const newId = data?.id
-      if (!newId) throw new Error('Invalid response when creating version.')
-      toast({ title: 'Success', description: `Version ${newVersionString} created successfully!` })
+      if (!newId) throw new Error(t('data-contracts:detailsView.errors.invalidVersionResponse', 'Invalid response when creating version.'))
+      toast({ title: t('common:status.success', 'Success'), description: t('data-contracts:detailsView.toast.versionCreated', 'Version {{version}} created successfully!', { version: newVersionString }) })
       setIsVersionDialogOpen(false)
       navigate(`${listPath}/${newId}`)
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to create new version.', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e?.message || t('data-contracts:detailsView.errors.createVersionFailed', 'Failed to create new version.'), variant: 'destructive' })
     }
   }
 
@@ -968,32 +970,32 @@ export default function DataContractDetails() {
         if (errorData.detail?.user_can_override) {
           // Admin can force update or create new version
           toast({
-            title: 'Breaking Changes Detected',
-            description: `${errorData.detail.message}. As an admin, you can force this update or create a new version.`,
+            title: t('data-contracts:detailsView.toast.breakingChangesTitle', 'Breaking Changes Detected'),
+            description: t('data-contracts:detailsView.toast.breakingChangesAdmin', '{{message}}. As an admin, you can force this update or create a new version.', { message: errorData.detail.message }),
             variant: 'destructive',
             duration: 10000
           })
         } else {
           // Non-admin must create new version
           toast({
-            title: 'Breaking Changes Detected',
-            description: `${errorData.detail.message}. You must create a new version.`,
+            title: t('data-contracts:detailsView.toast.breakingChangesTitle', 'Breaking Changes Detected'),
+            description: t('data-contracts:detailsView.toast.breakingChangesNonAdmin', '{{message}}. You must create a new version.', { message: errorData.detail.message }),
             variant: 'destructive',
             duration: 10000
           })
         }
-        throw new Error(errorData.detail?.message || 'Breaking changes detected')
+        throw new Error(errorData.detail?.message || t('data-contracts:detailsView.errors.breakingChangesDetected', 'Breaking changes detected'))
       }
-      
-      if (!res.ok) throw new Error('Update failed')
+
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.updateFailed', 'Update failed'))
       
       console.log('[DEBUG] Calling fetchDetails()...')
       await fetchDetails()
       
-      toast({ title: 'Updated', description: 'Contract metadata updated.' })
+      toast({ title: t('data-contracts:detailsView.toast.updatedTitle', 'Updated'), description: t('data-contracts:detailsView.toast.metadataUpdated', 'Contract metadata updated.') })
     } catch (e) {
       console.error('[DEBUG] Update error:', e)
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToUpdate', 'Failed to update'), variant: 'destructive' })
       throw e
     }
   }
@@ -1024,7 +1026,7 @@ export default function DataContractDetails() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(schema),
     })
-    if (!res.ok) throw new Error('Failed to add schema')
+    if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.addSchemaFailed', 'Failed to add schema'))
     clearSchemaCache()
     await fetchDetails()
   }
@@ -1066,13 +1068,13 @@ export default function DataContractDetails() {
 
   const handleDeleteSchema = async (index: number) => {
     if (!contract || !contractId) return
-    if (!confirm('Delete this schema?')) return
+    if (!confirm(t('data-contracts:detailsView.confirm.deleteSchema', 'Delete this schema?'))) return
     const schemaName = contract.schema?.[index]?.name
     if (!schemaName) return
     const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaName)}`, {
       method: 'DELETE',
     })
-    if (!res.ok) throw new Error('Failed to delete schema')
+    if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.deleteSchemaFailed', 'Failed to delete schema'))
     clearSchemaCache()
     if (selectedSchemaIndex >= (contract.schema?.length || 1) - 1) {
       setSelectedSchemaIndex(Math.max(0, selectedSchemaIndex - 1))
@@ -1097,7 +1099,7 @@ export default function DataContractDetails() {
 
   const handleDeleteQualityRule = async (index: number) => {
     if (!contract) return
-    if (!confirm('Delete this quality rule?')) return
+    if (!confirm(t('data-contracts:detailsView.confirm.deleteQualityRule', 'Delete this quality rule?'))) return
     const updatedRules = (contract.qualityRules || []).filter((_, i) => i !== index)
     await updateContract({ qualityRules: updatedRules })
   }
@@ -1136,7 +1138,7 @@ export default function DataContractDetails() {
 
   const handleDeleteServer = async (index: number) => {
     if (!contract) return
-    if (!confirm('Delete this server configuration?')) return
+    if (!confirm(t('data-contracts:detailsView.confirm.deleteServer', 'Delete this server configuration?'))) return
     const currentServers = Array.isArray(contract.servers) ? contract.servers : (contract.servers ? [contract.servers] : [])
     const updatedServers = currentServers.filter((_, i) => i !== index)
     await updateContract({ servers: updatedServers })
@@ -1156,11 +1158,11 @@ export default function DataContractDetails() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(definition)
       })
-      if (!res.ok) throw new Error('Failed to create authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.createAuthDefFailed', 'Failed to create authoritative definition'))
       await fetchContractAuthDefs()
-      toast({ title: 'Added', description: 'Authoritative definition added successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.addedTitle', 'Added'), description: t('data-contracts:detailsView.toast.authDefAdded', 'Authoritative definition added successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to add', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.addFailed', 'Failed to add'), variant: 'destructive' })
       throw e
     }
   }
@@ -1175,30 +1177,30 @@ export default function DataContractDetails() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(definition)
       })
-      if (!res.ok) throw new Error('Failed to update authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.updateAuthDefFailed', 'Failed to update authoritative definition'))
       await fetchContractAuthDefs()
       setEditingContractAuthDefIndex(null)
-      toast({ title: 'Updated', description: 'Authoritative definition updated successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.updatedTitle', 'Updated'), description: t('data-contracts:detailsView.toast.authDefUpdated', 'Authoritative definition updated successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToUpdate', 'Failed to update'), variant: 'destructive' })
       throw e
     }
   }
 
   const handleDeleteContractAuthDef = async (index: number) => {
     if (!contractId) return
-    if (!confirm('Delete this authoritative definition?')) return
+    if (!confirm(t('data-contracts:detailsView.confirm.deleteAuthDef', 'Delete this authoritative definition?'))) return
     const defId = contractAuthDefs[index]?.id
     if (!defId) return
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/authoritative-definitions/${defId}`, {
         method: 'DELETE'
       })
-      if (!res.ok) throw new Error('Failed to delete authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.deleteAuthDefFailed', 'Failed to delete authoritative definition'))
       await fetchContractAuthDefs()
-      toast({ title: 'Deleted', description: 'Authoritative definition deleted successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.deletedTitle', 'Deleted'), description: t('data-contracts:detailsView.toast.authDefDeleted', 'Authoritative definition deleted successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToDelete', 'Failed to delete'), variant: 'destructive' })
     }
   }
 
@@ -1225,7 +1227,7 @@ export default function DataContractDetails() {
 
   const handleDeleteCustomProperty = async (key: string) => {
     if (!contract) return
-    if (!confirm(`Delete custom property "${key}"?`)) return
+    if (!confirm(t('data-contracts:detailsView.confirm.deleteCustomProperty', 'Delete custom property "{{key}}"?', { key }))) return
     const updatedProps = { ...(contract.customProperties || {}) }
     delete updatedProps[key]
     await updateContract({ customProperties: updatedProps })
@@ -1240,11 +1242,11 @@ export default function DataContractDetails() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(definition)
       })
-      if (!res.ok) throw new Error('Failed to create schema authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.createSchemaAuthDefFailed', 'Failed to create schema authoritative definition'))
       await fetchSchemaAuthDefs(activeSchemaIdForAuthDef)
-      toast({ title: 'Added', description: 'Schema authoritative definition added successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.addedTitle', 'Added'), description: t('data-contracts:detailsView.toast.schemaAuthDefAdded', 'Schema authoritative definition added successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to add', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.addFailed', 'Failed to add'), variant: 'destructive' })
       throw e
     }
   }
@@ -1261,19 +1263,19 @@ export default function DataContractDetails() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(definition)
       })
-      if (!res.ok) throw new Error('Failed to update schema authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.updateSchemaAuthDefFailed', 'Failed to update schema authoritative definition'))
       await fetchSchemaAuthDefs(schemaId)
       setEditingSchemaAuthDef(null)
-      toast({ title: 'Updated', description: 'Schema authoritative definition updated successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.updatedTitle', 'Updated'), description: t('data-contracts:detailsView.toast.schemaAuthDefUpdated', 'Schema authoritative definition updated successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToUpdate', 'Failed to update'), variant: 'destructive' })
       throw e
     }
   }
 
   const handleDeleteSchemaAuthDef = async (schemaId: string, index: number) => {
     if (!contractId) return
-    if (!confirm('Delete this schema authoritative definition?')) return
+    if (!confirm(t('data-contracts:detailsView.confirm.deleteSchemaAuthDef', 'Delete this schema authoritative definition?'))) return
     const defs = schemaAuthDefs[schemaId] || []
     const defId = defs[index]?.id
     if (!defId) return
@@ -1281,11 +1283,11 @@ export default function DataContractDetails() {
       const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/authoritative-definitions/${defId}`, {
         method: 'DELETE'
       })
-      if (!res.ok) throw new Error('Failed to delete schema authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.deleteSchemaAuthDefFailed', 'Failed to delete schema authoritative definition'))
       await fetchSchemaAuthDefs(schemaId)
-      toast({ title: 'Deleted', description: 'Schema authoritative definition deleted successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.deletedTitle', 'Deleted'), description: t('data-contracts:detailsView.toast.schemaAuthDefDeleted', 'Schema authoritative definition deleted successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToDelete', 'Failed to delete'), variant: 'destructive' })
     }
   }
 
@@ -1315,11 +1317,11 @@ export default function DataContractDetails() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(definition)
       })
-      if (!res.ok) throw new Error('Failed to create property authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.createPropertyAuthDefFailed', 'Failed to create property authoritative definition'))
       await fetchPropertyAuthDefs(schemaId, propertyId)
-      toast({ title: 'Added', description: 'Property authoritative definition added successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.addedTitle', 'Added'), description: t('data-contracts:detailsView.toast.propertyAuthDefAdded', 'Property authoritative definition added successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to add', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.addFailed', 'Failed to add'), variant: 'destructive' })
       throw e
     }
   }
@@ -1336,12 +1338,12 @@ export default function DataContractDetails() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(definition)
       })
-      if (!res.ok) throw new Error('Failed to update property authoritative definition')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.updatePropertyAuthDefFailed', 'Failed to update property authoritative definition'))
       await fetchPropertyAuthDefs(schemaId, propertyId)
       setEditingPropertyAuthDef(null)
-      toast({ title: 'Updated', description: 'Property authoritative definition updated successfully.' })
+      toast({ title: t('data-contracts:detailsView.toast.updatedTitle', 'Updated'), description: t('data-contracts:detailsView.toast.propertyAuthDefUpdated', 'Property authoritative definition updated successfully.') })
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToUpdate', 'Failed to update'), variant: 'destructive' })
       throw e
     }
   }
@@ -1405,13 +1407,13 @@ export default function DataContractDetails() {
         }
       }
       
-      if (!res.ok) throw new Error('Update failed')
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.updateFailed', 'Update failed'))
       await fetchDetails()
       if (showToast) {
-        toast({ title: 'Updated', description: 'Contract updated successfully.' })
+        toast({ title: t('data-contracts:detailsView.toast.updatedTitle', 'Updated'), description: t('data-contracts:detailsView.toast.contractUpdated', 'Contract updated successfully.') })
       }
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      toast({ title: t('common:status.error', 'Error'), description: e instanceof Error ? e.message : t('data-contracts:detailsView.errors.failedToUpdate', 'Failed to update'), variant: 'destructive' })
       throw e
     }
   }
@@ -1436,8 +1438,8 @@ export default function DataContractDetails() {
     setIsVersionDialogOpen(true)
     // The pending update will be discarded - user needs to apply it to the new version
     toast({
-      title: 'Create New Version',
-      description: 'Creating a new version will clone this contract. Apply your changes to the new version after creation.'
+      title: t('data-contracts:detailsView.header.createNewVersion', 'Create New Version'),
+      description: t('data-contracts:detailsView.toast.createNewVersionDesc', 'Creating a new version will clone this contract. Apply your changes to the new version after creation.')
     })
   }
 
@@ -1465,14 +1467,14 @@ export default function DataContractDetails() {
 
       const totalCols = schemas.reduce((sum, s) => sum + s.properties.length, 0)
       toast({
-        title: 'Schema inferred successfully',
-        description: `Added ${schemas.length} schema${schemas.length > 1 ? 's' : ''} with ${totalCols} total columns`,
+        title: t('data-contracts:detailsView.toast.schemaInferredTitle', 'Schema inferred successfully'),
+        description: t('data-contracts:detailsView.toast.schemaInferredDesc', 'Added {{count}} schemas with {{columns}} total columns', { count: schemas.length, columns: totalCols }),
       })
       setIsInferFromCatalogOpen(false)
     } catch (e) {
       toast({
-        title: 'Failed to infer schema',
-        description: e instanceof Error ? e.message : 'Could not infer schema from catalog',
+        title: t('data-contracts:detailsView.toast.inferFailedTitle', 'Failed to infer schema'),
+        description: e instanceof Error ? e.message : t('data-contracts:detailsView.toast.inferFromCatalogFailed', 'Could not infer schema from catalog'),
         variant: 'destructive',
       })
     } finally {
@@ -1504,13 +1506,13 @@ export default function DataContractDetails() {
 
       const totalCols = schemas.reduce((sum, s) => sum + s.properties.length, 0)
       toast({
-        title: 'Schema inferred successfully',
-        description: `Added ${schemas.length} schema${schemas.length > 1 ? 's' : ''} with ${totalCols} total columns from asset`,
+        title: t('data-contracts:detailsView.toast.schemaInferredTitle', 'Schema inferred successfully'),
+        description: t('data-contracts:detailsView.toast.schemaInferredFromAssetDesc', 'Added {{count}} schemas with {{columns}} total columns from asset', { count: schemas.length, columns: totalCols }),
       })
     } catch (e) {
       toast({
-        title: 'Failed to infer schema',
-        description: e instanceof Error ? e.message : 'Could not infer schema from asset',
+        title: t('data-contracts:detailsView.toast.inferFailedTitle', 'Failed to infer schema'),
+        description: e instanceof Error ? e.message : t('data-contracts:detailsView.toast.inferFromAssetFailed', 'Could not infer schema from asset'),
         variant: 'destructive',
       })
     } finally {
@@ -1522,11 +1524,11 @@ export default function DataContractDetails() {
     if (!contractId) return;
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/approve`, { method: 'POST' });
-      if (!res.ok) throw new Error(`Approve failed (${res.status})`);
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.approveFailedStatus', 'Approve failed ({{status}})', { status: res.status }));
       await fetchDetails();
-      toast({ title: 'Approved', description: 'Contract approved.' });
+      toast({ title: t('data-contracts:detailsView.toast.approvedTitle', 'Approved'), description: t('data-contracts:detailsView.toast.contractApproved', 'Contract approved.') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Approve failed', variant: 'destructive' });
+      toast({ title: t('common:status.error', 'Error'), description: e?.message || t('data-contracts:detailsView.errors.approveFailed', 'Approve failed'), variant: 'destructive' });
     }
   };
 
@@ -1534,11 +1536,11 @@ export default function DataContractDetails() {
     if (!contractId) return;
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/reject`, { method: 'POST' });
-      if (!res.ok) throw new Error(`Reject failed (${res.status})`);
+      if (!res.ok) throw new Error(t('data-contracts:detailsView.errors.rejectFailedStatus', 'Reject failed ({{status}})', { status: res.status }));
       await fetchDetails();
-      toast({ title: 'Rejected', description: 'Contract rejected.' });
+      toast({ title: t('data-contracts:detailsView.toast.rejectedTitle', 'Rejected'), description: t('data-contracts:detailsView.toast.contractRejected', 'Contract rejected.') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Reject failed', variant: 'destructive' });
+      toast({ title: t('common:status.error', 'Error'), description: e?.message || t('data-contracts:detailsView.errors.rejectFailed', 'Reject failed'), variant: 'destructive' });
     }
   };
 
@@ -1554,12 +1556,12 @@ export default function DataContractDetails() {
         // The backend returns an actionable `detail` (e.g. the DQX job is not enabled);
         // prefer it over the raw response body.
         const errorDetail = await res.json().catch(() => null)
-        throw new Error(errorDetail?.detail || 'Failed to start profiling')
+        throw new Error(errorDetail?.detail || t('data-contracts:detailsView.errors.startProfilingFailed', 'Failed to start profiling'))
       }
       await res.json()
-      toast({ 
-        title: 'DQX Profiling Started', 
-        description: 'The profiler is analyzing your data. You will be notified when complete.' 
+      toast({
+        title: t('data-contracts:detailsView.toast.dqxStartedTitle', 'DQX Profiling Started'),
+        description: t('data-contracts:detailsView.toast.dqxStartedDesc', 'The profiler is analyzing your data. You will be notified when complete.')
       })
       setIsDqxSchemaSelectOpen(false)
       
@@ -1567,10 +1569,10 @@ export default function DataContractDetails() {
       setIsProfilingRunning(true)
       fetchProfileRuns()
     } catch (e) {
-      toast({ 
-        title: 'Failed to start profiling', 
-        description: e instanceof Error ? e.message : 'Could not start DQX profiling', 
-        variant: 'destructive' 
+      toast({
+        title: t('data-contracts:detailsView.toast.dqxStartFailedTitle', 'Failed to start profiling'),
+        description: e instanceof Error ? e.message : t('data-contracts:detailsView.toast.dqxStartFailedDesc', 'Could not start DQX profiling'),
+        variant: 'destructive'
       })
     }
   }
@@ -1581,24 +1583,24 @@ export default function DataContractDetails() {
       const result = await requestJobEnablement('dqx_profile_datasets')
       if (result === 'already_installed') {
         toast({
-          title: 'DQX profiling is already enabled',
-          description: 'Reload the page to start profiling.'
+          title: t('data-contracts:detailsView.toast.dqxAlreadyEnabledTitle', 'DQX profiling is already enabled'),
+          description: t('data-contracts:detailsView.toast.dqxAlreadyEnabledDesc', 'Reload the page to start profiling.')
         })
       } else if (result === 'already_requested') {
         toast({
-          title: 'Request already pending',
-          description: 'An administrator has already been notified about this job.'
+          title: t('data-contracts:detailsView.toast.dqxRequestPendingTitle', 'Request already pending'),
+          description: t('data-contracts:detailsView.toast.dqxRequestPendingDesc', 'An administrator has already been notified about this job.')
         })
       } else {
         toast({
-          title: 'Administrators notified',
-          description: 'They have been asked to enable the DQX profiling background job.'
+          title: t('data-contracts:detailsView.toast.dqxAdminsNotifiedTitle', 'Administrators notified'),
+          description: t('data-contracts:detailsView.toast.dqxAdminsNotifiedDesc', 'They have been asked to enable the DQX profiling background job.')
         })
       }
     } catch (e) {
       toast({
-        title: 'Failed to notify administrators',
-        description: e instanceof Error ? e.message : 'Could not submit the request',
+        title: t('data-contracts:detailsView.toast.dqxNotifyFailedTitle', 'Failed to notify administrators'),
+        description: e instanceof Error ? e.message : t('data-contracts:detailsView.toast.dqxNotifyFailedDesc', 'Could not submit the request'),
         variant: 'destructive'
       })
     } finally {
@@ -1673,7 +1675,7 @@ export default function DataContractDetails() {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error || 'Contract not found.'}</AlertDescription>
+        <AlertDescription>{error || t('data-contracts:detailsView.errors.contractNotFound', 'Contract not found.')}</AlertDescription>
       </Alert>
     )
   }
@@ -1694,16 +1696,16 @@ export default function DataContractDetails() {
     return (
       <div className="space-y-2">
         <DataTable
-          columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
+          columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks, t)}
           data={props}
           searchColumn="name"
         />
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm text-muted-foreground pt-1">
-            <span>Showing {currentPage * PROPS_PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PROPS_PAGE_SIZE, totalProps)} of {totalProps} columns</span>
+            <span>{t('data-contracts:detailsView.schemas.pagination', 'Showing {{from}}–{{to}} of {{total}} columns', { from: currentPage * PROPS_PAGE_SIZE + 1, to: Math.min((currentPage + 1) * PROPS_PAGE_SIZE, totalProps), total: totalProps })}</span>
             <div className="flex gap-1">
-              <Button size="sm" variant="outline" disabled={currentPage === 0 || loadingSchemaProps} onClick={() => fetchSchemaProperties(schemaName, currentPage - 1)}>Previous</Button>
-              <Button size="sm" variant="outline" disabled={currentPage >= totalPages - 1 || loadingSchemaProps} onClick={() => fetchSchemaProperties(schemaName, currentPage + 1)}>Next</Button>
+              <Button size="sm" variant="outline" disabled={currentPage === 0 || loadingSchemaProps} onClick={() => fetchSchemaProperties(schemaName, currentPage - 1)}>{t('common:pagination.previous', 'Previous')}</Button>
+              <Button size="sm" variant="outline" disabled={currentPage >= totalPages - 1 || loadingSchemaProps} onClick={() => fetchSchemaProperties(schemaName, currentPage + 1)}>{t('common:pagination.next', 'Next')}</Button>
             </div>
           </div>
         )}
@@ -1717,7 +1719,7 @@ export default function DataContractDetails() {
         <div className="flex items-center gap-4">
           <Button variant="outline" onClick={() => navigate(listPath)} size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to List
+            {t('data-contracts:details.backToList', 'Back to List')}
           </Button>
 
           {/* Version Navigation — unified across contracts and products (PRD #442). */}
@@ -1761,8 +1763,8 @@ export default function DataContractDetails() {
           {/* Lifecycle actions */}
           {contract && (['proposed','under_review'].includes((contract.status || '').toLowerCase())) && (
             <>
-              <Button size="sm" variant="outline" onClick={handleApprove}>Approve</Button>
-              <Button size="sm" variant="destructive" onClick={handleReject}>Reject</Button>
+              <Button size="sm" variant="outline" onClick={handleApprove}>{t('data-contracts:detailsView.header.approve', 'Approve')}</Button>
+              <Button size="sm" variant="destructive" onClick={handleReject}>{t('data-contracts:detailsView.header.reject', 'Reject')}</Button>
             </>
           )}
           {contract && contract.status?.toLowerCase() === 'active' && canApproveContractLifecycle && (
@@ -1775,7 +1777,7 @@ export default function DataContractDetails() {
                 setCertifyDialogOpen(true)
               }}
             >
-              <ShieldCheck className="mr-2 h-4 w-4" /> Certify
+              <ShieldCheck className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.certify', 'Certify')}
             </Button>
           )}
           {contract &&
@@ -1790,10 +1792,10 @@ export default function DataContractDetails() {
                   setPublishDialogOpen(true)
                 }}
               >
-                <Globe className="mr-2 h-4 w-4" /> Publish
+                <Globe className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.publish', 'Publish')}
               </Button>
             )}
-          <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm"><KeyRound className="mr-2 h-4 w-4" /> Request...</Button>
+          <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm"><KeyRound className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.request', 'Request...')}</Button>
           <CommentSidebar
             entityType="data_contract"
             entityId={contractId!}
@@ -1805,34 +1807,34 @@ export default function DataContractDetails() {
           {isPersonalDraft && (
             <>
               <Button variant="default" onClick={() => setIsCommitDraftDialogOpen(true)} size="sm">
-                <CopyPlus className="mr-2 h-4 w-4" /> Commit Changes
+                <CopyPlus className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.commitChanges', 'Commit Changes')}
               </Button>
               <Button variant="outline" onClick={handleDiscardDraft} size="sm">
-                <Trash2 className="mr-2 h-4 w-4" /> Discard Draft
+                <Trash2 className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.discardDraft', 'Discard Draft')}
               </Button>
             </>
           )}
           {/* Clone for editing (for active+ contracts) */}
           {!canEditInPlace && !isPersonalDraft && (
             <Button variant="outline" onClick={handleCloneForEditing} size="sm">
-              <CopyPlus className="mr-2 h-4 w-4" /> Clone for Editing
+              <CopyPlus className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.cloneForEditing', 'Clone for Editing')}
             </Button>
           )}
           {/* Create new version (for any contract) */}
           {!isPersonalDraft && (
             <Button variant="outline" onClick={handleCreateNewVersion} size="sm">
-              <CopyPlus className="mr-2 h-4 w-4" /> Create New Version
+              <CopyPlus className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.createNewVersion', 'Create New Version')}
             </Button>
           )}
           {/* Edit metadata only if editable */}
           {canEditInPlace && (
             <Button variant="outline" onClick={() => setIsBasicFormOpen(true)} size="sm">
-              <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
+              <Pencil className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.editMetadata', 'Edit Metadata')}
             </Button>
           )}
-          <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
+          <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> {t('data-contracts:detailsView.header.exportOdcs', 'Export ODCS')}</Button>
           {canEditInPlace && (
-            <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+            <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> {t('common:actions.delete', 'Delete')}</Button>
           )}
         </div>
       </div>
@@ -1842,10 +1844,10 @@ export default function DataContractDetails() {
         <Alert className="bg-amber-50 border-amber-300 dark:bg-amber-950 dark:border-amber-800">
           <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertDescription className="text-amber-800 dark:text-amber-200">
-            <strong>Personal Draft</strong> — Only visible to you. Commit to share with your team.
+            <strong>{t('data-contracts:detailsView.banners.personalDraftTitle', 'Personal Draft')}</strong> — {t('data-contracts:detailsView.banners.personalDraftText', 'Only visible to you. Commit to share with your team.')}
             {contract?.parentContractId && (
               <span className="ml-2 text-sm">
-                Based on{' '}
+                {t('data-contracts:detailsView.banners.basedOn', 'Based on')}{' '}
                 <Button variant="link" className="h-auto p-0 text-amber-700 dark:text-amber-300" onClick={() => navigate(`${listPath}/${contract.parentContractId}`)}>
                   v{contract?.version?.replace('-draft', '') || 'parent'}
                 </Button>
@@ -1860,7 +1862,7 @@ export default function DataContractDetails() {
         <Alert className="bg-blue-50 border-blue-300 dark:bg-blue-950 dark:border-blue-800">
           <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           <AlertDescription className="text-blue-800 dark:text-blue-200">
-            <strong>Read-Only</strong> — This contract is {contract?.status?.toLowerCase()}. Clone to create a new version for editing.
+            <strong>{t('data-contracts:detailsView.banners.readOnlyTitle', 'Read-Only')}</strong> — {t('data-contracts:detailsView.banners.readOnlyText', 'This contract is {{status}}. Clone to create a new version for editing.', { status: contract?.status?.toLowerCase() })}
           </AlertDescription>
         </Alert>
       )}
@@ -1875,7 +1877,7 @@ export default function DataContractDetails() {
                 <span className="truncate">{contract.name}</span>
               </CardTitle>
               <CardDescription className="pt-1">
-                {contract.description?.purpose || 'No description provided'}
+                {contract.description?.purpose || t('data-contracts:details.noDescription', 'No description provided')}
               </CardDescription>
             </div>
             <div className="flex items-end gap-5 shrink-0">
@@ -1883,7 +1885,7 @@ export default function DataContractDetails() {
                 <Badge variant={getStatusColor(contract.status)}>
                   {contract.status || '—'}
                 </Badge>
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</span>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('data-contracts:detailsView.metadata.status', 'Status')}</span>
               </div>
               {contract.id && (
                 <MaturityInline entityType="DataContract" entityId={contract.id} compact />
@@ -1894,7 +1896,7 @@ export default function DataContractDetails() {
         <CardContent className="space-y-3">
           <div className="grid md:grid-cols-3 gap-x-6 gap-y-2">
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Version:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.version', 'Version')}:</Label>
               {contract.version ? (
                 <Badge variant="outline" className="text-xs">{contract.version}</Badge>
               ) : (
@@ -1902,7 +1904,7 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Domain:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.domain', 'Domain')}:</Label>
               {(() => {
                 const domainId = contract.domainId;
                 const domainName = getDomainName(domainId) || contract.domain;
@@ -1923,12 +1925,12 @@ export default function DataContractDetails() {
               })()}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Project:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.project', 'Project')}:</Label>
               {(contract as any).project_id && contract.project_name ? (
                 <span
                   className="text-xs cursor-pointer text-primary hover:underline truncate"
                   onClick={() => navigate(`/projects/${(contract as any).project_id}`)}
-                  title={`Project ID: ${(contract as any).project_id}`}
+                  title={t('data-contracts:detailsView.metadata.projectIdTitle', 'Project ID: {{id}}', { id: (contract as any).project_id })}
                 >
                   {contract.project_name}
                 </span>
@@ -1937,7 +1939,7 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.tenant', 'Tenant')}:</Label>
               {contract.tenant ? (
                 <span className="text-xs text-muted-foreground truncate">{contract.tenant}</span>
               ) : (
@@ -1945,12 +1947,12 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Team:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.team', 'Team')}:</Label>
               {contract.owner_team_id && contract.owner_team_name ? (
                 <span
                   className="text-xs cursor-pointer text-primary hover:underline truncate"
                   onClick={() => navigate(`/teams/${contract.owner_team_id}`)}
-                  title={`Team ID: ${contract.owner_team_id}`}
+                  title={t('data-contracts:detailsView.metadata.teamIdTitle', 'Team ID: {{id}}', { id: contract.owner_team_id })}
                 >
                   {contract.owner_team_name}
                 </span>
@@ -1959,7 +1961,7 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">API Ver:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.apiVersion', 'API Ver')}:</Label>
               {contract.apiVersion ? (
                 <Badge variant="outline" className="text-xs">{contract.apiVersion}</Badge>
               ) : (
@@ -1967,7 +1969,7 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Created:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.created', 'Created')}:</Label>
               {contract.created ? (
                 <span className="text-xs text-muted-foreground truncate">{formatDate(contract.created)}</span>
               ) : (
@@ -1975,7 +1977,7 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Updated:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.updated', 'Updated')}:</Label>
               {contract.updated ? (
                 <span className="text-xs text-muted-foreground truncate">{formatDate(contract.updated)}</span>
               ) : (
@@ -1983,7 +1985,7 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Cert:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.cert', 'Cert')}:</Label>
               {(contract.certification_level || contract.inherited_certification_level) ? (
                 <CertificationBadge
                   certificationLevel={contract.certification_level}
@@ -1998,7 +2000,7 @@ export default function DataContractDetails() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground min-w-[4rem]">Published:</Label>
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.published', 'Published')}:</Label>
               {contract.publication_scope && contract.publication_scope !== 'none' ? (
                 <PublicationScopeBadge
                   scope={contract.publication_scope as PublicationScope}
@@ -2015,23 +2017,23 @@ export default function DataContractDetails() {
           <div className="pt-2 border-t">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1 min-w-0">
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Tags:</Label>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">{t('data-contracts:detailsView.metadata.tags', 'Tags')}:</Label>
                 <div className="flex flex-wrap gap-1">
                   {(contract.tags || []).length > 0 ? (
                     (contract.tags || []).map((tag, index) => (
                       <TagChip key={index} tag={tag} size="sm" />
                     ))
                   ) : (
-                    <span className="text-xs text-muted-foreground">No tags</span>
+                    <span className="text-xs text-muted-foreground">{t('data-contracts:details.coreMetadata.noTags', 'No tags')}</span>
                   )}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <Label className="text-xs text-muted-foreground mb-1.5 block">Linked Business Concepts:</Label>
+                <Label className="text-xs text-muted-foreground mb-1.5 block">{t('data-contracts:detailsView.metadata.linkedBusinessConcepts', 'Linked Business Concepts')}:</Label>
                 <LinkedConceptChips
                   links={links}
                   onRemove={canEditInPlace ? (id) => removeLink(id) : undefined}
-                  trailing={canEditInPlace ? <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">Add</Button> : undefined}
+                  trailing={canEditInPlace ? <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">{t('common:actions.add', 'Add')}</Button> : undefined}
                 />
               </div>
             </div>
@@ -2046,7 +2048,7 @@ export default function DataContractDetails() {
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center">
                 <FileText className="mr-2 h-5 w-5" />
-                Description
+                {t('common:labels.description', 'Description')}
               </span>
               {canEditInPlace && (
                 <Button size="sm" variant="outline" onClick={() => setIsBasicFormOpen(true)}>
@@ -2058,19 +2060,19 @@ export default function DataContractDetails() {
           <CardContent className="space-y-4">
             {contract.description.purpose && (
               <div>
-                <Label>Purpose:</Label>
+                <Label>{t('data-contracts:detailsView.description.purpose', 'Purpose')}:</Label>
                 <p className="text-sm mt-1">{contract.description.purpose}</p>
               </div>
             )}
             {contract.description.limitations && (
               <div>
-                <Label>Limitations:</Label>
+                <Label>{t('data-contracts:detailsView.description.limitations', 'Limitations')}:</Label>
                 <p className="text-sm mt-1">{contract.description.limitations}</p>
               </div>
             )}
             {contract.description.usage && (
               <div>
-                <Label>Usage:</Label>
+                <Label>{t('data-contracts:detailsView.description.usage', 'Usage')}:</Label>
                 <p className="text-sm mt-1">{contract.description.usage}</p>
               </div>
             )}
@@ -2083,8 +2085,8 @@ export default function DataContractDetails() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-xl">Schemas ({contract.schema?.length || 0})</CardTitle>
-              <CardDescription>Database schema definitions</CardDescription>
+              <CardTitle className="text-xl">{t('data-contracts:detailsView.schemas.title', 'Schemas ({{count}})', { count: contract.schema?.length || 0 })}</CardTitle>
+              <CardDescription>{t('data-contracts:detailsView.schemas.subtitle', 'Database schema definitions')}</CardDescription>
             </div>
             <div className="flex gap-2">
               <Tooltip>
@@ -2098,13 +2100,13 @@ export default function DataContractDetails() {
                       disabled={!contract.schema || contract.schema.length === 0 || !isDqxJobInstalled}
                     >
                       <Sparkles className="h-4 w-4 mr-1.5" />
-                      Profile with DQX
+                      {t('data-contracts:detailsView.schemas.profileWithDqx', 'Profile with DQX')}
                     </Button>
                   </span>
                 </TooltipTrigger>
                 {!isDqxJobInstalled && (
                   <TooltipContent className="max-w-xs">
-                    <p>Ask your admin to enable the background job.</p>
+                    <p>{t('data-contracts:detailsView.schemas.dqxAdminHint', 'Ask your admin to enable the background job.')}</p>
                     {canRequestJobEnablement && (
                       <button
                         type="button"
@@ -2113,7 +2115,7 @@ export default function DataContractDetails() {
                         className="mt-1 inline-flex items-center underline underline-offset-2 hover:no-underline disabled:opacity-60"
                       >
                         {isRequestingDqxJob && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                        {isRequestingDqxJob ? 'Notifying admin...' : 'Notify admin'}
+                        {isRequestingDqxJob ? t('data-contracts:detailsView.schemas.notifyingAdmin', 'Notifying admin...') : t('data-contracts:detailsView.schemas.notifyAdmin', 'Notify admin')}
                       </button>
                     )}
                   </TooltipContent>
@@ -2123,15 +2125,15 @@ export default function DataContractDetails() {
                 <>
                   <Button size="sm" variant="outline" onClick={() => setIsInferFromCatalogOpen(true)} disabled={isInferringSchema}>
                     {isInferringSchema ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Database className="h-4 w-4 mr-1.5" />}
-                    {isInferringSchema ? 'Inferring...' : 'Infer from Catalog'}
+                    {isInferringSchema ? t('data-contracts:detailsView.schemas.inferring', 'Inferring...') : t('data-contracts:detailsView.schemas.inferFromCatalog', 'Infer from Catalog')}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setIsInferFromAssetOpen(true)} disabled={isInferringSchema}>
                     <Package className="h-4 w-4 mr-1.5" />
-                    Infer from Asset
+                    {t('data-contracts:detailsView.schemas.inferFromAsset', 'Infer from Asset')}
                   </Button>
                   <Button size="sm" onClick={() => { setEditingSchemaIndex(null); setIsSchemaFormOpen(true); }}>
                     <Plus className="h-4 w-4 mr-1.5" />
-                    Add Schema
+                    {t('data-contracts:schemaEditor.addSchema', 'Add Schema')}
                   </Button>
                 </>
               )}
@@ -2144,7 +2146,7 @@ export default function DataContractDetails() {
               <Loader2 className="h-4 w-4 animate-spin" />
               <AlertDescription className="flex items-center justify-between">
                 <span>
-                  DQX profiling in progress... Results will appear here when complete.
+                  {t('data-contracts:detailsView.schemas.profilingInProgress', 'DQX profiling in progress... Results will appear here when complete.')}
                 </span>
               </AlertDescription>
             </Alert>
@@ -2154,14 +2156,14 @@ export default function DataContractDetails() {
               <Sparkles className="h-4 w-4" />
               <AlertDescription className="flex items-center justify-between">
                 <span>
-                  {pendingSuggestionsCount} quality check {pendingSuggestionsCount === 1 ? 'suggestion' : 'suggestions'} available from DQX profiling
+                  {t('data-contracts:detailsView.schemas.suggestionsAvailable', '{{count}} quality check suggestions available from DQX profiling', { count: pendingSuggestionsCount })}
                 </span>
                 <Button 
                   size="sm" 
                   variant="outline" 
                   onClick={() => handleOpenSuggestions()}
                 >
-                  Review Suggestions
+                  {t('data-contracts:detailsView.schemas.reviewSuggestions', 'Review Suggestions')}
                 </Button>
               </AlertDescription>
             </Alert>
@@ -2170,31 +2172,31 @@ export default function DataContractDetails() {
             <Alert className="mb-4">
               <Loader2 className="h-4 w-4 animate-spin" />
               <AlertDescription>
-                Inferring schema... This may take a moment.
+                {t('data-contracts:detailsView.schemas.inferringSchemaWait', 'Inferring schema... This may take a moment.')}
               </AlertDescription>
             </Alert>
           )}
           {!contract.schema || contract.schema.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-              <div className="text-muted-foreground mb-2">No schemas defined yet</div>
+              <div className="text-muted-foreground mb-2">{t('data-contracts:detailsView.schemas.noSchemasYet', 'No schemas defined yet')}</div>
               <div className="text-sm text-muted-foreground mb-4">
-                {canEditInPlace 
-                  ? 'Define the structure of your data by adding schemas'
-                  : 'This contract has no schemas defined'}
+                {canEditInPlace
+                  ? t('data-contracts:detailsView.schemas.defineStructure', 'Define the structure of your data by adding schemas')
+                  : t('data-contracts:detailsView.schemas.noSchemasReadOnly', 'This contract has no schemas defined')}
               </div>
               {canEditInPlace && (
                 <div className="flex gap-3 justify-center flex-wrap">
                   <Button variant="outline" onClick={() => setIsInferFromCatalogOpen(true)} disabled={isInferringSchema}>
                     {isInferringSchema ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
-                    {isInferringSchema ? 'Inferring Schema...' : 'Infer from Catalog'}
+                    {isInferringSchema ? t('data-contracts:detailsView.schemas.inferringSchema', 'Inferring Schema...') : t('data-contracts:detailsView.schemas.inferFromCatalog', 'Infer from Catalog')}
                   </Button>
                   <Button variant="outline" onClick={() => setIsInferFromAssetOpen(true)} disabled={isInferringSchema}>
                     <Package className="h-4 w-4 mr-2" />
-                    Infer from Asset
+                    {t('data-contracts:detailsView.schemas.inferFromAsset', 'Infer from Asset')}
                   </Button>
                   <Button onClick={() => { setEditingSchemaIndex(null); setIsSchemaFormOpen(true); }}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Schema Manually
+                    {t('data-contracts:detailsView.schemas.addSchemaManually', 'Add Schema Manually')}
                   </Button>
                 </div>
               )}
@@ -2204,7 +2206,7 @@ export default function DataContractDetails() {
               <div className="space-y-4">
                 <div className="flex items-center gap-4 justify-between">
                   <div>
-                    <Label className="text-base font-semibold">{contract.schema[0].name || 'Table 1'}</Label>
+                    <Label className="text-base font-semibold">{contract.schema[0].name || t('data-contracts:detailsView.schemas.tableFallback', 'Table {{number}}', { number: 1 })}</Label>
                     {contract.schema[0].name && schemaLinks[contract.schema[0].name] && schemaLinks[contract.schema[0].name].length > 0 && (
                       <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                         {schemaLinks[contract.schema[0].name].map((link, idx) => (
@@ -2232,7 +2234,7 @@ export default function DataContractDetails() {
                         className="flex items-center gap-1.5 text-sm text-primary hover:underline"
                         target="_blank"
                         rel="noopener noreferrer"
-                        title={`Open ${contract.schema[0].physicalName} in Catalog Commander`}
+                        title={t('data-contracts:detailsView.schemas.openInCatalogCommander', 'Open {{name}} in Catalog Commander', { name: contract.schema[0].physicalName })}
                       >
                         <Database className="h-4 w-4" />
                         {contract.schema[0].physicalName}
@@ -2259,7 +2261,7 @@ export default function DataContractDetails() {
                   return (
                     <div className="mt-4 pt-4 border-t">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold">Authoritative Definitions ({defs.length})</h4>
+                        <h4 className="text-sm font-semibold">{t('data-contracts:detailsView.authDefs.schemaTitle', 'Authoritative Definitions ({{count}})', { count: defs.length })}</h4>
                         {canEditInPlace && (
                           <Button
                             size="sm"
@@ -2271,12 +2273,12 @@ export default function DataContractDetails() {
                             }}
                           >
                             <Plus className="h-3 w-3 mr-1" />
-                            Add
+                            {t('common:actions.add', 'Add')}
                           </Button>
                         )}
                       </div>
                       {defs.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No authoritative definitions for this schema.</p>
+                        <p className="text-xs text-muted-foreground">{t('data-contracts:detailsView.authDefs.noneForSchema', 'No authoritative definitions for this schema.')}</p>
                       ) : (
                         <div className="space-y-2">
                           {defs.map((def, idx) => (
@@ -2322,7 +2324,7 @@ export default function DataContractDetails() {
               // Many schemas - use dropdown selector
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
-                  <Label>Select Schema:</Label>
+                  <Label>{t('data-contracts:detailsView.schemas.selectSchema', 'Select Schema')}:</Label>
                   <Select value={selectedSchemaIndex.toString()} onValueChange={(value) => setSelectedSchemaIndex(parseInt(value))}>
                     <SelectTrigger className="w-80">
                       <SelectValue />
@@ -2330,7 +2332,7 @@ export default function DataContractDetails() {
                     <SelectContent className="max-h-[40vh] overflow-y-auto" position="popper" sideOffset={5}>
                       {contract.schema.map((schemaObj, idx) => (
                         <SelectItem key={idx} value={idx.toString()}>
-                          {schemaObj.name || `Table ${idx + 1}`} ({schemaPropTotal[schemaObj.name] ?? schemaObj.propertyCount ?? 0} columns)
+                          {schemaObj.name || t('data-contracts:detailsView.schemas.tableFallback', 'Table {{number}}', { number: idx + 1 })} {t('data-contracts:detailsView.schemas.columnsCount', '({{count}} columns)', { count: schemaPropTotal[schemaObj.name] ?? schemaObj.propertyCount ?? 0 })}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -2339,14 +2341,14 @@ export default function DataContractDetails() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 justify-between">
                     <div>
-                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || t('data-contracts:detailsView.schemas.tableFallback', 'Table {{number}}', { number: selectedSchemaIndex + 1 })}</Label>
                       {contract.schema[selectedSchemaIndex]?.stableId && (
-                        <span className="ml-2 text-xs font-mono text-muted-foreground" title="ODCS StableId">{contract.schema[selectedSchemaIndex].stableId}</span>
+                        <span className="ml-2 text-xs font-mono text-muted-foreground" title={t('data-contracts:detailsView.stableIdTitle', 'ODCS StableId')}>{contract.schema[selectedSchemaIndex].stableId}</span>
                       )}
                       {contract.schema[selectedSchemaIndex]?.relationships && contract.schema[selectedSchemaIndex].relationships!.length > 0 && (
                         <Badge variant="outline" className="ml-2 text-xs">
                           <Link2 className="h-3 w-3 mr-1" />
-                          {contract.schema[selectedSchemaIndex].relationships!.length} FK{contract.schema[selectedSchemaIndex].relationships!.length > 1 ? 's' : ''}
+                          {t('data-contracts:detailsView.schemas.fkCount', '{{count}} FK', { count: contract.schema[selectedSchemaIndex].relationships!.length })}
                         </Badge>
                       )}
                       {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
@@ -2376,7 +2378,7 @@ export default function DataContractDetails() {
                           className="flex items-center gap-1.5 text-sm text-primary hover:underline"
                           target="_blank"
                           rel="noopener noreferrer"
-                          title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Commander`}
+                          title={t('data-contracts:detailsView.schemas.openInCatalogCommander', 'Open {{name}} in Catalog Commander', { name: contract.schema[selectedSchemaIndex].physicalName })}
                         >
                           <Database className="h-4 w-4" />
                           {contract.schema[selectedSchemaIndex].physicalName}
@@ -2403,7 +2405,7 @@ export default function DataContractDetails() {
                     return (
                       <div className="mt-4 pt-4 border-t">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold">Authoritative Definitions ({defs.length})</h4>
+                          <h4 className="text-sm font-semibold">{t('data-contracts:detailsView.authDefs.schemaTitle', 'Authoritative Definitions ({{count}})', { count: defs.length })}</h4>
                           {canEditInPlace && (
                             <Button
                               size="sm"
@@ -2415,12 +2417,12 @@ export default function DataContractDetails() {
                               }}
                             >
                               <Plus className="h-3 w-3 mr-1" />
-                              Add
+                              {t('common:actions.add', 'Add')}
                             </Button>
                           )}
                         </div>
                         {defs.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">No authoritative definitions for this schema.</p>
+                          <p className="text-xs text-muted-foreground">{t('data-contracts:detailsView.authDefs.noneForSchema', 'No authoritative definitions for this schema.')}</p>
                         ) : (
                           <div className="space-y-2">
                             {defs.map((def, idx) => (
@@ -2478,7 +2480,7 @@ export default function DataContractDetails() {
                             : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
                         }`}
                       >
-                        {schemaObj.name || `Table ${idx + 1}`}
+                        {schemaObj.name || t('data-contracts:detailsView.schemas.tableFallback', 'Table {{number}}', { number: idx + 1 })}
                         <span className="ml-2 text-xs">
                           ({schemaPropTotal[schemaObj.name] ?? schemaObj.propertyCount ?? schemaObj.properties?.length ?? 0})
                         </span>
@@ -2489,14 +2491,14 @@ export default function DataContractDetails() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 justify-between">
                     <div>
-                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || t('data-contracts:detailsView.schemas.tableFallback', 'Table {{number}}', { number: selectedSchemaIndex + 1 })}</Label>
                       {contract.schema[selectedSchemaIndex]?.stableId && (
-                        <span className="ml-2 text-xs font-mono text-muted-foreground" title="ODCS StableId">{contract.schema[selectedSchemaIndex].stableId}</span>
+                        <span className="ml-2 text-xs font-mono text-muted-foreground" title={t('data-contracts:detailsView.stableIdTitle', 'ODCS StableId')}>{contract.schema[selectedSchemaIndex].stableId}</span>
                       )}
                       {contract.schema[selectedSchemaIndex]?.relationships && contract.schema[selectedSchemaIndex].relationships!.length > 0 && (
                         <Badge variant="outline" className="ml-2 text-xs">
                           <Link2 className="h-3 w-3 mr-1" />
-                          {contract.schema[selectedSchemaIndex].relationships!.length} FK{contract.schema[selectedSchemaIndex].relationships!.length > 1 ? 's' : ''}
+                          {t('data-contracts:detailsView.schemas.fkCount', '{{count}} FK', { count: contract.schema[selectedSchemaIndex].relationships!.length })}
                         </Badge>
                       )}
                       {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
@@ -2526,7 +2528,7 @@ export default function DataContractDetails() {
                           className="flex items-center gap-1.5 text-sm text-primary hover:underline"
                           target="_blank"
                           rel="noopener noreferrer"
-                          title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Commander`}
+                          title={t('data-contracts:detailsView.schemas.openInCatalogCommander', 'Open {{name}} in Catalog Commander', { name: contract.schema[selectedSchemaIndex].physicalName })}
                         >
                           <Database className="h-4 w-4" />
                           {contract.schema[selectedSchemaIndex].physicalName}
@@ -2553,7 +2555,7 @@ export default function DataContractDetails() {
                     return (
                       <div className="mt-4 pt-4 border-t">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold">Authoritative Definitions ({defs.length})</h4>
+                          <h4 className="text-sm font-semibold">{t('data-contracts:detailsView.authDefs.schemaTitle', 'Authoritative Definitions ({{count}})', { count: defs.length })}</h4>
                           {canEditInPlace && (
                             <Button
                               size="sm"
@@ -2565,12 +2567,12 @@ export default function DataContractDetails() {
                               }}
                             >
                               <Plus className="h-3 w-3 mr-1" />
-                              Add
+                              {t('common:actions.add', 'Add')}
                             </Button>
                           )}
                         </div>
                         {defs.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">No authoritative definitions for this schema.</p>
+                          <p className="text-xs text-muted-foreground">{t('data-contracts:detailsView.authDefs.noneForSchema', 'No authoritative definitions for this schema.')}</p>
                         ) : (
                           <div className="space-y-2">
                             {defs.map((def, idx) => (
@@ -2626,9 +2628,9 @@ export default function DataContractDetails() {
             <div>
               <CardTitle className="text-xl flex items-center gap-2">
                 <Package className="h-5 w-5 text-primary" />
-                Linked Data Products ({linkedProducts.length})
+                {t('data-contracts:detailsView.linkedProducts.title', 'Linked Data Products ({{count}})', { count: linkedProducts.length })}
               </CardTitle>
-              <CardDescription>Data Products using this contract for deliverables</CardDescription>
+              <CardDescription>{t('data-contracts:detailsView.linkedProducts.subtitle', 'Data Products using this contract for deliverables')}</CardDescription>
             </div>
             <div className="flex gap-2">
               <Button
@@ -2638,7 +2640,7 @@ export default function DataContractDetails() {
                 disabled={!contract || !['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase())}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
-                Link to Existing Product
+                {t('data-contracts:detailsView.linkedProducts.linkExisting', 'Link to Existing Product')}
               </Button>
               <Button
                 size="sm"
@@ -2646,7 +2648,7 @@ export default function DataContractDetails() {
                 disabled={!contract || !['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase())}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
-                Create Data Product
+                {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
               </Button>
             </div>
           </div>
@@ -2659,18 +2661,18 @@ export default function DataContractDetails() {
           ) : linkedProducts.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
               <Package className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-              <div className="text-muted-foreground mb-2">No linked data products yet</div>
+              <div className="text-muted-foreground mb-2">{t('data-contracts:detailsView.linkedProducts.noneYet', 'No linked data products yet')}</div>
               <div className="text-sm text-muted-foreground mb-4">
-                Create a data product that uses this contract to govern a deliverable
+                {t('data-contracts:detailsView.linkedProducts.emptyHint', 'Create a data product that uses this contract to govern a deliverable')}
               </div>
               {contract && ['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase()) ? (
                 <Button onClick={() => setIsCreateProductDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Data Product
+                  {t('data-contracts:detailsView.linkedProducts.createProduct', 'Create Data Product')}
                 </Button>
               ) : (
                 <div className="text-sm text-muted-foreground italic">
-                  Contract must be in 'active', 'approved', or 'certified' status
+                  {t('data-contracts:detailsView.linkedProducts.statusRequirement', "Contract must be in 'active', 'approved', or 'certified' status")}
                 </div>
               )}
             </div>
@@ -2687,7 +2689,7 @@ export default function DataContractDetails() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="font-medium text-base">{product.name || 'Unnamed Product'}</div>
+                        <div className="font-medium text-base">{product.name || t('data-contracts:detailsView.linkedProducts.unnamedProduct', 'Unnamed Product')}</div>
                         {product.description?.purpose && (
                           <p className="text-sm text-muted-foreground mt-1">{product.description.purpose}</p>
                         )}
@@ -2701,7 +2703,7 @@ export default function DataContractDetails() {
                         </div>
                         {linkedPorts.length > 0 && (
                           <div className="mt-2 text-xs text-muted-foreground">
-                            Deliverable{linkedPorts.length > 1 ? 's' : ''}: {linkedPorts.map(port => `${port.name} (v${port.version})`).join(', ')}
+                            {t('data-contracts:detailsView.linkedProducts.deliverables', 'Deliverables: {{ports}}', { count: linkedPorts.length, ports: linkedPorts.map(port => `${port.name} (v${port.version})`).join(', ') })}
                           </div>
                         )}
                       </div>
@@ -2721,13 +2723,13 @@ export default function DataContractDetails() {
           <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-xl">Quality Rules ({contract.qualityRules?.length || 0})</CardTitle>
-              <CardDescription>Data quality checks and validations</CardDescription>
+              <CardTitle className="text-xl">{t('data-contracts:detailsView.qualityRules.title', 'Quality Rules ({{count}})', { count: contract.qualityRules?.length || 0 })}</CardTitle>
+              <CardDescription>{t('data-contracts:detailsView.qualityRules.subtitle', 'Data quality checks and validations')}</CardDescription>
             </div>
             {canEditInPlace && (
               <Button size="sm" onClick={() => { setEditingQualityRuleIndex(null); setIsQualityRuleFormOpen(true); }}>
                 <Plus className="h-4 w-4 mr-1.5" />
-                Add Rule
+                {t('data-contracts:details.qualityRules.addRule', 'Add Rule')}
               </Button>
             )}
           </div>
@@ -2759,7 +2761,7 @@ export default function DataContractDetails() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No quality rules defined. Click "Add Rule" to create one.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{t('data-contracts:detailsView.qualityRules.empty', 'No quality rules defined. Click "Add Rule" to create one.')}</p>
           )}
         </CardContent>
       </Card>
@@ -2771,8 +2773,8 @@ export default function DataContractDetails() {
           <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-xl">ODCS Team Metadata</CardTitle>
-              <CardDescription>Read-only provenance from imported contract YAML. Manage ownership via the Owners panel above.</CardDescription>
+              <CardTitle className="text-xl">{t('data-contracts:detailsView.teamMetadata.title', 'ODCS Team Metadata')}</CardTitle>
+              <CardDescription>{t('data-contracts:detailsView.teamMetadata.subtitle', 'Read-only provenance from imported contract YAML. Manage ownership via the Owners panel above.')}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -2781,11 +2783,11 @@ export default function DataContractDetails() {
           {(teamMetaName || teamMetaDesc) && (
             <div className="grid grid-cols-2 gap-4 border rounded-lg p-4 bg-muted/30">
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Team Name</Label>
+                <Label className="text-xs text-muted-foreground">{t('data-contracts:detailsView.teamMetadata.teamName', 'Team Name')}</Label>
                 <p className="text-sm">{teamMetaName || '—'}</p>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Team Description</Label>
+                <Label className="text-xs text-muted-foreground">{t('data-contracts:detailsView.teamMetadata.teamDescription', 'Team Description')}</Label>
                 <p className="text-sm">{teamMetaDesc || '—'}</p>
               </div>
             </div>
@@ -2804,7 +2806,7 @@ export default function DataContractDetails() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">No imported team members.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">{t('data-contracts:detailsView.teamMetadata.noMembers', 'No imported team members.')}</p>
           )}
         </CardContent>
       </Card>
@@ -2814,18 +2816,18 @@ export default function DataContractDetails() {
       {shouldShowSection('sla') && (
         <Card>
           <CardHeader>
-          <CardTitle className="text-xl">SLA & Infrastructure</CardTitle>
-          <CardDescription>Service level agreements and server configurations</CardDescription>
+          <CardTitle className="text-xl">{t('data-contracts:detailsView.sla.title', 'SLA & Infrastructure')}</CardTitle>
+          <CardDescription>{t('data-contracts:detailsView.sla.subtitle', 'Service level agreements and server configurations')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* SLA Requirements */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <Label className="text-base font-semibold">SLA Requirements</Label>
+              <Label className="text-base font-semibold">{t('data-contracts:detailsView.sla.requirements', 'SLA Requirements')}</Label>
               {canEditInPlace && (
                 <Button size="sm" variant="outline" onClick={() => setIsSLAFormOpen(true)}>
                   <Pencil className="h-4 w-4 mr-1.5" />
-                  Edit SLA
+                  {t('data-contracts:detailsView.sla.editSla', 'Edit SLA')}
                 </Button>
               )}
             </div>
@@ -2833,42 +2835,42 @@ export default function DataContractDetails() {
               <div className="grid grid-cols-2 gap-3 pl-4">
                 {contract.sla.uptimeTarget !== undefined && (
                   <div className="space-y-1">
-                    <Label className="text-sm">Uptime Target:</Label>
+                    <Label className="text-sm">{t('data-contracts:detailsView.sla.uptimeTarget', 'Uptime Target')}:</Label>
                     <span className="text-sm text-muted-foreground block">{contract.sla.uptimeTarget}%</span>
                   </div>
                 )}
                 {contract.sla.maxDowntimeMinutes !== undefined && (
                   <div className="space-y-1">
-                    <Label className="text-sm">Max Downtime:</Label>
-                    <span className="text-sm text-muted-foreground block">{contract.sla.maxDowntimeMinutes} min</span>
+                    <Label className="text-sm">{t('data-contracts:detailsView.sla.maxDowntime', 'Max Downtime')}:</Label>
+                    <span className="text-sm text-muted-foreground block">{t('data-contracts:detailsView.sla.minutesUnit', '{{value}} min', { value: contract.sla.maxDowntimeMinutes })}</span>
                   </div>
                 )}
                 {contract.sla.queryResponseTimeMs !== undefined && (
                   <div className="space-y-1">
-                    <Label className="text-sm">Query Response Time:</Label>
-                    <span className="text-sm text-muted-foreground block">{contract.sla.queryResponseTimeMs} ms</span>
+                    <Label className="text-sm">{t('data-contracts:detailsView.sla.queryResponseTime', 'Query Response Time')}:</Label>
+                    <span className="text-sm text-muted-foreground block">{t('data-contracts:detailsView.sla.msUnit', '{{value}} ms', { value: contract.sla.queryResponseTimeMs })}</span>
                   </div>
                 )}
                 {contract.sla.dataFreshnessMinutes !== undefined && (
                   <div className="space-y-1">
-                    <Label className="text-sm">Data Freshness:</Label>
-                    <span className="text-sm text-muted-foreground block">{contract.sla.dataFreshnessMinutes} min</span>
+                    <Label className="text-sm">{t('data-contracts:detailsView.sla.dataFreshness', 'Data Freshness')}:</Label>
+                    <span className="text-sm text-muted-foreground block">{t('data-contracts:detailsView.sla.minutesUnit', '{{value}} min', { value: contract.sla.dataFreshnessMinutes })}</span>
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground pl-4">No SLA requirements defined.</p>
+              <p className="text-sm text-muted-foreground pl-4">{t('data-contracts:detailsView.sla.noRequirements', 'No SLA requirements defined.')}</p>
             )}
           </div>
 
           {/* Server Configurations */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <Label className="text-base font-semibold">Server Configurations ({serversList.length})</Label>
+              <Label className="text-base font-semibold">{t('data-contracts:detailsView.sla.serverConfigs', 'Server Configurations ({{count}})', { count: serversList.length })}</Label>
               {canEditInPlace && (
                 <Button size="sm" onClick={() => { setEditingServerIndex(null); setIsServerConfigFormOpen(true); }}>
                   <Plus className="h-4 w-4 mr-1.5" />
-                  Add Server
+                  {t('data-contracts:detailsView.sla.addServer', 'Add Server')}
                 </Button>
               )}
             </div>
@@ -2898,7 +2900,7 @@ export default function DataContractDetails() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground pl-4">No server configurations defined.</p>
+              <p className="text-sm text-muted-foreground pl-4">{t('data-contracts:detailsView.sla.noServers', 'No server configurations defined.')}</p>
             )}
           </div>
         </CardContent>
@@ -2909,19 +2911,19 @@ export default function DataContractDetails() {
       {shouldShowSection('access-control') && contract.accessControl && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Access Control</CardTitle>
+            <CardTitle className="text-xl">{t('data-contracts:details.accessControl.title', 'Access Control')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-3">
               {contract.accessControl.classification && (
                 <div className="space-y-1">
-                  <Label>Classification:</Label>
+                  <Label>{t('data-contracts:detailsView.accessControl.classification', 'Classification')}:</Label>
                   <Badge variant="secondary">{contract.accessControl.classification}</Badge>
                 </div>
               )}
               <div className="space-y-1">
-                <Label>Contains PII:</Label>
-                <span className="text-sm">{contract.accessControl.containsPii ? 'Yes' : 'No'}</span>
+                <Label>{t('data-contracts:detailsView.accessControl.containsPii', 'Contains PII')}:</Label>
+                <span className="text-sm">{contract.accessControl.containsPii ? t('data-contracts:detailsView.common.yes', 'Yes') : t('data-contracts:detailsView.common.no', 'No')}</span>
               </div>
             </div>
           </CardContent>
@@ -2935,28 +2937,28 @@ export default function DataContractDetails() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl">Custom Properties ({Object.keys(contract.customProperties || {}).length})</CardTitle>
-                <CardDescription>Additional metadata and configuration</CardDescription>
+                <CardTitle className="text-xl">{t('data-contracts:detailsView.customProperties.title', 'Custom Properties ({{count}})', { count: Object.keys(contract.customProperties || {}).length })}</CardTitle>
+                <CardDescription>{t('data-contracts:detailsView.customProperties.subtitle', 'Additional metadata and configuration')}</CardDescription>
               </div>
               {canEditInPlace && (
                 <Button size="sm" onClick={() => { setEditingCustomPropertyKey(null); setIsCustomPropertyFormOpen(true); }}>
                   <Plus className="h-4 w-4 mr-1.5" />
-                  Add Property
+                  {t('data-contracts:detailsView.customProperties.addProperty', 'Add Property')}
                 </Button>
               )}
             </div>
           </CardHeader>
           <CardContent>
             {!contract.customProperties || Object.keys(contract.customProperties).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No custom properties defined. Click "Add Property" to create one.</p>
+              <p className="text-sm text-muted-foreground text-center py-8">{t('data-contracts:detailsView.customProperties.empty', 'No custom properties defined. Click "Add Property" to create one.')}</p>
             ) : (
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left p-3 font-medium w-48">Property</th>
-                      <th className="text-left p-3 font-medium">Value</th>
-                      <th className="text-right p-3 font-medium w-24">Actions</th>
+                      <th className="text-left p-3 font-medium w-48">{t('data-contracts:detailsView.customProperties.property', 'Property')}</th>
+                      <th className="text-left p-3 font-medium">{t('data-contracts:detailsView.customProperties.value', 'Value')}</th>
+                      <th className="text-right p-3 font-medium w-24">{t('common:labels.actions', 'Actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3023,7 +3025,7 @@ export default function DataContractDetails() {
       {shouldShowSection('support') && contract.support && Object.keys(contract.support).length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Support</CardTitle>
+            <CardTitle className="text-xl">{t('data-contracts:detailsView.support.title', 'Support')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -3033,7 +3035,7 @@ export default function DataContractDetails() {
                   {url ? (
                     <a href={url} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline break-all">{url}</a>
                   ) : (
-                    <span className="text-sm text-muted-foreground">N/A</span>
+                    <span className="text-sm text-muted-foreground">{t('common:states.notAvailable', 'N/A')}</span>
                   )}
                 </div>
               ))}
@@ -3048,8 +3050,8 @@ export default function DataContractDetails() {
           <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-xl">Authoritative Definitions</CardTitle>
-              <CardDescription>ODCS authoritative sources for this contract ({contractAuthDefs.length})</CardDescription>
+              <CardTitle className="text-xl">{t('data-contracts:detailsView.authDefs.title', 'Authoritative Definitions')}</CardTitle>
+              <CardDescription>{t('data-contracts:detailsView.authDefs.subtitle', 'ODCS authoritative sources for this contract ({{count}})', { count: contractAuthDefs.length })}</CardDescription>
             </div>
             {canEditInPlace && (
               <Button
@@ -3060,14 +3062,14 @@ export default function DataContractDetails() {
                 }}
               >
                 <Plus className="h-4 w-4 mr-1.5" />
-                Add Definition
+                {t('data-contracts:detailsView.authDefs.addDefinition', 'Add Definition')}
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent>
           {contractAuthDefs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No authoritative definitions defined yet.</p>
+            <p className="text-sm text-muted-foreground">{t('data-contracts:detailsView.authDefs.noneYet', 'No authoritative definitions defined yet.')}</p>
           ) : (
             <div className="space-y-3">
               {contractAuthDefs.map((def, idx) => (
@@ -3131,7 +3133,7 @@ export default function DataContractDetails() {
             dateIn: m.dateIn,
             dateOut: m.dateOut,
           }))}
-          importedContactsLabel="Imported Contacts"
+          importedContactsLabel={t('data-contracts:detailsView.panels.importedContacts', 'Imported Contacts')}
           ownerTeamId={contract.owner_team_id}
           ownerTeamName={contract.owner_team_name}
         />
@@ -3142,7 +3144,7 @@ export default function DataContractDetails() {
         <EntityTreePanel
           entityType="DataContract"
           entityId={contract.id}
-          title="Related Entities"
+          title={t('data-contracts:detailsView.panels.relatedEntities', 'Related Entities')}
           canEdit={canEditInPlace}
         />
       )}
@@ -3328,13 +3330,13 @@ export default function DataContractDetails() {
         isOpen={isLinkProductDialogOpen}
         onOpenChange={setIsLinkProductDialogOpen}
         contractId={contractId!}
-        contractName={contract?.name || 'this contract'}
+        contractName={contract?.name || t('data-contracts:detailsView.common.thisContract', 'this contract')}
         onSuccess={() => {
           fetchLinkedProducts();
           setIsLinkProductDialogOpen(false);
           toast({
-            title: 'Contract Linked',
-            description: 'Contract successfully linked to product deliverable.'
+            title: t('data-contracts:detailsView.toast.contractLinkedTitle', 'Contract Linked'),
+            description: t('data-contracts:detailsView.toast.contractLinkedDesc', 'Contract successfully linked to product deliverable.')
           });
         }}
       />
@@ -3364,7 +3366,7 @@ export default function DataContractDetails() {
         isOpen={isCommitDraftDialogOpen}
         onOpenChange={setIsCommitDraftDialogOpen}
         contractId={contractId!}
-        contractName={contract?.name || 'this contract'}
+        contractName={contract?.name || t('data-contracts:detailsView.common.thisContract', 'this contract')}
         onSuccess={handleCommitSuccess}
       />
 

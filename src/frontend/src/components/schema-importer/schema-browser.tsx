@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ChevronRight,
   ChevronDown,
@@ -34,6 +35,9 @@ interface TreeNode extends BrowseNode {
   isExpanded: boolean;
   isLoading: boolean;
   level: number;
+  // True when this node's children were capped by the configured fetch limit.
+  childrenTruncated?: boolean;
+  childrenTruncatedAt?: number | null;
 }
 
 interface SchemaBrowserProps {
@@ -46,6 +50,8 @@ interface LoadResult {
   nodes: TreeNode[];
   error?: string | null;
   errorDetail?: string | null;
+  truncated?: boolean;
+  truncatedAt?: number | null;
 }
 
 const nodeIconMap: Record<string, typeof Database> = {
@@ -100,11 +106,14 @@ export default function SchemaBrowser({
   selectedPaths,
   onSelectionChange,
 }: SchemaBrowserProps) {
+  const { t } = useTranslation(['database-schema', 'common']);
   const { get: apiGet } = useApi();
   const [roots, setRoots] = useState<TreeNode[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [browseErrorDetail, setBrowseErrorDetail] = useState<string | null>(null);
+  // Root-level truncation: set when the top-level asset list was capped.
+  const [rootTruncatedAt, setRootTruncatedAt] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [highlightedPath, setHighlightedPath] = useState<string | null>(null);
   const apiGetRef = useRef(apiGet);
@@ -134,6 +143,8 @@ export default function SchemaBrowser({
         nodes,
         error: resp.data?.error,
         errorDetail: resp.data?.error_detail,
+        truncated: resp.data?.truncated ?? false,
+        truncatedAt: resp.data?.truncated_at ?? null,
       };
     },
     [],
@@ -145,6 +156,7 @@ export default function SchemaBrowser({
       setRoots([]);
       setBrowseError(null);
       setBrowseErrorDetail(null);
+      setRootTruncatedAt(null);
       return;
     }
     let cancelled = false;
@@ -159,6 +171,7 @@ export default function SchemaBrowser({
           setRoots(result.nodes);
           setBrowseError(result.error ?? null);
           setBrowseErrorDetail(result.errorDetail ?? null);
+          setRootTruncatedAt(result.truncated ? (result.truncatedAt ?? null) : null);
         }
       })
       .catch((err) => {
@@ -187,7 +200,14 @@ export default function SchemaBrowser({
         try {
           const result = await loadChildren(connectionId, path);
           setRoots((prev) =>
-            updateNode(prev, path, (n) => ({ ...n, children: result.nodes, isExpanded: true, isLoading: false })),
+            updateNode(prev, path, (n) => ({
+              ...n,
+              children: result.nodes,
+              isExpanded: true,
+              isLoading: false,
+              childrenTruncated: result.truncated ?? false,
+              childrenTruncatedAt: result.truncatedAt ?? null,
+            })),
           );
         } catch {
           setRoots((prev) => updateNode(prev, path, (n) => ({ ...n, isLoading: false })));
@@ -446,6 +466,19 @@ export default function SchemaBrowser({
         {node.isExpanded && node.children && (
           <div>{node.children.map(renderNode)}</div>
         )}
+
+        {/* Truncation notice: children capped by the configured fetch limit */}
+        {node.isExpanded && node.childrenTruncated && (
+          <div
+            className="flex items-center gap-1.5 py-1 text-xs text-amber-600 dark:text-amber-500"
+            style={{ paddingLeft: `${(node.level + 1) * 20 + 8}px` }}
+          >
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Showing first {node.childrenTruncatedAt} items — raise the Schema Importer limit in Settings to see more.
+            </span>
+          </div>
+        )}
       </div>
     );
   };
@@ -453,7 +486,7 @@ export default function SchemaBrowser({
   if (!connectionId) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        Select a connection to browse its resources
+        {t('database-schema:browser.selectConnection')}
       </div>
     );
   }
@@ -462,7 +495,7 @@ export default function SchemaBrowser({
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
+        <span className="ml-2 text-sm text-muted-foreground">{t('common:states.loading')}</span>
       </div>
     );
   }
@@ -473,13 +506,13 @@ export default function SchemaBrowser({
         <div className="flex items-center justify-center h-64 px-4">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Connection Error</AlertTitle>
+            <AlertTitle>{t('database-schema:browser.connectionError')}</AlertTitle>
             <AlertDescription className="space-y-2">
               <p>{browseError}</p>
               {browseErrorDetail && (
                 <Collapsible>
                   <CollapsibleTrigger className="text-xs underline cursor-pointer">
-                    Show details
+                    {t('database-schema:browser.showDetails')}
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <pre className="text-xs mt-2 p-2 bg-muted rounded whitespace-pre-wrap break-all">
@@ -495,7 +528,7 @@ export default function SchemaBrowser({
     }
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        No resources found for this connection
+        {t('database-schema:browser.noResources')}
       </div>
     );
   }
@@ -508,7 +541,7 @@ export default function SchemaBrowser({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             className="h-9 text-sm pl-8 pr-8"
-            placeholder="Search: t:catalog.schema.table"
+            placeholder={t('database-schema:browser.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -522,14 +555,25 @@ export default function SchemaBrowser({
           )}
         </div>
         <p className="text-[11px] text-muted-foreground px-1">
-          Type prefix for filtering: t:table, v:view, f:function, m:model, vol:volume
+          {t('database-schema:browser.searchHint')}
         </p>
       </div>
+
+      {/* Root-level truncation notice */}
+      {rootTruncatedAt !== null && !search && (
+        <Alert variant="default" className="py-2">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            Showing first {rootTruncatedAt} items at this level — more exist than are shown.
+            Raise the Schema Importer limit in Settings → General to fetch more.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Tree */}
       {visibleRoots.length === 0 ? (
         <div className="flex items-center justify-center h-48 text-muted-foreground text-sm border rounded-md">
-          No matches found
+          {t('database-schema:browser.noMatches')}
         </div>
       ) : (
         <ScrollArea className="h-[460px] border rounded-md">

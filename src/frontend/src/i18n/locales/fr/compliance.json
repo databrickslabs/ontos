@@ -34,12 +34,73 @@
     "security": "Sécurité",
     "dataQuality": "Qualité des Données",
     "privacy": "Confidentialité",
-    "governance": "Gouvernance"
+    "governance": "Gouvernance",
+    "maturity": "Maturité"
   },
   "errors": {
     "loadingPolicies": "Erreur lors du Chargement des Politiques",
     "savingPolicy": "Erreur lors de l'Enregistrement de la Politique",
-    "deletingPolicy": "Erreur lors de la Suppression de la Politique"
+    "deletingPolicy": "Erreur lors de la Suppression de la Politique",
+    "loadPolicyFailed": "Échec du chargement de la politique",
+    "loadFailed": "Échec du chargement",
+    "savePolicyFailed": "Échec de l'enregistrement de la politique",
+    "deletePolicyFailed": "Échec de la suppression de la politique",
+    "noDataReceived": "Aucune donnée reçue du point de terminaison des politiques de conformité.",
+    "saveNoDataReturned": "Échec de l'enregistrement de la politique : aucune donnée renvoyée",
+    "loadPoliciesFailed": "Échec du chargement des politiques de conformité",
+    "loadRunResultsFailed": "Échec du chargement des résultats d'exécution",
+    "policyNotFound": "Politique de conformité introuvable.",
+    "runNotFound": "Exécution introuvable."
+  },
+  "results": {
+    "passed": "Réussi",
+    "failed": "Échoué",
+    "showFailed": "Afficher les échecs",
+    "showAll": "Tout afficher",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Retour à la liste",
+    "run": "Exécuter",
+    "id": "ID",
+    "examples": "Exemples",
+    "shouldPass": "Devrait réussir",
+    "shouldFail": "Devrait échouer",
+    "noExamples": "Aucun exemple",
+    "runSummary": {
+      "title": "Résumé de l'exécution",
+      "lastRunStarted": "Dernière exécution démarrée le {{date}}",
+      "statusLabel": "Statut :",
+      "score": "Score",
+      "passed": "Réussi",
+      "failed": "Échoué",
+      "passedExamples": "Exemples réussis",
+      "failedExamples": "Exemples échoués",
+      "noPassedExamples": "Aucun exemple réussi dans cette exécution",
+      "noFailures": "Aucun échec dans cette exécution"
+    },
+    "runsList": {
+      "title": "Exécutions",
+      "mostRecentFirst": "Les plus récentes d'abord",
+      "noRuns": "Aucune exécution pour le moment",
+      "scoreLabel": "Score :",
+      "scoreDetail": "{{passed}} réussis / {{failed}} échoués",
+      "openRunDetails": "Ouvrir les détails de l'exécution"
+    },
+    "resultsCard": {
+      "title": "Résultats",
+      "filteredFailed": "Filtré sur les échecs uniquement — dernière exécution {{date}}",
+      "filteredAll": "Filtré sur tout — dernière exécution {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Exécution {{id}}",
+    "viewPolicy": "Voir la politique",
+    "statusLabel": "Statut :",
+    "scoreLabel": "Score :",
+    "passedLabel": "Réussis :",
+    "failedLabel": "Échoués :",
+    "startedLabel": "Démarrée : {{date}}"
   },
   "toast": {
     "policySaved": "Politique '{{name}}' enregistrée avec succès",
@@ -102,4 +163,3 @@
     }
   }
 }
-

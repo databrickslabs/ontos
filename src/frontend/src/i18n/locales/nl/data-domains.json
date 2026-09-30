@@ -6,6 +6,8 @@
   "editDomain": "Domein Bewerken",
   "deleteDomain": "Domein Verwijderen",
   "noDomainsYet": "Nog geen datadomeinen.",
+  "openMenu": "Menu openen",
+  "previewMetadata": "Metadata bekijken",
   "table": {
     "name": "Naam",
     "description": "Beschrijving",
@@ -28,13 +30,133 @@
     "domainDeletedSuccess": "Het datadomein is succesvol verwijderd.",
     "errorFetchingDomains": "Fout bij ophalen domeinen",
     "errorDeletingDomain": "Fout bij Verwijderen Domein",
-    "errorLoadingData": "Fout bij Laden Data"
+    "errorLoadingData": "Fout bij Laden Data",
+    "failedLoadDomains": "Laden van datadomeinen mislukt",
+    "failedDeleteDomain": "Verwijderen van domein mislukt."
   },
   "deleteDialog": {
     "title": "Weet je het absoluut zeker?",
     "description": "Deze actie kan niet ongedaan worden gemaakt. Dit zal het datadomein permanent verwijderen.",
     "cancel": "Annuleren",
-    "delete": "Verwijderen"
+    "delete": "Verwijderen",
+    "cannotDelete": "Dit domein kan niet worden verwijderd.",
+    "primaryForAssignments_one": "Het is het primaire domein voor {{count}} entiteitstoewijzing:",
+    "primaryForAssignments_other": "Het is het primaire domein voor {{count}} entiteitstoewijzingen:",
+    "assignmentCount": "{{count}} {{type}}(s)",
+    "reassignFirst": "Wijs die eerst toe aan een ander primair domein."
+  },
+  "form": {
+    "editTitle": "Datadomein bewerken",
+    "createTitle": "Nieuw datadomein aanmaken",
+    "editDescription": "Breng wijzigingen aan in het bestaande datadomein.",
+    "createDescription": "Voeg een nieuw datadomein toe aan het systeem.",
+    "createSubmit": "Domein aanmaken",
+    "nameLabel": "Naam *",
+    "namePlaceholder": "bijv. Sales Analytics",
+    "descriptionLabel": "Beschrijving",
+    "descriptionPlaceholder": "Beschrijf het doel van dit domein...",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "Zoek en selecteer tags voor dit datadomein...",
+    "parentLabel": "Bovenliggend domein",
+    "parentPlaceholder": "Selecteer een bovenliggend domein (optioneel)",
+    "noParent": "Geen bovenliggend domein",
+    "validation": {
+      "nameMin": "Naam moet minimaal 2 tekens bevatten.",
+      "descriptionMax": "Beschrijving mag niet langer zijn dan 500 tekens."
+    },
+    "discardDescription": "Je hebt niet-opgeslagen wijzigingen die verloren gaan als je dit dialoogvenster sluit. Weet je zeker dat je ze wilt verwerpen?",
+    "continueEditing": "Doorgaan met bewerken",
+    "discardChanges": "Wijzigingen verwerpen",
+    "toasts": {
+      "updated": "Domein Bijgewerkt",
+      "created": "Domein Aangemaakt",
+      "saveSuccess": "'{{name}}' is succesvol opgeslagen.",
+      "saveError": "Fout bij Opslaan Domein"
+    }
+  },
+  "details": {
+    "backToList": "Terug naar lijst",
+    "backToDataDomains": "Terug naar Datadomeinen",
+    "edit": "Bewerken",
+    "notFound": "Datadomein niet gevonden of kon niet worden geladen.",
+    "noDomainIdProvided": "Geen domein-ID opgegeven.",
+    "invalidDomain": "Ongeldig domein",
+    "relatedEntities": "Gerelateerde entiteiten",
+    "addConcept": "Concept toevoegen",
+    "hierarchyContext": "Context domeinhiërarchie",
+    "info": {
+      "id": "ID",
+      "parentDomain": "Bovenliggend domein",
+      "childrenCount": "Aantal onderliggende items",
+      "tags": "Tags",
+      "createdBy": "Aangemaakt door",
+      "createdAt": "Aangemaakt op",
+      "lastUpdatedAt": "Laatst bijgewerkt op",
+      "linkedBusinessConcepts": "Gekoppelde bedrijfsconcepten"
+    },
+    "childDomains": {
+      "title": "Onderliggende datadomeinen ({{count}})",
+      "description": "Direct geneste datadomeinen.",
+      "empty": "Geen onderliggende domeinen gevonden",
+      "columns": {
+        "name": "Naam",
+        "id": "ID"
+      }
+    },
+    "teams": {
+      "title": "Domeinteams",
+      "countBadge_one": "{{count}} team",
+      "countBadge_other": "{{count}} teams",
+      "create": "Team aanmaken",
+      "description": "Teams die aan dit datadomein zijn toegewezen. Teams erven domeinspecifieke rechten en verantwoordelijkheden.",
+      "empty": "Geen teams toegewezen",
+      "emptyHint": "Maak een team aan om het aan dit datadomein toe te wijzen.",
+      "createFirst": "Eerste team aanmaken",
+      "columns": {
+        "name": "Teamnaam",
+        "title": "Titel",
+        "noTitle": "Geen titel",
+        "members": "Leden",
+        "memberCount_one": "{{count}} lid",
+        "memberCount_other": "{{count}} leden",
+        "actions": "Acties",
+        "edit": "Bewerken"
+      }
+    },
+    "assignedEntities": {
+      "title": "Toegewezen entiteiten",
+      "description": "Dataproducten, contracten en assets die aan dit domein zijn toegewezen (primair of aanvullend).",
+      "dataProducts": "Dataproducten",
+      "dataContracts": "Datacontracten",
+      "assets": "Assets",
+      "primaryDomain": "Primair domein",
+      "additionalDomain": "Aanvullend domein",
+      "noneAssigned": "Geen toegewezen."
+    },
+    "linkedAssets": {
+      "title": "Gekoppelde assets",
+      "description": "Assets (dataproducten, contracten, enz.) die via semantische relaties aan dit datadomein zijn gekoppeld.",
+      "empty": "Geen gekoppelde assets gevonden",
+      "countBadge": "{{count}} totaal",
+      "columns": {
+        "name": "Assetnaam",
+        "type": "Type",
+        "unknownType": "Onbekend",
+        "path": "Pad",
+        "domain": "Domein"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "Bedrijfsconcept gekoppeld aan datadomein.",
+    "conceptUnlinked": "Bedrijfsconcept losgekoppeld van datadomein.",
+    "linkConceptError": "Koppelen van bedrijfsconcept mislukt",
+    "unlinkConceptError": "Loskoppelen van bedrijfsconcept mislukt",
+    "errorFetchingDomain": "Fout bij Ophalen Domein",
+    "couldNotLoadDomain": "Kon domeindetails niet laden.",
+    "failedFetchDomain": "Ophalen van domeindetails mislukt.",
+    "metadataLoadFailed": "Laden van metadata mislukt",
+    "couldNotLoadMetadata": "Kon metadata niet laden.",
+    "editTeamLoadError": "Laden van teamdetails voor bewerking mislukt."
   }
 }
-

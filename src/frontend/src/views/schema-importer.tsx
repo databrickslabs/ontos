@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Import, Loader2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,15 +17,18 @@ import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/hooks/use-api';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import type { Connection } from '@/types/connections';
-import type { ImportDepth } from '@/types/schema-import';
+import type { ImportDepth, ImportResult, SchemaImportRunDetail } from '@/types/schema-import';
 import SchemaBrowser from '@/components/schema-importer/schema-browser';
 import ImportPreviewDialog from '@/components/schema-importer/import-preview-dialog';
 import { useUICustomizationStore } from '@/stores/ui-customization-store';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SchemaImporterView() {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation(['database-schema', 'settings', 'common']);
   const appName = useUICustomizationStore((s) => s.getAppName());
   const { get: apiGet } = useApi();
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((s) => s.setDynamicTitle);
 
@@ -34,6 +38,8 @@ export default function SchemaImporterView() {
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [importDepth, setImportDepth] = useState<ImportDepth>('full_recursive');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  // Result-only view for a completed run reopened from its notification (?runId=).
+  const [runResult, setRunResult] = useState<ImportResult | null>(null);
 
   useEffect(() => {
     setStaticSegments([]);
@@ -66,6 +72,39 @@ export default function SchemaImporterView() {
     fetchConnections();
   }, [fetchConnections]);
 
+  // Reopen a completed background import's result when deep-linked via ?runId=
+  // (from the completion notification's "Open" button).
+  const runIdParam = searchParams.get('runId');
+  useEffect(() => {
+    if (!runIdParam) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await apiGet<SchemaImportRunDetail>(`/api/schema-import/runs/${runIdParam}`);
+        if (cancelled) return;
+        if (resp.data?.result) {
+          setRunResult(resp.data.result);
+        } else {
+          toast({
+            title: 'Import still running',
+            description: "You'll be notified when it completes.",
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load import run:', err);
+        toast({ title: 'Could not load import result', description: String(err), variant: 'destructive' });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [runIdParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const closeRunResult = () => {
+    setRunResult(null);
+    // Drop ?runId= so a refresh/re-close doesn't reopen the result.
+    searchParams.delete('runId');
+    setSearchParams(searchParams, { replace: true });
+  };
+
   const handleConnectionChange = (id: string) => {
     setSelectedConnectionId(id);
     setSelectedPaths(new Set());
@@ -95,20 +134,20 @@ export default function SchemaImporterView() {
           {/* Connection selector */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Connection</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('common:labels.connection')}</CardTitle>
               <CardDescription className="text-xs">
-                Select a data platform connection
+                {t('database-schema:importer.selectConnectionDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingConnections ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading...
+                  {t('common:states.loading')}
                 </div>
               ) : connections.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No connections configured. Add one in Settings &gt; Connectors.
+                  {t('database-schema:importer.noConnections')}
                 </p>
               ) : (
                 <Select
@@ -116,7 +155,7 @@ export default function SchemaImporterView() {
                   onValueChange={handleConnectionChange}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose connection..." />
+                    <SelectValue placeholder={t('database-schema:importer.chooseConnection')} />
                   </SelectTrigger>
                   <SelectContent>
                     {connections.map((c) => (
@@ -138,9 +177,9 @@ export default function SchemaImporterView() {
           {/* Import depth */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Import Depth</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('database-schema:importer.importDepth')}</CardTitle>
               <CardDescription className="text-xs">
-                How deep to recurse below selected nodes
+                {t('database-schema:importer.importDepthDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -152,30 +191,30 @@ export default function SchemaImporterView() {
                 <div className="flex items-start gap-2">
                   <RadioGroupItem value="selected_only" id="depth-selected" />
                   <Label htmlFor="depth-selected" className="text-sm font-normal leading-tight cursor-pointer">
-                    <span className="font-medium">Selected only</span>
+                    <span className="font-medium">{t('database-schema:importer.depthSelectedOnly')}</span>
                     <br />
                     <span className="text-xs text-muted-foreground">
-                      Import only the selected items
+                      {t('database-schema:importer.depthSelectedOnlyHint')}
                     </span>
                   </Label>
                 </div>
                 <div className="flex items-start gap-2">
                   <RadioGroupItem value="one_level" id="depth-one" />
                   <Label htmlFor="depth-one" className="text-sm font-normal leading-tight cursor-pointer">
-                    <span className="font-medium">One level</span>
+                    <span className="font-medium">{t('database-schema:importer.depthOneLevel')}</span>
                     <br />
                     <span className="text-xs text-muted-foreground">
-                      Selected items + immediate children
+                      {t('database-schema:importer.depthOneLevelHint')}
                     </span>
                   </Label>
                 </div>
                 <div className="flex items-start gap-2">
                   <RadioGroupItem value="full_recursive" id="depth-full" />
                   <Label htmlFor="depth-full" className="text-sm font-normal leading-tight cursor-pointer">
-                    <span className="font-medium">Full recursive</span>
+                    <span className="font-medium">{t('database-schema:importer.depthFullRecursive')}</span>
                     <br />
                     <span className="text-xs text-muted-foreground">
-                      Everything nested below selected nodes
+                      {t('database-schema:importer.depthFullRecursiveHint')}
                     </span>
                   </Label>
                 </div>
@@ -192,7 +231,7 @@ export default function SchemaImporterView() {
               className="w-full"
             >
               <Eye className="mr-2 h-4 w-4" />
-              Preview ({selectedPaths.size} selected)
+              {t('database-schema:importer.previewSelected', { count: selectedPaths.size })}
             </Button>
             <Button
               onClick={() => setIsPreviewOpen(true)}
@@ -200,7 +239,7 @@ export default function SchemaImporterView() {
               className="w-full"
             >
               <Import className="mr-2 h-4 w-4" />
-              Import
+              {t('common:actions.import')}
             </Button>
           </div>
         </div>
@@ -212,15 +251,15 @@ export default function SchemaImporterView() {
               <div>
                 <CardTitle className="text-sm font-medium">
                   {selectedConnection
-                    ? `${selectedConnection.name} — Resources`
-                    : 'Resources'}
+                    ? t('database-schema:importer.resourcesTitle', { name: selectedConnection.name })
+                    : t('database-schema:importer.resources')}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Expand nodes and check the resources you want to import
+                  {t('database-schema:importer.resourcesDescription')}
                 </CardDescription>
               </div>
               {selectedPaths.size > 0 && (
-                <Badge variant="secondary">{selectedPaths.size} selected</Badge>
+                <Badge variant="secondary">{t('database-schema:importer.selectedCount', { count: selectedPaths.size })}</Badge>
               )}
             </div>
           </CardHeader>
@@ -242,6 +281,15 @@ export default function SchemaImporterView() {
           connectionId={selectedConnectionId}
           selectedPaths={Array.from(selectedPaths)}
           depth={importDepth}
+        />
+      )}
+
+      {/* Result-only view for a completed run reopened from its notification */}
+      {runResult && (
+        <ImportPreviewDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) closeRunResult(); }}
+          initialResult={runResult}
         />
       )}
     </div>

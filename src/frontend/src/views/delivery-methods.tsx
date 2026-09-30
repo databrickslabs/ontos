@@ -52,7 +52,7 @@ export default function DeliveryMethodsView() {
       if (response.error) throw new Error(response.error);
       setMethods(Array.isArray(response.data) ? response.data : []);
     } catch (err: any) {
-      setComponentError(err.message || 'Failed to load delivery methods');
+      setComponentError(err.message || t('messages.loadFailed'));
       setMethods([]);
       toast({ variant: 'destructive', title: t('messages.errorFetching'), description: err.message });
     }
@@ -98,7 +98,7 @@ export default function DeliveryMethodsView() {
         <div>
           <span className="font-medium">{row.original.name}</span>
           {row.original.is_system && (
-            <Badge variant="outline" className="ml-2 text-xs">System</Badge>
+            <Badge variant="outline" className="ml-2 text-xs">{t('systemBadge')}</Badge>
           )}
         </div>
       ),
@@ -146,7 +146,7 @@ export default function DeliveryMethodsView() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
+              <span className="sr-only">{t('openMenu')}</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

@@ -22,7 +22,7 @@ interface ProductWithSubscribers {
 }
 
 export default function OwnerConsumersView() {
-  const { t: _t } = useTranslation(['data-products', 'common']);
+  const { t } = useTranslation(['data-products', 'common']);
   const api = useApi();
   const setStaticSegments = useBreadcrumbStore((s) => s.setStaticSegments);
 
@@ -33,8 +33,8 @@ export default function OwnerConsumersView() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    setStaticSegments([{ label: 'Consumers' }]);
-  }, [setStaticSegments]);
+    setStaticSegments([{ label: t('ownerConsumers.breadcrumb') }]);
+  }, [setStaticSegments, t]);
 
   const fetchProducts = useCallback(async () => {
     setProductsLoading(true);
@@ -131,7 +131,7 @@ export default function OwnerConsumersView() {
                 <Package className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Products</p>
+                <p className="text-sm text-muted-foreground">{t('ownerConsumers.totalProducts')}</p>
                 <p className="text-2xl font-bold">
                   {productsLoading ? <SkeletonLine height="h-8" width="w-12" /> : products.length}
                 </p>
@@ -146,7 +146,7 @@ export default function OwnerConsumersView() {
                 <Package className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Active Products</p>
+                <p className="text-sm text-muted-foreground">{t('ownerConsumers.activeProducts')}</p>
                 <p className="text-2xl font-bold">
                   {productsLoading ? <SkeletonLine height="h-8" width="w-12" /> : activeProducts.length}
                 </p>
@@ -161,7 +161,7 @@ export default function OwnerConsumersView() {
                 <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Subscribers</p>
+                <p className="text-sm text-muted-foreground">{t('ownerConsumers.totalSubscribers')}</p>
                 <p className="text-2xl font-bold">
                   {productsLoading ? <SkeletonLine height="h-8" width="w-12" /> : totalSubscribers}
                 </p>
@@ -176,13 +176,13 @@ export default function OwnerConsumersView() {
         {/* Product list */}
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Products</CardTitle>
+            <CardTitle className="text-base">{t('ownerConsumers.products')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 max-h-[600px] overflow-y-auto">
             {productsLoading ? (
               <ListItemSkeleton count={4} height="h-14" />
             ) : products.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No products found</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">{t('ownerConsumers.noProducts')}</p>
             ) : (
               products.map((p) => {
                 const subCount = productSubscribers[p.id]?.subscribers?.length ?? 0;
@@ -200,7 +200,7 @@ export default function OwnerConsumersView() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{p.name ?? p.id}</p>
-                      <p className="text-xs text-muted-foreground">{p.domain ?? 'No domain'}</p>
+                      <p className="text-xs text-muted-foreground">{p.domain ?? t('ownerConsumers.noDomain')}</p>
                     </div>
                     <Badge variant="secondary" className="ml-2 shrink-0">
                       <Users className="h-3 w-3 mr-1" />
@@ -219,14 +219,14 @@ export default function OwnerConsumersView() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">
                 {selectedData?.product
-                  ? `Subscribers — ${selectedData.product.name ?? selectedData.product.id}`
-                  : 'Select a product'}
+                  ? t('ownerConsumers.subscribersFor', { name: selectedData.product.name ?? selectedData.product.id })
+                  : t('ownerConsumers.selectProduct')}
               </CardTitle>
               {selectedProductId && (
                 <div className="relative w-64">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Filter subscribers..."
+                    placeholder={t('ownerConsumers.filterPlaceholder')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9 h-9"
@@ -239,7 +239,7 @@ export default function OwnerConsumersView() {
             {!selectedProductId ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Users className="h-10 w-10 mb-3 opacity-40" />
-                <p className="text-sm">Select a product to view its subscribers</p>
+                <p className="text-sm">{t('ownerConsumers.selectProductHint')}</p>
               </div>
             ) : selectedData?.loading ? (
               <ListItemSkeleton count={3} height="h-12" className="space-y-2" />
@@ -247,16 +247,16 @@ export default function OwnerConsumersView() {
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Users className="h-10 w-10 mb-3 opacity-40" />
                 <p className="text-sm">
-                  {searchQuery ? 'No subscribers match your filter' : 'No subscribers yet'}
+                  {searchQuery ? t('ownerConsumers.noSubscribersMatch') : t('ownerConsumers.noSubscribers')}
                 </p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Subscriber</TableHead>
-                    <TableHead>Subscribed</TableHead>
-                    <TableHead>Reason</TableHead>
+                    <TableHead>{t('ownerConsumers.colSubscriber')}</TableHead>
+                    <TableHead>{t('ownerConsumers.colSubscribed')}</TableHead>
+                    <TableHead>{t('ownerConsumers.colReason')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

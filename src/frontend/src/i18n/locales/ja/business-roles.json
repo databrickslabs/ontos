@@ -1,0 +1,78 @@
+{
+  "title": "ビジネスロール",
+  "subtitle": "さまざまなオブジェクトの所有者としてユーザーに割り当てることができる、名前付きロールです。",
+  "addNew": "ロールを追加",
+  "editRole": "ロールを編集",
+  "deleteRole": "ロールを削除",
+  "systemBadge": "システム",
+  "openMenu": "メニューを開く",
+  "table": {
+    "name": "名前",
+    "description": "説明",
+    "category": "カテゴリ",
+    "status": "ステータス",
+    "system": "システム",
+    "lastUpdated": "最終更新",
+    "actions": "アクション"
+  },
+  "categories": {
+    "governance": "ガバナンス",
+    "technical": "技術",
+    "business": "ビジネス",
+    "operational": "運用"
+  },
+  "statuses": {
+    "active": "有効",
+    "deprecated": "非推奨"
+  },
+  "permissions": {
+    "deniedView": "ビジネスロールを表示する権限がありません。",
+    "deniedCreate": "ビジネスロールを作成する権限がありません。",
+    "deniedEdit": "ビジネスロールを編集する権限がありません。",
+    "deniedDelete": "ビジネスロールを削除する権限がありません。",
+    "permissionDenied": "権限が拒否されました"
+  },
+  "messages": {
+    "errorFetching": "ビジネスロールの取得エラー",
+    "loadFailed": "ビジネスロールの読み込みに失敗しました",
+    "errorDeleting": "ビジネスロールの削除エラー",
+    "deleted": "ビジネスロールを削除しました",
+    "deletedSuccess": "ビジネスロールが正常に削除されました。",
+    "errorLoadingData": "データの読み込みエラー"
+  },
+  "deleteDialog": {
+    "title": "ビジネスロールを削除しますか？",
+    "description": "この操作は元に戻せません。このロールを使用している既存の所有者割り当ては、参照先を失う可能性があります。",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  },
+  "emptyState": {
+    "title": "まだビジネスロールが定義されていません",
+    "description": "最初のビジネスロールを作成してください（例: データオーナー、ドメインオーナー）。"
+  },
+  "form": {
+    "createTitle": "ビジネスロールを作成",
+    "createDescription": "ユーザーに割り当てることができる新しいビジネスロールを追加します。",
+    "editTitle": "ビジネスロールを編集",
+    "editDescription": "このビジネスロールの詳細を更新します。",
+    "create": "作成",
+    "update": "変更を保存",
+    "noCategory": "カテゴリなし",
+    "isApprover": "ワークフロー承認者",
+    "isApproverDescription": "ワークフローの承認者および通知の受信者のドロップダウンにこのロールを表示します。",
+    "isApproverInUse": "無効にできません — {{count}} 件のワークフローで使用されています: {{workflows}}。",
+    "placeholders": {
+      "name": "例: データオーナー",
+      "description": "このロールの責任範囲を記述してください...",
+      "category": "カテゴリを選択"
+    },
+    "toasts": {
+      "created": "ビジネスロールを作成しました",
+      "createdDescription": "「{{name}}」を作成しました。",
+      "updated": "ビジネスロールを更新しました",
+      "updatedDescription": "「{{name}}」を更新しました。",
+      "createFailed": "作成に失敗しました",
+      "updateFailed": "更新に失敗しました"
+    }
+  }
+}

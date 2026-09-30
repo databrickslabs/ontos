@@ -113,7 +113,12 @@
     "selectDescription": "このエンティティに添付する共有アセットを選択してください",
     "noSharedNotes": "利用可能な共有メモがありません",
     "noSharedLinks": "利用可能な共有リンクがありません",
-    "noSharedDocuments": "利用可能な共有ドキュメントがありません"
+    "noSharedDocuments": "利用可能な共有ドキュメントがありません",
+    "loading": "共有アセットを読み込み中...",
+    "attach": "添付",
+    "levelInfo": "レベル: {{level}}",
+    "inheritable": "継承可能",
+    "notInheritable": "継承不可"
   },
   "messages": {
     "loadFailed": "メタデータの読み込みに失敗しました",
@@ -121,17 +126,130 @@
     "attachFailed": "共有アセットの添付に失敗しました"
   },
   "tags": {
-    "title": "Tags",
-    "description": "Apply governance tags to this object.",
-    "edit": "Edit tags",
-    "refresh": "Refresh",
-    "placeholder": "Search and select tags...",
-    "save": "Save",
-    "cancel": "Cancel",
-    "noTags": "No tags applied.",
+    "title": "タグ",
+    "description": "このオブジェクトにガバナンスタグを適用します。",
+    "edit": "タグを編集",
+    "refresh": "更新",
+    "placeholder": "タグを検索して選択...",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "noTags": "タグが適用されていません。",
     "messages": {
-      "saveSuccess": "Tags updated",
-      "saveFailed": "Failed to update tags"
+      "saveSuccess": "タグを更新しました",
+      "saveFailed": "タグの更新に失敗しました"
     }
+  },
+  "costs": {
+    "title": "コスト管理",
+    "total": "合計",
+    "breakdown": "内訳",
+    "noItems": "項目がありません",
+    "addExpense": "費用を追加",
+    "editExpense": "費用を編集",
+    "loading": "読み込み中",
+    "noItemsForMonth": "今月のコスト項目はありません。",
+    "donutAria": "コストの内訳",
+    "table": {
+      "title": "タイトル",
+      "center": "コストセンター",
+      "monthRange": "対象月の範囲",
+      "amountMonth": "月額"
+    },
+    "form": {
+      "title": "タイトル",
+      "center": "コストセンター",
+      "customCenter": "カスタムコストセンター",
+      "amountCents": "金額（セント）",
+      "currency": "通貨",
+      "startMonth": "開始月（YYYY-MM）",
+      "endMonth": "終了月（YYYY-MM）",
+      "monthPlaceholder": "YYYY-MM"
+    },
+    "validation": {
+      "required": "必須"
+    },
+    "messages": {
+      "loadFailed": "コストの読み込みに失敗しました",
+      "missingFields": "必須フィールドが未入力です",
+      "missingFieldsDescription": "すべての必須フィールドを入力してください。",
+      "added": "コストを追加しました",
+      "updated": "コストを更新しました",
+      "deleted": "コストを削除しました",
+      "deleteFailed": "削除に失敗しました",
+      "saveFailed": "保存に失敗しました"
+    }
+  },
+  "quality": {
+    "title": "データ品質",
+    "overallScore": "総合スコア",
+    "byDimension": "ディメンション別",
+    "noMeasurements": "測定値がありません",
+    "addMeasurement": "測定値を追加",
+    "editMeasurement": "測定値を編集",
+    "lastMeasured": "最終測定 {{date}}",
+    "loading": "読み込み中",
+    "noMeasurementsRecorded": "記録された品質測定値はありません。",
+    "gaugeAria": "品質スコア",
+    "table": {
+      "title": "タイトル",
+      "dimension": "ディメンション",
+      "source": "ソース",
+      "score": "スコア",
+      "measured": "測定日"
+    },
+    "form": {
+      "title": "タイトル",
+      "dimension": "ディメンション",
+      "source": "ソース",
+      "score": "スコア（%）",
+      "checksPassed": "合格したチェック",
+      "checksTotal": "チェック総数"
+    },
+    "validation": {
+      "required": "必須",
+      "range": "0〜100"
+    },
+    "messages": {
+      "loadFailed": "品質データの読み込みに失敗しました",
+      "missingFields": "必須フィールドが未入力です",
+      "added": "測定値を追加しました",
+      "updated": "測定値を更新しました",
+      "deleted": "測定値を削除しました",
+      "deleteFailed": "削除に失敗しました",
+      "saveFailed": "保存に失敗しました"
+    }
+  },
+  "ratings": {
+    "title": "評価",
+    "youRated": "評価しました: {{rating}}★",
+    "updateYourRating": "評価を更新",
+    "rateThisItem": "この項目を評価",
+    "addReviewOptional": "レビューを追加（任意）",
+    "reviewPlaceholder": "感想を共有してください...",
+    "submitting": "送信中...",
+    "submitRating": "評価を送信",
+    "labels": {
+      "poor": "不満",
+      "fair": "やや不満",
+      "good": "良い",
+      "veryGood": "とても良い",
+      "excellent": "非常に良い"
+    }
+  },
+  "info": {
+    "entityInformation": "エンティティ情報",
+    "subscribed": "登録済み",
+    "tableOfContents": "目次",
+    "noNotesAvailable": "利用可能なメモはありません。",
+    "noLinks": "リンクはありません。",
+    "inherited": "継承済み",
+    "shared": "共有済み",
+    "ratingsAndReviews": "評価とレビュー",
+    "loadingRatings": "評価を読み込み中...",
+    "yourRating": "あなたの評価",
+    "addReviewPlaceholder": "レビューを追加（任意）...",
+    "goToDetails": "詳細へ移動",
+    "alreadySubscribed": "登録済み",
+    "subscribe": "登録"
   }
 }

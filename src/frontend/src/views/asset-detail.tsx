@@ -48,11 +48,12 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'dest
 };
 
 function PropertyValue({ value }: { value: any }) {
+  const { t } = useTranslation(['assets', 'common']);
   if (value === null || value === undefined) {
-    return <span className="text-muted-foreground italic">null</span>;
+    return <span className="text-muted-foreground italic">{t('assets:detail.nullValue')}</span>;
   }
   if (typeof value === 'boolean') {
-    return <Badge variant={value ? 'default' : 'secondary'}>{value ? 'Yes' : 'No'}</Badge>;
+    return <Badge variant={value ? 'default' : 'secondary'}>{value ? t('assets:detail.yes') : t('assets:detail.no')}</Badge>;
   }
   if (typeof value === 'object') {
     return (
@@ -65,6 +66,7 @@ function PropertyValue({ value }: { value: any }) {
 }
 
 function PropertiesCard({ properties }: { properties?: Record<string, any> | null }) {
+  const { t } = useTranslation(['assets', 'common']);
   if (!properties || Object.keys(properties).length === 0) {
     return null;
   }
@@ -74,7 +76,7 @@ function PropertiesCard({ properties }: { properties?: Record<string, any> | nul
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <FileJson className="h-4 w-4" />
-          Properties
+          {t('assets:detail.properties')}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -112,7 +114,7 @@ export default function AssetDetailView() {
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
 
   const { get: apiGet, post: apiPost, delete: apiDelete } = useApi();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation(['assets', 'common']);
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
@@ -159,7 +161,7 @@ export default function AssetDetailView() {
       setAsset(assetRes.data ?? null);
       setSemanticLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load asset');
+      setError(err.message || t('assets:detail.loadError'));
     } finally {
       setLoading(false);
     }
@@ -182,9 +184,9 @@ export default function AssetDetailView() {
       const refreshed = await apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`);
       setSemanticLinks(Array.isArray(refreshed.data) ? refreshed.data : []);
       setIriDialogOpen(false);
-      toast({ title: 'Linked', description: 'Concept linked to asset.' });
+      toast({ title: t('common:toast.linked'), description: t('assets:detail.conceptLinked') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to link concept', variant: 'destructive' });
+      toast({ title: t('common:states.error'), description: e?.message || t('assets:detail.linkConceptError'), variant: 'destructive' });
     }
   }, [assetId, apiPost, apiGet, toast]);
 
@@ -195,16 +197,16 @@ export default function AssetDetailView() {
       if (res.error) throw new Error(res.error);
       const refreshed = await apiGet<EntitySemanticLink[]>(`/api/semantic-links/entity/asset/${assetId}`);
       setSemanticLinks(Array.isArray(refreshed.data) ? refreshed.data : []);
-      toast({ title: 'Removed', description: 'Concept link removed.' });
+      toast({ title: t('assets:detail.removed'), description: t('assets:detail.conceptLinkRemoved') });
     } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Failed to remove link', variant: 'destructive' });
+      toast({ title: t('common:states.error'), description: e?.message || t('assets:detail.removeLinkError'), variant: 'destructive' });
     }
   }, [assetId, apiDelete, apiGet, toast]);
 
   useEffect(() => {
     if (asset) {
       setStaticSegments([
-        { label: 'Asset Explorer', path: '/assets' },
+        { label: t('assets:explorer.title'), path: '/assets' },
       ]);
       setDynamicTitle(asset.name);
       // Resolve ontology IRI for the asset type
@@ -233,12 +235,12 @@ export default function AssetDetailView() {
     return (
       <div className="py-6 space-y-4">
         <Button variant="outline" onClick={() => navigate(-1)} size="sm">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t('common:actions.back')}
         </Button>
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error || 'Asset not found'}</AlertDescription>
+          <AlertTitle>{t('common:states.error')}</AlertTitle>
+          <AlertDescription>{error || t('assets:detail.notFound')}</AlertDescription>
         </Alert>
       </div>
     );
@@ -249,7 +251,7 @@ export default function AssetDetailView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={() => navigate(-1)} size="sm">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t('common:actions.back')}
         </Button>
         <div className="flex items-center gap-2">
           <CommentSidebar
@@ -264,7 +266,7 @@ export default function AssetDetailView() {
             size="sm"
             onClick={() => navigate(`/hierarchy?type=${ontologyTypeName}&id=${assetId}`)}
           >
-            <Network className="mr-2 h-4 w-4" /> View in Hierarchy
+            <Network className="mr-2 h-4 w-4" /> {t('assets:detail.viewInHierarchy')}
           </Button>
           {showLineageTab && canWrite && (
             <Button
@@ -272,11 +274,11 @@ export default function AssetDetailView() {
               size="sm"
               onClick={() => setIsLineageEditorOpen(true)}
             >
-              <GitBranch className="mr-2 h-4 w-4" /> Manage Lineage
+              <GitBranch className="mr-2 h-4 w-4" /> {t('assets:detail.manageLineage')}
             </Button>
           )}
           <Button variant="outline" size="sm" disabled={!canWrite} onClick={() => setIsEditOpen(true)}>
-            <Pencil className="mr-2 h-4 w-4" /> Edit
+            <Pencil className="mr-2 h-4 w-4" /> {t('common:actions.edit')}
           </Button>
           <Button
             variant="outline"
@@ -285,7 +287,7 @@ export default function AssetDetailView() {
             disabled={!canAdmin}
             onClick={() => setIsDeleteDialogOpen(true)}
           >
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
+            <Trash2 className="mr-2 h-4 w-4" /> {t('common:actions.delete')}
           </Button>
         </div>
       </div>
@@ -314,16 +316,16 @@ export default function AssetDetailView() {
       {/* Tabs */}
       <Tabs defaultValue="overview">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="relationships">Relationships</TabsTrigger>
+          <TabsTrigger value="overview">{t('assets:detail.tabs.overview')}</TabsTrigger>
+          <TabsTrigger value="relationships">{t('assets:detail.tabs.relationships')}</TabsTrigger>
           {showLineageTab && (
             <TabsTrigger value="lineage">
               <GitBranch className="mr-1 h-3.5 w-3.5" />
-              Lineage
+              {t('assets:detail.tabs.lineage')}
             </TabsTrigger>
           )}
           {(isPolicy || isBusinessTerm) && (
-            <TabsTrigger value="impact">Impact Analysis</TabsTrigger>
+            <TabsTrigger value="impact">{t('assets:detail.tabs.impact')}</TabsTrigger>
           )}
         </TabsList>
 
@@ -331,14 +333,14 @@ export default function AssetDetailView() {
           {/* Core metadata card */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Details</CardTitle>
+              <CardTitle className="text-base">{t('common:labels.details')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {asset.location && (
                   <div>
                     <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> Location
+                      <MapPin className="h-3 w-3" /> {t('assets:table.location')}
                     </Label>
                     <p className="text-sm font-mono mt-1 truncate">{asset.location}</p>
                   </div>
@@ -346,7 +348,7 @@ export default function AssetDetailView() {
                 {asset.platform && (
                   <div>
                     <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Globe className="h-3 w-3" /> Platform
+                      <Globe className="h-3 w-3" /> {t('assets:table.platform')}
                     </Label>
                     <p className="text-sm mt-1">{asset.platform}</p>
                   </div>
@@ -354,7 +356,7 @@ export default function AssetDetailView() {
                 {((asset.domains && asset.domains.length > 0) || asset.domain_id) && (
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      {asset.domains && asset.domains.length > 1 ? 'Domains' : 'Domain'}
+                      {asset.domains && asset.domains.length > 1 ? t('assets:detail.domains') : t('common:labels.domain')}
                     </Label>
                     <div className="mt-1">
                       <DomainBadgeList
@@ -369,14 +371,14 @@ export default function AssetDetailView() {
                 {asset.created_by && (
                   <div>
                     <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <User className="h-3 w-3" /> Created By
+                      <User className="h-3 w-3" /> {t('common:labels.createdBy')}
                     </Label>
                     <p className="text-sm mt-1">{asset.created_by}</p>
                   </div>
                 )}
                 <div>
                   <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Calendar className="h-3 w-3" /> Created
+                    <Calendar className="h-3 w-3" /> {t('common:labels.created')}
                   </Label>
                   <div className="text-sm mt-1">
                     <RelativeDate date={asset.created_at} />
@@ -384,7 +386,7 @@ export default function AssetDetailView() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Calendar className="h-3 w-3" /> Updated
+                    <Calendar className="h-3 w-3" /> {t('common:labels.updated')}
                   </Label>
                   <div className="text-sm mt-1">
                     <RelativeDate date={asset.updated_at} />
@@ -398,7 +400,7 @@ export default function AssetDetailView() {
                   <Separator className="my-4" />
                   <div>
                     <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                      <Tag className="h-3 w-3" /> Tags
+                      <Tag className="h-3 w-3" /> {t('common:labels.tags')}
                     </Label>
                     <div className="flex flex-wrap gap-1">
                       {asset.tags.map((tag) => (
@@ -414,12 +416,12 @@ export default function AssetDetailView() {
                 <>
                   <Separator className="my-4" />
                   <div>
-                    <Label className="text-xs text-muted-foreground mb-2 block">Linked Business Concepts</Label>
+                    <Label className="text-xs text-muted-foreground mb-2 block">{t('assets:detail.linkedConcepts')}</Label>
                     <LinkedConceptChips
                       links={semanticLinks}
                       onRemove={canEditSemanticLinks ? removeSemanticLink : undefined}
                       trailing={canEditSemanticLinks ? (
-                        <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">Add</Button>
+                        <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">{t('common:actions.add')}</Button>
                       ) : undefined}
                     />
                   </div>
@@ -432,18 +434,18 @@ export default function AssetDetailView() {
           {isBusinessTerm && asset.properties && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Business Definition</CardTitle>
+                <CardTitle className="text-base">{t('assets:detail.businessDefinition')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {asset.properties.definition && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Definition</Label>
+                    <Label className="text-xs text-muted-foreground">{t('assets:detail.definition')}</Label>
                     <p className="text-sm mt-1">{asset.properties.definition}</p>
                   </div>
                 )}
                 {asset.properties.synonyms && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Synonyms</Label>
+                    <Label className="text-xs text-muted-foreground">{t('assets:detail.synonyms')}</Label>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {String(asset.properties.synonyms).split(',').map((s) => (
                         <Badge key={s.trim()} variant="secondary" className="text-xs">{s.trim()}</Badge>
@@ -453,7 +455,7 @@ export default function AssetDetailView() {
                 )}
                 {asset.properties.examples && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Examples</Label>
+                    <Label className="text-xs text-muted-foreground">{t('assets:detail.examples')}</Label>
                     <p className="text-sm mt-1 text-muted-foreground">{asset.properties.examples}</p>
                   </div>
                 )}
@@ -465,18 +467,18 @@ export default function AssetDetailView() {
           {isLogicalEntity && asset.properties && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Logical Model</CardTitle>
+                <CardTitle className="text-base">{t('assets:detail.logicalModel')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {asset.properties.entityDomain && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Domain</Label>
+                    <Label className="text-xs text-muted-foreground">{t('common:labels.domain')}</Label>
                     <p className="text-sm mt-1">{asset.properties.entityDomain}</p>
                   </div>
                 )}
                 {asset.properties.entitySupertype && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Supertype</Label>
+                    <Label className="text-xs text-muted-foreground">{t('assets:detail.supertype')}</Label>
                     <p className="text-sm mt-1">{asset.properties.entitySupertype}</p>
                   </div>
                 )}
@@ -488,24 +490,24 @@ export default function AssetDetailView() {
           {isPolicy && asset.properties && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Policy Details</CardTitle>
+                <CardTitle className="text-base">{t('assets:detail.policyDetails')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {asset.properties.policyType && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Policy Type</Label>
+                    <Label className="text-xs text-muted-foreground">{t('assets:detail.policyType')}</Label>
                     <Badge variant="outline" className="ml-2">{asset.properties.policyType}</Badge>
                   </div>
                 )}
                 {asset.properties.enforcementLevel && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Enforcement</Label>
+                    <Label className="text-xs text-muted-foreground">{t('assets:detail.enforcement')}</Label>
                     <Badge variant="outline" className="ml-2">{asset.properties.enforcementLevel}</Badge>
                   </div>
                 )}
                 {asset.properties.policyContent && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">Content</Label>
+                    <Label className="text-xs text-muted-foreground">{t('assets:detail.content')}</Label>
                     <p className="text-sm mt-1 whitespace-pre-wrap">{asset.properties.policyContent}</p>
                   </div>
                 )}
@@ -520,7 +522,7 @@ export default function AssetDetailView() {
           <EntityTreePanel
             entityType={ontologyTypeName}
             entityId={asset.id}
-            title="Relationships"
+            title={t('assets:detail.tabs.relationships')}
             canEdit={canWrite}
           />
         </TabsContent>
@@ -548,7 +550,7 @@ export default function AssetDetailView() {
             <EntityTreePanel
               entityType={ontologyTypeName}
               entityId={asset.id}
-              title="All Entity Relationships"
+              title={t('assets:detail.allRelationships')}
               canEdit={canWrite}
             />
           ) : (
@@ -593,7 +595,7 @@ export default function AssetDetailView() {
       <RatingPanel
         entityType="asset"
         entityId={assetId!}
-        title="Ratings & Reviews"
+        title={t('assets:detail.ratingsReviews')}
         showDistribution
         allowSubmit
       />

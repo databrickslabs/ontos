@@ -4,11 +4,16 @@
   "tabs": {
     "askOntos": "{{shortName}} fragen",
     "indexSearch": "Index-Suche",
+    "searchConcepts": "Konzepte suchen",
     "viewGraph": "Graph anzeigen",
     "searchGraph": "Graph durchsuchen",
     "concepts": "Konzepte",
     "properties": "Eigenschaften",
     "knowledgeGraph": "Wissensgraph"
+  },
+  "subtitles": {
+    "searchConcepts": "Ontologie-Konzepte und -Eigenschaften suchen und durchsuchen",
+    "searchGraph": "Den Wissensgraphen mit SPARQL abfragen und erkunden"
   },
   "noResults": "Keine Ergebnisse gefunden",
   "noResultsHint": "Versuchen Sie, Ihre Suchbegriffe oder Filter anzupassen",
@@ -57,7 +62,18 @@
     "resourcesWithLabel": "Ressourcen mit rdfs:label",
     "subjectsAndTypes": "Subjekte und ihre Typen",
     "topPredicates": "Top-Prädikate nach Häufigkeit",
-    "mostLinkedSeeAlso": "Am häufigsten verlinkt via rdfs:seeAlso"
+    "mostLinkedSeeAlso": "Am häufigsten verlinkt via rdfs:seeAlso",
+    "resourceDetail": "Ressourcendetail",
+    "prefixPlaceholder": "z. B. example.org/banking",
+    "resourceLoading": "Wird geladen…",
+    "noTriples": "Keine Triples für diese Ressource.",
+    "blankNodeExpanded": "(leerer Knoten, unten erweitert)",
+    "hover": {
+      "type": "Typ: {{type}}",
+      "id": "ID: {{id}}",
+      "owner": "Eigentümer: {{owner}}",
+      "status": "Status: {{status}}"
+    }
   },
   "index": {
     "title": "Index-Suche",
@@ -130,7 +146,10 @@
       "property": "Eigenschaft",
       "selectProperty": "Eigenschaft auswählen...",
       "browseUCColumn": "UC-Tabelle durchsuchen und Spalte wählen...",
-      "ucColumnTitle": "UC-Spalte auswählen"
+      "ucColumnTitle": "UC-Spalte auswählen",
+      "asset": "Asset",
+      "noColumnAssets": "Keine Spalten- oder logischen Attribut-Assets gefunden",
+      "selectAsset": "Asset auswählen"
     },
     "messages": {
       "selectPropertyTarget": "Bitte wählen Sie Vertrag, Schema und Eigenschaft.",
@@ -160,7 +179,11 @@
       "findCustomerData": "Wo finde ich Kundendaten?",
       "dataProductsCost": "Wie viel kosten alle Datenprodukte?",
       "businessTermsSales": "Welche Geschäftsbegriffe beziehen sich auf Verkauf?",
-      "showDataProducts": "Zeige mir Datenprodukte in der Kundendomäne"
+      "showDataProducts": "Zeige mir Datenprodukte in der Kundendomäne",
+      "howToCreateProduct": "Wie erstelle ich mein erstes Datenprodukt?",
+      "howToSetupDomains": "Wie richte ich Datendomänen ein?",
+      "whatIsOntos": "Was ist Ontos und was kann ich damit machen?",
+      "coreConcepts": "Erkläre die Kernkonzepte: Datenprodukte, Verträge und Domänen."
     },
     "messages": {
       "sessionDeleted": "Sitzung gelöscht",
@@ -168,11 +191,45 @@
       "loadSessionFailed": "Sitzung konnte nicht geladen werden",
       "deleteSessionFailed": "Sitzung konnte nicht gelöscht werden",
       "loadFailed": "LLM-Suche konnte nicht geladen werden. Bitte versuchen Sie es später erneut."
+    },
+    "debug": {
+      "title": "Debug",
+      "toolCallCount_one": "{{count}} Tool-Aufruf",
+      "toolCallCount_other": "{{count}} Tool-Aufrufe",
+      "priorResults": "({{count}} vorherige)",
+      "followUp": "Folgeanfrage: LLM hat {{messages}} vorherige Nachrichten ({{results}} Tool-Ergebnisse) im Konversationsverlauf",
+      "queryClassification": "Abfrage-Klassifizierung",
+      "query": "Abfrage:",
+      "categories": "Kategorien:",
+      "toolsProvided": "Bereitgestellte Tools:",
+      "model": "Modell:",
+      "iterations": "Iterationen:",
+      "total": "gesamt",
+      "toolExecutions": "Tool-Ausführungen",
+      "llmIterations": "LLM-Iterationen",
+      "messagesSent": "{{count}} Nachr.",
+      "toolCallsShort": "{{count}} Tool-Aufruf(e)",
+      "args": "Argumente:",
+      "showResult": "Ergebnis anzeigen",
+      "hideResult": "Ergebnis ausblenden",
+      "modeEnabled": "Debug-Modus aktiviert",
+      "modeDisabled": "Debug-Modus deaktiviert",
+      "modeEnabledDesc": "LLM-Zwischenschritte werden angezeigt",
+      "clickToDisable": "Klicken, um den Debug-Modus zu deaktivieren"
     }
   },
   "copilot": {
+    "title": "{{shortName}} fragen",
+    "subtitle": "KI-gestützter Assistent",
+    "button": "{{shortName}} fragen",
+    "welcome": "Willkommen bei {{shortName}} fragen!",
+    "welcomeDescription": "Erhalten Sie Hilfe bei Modellierung, Zuordnungen, Produkterstellung und Health-Insights. Probieren Sie einen der vorgeschlagenen Prompts unten aus oder geben Sie Ihre eigene Frage ein.",
+    "askingAbout": "Frage zu:",
     "scopePageSpecific": "Seitenspezifisch",
     "scopeGeneral": "Ontos (allgemein)",
-    "scopeThisPage": "Diese Seite"
+    "scopeThisPage": "Diese Seite",
+    "inputPlaceholder": "{{shortName}} etwas fragen...",
+    "messageSendFailed": "Nachricht konnte nicht gesendet werden",
+    "resizeHandle": "Größe des Ask-Ontos-Panels ändern"
   }
 }

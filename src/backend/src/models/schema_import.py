@@ -6,6 +6,7 @@ external connectors (BigQuery, Databricks, Snowflake, etc.) with persisted
 Ontos assets.
 """
 
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -35,6 +36,8 @@ class BrowseResponse(BaseModel):
     nodes: List[BrowseNode] = Field(default_factory=list)
     error: Optional[str] = Field(None, description="Short error message if browsing failed")
     error_detail: Optional[str] = Field(None, description="Full error details for debugging")
+    truncated: bool = Field(False, description="True if leaf assets at this path were capped by the configured fetch limit; more assets exist than are shown")
+    truncated_at: Optional[int] = Field(None, description="The child fetch limit that was applied when truncated is True")
 
 
 # ---------------------------------------------------------------------------
@@ -91,3 +94,57 @@ class ImportResult(BaseModel):
     error_messages: List[str] = Field(default_factory=list)
     items: List[ImportResultItem] = Field(default_factory=list)
     system_asset_id: Optional[UUID] = Field(None, description="ID of the System asset used as hierarchy root")
+
+
+# ---------------------------------------------------------------------------
+# Async import run (background execution)
+# ---------------------------------------------------------------------------
+
+class SchemaImportRunStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class StartImportRunResponse(BaseModel):
+    """Returned by the async import endpoint (HTTP 202)."""
+    run_id: str = Field(..., description="ID of the background import run to poll")
+    status: SchemaImportRunStatus = SchemaImportRunStatus.PENDING
+
+
+class SchemaImportRunDetail(BaseModel):
+    """Status + progress of a background import run (poll target)."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    status: SchemaImportRunStatus
+    progress_message: Optional[str] = None
+    error: Optional[str] = None
+    connection_id: Optional[str] = None
+    total_items: Optional[int] = None
+    processed_items: int = 0
+    created_count: int = 0
+    skipped_count: int = 0
+    error_count: int = 0
+    result: Optional[ImportResult] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class SchemaImportRunSummary(BaseModel):
+    """Lightweight run row for list views."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    status: SchemaImportRunStatus
+    connection_id: Optional[str] = None
+    total_items: Optional[int] = None
+    processed_items: int = 0
+    created_count: int = 0
+    skipped_count: int = 0
+    error_count: int = 0
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None

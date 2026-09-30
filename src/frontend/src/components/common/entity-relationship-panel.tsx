@@ -16,6 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { AddRelationshipDialog } from '@/components/common/add-relationship-dialog';
 
 interface RelationshipRecord {
@@ -64,10 +65,12 @@ function getEntityRoute(entityType: string, entityId: string): string {
 export function EntityRelationshipPanel({
   entityType,
   entityId,
-  title = 'Relationships',
+  title,
   className,
   canEdit = false,
 }: EntityRelationshipPanelProps) {
+  const { t } = useTranslation('common');
+  const resolvedTitle = title ?? t('common:entityRelationships.title');
   const [data, setData] = useState<RelationshipSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,11 +99,11 @@ export function EntityRelationshipPanel({
       if (response.error) throw new Error(response.error);
       setData(response.data ?? null);
     } catch (err: any) {
-      setError(err.message || 'Failed to load relationships');
+      setError(err.message || t('common:entityRelationships.failedLoad'));
     } finally {
       setLoading(false);
     }
-  }, [apiGet, entityType, entityId]);
+  }, [apiGet, entityType, entityId, t]);
 
   useEffect(() => { fetchRelationships(); }, [fetchRelationships]);
 
@@ -110,11 +113,11 @@ export function EntityRelationshipPanel({
     try {
       const response = await apiDelete(`/api/entity-relationships/${deleteId}`);
       if (response.error) throw new Error(response.error);
-      toast({ title: 'Relationship removed' });
+      toast({ title: t('common:entityRelationships.relationshipRemoved') });
       setDeleteId(null);
       fetchRelationships();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
+      toast({ variant: 'destructive', title: t('common:toast.error'), description: err.message });
     } finally {
       setDeleteLoading(false);
     }
@@ -151,7 +154,7 @@ export function EntityRelationshipPanel({
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Link2 className="h-4 w-4" />
-            {title}
+            {resolvedTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -169,7 +172,7 @@ export function EntityRelationshipPanel({
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Link2 className="h-4 w-4" />
-            {title}
+            {resolvedTitle}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -189,12 +192,12 @@ export function EntityRelationshipPanel({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Link2 className="h-4 w-4" />
-              {title}
+              {resolvedTitle}
               <Badge variant="secondary" className="ml-1 text-xs">{total}</Badge>
             </CardTitle>
             {canEdit && (
               <Button variant="outline" size="sm" onClick={() => setIsAddOpen(true)}>
-                <PlusCircle className="mr-1 h-3.5 w-3.5" /> Add
+                <PlusCircle className="mr-1 h-3.5 w-3.5" /> {t('common:actions.add')}
               </Button>
             )}
           </div>
@@ -202,7 +205,7 @@ export function EntityRelationshipPanel({
         <CardContent>
           {total === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
-              No relationships found
+              {t('common:entityRelationships.noneFound')}
             </p>
           ) : (
             <div className="space-y-2">
@@ -214,7 +217,7 @@ export function EntityRelationshipPanel({
                     !typeFilter ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
                   }`}
                 >
-                  {total} All
+                  {t('common:entityRelationships.allCount', { count: total })}
                 </button>
                 {Object.entries(typeCounts).map(([type, count]) => (
                   <button
@@ -233,7 +236,7 @@ export function EntityRelationshipPanel({
 
               {filteredTotal === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  No relationships match this filter
+                  {t('common:entityRelationships.noneMatchFilter')}
                 </p>
               ) : (
                 <div className="space-y-0">
@@ -251,7 +254,7 @@ export function EntityRelationshipPanel({
                           {rel.target_type.replace(/([A-Z])/g, ' $1').trim()}
                         </Badge>
                         <span className="text-xs text-muted-foreground flex-shrink-0 hidden sm:inline">
-                          this Asset <span className="font-medium text-foreground">{rel.relationship_label || rel.relationship_type}</span> {rel.target_name || rel.target_id}
+                          {t('common:entityRelationships.thisAsset')} <span className="font-medium text-foreground">{rel.relationship_label || rel.relationship_type}</span> {rel.target_name || rel.target_id}
                         </span>
                         <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       </button>
@@ -268,7 +271,7 @@ export function EntityRelationshipPanel({
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Remove relationship</TooltipContent>
+                            <TooltipContent>{t('common:entityRelationships.removeRelationshipTooltip')}</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       )}
@@ -289,7 +292,7 @@ export function EntityRelationshipPanel({
                           {rel.source_type.replace(/([A-Z])/g, ' $1').trim()}
                         </Badge>
                         <span className="text-xs text-muted-foreground flex-shrink-0 hidden sm:inline">
-                          <span className="font-medium text-foreground">{rel.source_name || rel.source_id}</span> <span className="font-medium text-foreground">{rel.relationship_label || rel.relationship_type}</span> this Asset
+                          <span className="font-medium text-foreground">{rel.source_name || rel.source_id}</span> <span className="font-medium text-foreground">{rel.relationship_label || rel.relationship_type}</span> {t('common:entityRelationships.thisAsset')}
                         </span>
                         <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       </button>
@@ -306,7 +309,7 @@ export function EntityRelationshipPanel({
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Remove relationship</TooltipContent>
+                            <TooltipContent>{t('common:entityRelationships.removeRelationshipTooltip')}</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       )}
@@ -332,20 +335,20 @@ export function EntityRelationshipPanel({
       <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Relationship</AlertDialogTitle>
+            <AlertDialogTitle>{t('common:entityRelationships.removeRelationshipTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove this relationship? This action cannot be undone.
+              {t('common:entityRelationships.removeConfirm')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteRelationship}
               className="bg-red-600 hover:bg-red-700"
               disabled={deleteLoading}
             >
               {deleteLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Remove
+              {t('common:actions.remove')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

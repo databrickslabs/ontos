@@ -8,6 +8,18 @@
   "newTerm": "Nouveau Terme",
   "searchPlaceholder": "Rechercher des termes...",
   "loading": "Chargement des modèles sémantiques...",
+  "tabs": {
+    "collections": "Collections",
+    "concepts": "Concepts",
+    "graph": "Graphe"
+  },
+  "types": {
+    "concept": "Concept",
+    "class": "Classe",
+    "property": "Propriété",
+    "individual": "Individu",
+    "term": "Terme"
+  },
   "linkedObjects": {
     "title": "Entités liées",
     "assign": "Associer une entité",
@@ -17,13 +29,6 @@
     "removeFailed": "Impossible de supprimer le lien.",
     "removeAria": "Supprimer l'entité liée"
   },
-  "relations": {
-    "title": "Relations",
-    "loading": "Chargement des relations...",
-    "empty": "Aucune relation trouvée.",
-    "outgoingTooltip": "Ce concept → cible",
-    "incomingTooltip": "Source → ce concept"
-  },
   "neighborhood": {
     "title": "Voisinage du concept",
     "loading": "Chargement du voisinage...",
@@ -31,13 +36,39 @@
     "moreParents": "+{{count}} de plus",
     "moreChildren": "+{{count}} de plus"
   },
+  "relations": {
+    "title": "Relations",
+    "loading": "Chargement des relations...",
+    "empty": "Aucune relation trouvée.",
+    "outgoingTooltip": "Ce concept → cible",
+    "incomingTooltip": "Source → ce concept"
+  },
   "filters": {
     "allGlossaries": "Tous les Glossaires",
     "allStatus": "Tous les Statuts",
     "bySource": "Filtrer par Source",
     "all": "Tous",
     "none": "Aucun",
-    "groupBySource": "Grouper par Source"
+    "groupBySource": "Grouper par Source",
+    "showProperties": "Afficher les propriétés",
+    "groupByDomain": "Grouper par domaine",
+    "allTypes": "Tous les types",
+    "allScopes": "Tous les périmètres",
+    "allCollections": "Toutes les collections",
+    "labelLanguage": "Langue des libellés"
+  },
+  "groupBy": {
+    "collection": "Par collection",
+    "type": "Par type",
+    "flat": "Liste à plat"
+  },
+  "scopes": {
+    "enterprise": "Entreprise",
+    "domain": "Domaine",
+    "department": "Département",
+    "team": "Équipe",
+    "project": "Projet",
+    "external": "Externe"
   },
   "table": {
     "name": "Nom",
@@ -52,7 +83,25 @@
     "error": "Erreur",
     "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce terme ?",
     "deleteSuccess": "Terme supprimé avec succès",
-    "deleteError": "Échec de la suppression du terme"
+    "deleteError": "Échec de la suppression du terme",
+    "collectionCreated": "Collection créée avec succès",
+    "collectionUpdated": "Collection mise à jour avec succès",
+    "collectionDeleted": "Collection supprimée avec succès",
+    "confirmDeleteCollection": "Êtes-vous sûr de vouloir supprimer la collection « {{name}} » ? Cela supprimera tous les concepts qu'elle contient.",
+    "conceptCreated": "Concept créé avec succès",
+    "conceptUpdated": "Concept mis à jour avec succès",
+    "conceptDeleted": "Concept supprimé avec succès",
+    "submittedForReview": "Concept soumis pour revue",
+    "enterReviewerEmail": "Saisissez l'adresse e-mail du relecteur :",
+    "conceptPromoted": "Concept promu avec succès",
+    "conceptMigrated": "Concept migré avec succès",
+    "noCollections": "Aucune collection trouvée",
+    "noConceptsFound": "Aucun concept trouvé",
+    "selectConcept": "Sélectionnez un concept pour afficher les détails",
+    "linkAdded": "Lien ajouté avec succès",
+    "linkRemoved": "Lien supprimé avec succès",
+    "saveFailed": "Échec de l'enregistrement du concept",
+    "deleteConceptFailed": "Échec de la suppression du concept"
   },
   "status": {
     "draft": "Brouillon",
@@ -61,8 +110,10 @@
     "under_review": "En révision",
     "active": "Actif",
     "approved": "Approuvé",
+    "published": "Publié",
     "certified": "Certifié",
     "deprecated": "Obsolète",
+    "archived": "Archivé",
     "retired": "Retiré"
   },
   "details": {
@@ -71,9 +122,27 @@
     "delete": "Supprimer",
     "notFound": "Concept non trouvé",
     "loading": "Chargement...",
+    "loadError": "Échec du chargement du concept",
+    "created": "Créé",
+    "refreshing": "Actualisation...",
+    "openIriAria": "Ouvrir l'IRI",
     "linkedAssets": "Actifs Liés",
     "synonyms": "Synonymes",
     "relatedTerms": "Termes Associés"
+  },
+  "fields": {
+    "definition": "Définition",
+    "domain": "Domaine",
+    "range": "Portée",
+    "synonyms": "Synonymes",
+    "examples": "Exemples",
+    "businessOwners": "Propriétaires métier",
+    "parentConcepts": "Concepts parents",
+    "childConcepts": "Concepts enfants",
+    "scope": "Périmètre",
+    "concepts": "Concepts",
+    "source": "Source",
+    "sourceUrl": "URL de la source"
   },
   "form": {
     "createTitle": "Créer un Terme",
@@ -85,6 +154,309 @@
     "status": "Statut",
     "cancel": "Annuler",
     "save": "Enregistrer"
+  },
+  "collections": {
+    "title": "Collections",
+    "glossary": "Glossaire",
+    "taxonomy": "Taxonomie",
+    "ontology": "Ontologie"
+  },
+  "actions": {
+    "createConcept": "Créer un concept",
+    "createCollection": "Créer une collection"
+  },
+  "badges": {
+    "imported": "Importé",
+    "custom": "Personnalisé",
+    "readonly": "Lecture seule"
+  },
+  "links": {
+    "outgoing": "Liens sortants",
+    "incoming": "Liens entrants",
+    "noOutgoing": "Aucun lien sortant",
+    "noIncoming": "Aucun lien entrant",
+    "source": "Source",
+    "target": "Cible",
+    "relationshipType": "Type de relation",
+    "selectTarget": "Sélectionner la cible",
+    "typeToSearch": "Saisissez pour rechercher des concepts",
+    "createLink": "Créer un lien"
+  },
+  "graph": {
+    "legend": "Légende",
+    "layout": "Disposition",
+    "hierarchical": "Hiérarchique",
+    "force": "Force",
+    "circular": "Circulaire"
+  },
+  "dialogs": {
+    "deleteConcept": {
+      "title": "Supprimer le concept",
+      "description": "Êtes-vous sûr de vouloir supprimer « {{label}} » ? Cette action est irréversible. Seuls les concepts à l'état de brouillon peuvent être supprimés."
+    },
+    "linkEditor": {
+      "title": "Créer un lien",
+      "description": "Définissez une relation entre deux concepts"
+    }
+  },
+  "rdfSources": {
+    "syntaxColumn": "Syntaxe",
+    "serializationUnknown": "—",
+    "serializationTurtle": "Turtle",
+    "serializationRdfXml": "RDF/XML",
+    "serializationJsonLd": "JSON-LD",
+    "serializationNTriples": "N-Triples",
+    "serializationTriG": "TriG",
+    "viewRawDescription": "Contenu RDF brut ({{syntax}}).",
+    "viewRawDescriptionFallback": "Contenu RDF brut.",
+    "nameColumn": "Nom",
+    "editDisplayTitle": "Modifier le titre d'affichage",
+    "titleDialog": "Titre de la source RDF",
+    "titleDialogDescription": "Choisissez un libellé dans l'en-tête de l'ontologie ou saisissez un titre personnalisé. Le nom du fichier reste la clé interne du graphe.",
+    "suggestedFromFile": "Suggéré depuis le fichier",
+    "customTitle": "Titre personnalisé",
+    "useFilename": "Utiliser le nom du fichier",
+    "titleSaved": "Titre d'affichage mis à jour",
+    "loadSuggestionsFailed": "Échec du chargement des suggestions de titre",
+    "fileBackedReadOnly": "Les sources de fichiers intégrées utilisent le nom du fichier comme titre.",
+    "systemNamespaces": {
+      "metaSources": "Métadonnées du registre des sources",
+      "semanticLinks": "Liens sémantiques",
+      "rdflibDefault": "Graphe par défaut",
+      "appEntities": "Entités de l'application",
+      "demoGraph": "Concepts métier de démonstration"
+    }
+  },
+  "import": {
+    "chooseFile": "Choisir un fichier…",
+    "file": "Fichier",
+    "noEditableCollections": "Aucune collection modifiable disponible. Créez-en une d'abord.",
+    "selectCollection": "Sélectionner une collection…",
+    "submit": "Importer",
+    "success": "Importation réussie",
+    "supportedFormats": "Pris en charge : Turtle (.ttl), RDF/XML (.rdf, .xml), OWL (.owl), N-Triples (.nt), N3 (.n3), JSON-LD (.jsonld, .json)",
+    "targetCollection": "Collection cible",
+    "title": "Importer des concepts"
+  },
+  "propertyTypes": {
+    "object": "Propriété d'objet",
+    "datatype": "Propriété de type de données",
+    "annotation": "Propriété d'annotation"
+  },
+  "conceptEditor": {
+    "editTitle": "Modifier le concept",
+    "createDescription": "Créez un nouveau terme ou concept dans la collection.",
+    "collectionLabel": "Collection",
+    "selectCollectionPlaceholder": "Sélectionner une collection...",
+    "selectTypePlaceholder": "Sélectionner un type...",
+    "label": "Libellé",
+    "labelPlaceholder": "ex. : Chiffre d'affaires",
+    "definitionPlaceholder": "Une définition claire et concise...",
+    "propertyConfiguration": "Configuration de la propriété",
+    "propertyType": "Type de propriété",
+    "selectPropertyTypePlaceholder": "Sélectionner le type de propriété...",
+    "domainPlaceholder": "e.g., schema:Person or IRI...",
+    "domainHelp": "La classe ou le type auquel cette propriété s'applique (sujet)",
+    "rangeDatatypePlaceholder": "e.g., xsd:string, xsd:integer...",
+    "rangeObjectPlaceholder": "e.g., schema:Organization or IRI...",
+    "rangeDatatypeHelp": "Le type de données de la valeur de la propriété",
+    "rangeObjectHelp": "La classe ou le type de la valeur de la propriété (objet)",
+    "addSynonymPlaceholder": "Ajouter un synonyme...",
+    "addExamplePlaceholder": "Ajouter un exemple...",
+    "certified": "Certifié",
+    "expires": "Expire",
+    "promotedFrom": "Promu depuis",
+    "migratedFrom": "Migré depuis",
+    "history": "Historique",
+    "submitForReview": "Soumettre pour revue",
+    "typeDescriptions": {
+      "concept": "Un terme ou une notion générale (concept SKOS)",
+      "class": "Une catégorie ou un type (classe RDFS/OWL)",
+      "property": "Une relation ou un attribut (propriété RDF)",
+      "individual": "Une instance spécifique (individu OWL)",
+      "term": "Un terme de glossaire métier"
+    },
+    "propertyTypeDescriptions": {
+      "object": "Se rapporte à d'autres concepts",
+      "datatype": "Se rapporte à des valeurs littérales",
+      "annotation": "Annotation de métadonnées"
+    }
+  },
+  "collectionEditor": {
+    "editTitle": "Modifier la collection",
+    "createDescription": "Créez une nouvelle collection de glossaire, de taxonomie ou d'ontologie.",
+    "editDescription": "Mettez à jour les paramètres de la collection.",
+    "namePlaceholder": "ex. : Glossaire Finance",
+    "descriptionPlaceholder": "Description facultative...",
+    "parentCollection": "Collection parente",
+    "noneRootCollection": "Aucune (collection racine)",
+    "editable": "Modifiable",
+    "editableHelp": "Autoriser la création et la modification de concepts dans cette collection"
+  },
+  "promotion": {
+    "promoteConcept": "Promouvoir le concept",
+    "demoteConcept": "Rétrograder le concept",
+    "migrateConcept": "Migrer le concept",
+    "move": "Déplacer",
+    "toDifferentCollection": "vers une autre collection",
+    "actionLabel": "Action",
+    "promote": "Promouvoir",
+    "migrate": "Migrer",
+    "currentLocation": "Emplacement actuel",
+    "selectTargetPlaceholder": "Sélectionner la collection cible...",
+    "newIri": "Nouvel IRI",
+    "sourceConcept": "Concept source",
+    "deprecateOriginal": "Déprécier l'original (recommandé)",
+    "deleteOriginal": "Supprimer l'original",
+    "deleteHelp": "Seuls les concepts à l'état de brouillon peuvent être supprimés. Les concepts publiés seront dépréciés.",
+    "promoteWarning": "Les concepts promus nécessitent une nouvelle approbation au nouveau niveau de périmètre."
+  },
+  "collectionTree": {
+    "readOnly": "Collection en lecture seule",
+    "noCollectionsYet": "Aucune collection pour le moment"
+  },
+  "knowledgeGraph": {
+    "rootFilter": {
+      "show_one": "Afficher {{label}} ({{count}} concept)",
+      "show_other": "Afficher {{label}} ({{count}} concepts)",
+      "hide_one": "Masquer {{label}} ({{count}} concept)",
+      "hide_other": "Masquer {{label}} ({{count}} concepts)",
+      "sourcesVisible": "{{visible}} sources sur {{total}} visibles",
+      "filterSources": "Filtrer les sources",
+      "showAll": "Tout afficher",
+      "hideAll": "Tout masquer",
+      "toggleHint": "Cliquez sur les éléments de la légende pour basculer la visibilité"
+    },
+    "layout": {
+      "placeholder": "Disposition"
+    },
+    "layouts": {
+      "circular": "Circulaire",
+      "forceDirected": "Dirigé par les forces",
+      "grid": "Grille",
+      "hierarchical": "Hiérarchique",
+      "concentric": "Concentrique"
+    },
+    "toolbar": {
+      "showDomainGroups": "Afficher les groupes de domaines",
+      "hideDomainGroups": "Masquer les groupes de domaines",
+      "groups": "Groupes",
+      "showNodeLabels": "Afficher les libellés des nœuds",
+      "hideNodeLabels": "Masquer les libellés des nœuds",
+      "nodeLabels": "Libellés des nœuds",
+      "showEdgeLabels": "Afficher les libellés des arêtes",
+      "hideEdgeLabels": "Masquer les libellés des arêtes",
+      "edgeLabels": "Libellés des arêtes",
+      "size": "Taille",
+      "nodeSize": "Taille des nœuds",
+      "spacing": "Espacement",
+      "nodeSpacing": "Espacement des nœuds",
+      "spacingHint": "Relance la disposition. Affecte la longueur des arêtes et la répulsion des nœuds.",
+      "conceptCount_one": "{{count}} concept",
+      "conceptCount_other": "{{count}} concepts"
+    },
+    "fullscreen": {
+      "description": "Vue plein écran de la visualisation du graphe de concepts",
+      "hint": "Cliquez sur les nœuds pour sélectionner des concepts. Utilisez la molette pour zoomer, glissez pour déplacer."
+    }
+  },
+  "linkedConcepts": {
+    "empty": "Aucun concept métier lié",
+    "removeAria": "Supprimer le lien du concept"
+  },
+  "ontologyGenerator": {
+    "title": "Générateur d'ontologies",
+    "subtitle": "Parcourez un système distant, sélectionnez des tables et générez une ontologie OWL à partir de leurs schémas.",
+    "connectionDescription": "Sélectionnez une connexion de plateforme de données",
+    "noConnections": "Aucune connexion configurée. Ajoutez-en une dans Paramètres > Connecteurs.",
+    "chooseConnection": "Choisir une connexion...",
+    "generationOptions": "Options de génération",
+    "generationOptionsDescription": "Personnalisez la génération de l'ontologie",
+    "guidelines": "Directives",
+    "guidelinesPlaceholder": "Ex. : Créer une ontologie de domaine pour des données e-commerce...",
+    "baseUri": "URI de base",
+    "dataProperties": "Propriétés de données",
+    "relationships": "Relations",
+    "inheritance": "Héritage",
+    "cancelGeneration": "Annuler la génération",
+    "generateOntology": "Générer l'ontologie ({{count}} sélectionné(s))",
+    "recentRuns": "Exécutions récentes",
+    "noRuns": "Aucune exécution pour le moment",
+    "direct": "Direct",
+    "directGeneration": "Génération directe",
+    "deleteRun": "Supprimer l'exécution",
+    "paths": "Chemins",
+    "steps": "Étapes",
+    "started": "Démarré",
+    "finished": "Terminé",
+    "resources": "Ressources",
+    "resourcesWithName": "{{name}} — Ressources",
+    "resourcesDescription": "Sélectionnez les catalogues, schémas ou tables à partir desquels générer une ontologie",
+    "selectedCount": "{{count}} sélectionné(s)",
+    "agentProgress": "Progression de l'agent",
+    "generatedTurtle": "Turtle généré",
+    "saveToCollection": "Enregistrer dans la collection",
+    "empty": "(vide)",
+    "agentExecutionLog": "Journal d'exécution de l'agent",
+    "agentLogSummary": "{{iterations}} itération(s) · {{promptTokens}} tokens d'invite · {{completionTokens}} tokens de complétion",
+    "noClasses": "Aucune classe générée",
+    "noProperties": "Aucune propriété générée",
+    "noAgentSteps": "Aucune étape d'agent enregistrée",
+    "runStatus": {
+      "pending": "En attente",
+      "running": "En cours",
+      "completed": "Terminé",
+      "failed": "Échec",
+      "cancelled": "Annulé"
+    },
+    "progress": {
+      "starting": "Démarrage...",
+      "working": "Traitement..."
+    },
+    "tabs": {
+      "classes": "Classes ({{count}})",
+      "properties": "Propriétés ({{count}})",
+      "turtle": "Turtle",
+      "agentLog": "Journal de l'agent"
+    },
+    "table": {
+      "class": "Classe",
+      "parent": "Parent",
+      "attributes": "Attributs",
+      "none": "aucun",
+      "property": "Propriété",
+      "range": "Portée",
+      "objectType": "Objet",
+      "dataType": "Données"
+    },
+    "toasts": {
+      "generatedTitle": "Ontologie générée",
+      "generatedDescription": "{{classes}} classes, {{properties}} propriétés.",
+      "generatedFallback": "Génération terminée.",
+      "cancelledTitle": "Génération annulée",
+      "failedTitle": "Échec de la génération",
+      "unknownError": "Erreur inconnue",
+      "startFailed": "Échec du démarrage de la génération",
+      "startedTitle": "Génération démarrée",
+      "startedDescription": "L'agent LLM travaille en arrière-plan.",
+      "cancelFailed": "Échec de l'annulation",
+      "noResultTitle": "Aucun résultat",
+      "noResultDescription": "Cette exécution n'a aucune donnée de résultat.",
+      "deleteFailed": "Échec de la suppression",
+      "turtleCopied": "Contenu Turtle copié dans le presse-papiers.",
+      "saveFailed": "Échec de l'enregistrement",
+      "savedTitle": "Enregistré dans la collection",
+      "savedDescription_one": "{{count}} triplet importé dans « {{name}} ».",
+      "savedDescription_other": "{{count}} triplets importés dans « {{name}} »."
+    },
+    "saveDialog": {
+      "title": "Enregistrer dans la collection de concepts",
+      "description": "Créez une nouvelle collection d'ontologie et importez les triplets générés dans le graphe de connaissances.",
+      "nameLabel": "Nom de la collection",
+      "namePlaceholder": "ex. : Ontologie du domaine client",
+      "descriptionLabel": "Description (facultatif)",
+      "descriptionPlaceholder": "Décrivez l'objet de cette collection d'ontologie...",
+      "importSummary": "{{classes}} classes et {{properties}} propriétés seront importées."
+    }
   }
 }
-

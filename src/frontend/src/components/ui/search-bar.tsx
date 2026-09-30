@@ -28,7 +28,7 @@ interface SearchBarProps {
   placeholder?: string;
 }
 
-export default function SearchBar({ variant = 'default', placeholder = 'Search...' }: SearchBarProps) {
+export default function SearchBar({ variant = 'default', placeholder }: SearchBarProps) {
   const { t } = useTranslation('common');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -148,7 +148,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('common:placeholders.search')}
           className={cn(
             "w-full",
             variant === 'large' ? "h-12 text-lg" : "h-10"
@@ -159,7 +159,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
             variant="ghost"
             size="icon"
             className="hover:bg-transparent"
-            title="Search"
+            title={t('common:actions.search')}
           >
             <Search className="h-4 w-4" />
           </Button>
@@ -168,7 +168,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
             size="sm"
             className="hover:bg-transparent"
             onClick={() => navigate('/search/llm')}
-            title="Open advanced search"
+            title={t('common:tooltips.openAdvancedSearch')}
           >
             {t('header.advanced')}
           </Button>
@@ -181,7 +181,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
             {isLoading ? (
               <div className="flex items-center justify-center p-4 gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Loading...</span>
+                <span>{t('common:states.loading')}</span>
               </div>
             ) : results.length > 0 ? (
               <div className="p-2">
@@ -202,7 +202,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
               </div>
             ) : (
               <div className="p-4 text-center text-muted-foreground">
-                No results found
+                {t('common:placeholders.noResults')}
               </div>
             )}
           </ScrollArea>

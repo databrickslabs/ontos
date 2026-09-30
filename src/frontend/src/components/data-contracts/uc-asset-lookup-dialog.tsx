@@ -11,6 +11,7 @@
  */
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -160,10 +161,11 @@ export default function UCAssetLookupDialog({
   onOpenChange, 
   onSelect,
   allowedTypes = ALL_ASSET_TYPES,
-  title = 'Find UC Asset',
+  title,
   includeColumns = false,
   selectableTypes: selectableTypesProp
 }: UCAssetLookupDialogProps) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const isNodeSelectable = useCallback((type: UCAssetType | string) => {
     if (selectableTypesProp && selectableTypesProp.length > 0) {
       return selectableTypesProp.includes(type as UCAssetType)
@@ -232,7 +234,7 @@ export default function UCAssetLookupDialog({
         type: UCAssetType.CATALOG
       })) : [])
     } catch (e) {
-      setError('Failed to load catalogs')
+      setError(t('data-contracts:ucLookup.loadCatalogsError', 'Failed to load catalogs'))
     } finally {
       setLoading(false)
     }
@@ -883,34 +885,34 @@ export default function UCAssetLookupDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="w-[80vw] max-w-4xl h-[80vh] max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{title ?? t('data-contracts:ucLookup.defaultTitle', 'Find UC Asset')}</DialogTitle>
         </DialogHeader>
         
         <div className="flex-1 flex flex-col min-h-0 space-y-3 text-sm">
           {/* Search Input */}
           <div className="flex gap-2 flex-shrink-0">
-            <Input 
-              className="h-9 text-sm" 
-              placeholder="Search: t:catalog.schema.table" 
-              value={search} 
+            <Input
+              className="h-9 text-sm"
+              placeholder={t('data-contracts:ucLookup.searchPlaceholder', 'Search: t:catalog.schema.table')}
+              value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
             />
-            <Button 
-              className="h-9 px-3" 
-              type="button" 
-              variant="outline" 
-              onClick={fetchCatalogs} 
+            <Button
+              className="h-9 px-3"
+              type="button"
+              variant="outline"
+              onClick={fetchCatalogs}
               disabled={loading}
             >
-              Refresh
+              {t('common:actions.refresh')}
             </Button>
           </div>
           
           {/* Type filter indicator */}
           {parsedSearch.typeFilter && (
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-xs text-muted-foreground">Filtering:</span>
+              <span className="text-xs text-muted-foreground">{t('data-contracts:ucLookup.filtering', 'Filtering:')}</span>
               <Badge variant="secondary" className="text-xs">
                 {getTypeFilterDisplayName(parsedSearch.typeFilter)}
               </Badge>
@@ -919,7 +921,7 @@ export default function UCAssetLookupDialog({
           
           {/* Search hint */}
           <div className="text-xs text-muted-foreground flex-shrink-0">
-            Type prefix for filtering: t:table, v:view, f:function, m:model, vol:volume
+            {t('data-contracts:ucLookup.typePrefixHint', 'Type prefix for filtering: t:table, v:view, f:function, m:model, vol:volume')}
           </div>
           
           {/* Error display */}
@@ -931,9 +933,9 @@ export default function UCAssetLookupDialog({
             className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden border rounded p-2"
           >
             {loading ? (
-              <div className="p-3 text-sm text-muted-foreground">Loading catalogs...</div>
+              <div className="p-3 text-sm text-muted-foreground">{t('data-contracts:ucLookup.loadingCatalogs', 'Loading catalogs...')}</div>
             ) : filteredRootItems.length === 0 ? (
-              <div className="p-3 text-sm text-muted-foreground">No matching items found</div>
+              <div className="p-3 text-sm text-muted-foreground">{t('data-contracts:ucLookup.noMatchingItems', 'No matching items found')}</div>
             ) : (
               filteredRootItems.map((item) => renderTreeItem(item, 0))
             )}
@@ -942,14 +944,14 @@ export default function UCAssetLookupDialog({
         
         <DialogFooter className="flex-shrink-0">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t('common:actions.close')}
           </Button>
-          <Button 
-            type="button" 
+          <Button
+            type="button"
             onClick={handleAcceptSelection}
             disabled={!canAcceptSelection}
           >
-            Select
+            {t('common:actions.select')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -984,6 +986,7 @@ export function DatasetLookupDialog({
   onOpenChange: (open: boolean) => void;
   onSelect: (table: MetastoreTableInfo) => void;
 }) {
+  const { t } = useTranslation(['data-contracts', 'common'])
   const handleSelect = (asset: UCAssetInfo) => {
     // Convert to legacy format
     onSelect({
@@ -1000,7 +1003,7 @@ export function DatasetLookupDialog({
       onOpenChange={onOpenChange}
       onSelect={handleSelect}
       allowedTypes={[UCAssetType.TABLE, UCAssetType.VIEW]}
-      title="Find existing dataset"
+      title={t('data-contracts:ucLookup.findExistingDataset', 'Find existing dataset')}
     />
   )
 }

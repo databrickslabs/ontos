@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import {
   Download,
   Upload,
@@ -107,6 +108,7 @@ export default function AssetImportExportDialog({
   onImportComplete,
 }: AssetImportExportDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation(['assets', 'common']);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Export state
@@ -167,9 +169,9 @@ export default function AssetImportExportDialog({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast({ title: 'Export Successful', description: `Downloaded ${filename}` });
+      toast({ title: t('assets:importExport.toast.exportSuccessTitle'), description: t('assets:importExport.toast.exportSuccessDescription', { filename }) });
     } catch (error: any) {
-      toast({ title: 'Export Failed', description: error.message, variant: 'destructive' });
+      toast({ title: t('assets:importExport.toast.exportFailedTitle'), description: error.message, variant: 'destructive' });
     } finally {
       setIsExporting(false);
     }
@@ -196,9 +198,9 @@ export default function AssetImportExportDialog({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast({ title: 'Template Downloaded', description: filename });
+      toast({ title: t('assets:importExport.toast.templateDownloadedTitle'), description: filename });
     } catch (error: any) {
-      toast({ title: 'Download Failed', description: error.message, variant: 'destructive' });
+      toast({ title: t('assets:importExport.toast.downloadFailedTitle'), description: error.message, variant: 'destructive' });
     }
   };
 
@@ -234,7 +236,7 @@ export default function AssetImportExportDialog({
       const data: ImportPreviewResult = await response.json();
       setPreview(data);
     } catch (error: any) {
-      toast({ title: 'Preview Failed', description: error.message, variant: 'destructive' });
+      toast({ title: t('assets:importExport.toast.previewFailedTitle'), description: error.message, variant: 'destructive' });
     } finally {
       setIsPreviewLoading(false);
     }
@@ -265,9 +267,9 @@ export default function AssetImportExportDialog({
       setImportResult(data);
       setImportProgress(100);
 
-      const msg = `Created: ${data.created}, Updated: ${data.updated}, Errors: ${data.errors}`;
+      const msg = t('assets:importExport.toast.importSummary', { created: data.created, updated: data.updated, errors: data.errors });
       toast({
-        title: data.errors === 0 ? 'Import Successful' : 'Import Completed with Errors',
+        title: data.errors === 0 ? t('assets:importExport.toast.importSuccessTitle') : t('assets:importExport.toast.importErrorsTitle'),
         description: msg,
         variant: data.errors > 0 ? 'destructive' : undefined,
       });
@@ -276,7 +278,7 @@ export default function AssetImportExportDialog({
         onImportComplete();
       }
     } catch (error: any) {
-      toast({ title: 'Import Failed', description: error.message, variant: 'destructive' });
+      toast({ title: t('assets:importExport.toast.importFailedTitle'), description: error.message, variant: 'destructive' });
     } finally {
       setIsImporting(false);
     }
@@ -291,12 +293,12 @@ export default function AssetImportExportDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            {canImport ? 'Asset Import / Export' : 'Asset Export'}
+            {canImport ? t('assets:importExport.titleImportExport') : t('assets:importExport.titleExport')}
           </DialogTitle>
           <DialogDescription>
             {canImport
-              ? 'Export assets to CSV/Excel for offline editing, or import assets from a file.'
-              : 'Export assets to CSV/Excel for offline viewing.'}
+              ? t('assets:importExport.descriptionImportExport')
+              : t('assets:importExport.descriptionExport')}
           </DialogDescription>
         </DialogHeader>
 
@@ -304,12 +306,12 @@ export default function AssetImportExportDialog({
           <TabsList className={canImport ? "grid w-full grid-cols-2" : "grid w-full grid-cols-1"}>
             <TabsTrigger value="export" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
-              Export
+              {t('common:actions.export')}
             </TabsTrigger>
             {canImport && (
               <TabsTrigger value="import" className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
-                Import
+                {t('common:actions.import')}
               </TabsTrigger>
             )}
           </TabsList>
@@ -319,28 +321,28 @@ export default function AssetImportExportDialog({
           {/* ============================================================ */}
           <TabsContent value="export" className="space-y-4 mt-4">
             <div className="rounded-lg border p-4 space-y-3">
-              <div className="text-sm font-medium">Export Settings</div>
+              <div className="text-sm font-medium">{t('assets:importExport.exportSettings')}</div>
               <div className="flex items-center gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Format</label>
+                  <label className="text-xs text-muted-foreground">{t('assets:importExport.format')}</label>
                   <Select value={exportFormat} onValueChange={(v) => setExportFormat(v as 'csv' | 'xlsx')}>
                     <SelectTrigger className="w-32">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="csv">CSV</SelectItem>
-                      <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+                      <SelectItem value="csv">{t('assets:importExport.formatCsv')}</SelectItem>
+                      <SelectItem value="xlsx">{t('assets:importExport.formatXlsx')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">Scope</label>
+                  <label className="text-xs text-muted-foreground">{t('assets:importExport.scope')}</label>
                   <div className="text-sm flex items-center gap-1.5">
                     {hasSelectedIds
-                      ? <Badge variant="default">{selectedAssetIds.length} selected asset(s)</Badge>
+                      ? <Badge variant="default">{t('assets:importExport.selectedScope', { count: selectedAssetIds.length })}</Badge>
                       : selectedAssetTypeName
                         ? <Badge variant="secondary">{selectedAssetTypeName}</Badge>
-                        : <Badge variant="outline">All asset types</Badge>
+                        : <Badge variant="outline">{t('assets:importExport.allAssetTypes')}</Badge>
                     }
                   </div>
                 </div>
@@ -350,17 +352,17 @@ export default function AssetImportExportDialog({
             <div className="flex gap-2">
               <Button onClick={handleExport} disabled={isExporting}>
                 {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                {isExporting ? 'Exporting...' : 'Export Assets'}
+                {isExporting ? t('assets:importExport.exporting') : t('assets:importExport.exportAssets')}
               </Button>
               <Button variant="outline" onClick={handleDownloadTemplate}>
                 <FileDown className="mr-2 h-4 w-4" />
-                Download Template
+                {t('assets:importExport.downloadTemplate')}
               </Button>
             </div>
 
             <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
-              <p>The export file includes all fields for each asset. You can edit it offline and re-import.</p>
-              <p>The template provides an empty file with correct headers and an example row.</p>
+              <p>{t('assets:importExport.exportHelp1')}</p>
+              <p>{t('assets:importExport.exportHelp2')}</p>
             </div>
           </TabsContent>
 
@@ -370,7 +372,7 @@ export default function AssetImportExportDialog({
           {canImport && <TabsContent value="import" className="flex-1 flex flex-col min-h-0 space-y-3 mt-4">
             {/* File selection */}
             <div className="rounded-lg border p-4 space-y-3">
-              <div className="text-sm font-medium">Select File</div>
+              <div className="text-sm font-medium">{t('assets:importExport.selectFile')}</div>
               <div className="flex items-center gap-3">
                 <input
                   ref={fileInputRef}
@@ -396,7 +398,7 @@ export default function AssetImportExportDialog({
                     ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     : <RefreshCw className="mr-2 h-4 w-4" />
                   }
-                  Preview
+                  {t('assets:importExport.preview')}
                 </Button>
               </div>
             </div>
@@ -417,19 +419,19 @@ export default function AssetImportExportDialog({
             {preview && preview.error_messages.length === 0 && (
               <div className="rounded-lg border p-3">
                 <div className="flex items-center gap-4 text-sm">
-                  <span className="font-medium">{preview.total_rows} rows</span>
+                  <span className="font-medium">{t('assets:importExport.rows', { count: preview.total_rows })}</span>
                   <span className="flex items-center gap-1">
                     <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                    {preview.will_create} create
+                    {t('assets:importExport.willCreate', { count: preview.will_create })}
                   </span>
                   <span className="flex items-center gap-1">
                     <RefreshCw className="h-3.5 w-3.5 text-blue-600" />
-                    {preview.will_update} update
+                    {t('assets:importExport.willUpdate', { count: preview.will_update })}
                   </span>
                   {preview.errors > 0 && (
                     <span className="flex items-center gap-1 text-destructive">
                       <XCircle className="h-3.5 w-3.5" />
-                      {preview.errors} errors
+                      {t('assets:importExport.errorsCount', { count: preview.errors })}
                     </span>
                   )}
                 </div>
@@ -442,11 +444,11 @@ export default function AssetImportExportDialog({
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm">
                     <tr className="text-left">
-                      <th className="px-3 py-2 w-12">Row</th>
-                      <th className="px-3 py-2">Name</th>
-                      <th className="px-3 py-2">Type</th>
-                      <th className="px-3 py-2 w-24">Action</th>
-                      <th className="px-3 py-2">Message</th>
+                      <th className="px-3 py-2 w-12">{t('assets:importExport.tableRow')}</th>
+                      <th className="px-3 py-2">{t('common:labels.name')}</th>
+                      <th className="px-3 py-2">{t('common:labels.type')}</th>
+                      <th className="px-3 py-2 w-24">{t('assets:importExport.tableAction')}</th>
+                      <th className="px-3 py-2">{t('common:labels.message')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -458,7 +460,7 @@ export default function AssetImportExportDialog({
                           <td className="px-3 py-1.5 font-medium truncate max-w-[200px]">{item.name}</td>
                           <td className="px-3 py-1.5 text-muted-foreground">{item.asset_type}</td>
                           <td className="px-3 py-1.5">
-                            <Badge variant={badge.variant} className="text-xs">{badge.label}</Badge>
+                            <Badge variant={badge.variant} className="text-xs">{t(`assets:importExport.actionLabels.${item.action}`, badge.label)}</Badge>
                           </td>
                           <td className="px-3 py-1.5 text-xs text-muted-foreground truncate max-w-[250px]">
                             {item.message || ('asset_id' in item && item.asset_id ? `ID: ${item.asset_id}` : '')}
@@ -475,7 +477,7 @@ export default function AssetImportExportDialog({
             {isImporting && (
               <div className="space-y-1">
                 <Progress value={importProgress} className="h-2" />
-                <p className="text-xs text-muted-foreground">Importing assets...</p>
+                <p className="text-xs text-muted-foreground">{t('assets:importExport.importingAssets')}</p>
               </div>
             )}
 
@@ -483,7 +485,7 @@ export default function AssetImportExportDialog({
             {importResult && (
               <Alert variant={importResult.errors > 0 ? 'destructive' : 'default'}>
                 <AlertDescription className="text-sm">
-                  Import complete: {importResult.created} created, {importResult.updated} updated, {importResult.errors} errors.
+                  {t('assets:importExport.importComplete', { created: importResult.created, updated: importResult.updated, errors: importResult.errors })}
                 </AlertDescription>
               </Alert>
             )}
@@ -492,13 +494,13 @@ export default function AssetImportExportDialog({
 
         <DialogFooter className="flex justify-between sm:justify-between">
           <Button variant="outline" onClick={() => { onOpenChange(false); resetImportState(); }}>
-            Close
+            {t('common:actions.close')}
           </Button>
           {canImport && preview && !importResult && importableCount > 0 && (
             <Button onClick={handleImport} disabled={isImporting}>
               {isImporting
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Importing...</>
-                : <><Upload className="mr-2 h-4 w-4" />Import {importableCount} asset(s)</>
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('assets:importExport.importing')}</>
+                : <><Upload className="mr-2 h-4 w-4" />{t('assets:importExport.importAssets', { count: importableCount })}</>
               }
             </Button>
           )}

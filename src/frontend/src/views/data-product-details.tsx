@@ -2013,7 +2013,18 @@ export default function DataProductDetails() {
                   <div key={idx} className="flex items-start justify-between border rounded p-3">
                     <div className="flex-1">
                       <div className="font-medium">{port.name} (v{port.version})</div>
-                      <div className="text-sm text-muted-foreground">{t('data-products:details.consumables.contractLabel', { contractId: port.contractId })}</div>
+                      {/* #854: resolve input-port contractId to a navigable name (mirrors output ports). */}
+                      {port.contractId ? (
+                        <Badge
+                          variant="secondary"
+                          className="mt-1 cursor-pointer hover:bg-secondary/80"
+                          onClick={() => navigate(`/data-contracts/${port.contractId}`)}
+                        >
+                          {t('data-products:details.consumables.contractLabel', { contractId: port.contractName || port.contractId })}
+                        </Badge>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">{t('data-products:details.consumables.contractLabel', { contractId: port.contractId })}</div>
+                      )}
                     </div>
                     {canModify && (
                       <div className="flex gap-2 ml-3">

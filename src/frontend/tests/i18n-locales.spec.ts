@@ -12,7 +12,7 @@ import { test, expect, Page } from '@playwright/test';
  * Requires the app to be running (see playwright.config webServer / BASE_URL).
  */
 
-const LOCALES = ['en', 'de', 'es', 'fr', 'it', 'ja', 'nl'] as const;
+const LOCALES = ['en', 'de', 'es', 'fr', 'it', 'ja', 'nl', 'pt'] as const;
 
 const ROUTES = [
   '/',

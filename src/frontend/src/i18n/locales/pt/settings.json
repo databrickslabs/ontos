@@ -1,0 +1,1337 @@
+{
+  "personaNav": {
+    "home": "Início",
+    "marketplace": "Marketplace",
+    "dataCatalog": "Catálogo de dados",
+    "businessGlossary": "Navegador de conceitos",
+    "mySubscriptions": "Minhas assinaturas",
+    "accessRequests": "Solicitações de acesso",
+    "dataProducts": "Produtos de dados",
+    "dataContracts": "Contratos de dados",
+    "dataAssets": "Ativos de dados",
+    "qualityCompliance": "Qualidade e conformidade",
+    "myConsumers": "Meus consumidores",
+    "reviewsApprovals": "Revisões e aprovações",
+    "assetExplorer": "Explorador de ativos",
+    "compliance": "Conformidade",
+    "masterData": "Dados mestres",
+    "catalogCommander": "Catalog Commander",
+    "domains": "Domínios",
+    "teams": "Equipes",
+    "ownership": "Propriedade",
+    "policies": "Políticas",
+    "workflows": "Fluxos de trabalho",
+    "audit": "Trilha de auditoria",
+    "estateManager": "Gerenciador de estate",
+    "searchConcepts": "Pesquisar conceitos",
+    "viewGraph": "Visualizar grafo",
+    "searchGraph": "Pesquisar no grafo",
+    "assetTypes": "Tipos de ativos",
+    "tags": "Tags",
+    "entitlements": "Direitos de acesso",
+    "securityFeatures": "Recursos de segurança",
+    "entitlementsSync": "Sincronização de direitos de acesso",
+    "general": "Geral",
+    "uiCustomization": "Personalização da interface",
+    "connectors": "Conectores",
+    "schemaImporter": "Importador de esquemas",
+    "jobs": "Jobs",
+    "deliveryModes": "Modos de entrega",
+    "git": "Integração com Git",
+    "appRoles": "Papéis do aplicativo",
+    "businessRoles": "Papéis de negócio",
+    "businessOwners": "Responsáveis pelo negócio",
+    "searchSettings": "Configurações de pesquisa",
+    "mcpSettings": "Configurações de MCP",
+    "collections": "Coleções",
+    "rdfSources": "Fontes RDF",
+    "about": "Sobre",
+    "hierarchyBrowser": "Navegador de hierarquia"
+  },
+  "navGroups": {
+    "discover": "Descobrir",
+    "myData": "Meus dados",
+    "build": "Criar",
+    "monitor": "Monitorar",
+    "tasks": "Tarefas",
+    "catalog": "Catálogo",
+    "govern": "Governar",
+    "tools": "Ferramentas",
+    "organize": "Organizar",
+    "standards": "Padrões",
+    "oversight": "Supervisão",
+    "advanced": "Avançado",
+    "accessControl": "Controle de acesso",
+    "monitoring": "Monitoramento",
+    "configuration": "Configuração",
+    "automation": "Automação",
+    "access": "Acesso",
+    "system": "Sistema"
+  },
+  "personas": {
+    "data_consumer": "Consumidor de dados",
+    "data_producer": "Produtor de dados",
+    "data_steward": "Steward de dados",
+    "data_governance_officer": "Governador de dados",
+    "security_officer": "Responsável por segurança",
+    "administrator": "Administrador"
+  },
+  "personaDescriptions": {
+    "data_consumer": "Navegue e assine produtos de dados",
+    "data_producer": "Crie, publique e monitore produtos de dados",
+    "data_steward": "Curadoria do catálogo e garantia da qualidade dos dados",
+    "data_governance_officer": "Políticas, domínios e propriedade",
+    "security_officer": "Controle de acesso e segurança",
+    "administrator": "Configuração e gerenciamento do sistema"
+  },
+  "personaSwitcher": {
+    "switchPersona": "Alternar persona",
+    "currentPersona": "Persona atual"
+  },
+  "title": "Configurações",
+  "tabs": {
+    "general": "Geral",
+    "databricks": "Databricks",
+    "git": "Git",
+    "delivery": "Modos de entrega",
+    "jobs": "Jobs",
+    "audit": "Trilha de auditoria",
+    "businessRoles": "Papéis de negócio",
+    "deliveryMethods": "Métodos de entrega",
+    "assetTypes": "Tipos de ativos",
+    "dataDomains": "Domínios",
+    "teams": "Equipes",
+    "projects": "Projetos",
+    "roles": "Papéis",
+    "rdfSources": "Fontes RDF",
+    "tags": "Tags",
+    "search": "Pesquisa",
+    "mcpTokens": "Tokens MCP",
+    "workflows": "Fluxos de trabalho",
+    "uiCustomization": "Personalização da interface",
+    "connectors": "Conectores",
+    "schemaImporter": "Importador de esquemas",
+    "certificationLevels": "Níveis de certificação",
+    "maturityLevels": "Níveis de maturidade"
+  },
+  "accessDenied": {
+    "title": "Acesso negado",
+    "message": "Você não tem permissão para acessar a página de Configurações. Esta página é restrita a usuários com privilégios administrativos.",
+    "action": "Se você acredita que deveria ter acesso, entre em contato com o administrador ou ",
+    "returnHome": "retorne à página inicial",
+    "requestRole": " para solicitar um papel adequado."
+  },
+  "general": {
+    "title": "Configurações gerais",
+    "description": "Defina as configurações básicas do aplicativo",
+    "unityCatalog": {
+      "title": "Unity Catalog",
+      "help": "Local do Unity Catalog para armazenar os dados do aplicativo.",
+      "catalog": {
+        "label": "Catálogo",
+        "placeholder": "app_data"
+      },
+      "schema": {
+        "label": "Esquema",
+        "placeholder": "app_ontos"
+      },
+      "volume": {
+        "label": "Volume",
+        "placeholder": "app_files"
+      }
+    },
+    "auditLog": {
+      "label": "Diretório de logs de auditoria",
+      "placeholder": "audit_logs",
+      "help": "Diretório onde os arquivos de log de auditoria são armazenados."
+    },
+    "backgroundJobs": {
+      "title": "Jobs em segundo plano",
+      "allowEnablementRequests": {
+        "label": "Permitir que usuários solicitem a ativação de jobs em segundo plano",
+        "help": "Quando um usuário acessa um recurso cujo job em segundo plano não está ativado, ele pode enviar uma notificação pedindo a um administrador que o ative."
+      }
+    },
+    "schemaImporter": {
+      "title": "Importador de esquemas",
+      "childLimit": {
+        "label": "Máximo de objetos buscados por nível",
+        "help": "Número máximo de tabelas/views/objetos que o importador busca por catálogo ou esquema ao navegar (1–10000). Aumente este valor para estates grandes; não há paginação além deste limite."
+      }
+    },
+    "llm": {
+      "title": "Configuração de IA / LLM",
+      "enabled": {
+        "label": "Ativar recursos de IA"
+      },
+      "endpoint": {
+        "label": "Endpoint de LLM",
+        "placeholder": "databricks-claude-sonnet-4-5",
+        "help": "Nome do endpoint de serving do Databricks para o LLM."
+      },
+      "systemPrompt": {
+        "label": "Prompt do sistema",
+        "placeholder": "Você é um Steward de dados...",
+        "help": "Prompt do sistema que define o comportamento do assistente de IA."
+      },
+      "disclaimer": {
+        "label": "Texto de aviso legal",
+        "placeholder": "Este recurso usa IA para analisar ativos de dados...",
+        "help": "Aviso exibido aos usuários ao usar recursos de IA."
+      }
+    },
+    "saveButton": "Salvar configurações",
+    "messages": {
+      "saveSuccess": "Configurações salvas com sucesso",
+      "saveError": "Falha ao salvar as configurações"
+    }
+  },
+  "databricks": {
+    "title": "Configurações do Databricks",
+    "description": "Defina as configurações de conexão com o Databricks",
+    "labels": {
+      "host": "Host",
+      "token": "Token",
+      "warehouseId": "ID do warehouse",
+      "catalog": "Catálogo",
+      "schema": "Esquema"
+    },
+    "placeholders": {
+      "host": "https://<your-workspace>.cloud.databricks.com",
+      "token": "dapi...",
+      "warehouseId": "1234abcd5678efgh",
+      "catalog": "main",
+      "schema": "uc_swiss_knife"
+    }
+  },
+  "git": {
+    "title": "Configurações do Git",
+    "description": "Configure o repositório Git para armazenamento de YAML",
+    "labels": {
+      "repoUrl": "URL do repositório",
+      "branch": "Branch",
+      "token": "Token",
+      "username": "Nome de usuário"
+    },
+    "placeholders": {
+      "repoUrl": "https://github.com/your-org/your-repo.git",
+      "branch": "main",
+      "token": "ghp_... ou similar",
+      "username": "x-access-token"
+    },
+    "cloneButton": "Clonar repositório",
+    "currentCommit": "Commit",
+    "diff": {
+      "collapseAll": "Recolher tudo",
+      "commitAndPush": "Commit e push",
+      "commitMessage": "Mensagem de commit (opcional)",
+      "expandAll": "Expandir tudo",
+      "fileCount": "{{count}} arquivo(s) alterado(s)",
+      "newFile": "Novo arquivo",
+      "noChanges": "Nenhuma alteração pendente",
+      "noDiff": "Nenhum diff disponível",
+      "title": "Alterações pendentes"
+    },
+    "errorTitle": "Erro",
+    "lastSync": "Última sincronização",
+    "messages": {
+      "cloneError": "Falha ao clonar o repositório",
+      "cloneSuccess": "Repositório clonado com sucesso",
+      "pullError": "Falha ao baixar as alterações",
+      "pullSuccess": "Repositório atualizado",
+      "pushError": "Falha ao enviar as alterações",
+      "pushSuccess": "Alterações enviadas com sucesso",
+      "saveError": "Falha ao salvar as configurações do Git",
+      "saveSuccess": "Configurações do Git salvas"
+    },
+    "pendingChanges": "Alterações pendentes",
+    "pullButton": "Pull",
+    "pushButton": "Push",
+    "repoStatus": "Status do repositório",
+    "saveButton": "Salvar configurações",
+    "status": {
+      "cloned": "Clonado",
+      "cloning": "Clonando...",
+      "error": "Erro",
+      "notCloned": "Não clonado",
+      "notConfigured": "Não configurado"
+    },
+    "viewChangesButton": "Ver alterações",
+    "volumePath": "Caminho do volume"
+  },
+  "nav": {
+    "groups": {
+      "configuration": "Configuração",
+      "integrations": "Integrações",
+      "operations": "Operações",
+      "accessControl": "Controle de acesso",
+      "referenceData": "Dados de referência"
+    }
+  },
+  "jobs": {
+    "title": "Configuração de jobs",
+    "description": "Configure o cluster de jobs do Databricks e ative fluxos de trabalho em segundo plano",
+    "jobClusterId": {
+      "label": "ID do cluster de jobs (opcional)",
+      "placeholder": "Deixe vazio para computação serverless"
+    },
+    "workspaceDeploymentPath": {
+      "label": "Caminho de implantação no workspace",
+      "placeholder": "/Workspace/Users/user@domain.com/ontos-workflows",
+      "help": "Caminho no workspace do Databricks onde os arquivos de fluxo de trabalho são implantados para jobs em segundo plano.",
+      "requiredHint": "Defina o caminho de implantação acima para ativar os fluxos de trabalho."
+    },
+    "availableWorkflows": {
+      "label": "Fluxos de trabalho disponíveis",
+      "description": "Ativar ou desativar fluxos de trabalho em segundo plano"
+    },
+    "noWorkflows": "Nenhum fluxo de trabalho disponível",
+    "saveButton": "Salvar configuração",
+    "messages": {
+      "saveSuccess": "Configurações salvas com sucesso",
+      "saveError": "Falha ao salvar as configurações",
+      "statusFetchError": "Falha ao buscar os status dos fluxos de trabalho",
+      "saveFailed": "Falha ao salvar",
+      "startedRun": "Execução iniciada",
+      "startFailed": "Falha ao iniciar",
+      "stoppedRun": "Execução interrompida",
+      "stopFailed": "Falha ao interromper",
+      "pausedSchedule": "Agendamento pausado",
+      "pauseFailed": "Falha ao pausar",
+      "resumedSchedule": "Agendamento retomado",
+      "resumeFailed": "Falha ao retomar"
+    },
+    "aria": {
+      "history": "Histórico",
+      "configure": "Configurar"
+    },
+    "configureTooltip": "Configurar parâmetros do fluxo de trabalho",
+    "table": {
+      "actions": "Ações",
+      "canceled": "Cancelado",
+      "description": "Descrição",
+      "enabled": "Ativado",
+      "failed": "Falhou",
+      "idle": "Ocioso",
+      "name": "Nome",
+      "notInstalled": "Não instalado",
+      "running": "Em execução",
+      "status": "Status",
+      "success": "Sucesso",
+      "timedOut": "Tempo esgotado"
+    }
+  },
+  "jobsActions": {
+    "start": "Iniciar",
+    "stop": "Parar",
+    "pause": "Pausar agendamento",
+    "resume": "Retomar",
+    "history": "Ver histórico de execuções",
+    "cannotDisableRunning": "Não é possível desativar um fluxo de trabalho em execução"
+  },
+  "jobRuns": {
+    "viewHistory": "Ver histórico de execuções",
+    "dialogTitle": "Histórico de execuções do job: {{workflowName}}",
+    "dialogDescription": "Histórico de execuções recentes deste fluxo de trabalho",
+    "emptyState": "Nenhuma execução encontrada para este fluxo de trabalho",
+    "runId": "ID da execução",
+    "runName": "Nome",
+    "status": "Status",
+    "started": "Iniciada em",
+    "duration": "Duração",
+    "notified": "Notificado",
+    "statuses": {
+      "success": "Sucesso",
+      "failed": "Falhou",
+      "canceled": "Cancelado",
+      "timedout": "Tempo esgotado",
+      "running": "Em execução",
+      "pending": "Pendente",
+      "unknown": "Desconhecido"
+    },
+    "expandDetails": "Expandir detalhes",
+    "collapseDetails": "Recolher detalhes",
+    "stateMessage": "Mensagem de estado:"
+  },
+  "roles": {
+    "title": "Controle de acesso baseado em papéis",
+    "description": "Defina os papéis do aplicativo e atribua permissões a grupos de diretório.",
+    "table": {
+      "nameColumn": "Nome",
+      "descriptionColumn": "Descrição",
+      "assignedGroupsColumn": "Grupos atribuídos",
+      "none": "Nenhum",
+      "assigned": "Atribuído",
+      "request": "Solicitar",
+      "requestTooltip": "Solicitar acesso a este papel",
+      "alreadyAssignedTooltip": "Você já possui este papel"
+    },
+    "dialog": {
+      "createTitle": "Criar papel",
+      "editTitle": "Editar papel: {{name}}",
+      "description": "Defina o nome do papel, os grupos atribuídos, as permissões de recursos e os privilégios de aprovação.",
+      "defaultRoleName": "Papel"
+    },
+    "tabs": {
+      "general": "Geral",
+      "privileges": "Privilégios",
+      "permissions": "Permissões",
+      "deployment": "Implantação",
+      "accessControl": "Controle de acesso"
+    },
+    "general": {
+      "roleName": "Nome do papel",
+      "roleNameRequired": "O nome do papel é obrigatório",
+      "description": "Descrição",
+      "assignedGroups": "Grupos de diretório atribuídos (separados por vírgula)",
+      "assignedGroupsPlaceholder": "ex.: data-stewards, finance-team",
+      "assignedGroupsHelp": "Usuários pertencentes a estes grupos herdarão as permissões deste papel."
+    },
+    "privileges": {
+      "homeSections": {
+        "title": "Seções da página inicial",
+        "description": "Selecione quais seções aparecem na página inicial para usuários com este papel."
+      },
+      "approvalPrivileges": {
+        "title": "Privilégios de aprovação",
+        "description": "Conceda a este papel a capacidade de aprovar tipos específicos de solicitações."
+      },
+      "allowedPersonas": {
+        "title": "Personas que este papel pode acessar",
+        "description": "Selecione quais visualizações de persona os usuários com este papel podem usar na interface."
+      },
+      "adminRole": {
+        "title": "Papel de administrador",
+        "description": "Marque este papel como o papel de administrador. Apenas um papel deve ser marcado como administrador.",
+        "label": "Este é o papel de administrador"
+      }
+    },
+    "permissions": {
+      "featurePermissions": {
+        "title": "Permissões de recursos",
+        "description": "Configure os níveis de acesso para cada recurso do aplicativo."
+      },
+      "groups": {
+        "discover": "Descobrir",
+        "build": "Criar",
+        "govern": "Governar",
+        "deploy": "Implantar",
+        "settings": "Configurações",
+        "other": "Outros"
+      },
+      "crossCutting": "Segundo plano",
+      "settingsSubGroups": {
+        "referenceData": "Dados de referência",
+        "configuration": "Configuração",
+        "integrations": "Integrações",
+        "operations": "Operações",
+        "accessControl": "Controle de acesso"
+      },
+      "selectAccessPlaceholder": "Selecione o acesso",
+      "noLevels": "Sem níveis",
+      "noFeaturesLoaded": "Nenhuma configuração de recursos carregada."
+    },
+    "deployment": {
+      "title": "Política de implantação",
+      "description": "Controle para quais catálogos/esquemas do Unity Catalog os usuários com este papel podem implantar. Suporta curingas (* para qualquer um) e variáveis de template ({username}, {email}).",
+      "allowedCatalogs": {
+        "label": "Catálogos permitidos (separados por vírgula)",
+        "placeholder": "ex.: prod_catalog, {username}_sandbox, *",
+        "help": "Deixe vazio para impedir implantações. Use * para permitir todos os catálogos."
+      },
+      "allowedSchemas": {
+        "label": "Esquemas permitidos (separados por vírgula, opcional)",
+        "placeholder": "ex.: dev, {username}_schema, *",
+        "help": "Deixe vazio para permitir qualquer esquema dentro dos catálogos permitidos."
+      },
+      "defaultCatalog": {
+        "label": "Catálogo padrão",
+        "placeholder": "ex.: {username}_sandbox",
+        "help": "Pré-selecionado na interface"
+      },
+      "defaultSchema": {
+        "label": "Esquema padrão",
+        "placeholder": "ex.: default",
+        "help": "Pré-selecionado na interface"
+      },
+      "requireApproval": "Exigir aprovação para implantações",
+      "canApprove": "Pode aprovar solicitações de implantação"
+    },
+    "accessControl": {
+      "requestableBy": {
+        "title": "Quem pode solicitar este papel?",
+        "description": "Selecione quais papéis podem solicitar acesso a este papel. Usuários com esses papéis verão este papel em sua lista de papéis solicitáveis."
+      },
+      "approvers": {
+        "title": "Quem pode aprovar solicitações para este papel?",
+        "description": "Selecione quais papéis podem aprovar solicitações de acesso a este papel. Usuários com esses papéis receberão notificações quando alguém solicitar este papel.",
+        "hint": "Se nenhum aprovador for selecionado, as solicitações serão enviadas ao administrador por padrão."
+      },
+      "noRole": "Usuários sem papel (novos usuários)",
+      "noRolesAvailable": "Nenhum outro papel disponível",
+      "defaultApprover": "Padrão"
+    },
+    "actions": {
+      "cancel": "Cancelar",
+      "create": "Criar papel",
+      "update": "Atualizar papel",
+      "addRole": "Adicionar papel",
+      "actions": "Ações",
+      "editRole": "Editar papel",
+      "deleteRole": "Excluir papel",
+      "cannotDeleteAdmin": "Não é possível excluir o papel de administrador"
+    },
+    "messages": {
+      "loadFailed": "Falha ao carregar a configuração de papéis.",
+      "deleteFailed": "Falha ao excluir o papel.",
+      "permissionDeniedTitle": "Permissão negada",
+      "cannotEditRoles": "Você não tem permissão para editar papéis.",
+      "cannotDeleteRoles": "Você não tem permissão para excluir papéis.",
+      "permissionsUpdatedTitle": "Permissões atualizadas",
+      "permissionsUpdated": "Permissões de usuário e papéis disponíveis atualizados.",
+      "refreshFailedTitle": "Falha na atualização",
+      "refreshFailed": "Não foi possível atualizar permissões/papéis: {{error}}",
+      "deleteConfirm": "Tem certeza de que deseja excluir o papel \"{{name}}\"?",
+      "roleDeleted": "Papel \"{{name}}\" excluído.",
+      "roleCreated": "Papel \"{{name}}\" criado.",
+      "roleUpdated": "Papel \"{{name}}\" atualizado.",
+      "saveErrorTitle": "Erro ao salvar",
+      "unexpectedError": "Ocorreu um erro inesperado.",
+      "unsavedChangesConfirm": "Você tem alterações não salvas. Tem certeza de que deseja fechar?"
+    },
+    "confirmRequest": {
+      "title": "Tratar solicitação de acesso a papel",
+      "reviewPrompt": "Revise a solicitação de <strong>{{email}}</strong> para o papel <strong>{{role}}</strong>.",
+      "requesterReasonLabel": "Motivo do solicitante",
+      "messageLabel": "Mensagem opcional ao solicitante",
+      "messagePlaceholder": "Informe um motivo para aprovação ou recusa (opcional)",
+      "deny": "Negar solicitação",
+      "approve": "Aprovar solicitação",
+      "approvedTitle": "Solicitação aprovada",
+      "deniedTitle": "Solicitação negada",
+      "decisionSubmitted": "Decisão sobre a solicitação de {{email}} para o papel {{role}} enviada.",
+      "submissionFailed": "Falha no envio",
+      "submissionFailedDescription": "Não foi possível enviar a decisão."
+    },
+    "requestAccess": {
+      "title": "Solicitar acesso a papel",
+      "description": "Envie uma solicitação de acesso a este papel do aplicativo. Forneça um motivo detalhado para a sua solicitação.",
+      "roleLabel": "Papel:",
+      "reasonLabel": "Motivo da solicitação de acesso ao papel *",
+      "reasonPlaceholder": "Explique por que você precisa deste papel. Inclua detalhes sobre suas responsabilidades, requisitos do projeto ou justificativa de negócio...",
+      "reasonHelp": "Mínimo de 10 caracteres obrigatórios. Essas informações serão compartilhadas com os administradores.",
+      "reasonRequired": "Forneça um motivo para solicitar este papel",
+      "reasonTooShort": "Forneça um motivo mais detalhado (pelo menos 10 caracteres)",
+      "submittedTitle": "Solicitação enviada",
+      "submittedDescription": "Sua solicitação para o papel \"{{role}}\" foi enviada e você será notificado sobre a decisão.",
+      "submitFailed": "Falha ao enviar a solicitação de acesso ao papel",
+      "sending": "Enviando solicitação...",
+      "send": "Enviar solicitação"
+    }
+  },
+  "mcpTokens": {
+    "title": "Tokens de API MCP",
+    "description": "Gerencie tokens de API para integrações de assistentes de IA via Model Context Protocol",
+    "refresh": "Atualizar",
+    "createToken": "Criar token",
+    "showRevokedTokens": "Mostrar tokens revogados",
+    "emptyState": {
+      "title": "Nenhum token MCP ainda",
+      "description": "Crie um token para permitir que assistentes de IA acessem suas ferramentas"
+    },
+    "table": {
+      "name": "Nome",
+      "scopes": "Escopos",
+      "created": "Criado em",
+      "lastUsed": "Último uso",
+      "expires": "Expira em",
+      "status": "Status",
+      "actions": "Ações",
+      "never": "Nunca",
+      "moreScopes": "+{{count}} mais",
+      "createdBy": "por {{name}}",
+      "keylessDefault": "Padrão sem chave"
+    },
+    "status": {
+      "active": "Ativo",
+      "revoked": "Revogado",
+      "expired": "Expirado"
+    },
+    "tooltips": {
+      "revokeToken": "Revogar token",
+      "setKeylessDefault": "Tornar este o token padrão sem chave",
+      "clearKeylessDefault": "Limpar padrão sem chave (desativa o acesso sem chave)",
+      "keylessDefaultBadge": "Solicitações MCP autenticadas pelo app-gate sem X-API-Key são resolvidas para os escopos deste token, atribuídas ao usuário chamador. Seus escopos se aplicam a qualquer usuário autenticado do app."
+    },
+    "info": {
+      "title": "Usando tokens MCP",
+      "description": "Tokens MCP permitem que assistentes de IA interajam com sua plataforma de governança de dados. Cada token tem escopos específicos que controlam quais ferramentas podem ser acessadas.",
+      "endpoint": "Endpoint:",
+      "header": "Cabeçalho:"
+    },
+    "createDialog": {
+      "title": "Criar token MCP",
+      "description": "Crie um novo token de API para integrações de assistentes de IA. O token será exibido apenas uma vez.",
+      "tokenName": "Nome do token",
+      "tokenNamePlaceholder": "ex.: Claude Assistant - Equipe de Analytics",
+      "tokenNameHelp": "Um nome descritivo para identificar este token",
+      "expiration": "Expiração (dias)",
+      "expirationHelp": "Deixe vazio para não expirar",
+      "keylessDefault": "Usar como padrão sem chave",
+      "keylessDefaultHelp": "Resolve solicitações MCP autenticadas pelo app-gate sem X-API-Key para este token. Substitui qualquer padrão existente.",
+      "keylessDefaultWarning": "Os escopos deste token se aplicarão a QUALQUER usuário do app que acessar /api/mcp sem uma chave. A pesquisa global ignora os controles de acesso por usuário, portanto conceda apenas escopos de leitura (sem escrita, SPARQL ou acesso total).",
+      "scopes": "Escopos",
+      "scopesHelp": "Selecione as permissões que este token deve ter",
+      "selectedScopes": "Selecionados:",
+      "cancel": "Cancelar",
+      "create": "Criar token",
+      "creating": "Criando..."
+    },
+    "createdDialog": {
+      "title": "Token criado com sucesso",
+      "warning": "Copie este token agora — ele não será exibido novamente!",
+      "tokenName": "Nome do token",
+      "apiToken": "Token de API",
+      "scopes": "Escopos",
+      "expires": "Expira em",
+      "copy": "Copiar",
+      "copied": "Copiado!",
+      "done": "Concluído"
+    },
+    "revokeDialog": {
+      "title": "Revogar token?",
+      "description": "Tem certeza de que deseja revogar o token",
+      "warning": "Esta ação não pode ser desfeita. Todos os assistentes de IA que usam este token perderão o acesso imediatamente.",
+      "cancel": "Cancelar",
+      "revoke": "Revogar token"
+    },
+    "messages": {
+      "loadError": "Falha ao carregar os tokens MCP",
+      "tokenNameRequired": "O nome do token é obrigatório",
+      "scopeRequired": "Pelo menos um escopo é obrigatório",
+      "createError": "Falha ao criar o token",
+      "copied": "Token copiado para a área de transferência",
+      "revoked": "O token \"{{name}}\" foi revogado",
+      "revokeError": "Falha ao revogar o token",
+      "keylessDefaultSet": "\"{{name}}\" agora é o token padrão sem chave",
+      "keylessDefaultCleared": "Padrão sem chave removido — o acesso sem chave está desativado",
+      "keylessDefaultError": "Falha ao atualizar o padrão sem chave"
+    }
+  },
+  "uiCustomization": {
+    "title": "Personalização da interface",
+    "description": "Personalize a identidade visual, as configurações de idioma e a aparência do aplicativo.",
+    "i18n": {
+      "title": "Configurações de idioma",
+      "enableLabel": "Ativar internacionalização",
+      "enableDescription": "Quando desativado, o aplicativo sempre usará inglês, independentemente das configurações do navegador."
+    },
+    "logo": {
+      "title": "Logo personalizado",
+      "urlLabel": "URL do logo",
+      "urlPlaceholder": "https://example.com/logo.svg",
+      "help": "Insira a URL do seu logo personalizado. Suporta formatos SVG, PNG ou JPG. Tamanho recomendado: 40x40 pixels.",
+      "invalidUrl": "Insira uma URL HTTP ou HTTPS válida",
+      "preview": "Pré-visualização:",
+      "loadError": "Falha ao carregar a imagem",
+      "openInNewTab": "Abrir em nova guia",
+      "previewAlt": "Pré-visualização do logo"
+    },
+    "about": {
+      "title": "Conteúdo personalizado da página Sobre",
+      "description": "Substitua o conteúdo padrão da página Sobre por Markdown personalizado. Deixe vazio para usar o conteúdo padrão.",
+      "editTab": "Editar",
+      "previewTab": "Pré-visualizar",
+      "placeholder": "# Sobre nossa empresa\n\nEscreva aqui o conteúdo personalizado da página Sobre usando **Markdown**...",
+      "noContent": "Nenhum conteúdo personalizado. A página Sobre padrão será exibida."
+    },
+    "css": {
+      "title": "Folha de estilos personalizada",
+      "warningTitle": "Use com cautela",
+      "warningDescription": "CSS inválido ou conflitante pode quebrar a interface. Se o aplicativo se tornar inutilizável, limpe este campo para restaurar a funcionalidade normal. As alterações exigem o recarregamento da página.",
+      "label": "CSS personalizado",
+      "placeholder": "/* Sobrescrever variáveis CSS */\n:root {\n  --primary: 220 70% 50%;\n}\n\n/* Estilos personalizados */\n.my-custom-class {\n  color: red;\n}",
+      "help": "Insira CSS personalizado para substituir o tema padrão. Você pode modificar as variáveis CSS definidas em :root para alterar cores em todo o aplicativo."
+    },
+    "saveButton": "Salvar configurações de interface",
+    "messages": {
+      "saveSuccess": "Configurações de personalização da interface salvas",
+      "saveError": "Falha ao salvar as configurações de personalização da interface",
+      "reloadRequired": "Recarregue a página para ver algumas alterações."
+    },
+    "branding": {
+      "help": "O nome de exibição substitui o nome do produto nos textos de boas-vindas/sobre/copilot e no título da guia do navegador. O nome do manifest PWA e o título estático da página definidos no build não são atualizados por estas configurações.",
+      "displayNameHelp": "Deixe vazio para usar o nome padrão do produto ({{defaultName}}). Máximo de {{max}} caracteres.",
+      "shortNamePlaceholder": "ex.: um acrônimo para interface compacta",
+      "shortNameHelp": "Usado em espaços reduzidos (ex.: \"Perguntar ao {{shortName}}\"). Quando vazio, usa o nome de exibição. Máximo de {{max}} caracteres.",
+      "displayNameLabel": "Nome de exibição",
+      "shortNameLabel": "Nome curto (opcional)",
+      "title": "Identidade visual"
+    },
+    "favicon": {
+      "previewAlt": "Pré-visualização do favicon",
+      "urlPlaceholder": "https://example.com/favicon.svg",
+      "help": "Aplicado em tempo de execução à guia do navegador. O <link rel=\"icon\"> estático no index.html distribuído e o manifest PWA não são atualizados por esta configuração.",
+      "invalidUrl": "Insira uma URL HTTP ou HTTPS válida",
+      "loadError": "Falha ao carregar a imagem",
+      "openInNewTab": "Abrir em nova guia",
+      "preview": "Pré-visualização:",
+      "title": "Favicon do navegador",
+      "urlLabel": "URL do favicon"
+    }
+  },
+  "connectors": {
+    "title": "Conexões",
+    "description": "Gerencie conexões com plataformas de dados externas para descoberta de ativos e obtenção de metadados.",
+    "addConnection": "Adicionar conexão",
+    "testConnection": "Testar conexão",
+    "editTitle": "Editar conexão",
+    "editDescription": "Atualizar as configurações da conexão.",
+    "createTitle": "Nova conexão",
+    "createDescription": "Configure uma nova conexão com uma plataforma de dados externa.",
+    "deleteTitle": "Excluir conexão",
+    "deleteDescription": "Tem certeza de que deseja excluir esta conexão? Esta ação não pode ser desfeita.",
+    "columns": {
+      "name": "Nome",
+      "type": "Tipo",
+      "description": "Descrição",
+      "status": "Status",
+      "updated": "Atualizado"
+    },
+    "form": {
+      "connectorType": "Tipo de conector",
+      "name": "Nome",
+      "description": "Descrição",
+      "enabled": "Ativado",
+      "isDefault": "Padrão",
+      "systemAssetHelp": "Vincule a um ativo de Sistema existente ou deixe vazio para criar um automaticamente na primeira importação.",
+      "connectorTypePlaceholder": "Selecione um tipo de conector...",
+      "namePlaceholder": "ex.: BQ de produção - Analytics",
+      "descriptionPlaceholder": "Descrição opcional...",
+      "autoCreateOnImport": "Criar automaticamente na primeira importação",
+      "systemAsset": "Ativo de sistema vinculado"
+    },
+    "bigquery": {
+      "configTitle": "Configuração do BigQuery",
+      "ucConnectionName": "Nome da conexão UC",
+      "ucConnectionNameHelp": "Opcional. Fornece o ID do projeto GCP a partir dos metadados da conexão UC.",
+      "projectId": "ID do projeto GCP",
+      "projectIdHelp": "Opcional. Derivado das credenciais se não definido.",
+      "location": "Localização",
+      "locationHelp": "ex.: US, EU, us-central1",
+      "authSectionTitle": "Autenticação",
+      "authSectionHelp": "Armazene o JSON da chave da conta de serviço do GCP como um Databricks Secret e referencie o escopo e o nome da chave abaixo.",
+      "secretScope": "Escopo do secret",
+      "secretKey": "Chave do secret",
+      "credentialsPath": "Caminho do arquivo de credenciais",
+      "credentialsPathHelp": "Alternativa para desenvolvimento: caminho local para um arquivo JSON de chave de conta de serviço.",
+      "projectIdPlaceholder": "my-gcp-project",
+      "locationPlaceholder": "US",
+      "ucConnectionNamePlaceholder": "my-bigquery-connection",
+      "secretScopePlaceholder": "ontos-connectors",
+      "secretKeyPlaceholder": "bigquery-sa-key",
+      "credentialsPathPlaceholder": "/path/to/service-account-key.json"
+    },
+    "snowflake": {
+      "configTitle": "Configuração do Snowflake",
+      "account": "Identificador da conta",
+      "accountHelp": "ex.: myorg-myaccount ou xy12345.us-east-1",
+      "user": "Usuário",
+      "warehouse": "Warehouse",
+      "role": "Papel",
+      "roleHelp": "Opcional. Papel a assumir para as consultas.",
+      "database": "Banco de dados padrão",
+      "defaultSchema": "Esquema padrão",
+      "accountPlaceholder": "myorg-myaccount",
+      "userPlaceholder": "ONTOS_SVC",
+      "warehousePlaceholder": "COMPUTE_WH",
+      "rolePlaceholder": "SYSADMIN",
+      "databasePlaceholder": "ANALYTICS",
+      "defaultSchemaPlaceholder": "PUBLIC"
+    },
+    "databricks": {
+      "systemNote": "Esta conexão é configurada automaticamente a partir de variáveis de ambiente e não pode ser modificada."
+    },
+    "messages": {
+      "saveSuccess": "Conexão salva",
+      "saveError": "Falha ao salvar a conexão",
+      "testSuccess": "Conexão bem-sucedida",
+      "testFailed": "Falha na conexão",
+      "testError": "Erro no teste de conexão",
+      "deleteSuccess": "Conexão excluída",
+      "testSuccessProject": "Projeto: {{project}}",
+      "deleteFailed": "Falha ao excluir"
+    },
+    "badges": {
+      "system": "Sistema",
+      "default": "Padrão"
+    }
+  },
+  "schemaImporter": {
+    "title": "Importador de esquemas",
+    "description": "Navegue por sistemas remotos e importe sua estrutura como ativos do {{appName}}."
+  },
+  "assetBulk": {
+    "title": "Importar / exportar ativos",
+    "description": "Exporte ativos para CSV/Excel para edição offline ou importe ativos de um arquivo.",
+    "exportTab": "Exportar",
+    "importTab": "Importar",
+    "exportSettings": "Configurações de exportação",
+    "format": "Formato",
+    "scope": "Escopo",
+    "allAssetTypes": "Todos os tipos de ativos",
+    "exportAssets": "Exportar ativos",
+    "exporting": "Exportando...",
+    "downloadTemplate": "Baixar modelo",
+    "exportSuccess": "Exportação concluída com sucesso",
+    "exportFailed": "Falha na exportação",
+    "templateDownloaded": "Modelo baixado",
+    "selectFile": "Selecionar arquivo",
+    "preview": "Pré-visualização",
+    "previewFailed": "Falha na pré-visualização",
+    "importButton": "Importar",
+    "importing": "Importando...",
+    "importAssets": "Importar {count} ativo(s)",
+    "importSuccess": "Importação concluída com sucesso",
+    "importFailed": "Falha na importação",
+    "importWithErrors": "Importação concluída com erros",
+    "importComplete": "Importação concluída: {created} criados, {updated} atualizados, {errors} erros.",
+    "close": "Fechar",
+    "row": "Linha",
+    "name": "Nome",
+    "type": "Tipo",
+    "action": "Ação",
+    "message": "Mensagem",
+    "create": "Criar",
+    "update": "Atualizar",
+    "skip": "Ignorar",
+    "error": "Erro",
+    "importExport": "Importar / exportar",
+    "exportHelp": "O arquivo de exportação inclui todos os campos de cada ativo. Você pode editá-lo offline e reimportá-lo.",
+    "templateHelp": "O modelo fornece um arquivo vazio com os cabeçalhos corretos e uma linha de exemplo."
+  },
+  "workflows": {
+    "actions": {
+      "start": "Iniciar",
+      "stop": "Parar",
+      "pause": "Pausar",
+      "unpause": "Retomar"
+    }
+  },
+  "workflowConfig": {
+    "title": "Configurar {{name}}",
+    "description": "Defina os parâmetros deste fluxo de trabalho. Esses valores serão usados quando o fluxo de trabalho for executado.",
+    "loadError": "Falha ao carregar a configuração",
+    "saveError": "Falha ao salvar a configuração",
+    "saveSuccess": "Configuração do fluxo de trabalho salva com sucesso",
+    "selectOption": "Selecione uma opção",
+    "noParameters": "Nenhum parâmetro configurável para este fluxo de trabalho.",
+    "saveButton": "Salvar configuração"
+  },
+  "tags": {
+    "enable": "Ativar",
+    "title": "Tags",
+    "description": "Gerencie namespaces de tags, configure as opções de exibição e organize tags em todo o aplicativo.",
+    "columns": {
+      "group": "Grupo",
+      "accessLevel": "Nível de acesso"
+    },
+    "display": {
+      "title": "Configurações de exibição de tags",
+      "description": "Configure como as tags são exibidas em todo o aplicativo.",
+      "formatLabel": "Formato de exibição:",
+      "formatPlaceholder": "Selecione o formato",
+      "short": "Curto (somente nome da tag)",
+      "long": "Longo (namespace/nome da tag)",
+      "help": "<strong>Curto:</strong> mostra apenas o nome da tag (ex.: \"pii\"). <br/> <strong>Longo:</strong> mostra o namespace e o nome da tag (ex.: \"compliance/pii\")."
+    },
+    "namespaces": {
+      "title": "Namespaces de tags",
+      "description": "Organize tags em namespaces lógicos para melhor gerenciamento e permissões.",
+      "add": "Adicionar namespace",
+      "activeLabel": "Namespace ativo:",
+      "selectPlaceholder": "Selecione o namespace"
+    },
+    "list": {
+      "description": "Gerencie as tags dentro do namespace selecionado.",
+      "add": "Adicionar tag"
+    },
+    "permissions": {
+      "title": "Permissões do namespace",
+      "description": "Controle quais grupos podem acessar e modificar tags neste namespace.",
+      "add": "Adicionar permissão"
+    },
+    "namespaceDialog": {
+      "editTitle": "Editar namespace",
+      "createTitle": "Criar namespace",
+      "editDescription": "Atualizar os detalhes do namespace.",
+      "createDescription": "Criar um novo namespace para organizar tags.",
+      "namePlaceholder": "ex.: financeiro, marketing, engenharia",
+      "descriptionPlaceholder": "Descrição opcional para o namespace"
+    },
+    "tagDialog": {
+      "editTitle": "Editar tag",
+      "createTitle": "Criar tag",
+      "editDescription": "Atualizar os detalhes da tag.",
+      "createDescription": "Criar uma nova tag no namespace selecionado.",
+      "namePlaceholder": "ex.: pii, sensível, público",
+      "descriptionPlaceholder": "Descreva o que esta tag representa",
+      "versionPlaceholder": "ex.: v1.0, 2023.1",
+      "parentLabel": "Tag pai",
+      "possibleValuesLabel": "Valores possíveis (array JSON)",
+      "possibleValuesHelp": "Opcional. Array JSON de valores permitidos para esta tag quando atribuída a entidades.",
+      "statuses": {
+        "active": "Ativa",
+        "draft": "Rascunho",
+        "candidate": "Candidata",
+        "deprecated": "Obsoleta",
+        "inactive": "Inativa",
+        "retired": "Aposentada"
+      }
+    },
+    "permissionDialog": {
+      "editTitle": "Editar permissão",
+      "addTitle": "Adicionar permissão",
+      "editDescription": "Atualizar os detalhes da permissão.",
+      "addDescription": "Conceder acesso a um grupo para este namespace.",
+      "groupLabel": "Grupo",
+      "groupPlaceholder": "ex.: data-engineers, analysts"
+    },
+    "accessLevels": {
+      "readOnly": "Somente leitura",
+      "readWrite": "Leitura/escrita",
+      "admin": "Administrador"
+    },
+    "deleteDialog": {
+      "title": "Excluir {{type}}",
+      "description": "Tem certeza de que deseja excluir \"{{name}}\"? Esta ação não pode ser desfeita.",
+      "namespaceWarning": "Todas as tags e permissões deste namespace também serão excluídas."
+    },
+    "toasts": {
+      "fetchNamespacesError": "Erro ao buscar namespaces",
+      "fetchTagsError": "Erro ao buscar tags",
+      "fetchPermissionsError": "Erro ao buscar permissões",
+      "displayFormatUpdated": "Formato de exibição de tags atualizado",
+      "displayFormatError": "Erro ao salvar o formato de exibição",
+      "namespaceUpdated": "Namespace atualizado com sucesso",
+      "namespaceCreated": "Namespace criado com sucesso",
+      "namespaceSaveError": "Erro ao salvar o namespace",
+      "tagUpdated": "Tag atualizada com sucesso",
+      "tagCreated": "Tag criada com sucesso",
+      "tagSaveError": "Erro ao salvar a tag",
+      "permissionUpdated": "Permissão atualizada com sucesso",
+      "permissionCreated": "Permissão criada com sucesso",
+      "permissionSaveError": "Erro ao salvar a permissão",
+      "deleteSuccess": "{{type}} excluído com sucesso",
+      "deleteError": "Erro ao excluir o item"
+    },
+    "syncConfigs": {
+      "errors": {
+        "empty": "A chave da tag não pode estar vazia",
+        "spaces": "A chave da tag não pode ter espaços no início/fim",
+        "invalidChar": "A chave da tag não pode conter '{{char}}'"
+      },
+      "introBefore": "Configure quais metadados sincronizar com as tags do Unity Catalog e personalize os formatos de chave/valor das tags. Use",
+      "introAfter": "placeholders para valores dinâmicos.",
+      "invalidCharsBefore": "As chaves de tag do UC não podem conter:",
+      "invalidCharsAfter": "nem ter espaços no início/fim",
+      "cardDescription": "Configurar o formato de tag para {{type}}",
+      "availableVariables": "Variáveis disponíveis",
+      "keyFormatLabel": "Formato da chave da tag",
+      "keyFormatPlaceholder": "ex.: ontos_{VARIABLE}",
+      "example": "Exemplo:",
+      "valueFormatLabel": "Formato do valor da tag",
+      "valueFormatPlaceholder": "ex.: {VARIABLE}",
+      "valueFormatHelp": "O valor que será atribuído à tag",
+      "variables": {
+        "linkIri": "IRI completo do link semântico",
+        "linkLabel": "Rótulo do link semântico",
+        "linkSlug": "IRI em formato slug (ex.: \"customer\")",
+        "domainId": "UUID do domínio",
+        "domainName": "Nome do domínio",
+        "contractId": "UUID do contrato",
+        "contractName": "Nome do contrato",
+        "contractVersion": "Versão do contrato",
+        "contractStatus": "Status do contrato",
+        "productId": "UUID do produto",
+        "productName": "Nome do produto",
+        "productVersion": "Versão do produto",
+        "productStatus": "Status do produto"
+      }
+    },
+    "entityPatterns": {
+      "intro": "Configure padrões de tags para descobrir e importar entidades do Unity Catalog. Use expressões regulares para corresponder às chaves das tags e extrair nomes de entidades.",
+      "discoveryTitle": "Descoberta de {{type}}",
+      "cardDescription": "Configure padrões para descobrir {{type}}s a partir de tags do UC",
+      "filterPatternOptional": "Padrão de filtro (opcional)",
+      "filterHelp": "Opcionalmente, filtre quais objetos considerar correspondendo a padrões de tags adicionais",
+      "filterSource": "Fonte do filtro",
+      "tagKey": "Chave da tag",
+      "tagValue": "Valor da tag",
+      "filterPatternRegex": "Padrão de filtro (regex)",
+      "keyPatternRequired": "Padrão de chave (obrigatório)",
+      "keyPatternHelp": "Padrão regex para corresponder às chaves de tag que identificam este tipo de entidade",
+      "valueExtractionRequired": "Extração de valor (obrigatório)",
+      "valueExtractionHelp": "Extrair o nome de {{type}} da tag correspondente",
+      "extractionSource": "Fonte da extração",
+      "extractionPatternLabel": "Padrão de extração (regex com grupo de captura)",
+      "extractionExampleBefore": "Use parênteses () para capturar o nome de {{type}}. Exemplo:",
+      "extractionExampleAfter": "extrai \"ABC\" de \"data-{{type}}-ABC\""
+    }
+  },
+  "search": {
+    "title": "Configuração de pesquisa",
+    "description": "Configure como a pesquisa global indexa e classifica resultados em diferentes tipos de ativos.",
+    "unsavedChanges": "Você tem alterações não salvas. Salve para persistir sua configuração.",
+    "loadFailedAlert": "Falha ao carregar a configuração de pesquisa. Atualize a página.",
+    "matchTypes": {
+      "prefix": "Prefixo (início da palavra)",
+      "substring": "Substring (em qualquer posição)",
+      "exact": "Somente correspondência exata",
+      "fuzzy": "Aproximada (permite erros de digitação)"
+    },
+    "sortFields": {
+      "matchPriority": "Prioridade de campo (título > descrição > tags)",
+      "boostScore": "Pontuação de boost (relevância ponderada)",
+      "titleAsc": "Título (A → Z)",
+      "titleDesc": "Título (Z → A)"
+    },
+    "assetTypes": {
+      "dataProduct": "Produtos de dados",
+      "dataContract": "Contratos de dados",
+      "glossaryTerm": "Termos do glossário",
+      "dataAssetReview": "Revisões de ativos",
+      "tag": "Tags",
+      "dataDomain": "Domínios de dados"
+    },
+    "fieldEditor": {
+      "sourceBadge": "fonte: {{source}}",
+      "indexed": "Indexado",
+      "matchType": "Tipo de correspondência",
+      "priorityLabel": "Prioridade (1-100)",
+      "priorityHelp": "Menor = maior importância",
+      "boostLabel": "Boost (0-10)",
+      "boostHelp": "Multiplicador de pontuação para classificação"
+    },
+    "tabs": {
+      "defaultFields": "Campos padrão",
+      "assetTypes": "Tipos de ativos",
+      "ranking": "Classificação"
+    },
+    "defaults": {
+      "description": "Estas configurações se aplicam a todos os tipos de ativos por padrão. Tipos de ativos individuais podem substituí-las."
+    },
+    "assetTypesTab": {
+      "description": "Configure o comportamento de pesquisa para cada tipo de ativo. Ative/desative a indexação e personalize campos extras.",
+      "enableIndexing": "Ativar indexação",
+      "inheritDefaults": "Herdar configurações de campos padrão",
+      "extraFieldsTitle": "Campos extras",
+      "extraFieldsDescription": "Campos adicionais específicos deste tipo de ativo.",
+      "extraFieldsBadge": "+{{count}} campos extras"
+    },
+    "ranking": {
+      "description": "Configure como os resultados da pesquisa são ordenados. Resultados que correspondem a campos de maior prioridade aparecem primeiro.",
+      "primarySort": "Ordenação primária",
+      "primarySortHelp": "O critério principal usado para ordenar os resultados.",
+      "secondarySort": "Ordenação secundária (desempate)",
+      "secondarySortHelp": "Usada quando os valores da ordenação primária são iguais.",
+      "tertiarySort": "Ordenação terciária",
+      "tertiarySortHelp": "Desempate final para resultados com valores primários e secundários iguais."
+    },
+    "buttons": {
+      "rebuildIndex": "Reconstruir índice de pesquisa",
+      "save": "Salvar configuração"
+    },
+    "messages": {
+      "loadErrorTitle": "Erro ao carregar a configuração",
+      "loadErrorDescription": "Falha ao carregar a configuração de pesquisa. Tente novamente.",
+      "saveSuccessTitle": "Configuração salva",
+      "saveSuccessDescription": "A configuração de pesquisa foi atualizada. Considere reconstruir o índice para aplicar as alterações.",
+      "saveErrorTitle": "Erro ao salvar a configuração",
+      "saveErrorDescription": "Falha ao salvar a configuração de pesquisa. Tente novamente.",
+      "rebuildSuccessTitle": "Índice reconstruído",
+      "rebuildSuccessDescription": "Índice de pesquisa reconstruído com {{count}} itens.",
+      "rebuildErrorTitle": "Erro ao reconstruir o índice",
+      "rebuildErrorDescription": "Falha ao reconstruir o índice de pesquisa. Tente novamente."
+    },
+    "matchType": {
+      "prefix": "Prefixo (início da palavra)",
+      "substring": "Substring (em qualquer posição)",
+      "exact": "Somente correspondência exata",
+      "fuzzy": "Aproximada (permite erros de digitação)"
+    },
+    "sortField": {
+      "matchPriority": "Prioridade de campo (título > descrição > tags)",
+      "boostScore": "Pontuação de boost (relevância ponderada)",
+      "titleAsc": "Título (A → Z)",
+      "titleDesc": "Título (Z → A)"
+    },
+    "assetType": {
+      "dataProduct": "Produtos de dados",
+      "dataContract": "Contratos de dados",
+      "glossaryTerm": "Termos do glossário",
+      "dataAssetReview": "Revisões de ativos",
+      "tag": "Tags",
+      "dataDomain": "Domínios de dados"
+    }
+  },
+  "ontologyLibrary": {
+    "title": "Biblioteca de ontologias do setor",
+    "description": "Navegue e importe ontologias padrão do setor organizadas por vertical.",
+    "verticalsHeading": "Verticais do setor",
+    "ontologiesHeading": "Ontologias",
+    "filterPlaceholder": "Filtrar...",
+    "noOntologiesFound": "Nenhuma ontologia encontrada",
+    "selectVertical": "Selecione uma vertical",
+    "foundationBadge": "Fundação",
+    "licenseBadge": "Licença",
+    "modulesHeading": "Módulos",
+    "website": "Site",
+    "selectOntologyPrompt": "Selecione uma ontologia para ver seus módulos",
+    "noModulesAvailable": "Nenhum módulo disponível",
+    "moduleCount_one": "{{count}} módulo",
+    "moduleCount_other": "{{count}} módulos",
+    "footer": {
+      "selected_one": "Selecionado: <strong>{{count}}</strong> módulo",
+      "selected_other": "Selecionados: <strong>{{count}}</strong> módulos",
+      "selectedFrom_one": "Selecionado: <strong>{{count}}</strong> módulo de {{ontology}}",
+      "selectedFrom_other": "Selecionados: <strong>{{count}}</strong> módulos de {{ontology}}",
+      "selectPrompt": "Selecione os módulos para importar"
+    },
+    "license": {
+      "acceptLabel": "Aceito os <terms>termos de licença</terms> de {{name}}{{license}}"
+    },
+    "buttons": {
+      "importing": "Importando...",
+      "import": "Importar módulos selecionados"
+    },
+    "messages": {
+      "loadVerticalsFailed": "Falha ao carregar as verticais do setor",
+      "loadOntologiesFailed": "Falha ao carregar as ontologias",
+      "loadModulesFailed": "Falha ao carregar os módulos",
+      "noModulesTitle": "Nenhum módulo selecionado",
+      "noModulesDescription": "Selecione pelo menos um módulo para importar.",
+      "licenseRequiredTitle": "Aceite da licença obrigatório",
+      "licenseRequiredDescription": "Aceite os termos de licença para continuar.",
+      "importFailed": "Falha na importação",
+      "importSuccessTitle": "Importação bem-sucedida",
+      "importSuccessDescription": "{{count}} triplas importadas como \"{{name}}\"",
+      "warningTitle": "Aviso",
+      "importErrorTitle": "Erro na importação",
+      "importErrorDescription": "Falha ao importar a ontologia"
+    }
+  },
+  "delivery": {
+    "description": "Configure como as alterações de governança são propagadas para sistemas externos. Vários modos podem estar ativos simultaneamente.",
+    "direct": {
+      "description": "Aplicar alterações diretamente no Unity Catalog via SDK (GRANTs, atribuições de tags).",
+      "dryRun": "Modo de simulação (registrar alterações sem aplicar)",
+      "label": "Modo direto"
+    },
+    "indirect": {
+      "description": "Persistir alterações como arquivos YAML em um repositório Git para integração com CI/CD.",
+      "gitInfo": "Configure o repositório Git na guia Git. As alterações serão exportadas para o UC Volume configurado em /git-export/.",
+      "label": "Modo indireto"
+    },
+    "manual": {
+      "description": "Gerar notificações para que administradores apliquem as alterações manualmente em sistemas externos.",
+      "label": "Modo manual"
+    },
+    "saveButton": "Configurações de entrega salvas com sucesso",
+    "title": "Modos de entrega"
+  },
+  "certificationLevels": {
+    "title": "Níveis de certificação",
+    "description": "Defina os níveis de certificação disponíveis para produtos de dados, contratos e ativos.",
+    "addLevel": "Adicionar nível",
+    "table": {
+      "order": "Ordem",
+      "preview": "Pré-visualização"
+    },
+    "emptyState": "Nenhum nível de certificação configurado. Clique em \"Adicionar nível\" para criar um.",
+    "dialog": {
+      "editTitle": "Editar nível de certificação",
+      "createTitle": "Adicionar nível de certificação",
+      "editDescription": "Atualizar os detalhes do nível de certificação.",
+      "createDescription": "Criar um novo nível de certificação."
+    },
+    "form": {
+      "namePlaceholder": "ex.: Ouro",
+      "descriptionPlaceholder": "O que este nível representa...",
+      "colorLabel": "Cor",
+      "previewLabel": "Pré-visualização",
+      "levelNamePreview": "Nome do nível"
+    },
+    "delete": {
+      "title": "Excluir nível de certificação?",
+      "description": "Tem certeza de que deseja excluir \"{{name}}\"? Isso não pode ser desfeito. Se houver entidades certificadas neste nível, a exclusão será bloqueada."
+    },
+    "messages": {
+      "updated": "Nível de certificação \"{{name}}\" atualizado.",
+      "created": "Nível de certificação \"{{name}}\" criado.",
+      "deleted": "Nível de certificação \"{{name}}\" excluído.",
+      "cannotDeleteTitle": "Não é possível excluir",
+      "reorderFailed": "Falha ao reordenar"
+    }
+  },
+  "maturityLevels": {
+    "title": "Níveis de maturidade",
+    "description": "Defina a escala de maturidade para produtos e contratos de dados. Cada nível é condicionado por políticas de conformidade.",
+    "addLevel": "Adicionar nível",
+    "allTypes": "Todos os tipos",
+    "gateCount_one": "{{count}} gate",
+    "gateCount_other": "{{count}} gates",
+    "complianceGates": "Gates de políticas de conformidade",
+    "noDescription": "Sem descrição",
+    "required": "Obrigatório",
+    "advisory": "Recomendado",
+    "viewInCompliance": "Ver em Conformidade",
+    "selectPolicyPlaceholder": "Selecione a política de conformidade...",
+    "addGate": "Adicionar gate",
+    "emptyState": "Nenhum nível de maturidade configurado. Clique em \"Adicionar nível\" para criar um.",
+    "dialog": {
+      "editTitle": "Editar nível de maturidade",
+      "createTitle": "Adicionar nível de maturidade",
+      "editDescription": "Atualizar os detalhes do nível de maturidade.",
+      "createDescription": "Criar um novo nível de maturidade."
+    },
+    "form": {
+      "namePlaceholder": "ex.: Confiável",
+      "descriptionPlaceholder": "O que este nível representa...",
+      "entityTypeLabel": "Tipo de entidade",
+      "iconLabel": "Ícone",
+      "colorLabel": "Cor",
+      "previewLabel": "Pré-visualização",
+      "levelNamePreview": "Nome do nível"
+    },
+    "entityTypes": {
+      "all": "Todos os tipos de entidade",
+      "DataProduct": "Produtos de dados",
+      "DataContract": "Contratos de dados"
+    },
+    "delete": {
+      "title": "Excluir nível de maturidade?",
+      "description": "Tem certeza de que deseja excluir \"{{name}}\"? Isso não pode ser desfeito. Se snapshots referenciarem este nível, a exclusão será bloqueada."
+    },
+    "messages": {
+      "updated": "Nível de maturidade \"{{name}}\" atualizado.",
+      "created": "Nível de maturidade \"{{name}}\" criado.",
+      "deleted": "Nível de maturidade \"{{name}}\" excluído.",
+      "cannotDeleteTitle": "Não é possível excluir"
+    }
+  },
+  "directory": {
+    "title": "Diretório",
+    "intro": "Conecte um diretório de principais para que usuários e grupos possam ser selecionados em todo o aplicativo. A v1 suporta Microsoft Entra ID (via uma conexão HTTP do UC), uma tabela Postgres / Lakebase ou um arquivo CSV local para testes e demonstrações.",
+    "providerLabel": "Provedor",
+    "providerPlaceholder": "Selecione um provedor…",
+    "providers": {
+      "entra": "Microsoft Entra ID",
+      "lakebase": "Tabela Lakebase",
+      "file": "Arquivo CSV (teste / demonstração)"
+    },
+    "testConnection": "Testar conexão",
+    "statusLabel": "Status:",
+    "configured": "Configurado ({{provider}})",
+    "notConfigured": "Não configurado",
+    "messages": {
+      "saveSuccess": "Configurações de diretório salvas",
+      "saveFailed": "Falha ao salvar",
+      "testSuccess": "Teste de diretório bem-sucedido",
+      "testFailed": "Falha no teste de diretório",
+      "unknownError": "Erro desconhecido",
+      "clearSuccess": "Configurações de diretório limpas",
+      "clearFailed": "Falha ao limpar"
+    },
+    "entra": {
+      "connectionLabel": "Conexão HTTP do UC",
+      "loadingConnections": "Carregando conexões…",
+      "noConnections": "Nenhuma conexão HTTP encontrada",
+      "selectConnection": "Selecione uma conexão…",
+      "setupTitle": "Configuração da conexão com o Entra ID",
+      "setupBody": "Crie uma conexão HTTP do Unity Catalog com o Microsoft Graph usando client_credentials. O aplicativo empresarial deve ter pelo menos os escopos de aplicativo <code>User.Read.All</code> e <code>GroupMember.Read.All</code> (ou <code>Group.Read.All</code>).",
+      "helpLabels": {
+        "tokenUrl": "URL do token",
+        "baseUrl": "URL base",
+        "scope": "Escopo",
+        "grantType": "Tipo de concessão"
+      }
+    },
+    "lakebase": {
+      "tableLabel": "Tabela Lakebase",
+      "tablePlaceholder": "catalog.schema.table",
+      "tableHelp": "Nome totalmente qualificado de uma tabela Postgres no banco de dados Lakebase principal do aplicativo. Os segmentos do identificador devem conter apenas letras, dígitos e sublinhados.",
+      "schemaTitle": "Esquema obrigatório",
+      "schemaBody": "Preencha esta tabela a partir do seu pipeline de sincronização com o IdP. Índices em colunas em minúsculas são opcionais, mas recomendados para uma pesquisa por prefixo rápida."
+    },
+    "file": {
+      "pathLabel": "Caminho do arquivo CSV",
+      "pathPlaceholder": "/etc/ontos/principals.csv",
+      "pathHelp": "Caminho absoluto para um arquivo CSV legível pelo processo do aplicativo. Relido automaticamente quando o mtime do arquivo avança; não é necessário reiniciar.",
+      "formatTitle": "Formato do CSV",
+      "formatBody": "Colunas obrigatórias: <code>type</code>, <code>id</code>, <code>display_name</code>. A coluna <code>sub_label</code> é opcional. <code>type</code> deve ser <code>user</code> ou <code>group</code>."
+    }
+  },
+  "semanticModels": {
+    "page": {
+      "title": "Fontes RDF",
+      "description": "Envie e gerencie arquivos de ontologia e taxonomia RDF (RDFS, SKOS, OWL)."
+    },
+    "actions": {
+      "industryLibrary": "Biblioteca do setor",
+      "uploading": "Enviando...",
+      "refreshListTooltip": "Atualizar lista"
+    },
+    "table": {
+      "sourceHeader": "Fonte",
+      "sizeHeader": "Tamanho",
+      "sizeKb": "{{value}} KB",
+      "enabledHeader": "Ativado",
+      "alwaysOn": "Sempre ativo",
+      "viewContentTooltip": "Ver conteúdo",
+      "deleteModelTooltip": "Excluir modelo"
+    },
+    "source": {
+      "unknown": "Desconhecida",
+      "system": "Sistema",
+      "file": "Arquivo",
+      "schema": "Esquema",
+      "upload": "Upload"
+    },
+    "deleteDialog": {
+      "title": "Excluir fonte RDF",
+      "description": "Tem certeza de que deseja excluir <strong>{{name}}</strong>? Esta ação não pode ser desfeita e removerá o modelo do grafo semântico."
+    },
+    "viewDialog": {
+      "titleFallback": "Ver ontologia",
+      "loadingContent": "Carregando conteúdo...",
+      "noContent": "Nenhum conteúdo disponível.",
+      "loadContentFailed": "Falha ao carregar o conteúdo.",
+      "copied": "Copiado!",
+      "copyToClipboard": "Copiar para a área de transferência"
+    },
+    "messages": {
+      "loadModelsError": "Falha ao carregar os modelos",
+      "graphRefreshed": "Grafo de conhecimento atualizado com sucesso",
+      "graphRefreshError": "Falha ao atualizar o grafo de conhecimento",
+      "uploadFailedTitle": "Falha no upload",
+      "modelUploaded": "Modelo semântico enviado com sucesso",
+      "uploadErrorTitle": "Erro no upload",
+      "uploadFileError": "Falha ao enviar o arquivo",
+      "modelToggled": "Modelo {{state}} com sucesso",
+      "enabledState": "ativado",
+      "disabledState": "desativado",
+      "updateModelError": "Falha ao atualizar o modelo",
+      "loadContentError": "Falha ao carregar o conteúdo",
+      "copyClipboardError": "Falha ao copiar para a área de transferência",
+      "deleteFailedTitle": "Falha na exclusão",
+      "modelDeleted": "Modelo semântico excluído com sucesso",
+      "deleteErrorTitle": "Erro na exclusão",
+      "deleteModelError": "Falha ao excluir o modelo",
+      "updateTitleError": "Falha ao atualizar o título",
+      "saveError": "Falha ao salvar",
+      "clearTitleError": "Falha ao limpar o título",
+      "clearError": "Falha ao limpar"
+    }
+  }
+}

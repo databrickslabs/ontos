@@ -1,0 +1,90 @@
+{
+  "title": "Projetos",
+  "subtitle": "Crie e gerencie projetos para organizar equipes e o isolamento de workspaces.",
+  "openMenu": "Abrir menu",
+  "addNewProject": "Adicionar novo projeto",
+  "editProject": "Editar projeto",
+  "deleteProject": "Excluir projeto",
+  "form": {
+    "dialog": {
+      "createTitle": "Criar novo projeto",
+      "editTitle": "Editar projeto",
+      "createDescription": "Crie um novo projeto e atribua equipes para isolamento de workspace.",
+      "editDescription": "Atualize os detalhes do projeto e as atribuições de equipes."
+    },
+    "sections": {
+      "info": "Informações do projeto",
+      "teams": "Atribuições de equipes",
+      "tags": "Tags"
+    },
+    "labels": {
+      "name": "Nome do projeto *",
+      "title": "Título de exibição",
+      "description": "Descrição",
+      "projectType": "Tipo de projeto",
+      "assignTeams": "Atribuir equipes",
+      "assignedTeams": "Equipes atribuídas:",
+      "tags": "Tags"
+    },
+    "placeholders": {
+      "name": "Digite o nome do projeto",
+      "title": "Digite o título de exibição (opcional)",
+      "description": "Digite a descrição do projeto (opcional)",
+      "selectProjectType": "Selecione o tipo de projeto",
+      "assignTeams": "Selecione equipes para atribuir a este projeto",
+      "noTeamsAvailable": "Nenhuma equipe disponível",
+      "allTeamsAssigned": "Todas as equipes já foram atribuídas",
+      "selectTags": "Selecione tags...",
+      "enterTag": "Digite a tag",
+      "noTagsHelp": "Nenhuma tag adicionada ainda. Clique em \"Adicionar tag\" para adicionar tags ao projeto."
+    },
+    "types": {
+      "PERSONAL": "PESSOAL",
+      "TEAM": "EQUIPE"
+    },
+    "buttons": {
+      "addTag": "Adicionar tag",
+      "update": "Atualizar projeto",
+      "create": "Criar projeto"
+    },
+    "toasts": {
+      "createdTitle": "Projeto criado",
+      "updatedTitle": "Projeto atualizado",
+      "createdDescription": "O projeto \"{{name}}\" foi criado com sucesso.",
+      "updatedDescription": "O projeto \"{{name}}\" foi atualizado com sucesso.",
+      "createFailedTitle": "Falha ao criar projeto",
+      "updateFailedTitle": "Falha ao atualizar projeto",
+      "failedDescription": "Ocorreu um erro inesperado."
+    }
+  },
+  "table": {
+    "name": "Nome",
+    "description": "Descrição",
+    "teams": "Equipes",
+    "tags": "Tags",
+    "lastUpdated": "Última atualização",
+    "actions": "Ações",
+    "moreTeams": "mais",
+    "moreTags": "mais"
+  },
+  "permissions": {
+    "deniedView": "Você não tem permissão para visualizar projetos.",
+    "deniedCreate": "Você não tem permissão para criar projetos.",
+    "deniedEdit": "Você não tem permissão para editar projetos.",
+    "deniedDelete": "Você não tem permissão para excluir projetos.",
+    "permissionDenied": "Permissão negada"
+  },
+  "messages": {
+    "projectDeleted": "Projeto excluído",
+    "projectDeletedSuccess": "O projeto foi excluído com sucesso.",
+    "errorFetchingProjects": "Erro ao buscar projetos",
+    "errorDeletingProject": "Erro ao excluir projeto",
+    "errorLoadingData": "Erro ao carregar dados"
+  },
+  "deleteDialog": {
+    "title": "Você tem certeza absoluta?",
+    "description": "Esta ação não pode ser desfeita. Isso excluirá permanentemente o projeto e o removerá de todas as equipes.",
+    "cancel": "Cancelar",
+    "delete": "Excluir"
+  }
+}

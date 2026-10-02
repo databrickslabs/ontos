@@ -1,0 +1,56 @@
+{
+  "title": "Trilha de auditoria",
+  "description": "Visualizar e filtrar logs de auditoria do aplicativo",
+  "filters": {
+    "title": "Filtros",
+    "description": "Filtrar logs de auditoria por critérios",
+    "username": "Nome de usuário",
+    "usernamePlaceholder": "Filtrar por nome de usuário",
+    "feature": "Recurso",
+    "featurePlaceholder": "Filtrar por recurso",
+    "action": "Ação",
+    "actionPlaceholder": "Filtrar por ação",
+    "success": "Sucesso",
+    "successOptions": {
+      "all": "Todos",
+      "successOnly": "Somente sucessos",
+      "failuresOnly": "Somente falhas"
+    },
+    "applyButton": "Aplicar filtros",
+    "clearButton": "Limpar filtros",
+    "exportButton": "Exportar CSV"
+  },
+  "results": {
+    "title": "Logs de auditoria",
+    "showing": "Mostrando {{count}} de {{total}} entradas de log",
+    "loading": "Carregando...",
+    "noLogs": "Nenhum log de auditoria encontrado"
+  },
+  "table": {
+    "timestamp": "Data e hora",
+    "username": "Nome de usuário",
+    "ipAddress": "Endereço IP",
+    "feature": "Recurso",
+    "action": "Ação",
+    "status": "Status",
+    "details": "Detalhes",
+    "viewButton": "Visualizar",
+    "success": "Sucesso",
+    "failed": "Falha",
+    "notAvailable": "N/A"
+  },
+  "pagination": {
+    "page": "Página {{current}} de {{total}}",
+    "previous": "Anterior",
+    "next": "Próxima"
+  },
+  "detailsDialog": {
+    "title": "Detalhes do log de auditoria"
+  },
+  "messages": {
+    "exportSuccess": "Logs de auditoria exportados para CSV",
+    "exportSuccessTitle": "Sucesso",
+    "loadError": "Falha ao carregar logs de auditoria",
+    "loadErrorTitle": "Erro"
+  }
+}

@@ -98,6 +98,12 @@ asset_types:
         match_type: substring
         priority: 4
         boost: 1.0
+      team_members:
+        indexed: true
+        source: "team_members"
+        match_type: substring
+        priority: 4
+        boost: 1.2
 
   glossary-term:
     enabled: true

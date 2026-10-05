@@ -1,0 +1,67 @@
+# ============================================================================
+# Linked fixture — Product P1: Sales Analytics  (id 9fd027b7-…)
+# ----------------------------------------------------------------------------
+# References:
+#   inputPorts[0].contractId  -> fbfa8318-… (C1 Raw Orders)        [consumes]
+#   outputPorts[0].contractId -> c8e034aa-… (C2 Sales Aggregates)  [produces]
+# Referenced BY:
+#   sales_aggregates.odcs.yaml dataProduct -> this product's id    [reciprocal]
+#
+# The top-level `id` is a stable UUID adopted as the PK on import (#853), so
+# C2's `dataProduct` back-reference resolves to this product after a round-trip.
+# Port contractIds match the contracts' `id` fields, so #854 resolves each port
+# to its contract's name at read time.
+# ============================================================================
+apiVersion: v1.0.0
+kind: DataProduct
+id: 9fd027b7-b920-4fa0-940e-c27d5db03f9b
+name: Sales Analytics
+version: 1.0.0
+status: active
+domain: sales
+tenant: AcmeRetail
+
+description:
+  purpose: Transforms raw orders into curated daily sales aggregates.
+  usage: Subscribe to the sales-aggregates output port.
+
+inputPorts:
+  - name: raw-orders-in
+    version: 1.0.0
+    # -> C1 Raw Orders
+    contractId: fbfa8318-bb26-4172-a705-80c1ec94c4b6
+    assetType: table
+    assetIdentifier: main.sales.raw_orders
+    tags:
+      - source
+
+outputPorts:
+  - id: op-sales-aggregates
+    name: sales-aggregates-out
+    version: 1.0.0
+    type: Table
+    description: Daily sales aggregates published as a Delta table.
+    # -> C2 Sales Aggregates
+    contractId: c8e034aa-0145-4e41-ae9b-b64dbcea41c8
+    assetType: table
+    assetIdentifier: main.sales.sales_aggregates_daily
+    server:
+      database: main
+      schema: sales
+      table: sales_aggregates_daily
+    tags:
+      - gold
+      - governance/certified
+
+team:
+  name: Sales Analytics Team
+  description: Owns the sales analytics product.
+  members:
+    - username: aturing@example.com
+      name: Alan Turing
+      role: owner
+      dateIn: "2023-01-01"
+
+tags:
+  - domain/sales
+  - governance/certified

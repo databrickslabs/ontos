@@ -82,7 +82,11 @@ from src.db_models.data_contracts import (
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.controller.domain_export_adapter import domain_export_adapter, ONTOS_ORIGINAL_DOMAIN_PROPERTY
+from src.controller.domain_export_adapter import (
+    domain_export_adapter,
+    ONTOS_ORIGINAL_DOMAIN_PROPERTY,
+    original_domain_strings_from_props,
+)
 
 from src.common.logging import get_logger
 from src.common.delivery_mixin import DeliveryMixin
@@ -420,25 +424,77 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             except Exception as tag_err:
                 logger.debug(f"Could not load unified tags for contract {contract_id}: {tag_err}")
 
+        # Owner/team: resolve the native owning team, then fall back to the ODCS-supplied team
+        # (team-object name + member names) so a contract whose owner_team_id is unset is still
+        # findable by the team that only exists in the imported YAML.
         owner = ""
+        if getattr(contract_db_obj, 'owner_team_id', None):
+            try:
+                from uuid import UUID
+                owner_team = team_repo.get(db, id=UUID(str(contract_db_obj.owner_team_id)))
+                if owner_team:
+                    owner = owner_team.name or ""
+            except Exception as team_err:
+                logger.debug("Could not resolve owner_team_id for contract %s: %s", contract_id, team_err)
+
+        team_strings: List[str] = []
+        try:
+            tm = getattr(contract_db_obj, 'team_metadata', None)
+            if tm is not None and getattr(tm, 'name', None):
+                team_strings.append(tm.name)
+            for member in (getattr(contract_db_obj, 'team', None) or []):
+                m_name = getattr(member, 'name', None)
+                m_user = getattr(member, 'username', None)
+                if m_name:
+                    team_strings.append(m_name)
+                if m_user and m_user != m_name:
+                    team_strings.append(m_user)
+        except Exception as tm_err:
+            logger.debug("Could not load team for contract %s search index: %s", contract_id, tm_err)
+        # With no native owning team, surface the supplied team-object name as the owner so the
+        # "owner" search field still matches.
+        if not owner and team_strings:
+            owner = team_strings[0]
 
         # Index every assigned domain NAME so domain-keyed search matches by any of the
         # contract's domains (primary or additional) — issue #520 story 14.
+        assigned_domain_names: List[str] = []
         primary_domain = ""
         try:
             assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
                 db, entity_type="data_contract", entity_id=str(contract_id)
             )
+            assigned_domain_names = [d.domain_name for d in assigned if d.domain_name]
             primary_domain = next((d.domain_name for d in assigned if d.is_primary), "") or ""
-            tag_names = tag_names + [d.domain_name for d in assigned if d.domain_name]
+            tag_names = tag_names + assigned_domain_names
         except Exception as dom_err:
             logger.debug("Could not load domains for contract %s search index: %s", contract_id, dom_err)
+
+        # Fallback: index the original ODCS-supplied domain string(s) preserved as the
+        # ontosOriginalDomain custom property, so a contract imported with an unmatched domain
+        # (create_missing off → no native assignment) is still findable by that domain name.
+        # De-duped against native names so a resolved domain is not indexed twice.
+        try:
+            original_domains = [
+                d for d in original_domain_strings_from_props(getattr(contract_db_obj, 'custom_properties', None))
+                if d and d not in assigned_domain_names
+            ]
+            if original_domains:
+                tag_names = tag_names + original_domains
+                if not primary_domain:
+                    primary_domain = original_domains[0]
+        except Exception as od_err:
+            logger.debug("Could not load original domains for contract %s search index: %s", contract_id, od_err)
+
+        # Index team strings as tags too, so team-keyed search matches even without a native team.
+        tag_names = tag_names + team_strings
 
         extra_data = {
             "version": str(version) if version else "",
             "status": str(status) if status else "",
             "owner": owner,
             "domain": primary_domain,
+            "team_members": ", ".join(team_strings),
         }
 
         return SearchIndexItem(

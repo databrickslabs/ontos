@@ -20,6 +20,8 @@ from src.models.projects import (
 from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.projects import ProjectDb
 from src.common.errors import ConflictError, NotFoundError
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.database import get_session_factory
 from src.models.notifications import NotificationType
 from src.common.authorization import is_user_admin
 from src.common.config import Settings
@@ -28,12 +30,48 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
-class ProjectsManager:
+class ProjectsManager(SearchableAsset):
     def __init__(self, tags_manager: Optional[TagsManager] = None):
         self.project_repo = project_repo
         self.team_repo = team_repo
         self.tags_manager = tags_manager or TagsManager()
         logger.debug("ProjectsManager initialized.")
+
+    # --- SearchableAsset Implementation ---
+    def _build_search_index_item(self, project: ProjectDb) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a Project DB model."""
+        if not getattr(project, 'id', None) or not getattr(project, 'name', None):
+            return None
+        return SearchIndexItem(
+            id=f"project::{project.id}",
+            type="project",
+            feature_id="projects",
+            title=getattr(project, 'title', None) or project.name,
+            description=getattr(project, 'description', '') or "",
+            link=f"/projects/{project.id}",
+            tags=[],
+            extra_data={"name": project.name},
+        )
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetch projects and map them to SearchIndexItem format for global search."""
+        logger.info("Fetching projects for search indexing...")
+        items: List[SearchIndexItem] = []
+        try:
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index projects.")
+                return []
+            with session_factory() as db:
+                for project in self.project_repo.get_multi_with_teams(db, limit=10000):
+                    item = self._build_search_index_item(project)
+                    if item:
+                        items.append(item)
+            logger.info(f"Prepared {len(items)} projects for search index.")
+            return items
+        except Exception as e:
+            logger.error(f"Error fetching or mapping projects for search: {e}", exc_info=True)
+            return []
 
     def _serialize_list_fields(self, data: dict) -> dict:
         """Helper to serialize list fields to JSON strings for database storage."""

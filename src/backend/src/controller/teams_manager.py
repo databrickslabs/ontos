@@ -19,18 +19,56 @@ from src.models.teams import (
 from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.common.errors import ConflictError, NotFoundError
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.database import get_session_factory
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
-class TeamsManager:
+class TeamsManager(SearchableAsset):
     def __init__(self, tags_manager: Optional[TagsManager] = None):
         self.team_repo = team_repo
         self.team_member_repo = team_member_repo
         self.domain_repo = data_domain_repo
         self.tags_manager = tags_manager or TagsManager()
         logger.debug("TeamsManager initialized.")
+
+    # --- SearchableAsset Implementation ---
+    def _build_search_index_item(self, team: TeamDb) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a Team DB model."""
+        if not getattr(team, 'id', None) or not getattr(team, 'name', None):
+            return None
+        return SearchIndexItem(
+            id=f"team::{team.id}",
+            type="team",
+            feature_id="teams",
+            title=team.name,
+            description=getattr(team, 'description', '') or "",
+            link=f"/teams/{team.id}",
+            tags=[],
+            extra_data={"title": getattr(team, 'title', '') or ""},
+        )
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetch teams and map them to SearchIndexItem format for global search."""
+        logger.info("Fetching teams for search indexing...")
+        items: List[SearchIndexItem] = []
+        try:
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index teams.")
+                return []
+            with session_factory() as db:
+                for team in self.team_repo.get_multi_with_members(db, limit=10000):
+                    item = self._build_search_index_item(team)
+                    if item:
+                        items.append(item)
+            logger.info(f"Prepared {len(items)} teams for search index.")
+            return items
+        except Exception as e:
+            logger.error(f"Error fetching or mapping teams for search: {e}", exc_info=True)
+            return []
 
     def _serialize_list_fields(self, data: dict) -> dict:
         """Helper to serialize list fields to JSON strings for database storage."""

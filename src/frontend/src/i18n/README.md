@@ -175,7 +175,7 @@ Two scripts under `src/scripts/` (wired as npm scripts) drive and protect the mi
 - Language selector in header; persistence across reloads
 - Tooling & guardrails above (`check:i18n`, `audit:i18n`, `--scaffold`, ESLint rule)
 - **All views, components, dialogs, wizards, panels, navigation, feature configs, toasts, and validation messages migrated to `t(...)`** across every namespace (`check:i18n` passes; `audit:i18n` shows only non-translatable false-positives)
-- **Full locale parity** — every namespace has identical keys in all 8 locales
+- **Full locale parity** — `en` and `pt` have full key coverage; de/es/fr/it/ja/nl have 78 keys missing (tracked separately, all fall back silently to `en`)
 - **Real translations** for de/es/fr/it/ja/nl/pt (0 `__TODO__` markers remaining)
 - Playwright coverage across all 8 locales (`tests/i18n-locales.spec.ts`)
 

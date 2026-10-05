@@ -3,7 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 /**
  * Cross-locale coverage (issue #471).
  *
- * Switches through all 7 supported locales, visits the main navigation routes,
+ * Switches through all 8 supported locales, visits the main navigation routes,
  * and smoke-tests that:
  *   - the route renders (a heading is visible), and
  *   - no visible text leaks an untranslated marker (`__TODO__`) or a raw i18n

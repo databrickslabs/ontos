@@ -106,3 +106,12 @@ class TestProductBatchImport:
         ]
         result = manager.create_products_from_files(files, user="a@b.com")
         assert (result.created, result.skipped, result.total) == (1, 1, 2)
+
+    def test_structured_but_unrecognized_yaml_is_skipped(self, manager: DataProductsManager):
+        """A valid YAML mapping that is not ODPS is skipped, not turned into a product."""
+        junk = {"some": "config", "schema_version": 2, "enabled": True}
+        result = manager.create_products_from_files(
+            [("config.yaml", yaml.safe_dump(junk).encode("utf-8"))], user="a@b.com",
+        )
+        assert (result.created, result.skipped, result.total) == (0, 1, 1)
+        assert "recognizable ODPS" in result.items[0].message

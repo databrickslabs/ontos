@@ -350,13 +350,12 @@ class TestDataContractsRoutes:
         finally:
             Path(temp_path).unlink()
 
-    def test_upload_freeform_text_file_becomes_minimal_draft(self, client: TestClient):
-        """Free-form text is accepted as a minimal draft contract.
+    def test_upload_freeform_text_file_is_rejected(self, client: TestClient):
+        """Free-form text is NOT fabricated into a contract.
 
-        Contracts deliberately support plain text (`.txt` is in the upload accept
-        list and `parse_uploaded_file` wraps unstructured content into a minimal
-        contract). The batch endpoint preserves this lenient fallback and reports
-        it truthfully as one created item rather than aborting.
+        There is no meaningful mapping from arbitrary prose (e.g. a README) to an
+        ODCS entity, so an unsupported file type is reported as a failed item and
+        nothing is created — rather than producing a junk draft contract.
         """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("This is not valid ODCS content")
@@ -369,8 +368,9 @@ class TestDataContractsRoutes:
 
             assert response.status_code == 200, response.text
             data = response.json()
-            assert data["created"] == 1
+            assert data["created"] == 0
             assert data["total"] == 1
+            assert data["items"][0]["status"] == "failed"
 
         finally:
             Path(temp_path).unlink()

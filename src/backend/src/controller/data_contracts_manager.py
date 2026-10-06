@@ -3082,32 +3082,42 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
         Parity with the products path (`upload_products_batch`): a file may hold a
         single ODCS object or a top-level array of them. A dict yields ``[dict]``;
-        a list is returned as-is. The text fallback (a non-structured payload) is
-        wrapped into a single minimal contract via `parse_uploaded_file`, preserving
-        the previous single-file behavior.
-        """
-        format = 'json'
-        if content_type == 'application/x-yaml' or filename.endswith(('.yaml', '.yml')):
-            format = 'yaml'
-        elif content_type and content_type.startswith('text/'):
-            # text/* still commonly carries JSON/YAML payloads; try structured first
-            format = 'yaml' if filename.endswith(('.yaml', '.yml')) else 'json'
+        a list is returned as-is.
 
-        parsed = None
+        Only structured ODCS files (``.yaml``/``.yml``/``.json``) are accepted. We
+        deliberately do NOT fabricate a contract from free-form text — there is no
+        meaningful mapping from arbitrary prose (e.g. a README) to an ODCS entity,
+        and doing so previously produced junk contracts. An unsupported extension or
+        a non-structured payload raises ``ValueError``, which the batch importer
+        records as a failed item.
+        """
+        name = (filename or '').lower()
+        if name.endswith(('.yaml', '.yml')):
+            fmt = 'yaml'
+        elif name.endswith('.json'):
+            fmt = 'json'
+        elif content_type == 'application/x-yaml':
+            fmt = 'yaml'
+        elif content_type and 'json' in content_type:
+            fmt = 'json'
+        else:
+            raise ValueError(
+                f"Unsupported file type: {filename}. "
+                "Expected an ODCS Data Contract as .yaml, .yml, or .json."
+            )
+
         try:
-            if format == 'yaml':
-                parsed = yaml.safe_load(file_content)
-            else:
-                parsed = json.loads(file_content)
-        except Exception:
-            parsed = None
+            parsed = yaml.safe_load(file_content) if fmt == 'yaml' else json.loads(file_content)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML: {e}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON: {e}")
 
         if isinstance(parsed, list):
             return [item for item in parsed]
         if isinstance(parsed, dict):
             return [parsed]
-        # Fall back to the single-entity text handling (minimal contract wrapper).
-        return [self.parse_uploaded_file(file_content, filename, content_type)]
+        raise ValueError("File must contain an ODCS object or an array of ODCS objects.")
 
     def create_contracts_from_files(
         self,
@@ -3158,18 +3168,25 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     ))
                     index += 1
                     continue
-                # Guard against a cross-type file: an ODPS Data Product must not
-                # be imported as a Data Contract. Skip (don't fail) and tell the
-                # user where it belongs.
-                if classify_import_entity(entity) == "product":
-                    result.add(ImportItemResult(
-                        index=index, source_file=filename, source_id=source_id,
-                        name=entity.get('name'), status="skipped",
-                        message=(
+                # Only import a recognizable ODCS Data Contract. An ODPS product is
+                # routed to the right page; anything unrecognizable is skipped rather
+                # than fabricated into a junk contract.
+                entity_kind = classify_import_entity(entity)
+                if entity_kind != "contract":
+                    if entity_kind == "product":
+                        skip_msg = (
                             f"Skipped: this is an {describe_import_entity(entity)} "
                             "(kind: DataProduct), not a Data Contract. "
                             "Import it from the Data Products page."
-                        ),
+                        )
+                    else:
+                        skip_msg = (
+                            "Skipped: not a recognizable ODCS Data Contract "
+                            "(expected kind: DataContract or a contract schema)."
+                        )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="skipped", message=skip_msg,
                     ))
                     index += 1
                     continue

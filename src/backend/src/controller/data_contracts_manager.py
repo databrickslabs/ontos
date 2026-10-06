@@ -20,6 +20,7 @@ import yaml
 from sqlalchemy.orm import Session
 
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.models.data_contracts import (
     ColumnDefinition,
     DataContract,
@@ -3154,6 +3155,21 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, status="failed",
                         message="Entity is not an object/mapping",
+                    ))
+                    index += 1
+                    continue
+                # Guard against a cross-type file: an ODPS Data Product must not
+                # be imported as a Data Contract. Skip (don't fail) and tell the
+                # user where it belongs.
+                if classify_import_entity(entity) == "product":
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=entity.get('name'), status="skipped",
+                        message=(
+                            f"Skipped: this is an {describe_import_entity(entity)} "
+                            "(kind: DataProduct), not a Data Contract. "
+                            "Import it from the Data Products page."
+                        ),
                     ))
                     index += 1
                     continue

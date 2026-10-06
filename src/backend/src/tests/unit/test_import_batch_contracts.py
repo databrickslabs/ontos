@@ -98,3 +98,34 @@ class TestContractBatchImport:
         # text wrapper, so it still produces exactly one entity (created), never a crash.
         assert result.total == 2
         assert result.created >= 1
+
+    def test_odps_product_is_skipped_not_imported(self, db_session: Session):
+        """An ODPS Data Product dropped on the contract importer is skipped, not created."""
+        mgr = _manager()
+        product = {
+            "apiVersion": "v1.0.0", "kind": "DataProduct", "id": str(uuid.uuid4()),
+            "name": "Sales Analytics", "version": "1.0.0", "status": "active",
+            "outputPorts": [{"name": "out"}],
+        }
+        result = mgr.create_contracts_from_files(
+            db=db_session, files=[("p.yaml", yaml.safe_dump(product), "application/x-yaml")],
+            current_user="alice@example.com",
+        )
+        assert (result.created, result.skipped, result.failed, result.total) == (0, 1, 0, 1)
+        skipped = [i for i in result.items if i.status == "skipped"]
+        assert len(skipped) == 1
+        assert "Data Products page" in skipped[0].message
+        assert db_session.query(DataContractDb).count() == 0
+
+    def test_mixed_batch_imports_contracts_skips_products(self, db_session: Session):
+        """A mixed selection creates the contracts and skips the products in one summary."""
+        mgr = _manager()
+        product = {"apiVersion": "v1.0.0", "kind": "DataProduct", "name": "P", "version": "1.0.0"}
+        files = [
+            ("c.yaml", yaml.safe_dump(_odcs("Real Contract")), "application/x-yaml"),
+            ("p.yaml", yaml.safe_dump(product), "application/x-yaml"),
+        ]
+        result = mgr.create_contracts_from_files(
+            db=db_session, files=files, current_user="alice@example.com",
+        )
+        assert (result.created, result.skipped, result.total) == (1, 1, 2)

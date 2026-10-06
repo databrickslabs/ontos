@@ -443,20 +443,22 @@ export default function DataProducts() {
       }
 
       const result = response.data;
-      const failedItems = result?.items?.filter((i) => i.status === 'failed') ?? [];
-      if (result && result.failed > 0) {
-        // Partial success: surface the truthful summary plus the first failures.
-        const detail = failedItems
+      // Surface anything not created: failed entities AND files skipped as the
+      // wrong type (e.g. an ODCS contract dropped here).
+      const unimportedItems = result?.items?.filter((i) => i.status !== 'created') ?? [];
+      if (result && (result.failed > 0 || result.skipped > 0)) {
+        // Partial success: surface the truthful summary plus the first issues.
+        const detail = unimportedItems
           .slice(0, 5)
-          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+          .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
           .join('\n');
         toast({
-          title: result.created > 0 ? t('upload.partialSuccess', 'Imported with errors') : t('upload.failed'),
+          title: result.created > 0 ? t('upload.partialSuccess', 'Imported with issues') : t('upload.failed'),
           description: `${summarizeImport(result)}${detail ? `\n${detail}` : ''}`,
-          variant: result.created > 0 ? 'default' : 'destructive',
+          variant: result.failed > 0 && result.created === 0 ? 'destructive' : 'default',
           duration: 10000,
         });
-        if (failedItems.length > 0) setError(`${summarizeImport(result)}\n${detail}`);
+        if (unimportedItems.length > 0) setError(`${summarizeImport(result)}\n${detail}`);
       } else {
         toast({
           title: t('upload.success'),

@@ -199,17 +199,18 @@
     "importing": "Importing...",
     "uploadTitle": "Upload Data Contract",
     "uploadTooltipTitle": "Upload Data Contract (ODCS format)",
-    "uploadTooltipFormats": "Accepts JSON, YAML, or text files following the ODCS (Open Data Contract Standard) schema.",
+    "uploadTooltipFormats": "Accepts JSON or YAML files following the ODCS (Open Data Contract Standard) schema.",
     "uploadTooltipOdps": "For Data Products (ODPS), use the Data Products page instead.",
     "technicalDetails": "Technical details",
-    "dropActive": "Drop the file here",
-    "dropInactive": "Drag and drop a contract file here, or click to select",
-    "supportedFormats": "Supported formats: JSON, YAML, or plain text",
+    "dropActive": "Drop the file(s) here",
+    "dropInactive": "Drag and drop contract file(s) here, or click to select",
+    "supportedFormats": "Supported formats: JSON or YAML (ODCS)",
     "orPasteOdcs": "Or paste ODCS JSON",
     "importedTitle": "Imported",
     "importedSuccess": "ODCS JSON imported successfully",
     "importOdcsError": "Failed to import ODCS JSON",
-    "importJsonButton": "Import JSON"
+    "importJsonButton": "Import JSON",
+    "uploadDescription": "Select one or more ODCS files (YAML/JSON). Each file may contain a single contract or an array."
   },
   "editor": {
     "title": "Contract Editor",

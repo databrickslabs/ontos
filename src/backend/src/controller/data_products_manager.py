@@ -73,6 +73,7 @@ from src.models.data_products import (
     OnBehalfOf,
 )
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
@@ -1739,6 +1740,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, status="failed",
                         message="Entity is not an object/mapping",
+                    ))
+                    index += 1
+                    continue
+                # Guard against a cross-type file: an ODCS Data Contract must not
+                # be imported as a Data Product. Skip (don't fail) and tell the
+                # user where it belongs.
+                if classify_import_entity(product_data) == "contract":
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=product_data.get('name'), status="skipped",
+                        message=(
+                            f"Skipped: this is an {describe_import_entity(product_data)} "
+                            "(kind: DataContract), not a Data Product. "
+                            "Import it from the Data Contracts page."
+                        ),
                     ))
                     index += 1
                     continue

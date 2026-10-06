@@ -77,7 +77,11 @@ from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.controller.domain_export_adapter import domain_export_adapter, ONTOS_ORIGINAL_DOMAIN_PROPERTY
+from src.controller.domain_export_adapter import (
+    domain_export_adapter,
+    ONTOS_ORIGINAL_DOMAIN_PROPERTY,
+    original_domain_strings_from_props,
+)
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -2691,6 +2695,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             tag_strings = tag_strings + assigned_domain_names
         except Exception as dom_err:
             logger.debug("Could not load domains for product %s search index: %s", product.id, dom_err)
+
+        # Fallback: index the original ODPS-supplied domain string(s) preserved as the
+        # ontosOriginalDomain custom property, so a product imported with an unmatched domain
+        # (create_missing off → no native assignment) is still findable by that domain name.
+        # De-duped against native names so a resolved domain is not indexed twice.
+        try:
+            original_domains = [
+                d for d in original_domain_strings_from_props(product.customProperties)
+                if d and d not in assigned_domain_names
+            ]
+            if original_domains:
+                tag_strings = tag_strings + original_domains
+                assigned_domain_names = assigned_domain_names + original_domains
+                if not primary_domain_name:
+                    primary_domain_name = original_domains[0]
+        except Exception as od_err:
+            logger.debug("Could not load original domains for product %s search index: %s", product.id, od_err)
 
         # Index linked ontology concept labels / IRI tails so semantic queries match.
         try:

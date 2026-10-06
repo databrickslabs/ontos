@@ -278,3 +278,33 @@ class DomainExportAdapter:
 
 # Module-level singleton
 domain_export_adapter = DomainExportAdapter()
+
+
+def original_domain_strings_from_props(custom_properties: Any) -> List[str]:
+    """Extract the preserved ``ontosOriginalDomain`` string(s) from an entity's stored custom
+    properties, so an unmatched ODCS/ODPS domain name stays findable via search even when no
+    native domain was assigned on import.
+
+    Accepts a list whose items are either dicts (``{"property", "value"}``) or objects exposing
+    ``.property`` / ``.value`` (e.g. CustomProperty API models or DataContractCustomPropertyDb
+    rows). Delegates the key/shape handling to
+    :meth:`DomainExportAdapter.extract_original_domain_strings` so there is a single source of truth.
+    """
+    import json
+    normalized: List[Dict[str, Any]] = []
+    for c in custom_properties or []:
+        if isinstance(c, dict):
+            prop, val = c.get("property"), c.get("value")
+        else:
+            prop, val = getattr(c, "property", None), getattr(c, "value", None)
+        # Persisted rows store the value as a JSON-encoded string (e.g. '["sales"]'); decode so a
+        # list stays a list. API-model values are already native and pass through untouched.
+        if isinstance(val, str):
+            s = val.strip()
+            if s[:1] in ("[", "{", '"'):
+                try:
+                    val = json.loads(s)
+                except (ValueError, TypeError):
+                    pass
+        normalized.append({"property": prop, "value": val})
+    return domain_export_adapter.extract_original_domain_strings({"customProperties": normalized})

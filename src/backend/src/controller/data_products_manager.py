@@ -1743,18 +1743,25 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     ))
                     index += 1
                     continue
-                # Guard against a cross-type file: an ODCS Data Contract must not
-                # be imported as a Data Product. Skip (don't fail) and tell the
-                # user where it belongs.
-                if classify_import_entity(product_data) == "contract":
-                    result.add(ImportItemResult(
-                        index=index, source_file=filename, source_id=source_id,
-                        name=product_data.get('name'), status="skipped",
-                        message=(
+                # Only import a recognizable ODPS Data Product. An ODCS contract is
+                # routed to the right page; anything unrecognizable is skipped rather
+                # than imported as a junk product.
+                entity_kind = classify_import_entity(product_data)
+                if entity_kind != "product":
+                    if entity_kind == "contract":
+                        skip_msg = (
                             f"Skipped: this is an {describe_import_entity(product_data)} "
                             "(kind: DataContract), not a Data Product. "
                             "Import it from the Data Contracts page."
-                        ),
+                        )
+                    else:
+                        skip_msg = (
+                            "Skipped: not a recognizable ODPS Data Product "
+                            "(expected kind: DataProduct or product ports)."
+                        )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=product_data.get('name'), status="skipped", message=skip_msg,
                     ))
                     index += 1
                     continue

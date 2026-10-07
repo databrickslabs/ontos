@@ -1561,14 +1561,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
             odcs['servers'] = servers
 
         # Inject semantic assignments from EntitySemanticLinks
+        from contextlib import nullcontext
         from src.controller.semantic_links_manager import SemanticLinksManager
         from src.common.database import get_db_session
         from src.utils.semantic_helpers import get_semantic_assignment_type
 
         SEMANTIC_ASSIGNMENT_TYPE = get_semantic_assignment_type()
 
+        # Reuse the caller's session when one was passed, rather than opening a
+        # second session via get_db_session(). The read-only semantic lookups don't
+        # need their own session, and get_db_session() commits on exit — under the
+        # test harness's shared single SQLite connection that commit lands on the
+        # outer per-test transaction, defeating its rollback and leaking rows across
+        # tests; in production it was simply a redundant session + commit per export.
         try:
-            with get_db_session() as db:
+            session_cm = nullcontext(db_session) if db_session is not None else get_db_session()
+            with session_cm as db:
                 semantic_manager = SemanticLinksManager(db)
 
                 # Inject contract-level semantic assignments

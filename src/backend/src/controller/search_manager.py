@@ -15,11 +15,14 @@ from src.common.features import FeatureAccessLevel
 # Import search configuration
 from src.common.search_config_loader import get_search_config_loader, SearchConfigLoader
 from src.models.search_config import (
-    SearchConfig, 
-    FieldConfig, 
-    MatchType, 
+    SearchConfig,
+    FieldConfig,
+    MatchType,
     SortField,
 )
+# Shared, tokenized scoring core (single source of truth for match logic).
+from src.controller import search_scoring
+from src.controller.search_backend import create_backend, PostgresBackend
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -56,10 +59,29 @@ class SearchManager:
         self.searchable_managers = list(searchable_managers)
         self.index: List[SearchIndexItem] = []
         self._config_loader = config_loader or get_search_config_loader()
-        
-        logger.info(f"SearchManager initialized with {len(self.searchable_managers)} managers.")
-        
+
+        # Choose the backend from settings ("memory" default, "postgres" = DB-backed FTS).
+        try:
+            from src.common.config import get_settings
+            backend_name = get_settings().SEARCH_BACKEND
+        except Exception:
+            backend_name = "memory"
+        self._backend = create_backend(self, backend_name)
+
+        logger.info(
+            f"SearchManager initialized with {len(self.searchable_managers)} managers "
+            f"(backend={backend_name})."
+        )
+
         self.build_index() # Build index after receiving managers
+
+    @property
+    def backend(self):
+        """The active SearchBackend (InMemory or Postgres)."""
+        return self._backend
+
+    def _uses_postgres(self) -> bool:
+        return isinstance(self._backend, PostgresBackend)
 
     @property
     def config(self) -> SearchConfig:
@@ -99,11 +121,30 @@ class SearchManager:
         self.index = new_index
         logger.info(f"Search index build complete. Total items: {len(self.index)}")
 
+        # Postgres backend: backfill the search_documents table, then drop the
+        # in-memory copy so search RAM is O(1) rather than O(entities).
+        if self._uses_postgres():
+            try:
+                self._backend.rebuild(self.index)
+            except Exception as e:
+                logger.error(f"Failed to backfill search_documents: {e}", exc_info=True)
+            self.index = []
+
     def upsert_item(self, item: SearchIndexItem) -> None:
-        """Insert or update a single item in the index."""
+        """Insert or update a single item in the active backend's index."""
         if not self._is_item_enabled(item):
             logger.debug(f"upsert_item: skipping {item.id} (disabled or missing feature_id)")
+            # A now-disabled item should also be removed if present.
+            self._backend.remove(item.id)
             return
+        self._backend.upsert([item])
+
+    def remove_item(self, item_id: str) -> None:
+        """Remove an item from the active backend's index. No-op if not found."""
+        self._backend.remove(item_id)
+
+    # --- in-memory index mutation used by InMemoryBackend ---
+    def _index_upsert_local(self, item: SearchIndexItem) -> None:
         for i, existing in enumerate(self.index):
             if existing.id == item.id:
                 self.index[i] = item
@@ -112,8 +153,7 @@ class SearchManager:
         self.index.append(item)
         logger.debug(f"Search index: added {item.id}")
 
-    def remove_item(self, item_id: str) -> None:
-        """Remove an item from the index by id. No-op if not found."""
+    def _index_remove_local(self, item_id: str) -> None:
         for i, existing in enumerate(self.index):
             if existing.id == item_id:
                 self.index.pop(i)
@@ -157,7 +197,12 @@ class SearchManager:
         query_stripped = query.strip()
         if not query_stripped:
             return []
-        
+
+        # Postgres backend: candidates come from the DB (ranked), then the SAME
+        # per-item permission check is applied in Python — no auth logic in SQL.
+        if self._uses_postgres():
+            return self._search_postgres(query_stripped, auth_manager, user, team_role_override)
+
         config = self.config
         matches: List[SearchMatch] = []
         
@@ -166,12 +211,16 @@ class SearchManager:
             tag_pattern = query_stripped[4:].strip()  # Extract pattern after 'tag:'
             matches = self._filter_by_tag(tag_pattern, config)
         else:
-            # Normal search
-            query_lower = query_stripped.lower()
-            for item in self.index:
-                match = self._find_best_match(item, query_lower, config)
-                if match:
-                    matches.append(match)
+            # Normal search: tokenized scoring via the shared scorer, then wrapped
+            # in SearchMatch so downstream permission-filtering and ranking are unchanged.
+            for scored in search_scoring.score_and_rank(self.index, query_stripped, config):
+                matches.append(SearchMatch(
+                    item=scored.item,
+                    matched_field="",
+                    field_priority=scored.field_priority,
+                    boost_score=scored.total_score,
+                    match_quality=1.0,
+                ))
 
         # Filter based on permissions using AuthorizationManager
         if not user.groups:
@@ -200,9 +249,63 @@ class SearchManager:
         )
         return results
 
+    def _search_postgres(
+        self,
+        query: str,
+        auth_manager: AuthorizationManager,
+        user: UserInfo,
+        team_role_override: Optional[str],
+    ) -> List[SearchIndexItem]:
+        """REST search via the Postgres backend: DB-ranked candidates, then the
+        existing per-item permission filter (reused verbatim — no SQL auth)."""
+        REST_CANDIDATE_LIMIT = 200
+        candidates = self._backend.search_items(query, limit=REST_CANDIDATE_LIMIT)
+
+        if not user.groups:
+            logger.warning(f"User {user.username} has no groups, returning empty search results.")
+            return []
+        try:
+            effective_permissions = auth_manager.get_user_effective_permissions(
+                user.groups, team_role_override
+            )
+        except Exception as e:
+            logger.error(f"Error checking permissions during search for user {user.username}: {e}", exc_info=True)
+            return []
+
+        results = [
+            item for item in candidates
+            if auth_manager.has_permission(effective_permissions, item.feature_id, FeatureAccessLevel.READ_ONLY)
+        ]
+        logger.info(
+            f"Postgres search for '{query}' returned {len(results)} results "
+            f"after permission filtering for user {user.username}."
+        )
+        return results
+
+    def query_index(
+        self,
+        query: str,
+        *,
+        type_filter: Optional[str] = None,
+        filters: Optional[Dict[str, Optional[str]]] = None,
+        limit: int = 25,
+        offset: int = 0,
+        include_facets: bool = True,
+    ) -> Dict[str, Any]:
+        """MCP entry point: paginated/faceted search via the active backend.
+
+        Scope-based access only (no per-user permission filtering) — the MCP
+        layer enforces token scopes. Returns the ``search_scoring.search_index``
+        result shape regardless of backend.
+        """
+        return self._backend.search(
+            query, type_filter=type_filter, filters=filters,
+            limit=limit, offset=offset, include_facets=include_facets,
+        )
+
     def _filter_by_tag(
-        self, 
-        tag_pattern: str, 
+        self,
+        tag_pattern: str,
         config: SearchConfig
     ) -> List[SearchMatch]:
         """
@@ -310,108 +413,16 @@ class SearchManager:
         return best_match
 
     def _get_field_value(self, item: SearchIndexItem, field_name: str) -> Optional[str]:
-        """
-        Get the value of a field from a SearchIndexItem.
-        
-        Handles standard fields and extra_data fields.
-        """
-        # Standard fields
-        if field_name == "title":
-            return item.title
-        elif field_name == "description":
-            return item.description
-        elif field_name == "tags":
-            # Join tags into a single searchable string
-            return " ".join(str(t) for t in item.tags) if item.tags else None
-        elif field_name == "type":
-            return item.type
-        elif field_name == "id":
-            return item.id
-        
-        # Check extra_data for custom fields
-        if item.extra_data and field_name in item.extra_data:
-            value = item.extra_data[field_name]
-            if isinstance(value, list):
-                return " ".join(str(v) for v in value)
-            return str(value) if value is not None else None
-        
-        return None
+        """Get the value of a field from a SearchIndexItem (delegates to the shared scorer)."""
+        return search_scoring.get_field_value(item, field_name)
 
     def _check_match(self, value: str, query: str, match_type: MatchType) -> float:
-        """
-        Check if a value matches the query using the specified match type.
-        
-        Returns a match quality score:
-        - 0.0: No match
-        - 0.5-0.8: Partial match (fuzzy)
-        - 1.0: Full match (exact, prefix at start, substring found)
-        """
-        if not value:
-            return 0.0
-        
-        value_lower = value.lower()
-        
-        if match_type == MatchType.EXACT:
-            return 1.0 if value_lower == query else 0.0
-        
-        elif match_type == MatchType.PREFIX:
-            # Check if query matches start of value (or any word in value)
-            if value_lower.startswith(query):
-                return 1.0
-            # Also check word boundaries for multi-word values
-            # Split on spaces AND slashes to handle FQN tag format (namespace/tagname)
-            import re
-            words = re.split(r'[\s/]+', value_lower)
-            for word in words:
-                if word.startswith(query):
-                    return 0.9  # Slightly lower score for non-leading word match
-            return 0.0
-        
-        elif match_type == MatchType.SUBSTRING:
-            if query in value_lower:
-                # Higher score if match is at start or word boundary
-                if value_lower.startswith(query):
-                    return 1.0
-                elif f" {query}" in value_lower:
-                    return 0.9
-                return 0.8
-            return 0.0
-        
-        elif match_type == MatchType.FUZZY:
-            # Simple fuzzy matching using edit distance approximation
-            return self._fuzzy_match(value_lower, query)
-        
-        return 0.0
+        """Check how well a query matches a value (delegates to the shared scorer)."""
+        return search_scoring.check_match(value, query, match_type)
 
     def _fuzzy_match(self, value: str, query: str) -> float:
-        """
-        Simple fuzzy matching implementation.
-        
-        Returns a score between 0 and 1 based on similarity.
-        """
-        # First check for substring match
-        if query in value:
-            return 0.9
-        
-        # Check if all query characters appear in order (subsequence)
-        query_idx = 0
-        for char in value:
-            if query_idx < len(query) and char == query[query_idx]:
-                query_idx += 1
-        
-        if query_idx == len(query):
-            # All characters found in order
-            return 0.7
-        
-        # Check character overlap for very fuzzy matching
-        query_set = set(query)
-        value_set = set(value[:len(query) * 2])  # Only check beginning of value
-        overlap = len(query_set & value_set) / len(query_set) if query_set else 0
-        
-        if overlap >= 0.8:
-            return 0.5
-        
-        return 0.0
+        """Fuzzy match score in [0, 1] (delegates to the shared scorer)."""
+        return search_scoring.fuzzy_match(value, query)
 
     def _sort_matches(self, matches: List[SearchMatch], config: SearchConfig) -> List[SearchMatch]:
         """

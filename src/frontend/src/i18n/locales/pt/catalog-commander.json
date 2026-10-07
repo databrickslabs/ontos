@@ -1,0 +1,73 @@
+{
+  "title": "Catalog Commander",
+  "catalogBrowser": "Navegador do catálogo",
+  "target": "Destino",
+  "objectInformation": "Informações do objeto",
+  "basicInformation": "Informações básicas",
+  "commentsAndActivity": "Comentários e atividade",
+  "askOntos": "Perguntar ao {{shortName}}",
+  "actions": {
+    "viewData": "Visualizar dados",
+    "move": "Mover",
+    "delete": "Excluir",
+    "rename": "Renomear",
+    "info": "Informações",
+    "operations": "Operações",
+    "comments": "Comentários",
+    "retry": "Tentar novamente",
+    "newChat": "Novo chat",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar"
+  },
+  "tooltips": {
+    "copyToTarget": "Copiar para o destino",
+    "moveToTarget": "Mover para o destino",
+    "moveFromTarget": "Mover do destino",
+    "refresh": "Atualizar (segure Shift para forçar a atualização)",
+    "dragToResize": "Arraste para redimensionar"
+  },
+  "labels": {
+    "metastore": "Metastore",
+    "filterCatalogs": "Filtrar catálogos...",
+    "selectEstate": "Selecionar estate",
+    "name": "Nome:",
+    "type": "Tipo:",
+    "fullPath": "Caminho completo:",
+    "actions": "Ações:"
+  },
+  "messages": {
+    "selectObjectToViewInfo": "Selecione um objeto para visualizar suas informações",
+    "selectObjectToViewComments": "Selecione um objeto para visualizar comentários",
+    "loadingDetails": "Carregando detalhes...",
+    "noDataAvailable": "Nenhum dado disponível",
+    "datasetView": "Visualização do conjunto de dados: {{name}}",
+    "confirmOperation": "Confirmar operação",
+    "selectedItems": "Itens selecionados: {{items}}",
+    "noItemsSelected": "Nenhum item selecionado",
+    "noResponse": "Sem resposta",
+    "tableNotFound": "Tabela \"{{name}}\" não encontrada em {{schema}}",
+    "failedToNavigate": "Falha ao navegar para {{path}}"
+  },
+  "askPanel": {
+    "title": "Perguntar ao {{shortName}}",
+    "askAboutItem": "Pergunte sobre este item do catálogo",
+    "askQuestionsAbout": "Faça perguntas sobre \"{{name}}\"",
+    "selectItemFirst": "Selecione um item para fazer perguntas sobre ele",
+    "askAboutPlaceholder": "Pergunte sobre {{name}}...",
+    "selectItemPlaceholder": "Selecione um item primeiro...",
+    "askingAbout": "Perguntando sobre:",
+    "thinking": "Pensando...",
+    "rerun": "Executar novamente",
+    "copyToInput": "Editar e reenviar",
+    "exampleQuestions": {
+      "columns": "Quais colunas ele tem?",
+      "owner": "Quem é o responsável?",
+      "usage": "Como ele é usado?"
+    }
+  },
+  "errors": {
+    "error": "Erro",
+    "failedToSendMessage": "Falha ao enviar mensagem",
+    "chatRequestFailed": "Falha na solicitação de chat"
+  }
+}

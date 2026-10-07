@@ -567,6 +567,7 @@
       "title": "Using MCP Tokens",
       "description": "MCP tokens allow AI assistants to interact with your data governance platform. Each token has specific scopes that control which tools can be accessed.",
       "endpoint": "Endpoint:",
+      "endpointAlias": "(legacy alias: /api/mcp)",
       "header": "Header:"
     },
     "createDialog": {
@@ -579,7 +580,7 @@
       "expirationHelp": "Leave empty for no expiration",
       "keylessDefault": "Use as keyless default",
       "keylessDefaultHelp": "Resolve app-gate-authenticated MCP requests that carry no X-API-Key to this token. Supersedes any existing default.",
-      "keylessDefaultWarning": "This token's scopes will apply to ANY app user who reaches /api/mcp without a key. Global search bypasses per-user access controls, so grant read-only scopes only (no writes, SPARQL, or full access).",
+      "keylessDefaultWarning": "This token's scopes will apply to ANY app user who reaches /mcp without a key. Global search bypasses per-user access controls, so grant read-only scopes only (no writes, SPARQL, or full access).",
       "scopes": "Scopes",
       "scopesHelp": "Select the permissions this token should have",
       "selectedScopes": "Selected:",

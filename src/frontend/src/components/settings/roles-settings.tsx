@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AppRole, FeatureConfig, FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, AlertCircle, ChevronDown, UserPlus, Shield } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, ChevronDown, UserPlus, Shield, User, Users } from 'lucide-react';
 import { ListItemSkeleton } from '@/components/common/list-view-skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import RoleFormDialog from './role-form-dialog'; // Uncomment and import
@@ -42,13 +42,14 @@ export default function RolesSettings() {
     const canWrite = hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
     const canAdmin = hasPermission(featureId, FeatureAccessLevel.ADMIN);
 
-    // Function to check if the current user has a specific role based on group assignments
+    // Whether the current user holds a role — via group membership OR direct
+    // email assignment (assigned_users, #196/#760).
     const checkUserHasRole = (role: AppRole): boolean => {
-        if (!userGroups || userGroups.length === 0 || !role.assigned_groups) {
-            return false;
-        }
         const userGroupSet = new Set(userGroups);
-        return role.assigned_groups.some(group => userGroupSet.has(group));
+        const byGroup = (role.assigned_groups || []).some(group => userGroupSet.has(group));
+        const email = (userInfo?.email || '').trim().toLowerCase();
+        const byEmail = !!email && (role.assigned_users || []).some(u => (u || '').trim().toLowerCase() === email);
+        return byGroup || byEmail;
     };
 
     const fetchData = async () => {
@@ -160,19 +161,35 @@ export default function RolesSettings() {
         },
         {
             accessorKey: "assigned_groups",
-            header: t('roles.table.assignedGroupsColumn'),
+            header: t('roles.table.principalsColumn', 'Principals'),
             cell: ({ row }) => {
-                const groups = row.getValue("assigned_groups") as string[] || [];
+                const groups = (row.original.assigned_groups as string[]) || [];
+                const users = (row.original.assigned_users as string[]) || [];
+                // Groups: dark badge + multi-person icon. Users: light badge + single-person icon.
+                const principals = [
+                    ...groups.map((g) => ({ kind: 'group' as const, label: g })),
+                    ...users.map((u) => ({ kind: 'user' as const, label: u })),
+                ];
+                if (principals.length === 0) {
+                    return <span className="text-xs text-muted-foreground">{t('roles.table.none')}</span>;
+                }
+                const MAX = 3;
+                const shown = principals.slice(0, MAX);
+                const extra = principals.length - shown.length;
                 return (
-                    groups.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                            {groups.map((group: string) => (
-                                <Badge key={group} variant="secondary">{group}</Badge>
-                            ))}
-                        </div>
-                    ) : (
-                        <span className="text-xs text-muted-foreground">{t('roles.table.none')}</span>
-                    )
+                    <div className="flex flex-wrap gap-1">
+                        {shown.map((p) => (
+                            <Badge
+                                key={`${p.kind}:${p.label}`}
+                                variant={p.kind === 'group' ? 'secondary' : 'outline'}
+                                className="gap-1"
+                            >
+                                {p.kind === 'group' ? <Users className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                                {p.label}
+                            </Badge>
+                        ))}
+                        {extra > 0 && <Badge variant="outline">+{extra} more</Badge>}
+                    </div>
                 );
             },
             enableSorting: false,

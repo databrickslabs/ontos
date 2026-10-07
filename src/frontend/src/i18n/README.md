@@ -6,6 +6,12 @@ This application uses **react-i18next** for internationalization support.
 
 - 🇺🇸 **English (en)** - Default language
 - 🇩🇪 **German (de)**
+- 🇪🇸 **Spanish (es)**
+- 🇫🇷 **French (fr)**
+- 🇮🇹 **Italian (it)**
+- 🇯🇵 **Japanese (ja)**
+- 🇳🇱 **Dutch (nl)**
+- 🇧🇷 **Brazilian Portuguese (pt)**
 
 ## Directory Structure
 
@@ -165,13 +171,13 @@ Two scripts under `src/scripts/` (wired as npm scripts) drive and protect the mi
 ## Migration Status
 
 ### ✅ Completed (issue #471)
-- Infrastructure (react-i18next, auto-discovery config) + 7 locales (en, de, es, fr, it, ja, nl)
+- Infrastructure (react-i18next, auto-discovery config) + 8 locales (en, de, es, fr, it, ja, nl, pt)
 - Language selector in header; persistence across reloads
 - Tooling & guardrails above (`check:i18n`, `audit:i18n`, `--scaffold`, ESLint rule)
 - **All views, components, dialogs, wizards, panels, navigation, feature configs, toasts, and validation messages migrated to `t(...)`** across every namespace (`check:i18n` passes; `audit:i18n` shows only non-translatable false-positives)
-- **Full locale parity** — every namespace has identical keys in all 7 locales
-- **Real translations** for de/es/fr/it/ja/nl (0 `__TODO__` markers remaining)
-- Playwright coverage across all 7 locales (`tests/i18n-locales.spec.ts`)
+- **Full locale parity** — `en` and `pt` have full key coverage; de/es/fr/it/ja/nl have 78 keys missing (tracked separately, all fall back silently to `en`)
+- **Real translations** for de/es/fr/it/ja/nl/pt (0 `__TODO__` markers remaining)
+- Playwright coverage across all 8 locales (`tests/i18n-locales.spec.ts`)
 
 ## Best Practices
 

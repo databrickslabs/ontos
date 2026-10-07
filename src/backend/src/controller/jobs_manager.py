@@ -70,11 +70,22 @@ class JobsManager:
         return sorted(items, key=lambda x: x["name"].lower())
 
     def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
+        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
+
         # Deploy workflow code to workspace if deployer is configured
         if self._workspace_deployer:
             workflow_dir = self._workflows_root / workflow_id
             if workflow_dir.exists():
-                self._workspace_deployer.deploy_workflow(workflow_id, workflow_dir)
+                python_package_dir = (
+                    self._workflows_root.parent
+                    if wf_def.get('deploy_backend_source')
+                    else None
+                )
+                self._workspace_deployer.deploy_workflow(
+                    workflow_id,
+                    workflow_dir,
+                    python_package_dir=python_package_dir,
+                )
                 logger.info(f"Deployed workflow '{workflow_id}' to workspace")
         elif self._settings and self._settings.WORKSPACE_DEPLOYMENT_PATH:
             logger.error(
@@ -82,8 +93,6 @@ class JobsManager:
                 f"but WorkspaceDeployer is not initialized. Workflow files will NOT be uploaded. "
                 f"The job will be created but will fail at runtime."
             )
-
-        wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
 
         # Build job settings kwargs from workflow definition
         tasks = self._build_tasks_from_definition(wf_def)
@@ -589,6 +598,21 @@ class JobsManager:
         else:
             # Derive from __file__ (works when app runs in workspace)
             base_path = str(Path(__file__).parent.parent)
+
+        if wf.get('deploy_backend_source'):
+            parameters = wf.setdefault('parameters', {})
+            if isinstance(parameters, dict):
+                if self._settings and self._settings.WORKSPACE_DEPLOYMENT_PATH:
+                    backend_source_path = f"{base_path}/{workflow_id}/backend_src.zip"
+                else:
+                    # Both non-deployment base paths name the ``src`` package directory:
+                    # WORKSPACE_APP_PATH is configured as ``.../src/backend/src``; the
+                    # fallback derives ``.../backend/src`` from this file at
+                    # ``.../backend/src/controller/jobs_manager.py``. ``from src.*``
+                    # therefore needs exactly their parent, ``.../src/backend`` or
+                    # ``.../backend``, on sys.path.
+                    backend_source_path = str(Path(base_path).parent)
+                parameters['backend_source_path'] = backend_source_path
 
         # Helper: detect URI scheme like file:, dbfs:, s3:, etc.
         def _has_scheme(path: str) -> bool:
@@ -1299,4 +1323,3 @@ class JobsManager:
                 logger.info(f"Triggered {len(executions)} workflow(s) for job success (run {run_id})")
         except Exception as e:
             logger.error(f"Failed to trigger workflow for job success: {e}", exc_info=True)
-

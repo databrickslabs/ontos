@@ -492,8 +492,10 @@ if not settings.TESTING:
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
         # Only catch routes that aren't API routes, static files, or API docs
-        # This check might be redundant now due to ordering, but safe to keep
-        if not full_path.startswith("api/") and not full_path.startswith("static/") and full_path not in ["docs", "redoc", "openapi.json"]:
+        # This check might be redundant now due to ordering, but safe to keep.
+        # "mcp" is excluded so an unmatched GET under the native MCP path 404s
+        # instead of returning SPA HTML (which breaks MCP clients).
+        if not full_path.startswith("api/") and not full_path.startswith("static/") and not full_path.startswith("mcp") and full_path not in ["docs", "redoc", "openapi.json"]:
             # Ensure the path exists before serving
             spa_index = STATIC_ASSETS_PATH / "index.html"
             if spa_index.is_file():

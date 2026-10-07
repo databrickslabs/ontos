@@ -2976,15 +2976,24 @@ The MCP endpoint uses JSON-RPC 2.0 over HTTP.
 #### Endpoint URL
 
 ```text
-POST /api/mcp
+POST /mcp
 ```
+
+> The server is also mounted at the legacy path `/api/mcp`, which continues to
+> work for existing clients. New integrations should use `/mcp`.
+>
+> **On-behalf-of (OBO):** when the MCP server is reached through the Ontos app
+> proxy (native integration), tools that read Unity Catalog run **as the calling
+> user**, scoped to that user's grants. External agents calling with only an
+> `X-API-Key` (no forwarded user identity) run as the app service principal, as
+> before.
 
 #### Authentication
 
 Include your MCP token in the `X-API-Key` header:
 
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-mcp-token-here" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
@@ -3153,7 +3162,7 @@ Add Ontos as an MCP server in your Claude Desktop config:
 {
   "mcpServers": {
     "ontos": {
-      "url": "https://your-ontos-instance/api/mcp",
+      "url": "https://your-ontos-instance/mcp",
       "headers": {
         "X-API-Key": "your-mcp-token-here"
       }
@@ -3167,7 +3176,7 @@ Add Ontos as an MCP server in your Claude Desktop config:
 ```python
 import httpx
 
-MCP_URL = "https://your-ontos-instance/api/mcp"
+MCP_URL = "https://your-ontos-instance/mcp"
 MCP_TOKEN = "your-mcp-token-here"
 
 def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
@@ -3198,7 +3207,7 @@ print(result)
 
 **List available tools**:
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $MCP_TOKEN" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
@@ -3206,7 +3215,7 @@ curl -X POST https://your-ontos-instance/api/mcp \
 
 **Search data products**:
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $MCP_TOKEN" \
   -d '{
@@ -3222,7 +3231,7 @@ curl -X POST https://your-ontos-instance/api/mcp \
 
 **Find entities by concept**:
 ```bash
-curl -X POST https://your-ontos-instance/api/mcp \
+curl -X POST https://your-ontos-instance/mcp \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $MCP_TOKEN" \
   -d '{
@@ -3292,7 +3301,7 @@ The MCP endpoint returns standard JSON-RPC 2.0 errors:
 Use the health endpoint to verify connectivity:
 
 ```bash
-curl https://your-ontos-instance/api/mcp/health
+curl https://your-ontos-instance/mcp/health
 ```
 
 **Response**:

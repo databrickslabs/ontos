@@ -1,0 +1,90 @@
+{
+  "title": "Equipes",
+  "subtitle": "Gerencie equipes e seus membros em toda a organização.",
+  "openMenu": "Abrir menu",
+  "addNewTeam": "Adicionar nova equipe",
+  "editTeam": "Editar equipe",
+  "deleteTeam": "Excluir equipe",
+  "showingTeamsForProject": "Exibindo equipes do projeto:",
+  "form": {
+    "dialog": {
+      "createTitle": "Criar nova equipe",
+      "editTitle": "Editar equipe",
+      "createDescription": "Crie uma nova equipe com membros e substituições de papel.",
+      "editDescription": "Atualize os detalhes e membros da equipe."
+    },
+    "sections": {
+      "info": "Informações da equipe",
+      "members": "Membros da equipe",
+      "tags": "Tags"
+    },
+    "labels": {
+      "name": "Nome da equipe *",
+      "title": "Título de exibição",
+      "description": "Descrição",
+      "domain": "Domínio de dados",
+      "type": "Tipo",
+      "identifier": "E-mail / Nome do grupo",
+      "roleOverride": "Substituição de papel",
+      "noOverride": "Sem substituição"
+    },
+    "placeholders": {
+      "name": "Digite o nome da equipe",
+      "title": "Digite o título de exibição (opcional)",
+      "description": "Digite a descrição da equipe (opcional)",
+      "selectDomain": "Selecione um domínio de dados (opcional)",
+      "userEmail": "usuario@exemplo.com",
+      "groupName": "nome-do-grupo",
+      "noMembersHelp": "Nenhum membro adicionado ainda. Clique em \"Adicionar membro\" para começar a montar sua equipe.",
+      "tagSearch": "Pesquise e selecione tags para esta equipe..."
+    },
+    "memberTypes": {
+      "user": "Usuário",
+      "group": "Grupo"
+    },
+    "buttons": {
+      "addMember": "Adicionar membro",
+      "removeMember": "Remover membro",
+      "update": "Atualizar equipe",
+      "create": "Criar equipe"
+    },
+    "toasts": {
+      "createdTitle": "Equipe criada",
+      "updatedTitle": "Equipe atualizada",
+      "createdDescription": "A equipe \"{{name}}\" foi criada com sucesso.",
+      "updatedDescription": "A equipe \"{{name}}\" foi atualizada com sucesso.",
+      "createFailedTitle": "Falha ao criar equipe",
+      "updateFailedTitle": "Falha ao atualizar equipe",
+      "failedDescription": "Ocorreu um erro inesperado."
+    }
+  },
+  "table": {
+    "name": "Nome",
+    "description": "Descrição",
+    "members": "Membros",
+    "lastUpdated": "Última atualização",
+    "actions": "Ações",
+    "domainPrefix": "↳ Domínio:",
+    "moreMembers": "mais"
+  },
+  "permissions": {
+    "deniedView": "Você não tem permissão para visualizar equipes.",
+    "deniedCreate": "Você não tem permissão para criar equipes.",
+    "deniedEdit": "Você não tem permissão para editar equipes.",
+    "deniedDelete": "Você não tem permissão para excluir equipes.",
+    "permissionDenied": "Permissão negada"
+  },
+  "messages": {
+    "teamDeleted": "Equipe excluída",
+    "teamDeletedSuccess": "A equipe foi excluída com sucesso.",
+    "errorFetchingTeams": "Erro ao buscar equipes",
+    "errorDeletingTeam": "Erro ao excluir equipe",
+    "errorLoadingData": "Erro ao carregar dados"
+  },
+  "deleteDialog": {
+    "title": "Você tem certeza absoluta?",
+    "description": "Esta ação não pode ser desfeita. Isso excluirá permanentemente a equipe e todos os seus membros.",
+    "cancel": "Cancelar",
+    "delete": "Excluir"
+  }
+}

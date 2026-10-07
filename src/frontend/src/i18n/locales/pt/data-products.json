@@ -1,0 +1,1152 @@
+{
+  "title": "Produtos de dados",
+  "subtitle": "Gerencie seus produtos de dados",
+  "newProduct": "Novo produto de dados",
+  "importProduct": "Importar",
+  "searchPlaceholder": "Pesquisar produtos de dados...",
+  "loading": "Carregando produtos de dados...",
+  "filters": {
+    "allStatus": "Todos os status",
+    "allOwners": "Todos os proprietários",
+    "mySubscriptions": "Minhas assinaturas"
+  },
+  "toolbar": {
+    "showAll": "Mostrar todos os produtos",
+    "showSubscriptions": "Mostrar apenas minhas assinaturas",
+    "mySubscriptionsCount": "Minhas assinaturas ({{count}})",
+    "createProduct": "Criar produto",
+    "uploadFile": "Enviar arquivo"
+  },
+  "permissions": {
+    "denied": "Permissão negada",
+    "noView": "Você não tem permissão para visualizar produtos de dados.",
+    "noCreate": "Você não tem permissão para criar produtos de dados.",
+    "noEdit": "Você não tem permissão para editar produtos de dados.",
+    "noDelete": "Você não tem permissão para excluir produtos de dados.",
+    "noBulkDelete": "Você não tem permissão para excluir em massa.",
+    "noGenieSpace": "Você não tem permissão para criar Genie Spaces.",
+    "noUpload": "Você não tem permissão para enviar produtos de dados."
+  },
+  "bulk": {
+    "deleteConfirm": "Tem certeza de que deseja excluir {{count}} produto(s) selecionado(s)?",
+    "deleteSuccess": "Exclusão em massa bem-sucedida",
+    "deleteSuccessCount": "{{count}} produto(s) excluído(s).",
+    "deleteError": "Erro na exclusão em massa",
+    "deleteErrorCount": "{{count}} produto(s) não puderam ser excluídos. Primeiro erro: {{error}}",
+    "requestAccessTitle": "Solicitar acesso para os selecionados",
+    "requestAccess": "Solicitar acesso ({{count}})",
+    "createGenieSpaceTitle": "Criar Genie Space a partir dos selecionados",
+    "createGenieSpace": "Criar Genie Space ({{count}})",
+    "deleteTitle": "Excluir selecionados",
+    "deleteSelected": "Excluir selecionados ({{count}})"
+  },
+  "access": {
+    "submitting": "Enviando",
+    "requestingAccess": "Solicitando acesso para {{count}} item(ns)...",
+    "requestError": "Falha ao enviar solicitações de acesso",
+    "requestSent": "Solicitação enviada",
+    "requestSubmitted": "Solicitação de acesso enviada. Você será notificado."
+  },
+  "upload": {
+    "success": "Upload bem-sucedido",
+    "successMessage": "{{filename}} processado com sucesso. {{count}} produto(s) processado(s).",
+    "failed": "Falha no upload",
+    "unexpectedError": "Ocorreu um erro inesperado durante o upload.",
+    "uploading": "Enviando...",
+    "tooltipTitle": "Enviar produto de dados (formato ODPS)",
+    "tooltipDescription": "Aceita arquivos YAML ou JSON seguindo o esquema ODPS (Open Data Product Standard).",
+    "tooltipHint": "Para contratos de dados (ODCS), use a página Contratos de dados.",
+    "odcsHint": "Dica: esta página é para produtos de dados (formato ODPS). Se você está tentando enviar um contrato de dados (formato ODCS), use a página Contratos de dados."
+  },
+  "genie": {
+    "noSelection": "Nenhuma seleção",
+    "selectAtLeastOne": "Selecione pelo menos um produto de dados.",
+    "createConfirm": "Criar um Genie Space para {{count}} produto(s) selecionado(s)?",
+    "initiating": "Iniciando Genie Space",
+    "requestingCreation": "Solicitando a criação de Genie Space para {{count}} produto(s)...",
+    "requestSubmitted": "Solicitação enviada",
+    "willBeNotified": "Criação do Genie Space iniciada. Você será notificado.",
+    "creationError": "Falha ao iniciar a criação do Genie Space."
+  },
+  "navigation": {
+    "error": "Erro de navegação",
+    "missingId": "Não foi possível navegar para os detalhes; o ID do produto está ausente."
+  },
+  "table": {
+    "title": "Título",
+    "name": "Nome",
+    "status": "Status",
+    "domain": "Domínio",
+    "owner": "Proprietário",
+    "version": "Versão",
+    "type": "Tipo",
+    "tags": "Tags",
+    "created": "Criado em",
+    "updated": "Atualizado em",
+    "actions": "Ações",
+    "viewDetails": "Ver detalhes",
+    "editProduct": "Editar produto",
+    "deleteProduct": "Excluir produto",
+    "subscribed": "Assinado",
+    "unnamedProduct": "Produto sem nome",
+    "previewMetadata": "Visualizar metadados",
+    "editDenied": "Editar (permissão negada)",
+    "deleteDenied": "Excluir (permissão negada)"
+  },
+  "messages": {
+    "deleteConfirm": "Tem certeza de que deseja excluir este produto de dados?",
+    "deleteSuccess": "Produto de dados excluído com sucesso",
+    "deleteError": "Falha ao excluir produto de dados",
+    "fetchError": "Falha ao buscar produtos de dados",
+    "importSuccess": "Produto de dados importado com sucesso",
+    "importError": "Falha ao importar produto de dados",
+    "success": "Sucesso",
+    "error": "Erro",
+    "validationErrors": "Ocorreram {{count}} erro(s) de validação",
+    "validationTitle": "Erro de validação",
+    "loadInitialError": "Falha ao carregar dados iniciais",
+    "refreshError": "Falha ao atualizar a lista de produtos",
+    "unknownError": "Erro desconhecido",
+    "unknownErrorFormat": "Formato de erro desconhecido"
+  },
+  "status": {
+    "draft": "Rascunho",
+    "sandbox": "Sandbox",
+    "proposed": "Proposto",
+    "under_review": "Em revisão",
+    "in_review": "Em revisão",
+    "active": "Ativo",
+    "approved": "Aprovado",
+    "certified": "Certificado",
+    "deprecated": "Obsoleto",
+    "retired": "Aposentado",
+    "published": "Publicado",
+    "personalDraft": "Rascunho pessoal"
+  },
+  "viewMode": {
+    "table": "Tabela",
+    "graph": "Grafo"
+  },
+  "details": {
+    "backToList": "Voltar para a lista",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "subscribe": "Assinar",
+    "unsubscribe": "Cancelar assinatura",
+    "publish": "Publicar",
+    "unpublish": "Despublicar",
+    "published": "Publicado",
+    "notFound": "Produto de dados não encontrado",
+    "loading": "Carregando...",
+    "noDescription": "Nenhuma descrição fornecida",
+    "coreMetadata": {
+      "status": "Status",
+      "version": "Versão",
+      "owner": "Proprietário",
+      "domain": "Domínio",
+      "created": "Criado em",
+      "updated": "Atualizado em",
+      "tags": "Tags",
+      "noTags": "Sem tags",
+      "notAssigned": "Não atribuído",
+      "project": "Projeto",
+      "tenant": "Tenant",
+      "ownerTeam": "Equipe",
+      "apiVersion": "Ver. da API",
+      "certification": "Cert.",
+      "publishedLabel": "Publicado",
+      "quality": "Qualidade",
+      "linkedConcepts": "Conceitos de negócio vinculados"
+    },
+    "sections": {
+      "overview": "Visão geral",
+      "description": "Descrição",
+      "inputPorts": "Portas de entrada",
+      "outputPorts": "Portas de saída",
+      "contracts": "Contratos de dados",
+      "subscribers": "Assinantes",
+      "lineage": "Linhagem"
+    },
+    "inputPorts": {
+      "title": "Portas de entrada",
+      "subtitle": "Fontes de dados consumidas por este produto",
+      "noInputPorts": "Nenhuma porta de entrada definida",
+      "addInputPort": "Adicionar porta de entrada"
+    },
+    "outputPorts": {
+      "title": "Portas de saída",
+      "subtitle": "Dados expostos por este produto",
+      "noOutputPorts": "Nenhuma porta de saída definida",
+      "addOutputPort": "Adicionar porta de saída"
+    },
+    "contracts": {
+      "title": "Contratos de dados",
+      "subtitle": "Contratos associados a este produto",
+      "noContracts": "Nenhum contrato vinculado",
+      "viewContract": "Ver contrato"
+    },
+    "subscribers": {
+      "title": "Assinantes",
+      "subtitle": "Usuários e equipes assinantes deste produto",
+      "noSubscribers": "Ainda não há assinantes",
+      "table": {
+        "email": "E-mail",
+        "subscribed": "Assinado em",
+        "reason": "Motivo"
+      },
+      "titleWithCount": "Assinantes ({{count}})",
+      "notificationSubtitle": "Os usuários assinantes deste produto receberão notificações sobre mudanças de status, problemas de conformidade e novas versões."
+    },
+    "subscription": {
+      "subscribed": "Assinatura realizada",
+      "unsubscribed": "Assinatura cancelada",
+      "subscribeMessage": "Você receberá atualizações deste produto de dados",
+      "unsubscribeMessage": "Você não receberá mais atualizações deste produto de dados",
+      "error": "Falha ao atualizar assinatura"
+    },
+    "deleteConfirm": "Tem certeza de que deseja excluir \"{{name}}\"?",
+    "deleteSuccess": "Produto de dados excluído com sucesso",
+    "deleteError": "Falha ao excluir produto de dados",
+    "unnamedProduct": "Produto sem nome",
+    "ratings": {
+      "title": "Avaliações e comentários"
+    },
+    "actions": {
+      "requestAccess": "Solicitar...",
+      "certify": "Certificar",
+      "createGenieSpace": "Criar Genie Space",
+      "cloneForEditing": "Clonar para edição",
+      "commitChanges": "Confirmar alterações",
+      "discardDraft": "Descartar rascunho",
+      "newVersion": "Nova versão",
+      "exportODPS": "Exportar ODPS",
+      "manageLineage": "Gerenciar linhagem"
+    },
+    "banners": {
+      "personalDraftTitle": "Rascunho pessoal",
+      "personalDraftMessage": "Este é seu rascunho pessoal. Somente você pode vê-lo. Confirme as alterações para compartilhar com sua equipe.",
+      "readOnlyTitle": "Somente leitura",
+      "readOnlyMessage": "Este produto está {{status}}. Clone para criar um rascunho pessoal para edição."
+    },
+    "contacts": {
+      "title": "Contatos",
+      "fromImportedData": "De dados importados",
+      "teamAssignmentOnly": "Apenas atribuição de equipe",
+      "defaultRole": "Proprietário",
+      "teamRole": "Equipe",
+      "importedContactsLabel": "Contatos importados",
+      "noContactsAssigned": "Nenhum contato atribuído"
+    },
+    "deliverables": {
+      "titleWithCount": "Entregáveis ({{count}})",
+      "addDeliverable": "Adicionar entregável",
+      "subtitle": "Defina entregáveis e seus métodos de entrega. Vincule ativos e contratos a cada entregável.",
+      "noDeliverables": "Nenhum entregável definido.",
+      "noDeliverablesWithEdit": "Nenhum entregável definido. Adicione entregáveis e vincule ativos quando estiver pronto.",
+      "contractLabel": "Contrato: {{name}}",
+      "editTitle": "Editar entregável",
+      "deleteTitle": "Excluir entregável",
+      "linkAsset": "Vincular ativo",
+      "linkAssetsTitle": "Vincular ativos a \"{{portName}}\"",
+      "linkAssetsDescription": "Somente tipos de ativos entregáveis (tabela, view, conjunto de dados, endpoint de API, modelo de ML) podem ser vinculados a uma porta de saída.",
+      "linkedToPort": "vinculado à porta",
+      "assetsLinkedTitle": "Ativos vinculados",
+      "assetsLinked": "{{count}} ativo(s) vinculado(s) a {{portName}}",
+      "assetUnlinked": "Ativo desvinculado",
+      "linkAssetsFailed": "Falha ao vincular ativos",
+      "unlinkAssetFailed": "Falha ao desvincular ativo"
+    },
+    "description": {
+      "purposeLabel": "Propósito",
+      "limitationsLabel": "Limitações",
+      "usageLabel": "Uso"
+    },
+    "lineage": {
+      "businessLineageTitle": "Linhagem de negócio"
+    },
+    "consumables": {
+      "titleWithCount": "Consumíveis ({{count}})",
+      "addConsumable": "Adicionar consumível",
+      "contractLabel": "Contrato: {{contractId}}",
+      "noConsumables": "Nenhum consumível definido"
+    },
+    "managementPorts": {
+      "titleWithCount": "Portas de gerenciamento ({{count}})",
+      "addManagementPort": "Adicionar porta de gerenciamento",
+      "subtitle": "Endpoints de observabilidade, controle e descoberta",
+      "contentLabel": "Conteúdo",
+      "urlLabel": "URL",
+      "noManagementPorts": "Nenhuma porta de gerenciamento definida"
+    },
+    "teamMetadata": {
+      "titleWithCount": "Metadados de equipe ODPS ({{count}} membros)",
+      "subtitle": "Proveniência somente leitura do YAML do produto importado. Gerencie a propriedade pelo painel Proprietários acima.",
+      "defaultRole": "Membro"
+    },
+    "supportChannels": {
+      "titleWithCount": "Canais de suporte ({{count}})",
+      "addChannel": "Adicionar canal",
+      "toolLabel": "Ferramenta",
+      "noChannels": "Nenhum canal de suporte definido"
+    },
+    "relatedEntities": {
+      "title": "Entidades relacionadas"
+    },
+    "toasts": {
+      "loadError": "Falha ao carregar dados: {{error}}",
+      "certifyTitle": "Certificado",
+      "certifySuccess": "O nível de certificação foi aplicado.",
+      "publishTitle": "Publicação atualizada",
+      "publishSuccess": "O escopo de publicação foi salvo.",
+      "deleteError": "Falha ao excluir: {{error}}",
+      "draftCreatedTitle": "Rascunho criado",
+      "draftCreatedMessage": "Rascunho pessoal criado. Agora você pode editá-lo.",
+      "draftDiscardedTitle": "Rascunho descartado",
+      "draftDiscardedMessage": "O rascunho pessoal foi descartado.",
+      "approvalNotConfiguredTitle": "Fluxo de trabalho de aprovação não configurado",
+      "approvalNotConfiguredMessage": "Assinando diretamente. Carregue os fluxos de trabalho padrão em Configurações para usar o fluxo de aprovação.",
+      "subscribedTitle": "Assinatura realizada",
+      "subscribedMessage": "Agora você receberá notificações sobre este produto.",
+      "unsubscribedTitle": "Assinatura cancelada",
+      "unsubscribedMessage": "Você não receberá mais notificações sobre este produto.",
+      "updatedTitle": "Atualizado",
+      "updatedMessage": "Produto atualizado com sucesso.",
+      "createNewVersionTitle": "Criar nova versão",
+      "createNewVersionMessage": "Criar uma nova versão clonará este produto. Aplique suas alterações à nova versão após a criação.",
+      "creatingVersionTitle": "Criando nova versão",
+      "creatingVersionMessage": "Criando versão {{version}}...",
+      "versionCreatedMessage": "Versão {{version}} criada!",
+      "consumableUpdatedTitle": "Consumível atualizado",
+      "consumableUpdatedMessage": "Consumível atualizado com sucesso.",
+      "consumableDeletedTitle": "Consumível excluído",
+      "consumableDeletedMessage": "Consumível excluído com sucesso.",
+      "deliverableUpdatedTitle": "Entregável atualizado",
+      "deliverableUpdatedMessage": "Entregável atualizado com sucesso.",
+      "deliverableDeletedTitle": "Entregável excluído",
+      "deliverableDeletedMessage": "Entregável excluído com sucesso.",
+      "managementPortUpdatedTitle": "Porta de gerenciamento atualizada",
+      "managementPortUpdatedMessage": "Porta de gerenciamento atualizada com sucesso.",
+      "managementPortDeletedTitle": "Porta de gerenciamento excluída",
+      "managementPortDeletedMessage": "Porta de gerenciamento excluída com sucesso.",
+      "teamMemberAddedTitle": "Membro da equipe adicionado",
+      "teamMemberAddedMessage": "Membro da equipe adicionado com sucesso.",
+      "teamMemberUpdatedTitle": "Membro da equipe atualizado",
+      "teamMemberUpdatedMessage": "Membro da equipe atualizado com sucesso.",
+      "supportChannelUpdatedTitle": "Canal de suporte atualizado",
+      "supportChannelUpdatedMessage": "Canal de suporte atualizado com sucesso.",
+      "supportChannelDeletedTitle": "Canal de suporte excluído",
+      "supportChannelDeletedMessage": "Canal de suporte excluído com sucesso.",
+      "contractUnlinkedTitle": "Contrato desvinculado",
+      "contractUnlinkedMessage": "Contrato desvinculado do entregável com sucesso",
+      "iriLinkedTitle": "Vinculado",
+      "iriLinkedMessage": "IRI vinculado ao produto de dados.",
+      "iriRemovedTitle": "Removido",
+      "iriRemovedMessage": "Vínculo de IRI removido.",
+      "genieSpaceRequesting": "Solicitando criação do Genie Space...",
+      "genieSpaceInitiated": "Criação do Genie Space iniciada."
+    },
+    "confirms": {
+      "deleteProduct": "Excluir o produto de dados \"{{name}}\"?",
+      "discardDraft": "Descartar este rascunho? Esta ação não pode ser desfeita.",
+      "deleteConsumable": "Excluir este consumível?",
+      "deleteDeliverable": "Excluir este entregável?",
+      "deleteManagementPort": "Excluir esta porta de gerenciamento?",
+      "deleteSupportChannel": "Excluir este canal de suporte?",
+      "unlinkContract": "Desvincular o contrato deste entregável?",
+      "createGenieSpace": "Criar um Genie Space para \"{{name}}\"?"
+    }
+  },
+  "form": {
+    "createTitle": "Criar produto de dados",
+    "editTitle": "Editar produto de dados",
+    "name": "Nome",
+    "namePlaceholder": "Insira o nome do produto",
+    "description": "Descrição",
+    "descriptionPlaceholder": "Insira a descrição do produto",
+    "purpose": "Propósito",
+    "purposePlaceholder": "Qual é o propósito deste produto de dados?",
+    "usage": "Uso",
+    "usagePlaceholder": "Como este produto de dados deve ser usado?",
+    "status": "Status",
+    "version": "Versão",
+    "versionPlaceholder": "ex.: 1.0.0",
+    "domain": "Domínio",
+    "selectDomain": "Selecione um domínio",
+    "noDomain": "Sem domínio",
+    "ownerTeam": "Equipe proprietária",
+    "selectOwnerTeam": "Selecione a equipe proprietária",
+    "noOwner": "Sem proprietário",
+    "tags": "Tags",
+    "tagsPlaceholder": "Insira tags separadas por vírgulas",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "create": "Criar",
+    "saving": "Salvando...",
+    "createSuccess": "Produto de dados criado com sucesso",
+    "updateSuccess": "Produto de dados atualizado com sucesso",
+    "createError": "Falha ao criar produto de dados",
+    "updateError": "Falha ao atualizar produto de dados",
+    "dialogDescription": "Preencha os detalhes do produto de dados. Use as abas para alternar entre os editores de UI e JSON.",
+    "loadingDetails": "Carregando detalhes do produto...",
+    "tabs": {
+      "uiEditor": "Editor de UI",
+      "jsonEditor": "Editor de JSON"
+    },
+    "fields": {
+      "id": "ID (identificador único)",
+      "title": "Título *",
+      "owner": "Proprietário *",
+      "productType": "Tipo de produto *",
+      "project": "Projeto",
+      "domains": "Domínios",
+      "archetype": "Arquétipo"
+    },
+    "placeholders": {
+      "systemId": "(ID do sistema)",
+      "productIdOptional": "ex.: meu-produto-unico (opcional)",
+      "selectProductType": "Selecione o tipo de produto",
+      "selectProject": "Selecione o projeto (opcional)",
+      "selectDomains": "Selecione domínios...",
+      "selectArchetype": "Selecione o arquétipo",
+      "selectStatus": "Selecione o status"
+    },
+    "projectTeamCount": "({{count}} equipes)",
+    "projectMemberHint": "Você só pode selecionar projetos dos quais é membro",
+    "sections": {
+      "info": "Informações",
+      "infoDescription": "Informações básicas sobre o produto de dados.",
+      "consumables": "Consumíveis",
+      "consumablesDescription": "Fontes que alimentam este produto. Selecione tabelas do metastore.",
+      "deliverables": "Entregáveis",
+      "deliverablesDescription": "Saídas fornecidas por este produto de dados.",
+      "tagsDescription": "Adicione tags relevantes (separadas por vírgulas).",
+      "consumerGroups": "Grupos de consumidores",
+      "consumerGroupsDescriptionPart1": "Grupos do workspace que representam os consumidores esperados deste produto. Cada entrada é armazenada como um principal tipado ",
+      "consumerGroupsDescriptionPart2": "; exposto aos webhooks de assinatura via ",
+      "links": "Links",
+      "linksDescription": "Adicione links relevantes (ex.: documentação, dashboards).",
+      "customProperties": "Propriedades personalizadas",
+      "customPropertiesDescription": "Adicione metadados personalizados de chave-valor."
+    },
+    "validation": {
+      "titleRequired": "O título é obrigatório",
+      "ownerRequired": "O proprietário é obrigatório",
+      "productTypeRequired": "O tipo de produto é obrigatório",
+      "loadingSchema": "Carregando esquema...",
+      "schemaReady": "Esquema pronto.",
+      "schemaError": "Erro no esquema",
+      "schemaNotReady": "Esquema não pronto.",
+      "schemaValid": "Esquema válido",
+      "schemaErrors": "{{count}} erro(s) de validação de esquema",
+      "invalidJsonSyntax": "Sintaxe JSON inválida",
+      "dataFailedValidation": "Os dados falharam na validação do esquema. Verifique os campos destacados ou o editor de JSON."
+    },
+    "consumable": {
+      "idLabel": "ID do consumível *",
+      "idRequired": "O ID do consumível é obrigatório",
+      "nameLabel": "Nome do consumível *",
+      "nameRequired": "O nome do consumível é obrigatório",
+      "sourceTableLabel": "Tabela de origem (metastore) *",
+      "sourceTableRequired": "A tabela de origem é obrigatória",
+      "selectSourceTable": "Selecione a tabela de origem...",
+      "searchMetastore": "Pesquisar tabelas do metastore...",
+      "searching": "Pesquisando...",
+      "noTablesFound": "Nenhuma tabela encontrada.",
+      "tagsPlaceholder": "Pesquise e selecione tags para este consumível...",
+      "defaultName": "Novo consumível",
+      "add": "Adicionar consumível",
+      "removeTitle": "Remover consumível"
+    },
+    "deliverable": {
+      "idLabel": "ID do entregável *",
+      "idRequired": "O ID do entregável é obrigatório",
+      "nameLabel": "Nome do entregável *",
+      "nameRequired": "O nome do entregável é obrigatório",
+      "tagsPlaceholder": "Pesquise e selecione tags para este entregável...",
+      "defaultName": "Novo entregável",
+      "add": "Adicionar entregável",
+      "removeTitle": "Remover entregável"
+    },
+    "tagsProductPlaceholder": "Pesquise e selecione tags para este produto de dados...",
+    "links": {
+      "keyPlaceholder": "Chave do link (ex.: docs)",
+      "urlPlaceholder": "URL *",
+      "descriptionPlaceholder": "Descrição",
+      "removeTitle": "Remover link",
+      "add": "Adicionar link"
+    },
+    "customProps": {
+      "keyPlaceholder": "Chave da propriedade",
+      "valuePlaceholder": "Valor da propriedade (string)",
+      "removeTitle": "Remover propriedade",
+      "add": "Adicionar propriedade personalizada"
+    },
+    "portEditor": {
+      "portLinks": "Links da porta",
+      "linkKey": "Chave do link",
+      "url": "URL",
+      "removeLink": "Remover link",
+      "addLink": "Adicionar link",
+      "portCustomProperties": "Propriedades personalizadas da porta",
+      "propertyKey": "Chave da propriedade",
+      "propertyValue": "Valor da propriedade",
+      "removeProperty": "Remover propriedade",
+      "addCustomProperty": "Adicionar propriedade personalizada"
+    },
+    "buttons": {
+      "updateProduct": "Atualizar produto",
+      "createProduct": "Criar produto",
+      "updateViaJson": "Atualizar via JSON",
+      "createViaJson": "Criar via JSON"
+    },
+    "jsonPayloadLabel": "Payload JSON",
+    "jsonPlaceholder": "Insira ou edite o JSON do produto de dados...",
+    "validationStatusLabel": "Status da validação:",
+    "showValidationDetails": "Mostrar {{count}} detalhes de validação",
+    "confirmUnsavedClose": "Você tem alterações não salvas. Tem certeza de que deseja fechar?",
+    "messages": {
+      "syncError": "Erro de sincronização",
+      "couldNotSyncUiToJson": "Não foi possível sincronizar o estado da UI com o editor de JSON.",
+      "invalidJson": "JSON inválido",
+      "invalidJsonDescription": "Não é possível alternar para o editor de UI. Corrija primeiro os erros de validação de esquema.",
+      "couldNotParseJson": "Não foi possível analisar o JSON: {{message}}",
+      "validationError": "Erro de validação",
+      "pleaseFixValidation": "Corrija os erros de validação antes de salvar.",
+      "jsonDataFailedValidation": "Os dados JSON falharam na validação do esquema. Não é possível salvar.",
+      "saveError": "Erro ao salvar",
+      "errorLoadingData": "Erro ao carregar dados",
+      "couldNotFetchDetails": "Não foi possível obter os detalhes. {{message}}",
+      "failedToLoadDetails": "Falha ao carregar detalhes do produto: {{message}}",
+      "invalidJsonError": "JSON inválido: {{message}}",
+      "couldNotLoadSchema": "Não foi possível carregar o esquema: {{message}}",
+      "failedToSerialize": "Falha ao serializar o estado da UI para JSON.",
+      "unexpectedError": "Ocorreu um erro inesperado."
+    },
+    "syntaxErrorLabel": "Erro de sintaxe:"
+  },
+  "import": {
+    "title": "Importar produto de dados",
+    "dropzone": "Arraste um arquivo YAML ou JSON aqui, ou clique para selecionar",
+    "pasteLabel": "Ou cole o conteúdo diretamente",
+    "pastePlaceholder": "Cole o conteúdo YAML ou JSON...",
+    "cancel": "Cancelar",
+    "import": "Importar",
+    "importing": "Importando..."
+  },
+  "versionFamily": {
+    "showAllVersions": "Mostrar todas as versões"
+  },
+  "authoritativeDefinitionForm": {
+    "editTitle": "Editar definição autoritativa",
+    "addTitle": "Adicionar definição autoritativa",
+    "dialogDescription": "Vincule a fontes autoritativas como definições de negócio, implementações ou tutoriais (ODPS v1.0.0).",
+    "typeLabel": "Tipo",
+    "typeHint": "Tipo de fonte autoritativa",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://docs.example.com/definitions/customer",
+    "urlHint": "URL completa da fonte autoritativa",
+    "descriptionPlaceholder": "Descreva quais informações esta fonte fornece",
+    "addButton": "Adicionar definição",
+    "validationTypeRequired": "O tipo é obrigatório",
+    "validationUrlRequired": "A URL é obrigatória",
+    "validationUrlInvalid": "Insira uma URL válida",
+    "successAdded": "Definição autoritativa adicionada",
+    "successUpdated": "Definição autoritativa atualizada",
+    "saveError": "Falha ao salvar definição autoritativa"
+  },
+  "consumerGroups": {
+    "searchPlaceholder": "Pesquisar grupos do workspace…",
+    "removeAriaLabel": "Remover {{name}}",
+    "loadError": "Não foi possível carregar os grupos do workspace ({{error}}). Você ainda pode adicionar grupos digitando o nome e pressionando Enter."
+  },
+  "customProperty": {
+    "editTitle": "Editar propriedade personalizada",
+    "addTitle": "Adicionar propriedade personalizada",
+    "dialogDescription": "Adicione metadados personalizados para estender o esquema de produto de dados ODPS v1.0.0.",
+    "propertyNameLabel": "Nome da propriedade",
+    "propertyNamePlaceholder": "ex.: internalId, deploymentRegion",
+    "propertyNameHint": "Deve estar em camelCase (requisito do ODPS)",
+    "propertyValueLabel": "Valor da propriedade",
+    "propertyValuePlaceholder": "Texto simples ou JSON: {\"key\": \"value\"}",
+    "propertyValueHint": "Pode ser de qualquer tipo: string, número, booleano, objeto ou array. Valores JSON serão analisados automaticamente.",
+    "descriptionPlaceholder": "Explique o propósito desta propriedade personalizada",
+    "addButton": "Adicionar propriedade",
+    "validationNameRequired": "O nome da propriedade é obrigatório",
+    "validationValueRequired": "O valor da propriedade é obrigatório",
+    "validationCamelCase": "O nome da propriedade deve estar em camelCase (começar com letra minúscula)",
+    "successAdded": "Propriedade personalizada adicionada",
+    "successUpdated": "Propriedade personalizada atualizada",
+    "saveError": "Falha ao salvar propriedade personalizada"
+  },
+  "teamMemberForm": {
+    "editTitle": "Editar membro da equipe",
+    "addTitle": "Adicionar membro da equipe",
+    "dialogDescription": "Adicione um membro da equipe responsável por este produto de dados (ODPS v1.0.0).",
+    "usernameLabel": "Nome de usuário",
+    "usernamePlaceholder": "ex.: user@example.com ou nome de usuário",
+    "usernameHint": "Nome de usuário ou endereço de e-mail do usuário (OBRIGATÓRIO no ODPS)",
+    "fullNameLabel": "Nome completo",
+    "fullNamePlaceholder": "Nome completo (opcional)",
+    "roleLabel": "Papel",
+    "rolePlaceholder": "ex.: owner, data steward, contributor",
+    "roleHint": "Papel do usuário na equipe (ex.: owner, data steward, contributor)",
+    "descriptionPlaceholder": "Informações adicionais sobre este membro da equipe",
+    "dateJoinedLabel": "Data de entrada",
+    "dateLeftLabel": "Data de saída",
+    "addButton": "Adicionar membro",
+    "validationUsernameRequired": "O nome de usuário é obrigatório",
+    "successAdded": "Membro da equipe adicionado",
+    "successUpdated": "Membro da equipe atualizado",
+    "saveError": "Falha ao salvar membro da equipe"
+  },
+  "readiness": {
+    "title": "Prontidão para produção",
+    "checking": "Verificando prontidão...",
+    "loadError": "Falha ao carregar relatório de prontidão",
+    "loadFallbackError": "Não foi possível carregar o relatório de prontidão",
+    "passCount": "{{passed}}/{{total}} aprovados",
+    "retry": "Tentar novamente",
+    "status": {
+      "ready": "Pronto",
+      "notReady": "Não pronto",
+      "partial": "Parcialmente pronto"
+    }
+  },
+  "requestAction": {
+    "types": {
+      "access": {
+        "title": "Solicitar acesso ao produto",
+        "description": "Solicite permissão para visualizar e usar este produto de dados."
+      },
+      "review": {
+        "title": "Solicitar revisão de data steward",
+        "description": "Envie este produto para revisão por um data steward (transição para o status PROPOSED)."
+      },
+      "publish": {
+        "title": "Solicitar publicação no Marketplace",
+        "description": "Solicite a publicação deste produto aprovado no Marketplace de toda a organização."
+      },
+      "certify": {
+        "title": "Solicitar certificação",
+        "description": "Solicite que este produto seja certificado em um nível específico."
+      },
+      "statusChange": {
+        "titleDirect": "Alterar status",
+        "titleRequest": "Solicitar alteração de status",
+        "descriptionDirect": "Altere diretamente o status do ciclo de vida deste produto.",
+        "descriptionRequest": "Solicite aprovação para alterar o status do ciclo de vida deste produto."
+      }
+    },
+    "transitions": {
+      "moveToSandbox": "Mover para Sandbox",
+      "submitForReview": "Enviar para revisão",
+      "returnToDraft": "Voltar para rascunho",
+      "startReview": "Iniciar revisão",
+      "approve": "Aprovar",
+      "rejectReturnToDraft": "Rejeitar (voltar para rascunho)",
+      "publishActivate": "Publicar/Ativar",
+      "deprecate": "Descontinuar",
+      "retire": "Desativar",
+      "reactivate": "Reativar"
+    },
+    "validation": {
+      "reasonRequired": "Informe um motivo para solicitar acesso",
+      "reasonTooShort": "Informe um motivo mais detalhado (pelo menos 10 caracteres)",
+      "targetStatusRequired": "Selecione um status de destino",
+      "justificationRequired": "Informe uma justificativa para a alteração de status",
+      "justificationTooShort": "Informe uma justificativa mais detalhada (pelo menos 20 caracteres)",
+      "certLevelRequired": "Selecione um nível de certificação"
+    },
+    "errors": {
+      "cannotRequest": "Não é possível solicitar {{requestType}} para um produto com status '{{productStatus}}'",
+      "failedToSubmit": "Falha ao enviar solicitação"
+    },
+    "toast": {
+      "statusChanged": "Status alterado",
+      "statusChangedDesc": "O status do produto mudou de \"{{fromStatus}}\" para \"{{toStatus}}\".",
+      "requestSubmitted": "Solicitação enviada",
+      "requestSubmittedDesc": "Sua solicitação de {{type}} foi enviada e você será notificado sobre a decisão."
+    },
+    "labels": {
+      "requestType": "Tipo de solicitação",
+      "targetStatus": "Status de destino",
+      "justification": "Justificativa",
+      "justificationOptional": "Justificativa (opcional)",
+      "messageOptional": "Mensagem (opcional)",
+      "publicationScope": "Escopo de publicação",
+      "certLevel": "Nível de certificação"
+    },
+    "placeholders": {
+      "selectRequestType": "Selecione o tipo de solicitação",
+      "selectTargetStatus": "Selecione o status de destino",
+      "justification": "Explique por que esta alteração de status é necessária e qualquer contexto relevante...",
+      "reviewMessage": "Adicione observações para o revisor...",
+      "publishJustification": "Por que este produto deve ser publicado?",
+      "certMessage": "Por que este produto deve ser certificado?",
+      "selectCertLevel": "Selecione o nível de certificação"
+    },
+    "selectItems": {
+      "review": "Solicitar revisão",
+      "publish": "Solicitar publicação",
+      "certify": "Solicitar certificação",
+      "access": "Solicitar acesso"
+    },
+    "scopes": {
+      "organization": "Organização",
+      "external": "Externo"
+    },
+    "wizard": {
+      "noticeBefore": "Um assistente de várias etapas está configurado para esta solicitação. Clique em",
+      "noticeAfter": "para começar."
+    },
+    "hints": {
+      "noTransitionsAvailable": "Nenhuma transição de status disponível a partir do status atual.",
+      "justificationMinChars": "Mínimo de 20 caracteres. Será revisado por um administrador."
+    },
+    "buttons": {
+      "changingStatus": "Alterando status...",
+      "opening": "Abrindo...",
+      "sendingRequest": "Enviando solicitação...",
+      "continue": "Continuar",
+      "sendRequest": "Enviar solicitação"
+    }
+  },
+  "statusTransition": {
+    "title": "Alterar status do produto",
+    "description": "Transição do status do ciclo de vida de {{name}} (ODPS v1.0.0)",
+    "thisProduct": "este produto de dados",
+    "currentStatus": "Status atual:",
+    "recommended": "Recomendado:",
+    "selectTargetStatus": "Selecione o status de destino",
+    "terminalState": "Estado terminal:",
+    "terminalDesc": "Nenhuma transição disponível a partir do status {{statusLabel}}. Este produto não pode ser alterado para nenhum outro status.",
+    "notesLabel": "Notas da transição (opcional)",
+    "notesPlaceholder": "Adicione notas sobre por que esta alteração de status está sendo feita...",
+    "notesHint": "Estas notas serão registradas para fins de auditoria",
+    "lifecycleTitle": "Fluxo de ciclo de vida ODPS v1.0.0:",
+    "lifecycleHint": "O status atual está destacado. A descontinuação de emergência é permitida a partir de qualquer status.",
+    "toast": {
+      "validationError": "Erro de validação",
+      "selectTargetStatus": "Selecione um status de destino",
+      "invalidTransition": "Transição inválida",
+      "transitionFailed": "Falha na transição",
+      "failedToUpdate": "Falha ao atualizar o status do produto"
+    },
+    "buttons": {
+      "updating": "Atualizando...",
+      "updateStatus": "Atualizar status"
+    }
+  },
+  "outputPortForm": {
+    "addTitle": "Adicionar entregável",
+    "editTitle": "Editar entregável",
+    "description": "Defina um entregável para este produto de dados. Os ativos podem ser vinculados após a criação.",
+    "labels": {
+      "deliveryMethod": "Método de entrega",
+      "contractAssignment": "Atribuição de contrato",
+      "accessAndPrivacy": "Acesso e privacidade",
+      "containsPii": "Contém PII",
+      "autoApprove": "Aprovação automática"
+    },
+    "placeholders": {
+      "name": "ex.: Taxa diária de churn",
+      "deliveryMethod": "Selecione o método de entrega...",
+      "description": "Descreva o que este entregável fornece",
+      "type": "ex.: tabela, api, stream",
+      "status": "ex.: ativo, rascunho",
+      "chooseContract": "Escolha um contrato..."
+    },
+    "contractOptions": {
+      "noContract": "Sem contrato",
+      "selectExisting": "Selecionar contrato existente",
+      "createNew": "Criar novo contrato"
+    },
+    "hints": {
+      "deliveryMethodHint": "Como este entregável fornece dados aos consumidores (ex.: acesso a tabelas, endpoint de serving)",
+      "onlyActiveContracts": "Mostrando apenas contratos ativos/aprovados/certificados",
+      "containsPiiHint": "Este entregável contém informações de identificação pessoal?",
+      "autoApproveHint": "Aprovar automaticamente as solicitações de acesso para este entregável?",
+      "afterCreation": "Após criar este entregável, você pode vincular ativos (tabelas, views, conjuntos de dados etc.) a ele na página de detalhes."
+    },
+    "messages": {
+      "noActiveContracts": "Nenhum contrato ativo/aprovado disponível",
+      "contractCreated": "Contrato criado:",
+      "deliverableAdded": "Entregável adicionado",
+      "deliverableUpdated": "Entregável atualizado"
+    },
+    "validation": {
+      "error": "Erro de validação",
+      "nameRequired": "O nome é obrigatório",
+      "versionRequired": "A versão é obrigatória"
+    },
+    "errors": {
+      "failedToLoadContracts": "Falha ao carregar contratos",
+      "failedToSaveDeliverable": "Falha ao salvar entregável"
+    },
+    "actions": {
+      "addDeliverable": "Adicionar entregável"
+    },
+    "warnings": {
+      "couldNotLoadDeliveryMethods": "Não foi possível carregar os métodos de entrega"
+    }
+  },
+  "inputPortForm": {
+    "addTitle": "Adicionar consumível",
+    "editTitle": "Editar consumível",
+    "description": "Defina uma dependência de dados de entrada para este produto de dados (ODPS v1.0.0).",
+    "labels": {
+      "consumableName": "Nome do consumível",
+      "contractId": "ID do contrato",
+      "databricksExtensions": "Extensões do Databricks (opcional)",
+      "assetType": "Tipo de ativo",
+      "assetIdentifier": "Identificador do ativo"
+    },
+    "placeholders": {
+      "name": "ex.: customer-data-input",
+      "contractId": "ex.: customer-data-contract-v1",
+      "assetType": "ex.: table, notebook, job",
+      "assetIdentifier": "ex.: catalog.schema.table, /path/to/notebook"
+    },
+    "hints": {
+      "versionHint": "Versão deste consumível (ex.: 1.0.0, 2.1.3)",
+      "contractIdHint": "Referência ao ID do contrato de dados (OBRIGATÓRIO no ODPS v1.0.0)",
+      "assetTypeHint": "Tipo de ativo do Databricks",
+      "assetIdentifierHint": "Identificador único do ativo do Databricks"
+    },
+    "messages": {
+      "consumableAdded": "Consumível adicionado",
+      "consumableUpdated": "Consumível atualizado"
+    },
+    "validation": {
+      "error": "Erro de validação",
+      "portNameRequired": "O nome da porta é obrigatório",
+      "portVersionRequired": "A versão da porta é obrigatória",
+      "contractIdRequired": "O ID do contrato é obrigatório (requisito do ODPS v1.0.0)"
+    },
+    "errors": {
+      "failedToSaveConsumable": "Falha ao salvar consumível"
+    },
+    "actions": {
+      "addConsumable": "Adicionar consumível"
+    }
+  },
+  "managementPortForm": {
+    "addTitle": "Adicionar porta de gerenciamento",
+    "editTitle": "Editar porta de gerenciamento",
+    "description": "As portas de gerenciamento fornecem acesso a endpoints de observabilidade, controle, descoberta e dicionário de dados (ODPS v1.0.0).",
+    "labels": {
+      "portName": "Nome da porta",
+      "contentType": "Tipo de conteúdo",
+      "portType": "Tipo de porta",
+      "url": "URL",
+      "channel": "Canal"
+    },
+    "placeholders": {
+      "name": "ex.: observability-endpoint, data-dictionary",
+      "url": "https://observability.example.com/metrics",
+      "channel": "ex.: prometheus-metrics, openapi-spec",
+      "description": "Descreva o propósito e o uso desta porta de gerenciamento"
+    },
+    "hints": {
+      "contentTypeHint": "Propósito desta porta de gerenciamento",
+      "urlHint": "URL de acesso desta porta de gerenciamento",
+      "channelHint": "Identificador do canal de comunicação"
+    },
+    "messages": {
+      "portAdded": "Porta de gerenciamento adicionada",
+      "portUpdated": "Porta de gerenciamento atualizada"
+    },
+    "validation": {
+      "error": "Erro de validação",
+      "portNameRequired": "O nome da porta é obrigatório",
+      "contentTypeRequired": "O tipo de conteúdo é obrigatório",
+      "invalidUrl": "Insira uma URL válida"
+    },
+    "errors": {
+      "failedToSave": "Falha ao salvar porta de gerenciamento"
+    },
+    "actions": {
+      "addPort": "Adicionar porta"
+    }
+  },
+  "linkContract": {
+    "title": "Vincular contrato ao entregável",
+    "descriptionPrefix": "Selecione um contrato existente ou crie um novo para vincular a",
+    "thisDeliverable": "este entregável",
+    "labels": {
+      "deliverable": "Entregável",
+      "selectContract": "Selecionar contrato",
+      "or": "OU"
+    },
+    "placeholders": {
+      "chooseContract": "Escolha um contrato…"
+    },
+    "hints": {
+      "contractFilter": "Mostrando apenas contratos com status 'ativo', 'aprovado' ou 'certificado'. Escolha uma versão específica — contratos com o mesmo nome agora mostram a versão inline."
+    },
+    "messages": {
+      "contractLinked": "Contrato vinculado",
+      "contractLinkedDescription": "Contrato vinculado ao entregável com sucesso"
+    },
+    "validation": {
+      "error": "Erro de validação",
+      "selectContract": "Selecione um contrato"
+    },
+    "errors": {
+      "failedToLink": "Falha ao vincular contrato"
+    },
+    "actions": {
+      "createNewContract": "Criar novo contrato",
+      "linkContract": "Vincular contrato",
+      "linking": "Vinculando..."
+    }
+  },
+  "hierarchy": {
+    "title": "Hierarquia de dados",
+    "loadFailed": "Falha ao carregar hierarquia",
+    "noDatasets": "Nenhum conjunto de dados vinculado a este produto de dados ainda.",
+    "noTablesOrViews": "Nenhuma tabela ou view vinculada",
+    "contract": "Contrato",
+    "governedByContract": "Governado pelo contrato {{id}}",
+    "objectCount_one": "{{count}} objeto",
+    "objectCount_other": "{{count}} objetos",
+    "datasetCount_one": "{{count}} conjunto de dados",
+    "datasetCount_other": "{{count}} conjuntos de dados",
+    "colCount_one": "{{count}} col.",
+    "colCount_other": "{{count}} cols."
+  },
+  "commitDraft": {
+    "title": "Confirmar alterações do rascunho",
+    "description": "Confirme seu rascunho pessoal para torná-lo visível para sua equipe.",
+    "analyzing": "Analisando alterações...",
+    "changeAnalysisTitle": "Análise de alterações",
+    "changeAnalysisDescription": "Com base nas suas alterações, recomendamos um incremento de versão {{bump}}.",
+    "selectVersion": "Selecionar versão",
+    "patch": "Patch",
+    "patchDescription": "Correções de bugs",
+    "minor": "Minor",
+    "minorDescription": "Novos recursos",
+    "major": "Major",
+    "majorDescription": "Alterações incompatíveis",
+    "customVersion": "Versão personalizada",
+    "customVersionPlaceholder": "ex.: 2.0.0",
+    "changeSummaryLabel": "Resumo das alterações *",
+    "changeSummaryPlaceholder": "Descreva as alterações feitas nesta versão...",
+    "validationInvalidVersion": "Insira um número de versão válido (ex.: 1.0.0)",
+    "validationNoSummary": "Informe um resumo das alterações",
+    "errorAnalyze": "Falha ao analisar alterações",
+    "errorCommit": "Falha ao confirmar rascunho",
+    "toastCommittedTitle": "Rascunho confirmado",
+    "toastCommittedDescription": "A versão {{version}} do produto agora está visível para sua equipe.",
+    "committing": "Confirmando...",
+    "commitButton": "Confirmar rascunho"
+  },
+  "supportChannelForm": {
+    "titleAdd": "Adicionar canal de suporte",
+    "titleEdit": "Editar canal de suporte",
+    "description": "Defina um canal de suporte para os usuários deste produto de dados (ODPS v1.0.0).",
+    "channelName": "Nome do canal",
+    "channelNamePlaceholder": "ex.: data-product-support",
+    "accessUrl": "URL de acesso",
+    "accessUrlPlaceholder": "https://slack.com/channels/data-product-support",
+    "accessUrlHint": "URL para acessar este canal de suporte",
+    "tool": "Ferramenta",
+    "scope": "Escopo",
+    "invitationUrl": "URL de convite",
+    "invitationUrlPlaceholder": "https://slack.com/invite/...",
+    "invitationUrlHint": "Link de convite opcional para novos membros",
+    "descriptionPlaceholder": "Descreva como os usuários devem usar este canal de suporte",
+    "addChannel": "Adicionar canal",
+    "validationErrorTitle": "Erro de validação",
+    "channelRequired": "O nome do canal é obrigatório",
+    "urlRequired": "A URL é obrigatória",
+    "invalidUrl": "Insira uma URL válida",
+    "invalidInvitationUrl": "Insira uma URL de convite válida",
+    "successUpdated": "Canal de suporte atualizado",
+    "successAdded": "Canal de suporte adicionado",
+    "errorSave": "Falha ao salvar canal de suporte"
+  },
+  "maturity": {
+    "title": "Maturidade",
+    "evaluating": "Avaliando maturidade...",
+    "loadFailed": "Falha ao carregar relatório de maturidade",
+    "unableToLoad": "Não foi possível carregar o relatório de maturidade",
+    "gatesPassed": "{{passed}}/{{total}} gates aprovados",
+    "reevaluate": "Reavaliar maturidade",
+    "gates": "{{passed}}/{{total}} gates",
+    "required": "Obrigatório",
+    "advisory": "Recomendado",
+    "overTime": "Maturidade ao longo do tempo",
+    "retry": "Tentar novamente"
+  },
+  "createDialog": {
+    "editTitle": "Editar metadados do produto de dados",
+    "createTitle": "Criar produto de dados (ODPS v1.0.0)",
+    "editDescription": "Atualize os metadados principais deste produto de dados.",
+    "createDescription": "Crie um novo produto de dados com informações essenciais. Você pode adicionar portas, membros da equipe e canais de suporte na visualização de detalhes.",
+    "productNameLabel": "Nome do produto",
+    "productNamePlaceholder": "ex.: Dados de análise de clientes",
+    "versionPlaceholder": "0.0.1",
+    "productTypeLabel": "Tipo de produto",
+    "productTypePlaceholder": "Selecione o tipo de produto...",
+    "productTypeHint": "Posição na cadeia de valor de dados",
+    "selectTeamPlaceholder": "Selecione a equipe...",
+    "loadingTeams": "Carregando equipes...",
+    "ownerTeamHint": "Equipe responsável por este produto",
+    "projectLabel": "Projeto",
+    "selectProjectPlaceholder": "Selecione o projeto (opcional)",
+    "projectOption_one": "{{name}} ({{count}} equipe)",
+    "projectOption_other": "{{name}} ({{count}} equipes)",
+    "projectMemberHint": "Você só pode selecionar projetos dos quais é membro",
+    "domainsLabel": "Domínios",
+    "domainsPlaceholder": "Selecione domínios...",
+    "tenantLabel": "Tenant/Organização",
+    "tenantPlaceholder": "ex.: acme-corp",
+    "descriptionSectionTitle": "Descrição (estruturada ODPS)",
+    "purposePlaceholder": "Qual é o propósito pretendido destes dados?",
+    "limitationsLabel": "Limitações",
+    "limitationsPlaceholder": "Limitações técnicas, de conformidade e legais",
+    "usagePlaceholder": "Uso recomendado destes dados",
+    "tagsPlaceholder": "Pesquise e selecione tags para este produto de dados...",
+    "tagsHint": "Adicione tags para categorizar e organizar este produto de dados",
+    "consumerGroupsLabel": "Grupos de consumidores",
+    "createProductButton": "Criar produto",
+    "discardDescription": "Você tem alterações não salvas que serão perdidas se fechar esta caixa de diálogo. Tem certeza de que deseja descartá-las?",
+    "continueEditing": "Continuar editando",
+    "discardChanges": "Descartar alterações",
+    "messages": {
+      "createSuccessDesc": "Produto de dados criado com sucesso. Adicione portas e equipe na visualização de detalhes."
+    },
+    "validation": {
+      "nameRequired": "O nome do produto é obrigatório",
+      "versionRequired": "A versão é obrigatória",
+      "statusRequired": "O status é obrigatório"
+    }
+  },
+  "createFromContract": {
+    "title": "Criar produto de dados a partir de contrato",
+    "description": "Crie um novo produto de dados que usa este contrato para governar um entregável. O produto herdará o domínio, a equipe proprietária e o projeto do contrato.",
+    "contractLabel": "Contrato:",
+    "productNameLabel": "Nome do produto *",
+    "productNamePlaceholder": "ex.: Produto de análise de clientes",
+    "productTypeLabel": "Tipo de produto *",
+    "productTypePlaceholder": "Selecione o tipo de produto",
+    "versionLabel": "Versão *",
+    "versionPlaceholder": "ex.: v1.0.0",
+    "deliverableNameLabel": "Nome do entregável (opcional)",
+    "deliverableNamePlaceholder": "Padrão: {{contractName}}",
+    "deliverableNameHint": "Se não especificado, o entregável usará o nome do contrato",
+    "creating": "Criando...",
+    "createButton": "Criar produto",
+    "errors": {
+      "nameRequired": "O nome do produto é obrigatório",
+      "versionRequired": "A versão é obrigatória",
+      "typeRequired": "O tipo de produto é obrigatório",
+      "createError": "Falha ao criar produto a partir do contrato"
+    },
+    "messages": {
+      "productCreated": "Produto criado",
+      "productCreatedDesc": "Produto de dados \"{{productName}}\" criado com sucesso a partir do contrato."
+    }
+  },
+  "createVersion": {
+    "title": "Criar nova versão",
+    "description": "Insira o identificador da nova versão para o produto de dados \"{{productTitle}}\". Geralmente é útil incrementar com base na versão atual ({{currentVersion}}).",
+    "versionLabel": "Identificador da nova versão",
+    "versionPlaceholder": "ex.: v1.1, v2.0-beta",
+    "createButton": "Criar versão",
+    "errors": {
+      "versionEmpty": "O identificador da versão não pode estar vazio."
+    }
+  },
+  "graphView": {
+    "unnamedProduct": "Produto sem nome",
+    "switchToTableView": "Mudar para visualização em tabela",
+    "switchToGraphView": "Mudar para visualização em grafo",
+    "inputPortLabel": "{{name}} (Consumível)",
+    "outputPortLabel": "{{name}} (Entregável)",
+    "labels": {
+      "contract": "Contrato"
+    }
+  },
+  "importExport": {
+    "title": "Importação/Exportação ODPS v1.0.0",
+    "description": "Importe ou exporte produtos de dados no formato JSON Open Data Product Standard v1.0.0",
+    "pasteLabel": "Cole o JSON ODPS v1.0.0",
+    "validationErrors": "Erros de validação:",
+    "validate": "Validar",
+    "validationFailed": "Falha na validação",
+    "errorsFound_one": "{{count}} erro encontrado",
+    "errorsFound_other": "{{count}} erros encontrados",
+    "validationPassed": "Validação aprovada",
+    "validationPassedDesc": "O JSON está no formato ODPS v1.0.0 válido",
+    "invalidJson": "JSON inválido",
+    "cannotImportErrors_one": "Não é possível importar: {{count}} erro encontrado",
+    "cannotImportErrors_other": "Não é possível importar: {{count}} erros encontrados",
+    "importSuccessful": "Importação bem-sucedida",
+    "importSuccessfulDesc": "Produto de dados \"{{name}}\" importado com sucesso",
+    "importFailed": "Falha na importação",
+    "noProductSelected": "Nenhum produto selecionado",
+    "noProductSelectedDesc": "Não é possível exportar sem um produto",
+    "exportSuccessful": "Exportação bem-sucedida",
+    "exportSuccessfulDesc": "{{filename}} baixado",
+    "exportFailed": "Falha na exportação",
+    "exportFailedDesc": "Falha ao exportar produto de dados",
+    "exportDescription": "Clicar em \"Exportar\" fará o download deste produto como um arquivo JSON compatível com ODPS v1.0.0. Campos de auditoria (created_at, updated_at) serão excluídos para portabilidade.",
+    "exportAsJson": "Exportar como JSON",
+    "currentProduct": "Produto atual",
+    "unnamed": "Sem nome",
+    "noProductDesc": "Nenhum produto selecionado. Abra esta caixa de diálogo em uma página de detalhes do produto para exportar."
+  },
+  "subscribeDialog": {
+    "title": "Assinar produto de dados",
+    "descriptionPre": "Assine",
+    "descriptionPost": "para receber notificações sobre atualizações, alterações e status de conformidade.",
+    "subscribeAs": "Assinar como",
+    "forMyself": "Para mim mesmo",
+    "forMyGroup": "Para um grupo do qual faço parte",
+    "noGroupsAvailable": "(nenhum grupo disponível)",
+    "selectGroup": "Selecione um dos seus grupos",
+    "otherGroupOrSP": "Outro grupo ou entidade de serviço",
+    "groupDisplayName": "Grupo (nome de exibição)",
+    "spDisplayName": "Entidade de serviço (nome de exibição ou applicationId)",
+    "groupPlaceholder": "ex.: sales_consumers",
+    "spPlaceholder": "ex.: 11111111-2222-3333-4444-555555555555",
+    "validationNote": "Será validado no diretório do workspace antes de a solicitação ser registrada.",
+    "reasonLabel": "Por que você está assinando?",
+    "optional": "(opcional)",
+    "reasonPlaceholder": "Ex.: Preciso destes dados para relatórios trimestrais, criação de um dashboard etc.",
+    "reasonHint": "Isso ajuda os proprietários de dados a entender como seus produtos estão sendo usados.",
+    "subscribedTitle": "Assinatura realizada!",
+    "subscribedDesc": "Você agora está assinando \"{{productName}}\". Você receberá notificações sobre atualizações e alterações.",
+    "subscribedOnBehalfGroup": "Você assinou \"{{productName}}\" em nome do grupo \"{{value}}\".",
+    "subscribedOnBehalfSP": "Você assinou \"{{productName}}\" em nome da entidade de serviço \"{{value}}\".",
+    "subscriptionFailed": "Falha na assinatura",
+    "failedToSubscribe": "Falha ao assinar",
+    "subscribing": "Assinando..."
+  },
+  "myProductsView": {
+    "retry": "Tentar novamente",
+    "untitled": "Sem título",
+    "productsAvailable_one": "{{count}} produto disponível",
+    "productsAvailable_other": "{{count}} produtos disponíveis"
+  },
+  "ownerConsumers": {
+    "breadcrumb": "Consumidores",
+    "totalProducts": "Total de produtos",
+    "activeProducts": "Produtos ativos",
+    "totalSubscribers": "Total de assinantes",
+    "products": "Produtos",
+    "noProducts": "Nenhum produto encontrado",
+    "noDomain": "Sem domínio",
+    "subscribersFor": "Assinantes — {{name}}",
+    "selectProduct": "Selecione um produto",
+    "filterPlaceholder": "Filtrar assinantes...",
+    "selectProductHint": "Selecione um produto para ver seus assinantes",
+    "noSubscribersMatch": "Nenhum assinante corresponde ao seu filtro",
+    "noSubscribers": "Ainda não há assinantes",
+    "colSubscriber": "Assinante",
+    "colSubscribed": "Assinado em",
+    "colReason": "Motivo"
+  }
+}

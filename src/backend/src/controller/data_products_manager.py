@@ -551,10 +551,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
             ) if products_db else {}
 
+            # Batch-load referenced contracts once per page (#854 review): otherwise
+            # resolving port.contractId → port.contractName does N products × M ports
+            # single-row lookups per list request.
+            port_contract_ids: Set[str] = set()
+            for p in products_db:
+                for port in list(getattr(p, 'output_ports', []) or []) + list(getattr(p, 'input_ports', []) or []):
+                    cid = getattr(port, 'contract_id', None)
+                    if cid:
+                        port_contract_ids.add(cid)
+            from src.repositories.data_contracts_repository import data_contract_repo
+            contracts_map = (
+                data_contract_repo.get_by_ids(db=self._db, ids=port_contract_ids)
+                if port_contract_ids else {}
+            )
+
             products_with_tags = []
             for product_db in products_db:
                 product_with_tags = self._load_product_with_tags(
-                    product_db, preloaded_domains=domains_map.get(str(product_db.id), [])
+                    product_db,
+                    preloaded_domains=domains_map.get(str(product_db.id), []),
+                    preloaded_contracts=contracts_map,
                 )
                 fid = getattr(product_db, "version_family_id", None) or product_db.id
                 # Only emit a count on the collapsed view; on the expanded
@@ -2914,7 +2931,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to assign tags to ODPS product {product_id}: {e}", exc_info=True)
 
-    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None) -> DataProductApi:
+    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None, preloaded_contracts: Optional[Dict[str, Any]] = None) -> DataProductApi:
         """Helper to load an ODPS data product with its associated tags.
 
         ``db`` must be the caller's request session on write paths (create/update) so the
@@ -2961,17 +2978,28 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 except Exception as e:
                     logger.debug(f"Could not resolve project: {e}")
 
-            # Resolve contract names and delivery method names for output ports
+            # Resolve contract names and delivery method names for output + input ports.
+            # Prefer the batch-preloaded contracts map (list path) to avoid N+1; fall
+            # back to a per-port repo.get() for the single-entity callers (#854 review).
+            # A None contractName tells the frontend the id is dangling so it doesn't
+            # render a navigable link that leads to a 404.
+            def _resolve_port_contract(port):
+                if not port.contractId:
+                    return
+                try:
+                    if preloaded_contracts is not None:
+                        contract = preloaded_contracts.get(port.contractId)
+                    else:
+                        from src.repositories.data_contracts_repository import data_contract_repo
+                        contract = data_contract_repo.get(self._db, id=port.contractId)
+                    port.contractName = contract.name if contract else None
+                except Exception as e:
+                    logger.debug(f"Could not resolve port contract {port.contractId}: {e}")
+
             if product_api.outputPorts:
-                from src.repositories.data_contracts_repository import data_contract_repo
                 from src.repositories.delivery_methods_repository import delivery_method_repo
                 for port in product_api.outputPorts:
-                    if port.contractId:
-                        try:
-                            contract = data_contract_repo.get(self._db, id=port.contractId)
-                            port.contractName = contract.name if contract else None
-                        except Exception as e:
-                            logger.debug(f"Could not resolve contract: {e}")
+                    _resolve_port_contract(port)
                     if port.deliveryMethodId:
                         try:
                             dm = delivery_method_repo.get(self._db, port.deliveryMethodId)
@@ -2979,18 +3007,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         except Exception as e:
                             logger.debug(f"Could not resolve delivery method: {e}")
 
-            # Resolve contract names for input ports (#854), mirroring output ports so the
-            # input-port contractId renders as a navigable name instead of a raw UUID. A
-            # missing contract leaves contractName None → the UI falls back to the raw id.
             if product_api.inputPorts:
-                from src.repositories.data_contracts_repository import data_contract_repo
                 for port in product_api.inputPorts:
-                    if port.contractId:
-                        try:
-                            contract = data_contract_repo.get(self._db, id=port.contractId)
-                            port.contractName = contract.name if contract else None
-                        except Exception as e:
-                            logger.debug(f"Could not resolve input-port contract: {e}")
+                    _resolve_port_contract(port)
 
             return product_api
 

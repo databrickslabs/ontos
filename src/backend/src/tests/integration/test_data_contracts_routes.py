@@ -375,6 +375,27 @@ class TestDataContractsRoutes:
         finally:
             Path(temp_path).unlink()
 
+    def test_upload_non_utf8_file_is_failed_item_not_500(self, client: TestClient):
+        """A non-UTF-8 file is decoded per-file and recorded as a failed item;
+        it must not 500 the whole batch (reviewer item #860.2 / #860.5)."""
+        # 0xff is invalid UTF-8; posted as raw bytes with a .yaml name.
+        files = {"files": ("bad.yaml", b"\xff\xfe\x00bad", "application/x-yaml")}
+        response = client.post("/api/data-contracts/upload", files=files)
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["created"] == 0
+        assert data["total"] == 1
+        assert data["items"][0]["status"] == "failed"
+        assert "utf-8" in (data["items"][0]["message"] or "").lower()
+
+    def test_upload_too_many_files_413(self, client: TestClient, monkeypatch):
+        """The file-count cap is a request-level 413 abuse guard (#860.1)."""
+        import src.common.upload_limits as ul
+        monkeypatch.setattr(ul, "MAX_UPLOAD_FILES", 2)
+        files = [("files", (f"c{i}.json", b"{}", "application/json")) for i in range(3)]
+        response = client.post("/api/data-contracts/upload", files=files)
+        assert response.status_code == 413, response.text
+
     def test_export_contract_as_odcs_yaml(self, client: TestClient, db_session: Session):
         """Test exporting contract as ODCS YAML."""
         # Create a contract with full data structure

@@ -37,6 +37,18 @@ def _odps(name: str) -> dict:
     }
 
 
+class TestProductEmptyArrayParity:
+    """An empty ODPS array is a failed item, not a silent '0 imported' no-op
+    (parity with the contract path). Reviewer item #860.4."""
+
+    def test_empty_array_is_failed_item(self, manager: DataProductsManager):
+        content = json.dumps([]).encode("utf-8")
+        result = manager.create_products_from_files([("empty.json", content)], user="a@b.com")
+        assert (result.created, result.failed, result.total) == (0, 1, 1)
+        assert result.items[0].status == "failed"
+        assert "no data product" in (result.items[0].message or "").lower()
+
+
 class TestProductBatchImport:
     def test_array_in_file_creates_many(self, manager: DataProductsManager):
         content = yaml.safe_dump([_odps("P A"), _odps("P B")]).encode("utf-8")

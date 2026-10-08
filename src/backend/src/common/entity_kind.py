@@ -20,7 +20,10 @@ from typing import Any, Literal
 EntityKind = Literal["contract", "product", "unknown"]
 
 # Structural markers exclusive to each standard, used only when `kind` is absent.
-_PRODUCT_MARKERS = ("outputPorts", "inputPorts")
+# `productType` is an ODPS-only top-level enum (sourceAligned/aggregate/consumerAligned);
+# ODCS has no such field. Including it lets us classify a sparse early-draft product
+# that declares productType but no ports.
+_PRODUCT_MARKERS = ("outputPorts", "inputPorts", "productType")
 _CONTRACT_MARKERS = ("schema", "datasets")
 
 

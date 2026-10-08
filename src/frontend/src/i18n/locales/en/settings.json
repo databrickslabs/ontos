@@ -404,6 +404,11 @@
         "title": "Admin Role",
         "description": "Mark this role as the admin role. Only one role should be marked as admin.",
         "label": "This is the admin role"
+      },
+      "importPrivileges": {
+        "title": "Import Privileges",
+        "description": "Grant this role abilities beyond the default import toggles.",
+        "adoptEntityIds": "Adopt entity IDs on import"
       }
     },
     "permissions": {

@@ -649,6 +649,38 @@ async def enforce_feature_permission(
         )
 
 
+def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
+    """Return True if the caller may adopt an entity's UUID from an imported file.
+
+    Allowed when the caller holds any role flagged ``can_adopt_entity_ids=True``
+    OR when they hold ADMIN on the target feature (#853 review). The toggle itself
+    defaults to off; this check only matters when the client explicitly opts in.
+    """
+    groups = getattr(user, "groups", None) or []
+    try:
+        if auth_manager.user_can_adopt_entity_ids(groups):
+            return True
+    except Exception:
+        logger.warning("user_can_adopt_entity_ids check failed; falling back to feature-admin.", exc_info=True)
+    return user_has_feature_level(auth_manager, user, feature_id, FeatureAccessLevel.ADMIN)
+
+
+def user_has_feature_level(auth_manager, user, feature_id: str, required_level: FeatureAccessLevel) -> bool:
+    """Imperative, group-based permission check for conditional in-handler gates.
+
+    Mirrors the group-based path of :class:`PermissionChecker` (without the team/applied
+    role overrides) for secondary checks such as the import "create missing domains"
+    toggle, which must require ``data-domains`` write on top of the entity's own
+    write permission. Returns False on any resolution error (deny by default).
+    """
+    try:
+        effective = auth_manager.get_user_effective_permissions(getattr(user, "groups", None) or [], None)
+        return auth_manager.has_permission(effective, feature_id, required_level)
+    except Exception:
+        logger.warning("user_has_feature_level check failed for feature '%s'; denying.", feature_id, exc_info=True)
+        return False
+
+
 class PermissionChecker:
     """FastAPI Dependency to check user permissions for a feature."""
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):

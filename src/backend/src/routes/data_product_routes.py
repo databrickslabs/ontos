@@ -28,7 +28,9 @@ from src.models.data_products import (
 from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
-from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level, user_can_adopt_entity_ids_for
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -43,6 +45,7 @@ from src.common.workflow_triggers import get_trigger_registry, fire_trigger_safe
 from src.models.process_workflows import EntityType
 from src.models.notifications import NotificationType
 from src.models.import_results import BatchImportResult
+from src.common.upload_limits import read_uploads_capped
 from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
 
 from src.common.logging import get_logger
@@ -1597,9 +1600,10 @@ async def upload_data_products(
     current_user: AuditCurrentUserDep,
     files: List[UploadFile] = File(...),
     create_missing_domains: bool = Form(False),
-    adopt_ids: bool = Form(True),
+    adopt_ids: bool = Form(False),
     on_duplicate: str = Form("skip"),
     manager: DataProductsManager = Depends(get_data_products_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """Upload one or more ODPS product files (each single-entity or an array).
@@ -1621,16 +1625,40 @@ async def upload_data_products(
     }
 
     try:
-        file_inputs: List[tuple] = []
-        for f, safe_filename in zip(files, safe_filenames):
-            content = await f.read()
-            file_inputs.append((safe_filename, content))
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+        if on_duplicate not in ("skip", "new"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"on_duplicate must be 'skip' or 'new' (got {on_duplicate!r}).",
+            )
+        effective_adopt_ids = adopt_ids and user_can_adopt_entity_ids_for(
+            auth_manager, current_user, 'data-products'
+        )
+        details_for_audit["adopt_ids"] = {"requested": adopt_ids, "effective": effective_adopt_ids}
+        # Feature-admins may see the existing row's id/name on a skipped duplicate;
+        # others get a generic skip so the response isn't an existence oracle.
+        reveal_dup_detail = user_has_feature_level(
+            auth_manager, current_user, DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN
+        )
+        capped = await read_uploads_capped(
+            files,
+            sanitize=lambda n: sanitize_filename(n or "upload.bin", default="upload.bin"),
+        )
+        file_inputs = [(name, raw) for name, raw, _ in capped]
 
         result = manager.create_products_from_files(
             file_inputs, user=current_user.username if current_user else None,
             create_missing_domains=create_missing_domains,
-            adopt_ids=adopt_ids,
+            adopt_ids=effective_adopt_ids,
             on_duplicate=on_duplicate,
+            reveal_dup_detail=reveal_dup_detail,
         )
 
         success = result.created > 0
@@ -1646,10 +1674,10 @@ async def upload_data_products(
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = f"Unexpected error processing uploaded file(s): {e!s}"
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        logger.exception(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
+        # Log the full detail; return a generic message so no SQL/internal text leaks.
+        logger.exception("Product upload failed")
+        raise HTTPException(status_code=500, detail="Upload failed. See server logs for details.")
     finally:
         # Audit logging
         audit_manager.log_action(

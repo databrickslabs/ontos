@@ -28,6 +28,21 @@ def _is_valid_uuid(value: str) -> bool:
         return False
 
 
+def _canonical_uuid(value: str) -> Optional[str]:
+    """Return the canonical lowercase hyphenated form of a UUID string, or None.
+
+    Mirrors `data_contracts_manager._canonical_uuid` (#853 review item 2):
+    guards the import duplicate check against case/braced/urn/hyphenless
+    spellings that would otherwise create a second identity for the same UUID.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
 def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None:
     """Set a customProperties entry on a product/contract payload dict, tolerating the
     list-of-{property,value} form and the legacy {key: value} dict form."""
@@ -285,13 +300,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
             # so YAML-expressed links survive import; otherwise generate a fresh UUID.
+            # Canonicalize before lookup/storage so spelling variants cannot create
+            # a second identity for the same logical UUID (#853 review item 2).
+            canon_incoming = _canonical_uuid(incoming_id)
             if (
                 adopt_ids
-                and incoming_id and isinstance(incoming_id, str) and _is_valid_uuid(incoming_id)
-                and self._repo.get(db=db_session, id=incoming_id) is None
+                and canon_incoming is not None
+                and self._repo.get(db=db_session, id=canon_incoming) is None
             ):
-                product_data['id'] = incoming_id
-                logger.info(f"Adopted id {incoming_id} from payload for new product.")
+                product_data['id'] = canon_incoming
+                logger.info(f"Adopted id {canon_incoming} from payload for new product.")
             else:
                 product_data['id'] = str(uuid.uuid4())
                 logger.info(f"Generated ID {product_data['id']} for new product.")
@@ -1702,6 +1720,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
         on_duplicate: str = "skip",
+        reveal_dup_detail: bool = False,
     ) -> BatchImportResult:
         """Import ODPS products from one or more uploaded files.
 
@@ -1734,6 +1753,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 index += 1
                 continue
 
+            # An empty array is a failed item (parity with the contract path), not a
+            # silent no-op that the UI renders as "0 imported successfully".
+            if not data_list:
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message="File contained no data product entities",
+                ))
+                index += 1
+                continue
+
             for product_data in data_list:
                 source_id = product_data.get('id') if isinstance(product_data, dict) else None
                 if not isinstance(product_data, dict):
@@ -1745,7 +1774,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     continue
                 # Only import a recognizable ODPS Data Product. An ODCS contract is
                 # routed to the right page; anything unrecognizable is skipped rather
-                # than imported as a junk product.
+                # than imported as a junk product. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the products table.
                 entity_kind = classify_import_entity(product_data)
                 if entity_kind != "product":
                     if entity_kind == "contract":
@@ -1767,24 +1797,37 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     continue
                 # Duplicate-id handling (#853): a valid UUID already present is either
                 # skipped (default) or imported as a new copy with a fresh UUID.
-                if (
-                    source_id and isinstance(source_id, str) and _is_valid_uuid(source_id)
-                    and self._repo.get(db=self._db, id=source_id) is not None
-                ):
-                    if on_duplicate == "skip":
+                # Canonicalize the source id so case/braced/urn/hyphenless spellings
+                # cannot bypass the dup check (#853 review item 2).
+                canon_source = _canonical_uuid(source_id) if isinstance(source_id, str) else None
+                dup = bool(canon_source and self._repo.get(db=self._db, id=canon_source) is not None)
+                if dup and on_duplicate == "skip":
+                    # Don't surface the existing row's id/name to a caller who can't
+                    # read it — otherwise the skipped-dup message becomes an
+                    # existence oracle (#853 review item 5).
+                    if reveal_dup_detail:
                         result.add(ImportItemResult(
                             index=index, source_file=filename, source_id=source_id,
-                            entity_id=source_id, name=product_data.get('name'), status="skipped",
+                            entity_id=canon_source, name=product_data.get('name'), status="skipped",
                             message="already present (same id)",
                         ))
-                        index += 1
-                        continue
-                    # on_duplicate == "new": fall through with adoption disabled for this row.
+                    else:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            status="skipped",
+                            message="Supplied id cannot be adopted (import toggles or an existing entity prevent it).",
+                        ))
+                    index += 1
+                    continue
+                # on_duplicate == "new" with dup: fall through with adoption disabled;
+                # the row gets a fresh UUID. Intra-batch reference remap is not needed
+                # here because ODPS carries no product-to-product reference field (the
+                # only cross-ref is inputPorts[].contractId, which points at contracts
+                # imported through a separate endpoint, not at other products in this
+                # batch). If a cross-entity batch flow is introduced later, build an
+                # old→new map keyed on canon_source and rewrite port.contractId before
+                # calling create_product (#853 review item 4).
                 try:
-                    dup = (
-                        source_id and isinstance(source_id, str) and _is_valid_uuid(source_id)
-                        and self._repo.get(db=self._db, id=source_id) is not None
-                    )
                     created = self.create_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
@@ -1795,11 +1838,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         entity_id=created.id, name=created.name, status="created",
                     ))
                 except Exception as e:
-                    logger.error("Failed to import product at batch index %d: %s", index, e)
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import product at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=product_data.get('name'), status="failed",
-                        message=f"{type(e).__name__}: {e}",
+                        message="Could not import this data product. See server logs for details.",
                     ))
                 index += 1
 

@@ -22,6 +22,22 @@ def _is_valid_uuid(value: str) -> bool:
         return False
 
 
+def _canonical_uuid(value: str) -> Optional[str]:
+    """Return the canonical lowercase hyphenated form of a UUID string, or None.
+
+    ``uuid.UUID`` accepts upper/lower case, braced, URN and hyphenless spellings
+    (all of which refer to the same logical UUID), but the import duplicate
+    check compares strings. Canonicalizing before lookup and storage prevents a
+    second identity for the same logical UUID (#853 review item 2).
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
 def _upsert_custom_property(data: dict, prop: str, value) -> None:
     """Set a customProperties entry on an ODCS payload dict, tolerating the
     list-of-{property,value} form and the legacy {key: value} dict form."""
@@ -3058,13 +3074,17 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
 
             # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
             # so YAML-expressed cross-entity links survive import; else auto-generate.
+            # Canonicalize before lookup and storage so an upper/braced/urn spelling
+            # cannot bypass the duplicate check and create a second identity for the
+            # same logical UUID (#853 review item 2).
             adopted_id = None
+            canon_id = _canonical_uuid(original_id) if isinstance(original_id, str) else None
             if (
                 adopt_ids
-                and original_id and isinstance(original_id, str) and _is_valid_uuid(original_id)
-                and data_contract_repo.get(db, original_id) is None
+                and canon_id is not None
+                and data_contract_repo.get(db, canon_id) is None
             ):
-                adopted_id = original_id
+                adopted_id = canon_id
 
             # Create main contract record (adopt the file id when eligible, else default UUID).
             db_obj = DataContractDb(
@@ -3235,6 +3255,7 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
         on_duplicate: str = "skip",
+        reveal_dup_detail: bool = False,
     ) -> BatchImportResult:
         """Import ODCS contracts from one or more uploaded files.
 
@@ -3288,7 +3309,8 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     continue
                 # Only import a recognizable ODCS Data Contract. An ODPS product is
                 # routed to the right page; anything unrecognizable is skipped rather
-                # than fabricated into a junk contract.
+                # than fabricated into a junk contract. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the contracts table.
                 entity_kind = classify_import_entity(entity)
                 if entity_kind != "contract":
                     if entity_kind == "product":
@@ -3310,16 +3332,26 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                     continue
                 # Duplicate-id handling (#853): a valid UUID already present is either
                 # skipped (default) or imported as a new copy with a fresh UUID.
-                dup = bool(
-                    source_id and isinstance(source_id, str) and _is_valid_uuid(source_id)
-                    and data_contract_repo.get(db, source_id) is not None
-                )
+                # Canonicalize the source id so case/braced/urn/hyphenless spellings
+                # cannot bypass the dup check (#853 review item 2).
+                canon_source = _canonical_uuid(source_id) if isinstance(source_id, str) else None
+                dup = bool(canon_source and data_contract_repo.get(db, canon_source) is not None)
                 if dup and on_duplicate == "skip":
-                    result.add(ImportItemResult(
-                        index=index, source_file=filename, source_id=source_id,
-                        entity_id=source_id, name=entity.get('name'), status="skipped",
-                        message="already present (same id)",
-                    ))
+                    # Don't surface the existing row's id/name to a caller who can't
+                    # read it — otherwise the skipped-dup message becomes an
+                    # existence oracle (#853 review item 5).
+                    if reveal_dup_detail:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            entity_id=canon_source, name=entity.get('name'), status="skipped",
+                            message="already present (same id)",
+                        ))
+                    else:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            status="skipped",
+                            message="Supplied id cannot be adopted (import toggles or an existing entity prevent it).",
+                        ))
                     index += 1
                     continue
                 try:
@@ -3333,11 +3365,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         entity_id=created.id, name=created.name, status="created",
                     ))
                 except Exception as e:
-                    logger.error("Failed to import contract at batch index %d: %s", index, e)
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import contract at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=entity.get('name'), status="failed",
-                        message=f"{type(e).__name__}: {e}",
+                        message="Could not import this contract. See server logs for details.",
                     ))
                 index += 1
 

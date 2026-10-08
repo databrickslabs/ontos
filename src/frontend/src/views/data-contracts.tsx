@@ -50,7 +50,9 @@ export default function DataContracts() {
   const [createMissingDomains, setCreateMissingDomains] = useState(false)
   // #853: adopt valid, non-colliding UUIDs from the file as the PK (default on), and how
   // to handle a duplicate id already present (default skip; on = import as a new copy).
-  const [adoptIds, setAdoptIds] = useState(true)
+  // Default off, matching the backend-level privilege gate (#853 review): adoption
+  // is opt-in both on the UI and on the route.
+  const [adoptIds, setAdoptIds] = useState(false)
   const [duplicatesAsNew, setDuplicatesAsNew] = useState(false)
   const [importingPaste, setImportingPaste] = useState(false)
   const [showErrorDetail, setShowErrorDetail] = useState(false)
@@ -95,6 +97,21 @@ export default function DataContracts() {
       if (Array.isArray(data)) setCertificationLevels(data);
     });
   }, [get]);
+
+  // Reset the upload dialog's transient state every time it opens so a later
+  // import doesn't silently carry over earlier toggles, paste text, or errors
+  // (#930 review item 3). Paste survives failures within one dialog session
+  // (see importPastedOdcs) but is cleared on re-open.
+  useEffect(() => {
+    if (openUploadDialog) {
+      setCreateMissingDomains(false);
+      setAdoptIds(false);
+      setDuplicatesAsNew(false);
+      setOdcsPaste('');
+      setUploadError(null);
+      setShowErrorDetail(false);
+    }
+  }, [openUploadDialog]);
 
   // Removed ODCS schema load for inline JSON validation
   // Removed inline JSON validation
@@ -347,7 +364,8 @@ export default function DataContracts() {
           .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
           .join('\n');
         setUploadError({ message: summarizeImport(result), detail });
-        if (result.created > 0) setOdcsPaste('');
+        // Partial success: keep the pasted content so the user can fix the
+        // failing/skipped entries and retry (#930 review item 4).
       } else {
         setOpenUploadDialog(false);
         setOdcsPaste('');

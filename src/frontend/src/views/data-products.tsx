@@ -78,7 +78,9 @@ export default function DataProducts() {
   const [createMissingDomains, setCreateMissingDomains] = useState(false);
   // #853: adopt valid, non-colliding file UUIDs as PK (default on); duplicate-id handling
   // (default skip; on = import as a new copy).
-  const [adoptIds, setAdoptIds] = useState(true);
+  // Default off, matching the backend-level privilege gate (#853 review): adoption
+  // is opt-in both on the UI and on the route.
+  const [adoptIds, setAdoptIds] = useState(false);
   const [duplicatesAsNew, setDuplicatesAsNew] = useState(false);
   // Paste ODPS JSON (parity with the Data Contracts uploader).
   const [odpsPaste, setOdpsPaste] = useState('');
@@ -223,6 +225,20 @@ export default function DataProducts() {
       if (Array.isArray(data)) setCertificationLevels(data);
     });
   }, [get]);
+
+  // Reset the upload dialog's transient state every time it opens so a later
+  // import doesn't silently carry over earlier toggles, paste text, or errors
+  // (#930 review item 3). Paste survives failures within one dialog session
+  // (see importPastedOdps) but is cleared on re-open.
+  useEffect(() => {
+    if (uploadDialogOpen) {
+      setCreateMissingDomains(false);
+      setAdoptIds(false);
+      setDuplicatesAsNew(false);
+      setOdpsPaste('');
+      setError(null);
+    }
+  }, [uploadDialogOpen]);
 
   // Toggle subscription filter
   const handleToggleMySubscriptions = () => {
@@ -418,12 +434,14 @@ export default function DataProducts() {
 
   // File upload handler shared by the dropzone and the paste box (via
   // <ImportEntityDialog>). Each file may hold a single ODPS product or an array.
-  const uploadProductFiles = async (files: File[]) => {
+  // Returns true iff every entity was created successfully; callers that need to
+  // preserve input on failure (paste box) check this before clearing (#930 review).
+  const uploadProductFiles = async (files: File[]): Promise<boolean> => {
     if (!canWrite) {
       toast({ title: t('permissions.denied'), description: t('permissions.noUpload'), variant: "destructive" });
-      return;
+      return false;
     }
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) return false;
     setIsUploading(true);
     setError(null);
     const formData = new FormData();
@@ -460,6 +478,7 @@ export default function DataProducts() {
       // Surface anything not created: failed entities AND files skipped as the
       // wrong type (e.g. an ODCS contract dropped here).
       const unimportedItems = result?.items?.filter((i) => i.status !== 'created') ?? [];
+      const allCreated = !!result && result.failed === 0 && result.skipped === 0;
       if (result && (result.failed > 0 || result.skipped > 0)) {
         // Partial success: surface the truthful summary plus the first issues.
         const detail = unimportedItems
@@ -481,6 +500,7 @@ export default function DataProducts() {
         });
       }
       await fetchProducts();
+      return allCreated;
 
     } catch (err: any) {
       console.error('Error uploading file:', err);
@@ -492,20 +512,23 @@ export default function DataProducts() {
           duration: 10000, // Show longer for detailed errors
       });
       setError(errorMsg);
+      return false;
     } finally {
       setIsUploading(false);
     }
   };
 
   // Paste ODPS JSON: wrap the text as a .json file and reuse the batch endpoint.
+  // Only clear the textarea on full success — otherwise the user loses the input
+  // they would need to fix and retry (#930 review).
   const importPastedOdps = async () => {
     const value = odpsPaste.trim();
     if (!value) return;
     setImportingProductPaste(true);
     try {
       const file = new File([value], 'pasted.json', { type: 'application/json' });
-      await uploadProductFiles([file]);
-      setOdpsPaste('');
+      const allCreated = await uploadProductFiles([file]);
+      if (allCreated) setOdpsPaste('');
     } finally {
       setImportingProductPaste(false);
     }

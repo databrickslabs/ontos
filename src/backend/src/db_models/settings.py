@@ -28,6 +28,10 @@ class AppRoleDb(Base):
     deployment_policy = Column(Text, nullable=True, comment="Deployment policy for this role (catalog/schema restrictions)")
     is_admin = Column(Boolean, nullable=False, default=False, server_default='false',
                       comment="Whether this role is the admin role")
+    # Import privilege (#853 review): may this role adopt an entity's UUID from an
+    # imported file as the primary key? Default off; mirrors is_admin plumbing.
+    can_adopt_entity_ids = Column(Boolean, nullable=False, default=False, server_default='false',
+                                  comment="Whether this role may adopt entity IDs on import")
 
     # Add timestamp columns - Make them nullable
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=True)

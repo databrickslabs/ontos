@@ -239,10 +239,15 @@ class SearchManager:
 
         # Sort results based on ranking configuration
         sorted_matches = self._sort_matches(filtered_matches, config)
-        
+
         # Extract items from matches
         results = [m.item for m in sorted_matches]
-        
+
+        # Project search leaks names the list hides (same feature permission, but
+        # the list filters by team-domain membership). Apply the same visibility
+        # here so search isn't a side-channel (#919 review).
+        results = self._apply_project_visibility(results, user)
+
         logger.info(
             f"Search for '{query}' returned {len(results)} results "
             f"after permission filtering for user {user.username}."
@@ -276,11 +281,55 @@ class SearchManager:
             item for item in candidates
             if auth_manager.has_permission(effective_permissions, item.feature_id, FeatureAccessLevel.READ_ONLY)
         ]
+        results = self._apply_project_visibility(results, user)
         logger.info(
             f"Postgres search for '{query}' returned {len(results)} results "
             f"after permission filtering for user {user.username}."
         )
         return results
+
+    def _apply_project_visibility(self, results: List[SearchIndexItem], user: UserInfo) -> List[SearchIndexItem]:
+        """Hide `project::` items the caller cannot see on the list page.
+
+        Project list filters by team-domain membership, but search only filters by
+        feature permission — so without this post-filter a user with ``projects:
+        READ_ONLY`` could discover project names/descriptions their list hides
+        (#919 review). Resolves project ids once and delegates the membership
+        check to ProjectsManager so the same predicate runs in both places.
+        """
+        project_ids = [item.id.split("::", 1)[1] for item in results
+                       if getattr(item, 'type', '') == 'project' and '::' in (item.id or '')]
+        if not project_ids:
+            return results
+        projects_manager = next(
+            (m for m in self.searchable_managers if m.__class__.__name__ == 'ProjectsManager'),
+            None,
+        )
+        if projects_manager is None:
+            return results
+        try:
+            from src.common.database import get_session_factory
+            session_factory = get_session_factory()
+            if not session_factory:
+                return results
+            # Admin shortcut: ProjectsManager's own fallback uses an 'admin' group check.
+            # Match that so we don't double-restrict.
+            is_admin = bool(user.groups and any('admin' in (g or '').lower() for g in user.groups))
+            with session_factory() as db:
+                visible = projects_manager.visible_project_ids(
+                    db, project_ids,
+                    user_identifier=user.email,
+                    user_groups=user.groups or [],
+                    is_admin=is_admin,
+                )
+        except Exception as e:
+            logger.warning(f"Project visibility post-filter failed; dropping project results: {e}")
+            visible = set()
+        return [
+            item for item in results
+            if getattr(item, 'type', '') != 'project'
+            or ('::' in (item.id or '') and item.id.split('::', 1)[1] in visible)
+        ]
 
     def query_index(
         self,

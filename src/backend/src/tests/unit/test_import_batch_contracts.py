@@ -94,7 +94,66 @@ class TestContractBatchImport:
         result = mgr.create_contracts_from_files(
             db=db_session, files=files, current_user="alice@example.com",
         )
-        # The broken JSON has no structured payload; parse falls back to a minimal
-        # text wrapper, so it still produces exactly one entity (created), never a crash.
-        assert result.total == 2
-        assert result.created >= 1
+        # Broken JSON is no longer fabricated into a contract: it is a failed item,
+        # while the valid sibling still imports.
+        assert (result.created, result.failed, result.total) == (1, 1, 2)
+        broken = [i for i in result.items if i.source_file == "broken.json"]
+        assert len(broken) == 1 and broken[0].status == "failed"
+
+    def test_freeform_text_file_is_not_imported(self, db_session: Session):
+        """A README (free-form text) must not become a contract (regression)."""
+        mgr = _manager()
+        readme = "# Linked fixtures\n\nThese YAML files cross-reference each other.\n"
+        files = [
+            ("c.yaml", yaml.safe_dump(_odcs("Real")), "application/x-yaml"),
+            ("README.md", readme, "text/markdown"),
+        ]
+        result = mgr.create_contracts_from_files(
+            db=db_session, files=files, current_user="alice@example.com",
+        )
+        assert (result.created, result.total) == (1, 2)
+        readme_item = [i for i in result.items if i.source_file == "README.md"]
+        assert len(readme_item) == 1 and readme_item[0].status != "created"
+        assert db_session.query(DataContractDb).filter_by(name="README").count() == 0
+
+    def test_structured_but_unrecognized_yaml_is_skipped(self, db_session: Session):
+        """A valid YAML mapping that is not ODCS is skipped, not turned into a contract."""
+        mgr = _manager()
+        junk = {"some": "config", "ports": 8080, "enabled": True}
+        result = mgr.create_contracts_from_files(
+            db=db_session, files=[("config.yaml", yaml.safe_dump(junk), "application/x-yaml")],
+            current_user="alice@example.com",
+        )
+        assert (result.created, result.skipped, result.total) == (0, 1, 1)
+        assert "recognizable ODCS" in result.items[0].message
+
+    def test_odps_product_is_skipped_not_imported(self, db_session: Session):
+        """An ODPS Data Product dropped on the contract importer is skipped, not created."""
+        mgr = _manager()
+        product = {
+            "apiVersion": "v1.0.0", "kind": "DataProduct", "id": str(uuid.uuid4()),
+            "name": "Sales Analytics", "version": "1.0.0", "status": "active",
+            "outputPorts": [{"name": "out"}],
+        }
+        result = mgr.create_contracts_from_files(
+            db=db_session, files=[("p.yaml", yaml.safe_dump(product), "application/x-yaml")],
+            current_user="alice@example.com",
+        )
+        assert (result.created, result.skipped, result.failed, result.total) == (0, 1, 0, 1)
+        skipped = [i for i in result.items if i.status == "skipped"]
+        assert len(skipped) == 1
+        assert "Data Products page" in skipped[0].message
+        assert db_session.query(DataContractDb).count() == 0
+
+    def test_mixed_batch_imports_contracts_skips_products(self, db_session: Session):
+        """A mixed selection creates the contracts and skips the products in one summary."""
+        mgr = _manager()
+        product = {"apiVersion": "v1.0.0", "kind": "DataProduct", "name": "P", "version": "1.0.0"}
+        files = [
+            ("c.yaml", yaml.safe_dump(_odcs("Real Contract")), "application/x-yaml"),
+            ("p.yaml", yaml.safe_dump(product), "application/x-yaml"),
+        ]
+        result = mgr.create_contracts_from_files(
+            db=db_session, files=files, current_user="alice@example.com",
+        )
+        assert (result.created, result.skipped, result.total) == (1, 1, 2)

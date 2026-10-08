@@ -91,9 +91,56 @@ class TestProductIdAdoption:
                                        preserve_source_id=True, adopt_ids=True)
         import json
         content = json.dumps(_product("Dupe", id=fid)).encode("utf-8")
-        result = product_manager.create_products_from_files([("p.json", content)], user="a@b.com")
+        # reveal_dup_detail=True simulates a feature-admin caller; the id is surfaced.
+        result = product_manager.create_products_from_files(
+            [("p.json", content)], user="a@b.com", reveal_dup_detail=True,
+        )
         assert result.created == 0 and result.skipped == 1
         assert result.items[0].status == "skipped" and result.items[0].entity_id == fid
+
+    def test_canonical_uuid_blocks_upper_case_dup(self, product_manager, db_session):
+        """Dup detection canonicalizes UUIDs so UPPERCASE cannot bypass skip (#853 review item 2)."""
+        fid = str(uuid.uuid4())
+        product_manager.create_product(_product("Original", id=fid), db=db_session, user="a@b.com",
+                                       preserve_source_id=True, adopt_ids=True)
+        import json
+        upper = fid.upper()  # same logical UUID, different string
+        content = json.dumps(_product("Dupe", id=upper)).encode("utf-8")
+        result = product_manager.create_products_from_files(
+            [("p.json", content)], user="a@b.com", reveal_dup_detail=True,
+        )
+        assert result.skipped == 1 and result.created == 0
+        assert result.items[0].entity_id == fid  # canonical form, not UPPERCASE
+
+    def test_canonical_uuid_blocks_braced_dup(self, product_manager, db_session):
+        """Braced spelling must not bypass dup detection either."""
+        fid = str(uuid.uuid4())
+        product_manager.create_product(_product("Original", id=fid), db=db_session, user="a@b.com",
+                                       preserve_source_id=True, adopt_ids=True)
+        import json
+        braced = "{" + fid + "}"
+        content = json.dumps(_product("Dupe", id=braced)).encode("utf-8")
+        result = product_manager.create_products_from_files(
+            [("p.json", content)], user="a@b.com", reveal_dup_detail=True,
+        )
+        assert result.skipped == 1 and result.created == 0
+
+    def test_batch_duplicate_redacted_for_non_admin(self, product_manager, db_session):
+        """Non-admin skipped-dup must not surface the existing row's id (#853 review item 5)."""
+        fid = str(uuid.uuid4())
+        product_manager.create_product(_product("Original", id=fid), db=db_session, user="a@b.com",
+                                       preserve_source_id=True, adopt_ids=True)
+        import json
+        content = json.dumps(_product("Dupe", id=fid)).encode("utf-8")
+        result = product_manager.create_products_from_files(
+            [("p.json", content)], user="a@b.com", reveal_dup_detail=False,
+        )
+        assert result.skipped == 1
+        item = result.items[0]
+        assert item.status == "skipped"
+        assert item.entity_id is None, "entity_id must be redacted for non-admin"
+        assert item.name is None, "name must be redacted for non-admin"
+        assert "cannot be adopted" in (item.message or "").lower()
 
     def test_batch_duplicate_import_as_new_copy(self, product_manager, db_session):
         fid = str(uuid.uuid4())
@@ -146,3 +193,36 @@ class TestContractIdAdoption:
         # As a new copy → created with a fresh UUID.
         new = mgr.create_contracts_from_files(db=db_session, files=files, current_user="a@b.com", on_duplicate="new")
         assert new.created == 1 and new.created_ids[0] != fid
+
+    def test_canonical_uuid_blocks_upper_case_dup(self, db_session):
+        """UPPERCASE spelling of an existing UUID must still skip (#853 review item 2)."""
+        mgr = _contract_manager()
+        fid = str(uuid.uuid4())
+        import json
+        mgr.create_contracts_from_files(
+            db=db_session,
+            files=[("c.json", json.dumps(_odcs("C Orig", id=fid)), "application/json")],
+            current_user="a@b.com",
+        )
+        upper_files = [("c.json", json.dumps(_odcs("C Dup", id=fid.upper())), "application/json")]
+        skip = mgr.create_contracts_from_files(
+            db=db_session, files=upper_files, current_user="a@b.com", reveal_dup_detail=True,
+        )
+        assert skip.skipped == 1 and skip.created == 0
+        assert skip.items[0].entity_id == fid  # canonical form, not UPPER
+
+    def test_dup_detail_redacted_for_non_admin(self, db_session):
+        """Skipped-dup must not surface entity_id/name to a non-admin caller (#853 review item 5)."""
+        mgr = _contract_manager()
+        fid = str(uuid.uuid4())
+        import json
+        files = [("c.json", json.dumps(_odcs("C", id=fid)), "application/json")]
+        mgr.create_contracts_from_files(db=db_session, files=files, current_user="a@b.com")
+        skip = mgr.create_contracts_from_files(
+            db=db_session, files=files, current_user="a@b.com", reveal_dup_detail=False,
+        )
+        assert skip.skipped == 1
+        item = skip.items[0]
+        assert item.entity_id is None
+        assert item.name is None
+        assert "cannot be adopted" in (item.message or "").lower()

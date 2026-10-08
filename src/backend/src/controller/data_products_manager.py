@@ -1658,6 +1658,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 index += 1
                 continue
 
+            # An empty array is a failed item (parity with the contract path), not a
+            # silent no-op that the UI renders as "0 imported successfully".
+            if not data_list:
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message="File contained no data product entities",
+                ))
+                index += 1
+                continue
+
             for product_data in data_list:
                 source_id = product_data.get('id') if isinstance(product_data, dict) else None
                 if not isinstance(product_data, dict):
@@ -1698,11 +1708,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         entity_id=created.id, name=created.name, status="created",
                     ))
                 except Exception as e:
-                    logger.error("Failed to import product at batch index %d: %s", index, e)
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import product at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=product_data.get('name'), status="failed",
-                        message=f"{type(e).__name__}: {e}",
+                        message="Could not import this data product. See server logs for details.",
                     ))
                 index += 1
 

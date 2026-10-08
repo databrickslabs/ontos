@@ -3199,11 +3199,16 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                         entity_id=created.id, name=created.name, status="created",
                     ))
                 except Exception as e:
-                    logger.error("Failed to import contract at batch index %d: %s", index, e)
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import contract at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=entity.get('name'), status="failed",
-                        message=f"{type(e).__name__}: {e}",
+                        message="Could not import this contract. See server logs for details.",
                     ))
                 index += 1
 

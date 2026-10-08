@@ -73,6 +73,7 @@ from src.models.data_products import (
     OnBehalfOf,
 )
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
@@ -1729,12 +1730,45 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 index += 1
                 continue
 
+            # An empty array is a failed item (parity with the contract path), not a
+            # silent no-op that the UI renders as "0 imported successfully".
+            if not data_list:
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message="File contained no data product entities",
+                ))
+                index += 1
+                continue
+
             for product_data in data_list:
                 source_id = product_data.get('id') if isinstance(product_data, dict) else None
                 if not isinstance(product_data, dict):
                     result.add(ImportItemResult(
                         index=index, source_file=filename, status="failed",
                         message="Entity is not an object/mapping",
+                    ))
+                    index += 1
+                    continue
+                # Only import a recognizable ODPS Data Product. An ODCS contract is
+                # routed to the right page; anything unrecognizable is skipped rather
+                # than imported as a junk product. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the products table.
+                entity_kind = classify_import_entity(product_data)
+                if entity_kind != "product":
+                    if entity_kind == "contract":
+                        skip_msg = (
+                            f"Skipped: this is an {describe_import_entity(product_data)} "
+                            "(kind: DataContract), not a Data Product. "
+                            "Import it from the Data Contracts page."
+                        )
+                    else:
+                        skip_msg = (
+                            "Skipped: not a recognizable ODPS Data Product "
+                            "(expected kind: DataProduct or product ports)."
+                        )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=product_data.get('name'), status="skipped", message=skip_msg,
                     ))
                     index += 1
                     continue
@@ -1768,11 +1802,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         entity_id=created.id, name=created.name, status="created",
                     ))
                 except Exception as e:
-                    logger.error("Failed to import product at batch index %d: %s", index, e)
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import product at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=product_data.get('name'), status="failed",
-                        message=f"{type(e).__name__}: {e}",
+                        message="Could not import this data product. See server logs for details.",
                     ))
                 index += 1
 

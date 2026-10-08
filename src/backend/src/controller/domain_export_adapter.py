@@ -203,13 +203,19 @@ class DomainExportAdapter:
             names.extend(str(v) for v in legacy_additional)
 
         resolved: List[str] = []
-        for name in names:
+        for raw_name in names:
+            # Trim surrounding whitespace so " finance " matches "finance".
+            name = str(raw_name).strip()
+            if not name:
+                continue
             # ID-first: a free-form `domain` value might be an existing UUID.
             if _is_uuid(name) and self.domain_repo.get(db, name):
                 if name not in resolved:
                     resolved.append(name)
                 continue
-            domain = self.domain_repo.get_by_name(db, name=name)
+            # Case-insensitive, trimmed match so casing/whitespace differences do not
+            # leave the entity unassigned or create a near-duplicate under auto-create.
+            domain = self.domain_repo.get_by_name_normalized(db, name=name)
             if domain:
                 if domain.id not in resolved:
                     resolved.append(domain.id)
@@ -257,7 +263,10 @@ class DomainExportAdapter:
         'Create missing domains' toggle). Returns the created domain or None on failure."""
         try:
             from src.models.data_domains import DataDomainCreate
-            created = self.domain_repo.create(db=db, obj_in=DataDomainCreate(name=name))
+            # Record real attribution instead of the repo's "system" fallback.
+            created = self.domain_repo.create(
+                db=db, obj_in=DataDomainCreate(name=name, created_by=created_by)
+            )
             logger.info("DomainExportAdapter: auto-created missing domain %r (id=%s) on import.", name, created.id)
             return created
         except Exception as e:

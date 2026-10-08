@@ -646,6 +646,22 @@ async def enforce_feature_permission(
         )
 
 
+def user_has_feature_level(auth_manager, user, feature_id: str, required_level: FeatureAccessLevel) -> bool:
+    """Imperative, group-based permission check for conditional in-handler gates.
+
+    Mirrors the group-based path of :class:`PermissionChecker` (without the team/applied
+    role overrides) for secondary checks such as the import "create missing domains"
+    toggle, which must require ``data-domains`` write on top of the entity's own
+    write permission. Returns False on any resolution error (deny by default).
+    """
+    try:
+        effective = auth_manager.get_user_effective_permissions(getattr(user, "groups", None) or [], None)
+        return auth_manager.has_permission(effective, feature_id, required_level)
+    except Exception:
+        logger.warning("user_has_feature_level check failed for feature '%s'; denying.", feature_id, exc_info=True)
+        return False
+
+
 class PermissionChecker:
     """FastAPI Dependency to check user permissions for a feature."""
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):

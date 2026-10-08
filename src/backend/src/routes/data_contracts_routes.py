@@ -51,10 +51,13 @@ from src.models.data_contracts_api import (
     DataContractCommentRead,
 )
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
-from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
-from src.models.import_results import BatchImportResult
+from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.upload_limits import read_uploads_capped
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
 from src.common.deployment_dependencies import get_deployment_policy_manager
@@ -1541,6 +1544,7 @@ async def upload_contract(
     adopt_ids: bool = Form(True),
     on_duplicate: str = Form("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Upload one or more contract files (each single-entity or an ODCS array).
@@ -1559,11 +1563,33 @@ async def upload_contract(
     }
 
     try:
+        # The "create missing domains" toggle creates top-level domains, so it
+        # requires data-domains write on top of the contract-write permission —
+        # otherwise a contract-writer could create domains they cannot manage (#851 review).
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+
+        capped = await read_uploads_capped(
+            files,
+            sanitize=lambda n: sanitize_filename(n or "uploaded_contract", default="uploaded_contract"),
+        )
+        # Decode per file (not up front): a single non-UTF-8 file is recorded as a
+        # failed item and never aborts the batch, mirroring the per-entity policy.
         file_inputs: List[tuple] = []
-        for f in files:
-            safe_filename = sanitize_filename(f.filename or "uploaded_contract", default="uploaded_contract")
-            contract_text = (await f.read()).decode('utf-8')
-            file_inputs.append((safe_filename, contract_text, f.content_type or 'application/json'))
+        decode_failures: List[str] = []
+        for safe_filename, raw, content_type in capped:
+            try:
+                contract_text = raw.decode('utf-8')
+            except UnicodeDecodeError:
+                decode_failures.append(safe_filename)
+                continue
+            file_inputs.append((safe_filename, contract_text, content_type or 'application/json'))
 
         result = manager.create_contracts_from_files(
             db=db,
@@ -1573,6 +1599,11 @@ async def upload_contract(
             adopt_ids=adopt_ids,
             on_duplicate=on_duplicate,
         )
+        for safe_filename in decode_failures:
+            result.add(ImportItemResult(
+                index=result.total, source_file=safe_filename, status="failed",
+                message="File is not valid UTF-8 text (expected an ODCS .yaml, .yml or .json file).",
+            ))
 
         # Success = at least one entity created (partial success still 200 with detail).
         success = result.created > 0
@@ -1587,9 +1618,10 @@ async def upload_contract(
     except Exception as e:
         logger.exception("Upload failed")
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        # Do not echo raw exception text to the client — it can leak SQL/internal
+        # detail. The full traceback is in the server logs above.
         raise HTTPException(status_code=500, detail={
-            "message": "Upload failed",
-            "error": f"{type(e).__name__}: {e}",
+            "message": "Upload failed. See server logs for details.",
         })
     finally:
         audit_manager.log_action(
@@ -1629,6 +1661,7 @@ async def import_odcs_json(
     adopt_ids: bool = Query(True),
     on_duplicate: str = Query("skip"),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Import ODCS contract(s) from a pasted JSON object or array."""
@@ -1636,6 +1669,14 @@ async def import_odcs_json(
     details_for_audit: dict = {"params": {"source": "paste"}}
 
     try:
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
         contract_text = json.dumps(body)
         result = manager.create_contracts_from_files(
             db=db,
@@ -1658,8 +1699,7 @@ async def import_odcs_json(
         logger.exception("ODCS JSON import failed")
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail={
-            "message": "Import failed",
-            "error": f"{type(e).__name__}: {e}",
+            "message": "Import failed. See server logs for details.",
         })
     finally:
         audit_manager.log_action(

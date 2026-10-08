@@ -101,5 +101,22 @@ class DataDomainRepository(CRUDBase[DataDomain, DataDomainCreate, DataDomainUpda
             db.rollback()
             raise
 
+    def get_by_name_normalized(self, db: Session, *, name: str) -> Optional[DataDomain]:
+        """Case-insensitive, whitespace-trimmed name lookup.
+
+        Used by import reconciliation so ``" finance "`` matches ``Finance`` rather
+        than being left unassigned (or creating a near-duplicate under auto-create).
+        """
+        from sqlalchemy import func
+        norm = (name or "").strip().lower()
+        if not norm:
+            return None
+        try:
+            return db.query(self.model).filter(func.lower(self.model.name) == norm).first()
+        except SQLAlchemyError as e:
+            logger.error(f"Database error fetching {self.model.__name__} by normalized name {name!r}: {e}", exc_info=True)
+            db.rollback()
+            raise
+
 # Singleton instance
 data_domain_repo = DataDomainRepository() 

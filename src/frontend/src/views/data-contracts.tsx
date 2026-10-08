@@ -291,13 +291,15 @@ export default function DataContracts() {
         const result: BatchImportResult = await response.json();
         await fetchContracts();
 
-        if (result.failed > 0) {
+        // Surface anything that was not created — failed entities AND files
+        // skipped as the wrong type (e.g. an ODPS product dropped here).
+        if (result.failed > 0 || result.skipped > 0) {
           const detail = result.items
-            .filter((i) => i.status === 'failed')
+            .filter((i) => i.status !== 'created')
             .slice(0, 5)
-            .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+            .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
             .join('\n');
-          // Keep the dialog open so the user sees which entities failed.
+          // Keep the dialog open so the user sees which entities were skipped/failed.
           setUploadError({ message: summarizeImport(result), detail });
           if (result.created > 0) {
             toast({ title: t('data-contracts:messages.success', 'Success'), description: summarizeImport(result) });
@@ -813,11 +815,11 @@ export default function DataContracts() {
                   }
                   const result: BatchImportResult = await res.json()
                   await fetchContracts()
-                  if (result.failed > 0) {
+                  if (result.failed > 0 || result.skipped > 0) {
                     const detail = result.items
-                      .filter((i) => i.status === 'failed')
+                      .filter((i) => i.status !== 'created')
                       .slice(0, 5)
-                      .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? 'failed'}`)
+                      .map((i) => `• ${i.name || i.source_id || `#${i.index}`}: ${i.message ?? i.status}`)
                       .join('\n')
                     setUploadError({ message: summarizeImport(result), detail })
                     if (result.created > 0) setOdcsPaste('')

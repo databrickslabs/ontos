@@ -51,7 +51,9 @@ from src.models.data_contracts_api import (
     DataContractCommentRead,
 )
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
-from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.models.import_results import BatchImportResult, ImportItemResult
@@ -1540,6 +1542,7 @@ async def upload_contract(
     files: List[UploadFile] = File(...),
     create_missing_domains: bool = Form(False),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Upload one or more contract files (each single-entity or an ODCS array).
@@ -1558,6 +1561,18 @@ async def upload_contract(
     }
 
     try:
+        # The "create missing domains" toggle creates top-level domains, so it
+        # requires data-domains write on top of the contract-write permission —
+        # otherwise a contract-writer could create domains they cannot manage (#851 review).
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
+
         capped = await read_uploads_capped(
             files,
             sanitize=lambda n: sanitize_filename(n or "uploaded_contract", default="uploaded_contract"),
@@ -1640,6 +1655,7 @@ async def import_odcs_json(
     body: Any = Body(...),
     create_missing_domains: bool = Query(False),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Import ODCS contract(s) from a pasted JSON object or array."""
@@ -1647,6 +1663,14 @@ async def import_odcs_json(
     details_for_audit: dict = {"params": {"source": "paste"}}
 
     try:
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
         contract_text = json.dumps(body)
         result = manager.create_contracts_from_files(
             db=db,

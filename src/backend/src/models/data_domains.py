@@ -29,8 +29,11 @@ class DataDomainBase(BaseModel):
 
 # --- Create Model --- #
 class DataDomainCreate(DataDomainBase):
-    # No extra fields needed for creation beyond Base + who is creating it (captured in manager)
-    pass
+    # created_by is normally stamped by the manager from the request principal.
+    # It is an explicit (optional) field so non-manager callers — e.g. the import
+    # domain-reconciliation path (#851) — can record real attribution instead of
+    # falling back to the repository's "system" default.
+    created_by: Optional[str] = None
 
 # --- Update Model --- #
 class DataDomainUpdate(BaseModel):

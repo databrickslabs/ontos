@@ -28,7 +28,9 @@ from src.models.data_products import (
 from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
-from src.common.authorization import PermissionChecker, ApprovalChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker, user_has_feature_level
+from src.common.manager_dependencies import get_auth_manager
+from src.controller.authorization_manager import AuthorizationManager
 from src.common.features import FeatureAccessLevel
 from src.common.file_security import sanitize_filename
 
@@ -1599,6 +1601,7 @@ async def upload_data_products(
     files: List[UploadFile] = File(...),
     create_missing_domains: bool = Form(False),
     manager: DataProductsManager = Depends(get_data_products_manager),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """Upload one or more ODPS product files (each single-entity or an array).
@@ -1620,11 +1623,18 @@ async def upload_data_products(
     }
 
     try:
+        if create_missing_domains and not user_has_feature_level(
+            auth_manager, current_user, 'data-domains', FeatureAccessLevel.READ_WRITE
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Creating missing domains on import requires 'data-domains' write permission. "
+                       "Re-run with the toggle off, or ask an administrator.",
+            )
         capped = await read_uploads_capped(
             files,
             sanitize=lambda n: sanitize_filename(n or "upload.bin", default="upload.bin"),
         )
-        file_inputs: List[tuple] = [(name, raw) for name, raw, _ in capped]
 
         result = manager.create_products_from_files(
             file_inputs, user=current_user.username if current_user else None,

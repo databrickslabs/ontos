@@ -50,6 +50,16 @@ class TeamsManager(SearchableAsset):
             extra_data={"title": getattr(team, 'title', '') or ""},
         )
 
+    def _update_search_index(self, team: TeamDb) -> None:
+        """Build + upsert the search-index item for a team (keeps global search fresh on
+        every create/update, not just at startup; #919 review)."""
+        try:
+            item = self._build_search_index_item(team)
+            if item:
+                self._notify_index_upsert(item)
+        except Exception as e:
+            logger.debug(f"Failed to upsert team {getattr(team, 'id', '?')} in search index: {e}")
+
     def get_search_index_items(self) -> List[SearchIndexItem]:
         """Fetch teams and map them to SearchIndexItem format for global search."""
         logger.info("Fetching teams for search indexing...")
@@ -227,6 +237,8 @@ class TeamsManager(SearchableAsset):
                     )
 
             logger.info(f"Successfully created team '{db_team.name}' with id: {db_team.id}")
+            # Index the new team so global search finds it before the next full rebuild (#919 review).
+            self._update_search_index(db_team)
             return self._convert_db_to_read_model(db_team, db)
         except IntegrityError as e:
             db.rollback()
@@ -345,6 +357,8 @@ class TeamsManager(SearchableAsset):
                 )
 
             logger.info(f"Successfully updated team '{updated_db_team.name}' (id: {team_id})")
+            # Re-index so renames/description edits don't stay stale in global search (#919 review).
+            self._update_search_index(updated_db_team)
             return self._convert_db_to_read_model(updated_db_team, db)
         except IntegrityError as e:
             db.rollback()
@@ -371,6 +385,8 @@ class TeamsManager(SearchableAsset):
             entity_domain_repo.remove_all_for_entity(db, entity_type="team", entity_id=team_id)
             self.team_repo.remove(db=db, id=team_id)
             logger.info(f"Successfully deleted team '{read_model.name}' (id: {team_id})")
+            # Remove from the global search index so a deleted team isn't still findable (#919 review).
+            self._notify_index_remove(f"team::{team_id}")
             return read_model
         except Exception as e:
             db.rollback()

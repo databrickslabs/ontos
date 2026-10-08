@@ -404,6 +404,11 @@
         "title": "Papel de administrador",
         "description": "Marque este papel como o papel de administrador. Apenas um papel deve ser marcado como administrador.",
         "label": "Este é o papel de administrador"
+      },
+      "importPrivileges": {
+        "title": "Privilégios de importação",
+        "description": "Concede a este papel capacidades além dos alternadores de importação padrão.",
+        "adoptEntityIds": "Adotar os IDs de entidade na importação"
       }
     },
     "permissions": {

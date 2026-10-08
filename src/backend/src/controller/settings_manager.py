@@ -1848,6 +1848,7 @@ class SettingsManager:
             approval_privileges=approval_privileges,
             deployment_policy=deployment_policy,
             is_admin=getattr(role_db, 'is_admin', False),
+            can_adopt_entity_ids=getattr(role_db, 'can_adopt_entity_ids', False),
             requestable_by_roles=requestable_by_roles,
             approver_roles=approver_roles,
             # created_at=role_db.created_at, # Uncomment if needed

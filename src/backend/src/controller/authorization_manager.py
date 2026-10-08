@@ -191,6 +191,32 @@ class AuthorizationManager:
                 return True
         return False
 
+    def user_can_adopt_entity_ids(self, user_groups: Optional[List[str]]) -> bool:
+        """Return True iff the user holds any role flagged ``can_adopt_entity_ids=True``.
+
+        Mirrors :meth:`is_user_ontos_admin`: resolves roles by case-insensitive group
+        intersection and returns True if any resolved role has the import adoption
+        privilege. Gates the "Adopt IDs from file" import toggle so a contract/
+        product writer cannot silently claim an arbitrary UUID (#853 review).
+        """
+        if not user_groups:
+            return False
+        user_group_set = {(g or '').lower() for g in user_groups}
+        if not user_group_set:
+            return False
+        try:
+            all_roles = self._settings_manager.list_app_roles()
+        except Exception:
+            logger.exception("user_can_adopt_entity_ids: failed to load app roles; denying")
+            return False
+        for role in all_roles:
+            if not getattr(role, 'can_adopt_entity_ids', False):
+                continue
+            role_groups = {(g or '').lower() for g in (role.assigned_groups or [])}
+            if role_groups and role_groups.intersection(user_group_set):
+                return True
+        return False
+
     def get_user_effective_role_ids(
         self,
         user_groups: Optional[List[str]],

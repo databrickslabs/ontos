@@ -1864,13 +1864,22 @@ export default function DataProductDetails() {
                       {port.description && <p className="text-sm text-muted-foreground">{port.description}</p>}
                       {port.contractId ? (
                         <div className="flex items-center gap-2">
-                          <Badge 
-                            variant="secondary" 
-                            className="cursor-pointer hover:bg-secondary/80"
-                            onClick={() => navigate(`/data-contracts/${port.contractId}`)}
-                          >
-                            Contract: {port.contractName || port.contractId}
-                          </Badge>
+                          {/* Only render as a navigable link when the backend resolved
+                              the id to a contract (contractName is set); otherwise the
+                              id is dangling and the link would 404 (#854 review). */}
+                          {port.contractName ? (
+                            <Badge
+                              variant="secondary"
+                              className="cursor-pointer hover:bg-secondary/80"
+                              onClick={() => navigate(`/data-contracts/${port.contractId}`)}
+                            >
+                              Contract: {port.contractName}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground" title={t('data-products:details.contractDangling', 'Contract no longer exists')}>
+                              Contract: {port.contractId}
+                            </Badge>
+                          )}
                           {canModify && (
                             <Button size="sm" variant="ghost" className="h-6 px-1" onClick={() => handleUnlinkContract(idx)} title={t('common:tooltips.unlinkContract')}>
                               <Unlink className="h-3 w-3" />
@@ -2013,15 +2022,22 @@ export default function DataProductDetails() {
                   <div key={idx} className="flex items-start justify-between border rounded p-3">
                     <div className="flex-1">
                       <div className="font-medium">{port.name} (v{port.version})</div>
-                      {/* #854: resolve input-port contractId to a navigable name (mirrors output ports). */}
+                      {/* #854: resolve input-port contractId to a navigable name (mirrors output ports).
+                          Dangling id → no link (would 404), per #864 review. */}
                       {port.contractId ? (
-                        <Badge
-                          variant="secondary"
-                          className="mt-1 cursor-pointer hover:bg-secondary/80"
-                          onClick={() => navigate(`/data-contracts/${port.contractId}`)}
-                        >
-                          {t('data-products:details.consumables.contractLabel', { contractId: port.contractName || port.contractId })}
-                        </Badge>
+                        port.contractName ? (
+                          <Badge
+                            variant="secondary"
+                            className="mt-1 cursor-pointer hover:bg-secondary/80"
+                            onClick={() => navigate(`/data-contracts/${port.contractId}`)}
+                          >
+                            {t('data-products:details.consumables.contractLabel', { contractId: port.contractName })}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="mt-1 text-muted-foreground" title={t('data-products:details.contractDangling', 'Contract no longer exists')}>
+                            {t('data-products:details.consumables.contractLabel', { contractId: port.contractId })}
+                          </Badge>
+                        )
                       ) : (
                         <div className="text-sm text-muted-foreground">{t('data-products:details.consumables.contractLabel', { contractId: port.contractId })}</div>
                       )}

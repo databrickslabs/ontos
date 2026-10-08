@@ -6645,11 +6645,22 @@ class DataContractsManager(DeliveryMixin, SearchableAsset):
                 from src.db_models.data_products import DataProductDb
                 product = data_product_repo.get(db, id=db_contract.data_product)
                 if not product:
-                    product = (
+                    # Product names are non-unique (versions, drafts): require a UNIQUE
+                    # match or leave the resolution empty — otherwise `.first()` picks
+                    # an arbitrary row and the UI links to the wrong product (#854 review).
+                    name_matches = (
                         db.query(DataProductDb)
                         .filter(DataProductDb.name == db_contract.data_product)
-                        .first()
+                        .limit(2)
+                        .all()
                     )
+                    if len(name_matches) == 1:
+                        product = name_matches[0]
+                    elif len(name_matches) > 1:
+                        logger.debug(
+                            "dataProduct %r matches multiple products; leaving unresolved",
+                            db_contract.data_product,
+                        )
                 if product:
                     data_product_name = product.name
                     data_product_id = product.id

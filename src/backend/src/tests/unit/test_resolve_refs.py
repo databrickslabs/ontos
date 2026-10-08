@@ -100,3 +100,53 @@ class TestContractDataProductResolution:
         api = mgr._build_contract_api_model(db_session, created)
         assert api.dataProductName is None and api.dataProductId is None
         assert api.dataProduct == "Ghost Product"  # raw value preserved for fallback
+
+    def test_ambiguous_data_product_name_left_unresolved(self, product_manager, db_session):
+        """Non-unique product names must not resolve — otherwise `.first()` picks arbitrarily
+        and the UI links to the wrong product (#864 review)."""
+        for _ in range(2):
+            product_manager.create_product(
+                {"name": "Ambiguous Product", "version": "1.0.0", "productType": "sourceAligned"},
+                db=db_session, user="a@b.com",
+            )
+        mgr = _contract_manager()
+        created = mgr.create_from_upload(
+            db=db_session, parsed_odcs=_odcs("C ambig", dataProduct="Ambiguous Product"),
+            current_user="a@b.com",
+        )
+        api = mgr._build_contract_api_model(db_session, created)
+        assert api.dataProductName is None and api.dataProductId is None
+        assert api.dataProduct == "Ambiguous Product"
+
+
+class TestBatchContractPreload:
+    """list_products should resolve port.contractId → contractName in ONE query
+    for the whole page, not per-port (#864 review)."""
+
+    def test_list_products_batches_contract_lookups(self, product_manager, db_session, monkeypatch):
+        c1 = str(uuid.uuid4())
+        c2 = str(uuid.uuid4())
+        db_session.add(DataContractDb(id=c1, name="C1", version="1.0.0", status="active"))
+        db_session.add(DataContractDb(id=c2, name="C2", version="1.0.0", status="active"))
+        db_session.commit()
+        for cid in (c1, c2):
+            product_manager.create_product(
+                {"name": f"P-{cid[:4]}", "version": "1.0.0", "productType": "sourceAligned",
+                 "inputPorts": [{"name": "in", "version": "1.0.0", "contractId": cid}]},
+                db=db_session, user="a@b.com",
+            )
+        # Count how many times the per-row `data_contract_repo.get` is called during list_products.
+        # The batched path uses `get_by_ids` instead; `get` should NOT be invoked.
+        from src.repositories.data_contracts_repository import data_contract_repo
+        calls: list = []
+        original = data_contract_repo.get
+        def spy(*a, **k):
+            calls.append((a, k))
+            return original(*a, **k)
+        monkeypatch.setattr(data_contract_repo, "get", spy)
+        listed = product_manager.list_products(caller_email="a@b.com")
+        # Each product's inputPorts[0].contractName must be resolved (dangling → None).
+        resolved = {p.inputPorts[0].contractName for p in listed if p.inputPorts}
+        assert resolved == {"C1", "C2"}
+        # Zero per-port repo.get() during list_products: the batch path replaces them.
+        assert calls == [], f"list_products should not call data_contract_repo.get per port; got {len(calls)} calls"

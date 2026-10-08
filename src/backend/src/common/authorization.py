@@ -649,6 +649,22 @@ async def enforce_feature_permission(
         )
 
 
+def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
+    """Return True if the caller may adopt an entity's UUID from an imported file.
+
+    Allowed when the caller holds any role flagged ``can_adopt_entity_ids=True``
+    OR when they hold ADMIN on the target feature (#853 review). The toggle itself
+    defaults to off; this check only matters when the client explicitly opts in.
+    """
+    groups = getattr(user, "groups", None) or []
+    try:
+        if auth_manager.user_can_adopt_entity_ids(groups):
+            return True
+    except Exception:
+        logger.warning("user_can_adopt_entity_ids check failed; falling back to feature-admin.", exc_info=True)
+    return user_has_feature_level(auth_manager, user, feature_id, FeatureAccessLevel.ADMIN)
+
+
 def user_has_feature_level(auth_manager, user, feature_id: str, required_level: FeatureAccessLevel) -> bool:
     """Imperative, group-based permission check for conditional in-handler gates.
 

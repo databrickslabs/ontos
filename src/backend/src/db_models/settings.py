@@ -20,6 +20,9 @@ class AppRoleDb(Base):
     # Store lists/dicts as JSON strings or Text
     # Using Text for broader compatibility, can switch to JSONB if needed
     assigned_groups = Column(Text, nullable=False, default='[]')
+    # Individual users (by email) assigned to this role, parallel to assigned_groups.
+    # Matched case-insensitively against the user's IdP-issued email at auth time (#196/#760).
+    assigned_users = Column(Text, nullable=False, default='[]', server_default='[]')
     feature_permissions = Column(Text, nullable=False, default='{}')
     home_sections = Column(Text, nullable=False, default='[]')
     # Approval privileges JSON (e.g., {"CONTRACTS": true, "PRODUCTS": true})
@@ -28,6 +31,10 @@ class AppRoleDb(Base):
     deployment_policy = Column(Text, nullable=True, comment="Deployment policy for this role (catalog/schema restrictions)")
     is_admin = Column(Boolean, nullable=False, default=False, server_default='false',
                       comment="Whether this role is the admin role")
+    # Import privilege (#853 review): may this role adopt an entity's UUID from an
+    # imported file as the primary key? Default off; mirrors is_admin plumbing.
+    can_adopt_entity_ids = Column(Boolean, nullable=False, default=False, server_default='false',
+                                  comment="Whether this role may adopt entity IDs on import")
 
     # Add timestamp columns - Make them nullable
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=True)

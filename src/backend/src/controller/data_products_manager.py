@@ -28,6 +28,21 @@ def _is_valid_uuid(value: str) -> bool:
         return False
 
 
+def _canonical_uuid(value: str) -> Optional[str]:
+    """Return the canonical lowercase hyphenated form of a UUID string, or None.
+
+    Mirrors `data_contracts_manager._canonical_uuid` (#853 review item 2):
+    guards the import duplicate check against case/braced/urn/hyphenless
+    spellings that would otherwise create a second identity for the same UUID.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
 def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None:
     """Set a customProperties entry on a product/contract payload dict, tolerating the
     list-of-{property,value} form and the legacy {key: value} dict form."""
@@ -73,6 +88,7 @@ from src.models.data_products import (
     OnBehalfOf,
 )
 from src.models.import_results import BatchImportResult, ImportItemResult
+from src.common.entity_kind import classify_import_entity, describe_import_entity
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
@@ -280,13 +296,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
             # so YAML-expressed links survive import; otherwise generate a fresh UUID.
+            # Canonicalize before lookup/storage so spelling variants cannot create
+            # a second identity for the same logical UUID (#853 review item 2).
+            canon_incoming = _canonical_uuid(incoming_id)
             if (
                 adopt_ids
-                and incoming_id and isinstance(incoming_id, str) and _is_valid_uuid(incoming_id)
-                and self._repo.get(db=db_session, id=incoming_id) is None
+                and canon_incoming is not None
+                and self._repo.get(db=db_session, id=canon_incoming) is None
             ):
-                product_data['id'] = incoming_id
-                logger.info(f"Adopted id {incoming_id} from payload for new product.")
+                product_data['id'] = canon_incoming
+                logger.info(f"Adopted id {canon_incoming} from payload for new product.")
             else:
                 product_data['id'] = str(uuid.uuid4())
                 logger.info(f"Generated ID {product_data['id']} for new product.")
@@ -1697,6 +1716,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         create_missing_domains: bool = False,
         adopt_ids: bool = True,
         on_duplicate: str = "skip",
+        reveal_dup_detail: bool = False,
     ) -> BatchImportResult:
         """Import ODPS products from one or more uploaded files.
 
@@ -1729,6 +1749,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 index += 1
                 continue
 
+            # An empty array is a failed item (parity with the contract path), not a
+            # silent no-op that the UI renders as "0 imported successfully".
+            if not data_list:
+                result.add(ImportItemResult(
+                    index=index, source_file=filename, status="failed",
+                    message="File contained no data product entities",
+                ))
+                index += 1
+                continue
+
             for product_data in data_list:
                 source_id = product_data.get('id') if isinstance(product_data, dict) else None
                 if not isinstance(product_data, dict):
@@ -1738,26 +1768,62 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     ))
                     index += 1
                     continue
+                # Only import a recognizable ODPS Data Product. An ODCS contract is
+                # routed to the right page; anything unrecognizable is skipped rather
+                # than imported as a junk product. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the products table.
+                entity_kind = classify_import_entity(product_data)
+                if entity_kind != "product":
+                    if entity_kind == "contract":
+                        skip_msg = (
+                            f"Skipped: this is an {describe_import_entity(product_data)} "
+                            "(kind: DataContract), not a Data Product. "
+                            "Import it from the Data Contracts page."
+                        )
+                    else:
+                        skip_msg = (
+                            "Skipped: not a recognizable ODPS Data Product "
+                            "(expected kind: DataProduct or product ports)."
+                        )
+                    result.add(ImportItemResult(
+                        index=index, source_file=filename, source_id=source_id,
+                        name=product_data.get('name'), status="skipped", message=skip_msg,
+                    ))
+                    index += 1
+                    continue
                 # Duplicate-id handling (#853): a valid UUID already present is either
                 # skipped (default) or imported as a new copy with a fresh UUID.
-                if (
-                    source_id and isinstance(source_id, str) and _is_valid_uuid(source_id)
-                    and self._repo.get(db=self._db, id=source_id) is not None
-                ):
-                    if on_duplicate == "skip":
+                # Canonicalize the source id so case/braced/urn/hyphenless spellings
+                # cannot bypass the dup check (#853 review item 2).
+                canon_source = _canonical_uuid(source_id) if isinstance(source_id, str) else None
+                dup = bool(canon_source and self._repo.get(db=self._db, id=canon_source) is not None)
+                if dup and on_duplicate == "skip":
+                    # Don't surface the existing row's id/name to a caller who can't
+                    # read it — otherwise the skipped-dup message becomes an
+                    # existence oracle (#853 review item 5).
+                    if reveal_dup_detail:
                         result.add(ImportItemResult(
                             index=index, source_file=filename, source_id=source_id,
-                            entity_id=source_id, name=product_data.get('name'), status="skipped",
+                            entity_id=canon_source, name=product_data.get('name'), status="skipped",
                             message="already present (same id)",
                         ))
-                        index += 1
-                        continue
-                    # on_duplicate == "new": fall through with adoption disabled for this row.
+                    else:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            status="skipped",
+                            message="Supplied id cannot be adopted (import toggles or an existing entity prevent it).",
+                        ))
+                    index += 1
+                    continue
+                # on_duplicate == "new" with dup: fall through with adoption disabled;
+                # the row gets a fresh UUID. Intra-batch reference remap is not needed
+                # here because ODPS carries no product-to-product reference field (the
+                # only cross-ref is inputPorts[].contractId, which points at contracts
+                # imported through a separate endpoint, not at other products in this
+                # batch). If a cross-entity batch flow is introduced later, build an
+                # old→new map keyed on canon_source and rewrite port.contractId before
+                # calling create_product (#853 review item 4).
                 try:
-                    dup = (
-                        source_id and isinstance(source_id, str) and _is_valid_uuid(source_id)
-                        and self._repo.get(db=self._db, id=source_id) is not None
-                    )
                     created = self.create_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
@@ -1768,11 +1834,16 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         entity_id=created.id, name=created.name, status="created",
                     ))
                 except Exception as e:
-                    logger.error("Failed to import product at batch index %d: %s", index, e)
+                    # Log full detail (may carry SQL/internal text); keep the
+                    # client-facing per-item message generic.
+                    logger.warning(
+                        "Failed to import product at batch index %d (file %s): %s",
+                        index, filename, e, exc_info=True,
+                    )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
                         name=product_data.get('name'), status="failed",
-                        message=f"{type(e).__name__}: {e}",
+                        message="Could not import this data product. See server logs for details.",
                     ))
                 index += 1
 
@@ -2619,8 +2690,15 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
     # --- SearchableAsset implementation ---
 
-    def _build_search_index_item(self, product: DataProductApi, preloaded_domains=None) -> Optional[SearchIndexItem]:
-        """Convert a single DataProduct API model to a SearchIndexItem."""
+    def _build_search_index_item(self, product: DataProductApi, preloaded_domains=None, preloaded_concepts=None) -> Optional[SearchIndexItem]:
+        """Convert a single DataProduct API model to a SearchIndexItem.
+
+        ``preloaded_concepts`` (linked ontology concept labels/IRI tails) is
+        indexed so plain-language queries can match a product via its semantic
+        links — the same matching the MCP search tool used to do with a
+        dedicated DB lookup. During a full index build the concepts are
+        batch-loaded and passed in; on a single upsert they are fetched here.
+        """
         if not product.id or not product.name:
             return None
 
@@ -2670,18 +2748,45 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         # Index every assigned domain NAME so domain-keyed search matches by any of the
         # product's domains (primary or additional) — issue #520 story 14.
+        assigned_domain_names: List[str] = []
+        primary_domain_name: Optional[str] = None
         try:
             assigned = preloaded_domains if preloaded_domains is not None else entity_domain_repo.get_domains_for_entity(
                 self._db, entity_type="data_product", entity_id=str(product.id)
             )
-            tag_strings = tag_strings + [d.domain_name for d in assigned if d.domain_name]
+            assigned_domain_names = [d.domain_name for d in assigned if d.domain_name]
+            primary_domain_name = next(
+                (d.domain_name for d in assigned if getattr(d, "is_primary", False) and d.domain_name),
+                None,
+            )
+            tag_strings = tag_strings + assigned_domain_names
         except Exception as dom_err:
             logger.debug("Could not load domains for product %s search index: %s", product.id, dom_err)
+
+        # Index linked ontology concept labels / IRI tails so semantic queries match.
+        try:
+            from src.repositories.semantic_links_repository import entity_semantic_links_repo
+            if preloaded_concepts is not None:
+                concept_terms = preloaded_concepts
+            else:
+                links = entity_semantic_links_repo.list_for_entity(
+                    self._db, entity_id=str(product.id), entity_type="data_product"
+                )
+                concept_terms = []
+                for sl in links:
+                    label = (sl.label or "").strip()
+                    iri_tail = (sl.iri.split('#')[-1].split('/')[-1]).strip() if sl.iri else ""
+                    concept_terms.extend(v for v in (label, iri_tail) if v)
+            tag_strings = tag_strings + [c for c in concept_terms if c]
+        except Exception as sem_err:
+            logger.debug("Could not load semantic links for product %s search index: %s", product.id, sem_err)
 
         extra_data = {
             "status": product.status or "",
             "version": product.version or "",
-            "domain": product.domain or "",
+            # Primary domain for display; full assigned set for exact domain filtering.
+            "domain": primary_domain_name or product.domain or "",
+            "domains": assigned_domain_names,
             "owner": owner_team_name or product_team_name,
             "owner_team": owner_team_name,
             "product_team": product_team_name,
@@ -2720,8 +2825,26 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             domains_map = entity_domain_repo.get_domains_for_entities(
                 self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_api]
             ) if products_api else {}
+            # Batch-load linked concept terms once (label + IRI tail) for semantic search.
+            concepts_map: Dict[str, List[str]] = {}
+            try:
+                from src.repositories.semantic_links_repository import entity_semantic_links_repo
+                for sl in entity_semantic_links_repo.list_all(self._db):
+                    if sl.entity_type != "data_product":
+                        continue
+                    label = (sl.label or "").strip()
+                    iri_tail = (sl.iri.split('#')[-1].split('/')[-1]).strip() if sl.iri else ""
+                    terms = [v for v in (label, iri_tail) if v]
+                    if terms:
+                        concepts_map.setdefault(str(sl.entity_id), []).extend(terms)
+            except Exception as sem_err:
+                logger.debug("Could not batch-load semantic links for search index: %s", sem_err)
             for product in products_api:
-                item = self._build_search_index_item(product, preloaded_domains=domains_map.get(str(product.id), []))
+                item = self._build_search_index_item(
+                    product,
+                    preloaded_domains=domains_map.get(str(product.id), []),
+                    preloaded_concepts=concepts_map.get(str(product.id), []),
+                )
                 if item:
                     items.append(item)
             logger.info(f"Prepared {len(items)} ODPS products for search index.")

@@ -58,6 +58,36 @@ def _assigned_ids(db, entity_type, entity_id):
     return {a.domain_id for a in assigned}, next((a.domain_id for a in assigned if a.is_primary), None)
 
 
+class TestDomainReconcileReviewFixes:
+    """#851 review: real attribution for auto-created domains + case/whitespace-insensitive match."""
+
+    def test_auto_created_domain_records_real_creator(self, db_session: Session):
+        mgr = _contract_manager()
+        unique = f"Imported Domain {uuid.uuid4().hex[:8]}"
+        created = mgr.create_from_upload(
+            db=db_session, parsed_odcs=_odcs("C creator", domain=unique),
+            current_user="alice@example.com", create_missing_domains=True,
+        )
+        ids, _ = _assigned_ids(db_session, "data_contract", created.id)
+        assert ids, "domain should have been auto-created and assigned"
+        domain = data_domain_repo.get(db_session, next(iter(ids)))
+        # Attribution is the uploader, not the "system" fallback.
+        assert domain.created_by == "alice@example.com"
+
+    def test_name_match_is_trimmed_and_case_insensitive(self, db_session: Session):
+        existing = data_domain_repo.create(
+            db=db_session, obj_in=DataDomainCreate(name="Finance", created_by="x@y.com"))
+        db_session.commit()
+        mgr = _contract_manager()
+        created = mgr.create_from_upload(
+            db=db_session, parsed_odcs=_odcs("C finance", domain="  finance  "),
+            current_user="a@b.com", create_missing_domains=False,
+        )
+        ids, primary = _assigned_ids(db_session, "data_contract", created.id)
+        # Matched the existing domain despite case/whitespace — no new domain, assigned.
+        assert ids == {existing.id} and primary == existing.id
+
+
 class TestContractDomainReconcile:
     def test_matches_existing_domain_by_name(self, db_session, sales_domain):
         mgr = _contract_manager()

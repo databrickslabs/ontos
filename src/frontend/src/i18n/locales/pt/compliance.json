@@ -1,0 +1,165 @@
+{
+  "title": "Conformidade",
+  "subtitle": "Gerenciar políticas e execuções de conformidade",
+  "newPolicy": "Nova política",
+  "createRule": "Criar regra",
+  "editRule": "Editar regra de conformidade",
+  "createNewRule": "Criar nova regra de conformidade",
+  "searchPlaceholder": "Buscar políticas...",
+  "loading": "Carregando dados de conformidade...",
+  "stats": {
+    "overallCompliance": "Conformidade geral",
+    "acrossAllRules": "Em todas as regras",
+    "activeRules": "Regras ativas",
+    "currentlyEnforced": "Atualmente aplicadas",
+    "criticalIssues": "Problemas críticos",
+    "requireAttention": "Requerem atenção",
+    "lastUpdated": "Última atualização",
+    "today": "Hoje"
+  },
+  "form": {
+    "name": "Nome",
+    "description": "Descrição",
+    "category": "Categoria",
+    "selectCategory": "Selecionar categoria",
+    "severity": "Severidade",
+    "selectSeverity": "Selecionar severidade",
+    "ruleCode": "Código da regra",
+    "rulePlaceholder": "Insira a regra de conformidade no formato DSL de conformidade",
+    "failureMessage": "Mensagem de falha",
+    "failureMessagePlaceholder": "ex.: Nomes devem usar snake_case (minúsculas com sublinhados)",
+    "failureMessageHint": "Mensagem legível exibida aos usuários quando esta política falha. Ajuda a explicar o que deu errado e como corrigir."
+  },
+  "categories": {
+    "security": "Segurança",
+    "dataQuality": "Qualidade de dados",
+    "privacy": "Privacidade",
+    "governance": "Governança",
+    "maturity": "Maturidade"
+  },
+  "errors": {
+    "loadingPolicies": "Erro ao carregar políticas",
+    "savingPolicy": "Erro ao salvar política",
+    "deletingPolicy": "Erro ao excluir política",
+    "loadPolicyFailed": "Falha ao carregar política",
+    "loadFailed": "Falha ao carregar",
+    "savePolicyFailed": "Falha ao salvar política",
+    "deletePolicyFailed": "Falha ao excluir política",
+    "noDataReceived": "Nenhum dado recebido do endpoint de políticas de conformidade.",
+    "saveNoDataReturned": "Falha ao salvar política: nenhum dado retornado",
+    "loadPoliciesFailed": "Falha ao carregar políticas de conformidade",
+    "loadRunResultsFailed": "Falha ao carregar resultados da execução",
+    "policyNotFound": "Política de conformidade não encontrada.",
+    "runNotFound": "Execução não encontrada."
+  },
+  "results": {
+    "passed": "Aprovados",
+    "failed": "Reprovados",
+    "showFailed": "Mostrar reprovados",
+    "showAll": "Mostrar todos",
+    "empty": "-"
+  },
+  "policyDetails": {
+    "backToList": "Voltar para a lista",
+    "run": "Executar",
+    "id": "ID",
+    "examples": "Exemplos",
+    "shouldPass": "Deve passar",
+    "shouldFail": "Deve falhar",
+    "noExamples": "Nenhum exemplo",
+    "runSummary": {
+      "title": "Resumo da execução",
+      "lastRunStarted": "Última execução iniciada em {{date}}",
+      "statusLabel": "Status:",
+      "score": "Pontuação",
+      "passed": "Aprovados",
+      "failed": "Reprovados",
+      "passedExamples": "Exemplos aprovados",
+      "failedExamples": "Exemplos reprovados",
+      "noPassedExamples": "Nenhum exemplo aprovado nesta execução",
+      "noFailures": "Nenhuma falha nesta execução"
+    },
+    "runsList": {
+      "title": "Execuções",
+      "mostRecentFirst": "Mais recentes primeiro",
+      "noRuns": "Nenhuma execução ainda",
+      "scoreLabel": "Pontuação:",
+      "scoreDetail": "{{passed}} aprovados / {{failed}} reprovados",
+      "openRunDetails": "Abrir detalhes da execução"
+    },
+    "resultsCard": {
+      "title": "Resultados",
+      "filteredFailed": "Filtrado somente para reprovados — última execução em {{date}}",
+      "filteredAll": "Filtrado para todos — última execução em {{date}}"
+    }
+  },
+  "runDetails": {
+    "runTitle": "Execução {{id}}",
+    "viewPolicy": "Ver política",
+    "statusLabel": "Status:",
+    "scoreLabel": "Pontuação:",
+    "passedLabel": "Aprovados:",
+    "failedLabel": "Reprovados:",
+    "startedLabel": "Iniciada: {{date}}"
+  },
+  "toast": {
+    "policySaved": "Política '{{name}}' salva com sucesso",
+    "policyDeleted": "Política excluída com sucesso"
+  },
+  "score": {
+    "title": "Pontuação de conformidade",
+    "overall": "Pontuação geral",
+    "trend": "Tendência"
+  },
+  "filters": {
+    "allStatus": "Todos os status",
+    "allSeverity": "Todas as severidades"
+  },
+  "table": {
+    "name": "Nome",
+    "status": "Status",
+    "severity": "Severidade",
+    "lastRun": "Última execução",
+    "score": "Pontuação",
+    "actions": "Ações"
+  },
+  "messages": {
+    "success": "Sucesso",
+    "error": "Erro",
+    "deleteConfirm": "Tem certeza de que deseja excluir esta política?",
+    "deleteSuccess": "Política excluída com sucesso",
+    "deleteError": "Falha ao excluir política"
+  },
+  "status": {
+    "draft": "Rascunho",
+    "active": "Ativa",
+    "paused": "Pausada",
+    "disabled": "Desabilitada"
+  },
+  "severity": {
+    "critical": "Crítica",
+    "high": "Alta",
+    "medium": "Média",
+    "low": "Baixa"
+  },
+  "details": {
+    "backToList": "Voltar para políticas",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "run": "Executar agora",
+    "notFound": "Política não encontrada",
+    "loading": "Carregando..."
+  },
+  "runs": {
+    "title": "Execuções de conformidade",
+    "runNow": "Executar agora",
+    "noRuns": "Nenhuma execução de conformidade ainda",
+    "table": {
+      "startTime": "Hora de início",
+      "endTime": "Hora de término",
+      "status": "Status",
+      "score": "Pontuação",
+      "issues": "Problemas"
+    }
+  }
+}

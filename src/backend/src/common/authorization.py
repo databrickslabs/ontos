@@ -122,7 +122,7 @@ async def is_user_feature_admin(
             )
         else:
             effective = auth_manager.get_user_effective_permissions(
-                user_groups or [], team_role_override
+                user_groups or [], team_role_override, user_email=user_email
             )
 
         return effective.get(feature_id) == FeatureAccessLevel.ADMIN
@@ -579,15 +579,17 @@ async def enforce_feature_permission(
     can't be done with FastAPI's ``Depends`` (resolved before the handler
     runs).
     """
-    if not user_details.groups:
+    # A user with no groups may still hold a role via direct email assignment
+    # (assigned_users, #196/#760), so only deny early when there is neither.
+    if not user_details.groups and not user_details.email:
         logger.warning(
-            "User '%s' has no groups. Denying access for '%s'",
+            "User '%s' has no groups and no email. Denying access for '%s'",
             user_details.user or user_details.email,
             feature_id,
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User has no assigned groups, cannot determine permissions.",
+            detail="User has no assigned groups or email, cannot determine permissions.",
         )
 
     auth_manager: AuthorizationManager = getattr(request.app.state, "authorization_manager", None)
@@ -617,6 +619,7 @@ async def enforce_feature_permission(
             effective_permissions = auth_manager.get_user_effective_permissions(
                 user_details.groups,
                 team_role_override,
+                user_email=user_details.email,
             )
 
         if not auth_manager.has_permission(effective_permissions, feature_id, required_level):
@@ -646,6 +649,38 @@ async def enforce_feature_permission(
         )
 
 
+def user_can_adopt_entity_ids_for(auth_manager, user, feature_id: str) -> bool:
+    """Return True if the caller may adopt an entity's UUID from an imported file.
+
+    Allowed when the caller holds any role flagged ``can_adopt_entity_ids=True``
+    OR when they hold ADMIN on the target feature (#853 review). The toggle itself
+    defaults to off; this check only matters when the client explicitly opts in.
+    """
+    groups = getattr(user, "groups", None) or []
+    try:
+        if auth_manager.user_can_adopt_entity_ids(groups):
+            return True
+    except Exception:
+        logger.warning("user_can_adopt_entity_ids check failed; falling back to feature-admin.", exc_info=True)
+    return user_has_feature_level(auth_manager, user, feature_id, FeatureAccessLevel.ADMIN)
+
+
+def user_has_feature_level(auth_manager, user, feature_id: str, required_level: FeatureAccessLevel) -> bool:
+    """Imperative, group-based permission check for conditional in-handler gates.
+
+    Mirrors the group-based path of :class:`PermissionChecker` (without the team/applied
+    role overrides) for secondary checks such as the import "create missing domains"
+    toggle, which must require ``data-domains`` write on top of the entity's own
+    write permission. Returns False on any resolution error (deny by default).
+    """
+    try:
+        effective = auth_manager.get_user_effective_permissions(getattr(user, "groups", None) or [], None)
+        return auth_manager.has_permission(effective, feature_id, required_level)
+    except Exception:
+        logger.warning("user_has_feature_level check failed for feature '%s'; denying.", feature_id, exc_info=True)
+        return False
+
+
 class PermissionChecker:
     """FastAPI Dependency to check user permissions for a feature."""
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):
@@ -662,11 +697,13 @@ class PermissionChecker:
         """Performs the permission check when the dependency is called."""
         logger.debug("Checking permission for feature '%s' (level: '%s') for user '%s'", self.feature_id, self.required_level.value, user_details.user or user_details.email)
 
-        if not user_details.groups:
-            logger.warning("User '%s' has no groups. Denying access for '%s'", user_details.user or user_details.email, self.feature_id)
+        # A user with no groups may still hold a role via direct email assignment
+        # (assigned_users, #196/#760), so only deny early when there is neither.
+        if not user_details.groups and not user_details.email:
+            logger.warning("User '%s' has no groups and no email. Denying access for '%s'", user_details.user or user_details.email, self.feature_id)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User has no assigned groups, cannot determine permissions."
+                detail="User has no assigned groups or email, cannot determine permissions."
             )
 
         try:
@@ -692,7 +729,8 @@ class PermissionChecker:
             else:
                 effective_permissions = auth_manager.get_user_effective_permissions(
                     user_details.groups,
-                    team_role_override
+                    team_role_override,
+                    user_email=user_details.email,
                 )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,

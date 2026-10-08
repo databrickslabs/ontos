@@ -5,7 +5,8 @@ Bridges external connectors with persisted Ontos assets.  Provides browse,
 preview, and import operations.
 """
 
-from typing import Any, Dict, List, Optional
+import threading
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -180,6 +181,10 @@ class SchemaImportManager:
             browse_error_detail = str(exc)
             containers = []
 
+        # Sort containers alphabetically (case-insensitive) so the tree is
+        # scannable regardless of the order the connector/API returns them.
+        containers = sorted(containers, key=lambda c: (c.get("name") or "").lower())
+
         for c in containers:
             nodes.append(BrowseNode(
                 name=c.get("name", ""),
@@ -205,6 +210,9 @@ class SchemaImportManager:
             # truncation. Guarding on `not containers` avoids that false positive.
             if not containers and len(assets) >= child_limit:
                 truncated = True
+            # Sort leaf assets alphabetically within their group; container
+            # nodes stay first (above), columns keep metadata order (below).
+            assets = sorted(assets, key=lambda a: (a.name or "").lower())
             container_paths = {n.path for n in nodes}
             for asset in assets:
                 if asset.identifier in container_paths:
@@ -304,8 +312,18 @@ class SchemaImportManager:
         db: Session,
         request: ImportRequest,
         current_user_id: str,
+        progress_callback: Optional[Callable[[int, int, "ImportResult"], None]] = None,
+        cancel_event: Optional["threading.Event"] = None,
     ) -> ImportResult:
-        """Import selected resources (and nested children) as Ontos assets."""
+        """Import selected resources (and nested children) as Ontos assets.
+
+        Args:
+            progress_callback: optional ``(processed, total, result)`` hook invoked
+                as assets are created, so an async caller can persist live progress.
+            cancel_event: optional ``threading.Event``; when set, the creation loop
+                stops early and the (partial) result is returned. The caller inspects
+                the event to record a ``cancelled`` status.
+        """
         connector = self._connections.get_connector_for_connection(request.connection_id)
         if connector is None:
             raise ValueError(f"Connection '{request.connection_id}' not found or connector unavailable")
@@ -347,7 +365,21 @@ class SchemaImportManager:
         metadata_cache: Dict[str, Any] = {}
 
         # 2. Create assets (parents before children — items are in BFS order)
+        total_items = len(preview_items)
+        processed = 0
+        if progress_callback:
+            progress_callback(0, total_items, result)
+
         for item in preview_items:
+            # Cooperative cancellation: stop before starting the next item.
+            if cancel_event is not None and cancel_event.is_set():
+                logger.info("Import cancelled after %d/%d items", processed, total_items)
+                break
+
+            processed += 1
+            if progress_callback:
+                progress_callback(processed, total_items, result)
+
             # Skip items the user explicitly excluded
             if item.path in excluded:
                 continue

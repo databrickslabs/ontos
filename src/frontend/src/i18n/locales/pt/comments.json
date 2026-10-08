@@ -1,0 +1,73 @@
+{
+  "trigger": {
+    "button": "Comentários"
+  },
+  "timeline": {
+    "heading": "Linha do tempo de atividades",
+    "edited": "(editado)",
+    "loadError": "Falha ao carregar a linha do tempo: {{error}}"
+  },
+  "project": {
+    "label": "Projeto: {{name}}",
+    "noContext": "Sem contexto de projeto (global)"
+  },
+  "filter": {
+    "label": "Filtrar:",
+    "comments": "Comentários",
+    "changes": "Alterações"
+  },
+  "actions": {
+    "addComment": "Adicionar comentário"
+  },
+  "form": {
+    "titleLabel": "Título (opcional)",
+    "titlePlaceholder": "Adicione um título para este comentário...",
+    "commentLabel": "Comentário",
+    "commentPlaceholder": "Escreva seu comentário...",
+    "postInProject": "Publicar no projeto",
+    "projectOverrideTooltip": "Você está publicando em um projeto diferente do da visualização principal. A lista da linha do tempo não é afetada.",
+    "globalNoProject": "Global (sem projeto)",
+    "audienceHelp": "Direcione a equipes ou papéis específicos (opcional). Deixe vazio para visibilidade a todos os membros do projeto.",
+    "teamsLabel": "Equipes",
+    "noTeams": "Nenhuma equipe disponível no projeto atual",
+    "appRolesLabel": "Papéis do aplicativo",
+    "usersGroupsLabel": "Usuários e grupos",
+    "principalsPlaceholder": "Adicionar usuários ou grupos…",
+    "principalsAria": "Usuários e grupos do público-alvo",
+    "post": "Publicar"
+  },
+  "badge": {
+    "team": "Equipe: {{name}}",
+    "role": "Papel: {{name}}"
+  },
+  "change": {
+    "requesterLabel": "Solicitante:",
+    "decisionLabel": "Decisão:",
+    "messageLabel": "Mensagem:",
+    "iriLabel": "Iri:",
+    "linkIdLabel": "ID do link:",
+    "operationLabel": "Operação:",
+    "operationLinked": "vinculado",
+    "operationUnlinked": "desvinculado"
+  },
+  "validation": {
+    "commentRequired": "O conteúdo do comentário é obrigatório"
+  },
+  "confirmDelete": "Tem certeza de que deseja excluir este comentário?",
+  "toast": {
+    "createSuccess": "Comentário criado com sucesso",
+    "createError": "Falha ao criar comentário: {{error}}",
+    "updateSuccess": "Comentário atualizado com sucesso",
+    "updateError": "Falha ao atualizar comentário: {{error}}",
+    "deleteSuccess": "Comentário excluído com sucesso",
+    "deleteError": "Falha ao excluir comentário: {{error}}"
+  },
+  "empty": {
+    "commentsTitle": "Ainda não há comentários",
+    "commentsSubtitle": "Seja o primeiro a adicionar um comentário!",
+    "changesTitle": "Nenhuma alteração registrada",
+    "changesSubtitle": "As alterações aparecerão aqui quando ocorrerem",
+    "allTitle": "Ainda não há atividade",
+    "allSubtitle": "Comentários e alterações aparecerão aqui"
+  }
+}

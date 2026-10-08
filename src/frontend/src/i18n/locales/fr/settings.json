@@ -397,6 +397,11 @@
         "title": "Rôle administrateur",
         "description": "Marquez ce rôle comme rôle administrateur. Un seul rôle doit être marqué comme administrateur.",
         "label": "Ceci est le rôle administrateur"
+      },
+      "importPrivileges": {
+        "title": "Privilèges d'importation",
+        "description": "Accordez à ce rôle des capacités au-delà des bascules d'importation par défaut.",
+        "adoptEntityIds": "Adopter les IDs d'entité à l'importation"
       }
     },
     "permissions": {

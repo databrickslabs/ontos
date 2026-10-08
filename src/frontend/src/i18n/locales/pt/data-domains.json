@@ -1,0 +1,162 @@
+{
+  "title": "Domínios de Dados",
+  "subtitle": "Organize e gerencie domínios de dados hierárquicos para a sua organização.",
+  "addNewDomain": "Adicionar Novo Domínio",
+  "viewDetails": "Ver Detalhes",
+  "editDomain": "Editar Domínio",
+  "deleteDomain": "Excluir Domínio",
+  "noDomainsYet": "Nenhum domínio de dados ainda.",
+  "openMenu": "Abrir menu",
+  "previewMetadata": "Pré-visualizar metadados",
+  "table": {
+    "name": "Nome",
+    "description": "Descrição",
+    "owners": "Proprietários",
+    "tags": "Tags",
+    "children": "Filhos",
+    "lastUpdated": "Última Atualização",
+    "actions": "Ações",
+    "parentPrefix": "↳ Pai:"
+  },
+  "permissions": {
+    "deniedView": "Você não tem permissão para visualizar domínios de dados.",
+    "deniedCreate": "Você não tem permissão para criar domínios de dados.",
+    "deniedEdit": "Você não tem permissão para editar domínios de dados.",
+    "deniedDelete": "Você não tem permissão para excluir domínios de dados.",
+    "permissionDenied": "Permissão Negada"
+  },
+  "messages": {
+    "domainDeleted": "Domínio Excluído",
+    "domainDeletedSuccess": "O domínio de dados foi excluído com sucesso.",
+    "errorFetchingDomains": "Erro ao buscar domínios",
+    "errorDeletingDomain": "Erro ao Excluir Domínio",
+    "errorLoadingData": "Erro ao Carregar Dados",
+    "failedLoadDomains": "Falha ao carregar domínios de dados",
+    "failedDeleteDomain": "Falha ao excluir o domínio."
+  },
+  "deleteDialog": {
+    "title": "Tem certeza absoluta?",
+    "description": "Esta ação não pode ser desfeita. Isso excluirá permanentemente o domínio de dados.",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "cannotDelete": "Este domínio não pode ser excluído.",
+    "primaryForAssignments_one": "Ele é o domínio principal de {{count}} atribuição de entidade:",
+    "primaryForAssignments_other": "Ele é o domínio principal de {{count}} atribuições de entidades:",
+    "assignmentCount": "{{count}} {{type}}(s)",
+    "reassignFirst": "Reatribua-as primeiro a um domínio principal diferente."
+  },
+  "form": {
+    "editTitle": "Editar Domínio de Dados",
+    "createTitle": "Criar Novo Domínio de Dados",
+    "editDescription": "Faça alterações no domínio de dados existente.",
+    "createDescription": "Adicione um novo domínio de dados ao sistema.",
+    "createSubmit": "Criar Domínio",
+    "nameLabel": "Nome *",
+    "namePlaceholder": "ex.: Análise de Vendas",
+    "descriptionLabel": "Descrição",
+    "descriptionPlaceholder": "Descreva o objetivo deste domínio...",
+    "tagsLabel": "Tags",
+    "tagsPlaceholder": "Busque e selecione tags para este domínio de dados...",
+    "parentLabel": "Domínio Pai",
+    "parentPlaceholder": "Selecione um domínio pai (opcional)",
+    "noParent": "Sem Pai",
+    "validation": {
+      "nameMin": "O nome deve ter pelo menos 2 caracteres.",
+      "descriptionMax": "A descrição não deve exceder 500 caracteres."
+    },
+    "discardDescription": "Você tem alterações não salvas que serão perdidas se fechar esta caixa de diálogo. Tem certeza de que deseja descartá-las?",
+    "continueEditing": "Continuar Editando",
+    "discardChanges": "Descartar Alterações",
+    "toasts": {
+      "updated": "Domínio Atualizado",
+      "created": "Domínio Criado",
+      "saveSuccess": "'{{name}}' salvo com sucesso.",
+      "saveError": "Erro ao Salvar Domínio"
+    }
+  },
+  "details": {
+    "backToList": "Voltar para a Lista",
+    "backToDataDomains": "Voltar para Domínios de Dados",
+    "edit": "Editar",
+    "notFound": "Domínio de dados não encontrado ou não pôde ser carregado.",
+    "noDomainIdProvided": "Nenhum ID de domínio informado.",
+    "invalidDomain": "Domínio Inválido",
+    "relatedEntities": "Entidades Relacionadas",
+    "addConcept": "Adicionar Conceito",
+    "hierarchyContext": "Contexto da Hierarquia de Domínios",
+    "info": {
+      "id": "ID",
+      "parentDomain": "Domínio Pai",
+      "childrenCount": "Quantidade de Filhos",
+      "tags": "Tags",
+      "createdBy": "Criado Por",
+      "createdAt": "Criado Em",
+      "lastUpdatedAt": "Última Atualização Em",
+      "linkedBusinessConcepts": "Conceitos de Negócio Vinculados"
+    },
+    "childDomains": {
+      "title": "Domínios de Dados Filhos ({{count}})",
+      "description": "Domínios de dados aninhados diretamente.",
+      "empty": "Nenhum domínio filho encontrado",
+      "columns": {
+        "name": "Nome",
+        "id": "ID"
+      }
+    },
+    "teams": {
+      "title": "Equipes do Domínio",
+      "countBadge_one": "{{count}} equipe",
+      "countBadge_other": "{{count}} equipes",
+      "create": "Criar Equipe",
+      "description": "Equipes atribuídas a este domínio de dados. As equipes herdam permissões e responsabilidades específicas do domínio.",
+      "empty": "Nenhuma equipe atribuída",
+      "emptyHint": "Crie uma equipe para atribuí-la a este domínio de dados.",
+      "createFirst": "Criar Primeira Equipe",
+      "columns": {
+        "name": "Nome da Equipe",
+        "title": "Título",
+        "noTitle": "Sem título",
+        "members": "Membros",
+        "memberCount_one": "{{count}} membro",
+        "memberCount_other": "{{count}} membros",
+        "actions": "Ações",
+        "edit": "Editar"
+      }
+    },
+    "assignedEntities": {
+      "title": "Entidades Atribuídas",
+      "description": "Produtos de dados, contratos e ativos atribuídos a este domínio (principal ou adicional).",
+      "dataProducts": "Produtos de Dados",
+      "dataContracts": "Contratos de Dados",
+      "assets": "Ativos",
+      "primaryDomain": "Domínio principal",
+      "additionalDomain": "Domínio adicional",
+      "noneAssigned": "Nenhuma atribuída."
+    },
+    "linkedAssets": {
+      "title": "Ativos Vinculados",
+      "description": "Ativos (produtos de dados, contratos etc.) vinculados a este domínio de dados por meio de relacionamentos semânticos.",
+      "empty": "Nenhum ativo vinculado encontrado",
+      "countBadge": "{{count}} no total",
+      "columns": {
+        "name": "Nome do Ativo",
+        "type": "Tipo",
+        "unknownType": "Desconhecido",
+        "path": "Caminho",
+        "domain": "Domínio"
+      }
+    }
+  },
+  "toasts": {
+    "conceptLinked": "Conceito de negócio vinculado ao domínio de dados.",
+    "conceptUnlinked": "Conceito de negócio desvinculado do domínio de dados.",
+    "linkConceptError": "Falha ao vincular o conceito de negócio",
+    "unlinkConceptError": "Falha ao desvincular o conceito de negócio",
+    "errorFetchingDomain": "Erro ao Buscar Domínio",
+    "couldNotLoadDomain": "Não foi possível carregar os detalhes do domínio.",
+    "failedFetchDomain": "Falha ao buscar os detalhes do domínio.",
+    "metadataLoadFailed": "Falha ao carregar metadados",
+    "couldNotLoadMetadata": "Não foi possível carregar os metadados.",
+    "editTeamLoadError": "Falha ao carregar os detalhes da equipe para edição."
+  }
+}

@@ -397,6 +397,11 @@
         "title": "管理者ロール",
         "description": "このロールを管理者ロールとしてマークします。管理者としてマークできるロールは 1 つだけです。",
         "label": "これは管理者ロールです"
+      },
+      "importPrivileges": {
+        "title": "インポート権限",
+        "description": "既定のインポート トグルを超える機能をこのロールに付与します。",
+        "adoptEntityIds": "インポート時にエンティティIDを採用"
       }
     },
     "permissions": {

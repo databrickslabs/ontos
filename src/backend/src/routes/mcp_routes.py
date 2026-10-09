@@ -18,6 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from src.common.config import Settings, get_settings
 from src.common.database import get_db
+from src.common.workspace_client import get_obo_workspace_client
 from src.common.dependencies import AuditManagerDep
 from src.common.logging import get_logger
 from src.controller.audit_manager import AuditManager
@@ -28,12 +29,21 @@ from src.tools.registry import create_default_registry
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/mcp", tags=["MCP Server"])
+# No prefix on the router itself: it is mounted at two roots below so the same
+# handlers serve both the native MCP path and the legacy one.
+router = APIRouter(tags=["MCP Server"])
 
 
 def register_routes(app):
-    """Register MCP routes with the FastAPI app."""
-    app.include_router(router)
+    """Register MCP routes with the FastAPI app.
+
+    Mounted at two roots:
+    - ``/mcp``     — canonical, native MCP integration path.
+    - ``/api/mcp`` — legacy alias kept for existing clients; hidden from the
+      OpenAPI schema to avoid duplicate operation ids.
+    """
+    app.include_router(router, prefix="/mcp")
+    app.include_router(router, prefix="/api/mcp", include_in_schema=False)
 
 
 # JSON-RPC 2.0 Error Codes
@@ -152,6 +162,9 @@ class MCPHandler:
         self._audit_manager = audit_manager
         self._session_id = session_id
         self._tool_registry = create_default_registry()
+        # Set when a tool context is built: "obo" (ran as the forwarded user) or
+        # "service_principal" (app identity). Audited so UC data scope is traceable.
+        self._identity_mode: Optional[str] = None
     
     def _get_username(self) -> str:
         return self._token_info.created_by or self._token_info.name
@@ -306,15 +319,16 @@ class MCPHandler:
                 {"required_scope": required_scope, "token_scopes": self._token_info.scopes}
             )
         
-        # Create tool context
+        # Create tool context (also sets self._identity_mode)
         ctx = self._create_tool_context()
-        
+
         # Execute the tool with audit logging
         success = False
         details_for_audit: Dict[str, Any] = {
             "tool_name": tool_name,
             "token_name": self._token_info.name,
             "session_id": self._session_id,
+            "identity_mode": self._identity_mode,
         }
         try:
             result = await tool.execute(ctx, **tool_args)
@@ -384,15 +398,39 @@ class MCPHandler:
         
         return False
     
+    def _resolve_workspace_client(self):
+        """Pick the workspace client identity for UC-touching tools.
+
+        When the request carries a Databricks-forwarded user token (i.e. it came
+        through the app proxy / native integration), run tools on-behalf-of that
+        user so Unity Catalog results are scoped to their grants — matching the
+        in-app Ask Ontos path. Raw external token agents (no forwarded token) keep
+        the app service-principal client, preserving the prior behavior.
+
+        `get_obo_workspace_client` itself falls back to the SP client if the token
+        is missing, but we branch explicitly so we can audit which identity ran and
+        avoid the OBO cache path for pure token callers.
+        """
+        app = self._request.app
+        if self._request.headers.get("x-forwarded-access-token"):
+            try:
+                client = get_obo_workspace_client(self._request, self._settings)
+                self._identity_mode = "obo"
+                return client
+            except Exception as e:  # pragma: no cover - defensive; OBO is best-effort
+                logger.warning("OBO workspace client failed, falling back to service principal: %s", e)
+        self._identity_mode = "service_principal"
+        return getattr(app.state, "workspace_client", None)
+
     def _create_tool_context(self) -> ToolContext:
         """Create a ToolContext for tool execution."""
         # Get managers from app.state if available
         app = self._request.app
-        
+
         return ToolContext(
             db=self._db,
             settings=self._settings,
-            workspace_client=getattr(app.state, "workspace_client", None),
+            workspace_client=self._resolve_workspace_client(),
             data_products_manager=getattr(app.state, "data_products_manager", None),
             data_contracts_manager=getattr(app.state, "data_contracts_manager", None),
             semantic_models_manager=getattr(app.state, "semantic_models_manager", None),

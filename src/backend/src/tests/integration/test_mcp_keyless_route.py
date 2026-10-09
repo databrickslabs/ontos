@@ -73,11 +73,29 @@ def keyless_default_token(db_session: Session):
     return token
 
 
-def _rpc(client: TestClient, method: str, params=None, headers=None, _id=1):
+def _rpc(client: TestClient, method: str, params=None, headers=None, _id=1, path="/api/mcp"):
     body = {"jsonrpc": "2.0", "id": _id, "method": method}
     if params is not None:
         body["params"] = params
-    return client.post("/api/mcp", json=body, headers=headers or {})
+    return client.post(path, json=body, headers=headers or {})
+
+
+class TestNativePathAlias:
+    """The server is mounted at both /mcp (native) and /api/mcp (legacy alias);
+    the two must behave identically."""
+
+    @pytest.mark.parametrize("path", ["/mcp", "/api/mcp"])
+    def test_tools_list_identical_on_both_paths(self, mcp_client, keyless_default_token, path):
+        resp = _rpc(mcp_client, "tools/list", headers={FWD_EMAIL_HEADER: CALLER}, path=path)
+        assert resp.status_code == 200, resp.text
+        payload = resp.json()
+        assert "error" not in payload, payload
+        names = {t["name"] for t in payload["result"]["tools"]}
+        assert "global_search" in names  # in scope for the keyless default
+
+    def test_native_path_health(self, mcp_client):
+        resp = mcp_client.get("/mcp/health")
+        assert resp.status_code == 200, resp.text
 
 
 class TestKeylessEnabled:

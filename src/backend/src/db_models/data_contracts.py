@@ -23,7 +23,7 @@ class DataContractDb(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     name = Column(String, nullable=False, index=True)  # Required for app usability
     kind = Column(String, nullable=False, default="DataContract")
-    api_version = Column(String, nullable=False, default="v3.1.0")
+    api_version = Column(String, nullable=False, default="v3.2.0")
     version = Column(String, nullable=False, index=True)
     status = Column(String, nullable=False, default="draft", index=True)
     # Deprecated: legacy marketplace flag; use publication_scope. Column retained for DB compatibility.
@@ -92,6 +92,15 @@ class DataContractDb(Base):
     custom_properties = relationship("DataContractCustomPropertyDb", back_populates="contract", cascade="all, delete-orphan", lazy="selectin")
     sla_properties = relationship("DataContractSlaPropertyDb", back_populates="contract", cascade="all, delete-orphan", lazy="selectin")
     team_metadata = relationship("DataContractTeamMetadataDb", back_populates="contract", uselist=False, cascade="all, delete-orphan", lazy="selectin")
+    # ODCS v3.2.0 context block (RFC-0038), contract-level
+    context = relationship(
+        "DataContractContextDb",
+        back_populates="contract",
+        foreign_keys="DataContractContextDb.contract_id",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     # Heavy relationships: lazy="select" to prevent auto-loading on list queries
     owner_team = relationship("TeamDb", foreign_keys=[owner_team_id], lazy="select")
     parent_contract = relationship("DataContractDb", remote_side=[id], foreign_keys=[parent_contract_id], lazy="select")
@@ -277,6 +286,14 @@ class SchemaObjectDb(Base):
     authoritative_definitions = relationship("SchemaObjectAuthoritativeDefinitionDb", back_populates="schema_object", cascade="all, delete-orphan")
     custom_properties = relationship("SchemaObjectCustomPropertyDb", back_populates="schema_object", cascade="all, delete-orphan")
     relationships = relationship("SchemaObjectRelationshipDb", back_populates="schema_object", cascade="all, delete-orphan")
+    # ODCS v3.2.0 context block (RFC-0038), schema-object-level
+    context = relationship(
+        "DataContractContextDb",
+        back_populates="schema_object",
+        foreign_keys="DataContractContextDb.schema_object_id",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class SchemaPropertyDb(Base):
@@ -302,9 +319,10 @@ class SchemaPropertyDb(Base):
     transform_description = Column(Text, nullable=True)
     examples = Column(Text, nullable=True)  # comma-separated or JSON-like string
     critical_data_element = Column(Boolean, nullable=False, default=False)
-    logical_type_options_json = Column(Text, nullable=True)  # JSON string of ODCS type-specific options
+    logical_type_options_json = Column(Text, nullable=True)  # JSON string of ODCS type-specific options (incl. v3.2.0 vector/map)
     items_logical_type = Column(String, nullable=True)  # for arrays
     business_name = Column(String, nullable=True)  # ODCS businessName field at property level
+    semantic_type = Column(String, nullable=True)  # ODCS v3.2.0 semanticType: column|measure|dimension
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
     authoritative_definitions = relationship("SchemaPropertyAuthoritativeDefinitionDb", back_populates="property", cascade="all, delete-orphan")
@@ -507,5 +525,63 @@ class DataContractTeamMetadataDb(Base):
     custom_properties_json = Column(Text, nullable=True)  # JSON array of {property, value}
     authoritative_definitions_json = Column(Text, nullable=True)  # JSON array of {url, type}
     contract = relationship("DataContractDb", back_populates="team_metadata")
+
+
+class DataContractContextDb(Base):
+    """ODCS v3.2.0 context block (RFC-0038): AI/semantic guidance attached to a
+    contract root or a schema object. Exactly one owner FK is set per row (both
+    are unique so there is at most one context per owner). The shorthand string
+    form of `context` in ODCS is stored in `instructions`.
+    """
+    __tablename__ = "data_contract_contexts"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="CASCADE"), nullable=True, unique=True, index=True)
+    schema_object_id = Column(String, ForeignKey("data_contract_schema_objects.id", ondelete="CASCADE"), nullable=True, unique=True, index=True)
+    instructions = Column(Text, nullable=True)  # RFC-0038 instructions / shorthand string form
+    contract = relationship("DataContractDb", back_populates="context", foreign_keys=[contract_id])
+    schema_object = relationship("SchemaObjectDb", back_populates="context", foreign_keys=[schema_object_id])
+    verified_statements = relationship(
+        "DataContractContextVerifiedStatementDb",
+        back_populates="context",
+        cascade="all, delete-orphan",
+        order_by="DataContractContextVerifiedStatementDb.position",
+    )
+    constraints = relationship(
+        "DataContractContextConstraintDb",
+        back_populates="context",
+        cascade="all, delete-orphan",
+        order_by="DataContractContextConstraintDb.position",
+    )
+
+
+class DataContractContextVerifiedStatementDb(Base):
+    """ODCS v3.2.0 context verifiedStatement (question required; answer optional).
+    Leaf collections (tags / authoritativeDefinitions / customProperties) are kept
+    as JSON since they are never queried relationally."""
+    __tablename__ = "data_contract_context_verified_statements"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    context_id = Column(String, ForeignKey("data_contract_contexts.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=True)
+    position = Column(Integer, nullable=False, default=0)
+    tags_json = Column(Text, nullable=True)  # JSON array
+    authoritative_definitions_json = Column(Text, nullable=True)  # JSON array of {url, type}
+    custom_properties_json = Column(Text, nullable=True)  # JSON array of {property, value}
+    context = relationship("DataContractContextDb", back_populates="verified_statements")
+
+
+class DataContractContextConstraintDb(Base):
+    """ODCS v3.2.0 context constraint (negative guidance; constraint required)."""
+    __tablename__ = "data_contract_context_constraints"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    context_id = Column(String, ForeignKey("data_contract_contexts.id", ondelete="CASCADE"), nullable=False, index=True)
+    stable_id = Column(String, nullable=True)
+    constraint = Column(Text, nullable=False)
+    position = Column(Integer, nullable=False, default=0)
+    tags_json = Column(Text, nullable=True)  # JSON array
+    authoritative_definitions_json = Column(Text, nullable=True)  # JSON array of {url, type}
+    custom_properties_json = Column(Text, nullable=True)  # JSON array of {property, value}
+    context = relationship("DataContractContextDb", back_populates="constraints")
 
 

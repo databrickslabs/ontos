@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +22,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { DataTable } from "@/components/ui/data-table";
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import ImportEntityDialog from '@/components/common/import-entity-dialog';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -78,8 +78,13 @@ export default function DataProducts() {
   const [createMissingDomains, setCreateMissingDomains] = useState(false);
   // #853: adopt valid, non-colliding file UUIDs as PK (default on); duplicate-id handling
   // (default skip; on = import as a new copy).
-  const [adoptIds, setAdoptIds] = useState(true);
+  // Default off, matching the backend-level privilege gate (#853 review): adoption
+  // is opt-in both on the UI and on the route.
+  const [adoptIds, setAdoptIds] = useState(false);
   const [duplicatesAsNew, setDuplicatesAsNew] = useState(false);
+  // Paste ODPS JSON (parity with the Data Contracts uploader).
+  const [odpsPaste, setOdpsPaste] = useState('');
+  const [importingProductPaste, setImportingProductPaste] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,7 +107,6 @@ export default function DataProducts() {
 
   const api = useApi();
   const { get, post, delete: deleteApi } = api;
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -221,6 +225,20 @@ export default function DataProducts() {
       if (Array.isArray(data)) setCertificationLevels(data);
     });
   }, [get]);
+
+  // Reset the upload dialog's transient state every time it opens so a later
+  // import doesn't silently carry over earlier toggles, paste text, or errors
+  // (#930 review item 3). Paste survives failures within one dialog session
+  // (see importPastedOdps) but is cleared on re-open.
+  useEffect(() => {
+    if (uploadDialogOpen) {
+      setCreateMissingDomains(false);
+      setAdoptIds(false);
+      setDuplicatesAsNew(false);
+      setOdpsPaste('');
+      setError(null);
+    }
+  }, [uploadDialogOpen]);
 
   // Toggle subscription filter
   const handleToggleMySubscriptions = () => {
@@ -414,27 +432,27 @@ export default function DataProducts() {
     return String(error);
   };
 
-  // Keep File Upload Handlers
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // File upload handler shared by the dropzone and the paste box (via
+  // <ImportEntityDialog>). Each file may hold a single ODPS product or an array.
+  // Returns true iff every entity was created successfully; callers that need to
+  // preserve input on failure (paste box) check this before clearing (#930 review).
+  const uploadProductFiles = async (files: File[]): Promise<boolean> => {
     if (!canWrite) {
       toast({ title: t('permissions.denied'), description: t('permissions.noUpload'), variant: "destructive" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
+      return false;
     }
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) return false;
     setIsUploading(true);
     setError(null);
     const formData = new FormData();
     // Multi-file: append every selected file under the `files` field, matching
     // the backend `List[UploadFile]`. Each file may itself hold an ODPS array.
-    Array.from(files).forEach((f) => formData.append('files', f));
+    files.forEach((f) => formData.append('files', f));
     // #851: opt-in "Create missing domains" toggle, applied per-upload to every entity.
     formData.append('create_missing_domains', String(createMissingDomains));
     // #853: id adoption + duplicate handling.
     formData.append('adopt_ids', String(adoptIds));
     formData.append('on_duplicate', duplicatesAsNew ? 'new' : 'skip');
-    setUploadDialogOpen(false);
     const fileLabel = files.length === 1 ? files[0].name : `${files.length} files`;
     try {
       // The upload endpoint returns a truthful BatchImportResult summary
@@ -460,6 +478,7 @@ export default function DataProducts() {
       // Surface anything not created: failed entities AND files skipped as the
       // wrong type (e.g. an ODCS contract dropped here).
       const unimportedItems = result?.items?.filter((i) => i.status !== 'created') ?? [];
+      const allCreated = !!result && result.failed === 0 && result.skipped === 0;
       if (result && (result.failed > 0 || result.skipped > 0)) {
         // Partial success: surface the truthful summary plus the first issues.
         const detail = unimportedItems
@@ -474,12 +493,14 @@ export default function DataProducts() {
         });
         if (unimportedItems.length > 0) setError(`${summarizeImport(result)}\n${detail}`);
       } else {
+        setUploadDialogOpen(false);
         toast({
           title: t('upload.success'),
           description: t('upload.successMessage', { filename: fileLabel, count: result?.created ?? 0 }),
         });
       }
       await fetchProducts();
+      return allCreated;
 
     } catch (err: any) {
       console.error('Error uploading file:', err);
@@ -491,16 +512,26 @@ export default function DataProducts() {
           duration: 10000, // Show longer for detailed errors
       });
       setError(errorMsg);
+      return false;
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     }
   };
 
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
+  // Paste ODPS JSON: wrap the text as a .json file and reuse the batch endpoint.
+  // Only clear the textarea on full success — otherwise the user loses the input
+  // they would need to fix and retry (#930 review).
+  const importPastedOdps = async () => {
+    const value = odpsPaste.trim();
+    if (!value) return;
+    setImportingProductPaste(true);
+    try {
+      const file = new File([value], 'pasted.json', { type: 'application/json' });
+      const allCreated = await uploadProductFiles([file]);
+      if (allCreated) setOdpsPaste('');
+    } finally {
+      setImportingProductPaste(false);
+    }
   };
 
   // --- Genie Space Handler ---
@@ -871,68 +902,46 @@ export default function DataProducts() {
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    accept=".json,.yaml,.yml"
-                    multiple
-                    style={{ display: 'none' }}
+                  {/* Upload dialog (shared with Data Contracts via ImportEntityDialog) */}
+                  <ImportEntityDialog
+                    open={uploadDialogOpen}
+                    onOpenChange={setUploadDialogOpen}
+                    uploading={isUploading}
+                    disabled={importingProductPaste}
+                    accept={{
+                      'application/json': ['.json'],
+                      'application/x-yaml': ['.yaml', '.yml'],
+                      'text/yaml': ['.yaml', '.yml'],
+                    }}
+                    onFiles={uploadProductFiles}
+                    toggles={{
+                      createMissingDomains, setCreateMissingDomains,
+                      adoptIds, setAdoptIds,
+                      duplicatesAsNew, setDuplicatesAsNew,
+                    }}
+                    paste={{
+                      value: odpsPaste,
+                      onChange: setOdpsPaste,
+                      onSubmit: importPastedOdps,
+                      submitting: importingProductPaste,
+                    }}
+                    labels={{
+                      title: t('upload.dialogTitle', 'Upload Data Products'),
+                      description: t('upload.dialogDescription', 'Select one or more ODPS files (YAML/JSON). Each file may contain a single product or an array.'),
+                      createMissingDomains: t('upload.createMissingDomains', 'Create missing domains'),
+                      createMissingDomainsHint: t('upload.createMissingDomainsHint', "Auto-create domains that don't already exist. Off: unmatched domains are left unassigned (the original is preserved)."),
+                      adoptIds: t('upload.adoptIds', 'Adopt IDs from file'),
+                      adoptIdsHint: t('upload.adoptIdsHint', 'Reuse a valid, non-colliding UUID from the file as the primary key so links between entities survive import.'),
+                      duplicatesAsNew: t('upload.duplicatesAsNew', 'Import duplicate IDs as new copies'),
+                      duplicatesAsNewHint: t('upload.duplicatesAsNewHint', 'Off (default): a product whose ID already exists is skipped. On: it is imported as a new copy with a fresh ID.'),
+                      dropActive: t('upload.dropActive', 'Drop the file(s) here'),
+                      dropInactive: t('upload.dropInactive', 'Drag and drop product file(s) here, or click to select'),
+                      supportedFormats: t('upload.supportedFormats', 'Supported formats: JSON or YAML (ODPS)'),
+                      pasteLabel: t('upload.orPasteOdps', 'Or paste ODPS JSON'),
+                      pastePlaceholder: t('upload.pasteOdpsPlaceholder', 'Paste ODPS product JSON here'),
+                      pasteButton: t('upload.importJsonButton', 'Import JSON'),
+                    }}
                   />
-                  {/* #851: import options dialog hosting the per-upload domain toggle. */}
-                  <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{t('upload.dialogTitle', 'Upload Data Products')}</DialogTitle>
-                        <DialogDescription>
-                          {t('upload.dialogDescription', 'Select one or more ODPS files (YAML/JSON). Each file may contain a single product or an array.')}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="flex items-center justify-between rounded-md border p-3">
-                        <div className="pr-3">
-                          <Label htmlFor="pCreateMissingDomains" className="cursor-pointer">
-                            {t('upload.createMissingDomains', 'Create missing domains')}
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {t('upload.createMissingDomainsHint', "Auto-create domains that don't already exist. Off: unmatched domains are left unassigned (the original is preserved).")}
-                          </p>
-                        </div>
-                        <Switch
-                          id="pCreateMissingDomains"
-                          checked={createMissingDomains}
-                          onCheckedChange={setCreateMissingDomains}
-                          disabled={isUploading}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border p-3">
-                        <div className="pr-3">
-                          <Label htmlFor="pAdoptIds" className="cursor-pointer">
-                            {t('upload.adoptIds', 'Adopt IDs from file')}
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {t('upload.adoptIdsHint', 'Reuse a valid, non-colliding UUID from the file as the primary key so links between entities survive import.')}
-                          </p>
-                        </div>
-                        <Switch id="pAdoptIds" checked={adoptIds} onCheckedChange={setAdoptIds} disabled={isUploading} />
-                      </div>
-                      <div className="flex items-center justify-between rounded-md border p-3">
-                        <div className="pr-3">
-                          <Label htmlFor="pDuplicatesAsNew" className="cursor-pointer">
-                            {t('upload.duplicatesAsNew', 'Import duplicate IDs as new copies')}
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {t('upload.duplicatesAsNewHint', 'Off (default): a product whose ID already exists is skipped. On: it is imported as a new copy with a fresh ID.')}
-                          </p>
-                        </div>
-                        <Switch id="pDuplicatesAsNew" checked={duplicatesAsNew} onCheckedChange={setDuplicatesAsNew} disabled={isUploading} />
-                      </div>
-                      <Button onClick={triggerFileUpload} disabled={isUploading} className="w-full gap-2">
-                        {isUploading
-                          ? (<><Loader2 className="h-4 w-4 animate-spin" /> {t('upload.uploading')}</>)
-                          : (<><Upload className="h-4 w-4" /> {t('upload.chooseFiles', 'Choose file(s)')}</>)}
-                      </Button>
-                    </DialogContent>
-                  </Dialog>
                 </>
               }
             bulkActions={(selectedRows) => {

@@ -571,6 +571,26 @@ When `TEST_USER_TOKEN` is configured, the user-info dropdown gains a
 with every API request impersonating that user. A yellow ring around the
 avatar indicates an active persona.
 
+**Customizing the persona list without editing the repo (volume override):**
+
+The persona list is resolved in this order:
+
+1. **Volume override** — if a file exists at
+   `{DATABRICKS_VOLUME}/config/test_personas.yaml`, it is used *exclusively*.
+2. **Repo-bundled fallback** — otherwise `src/backend/src/data/test_personas.yaml`.
+
+This lets teams deploying Ontos via DABs from a git repo add or edit personas
+at runtime by dropping/updating that file on the Unity Catalog Volume — no repo
+change, rebuild, or restart required (the list is cached with a short TTL, so
+edits appear within ~30s). The override file uses the exact same schema as the
+bundled file. In local dev, `DATABRICKS_VOLUME` is usually a dotted placeholder
+(or unset), so the override never fires and the bundled list is used.
+
+Note: enabling the feature at all still requires `TEST_USER_TOKEN` in the
+environment (for a deployed app, via `src/app.yaml`'s `env:` block — ideally a
+secret `valueFrom`). The volume override controls *which personas* appear, not
+*whether* impersonation is on.
+
 **Usage from curl / Playwright / any HTTP client:**
 
 ```bash

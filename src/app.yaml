@@ -28,6 +28,7 @@ env:
   
   - name: "DATABRICKS_WAREHOUSE_ID"
     valueFrom: "sql-warehouse"
+
   - name: "DATABRICKS_VOLUME"
     valueFrom: "volume"
 
@@ -36,6 +37,18 @@ env:
   - name: "APP_AUDIT_LOG_DIR"
     value: "audit_logs"
     #value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"
+
+  # --- Per-request user impersonation (test personas) ---
+  # SECURITY: enabling TEST_USER_TOKEN turns on runtime identity override via
+  # X-Test-* headers. The value is NOT stored here — it is bound to the
+  # `test-user-token` secret resource declared in databricks.yaml (same pattern
+  # as DATABRICKS_WAREHOUSE_ID -> `sql-warehouse`). Impersonation is therefore
+  # enabled only in a deployment whose bundle wires that secret resource; leave
+  # it out to keep the feature off. Once enabled, the persona list can be
+  # customized (no repo change / restart) by dropping
+  # {DATABRICKS_VOLUME}/config/test_personas.yaml on the volume.
+  - name: "TEST_USER_TOKEN"
+    valueFrom: "test-user-token"
 
   - name: "LLM_ENABLED"
     value: "True"

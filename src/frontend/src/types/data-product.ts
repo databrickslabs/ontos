@@ -89,6 +89,7 @@ export interface InputPort {
   name: string;
   version: string;
   contractId: string; // REQUIRED in ODPS!
+  contractName?: string; // Resolved at query time (#854)
 
   // ODPS optional fields
   tags?: string[];

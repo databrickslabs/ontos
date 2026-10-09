@@ -192,6 +192,7 @@ def create_default_registry() -> ToolRegistry:
     from src.tools.data_products import (
         SearchDataProductsTool,
         GetDataProductTool,
+        GetDataProductsBulkTool,
         ListDataProductsTool,
         CreateDraftDataProductTool,
         UpdateDataProductTool,
@@ -200,6 +201,7 @@ def create_default_registry() -> ToolRegistry:
     from src.tools.data_contracts import (
         SearchDataContractsTool,
         GetDataContractTool,
+        GetDataContractsBulkTool,
         ListDataContractsTool,
         CreateDraftDataContractTool,
         UpdateDataContractTool,
@@ -267,6 +269,7 @@ def create_default_registry() -> ToolRegistry:
     # Data Products tools (full CRUD)
     registry.register(SearchDataProductsTool())
     registry.register(GetDataProductTool())
+    registry.register(GetDataProductsBulkTool())
     registry.register(ListDataProductsTool())
     registry.register(CreateDraftDataProductTool())
     registry.register(UpdateDataProductTool())
@@ -275,6 +278,7 @@ def create_default_registry() -> ToolRegistry:
     # Data Contracts tools (full CRUD)
     registry.register(SearchDataContractsTool())
     registry.register(GetDataContractTool())
+    registry.register(GetDataContractsBulkTool())
     registry.register(ListDataContractsTool())
     registry.register(CreateDraftDataContractTool())
     registry.register(UpdateDataContractTool())

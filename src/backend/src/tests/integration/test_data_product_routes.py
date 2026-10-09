@@ -547,3 +547,99 @@ class TestDataProductRoutes:
         # This would require mocking the manager to raise an unexpected exception
         # Placeholder for more sophisticated error testing
         pass
+
+    # =================================================================
+    # POST /api/data-products/upload - Batch Import
+    # =================================================================
+
+    @pytest.fixture
+    def _upload_route_stubs(self, db_session):
+        """Upload endpoints depend on AuditManagerDep (503s without
+        ``app.state.audit_manager``) and ``app.state.data_products_manager``
+        (500 without it). Install a no-op audit stub and a real
+        DataProductsManager bound to the test DB session so the route
+        reaches ``create_products_from_files``."""
+        from src.app import app
+        from src.controller.data_products_manager import DataProductsManager
+
+        class _NoopAudit:
+            def log_action(self, **kwargs):
+                return None
+
+            def log_action_background(self, **kwargs):
+                return None
+
+        prev_audit = getattr(app.state, "audit_manager", None)
+        prev_dp = getattr(app.state, "data_products_manager", None)
+        app.state.audit_manager = _NoopAudit()
+        app.state.data_products_manager = DataProductsManager(db=db_session)
+        try:
+            yield
+        finally:
+            for attr, prev in (("audit_manager", prev_audit), ("data_products_manager", prev_dp)):
+                if prev is not None:
+                    setattr(app.state, attr, prev)
+                else:
+                    try:
+                        delattr(app.state, attr)
+                    except AttributeError:
+                        pass
+
+    def test_upload_product_minimal_odps_json_succeeds(
+        self, client: TestClient, _upload_route_stubs
+    ):
+        """Golden-path product upload — a minimal ODPS JSON file is accepted
+        and returns a BatchImportResult. Guards against the ``file_inputs``
+        regression that landed the merge and caused every upload to NameError
+        into a generic 500 (#862.1)."""
+        import yaml  # noqa: F401 — kept so parity tests can swap to yaml easily
+        product = {
+            "kind": "DataProduct",
+            "apiVersion": "v1",
+            "id": str(uuid.uuid4()),
+            "name": "Upload Minimal Product",
+            "productType": "sourceAligned",
+            "version": "1.0.0",
+        }
+        files = {"files": ("product.json", json.dumps(product).encode("utf-8"), "application/json")}
+        response = client.post("/api/data-products/upload", files=files)
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["created"] == 1
+        assert data["total"] == 1
+        assert data["items"][0]["status"] == "created"
+
+    def test_upload_create_missing_domains_requires_data_domains_write(
+        self, client: TestClient, monkeypatch, _upload_route_stubs
+    ):
+        """The ``create_missing_domains`` toggle creates top-level domains, so
+        it must require ``data-domains`` write on top of the product-write
+        permission (#851 review / #862.3). Without that, a 403 is returned
+        and nothing is created."""
+        # Deny data-domains write; keep every other check intact.
+        import src.routes.data_product_routes as route_mod
+        original = route_mod.user_has_feature_level
+
+        def deny_data_domains_write(auth_manager, user, feature_id, required_level):
+            if feature_id == "data-domains":
+                return False
+            return original(auth_manager, user, feature_id, required_level)
+
+        monkeypatch.setattr(route_mod, "user_has_feature_level", deny_data_domains_write)
+
+        product = {
+            "kind": "DataProduct",
+            "apiVersion": "v1",
+            "id": str(uuid.uuid4()),
+            "name": "Gated Upload Product",
+            "productType": "sourceAligned",
+            "version": "1.0.0",
+        }
+        files = {"files": ("product.json", json.dumps(product).encode("utf-8"), "application/json")}
+        response = client.post(
+            "/api/data-products/upload",
+            files=files,
+            data={"create_missing_domains": "true"},
+        )
+        assert response.status_code == 403, response.text
+        assert "data-domains" in response.json().get("detail", "")

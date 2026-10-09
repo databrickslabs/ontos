@@ -1635,6 +1635,9 @@ async def upload_data_products(
             files,
             sanitize=lambda n: sanitize_filename(n or "upload.bin", default="upload.bin"),
         )
+        # The product parser handles raw bytes (YAML/JSON decode UTF-8 internally);
+        # we only need (filename, bytes), so drop the content_type.
+        file_inputs: List[tuple] = [(name, raw) for name, raw, _ in capped]
 
         result = manager.create_products_from_files(
             file_inputs, user=current_user.username if current_user else None,

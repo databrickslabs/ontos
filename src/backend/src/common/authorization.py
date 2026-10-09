@@ -652,7 +652,15 @@ def user_has_feature_level(auth_manager, user, feature_id: str, required_level: 
     Mirrors the group-based path of :class:`PermissionChecker` (without the team/applied
     role overrides) for secondary checks such as the import "create missing domains"
     toggle, which must require ``data-domains`` write on top of the entity's own
-    write permission. Returns False on any resolution error (deny by default).
+    write permission.
+
+    Caveats (callers rely on both):
+    - **Group-based only.** It does NOT consult team role overrides or an explicit
+      applied-role override. Use it for cross-feature secondary gates where the
+      user's group memberships are the source of truth.
+    - **Fails closed.** Any exception during resolution is caught and ``False``
+      is returned (with a warning log), so a transient error denies the extra
+      capability rather than silently granting it.
     """
     try:
         effective = auth_manager.get_user_effective_permissions(getattr(user, "groups", None) or [], None)

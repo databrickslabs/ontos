@@ -48,6 +48,36 @@ class TestDataDomainRepository:
         assert fetched is not None
         assert fetched.name == sample_create_model.name
 
+    def test_create_domain_with_caller_provided_id(self, db_session: Session):
+        """Test that a caller-provided UUID is used verbatim as the domain id."""
+        # Arrange
+        provided_id = uuid.uuid4()
+        model = DataDomainCreate(
+            name="Custom Id Domain",
+            id=provided_id,
+        )
+
+        # Act
+        result = data_domain_repo.create(db=db_session, obj_in=model)
+
+        # Assert - stored as the provided UUID (stringified for the String PK)
+        assert result.id == str(provided_id)
+        db_session.commit()
+        fetched = db_session.query(DataDomain).filter_by(id=str(provided_id)).first()
+        assert fetched is not None
+
+    def test_create_domain_without_id_generates_one(self, db_session: Session):
+        """Test that omitting id still auto-generates a UUID (default fires)."""
+        # Arrange
+        model = DataDomainCreate(name="Auto Id Domain")
+
+        # Act
+        result = data_domain_repo.create(db=db_session, obj_in=model)
+
+        # Assert - a UUID was generated and is parseable
+        assert result.id is not None
+        uuid.UUID(result.id)  # does not raise
+
     def test_create_domain_with_parent(self, db_session: Session):
         """Test creating domain with parent relationship."""
         # Arrange - Create parent domain

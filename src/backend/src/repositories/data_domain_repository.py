@@ -19,6 +19,12 @@ class DataDomainRepository(CRUDBase[DataDomain, DataDomainCreate, DataDomainUpda
         from uuid import UUID
         # Exclude tags since they're handled separately by TagsManager
         obj_in_data = obj_in.model_dump(exclude={"tags"})
+        # Optional caller-provided id (API only): drop a null id so the column
+        # default generates one; stringify a provided UUID for the String PK.
+        if obj_in_data.get("id") is None:
+            obj_in_data.pop("id", None)
+        elif isinstance(obj_in_data["id"], UUID):
+            obj_in_data["id"] = str(obj_in_data["id"])
         # Ensure created_by is set (for test scenarios where it might be missing)
         if "created_by" not in obj_in_data or obj_in_data["created_by"] is None:
             obj_in_data["created_by"] = "system"

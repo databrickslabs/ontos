@@ -65,6 +65,10 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             obj_in_data = obj_in
         else:
             obj_in_data = obj_in.dict()
+        # An optional caller-provided id of None must not override the column
+        # default (str(uuid4())); drop it so the DB-side default still fires.
+        if obj_in_data.get("id", "_missing_") is None:
+            obj_in_data.pop("id", None)
         db_obj = self.model(**obj_in_data)  # type: ignore
         try:
             db.add(db_obj)

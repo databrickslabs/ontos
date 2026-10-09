@@ -310,6 +310,21 @@ def get_connector_type_for_asset(asset_type: UnifiedAssetType) -> Optional[str]:
 # Schema Models (for assets that have columnar structure)
 # ============================================================================
 
+class ForeignKeyInfo(BaseModel):
+    """A foreign-key constraint imported from a source catalog.
+
+    Mirrors Unity Catalog's ForeignKeyConstraint: the local (child) columns
+    reference parent_columns on parent_table. Column order is significant and
+    positionally aligned between columns and parent_columns.
+    """
+    name: Optional[str] = Field(None, description="Constraint name if provided by the source")
+    columns: List[str] = Field(..., description="Local (child) column names forming the FK")
+    parent_table: str = Field(..., description="Fully qualified referenced (parent) table")
+    parent_columns: List[str] = Field(..., description="Referenced columns on the parent table")
+
+    model_config = {"from_attributes": True}
+
+
 class ColumnInfo(BaseModel):
     """Information about a single column/field in an asset's schema."""
     name: str = Field(..., description="Column name")
@@ -318,6 +333,7 @@ class ColumnInfo(BaseModel):
     nullable: bool = Field(True, description="Whether the column allows nulls")
     description: Optional[str] = Field(None, description="Column description/comment")
     is_primary_key: bool = Field(False, description="Whether this is part of the primary key")
+    is_foreign_key: bool = Field(False, description="Whether this column participates in a foreign key")
     is_partition_key: bool = Field(False, description="Whether this is a partition column")
     default_value: Optional[str] = Field(None, description="Default value if any")
     
@@ -332,6 +348,7 @@ class SchemaInfo(BaseModel):
     """Schema information for assets that have columnar structure."""
     columns: List[ColumnInfo] = Field(default_factory=list, description="List of columns")
     primary_key: Optional[List[str]] = Field(None, description="Primary key column names")
+    foreign_keys: List[ForeignKeyInfo] = Field(default_factory=list, description="Foreign-key constraints imported from the source catalog")
     partition_columns: Optional[List[str]] = Field(None, description="Partition column names")
     clustering_columns: Optional[List[str]] = Field(None, description="Clustering column names")
     

@@ -20,6 +20,8 @@ from src.models.projects import (
 from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.projects import ProjectDb
 from src.common.errors import ConflictError, NotFoundError
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.database import get_session_factory
 from src.models.notifications import NotificationType
 from src.common.authorization import is_user_admin
 from src.common.config import Settings
@@ -28,12 +30,57 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
-class ProjectsManager:
+class ProjectsManager(SearchableAsset):
     def __init__(self, tags_manager: Optional[TagsManager] = None):
         self.project_repo = project_repo
         self.team_repo = team_repo
         self.tags_manager = tags_manager or TagsManager()
         logger.debug("ProjectsManager initialized.")
+
+    # --- SearchableAsset Implementation ---
+    def _build_search_index_item(self, project: ProjectDb) -> Optional[SearchIndexItem]:
+        """Build a SearchIndexItem from a Project DB model."""
+        if not getattr(project, 'id', None) or not getattr(project, 'name', None):
+            return None
+        return SearchIndexItem(
+            id=f"project::{project.id}",
+            type="project",
+            feature_id="projects",
+            title=getattr(project, 'title', None) or project.name,
+            description=getattr(project, 'description', '') or "",
+            link=f"/projects/{project.id}",
+            tags=[],
+            extra_data={"name": project.name},
+        )
+
+    def _update_search_index(self, project: ProjectDb) -> None:
+        """Upsert a project into the search index on create/update (#919 review)."""
+        try:
+            item = self._build_search_index_item(project)
+            if item:
+                self._notify_index_upsert(item)
+        except Exception as e:
+            logger.debug(f"Failed to upsert project {getattr(project, 'id', '?')} in search index: {e}")
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetch projects and map them to SearchIndexItem format for global search."""
+        logger.info("Fetching projects for search indexing...")
+        items: List[SearchIndexItem] = []
+        try:
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index projects.")
+                return []
+            with session_factory() as db:
+                for project in self.project_repo.get_multi_with_teams(db, limit=10000):
+                    item = self._build_search_index_item(project)
+                    if item:
+                        items.append(item)
+            logger.info(f"Prepared {len(items)} projects for search index.")
+            return items
+        except Exception as e:
+            logger.error(f"Error fetching or mapping projects for search: {e}", exc_info=True)
+            return []
 
     def _serialize_list_fields(self, data: dict) -> dict:
         """Helper to serialize list fields to JSON strings for database storage."""
@@ -127,6 +174,8 @@ class ProjectsManager:
 
             # Reload with teams
             db_project = self.project_repo.get_with_teams(db, db_project.id)
+            # Index the new project so global search finds it before the next full rebuild.
+            self._update_search_index(db_project)
             return self._convert_db_to_read_model(db_project, db)
         except IntegrityError as e:
             db.rollback()
@@ -184,6 +233,39 @@ class ProjectsManager:
         logger.debug("Fetching projects summary")
         db_projects = self.project_repo.get_multi_with_teams(db, limit=1000)
         return [self._convert_db_to_summary_model(project) for project in db_projects]
+
+    def visible_project_ids(
+        self,
+        db: Session,
+        project_ids: List[str],
+        user_identifier: Optional[str],
+        user_groups: Optional[List[str]],
+        is_admin: bool = False,
+    ) -> set:
+        """Return the subset of ``project_ids`` the caller can see on the list page.
+
+        Mirrors ``get_all_projects``'s membership filter so global search doesn't
+        surface project names/descriptions the list hides (#919 review). Admins
+        see all; non-admins see projects reachable via their team-domain
+        relationship — the same predicate ``get_all_projects`` uses.
+        """
+        if not project_ids:
+            return set()
+        candidate = set(project_ids)
+        if is_admin:
+            return candidate
+        if not user_identifier or user_groups is None:
+            return set()
+        try:
+            visible_rows = self.project_repo.get_projects_by_domain_relationship(
+                db, user_identifier, user_groups
+            )
+            visible = {str(p.id) for p in visible_rows}
+            return candidate & visible
+        except Exception as e:
+            # Fail closed: on error, don't surface anything the list might hide.
+            logger.warning(f"visible_project_ids check failed; denying by default: {e}")
+            return set()
 
     def get_user_projects(self, db: Session, user_identifier: str, user_groups: List[str]) -> UserProjectAccess:
         """Gets all projects that a user has access to through team membership."""
@@ -323,6 +405,8 @@ class ProjectsManager:
 
             # Reload with teams
             updated_db_project = self.project_repo.get_with_teams(db, project_id)
+            # Re-index so renames/description edits don't stay stale in global search (#919 review).
+            self._update_search_index(updated_db_project)
             return self._convert_db_to_read_model(updated_db_project, db)
         except IntegrityError as e:
             db.rollback()
@@ -348,6 +432,8 @@ class ProjectsManager:
         try:
             self.project_repo.remove(db=db, id=project_id)
             logger.info(f"Successfully deleted project '{read_model.name}' (id: {project_id})")
+            # Remove from the search index so a deleted project isn't still findable.
+            self._notify_index_remove(f"project::{project_id}")
             return read_model
         except Exception as e:
             db.rollback()

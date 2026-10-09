@@ -190,6 +190,28 @@ asset_types:
         priority: 6
         boost: 0.7
 
+  team:
+    enabled: true
+    inherit_defaults: true
+    extra_fields:
+      title:
+        indexed: true
+        source: "title"
+        match_type: substring
+        priority: 4
+        boost: 1.0
+
+  project:
+    enabled: true
+    inherit_defaults: true
+    extra_fields:
+      name:
+        indexed: true
+        source: "name"
+        match_type: substring
+        priority: 4
+        boost: 1.0
+
 # Result ranking behavior
 ranking:
   primary_sort: match_priority   # Sort by field priority first (title matches before description)

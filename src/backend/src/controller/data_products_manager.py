@@ -13,6 +13,11 @@ from uuid import UUID
 from pathlib import Path
 
 SOURCE_ID_PROPERTY = "sourceId"
+# Reserved id round-trip keys (#853). ontosOriginalId folds in the legacy sourceId
+# convention (both written during the transition; either read); ontosEntityId is the
+# current Ontos primary key, re-derived on export so a re-import can detect/rebind.
+ONTOS_ORIGINAL_ID_PROPERTY = "ontosOriginalId"
+ONTOS_ENTITY_ID_PROPERTY = "ontosEntityId"
 
 
 def _is_valid_uuid(value: str) -> bool:
@@ -21,6 +26,35 @@ def _is_valid_uuid(value: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
+
+
+def _canonical_uuid(value: str) -> Optional[str]:
+    """Return the canonical lowercase hyphenated form of a UUID string, or None.
+
+    Mirrors `data_contracts_manager._canonical_uuid` (#853 review item 2):
+    guards the import duplicate check against case/braced/urn/hyphenless
+    spellings that would otherwise create a second identity for the same UUID.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _upsert_custom_property(data: Dict[str, Any], prop: str, value: Any) -> None:
+    """Set a customProperties entry on a product/contract payload dict, tolerating the
+    list-of-{property,value} form and the legacy {key: value} dict form."""
+    cprops = data.get('customProperties')
+    if isinstance(cprops, dict):
+        cprops[prop] = value
+        return
+    if not isinstance(cprops, list):
+        cprops = []
+    cprops = [c for c in cprops if not (isinstance(c, dict) and c.get('property') == prop)]
+    cprops.append({"property": prop, "value": value})
+    data['customProperties'] = cprops
 
 import yaml
 from pydantic import ValidationError
@@ -208,6 +242,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         background_tasks: Optional[Any] = None,
         preserve_source_id: bool = False,
         create_missing_domains: bool = False,
+        adopt_ids: bool = True,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
 
@@ -220,6 +255,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 sourceId custom property (used during batch upload/import)
             create_missing_domains: When True, auto-create by name any domain that doesn't
                 resolve (the opt-in "Create missing domains" import toggle, #851).
+            adopt_ids: When True (the "Adopt IDs from file" toggle, #853), a valid,
+                non-colliding UUID in the payload is adopted as the primary key so
+                YAML-expressed cross-entity links survive import. Otherwise (or on a
+                non-UUID / colliding id) a fresh UUID is generated as before.
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -229,16 +268,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         try:
             # Preserve original external ID (e.g. URN) as a custom property
             # Only when explicitly requested (e.g. during batch upload/import)
-            if preserve_source_id:
-                original_id = product_data.get('id')
-                if original_id and isinstance(original_id, str) and not _is_valid_uuid(original_id):
-                    custom_props = product_data.get('customProperties', [])
-                    if isinstance(custom_props, list):
-                        custom_props.append({"property": SOURCE_ID_PROPERTY, "value": original_id})
-                    elif isinstance(custom_props, dict):
-                        custom_props[SOURCE_ID_PROPERTY] = original_id
-                    product_data['customProperties'] = custom_props
-                    logger.info(f"Preserved original ID '{original_id}' as {SOURCE_ID_PROPERTY} custom property")
+            incoming_id = product_data.get('id')
+            if preserve_source_id and incoming_id and isinstance(incoming_id, str):
+                # ontosOriginalId (#853) records the source id verbatim regardless of form;
+                # the legacy sourceId is also written for non-UUID ids during the transition.
+                _upsert_custom_property(product_data, ONTOS_ORIGINAL_ID_PROPERTY, incoming_id)
+                if not _is_valid_uuid(incoming_id):
+                    _upsert_custom_property(product_data, SOURCE_ID_PROPERTY, incoming_id)
+                    logger.info(f"Preserved original ID '{incoming_id}' as {SOURCE_ID_PROPERTY} custom property")
 
             # Always preserve the raw incoming domain string(s) as provenance (#851), so the
             # original is never lost and a later export can surface it via ontosOriginalDomain.
@@ -257,9 +294,21 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains}
                     ]
 
-            # Always generate a UUID for the product ID
-            product_data['id'] = str(uuid.uuid4())
-            logger.info(f"Generated ID {product_data['id']} for new product.")
+            # Adopt a valid, non-colliding UUID from the payload as the primary key (#853)
+            # so YAML-expressed links survive import; otherwise generate a fresh UUID.
+            # Canonicalize before lookup/storage so spelling variants cannot create
+            # a second identity for the same logical UUID (#853 review item 2).
+            canon_incoming = _canonical_uuid(incoming_id)
+            if (
+                adopt_ids
+                and canon_incoming is not None
+                and self._repo.get(db=db_session, id=canon_incoming) is None
+            ):
+                product_data['id'] = canon_incoming
+                logger.info(f"Adopted id {canon_incoming} from payload for new product.")
+            else:
+                product_data['id'] = str(uuid.uuid4())
+                logger.info(f"Generated ID {product_data['id']} for new product.")
 
             # Ensure ODPS required fields have defaults
             product_data.setdefault('apiVersion', 'v1.0.0')
@@ -1682,6 +1731,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         files: List[tuple],
         user: Optional[str] = None,
         create_missing_domains: bool = False,
+        adopt_ids: bool = True,
+        on_duplicate: str = "skip",
+        reveal_dup_detail: bool = False,
     ) -> BatchImportResult:
         """Import ODPS products from one or more uploaded files.
 
@@ -1691,6 +1743,11 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             user: Username of the uploader (stamped as personal-draft owner).
             create_missing_domains: opt-in "Create missing domains" import toggle (#851),
                 applied per-upload to every entity in the batch.
+            adopt_ids: "Adopt IDs from file" toggle (#853, default on). A valid, non-colliding
+                UUID is adopted as the primary key; otherwise a fresh UUID is generated.
+            on_duplicate: what to do when the payload id is a valid UUID that already exists
+                in the table — "skip" (default, recorded as skipped) or "new" (import as a new
+                copy with a fresh UUID). Import stays create-only either way.
 
         Returns:
             A :class:`BatchImportResult`. A file that cannot be parsed at all is
@@ -1730,7 +1787,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     continue
                 # Only import a recognizable ODPS Data Product. An ODCS contract is
                 # routed to the right page; anything unrecognizable is skipped rather
-                # than imported as a junk product.
+                # than imported as a junk product. Runs before dup-check so a
+                # wrong-kind payload is never resolved against the products table.
                 entity_kind = classify_import_entity(product_data)
                 if entity_kind != "product":
                     if entity_kind == "contract":
@@ -1750,10 +1808,43 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                     ))
                     index += 1
                     continue
+                # Duplicate-id handling (#853): a valid UUID already present is either
+                # skipped (default) or imported as a new copy with a fresh UUID.
+                # Canonicalize the source id so case/braced/urn/hyphenless spellings
+                # cannot bypass the dup check (#853 review item 2).
+                canon_source = _canonical_uuid(source_id) if isinstance(source_id, str) else None
+                dup = bool(canon_source and self._repo.get(db=self._db, id=canon_source) is not None)
+                if dup and on_duplicate == "skip":
+                    # Don't surface the existing row's id/name to a caller who can't
+                    # read it — otherwise the skipped-dup message becomes an
+                    # existence oracle (#853 review item 5).
+                    if reveal_dup_detail:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            entity_id=canon_source, name=product_data.get('name'), status="skipped",
+                            message="already present (same id)",
+                        ))
+                    else:
+                        result.add(ImportItemResult(
+                            index=index, source_file=filename, source_id=source_id,
+                            status="skipped",
+                            message="Supplied id cannot be adopted (import toggles or an existing entity prevent it).",
+                        ))
+                    index += 1
+                    continue
+                # on_duplicate == "new" with dup: fall through with adoption disabled;
+                # the row gets a fresh UUID. Intra-batch reference remap is not needed
+                # here because ODPS carries no product-to-product reference field (the
+                # only cross-ref is inputPorts[].contractId, which points at contracts
+                # imported through a separate endpoint, not at other products in this
+                # batch). If a cross-entity batch flow is introduced later, build an
+                # old→new map keyed on canon_source and rewrite port.contractId before
+                # calling create_product (#853 review item 4).
                 try:
                     created = self.create_product(
                         product_data, user=user, preserve_source_id=True,
                         create_missing_domains=create_missing_domains,
+                        adopt_ids=adopt_ids and not dup,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
@@ -3351,7 +3442,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
         odps: Dict[str, Any] = {
             "kind": product.kind or "DataProduct",
-            "apiVersion": product.api_version or "v1.0.0",
+            "apiVersion": product.apiVersion or "v1.0.0",
             "id": product.id,
             "status": product.status,
         }
@@ -3376,32 +3467,32 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if desc:
                 odps["description"] = desc
 
-        if product.input_ports:
+        if product.inputPorts:
             odps["inputPorts"] = [
                 {k: v for k, v in {
                     "name": p.name, "version": p.version,
-                    "contractId": p.contract_id,
+                    "contractId": p.contractId,
                 }.items() if v}
-                for p in product.input_ports
+                for p in product.inputPorts
             ]
 
-        if product.output_ports:
+        if product.outputPorts:
             odps["outputPorts"] = [
                 {k: v for k, v in {
                     "name": p.name, "version": p.version,
-                    "contractId": p.contract_id,
+                    "contractId": p.contractId,
                     "status": p.status,
                 }.items() if v}
-                for p in product.output_ports
+                for p in product.outputPorts
             ]
 
-        if product.support_channels:
+        if product.support:
             odps["support"] = [
                 {k: v for k, v in {
                     "channel": s.channel, "url": s.url,
                     "tool": s.tool, "scope": s.scope,
                 }.items() if v}
-                for s in product.support_channels
+                for s in product.support
             ]
 
         # Build team members from ODPS data, then merge active Business Owners
@@ -3423,10 +3514,10 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             if team_name:
                 odps["team"]["name"] = team_name
 
-        if product.custom_properties:
+        if product.customProperties:
             rebuilt_props = [
                 {"property": cp.property, "value": cp.value}
-                for cp in product.custom_properties
+                for cp in product.customProperties
             ]
             # Preserve the additionalDomains entry apply_odcs injected above; a plain
             # overwrite here drops additional domains on export/round-trip.
@@ -3434,10 +3525,14 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 rebuilt_props, odps.get("customProperties")
             )
 
-        if product.authoritative_definitions:
+        # ontosEntityId (#853): re-derive the current Ontos primary key so a re-import can
+        # detect/rebind. ontosOriginalId (provenance) rides along in the rebuilt properties.
+        _upsert_custom_property(odps, ONTOS_ENTITY_ID_PROPERTY, product.id)
+
+        if product.authoritativeDefinitions:
             odps["authoritativeDefinitions"] = [
                 {"url": ad.url, "type": ad.type}
-                for ad in product.authoritative_definitions
+                for ad in product.authoritativeDefinitions
             ]
 
         # Extension: include entity relationship-based dataset hierarchy

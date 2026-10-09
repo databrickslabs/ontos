@@ -84,6 +84,8 @@ export interface AppRole {
     approval_privileges?: ApprovalPrivileges;
     deployment_policy?: DeploymentPolicy | null;
     is_admin?: boolean;
+    /** Import privilege (#853 review): may this role adopt an entity's UUID from an imported file as the primary key? */
+    can_adopt_entity_ids?: boolean;
     // Role hierarchy fields
     requestable_by_roles?: string[];  // Role IDs that can request this role (use '__NO_ROLE__' for users without any role)
     approver_roles?: string[];  // Role IDs that can approve access requests for this role

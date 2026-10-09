@@ -31,9 +31,12 @@ def adapter():
 
 @pytest.fixture
 def domains(db_session: Session):
+    # Get-or-create: the managers under test commit, so rows persist across tests in the
+    # shared session — this keeps the fixed-name domains order-independent across the suite.
     ids = {}
     for name in ("Sales", "Marketing", "Finance"):
-        d = data_domain_repo.create(db=db_session, obj_in=DataDomainCreate(name=name))
+        existing = data_domain_repo.get_by_name(db_session, name=name)
+        d = existing or data_domain_repo.create(db=db_session, obj_in=DataDomainCreate(name=name))
         ids[name] = d.id
     db_session.commit()
     return ids

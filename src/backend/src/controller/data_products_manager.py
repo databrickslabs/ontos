@@ -59,7 +59,7 @@ from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo, subscription_repo
 from src.repositories.teams_repository import team_repo
 from src.repositories.entity_domain_association_repository import entity_domain_repo
-from src.controller.domain_export_adapter import domain_export_adapter
+from src.controller.domain_export_adapter import domain_export_adapter, ONTOS_ORIGINAL_DOMAIN_PROPERTY
 from src.repositories.genie_spaces_repository import genie_space_repo
 from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -144,13 +144,20 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             logger.warning(f"Failed to attach domains for product {getattr(api_obj, 'id', '?')}: {e}")
         return api_obj
 
-    def _resolve_product_domain_assignment(self, data: dict, db: Optional[Session] = None) -> tuple:
+    def _resolve_product_domain_assignment(
+        self,
+        data: dict,
+        db: Optional[Session] = None,
+        create_missing: bool = False,
+        created_by: Optional[str] = None,
+    ) -> tuple:
         """Resolve a product payload to (domain_ids, primary_domain_id).
 
         Prefers domain_ids + primary_domain_id; falls back to the legacy single ``domain``
         (which may be a domain ID or name). Names are resolved via the data domain repo.
         Uses the caller's ``db`` session when provided so resolution sees rows written in
-        the same request transaction.
+        the same request transaction. When ``create_missing`` is set, unresolved names in
+        the round-trip/ODCS-standard path are auto-created (the opt-in import toggle, #851).
         """
         from src.repositories.data_domain_repository import data_domain_repo
         session = db if db is not None else self._db
@@ -185,7 +192,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         #    ODCS-standard primary ``domain`` name + ``customProperties.additionalDomains``
         #    are all honoured. Reading only the single ``domain`` name here previously
         #    dropped additional domains on re-import (round-trip loss).
-        return domain_export_adapter.parse_odcs(data, session)
+        return domain_export_adapter.parse_odcs(
+            data, session, create_missing=create_missing, created_by=created_by,
+        )
 
     def get_statuses(self) -> List[str]:
         """Get all ODPS v1.0.0 status values."""
@@ -198,6 +207,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         user: Optional[str] = None,
         background_tasks: Optional[Any] = None,
         preserve_source_id: bool = False,
+        create_missing_domains: bool = False,
     ) -> DataProductApi:
         """Creates a new ODPS v1.0.0 data product via the repository.
 
@@ -208,6 +218,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             background_tasks: Optional FastAPI BackgroundTasks for async delivery
             preserve_source_id: If True, preserve the original non-UUID id as a
                 sourceId custom property (used during batch upload/import)
+            create_missing_domains: When True, auto-create by name any domain that doesn't
+                resolve (the opt-in "Create missing domains" import toggle, #851).
         """
         from src.controller.delivery_service import DeliveryChangeType
 
@@ -227,6 +239,23 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                         custom_props[SOURCE_ID_PROPERTY] = original_id
                     product_data['customProperties'] = custom_props
                     logger.info(f"Preserved original ID '{original_id}' as {SOURCE_ID_PROPERTY} custom property")
+
+            # Always preserve the raw incoming domain string(s) as provenance (#851), so the
+            # original is never lost and a later export can surface it via ontosOriginalDomain.
+            original_domains = domain_export_adapter.extract_original_domain_strings(product_data)
+            if original_domains:
+                cprops = product_data.get('customProperties')
+                if isinstance(cprops, list):
+                    cprops = [
+                        c for c in cprops
+                        if not (isinstance(c, dict) and c.get('property') == ONTOS_ORIGINAL_DOMAIN_PROPERTY)
+                    ]
+                    cprops.append({"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains})
+                    product_data['customProperties'] = cprops
+                elif not cprops:
+                    product_data['customProperties'] = [
+                        {"property": ONTOS_ORIGINAL_DOMAIN_PROPERTY, "value": original_domains}
+                    ]
 
             # Always generate a UUID for the product ID
             product_data['id'] = str(uuid.uuid4())
@@ -267,7 +296,9 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
 
             # Assign domains via the junction table (accepts domain_ids/primary_domain_id
             # or legacy single `domain` id/name).
-            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(product_data, db=db_session)
+            prod_domain_ids, prod_primary = self._resolve_product_domain_assignment(
+                product_data, db=db_session, create_missing=create_missing_domains, created_by=user,
+            )
             if prod_domain_ids:
                 entity_domain_repo.set_domains_for_entity(
                     db_session, entity_type="data_product", entity_id=created_db_obj.id,
@@ -467,10 +498,27 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 self._db, entity_type="data_product", entity_ids=[str(p.id) for p in products_db]
             ) if products_db else {}
 
+            # Batch-load referenced contracts once per page (#854 review): otherwise
+            # resolving port.contractId → port.contractName does N products × M ports
+            # single-row lookups per list request.
+            port_contract_ids: Set[str] = set()
+            for p in products_db:
+                for port in list(getattr(p, 'output_ports', []) or []) + list(getattr(p, 'input_ports', []) or []):
+                    cid = getattr(port, 'contract_id', None)
+                    if cid:
+                        port_contract_ids.add(cid)
+            from src.repositories.data_contracts_repository import data_contract_repo
+            contracts_map = (
+                data_contract_repo.get_by_ids(db=self._db, ids=port_contract_ids)
+                if port_contract_ids else {}
+            )
+
             products_with_tags = []
             for product_db in products_db:
                 product_with_tags = self._load_product_with_tags(
-                    product_db, preloaded_domains=domains_map.get(str(product_db.id), [])
+                    product_db,
+                    preloaded_domains=domains_map.get(str(product_db.id), []),
+                    preloaded_contracts=contracts_map,
                 )
                 fid = getattr(product_db, "version_family_id", None) or product_db.id
                 # Only emit a count on the collapsed view; on the expanded
@@ -1633,6 +1681,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         self,
         files: List[tuple],
         user: Optional[str] = None,
+        create_missing_domains: bool = False,
     ) -> BatchImportResult:
         """Import ODPS products from one or more uploaded files.
 
@@ -1640,6 +1689,8 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
             files: List of ``(filename, content_bytes)`` tuples. Each file may
                 contain a single product object or an array of them.
             user: Username of the uploader (stamped as personal-draft owner).
+            create_missing_domains: opt-in "Create missing domains" import toggle (#851),
+                applied per-upload to every entity in the batch.
 
         Returns:
             A :class:`BatchImportResult`. A file that cannot be parsed at all is
@@ -1702,6 +1753,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 try:
                     created = self.create_product(
                         product_data, user=user, preserve_source_id=True,
+                        create_missing_domains=create_missing_domains,
                     )
                     result.add(ImportItemResult(
                         index=index, source_file=filename, source_id=source_id,
@@ -2767,7 +2819,7 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
         except Exception as e:
             logger.error(f"Failed to assign tags to ODPS product {product_id}: {e}", exc_info=True)
 
-    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None) -> DataProductApi:
+    def _load_product_with_tags(self, db_obj, db: Optional[Session] = None, preloaded_domains=None, preloaded_contracts: Optional[Dict[str, Any]] = None) -> DataProductApi:
         """Helper to load an ODPS data product with its associated tags.
 
         ``db`` must be the caller's request session on write paths (create/update) so the
@@ -2814,23 +2866,38 @@ class DataProductsManager(DeliveryMixin, SearchableAsset):
                 except Exception as e:
                     logger.debug(f"Could not resolve project: {e}")
 
-            # Resolve contract names and delivery method names for output ports
+            # Resolve contract names and delivery method names for output + input ports.
+            # Prefer the batch-preloaded contracts map (list path) to avoid N+1; fall
+            # back to a per-port repo.get() for the single-entity callers (#854 review).
+            # A None contractName tells the frontend the id is dangling so it doesn't
+            # render a navigable link that leads to a 404.
+            def _resolve_port_contract(port):
+                if not port.contractId:
+                    return
+                try:
+                    if preloaded_contracts is not None:
+                        contract = preloaded_contracts.get(port.contractId)
+                    else:
+                        from src.repositories.data_contracts_repository import data_contract_repo
+                        contract = data_contract_repo.get(self._db, id=port.contractId)
+                    port.contractName = contract.name if contract else None
+                except Exception as e:
+                    logger.debug(f"Could not resolve port contract {port.contractId}: {e}")
+
             if product_api.outputPorts:
-                from src.repositories.data_contracts_repository import data_contract_repo
                 from src.repositories.delivery_methods_repository import delivery_method_repo
                 for port in product_api.outputPorts:
-                    if port.contractId:
-                        try:
-                            contract = data_contract_repo.get(self._db, id=port.contractId)
-                            port.contractName = contract.name if contract else None
-                        except Exception as e:
-                            logger.debug(f"Could not resolve contract: {e}")
+                    _resolve_port_contract(port)
                     if port.deliveryMethodId:
                         try:
                             dm = delivery_method_repo.get(self._db, port.deliveryMethodId)
                             port.deliveryMethodName = dm.name if dm else None
                         except Exception as e:
                             logger.debug(f"Could not resolve delivery method: {e}")
+
+            if product_api.inputPorts:
+                for port in product_api.inputPorts:
+                    _resolve_port_contract(port)
 
             return product_api
 

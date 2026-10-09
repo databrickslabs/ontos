@@ -13,6 +13,27 @@ from src.tools.base import BaseTool, ToolContext, ToolResult
 logger = get_logger(__name__)
 
 
+def _serialize_contract(contract) -> Dict[str, Any]:
+    """Full-detail dict for a single data contract.
+
+    Shared by get_data_contract and the bulk get_data_contracts so both return
+    the identical shape.
+    """
+    desc = getattr(contract, 'description', None)
+    desc_purpose = getattr(desc, 'purpose', None) if desc is not None else None
+    return {
+        "id": contract.id,
+        "name": contract.name,
+        "domain": getattr(contract, 'domain', None),
+        "description": desc_purpose,
+        "status": contract.status,
+        "version": contract.version,
+        "owner_team_name": getattr(contract, 'owner_team_name', None),
+        "data_product": getattr(contract, 'dataProduct', None),
+        "url": f"/data-contracts/{contract.id}",
+    }
+
+
 class CreateDraftDataContractTool(BaseTool):
     """Create a new draft data contract based on schema information."""
     
@@ -355,27 +376,95 @@ class GetDataContractTool(BaseTool):
                 )
 
             contract = ctx.data_contracts_manager._build_contract_api_model(ctx.db, db_obj)
-            desc = getattr(contract, 'description', None)
-            desc_purpose = getattr(desc, 'purpose', None) if desc is not None else None
 
             logger.info(f"[get_data_contract] SUCCESS: Found contract {contract.name}")
-            return ToolResult(
-                success=True,
-                data={
-                    "id": contract.id,
-                    "name": contract.name,
-                    "domain": getattr(contract, 'domain', None),
-                    "description": desc_purpose,
-                    "status": contract.status,
-                    "version": contract.version,
-                    "owner_team_name": getattr(contract, 'owner_team_name', None),
-                    "data_product": getattr(contract, 'dataProduct', None),
-                    "url": f"/data-contracts/{contract.id}"
-                }
-            )
+            return ToolResult(success=True, data=_serialize_contract(contract))
 
         except Exception as e:
             logger.error(f"[get_data_contract] FAILED: {type(e).__name__}: {e}", exc_info=True)
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+
+
+class GetDataContractsBulkTool(BaseTool):
+    """Fetch full details for several data contracts by ID in one call."""
+
+    name = "get_data_contracts"
+    category = "data_contracts"
+    description = (
+        "Fetch full details for MULTIPLE data contracts by ID in a single call. "
+        "Prefer this over repeated get_data_contract when you already hold a set "
+        "of ids. Returns up to 20 by default; raise 'limit' up to 100. Ids beyond "
+        "the limit are not fetched and reported via 'truncated'/'requested' so you "
+        "can page."
+    )
+    parameters = {
+        "contract_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs of the data contracts to retrieve.",
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max contracts to return (default: 20, server max: 100).",
+        },
+    }
+    required_params = ["contract_ids"]
+    required_scope = "contracts:read"
+
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 100
+
+    async def execute(
+        self,
+        ctx: ToolContext,
+        contract_ids: List[str],
+        limit: int = DEFAULT_LIMIT,
+    ) -> ToolResult:
+        """Bulk-get data contracts by id, capped by a server-enforced maximum."""
+        if not ctx.data_contracts_manager:
+            return ToolResult(success=False, error="Data contracts manager not available")
+
+        from src.repositories.data_contracts_repository import data_contract_repo
+
+        # Server safeguard: clamp the batch size regardless of what the caller asks.
+        effective_limit = max(1, min(int(limit or self.DEFAULT_LIMIT), self.MAX_LIMIT))
+        # De-duplicate while preserving order.
+        unique_ids = list(dict.fromkeys(contract_ids or []))
+        requested = len(unique_ids)
+        ids = unique_ids[:effective_limit]
+        logger.info(
+            f"[get_data_contracts] Starting - requested={requested}, "
+            f"limit={effective_limit}, fetching={len(ids)}"
+        )
+
+        contracts: List[Dict[str, Any]] = []
+        not_found: List[str] = []
+        try:
+            for cid in ids:
+                db_obj = data_contract_repo.get_with_all(ctx.db, id=cid)
+                if db_obj:
+                    contract = ctx.data_contracts_manager._build_contract_api_model(ctx.db, db_obj)
+                    contracts.append(_serialize_contract(contract))
+                else:
+                    not_found.append(cid)
+
+            logger.info(
+                f"[get_data_contracts] SUCCESS: {len(contracts)} found, "
+                f"{len(not_found)} not found"
+            )
+            return ToolResult(
+                success=True,
+                data={
+                    "contracts": contracts,
+                    "not_found": not_found,
+                    "returned": len(contracts),
+                    "requested": requested,
+                    "limit": effective_limit,
+                    "truncated": requested > effective_limit,
+                },
+            )
+        except Exception as e:
+            logger.error(f"[get_data_contracts] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 
 

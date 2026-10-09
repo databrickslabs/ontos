@@ -14,6 +14,59 @@ from src.tools.base import BaseTool, ToolContext, ToolResult
 # search_scoring is no longer imported here — search tools delegate to
 # SearchManager.query_index() so the active backend (memory or postgres) is used.
 
+
+def _serialize_product(product) -> Dict[str, Any]:
+    """Full-detail dict for a single data product.
+
+    Shared by get_data_product and the bulk get_data_products so both return the
+    identical shape (including output ports with physical table locations).
+    """
+    # Extract description purpose (handles Description model, dict, or str)
+    desc_purpose = None
+    if product.description:
+        if hasattr(product.description, 'purpose'):
+            desc_purpose = product.description.purpose
+        elif isinstance(product.description, dict):
+            desc_purpose = product.description.get('purpose')
+        elif isinstance(product.description, str):
+            try:
+                desc_dict = json.loads(product.description)
+                if isinstance(desc_dict, dict):
+                    desc_purpose = desc_dict.get('purpose')
+            except Exception:
+                desc_purpose = product.description
+
+    # Surface output ports so agents can find the physical tables
+    output_ports = []
+    for port in (product.outputPorts or []):
+        server = getattr(port, 'server', None)
+        location = getattr(port, 'assetIdentifier', None)
+        if not location and server is not None:
+            host = getattr(server, 'host', '') or ''
+            schema = getattr(server, 'schema_name', '') or ''
+            location = f"{host}.{schema}" if host and schema else (host or None)
+        output_ports.append({
+            "name": port.name,
+            "description": getattr(port, 'description', None),
+            "contract_id": getattr(port, 'contractId', None),
+            "contract_name": getattr(port, 'contractName', None),
+            "location": location,
+        })
+
+    return {
+        "id": product.id,
+        "name": product.name,
+        "domain": product.domain,
+        "description": desc_purpose,
+        "status": product.status,
+        "version": product.version,
+        "owner_team_id": getattr(product, 'owner_team_id', None),
+        "owner_team_name": getattr(product, 'owner_team_name', None),
+        "output_ports": output_ports,
+        "tenant": getattr(product, 'tenant', None),
+        "url": f"/data-products/{product.id}",
+    }
+
 logger = get_logger(__name__)
 
 
@@ -335,65 +388,98 @@ class GetDataProductTool(BaseTool):
         
         try:
             product = ctx.data_products_manager.get_product(product_id)
-            
+
             if not product:
                 return ToolResult(
                     success=False,
                     error=f"Data product '{product_id}' not found"
                 )
-            
-            # Extract description purpose (handles Description model, dict, or str)
-            desc_purpose = None
-            if product.description:
-                if hasattr(product.description, 'purpose'):
-                    desc_purpose = product.description.purpose
-                elif isinstance(product.description, dict):
-                    desc_purpose = product.description.get('purpose')
-                elif isinstance(product.description, str):
-                    try:
-                        desc_dict = json.loads(product.description)
-                        if isinstance(desc_dict, dict):
-                            desc_purpose = desc_dict.get('purpose')
-                    except Exception:
-                        desc_purpose = product.description
-            
-            # Surface output ports so agents can find the physical tables
-            output_ports = []
-            for port in (product.outputPorts or []):
-                server = getattr(port, 'server', None)
-                location = getattr(port, 'assetIdentifier', None)
-                if not location and server is not None:
-                    host = getattr(server, 'host', '') or ''
-                    schema = getattr(server, 'schema_name', '') or ''
-                    location = f"{host}.{schema}" if host and schema else (host or None)
-                output_ports.append({
-                    "name": port.name,
-                    "description": getattr(port, 'description', None),
-                    "contract_id": getattr(port, 'contractId', None),
-                    "contract_name": getattr(port, 'contractName', None),
-                    "location": location,
-                })
-            
+
             logger.info(f"[get_data_product] SUCCESS: Found product {product.name}")
+            return ToolResult(success=True, data=_serialize_product(product))
+
+        except Exception as e:
+            logger.error(f"[get_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+
+
+class GetDataProductsBulkTool(BaseTool):
+    """Fetch full details for several data products by ID in one call."""
+
+    name = "get_data_products"
+    category = "data_products"
+    description = (
+        "Fetch full details for MULTIPLE data products by ID in a single call "
+        "(including output ports / physical table locations). Prefer this over "
+        "repeated get_data_product when you already hold a set of ids. Returns up "
+        "to 20 by default; raise 'limit' up to 100. Ids beyond the limit are not "
+        "fetched and reported via 'truncated'/'requested' so you can page."
+    )
+    parameters = {
+        "product_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "IDs of the data products to retrieve.",
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Max products to return (default: 20, server max: 100).",
+        },
+    }
+    required_params = ["product_ids"]
+    required_scope = "data-products:read"
+
+    DEFAULT_LIMIT = 20
+    MAX_LIMIT = 100
+
+    async def execute(
+        self,
+        ctx: ToolContext,
+        product_ids: List[str],
+        limit: int = DEFAULT_LIMIT,
+    ) -> ToolResult:
+        """Bulk-get data products by id, capped by a server-enforced maximum."""
+        if not ctx.data_products_manager:
+            return ToolResult(success=False, error="Data products manager not available")
+
+        # Server safeguard: clamp the batch size regardless of what the caller asks.
+        effective_limit = max(1, min(int(limit or self.DEFAULT_LIMIT), self.MAX_LIMIT))
+        # De-duplicate while preserving order.
+        unique_ids = list(dict.fromkeys(product_ids or []))
+        requested = len(unique_ids)
+        ids = unique_ids[:effective_limit]
+        logger.info(
+            f"[get_data_products] Starting - requested={requested}, "
+            f"limit={effective_limit}, fetching={len(ids)}"
+        )
+
+        products: List[Dict[str, Any]] = []
+        not_found: List[str] = []
+        try:
+            for pid in ids:
+                product = ctx.data_products_manager.get_product(pid)
+                if product:
+                    products.append(_serialize_product(product))
+                else:
+                    not_found.append(pid)
+
+            logger.info(
+                f"[get_data_products] SUCCESS: {len(products)} found, "
+                f"{len(not_found)} not found"
+            )
             return ToolResult(
                 success=True,
                 data={
-                    "id": product.id,
-                    "name": product.name,
-                    "domain": product.domain,
-                    "description": desc_purpose,
-                    "status": product.status,
-                    "version": product.version,
-                    "owner_team_id": getattr(product, 'owner_team_id', None),
-                    "owner_team_name": getattr(product, 'owner_team_name', None),
-                    "output_ports": output_ports,
-                    "tenant": getattr(product, 'tenant', None),
-                    "url": f"/data-products/{product.id}"
-                }
+                    "products": products,
+                    "not_found": not_found,
+                    "returned": len(products),
+                    "requested": requested,
+                    "limit": effective_limit,
+                    "truncated": requested > effective_limit,
+                },
             )
-            
         except Exception as e:
-            logger.error(f"[get_data_product] FAILED: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(f"[get_data_products] FAILED: {type(e).__name__}: {e}", exc_info=True)
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
 
 

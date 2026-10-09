@@ -11,7 +11,7 @@ from src.models.teams import (
     TeamMemberUpdate,
     TeamMemberRead
 )
-from src.controller.teams_manager import teams_manager
+from src.controller.teams_manager import TeamsManager, teams_manager
 from src.common.database import get_db
 from sqlalchemy.orm import Session
 from src.common.authorization import PermissionChecker
@@ -34,8 +34,18 @@ router = APIRouter(prefix="/api", tags=["Teams"])
 # Feature ID constant
 TEAMS_FEATURE_ID = "teams"
 
-# Team dependency
-def get_teams_manager():
+# Team dependency — resolve from app.state so index-upsert/remove hooks fire.
+# Startup builds the TeamsManager instance that `set_search_manager(...)` wires
+# up (``app.state.teams_manager``). The module-level ``teams_manager`` singleton
+# is a separate instance whose ``_search_manager`` stays None, so a route that
+# reaches it would silently skip the search index notification. Falls back to
+# the singleton for the handful of unit tests that call the getter without a
+# request context.
+def get_teams_manager(request: Request = None) -> TeamsManager:
+    if request is not None:
+        state_mgr = getattr(request.app.state, "teams_manager", None)
+        if isinstance(state_mgr, TeamsManager):
+            return state_mgr
     return teams_manager
 
 

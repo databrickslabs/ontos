@@ -309,12 +309,16 @@ class SearchManager:
             return results
         try:
             from src.common.database import get_session_factory
+            from src.common.authorization import is_user_admin
+            from src.common.config import get_settings
             session_factory = get_session_factory()
             if not session_factory:
                 return results
-            # Admin shortcut: ProjectsManager's own fallback uses an 'admin' group check.
-            # Match that so we don't double-restrict.
-            is_admin = bool(user.groups and any('admin' in (g or '').lower() for g in user.groups))
+            # Mirror the list route (projects_routes.py) exactly: configured admin
+            # groups from APP_ADMIN_DEFAULT_GROUPS via is_user_admin — not a substring
+            # match, which would misclassify e.g. a `billing-admin-viewers` group as
+            # admin and skip the visibility filter entirely (#919 re-review).
+            is_admin = is_user_admin(user.groups or [], get_settings())
             with session_factory() as db:
                 visible = projects_manager.visible_project_ids(
                     db, project_ids,

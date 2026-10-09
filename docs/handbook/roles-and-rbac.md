@@ -278,8 +278,11 @@ For local development and customer demos, Ontos supports a runtime
 persona switch:
 
 - Set `TEST_USER_TOKEN` in the backend environment.
-- The frontend exposes a persona picker (from
-  `data/test_personas.yaml`).
+- The frontend exposes a persona picker. The persona list comes from
+  `data/test_personas.yaml`, unless an override file exists at
+  `{DATABRICKS_VOLUME}/config/test_personas.yaml` (same schema), which then
+  fully replaces it — letting DABs-from-git deployers customize personas at
+  runtime without a repo change or restart (see below).
 - Each request from the frontend carries `X-Test-Token`,
   `X-Test-User-Email`, and optional `X-Test-User-Groups` headers.
 - The backend resolves the identity from these headers instead of OBO
@@ -291,6 +294,15 @@ empty-groups "anon" persona for exercising fully-denied paths.
 
 Leave `TEST_USER_TOKEN` unset in production. When it is unset, the
 persona headers are ignored and normal OBO resolution applies.
+
+**Customizing personas in a DABs deployment.** To change the persona list of a
+deployed app without editing the git repo, upload a YAML file (same schema as
+`data/test_personas.yaml`) to `{DATABRICKS_VOLUME}/config/test_personas.yaml`
+on the app's Unity Catalog Volume. When present it fully replaces the bundled
+list; when absent the bundled list is used. Edits are picked up at runtime
+(within a short cache TTL) — no rebuild or restart. Note this only controls
+*which* personas appear; enabling impersonation still requires
+`TEST_USER_TOKEN` to be set (e.g. via `src/app.yaml`).
 
 #### Role override (impersonation) {#role-override}
 

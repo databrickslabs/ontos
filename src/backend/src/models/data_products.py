@@ -123,6 +123,7 @@ class InputPort(BaseModel):
     name: str = Field(..., description="Name of the input port")
     version: str = Field(..., description="Version of the input port")
     contractId: str = Field(..., alias="contract_id", description="Contract ID for the input port (REQUIRED in ODPS)")
+    contractName: Optional[str] = Field(None, alias="contract_name", description="Contract name (resolved at query time)")
 
     # ODPS optional fields
     tags: Optional[List[str]] = Field(None, description="Tags for categorization")

@@ -1946,6 +1946,23 @@ export default function DataContractDetails() {
                 <span className="text-xs text-muted-foreground">—</span>
               )}
             </div>
+            {/* #854: resolve the contract's dataProduct reference to a navigable product link. */}
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.dataProduct', 'Data Product')}:</Label>
+              {contract.dataProductId ? (
+                <span
+                  className="text-xs cursor-pointer text-primary hover:underline truncate"
+                  onClick={() => navigate(`/data-products/${contract.dataProductId}`)}
+                  title={t('data-contracts:detailsView.metadata.dataProductIdTitle', 'Product ID: {{id}}', { id: contract.dataProductId })}
+                >
+                  {contract.dataProductName || contract.dataProduct}
+                </span>
+              ) : contract.dataProduct ? (
+                <span className="text-xs text-muted-foreground truncate">{contract.dataProduct}</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-muted-foreground min-w-[4rem]">{t('data-contracts:detailsView.metadata.team', 'Team')}:</Label>
               {contract.owner_team_id && contract.owner_team_name ? (

@@ -3,7 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 /**
  * Cross-locale coverage (issue #471).
  *
- * Switches through all 7 supported locales, visits the main navigation routes,
+ * Switches through all 8 supported locales, visits the main navigation routes,
  * and smoke-tests that:
  *   - the route renders (a heading is visible), and
  *   - no visible text leaks an untranslated marker (`__TODO__`) or a raw i18n
@@ -12,7 +12,7 @@ import { test, expect, Page } from '@playwright/test';
  * Requires the app to be running (see playwright.config webServer / BASE_URL).
  */
 
-const LOCALES = ['en', 'de', 'es', 'fr', 'it', 'ja', 'nl'] as const;
+const LOCALES = ['en', 'de', 'es', 'fr', 'it', 'ja', 'nl', 'pt'] as const;
 
 const ROUTES = [
   '/',

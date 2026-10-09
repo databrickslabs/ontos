@@ -1,0 +1,169 @@
+{
+  "title": "Revisões de Ativos de Dados",
+  "subtitle": "Revise e aprove ativos de dados",
+  "newReview": "Nova Revisão",
+  "createRequest": "Criar Nova Solicitação de Revisão de Ativo de Dados",
+  "searchPlaceholder": "Buscar revisões...",
+  "loading": "Carregando revisões...",
+  "noRequests": "Nenhuma solicitação de revisão encontrada.",
+  "toast": {
+    "requestCreated": "Solicitação de revisão \"{{title}}\" criada.",
+    "requestDeleted": "Solicitação de revisão excluída.",
+    "deleteError": "Falha ao excluir a solicitação.",
+    "bulkDeleted": "{{count}} solicitação(ões) excluída(s).",
+    "bulkDeleteError": "Algumas solicitações não puderam ser excluídas.",
+    "titleUpdated": "Título atualizado.",
+    "idCopied": "ID copiado para a área de transferência."
+  },
+  "form": {
+    "titleLabel": "Título (Opcional)",
+    "titlePlaceholder": "Deixe vazio para gerar automaticamente a partir dos ativos selecionados"
+  },
+  "actions": {
+    "editTitle": "Editar título",
+    "copyId": "Copiar ID"
+  },
+  "confirm": {
+    "deleteRequest": "Tem certeza de que deseja excluir esta solicitação de revisão?",
+    "bulkDelete": "Tem certeza de que deseja excluir {{count}} solicitação(ões) selecionada(s)?"
+  },
+  "filters": {
+    "allStatus": "Todos os Status",
+    "pending": "Pendente",
+    "approved": "Aprovado",
+    "rejected": "Rejeitado"
+  },
+  "table": {
+    "title": "Título",
+    "untitled": "(sem título)",
+    "asset": "Ativo",
+    "type": "Tipo",
+    "requester": "Solicitante",
+    "reviewer": "Revisor",
+    "status": "Status",
+    "assets": "Ativos",
+    "requested": "Solicitado",
+    "created": "Criado",
+    "updated": "Atualizado",
+    "actions": "Ações"
+  },
+  "messages": {
+    "success": "Sucesso",
+    "error": "Erro",
+    "approveSuccess": "Revisão aprovada com sucesso",
+    "rejectSuccess": "Revisão rejeitada com sucesso",
+    "approveError": "Falha ao aprovar a revisão",
+    "rejectError": "Falha ao rejeitar a revisão"
+  },
+  "status": {
+    "pending": "Pendente",
+    "in_review": "Em Revisão",
+    "approved": "Aprovado",
+    "rejected": "Rejeitado",
+    "cancelled": "Cancelado"
+  },
+  "details": {
+    "backToList": "Voltar para Revisões",
+    "approve": "Aprovar",
+    "reject": "Rejeitar",
+    "cancel": "Cancelar Revisão",
+    "notFound": "Revisão não encontrada",
+    "loading": "Carregando...",
+    "asset": "Ativo",
+    "requester": "Solicitante",
+    "reviewer": "Revisor",
+    "reason": "Motivo",
+    "comments": "Comentários",
+    "addComment": "Adicionar Comentário",
+    "loadingReview": "Carregando Revisão...",
+    "reviewTitleShort": "Revisão {{id}}",
+    "requestIdMissing": "ID da solicitação não encontrado na URL.",
+    "fetchFailed": "Falha ao buscar os detalhes da solicitação",
+    "loadRequestError": "Falha ao carregar a solicitação: {{error}}",
+    "updateTitleFailed": "Falha ao atualizar o título",
+    "statusUpdated": "Status da solicitação atualizado para {{status}}.",
+    "updateStatusFailed": "Falha ao atualizar o status",
+    "updateStatusError": "Falha ao atualizar o status: {{error}}",
+    "columnAssetFqn": "FQN do Ativo",
+    "columnLastReviewed": "Última Revisão",
+    "review": "Revisão",
+    "overallStatus": "Status Geral",
+    "requestInformation": "Informações da Solicitação",
+    "currentStatus": "Status Atual",
+    "assetsForReview": "Ativos para Revisão ({{count}})",
+    "reviewing": "Revisando: {{fqn}}"
+  },
+  "dialog": {
+    "description": "Selecione os ativos e atribua um revisor.",
+    "yourEmailLabel": "Seu E-mail",
+    "reviewerLabel": "Revisor *",
+    "reviewerPlaceholder": "usuario@exemplo.com",
+    "notesLabel": "Observações (Opcional)",
+    "notesPlaceholder": "Adicione qualquer contexto relevante para o revisor...",
+    "selectAssetsLabel": "Selecionar Ativos *",
+    "submitRequest": "Enviar Solicitação",
+    "messages": {
+      "emailFetchError": "Não foi possível obter seu e-mail.",
+      "catalogLoadFailed": "Falha ao carregar a estrutura do catálogo",
+      "partialLoadTitle": "Erro de Carregamento Parcial",
+      "partialLoadError": "Não foi possível carregar alguns filhos de {{node}}: {{error}}",
+      "childrenLoadError": "Não foi possível carregar os filhos de {{node}}: {{error}}",
+      "requesterVerifyError": "Não foi possível verificar o e-mail do solicitante. Atualize a página.",
+      "reviewerRequired": "O e-mail do revisor é obrigatório.",
+      "selectAtLeastOne": "Selecione pelo menos um ativo para revisar.",
+      "unexpectedError": "Ocorreu um erro inesperado.",
+      "submitFailedTitle": "Falha no Envio"
+    }
+  },
+  "editor": {
+    "assetDetails": "Detalhes do Ativo",
+    "fqnLabel": "FQN:",
+    "typeLabel": "Tipo:",
+    "contentPreview": "Pré-visualização do Conteúdo / Definição",
+    "yourReview": "Sua Revisão",
+    "statusLabel": "Status *",
+    "statusPlaceholder": "Definir status",
+    "commentsPlaceholder": "Adicione seus comentários de revisão aqui...",
+    "saveReview": "Salvar Revisão",
+    "runAutomatedChecks": "Executar Verificações Automatizadas (Não Implementado)",
+    "aiAssistedReview": "Revisão Assistida por IA",
+    "aiContentRequired": "O conteúdo do ativo (definição) deve estar carregado para executar a análise de IA.",
+    "rerunAiAnalysis": "Executar Análise de IA Novamente",
+    "runAiAnalysis": "Executar Análise de IA",
+    "aiAnalysisSummary": "Resumo da Análise de IA",
+    "securityWarning": "Aviso de Segurança",
+    "modelLabel": "Modelo",
+    "generatedLabel": "Gerado",
+    "modelReviewNotImplemented": "Detalhes da revisão do modelo ainda não implementados.",
+    "noPreviewAvailable": "Nenhuma pré-visualização ou definição disponível para este tipo de ativo, ou o conteúdo ainda está carregando.",
+    "messages": {
+      "reviewSaved": "Revisão de {{fqn}} salva.",
+      "saveErrorTitle": "Erro ao Salvar Revisão",
+      "saveError": "Falha ao salvar a revisão: {{error}}",
+      "aiDisabledTitle": "Recursos de IA Desabilitados",
+      "aiDisabled": "A análise com IA está desabilitada nas configurações no momento.",
+      "aiCompleteTitle": "Análise de IA Concluída",
+      "aiComplete": "Resumo da revisão gerado.",
+      "aiErrorTitle": "Erro na Análise de IA",
+      "aiFailed": "Falha ao executar a análise de IA.",
+      "loadContentFailed": "Falha ao carregar o conteúdo do ativo",
+      "fetchDefinitionFailed": "Falha ao buscar a definição ({{status}})"
+    }
+  },
+  "myRequests": {
+    "assetType": "Tipo de Ativo",
+    "pendingRequests": "Solicitações Pendentes",
+    "totalRequests": "Total de Solicitações",
+    "activeSubscriptions": "Assinaturas Ativas",
+    "accessRequestsTab": "Solicitações de Acesso",
+    "subscriptionsTab": "Minhas Assinaturas",
+    "noSubscriptions": "Você ainda não assinou nenhum produto de dados.",
+    "product": "Produto",
+    "loadFailed": "Falha ao carregar",
+    "cancelError": "Falha ao cancelar a solicitação",
+    "entityTypes": {
+      "dataProduct": "Produto de Dados",
+      "dataContract": "Contrato de Dados"
+    }
+  }
+}

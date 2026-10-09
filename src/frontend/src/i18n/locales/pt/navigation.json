@@ -1,0 +1,29 @@
+{
+  "home": "Início",
+  "groups": {
+    "discover": "Descobrir",
+    "build": "Construir",
+    "govern": "Governar",
+    "deploy": "Implantar"
+  },
+  "dbDown": {
+    "title": "Banco de dados indisponível",
+    "body": "O aplicativo não consegue acessar o banco de dados de metadados. A maioria dos recursos retornará erros até que a conexão seja restabelecida.",
+    "retrying": "Tentando novamente…",
+    "retryConnection": "Tentar reconectar",
+    "retryFailed": "Falha ao tentar novamente",
+    "autoRetrying": "Tentando novamente automaticamente a cada {{seconds}} segundos",
+    "pausedTitle": "Aplicativo pausado",
+    "pausedBodyBefore": "O banco de dados de metadados está inacessível, portanto a navegação e as visualizações de dados estão desabilitadas para evitar exibir um estado inconsistente. Use",
+    "pausedBodyAfter": "acima (ou aguarde a próxima tentativa automática) para continuar."
+  },
+  "warning": {
+    "title": "Aviso do sistema",
+    "workspaceFailed": "Falha na conexão com o workspace do Databricks. Alguns recursos podem estar indisponíveis."
+  },
+  "routeError": {
+    "title": "Algo deu errado",
+    "body": "Ocorreu um erro inesperado ao renderizar esta página. Você pode tentar novamente ou voltar para a página inicial.",
+    "goHome": "Ir para o início"
+  }
+}

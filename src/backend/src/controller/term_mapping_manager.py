@@ -190,6 +190,21 @@ class TermMappingManager:
         run = mapping_run_repo.get(db, run_id)
         return RunRead.model_validate(run) if run else None
 
+    def list_selectable_contexts(self) -> List[Dict[str, Any]]:
+        """Concept-scheme contexts the run-config dialog can offer as sources.
+
+        Delegates to concept_source.list_selectable_contexts so the picker shows
+        EXACTLY what the engine will run against — including schemes authored or
+        imported on the Explore/Define page (urn:glossary / urn:ontology /
+        urn:taxonomy), not just uploaded RDF sources (urn:semantic-model). This
+        is the fix for the dialog wrongly reporting 'no customer ontologies
+        loaded' whenever the user's ontology lives as a KnowledgeCollection
+        rather than a semantic_models row.
+        """
+        from src.controller.term_mapping.concept_source import list_selectable_contexts
+
+        return list_selectable_contexts(self._smm)
+
     def list_runs(self, db: Session, *, limit: int = 50) -> List[RunSummary]:
         rows = mapping_run_repo.list_recent(db, limit=limit)
         return [

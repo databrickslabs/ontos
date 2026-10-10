@@ -393,11 +393,12 @@ def create_entity_iterator(
     return EntityIterator(loaders)
 
 
-def parse_entity_filter(rule: str) -> EntityFilter:
+def parse_entity_filter(rule: str, parsed: Optional[Dict[str, Any]] = None) -> EntityFilter:
     """Parse entity filter from DSL rule.
 
     Args:
         rule: DSL rule string with MATCH and optional WHERE clauses
+        parsed: Result of ``parse_rule(rule)`` if the caller already has it
 
     Returns:
         EntityFilter object
@@ -406,9 +407,10 @@ def parse_entity_filter(rule: str) -> EntityFilter:
         >>> rule = "MATCH (obj:Object) WHERE obj.type IN ['table', 'view']"
         >>> filter = parse_entity_filter(rule)
     """
-    from src.common.compliance_dsl import parse_rule
+    if parsed is None:
+        from src.common.compliance_dsl import parse_rule
 
-    parsed = parse_rule(rule)
+        parsed = parse_rule(rule)
 
     # Extract entity types
     entity_types = []

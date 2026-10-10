@@ -546,6 +546,99 @@ class TestRuleParsing:
         assert parsed['on_fail_actions'][0]['type'] == 'NOTIFY'
         assert 'security-team@example.com' in parsed['on_fail_actions'][0]['recipients']
 
+    def test_parse_repeated_on_fail_clauses_accumulate(self):
+        """Repeated ON_FAIL clauses (one action per line, as in the DSL guide) all count."""
+        rule = """
+        MATCH (tbl:table)
+        WHERE HAS_TAG('contains_pii')
+        ASSERT TAG('encryption') = 'AES256'
+        ON_FAIL FAIL 'PII data must be encrypted with AES256'
+        ON_FAIL ASSIGN_TAG security_risk: 'high'
+        ON_FAIL NOTIFY 'security-team@example.com'
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['FAIL', 'ASSIGN_TAG', 'NOTIFY']
+        assert parsed['on_pass_actions'] == []
+
+    def test_parse_on_pass_after_on_fail(self):
+        """ON_PASS may follow ON_FAIL; neither clause is dropped."""
+        rule = """
+        MATCH (prod:data_product)
+        ASSERT prod.owner != 'unknown'
+        ON_FAIL ASSIGN_TAG needs_attention: 'missing_owner'
+        ON_PASS REMOVE_TAG needs_attention
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['ASSIGN_TAG']
+        assert [a['type'] for a in parsed['on_pass_actions']] == ['REMOVE_TAG']
+
+    def test_parse_interleaved_clauses_keep_declaration_order(self):
+        """Actions accumulate per clause type in the order they are written."""
+        rule = """
+        MATCH (obj:Object)
+        ASSERT obj.comment != ''
+        ON_PASS ASSIGN_TAG documentation_status: 'complete'
+        ON_FAIL FAIL 'Missing description'
+        ON_PASS REMOVE_TAG compliance_issue
+        ON_FAIL ASSIGN_TAG documentation_status: 'incomplete'
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_pass_actions']] == ['ASSIGN_TAG', 'REMOVE_TAG']
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['FAIL', 'ASSIGN_TAG']
+
+    def test_parse_multiple_actions_in_single_clause_still_supported(self):
+        """The compact form (several actions after one ON_FAIL) keeps working."""
+        rule = """
+        MATCH (obj:table)
+        ASSERT obj.owner != 'unknown'
+        ON_FAIL FAIL 'No owner' ASSIGN_TAG compliance_issue: 'missing_owner'
+        """
+
+        parsed = parse_rule(rule)
+
+        assert [a['type'] for a in parsed['on_fail_actions']] == ['FAIL', 'ASSIGN_TAG']
+
+    def test_trailing_input_is_reported_with_its_source(self, caplog):
+        """Unparsed trailing input is still ignored (shipped demo rules rely on it, see the
+        issue about truncated shipped rules), but it is logged with the rule's source so the
+        offending policy can be found. Tighten to an error once those rules are fixed."""
+        rule = "MATCH (d:Dataset) ASSERT d.consent_mechanism IS NOT NULL"
+
+        with caplog.at_level('WARNING', logger='src.common.compliance_dsl'):
+            parse_rule(rule, source="policy 'Vehicle PII consent' (p-1)")
+
+        [record] = [r for r in caplog.records if 'unparsed trailing input' in r.getMessage()]
+        assert "policy 'Vehicle PII consent' (p-1)" in record.getMessage()
+        assert "'IS'" in record.getMessage()
+
+    def test_dsl_guide_examples_parse_all_written_actions(self):
+        """Every rule example in the DSL guide yields as many actions as it writes."""
+        import re
+        from pathlib import Path
+
+        guide = Path(__file__).resolve().parents[2] / 'docs' / 'compliance-dsl-guide.md'
+        text = guide.read_text(encoding='utf-8').replace('\r\n', '\n')
+        blocks = [
+            b for b in re.findall(r"```[a-zA-Z]*\n(.*?)```", text, re.S)
+            if re.match(r"\s*MATCH\s*\(", b)
+        ]
+        # Skip the syntax skeleton ("ON_PASS action" / "ON_FAIL action").
+        placeholder = re.compile(r"^\s*ON_(?:PASS|FAIL)\s+action\s*$", re.M)
+        examples = [b for b in blocks if not placeholder.search(b)]
+        # Guard against the extraction silently matching (almost) nothing after a guide edit.
+        assert len(examples) >= 6, f'expected at least 6 rule examples, found {len(examples)}'
+
+        for block in examples:
+            written = len(re.findall(r'^\s*ON_(?:PASS|FAIL)\s', block, re.M))
+            parsed = parse_rule(block)
+            assert len(parsed['on_pass_actions']) + len(parsed['on_fail_actions']) == written, block
+
 
 class TestEdgeCases:
     """Test edge cases and error handling."""

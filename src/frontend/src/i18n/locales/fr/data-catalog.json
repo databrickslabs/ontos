@@ -99,9 +99,38 @@
       "upstream": "Amont",
       "both": "Les deux",
       "downstream": "Aval",
-      "breadth": "Largeur :",
-      "nesting": "Imbrication :",
-      "entitiesEdges": "{{nodes}} entités · {{edges}} arêtes"
+      "entitiesEdges": "{{nodes}} entités · {{edges}} arêtes",
+      "view": "Affichage",
+      "layers": "Couches",
+      "edges": "Relations",
+      "edgeLabels": "Libellés des liens",
+      "resetView": "Réinitialiser l'affichage",
+      "openEntity": "Ouvrir",
+      "clearSelection": "Effacer la sélection",
+      "selectHint": "Cliquez sur un nœud pour suivre son chemin · double-clic pour ouvrir",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Flux de données",
+        "implementation": "Implémenté par",
+        "crossContainment": "Contient (entre couches)",
+        "governance": "Gouvernance",
+        "semantic": "Sémantique / concepts"
+      },
+      "focusPath": "Focaliser le chemin",
+      "showContext": "Tout afficher",
+      "minimap": "Mini-carte",
+      "zoomIn": "Zoom avant",
+      "zoomOut": "Zoom arrière",
+      "fitView": "Ajuster à la vue",
+      "depth": "Profondeur :",
+      "depthAll": "Tout",
+      "depthHint": "Sauts de relation suivis dans chaque direction. Le contenu (ports, schéma, colonnes) ne compte pas.",
+      "detailHint": "Lignes affichées dans les cartes. Les lignes du chemin sélectionné sont toujours affichées.",
+      "detailLevels": {
+        "entities": "Entités",
+        "structure": "Structure",
+        "fields": "Champs"
+      }
     },
     "legendPanel": {
       "entityTypes": "Types d'entités",
@@ -109,7 +138,8 @@
       "dataFlow": "Flux de données",
       "containment": "Confinement",
       "governance": "Gouvernance",
-      "semantic": "Sémantique"
+      "semantic": "Sémantique",
+      "implementation": "Implémenté par"
     },
     "dev": {
       "entityTypeLabel": "Type d'entité :",

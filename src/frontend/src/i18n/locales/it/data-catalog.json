@@ -99,9 +99,38 @@
       "upstream": "A monte",
       "both": "Entrambi",
       "downstream": "A valle",
-      "breadth": "Ampiezza:",
-      "nesting": "Annidamento:",
-      "entitiesEdges": "{{nodes}} entità · {{edges}} archi"
+      "entitiesEdges": "{{nodes}} entità · {{edges}} archi",
+      "view": "Vista",
+      "layers": "Livelli",
+      "edges": "Relazioni",
+      "edgeLabels": "Etichette degli archi",
+      "resetView": "Reimposta vista",
+      "openEntity": "Apri",
+      "clearSelection": "Cancella selezione",
+      "selectHint": "Fai clic su un nodo per tracciarne il percorso · doppio clic per aprire",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Flusso di dati",
+        "implementation": "Implementato da",
+        "crossContainment": "Contiene (tra livelli)",
+        "governance": "Governance",
+        "semantic": "Semantica / concetti"
+      },
+      "focusPath": "Metti a fuoco il percorso",
+      "showContext": "Mostra tutto",
+      "minimap": "Minimappa",
+      "zoomIn": "Ingrandisci",
+      "zoomOut": "Riduci",
+      "fitView": "Adatta alla vista",
+      "depth": "Profondità:",
+      "depthAll": "Tutto",
+      "depthHint": "Passi di relazione seguiti in ogni direzione. Il contenimento (porte, schema, colonne) non conta.",
+      "detailHint": "Quali righe mostrano le schede. Le righe del percorso selezionato sono sempre visibili.",
+      "detailLevels": {
+        "entities": "Entità",
+        "structure": "Struttura",
+        "fields": "Campi"
+      }
     },
     "legendPanel": {
       "entityTypes": "Tipi di entità",
@@ -109,7 +138,8 @@
       "dataFlow": "Flusso di dati",
       "containment": "Contenimento",
       "governance": "Governance",
-      "semantic": "Semantico"
+      "semantic": "Semantico",
+      "implementation": "Implementato da"
     },
     "dev": {
       "entityTypeLabel": "Tipo di entità:",

@@ -99,9 +99,38 @@
       "upstream": "Vorgelagert",
       "both": "Beide",
       "downstream": "Nachgelagert",
-      "breadth": "Breite:",
-      "nesting": "Verschachtelung:",
-      "entitiesEdges": "{{nodes}} Entitäten · {{edges}} Kanten"
+      "entitiesEdges": "{{nodes}} Entitäten · {{edges}} Kanten",
+      "view": "Ansicht",
+      "layers": "Ebenen",
+      "edges": "Beziehungen",
+      "edgeLabels": "Kantenbeschriftungen",
+      "resetView": "Ansicht zurücksetzen",
+      "openEntity": "Öffnen",
+      "clearSelection": "Auswahl aufheben",
+      "selectHint": "Knoten anklicken, um den Pfad zu verfolgen · Doppelklick zum Öffnen",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Datenfluss",
+        "implementation": "Implementiert durch",
+        "crossContainment": "Enthält (ebenenübergreifend)",
+        "governance": "Governance",
+        "semantic": "Semantik / Konzepte"
+      },
+      "focusPath": "Pfad fokussieren",
+      "showContext": "Alles zeigen",
+      "minimap": "Übersichtskarte",
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern",
+      "fitView": "An Ansicht anpassen",
+      "depth": "Tiefe:",
+      "depthAll": "Alle",
+      "depthHint": "Anzahl der verfolgten Beziehungsschritte je Richtung. Enthaltensein (Ports, Schema, Spalten) zählt nicht.",
+      "detailHint": "Welche Zeilen Karten zeigen. Zeilen auf einem ausgewählten Pfad werden immer angezeigt.",
+      "detailLevels": {
+        "entities": "Entitäten",
+        "structure": "Struktur",
+        "fields": "Felder"
+      }
     },
     "legendPanel": {
       "entityTypes": "Entitätstypen",
@@ -109,7 +138,8 @@
       "dataFlow": "Datenfluss",
       "containment": "Enthalten in",
       "governance": "Governance",
-      "semantic": "Semantisch"
+      "semantic": "Semantisch",
+      "implementation": "Implementiert durch"
     },
     "dev": {
       "entityTypeLabel": "Entitätstyp:",

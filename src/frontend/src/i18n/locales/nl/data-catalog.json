@@ -99,9 +99,38 @@
       "upstream": "Upstream",
       "both": "Beide",
       "downstream": "Downstream",
-      "breadth": "Breedte:",
-      "nesting": "Nesting:",
-      "entitiesEdges": "{{nodes}} entiteiten · {{edges}} edges"
+      "entitiesEdges": "{{nodes}} entiteiten · {{edges}} edges",
+      "view": "Weergave",
+      "layers": "Lagen",
+      "edges": "Relaties",
+      "edgeLabels": "Randlabels",
+      "resetView": "Weergave herstellen",
+      "openEntity": "Openen",
+      "clearSelection": "Selectie wissen",
+      "selectHint": "Klik op een knooppunt om het pad te volgen · dubbelklik om te openen",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Gegevensstroom",
+        "implementation": "Geïmplementeerd door",
+        "crossContainment": "Bevat (over lagen heen)",
+        "governance": "Governance",
+        "semantic": "Semantisch / concepten"
+      },
+      "focusPath": "Pad focussen",
+      "showContext": "Alles tonen",
+      "minimap": "Minikaart",
+      "zoomIn": "Inzoomen",
+      "zoomOut": "Uitzoomen",
+      "fitView": "Passend maken",
+      "depth": "Diepte:",
+      "depthAll": "Alles",
+      "depthHint": "Aantal relatiestappen per richting. Bevatten (poorten, schema, kolommen) telt niet mee.",
+      "detailHint": "Welke rijen kaarten tonen. Rijen op een geselecteerd pad worden altijd getoond.",
+      "detailLevels": {
+        "entities": "Entiteiten",
+        "structure": "Structuur",
+        "fields": "Velden"
+      }
     },
     "legendPanel": {
       "entityTypes": "Entiteitstypes",
@@ -109,7 +138,8 @@
       "dataFlow": "Datastroom",
       "containment": "Bevatting",
       "governance": "Governance",
-      "semantic": "Semantisch"
+      "semantic": "Semantisch",
+      "implementation": "Geïmplementeerd door"
     },
     "dev": {
       "entityTypeLabel": "Entiteitstype:",

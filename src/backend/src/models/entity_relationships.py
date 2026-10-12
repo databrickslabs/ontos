@@ -88,6 +88,14 @@ class LineageGraphNode(BaseModel):
     description: Optional[str] = None
     domain: Optional[str] = None
     is_center: bool = False
+    layer: Optional[str] = Field(
+        None,
+        description="Model layer: business | delivery | logical | physical | other",
+    )
+    context_id: Optional[str] = Field(
+        None,
+        description="Owning entity id for sub-entities (contract for schema objects/properties, product for output ports)",
+    )
 
 
 class LineageGraphEdge(BaseModel):
@@ -96,6 +104,14 @@ class LineageGraphEdge(BaseModel):
     target: str = Field(..., description="Target node id ('{entity_type}:{entity_id}')")
     relationship_type: str
     label: Optional[str] = None
+    derived: bool = Field(
+        False,
+        description="True when computed at query time (semantic links, contract schema, physical-name binding) rather than stored",
+    )
+    reversed: bool = Field(
+        False,
+        description="True when the stored direction points against the flow (target is upstream), e.g. dependsOn",
+    )
 
 
 class LineageGraph(BaseModel):

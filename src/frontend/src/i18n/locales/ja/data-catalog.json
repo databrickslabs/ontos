@@ -99,9 +99,38 @@
       "upstream": "上流",
       "both": "両方",
       "downstream": "下流",
-      "breadth": "幅:",
-      "nesting": "ネスト:",
-      "entitiesEdges": "{{nodes}} エンティティ · {{edges}} エッジ"
+      "entitiesEdges": "{{nodes}} エンティティ · {{edges}} エッジ",
+      "view": "表示",
+      "layers": "レイヤー",
+      "edges": "関係",
+      "edgeLabels": "エッジラベル",
+      "resetView": "表示をリセット",
+      "openEntity": "開く",
+      "clearSelection": "選択を解除",
+      "selectHint": "ノードをクリックしてパスを追跡 · ダブルクリックで開く",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "データフロー",
+        "implementation": "実装",
+        "crossContainment": "包含(レイヤー間)",
+        "governance": "ガバナンス",
+        "semantic": "セマンティック / 概念"
+      },
+      "focusPath": "パスに集中",
+      "showContext": "すべて表示",
+      "minimap": "ミニマップ",
+      "zoomIn": "ズームイン",
+      "zoomOut": "ズームアウト",
+      "fitView": "全体を表示",
+      "depth": "深さ:",
+      "depthAll": "すべて",
+      "depthHint": "各方向にたどる関係のホップ数。包含(ポート、スキーマ、列)は数えません。",
+      "detailHint": "カードに表示する行。選択したパス上の行は常に表示されます。",
+      "detailLevels": {
+        "entities": "エンティティ",
+        "structure": "構造",
+        "fields": "フィールド"
+      }
     },
     "legendPanel": {
       "entityTypes": "エンティティ種別",
@@ -109,7 +138,8 @@
       "dataFlow": "データフロー",
       "containment": "包含",
       "governance": "ガバナンス",
-      "semantic": "セマンティック"
+      "semantic": "セマンティック",
+      "implementation": "実装"
     },
     "dev": {
       "entityTypeLabel": "エンティティ種別:",

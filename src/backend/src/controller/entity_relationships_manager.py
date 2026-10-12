@@ -6,7 +6,8 @@ and resolves entity names for display.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from collections import deque
+from typing import Any, Deque, Dict, List, Optional, Set, TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -25,6 +26,18 @@ from src.models.entity_relationships import (
     LineageGraphEdge,
 )
 from src.common.errors import ConflictError, NotFoundError
+from src.controller.model_lineage import (
+    DEFAULT_LAYER,
+    HIDDEN_LINEAGE_TYPES,
+    LAYER_RANK,
+    MODEL_LAYERS,
+    REL_LABELS,
+    SYNTHETIC_LAYERS,
+    SYNTHETIC_TYPES,
+    ZERO_COST_RELS,
+    ModelLineageResolver,
+    is_forward_flow,
+)
 from src.common.logging import get_logger
 
 if TYPE_CHECKING:
@@ -49,6 +62,9 @@ class EntityRelationshipsManager:
 
     def __init__(self, ontology_schema_manager: "OntologySchemaManager"):
         self._osm = ontology_schema_manager
+        self._model_lineage = ModelLineageResolver()
+        self._layer_cache: Dict[str, str] = {}
+        self._rel_label_cache: Dict[str, str] = {}
         logger.info("EntityRelationshipsManager initialized")
 
     # ------------------------------------------------------------------
@@ -331,6 +347,8 @@ class EntityRelationshipsManager:
         self, db: Session, entity_type: str, entity_id: str
     ) -> Optional[Dict[str, Any]]:
         """Resolve an entity's display info (name, status, description) by type and ID."""
+        if entity_type in SYNTHETIC_TYPES:
+            return self._model_lineage.resolve(db, entity_type, entity_id)
         table_name = DEDICATED_TYPE_RESOLVERS.get(entity_type)
         if table_name:
             return self._resolve_dedicated_entity(db, table_name, entity_id)
@@ -386,7 +404,11 @@ class EntityRelationshipsManager:
         """Resolve an asset-tier entity from the assets table."""
         try:
             from src.repositories.assets_repository import asset_repo
-            obj = asset_repo.get(db, entity_id)
+            try:
+                key: Any = UUID(str(entity_id))
+            except ValueError:
+                return None  # asset ids are UUIDs
+            obj = asset_repo.get(db, key)
             if obj:
                 return {"name": obj.name, "status": obj.status, "description": obj.description}
         except Exception as e:
@@ -630,103 +652,247 @@ class EntityRelationshipsManager:
         max_depth: int = 3,
         direction: Optional[str] = None,
     ) -> LineageGraph:
-        """BFS traversal of entity relationships to build a lineage graph.
+        """Lineage graph over stored and derived relationships.
+
+        Stored ``entity_relationships`` rows are combined with links derived at
+        query time (concepts, product ports, contract schema, physical-name
+        binding — see ``model_lineage``). Direction follows the *flow*
+        (business → platform, provider → consumer), not the stored edge
+        direction: across layers the business-side end is upstream, within a
+        layer ``REVERSED_FLOW_RELS`` decides (e.g. ``dependsOn`` points from
+        consumer to provider).
+
+        "Both" is the union of the upstream and the downstream chain — not an
+        undirected walk, which would pull in siblings through shared nodes.
 
         Args:
-            direction: None for both, "downstream" for impact analysis (outgoing only),
-                       "upstream" for provenance (incoming only).
+            direction: None for both, "downstream" for impact analysis,
+                       "upstream" for provenance.
         """
         graph = LineageGraph(
             center_entity_type=entity_type,
             center_entity_id=entity_id,
         )
 
-        node_key = f"{entity_type}:{entity_id}"
-        visited_nodes: Dict[str, LineageGraphNode] = {}
-        visited_edges: set = set()
-        queue: List[tuple] = [(entity_type, entity_id, 0)]
-
         center_info = self._resolve_entity(db, entity_type, entity_id)
         if not center_info:
             return graph
 
-        center_node = LineageGraphNode(
-            id=node_key,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            name=center_info["name"],
-            icon=self._get_icon_for_type(entity_type),
-            status=center_info.get("status"),
-            description=center_info.get("description"),
-            is_center=True,
-        )
-        visited_nodes[node_key] = center_node
+        center_key = f"{entity_type}:{entity_id}"
+        nodes: Dict[str, LineageGraphNode] = {
+            center_key: self._make_lineage_node(db, entity_type, entity_id, center_info, is_center=True),
+        }
+        edges: Dict[tuple, LineageGraphEdge] = {}
+        passes = [direction] if direction in ("upstream", "downstream") else ["upstream", "downstream"]
+        leaves: Set[tuple] = set()
+        for pass_direction in passes:
+            self._walk_lineage(db, entity_type, entity_id, max_depth, pass_direction, nodes, edges, leaves)
+        self._attach_leaf_containers(db, leaves, nodes, edges)
+
+        graph.nodes = list(nodes.values())
+        graph.edges = list(edges.values())
+        return graph
+
+    def _walk_lineage(
+        self,
+        db: Session,
+        entity_type: str,
+        entity_id: str,
+        max_depth: int,
+        direction: str,
+        nodes: Dict[str, LineageGraphNode],
+        edges: Dict[tuple, LineageGraphEdge],
+        leaves: Set[tuple],
+    ) -> None:
+        """One directional pass (0-1 BFS); adds to ``nodes`` / ``edges`` in place.
+
+        Gap-fill neighbors are not walked further; they are collected in
+        ``leaves`` so their containers can be attached afterwards.
+
+        Containment links in ``ZERO_COST_RELS`` do not consume breadth and are
+        followed in either direction, so a contract always comes with its
+        schema and a column with its table.
+        """
+        show_hidden = entity_type in HIDDEN_LINEAGE_TYPES
+        center_rank = LAYER_RANK.get(self._layer_for_type(entity_type))
+        best_depth: Dict[str, int] = {f"{entity_type}:{entity_id}": 0}
+        unresolvable: Set[str] = set()
+        queue: Deque[tuple] = deque([(entity_type, entity_id, 0)])
 
         while queue:
-            cur_type, cur_id, depth = queue.pop(0)
-            if depth >= max_depth:
-                continue
+            cur_type, cur_id, depth = queue.popleft()
+            cur_key = f"{cur_type}:{cur_id}"
+            if depth > best_depth.get(cur_key, depth):
+                continue  # stale entry, reached cheaper since
 
-            rows = entity_relationship_repo.get_for_entity(
-                db, entity_type=cur_type, entity_id=cur_id,
-            )
-
-            for row in rows:
-                is_outgoing = (row.source_type == cur_type and row.source_id == cur_id)
-
-                if direction == "downstream" and not is_outgoing:
-                    continue
-                if direction == "upstream" and is_outgoing:
+            for src_type, src_id, tgt_type, tgt_id, rel_type, derived in self._lineage_links(db, cur_type, cur_id):
+                is_outgoing = (src_type == cur_type and src_id == cur_id)
+                neighbor_type = tgt_type if is_outgoing else src_type
+                neighbor_id = tgt_id if is_outgoing else src_id
+                if neighbor_type in HIDDEN_LINEAGE_TYPES and not show_hidden:
                     continue
 
-                neighbor_type = row.target_type if is_outgoing else row.source_type
-                neighbor_id = row.target_id if is_outgoing else row.source_id
+                forward = is_forward_flow(rel_type, self._layer_for_type(src_type), self._layer_for_type(tgt_type))
+                zero_cost = rel_type in ZERO_COST_RELS
+                gap_fill = False
+                if not zero_cost:
+                    neighbor_is_upstream = (forward != is_outgoing)
+                    if neighbor_is_upstream != (direction == "upstream"):
+                        # Wrong direction — unless the neighbor fills a layer the
+                        # chain skipped (e.g. Product → Dataset skips Logical; the
+                        # Dataset's contract belongs in between). Added as a leaf.
+                        gap_fill = self._fills_layer_gap(center_rank, cur_type, neighbor_type)
+                        if not gap_fill:
+                            continue
 
+                next_depth = depth + (0 if zero_cost else 1)
                 neighbor_key = f"{neighbor_type}:{neighbor_id}"
-
-                edge_key = (
-                    f"{row.source_type}:{row.source_id}",
-                    f"{row.target_type}:{row.target_id}",
-                    row.relationship_type,
-                )
-                if edge_key in visited_edges:
+                # Beyond the breadth budget only close edges between nodes already shown
+                if next_depth > max_depth and neighbor_key not in nodes:
                     continue
-                visited_edges.add(edge_key)
-
-                rel_label = row.relationship_type
-                try:
-                    rel_iri = self._normalize_relationship_type(row.relationship_type)
-                    from rdflib import URIRef, RDFS
-                    lv = self._osm._graph.value(URIRef(rel_iri), RDFS.label)
-                    if lv:
-                        rel_label = str(lv)
-                except Exception:
-                    pass
-
-                graph.edges.append(LineageGraphEdge(
-                    source=f"{row.source_type}:{row.source_id}",
-                    target=f"{row.target_type}:{row.target_id}",
-                    relationship_type=row.relationship_type,
-                    label=rel_label,
-                ))
-
-                if neighbor_key not in visited_nodes:
+                if neighbor_key in unresolvable:
+                    continue
+                if neighbor_key not in nodes:
                     n_info = self._resolve_entity(db, neighbor_type, neighbor_id)
                     if not n_info:
+                        # Never emit an edge to a node that is not in the graph
+                        unresolvable.add(neighbor_key)
                         continue
-                    visited_nodes[neighbor_key] = LineageGraphNode(
-                        id=neighbor_key,
-                        entity_type=neighbor_type,
-                        entity_id=neighbor_id,
-                        name=n_info["name"],
-                        icon=self._get_icon_for_type(neighbor_type),
-                        status=n_info.get("status"),
-                        description=n_info.get("description"),
-                    )
-                    queue.append((neighbor_type, neighbor_id, depth + 1))
+                    nodes[neighbor_key] = self._make_lineage_node(db, neighbor_type, neighbor_id, n_info)
 
-        graph.nodes = list(visited_nodes.values())
-        return graph
+                edge_key = (f"{src_type}:{src_id}", f"{tgt_type}:{tgt_id}", rel_type)
+                if edge_key not in edges:
+                    edges[edge_key] = LineageGraphEdge(
+                        source=edge_key[0],
+                        target=edge_key[1],
+                        relationship_type=rel_type,
+                        label=self._relationship_label(rel_type),
+                        derived=derived,
+                        reversed=not forward,
+                    )
+
+                if gap_fill:
+                    leaves.add((neighbor_type, neighbor_id))
+                    continue
+                if next_depth <= max_depth and next_depth < best_depth.get(neighbor_key, max_depth + 1):
+                    best_depth[neighbor_key] = next_depth
+                    if zero_cost:
+                        queue.appendleft((neighbor_type, neighbor_id, next_depth))
+                    else:
+                        queue.append((neighbor_type, neighbor_id, next_depth))
+
+    def _attach_leaf_containers(
+        self,
+        db: Session,
+        leaves: Set[tuple],
+        nodes: Dict[str, LineageGraphNode],
+        edges: Dict[tuple, LineageGraphEdge],
+    ) -> None:
+        """Give gap-fill leaves their containers (property → schema object → contract,
+        column → table) so they nest as rows instead of floating as loose cards.
+
+        Only parents are pulled in; children are linked only if already present.
+        """
+        stack = list(leaves)
+        seen: Set[tuple] = set()
+        while stack:
+            cur_type, cur_id = stack.pop()
+            if (cur_type, cur_id) in seen:
+                continue
+            seen.add((cur_type, cur_id))
+            for src_type, src_id, tgt_type, tgt_id, rel_type, derived in self._lineage_links(db, cur_type, cur_id):
+                if rel_type not in ZERO_COST_RELS:
+                    continue
+                cur_is_child = (tgt_type == cur_type and tgt_id == cur_id)
+                other_type, other_id = (src_type, src_id) if cur_is_child else (tgt_type, tgt_id)
+                other_key = f"{other_type}:{other_id}"
+                if other_key not in nodes:
+                    if not cur_is_child:
+                        continue
+                    info = self._resolve_entity(db, other_type, other_id)
+                    if not info:
+                        continue
+                    nodes[other_key] = self._make_lineage_node(db, other_type, other_id, info)
+                    stack.append((other_type, other_id))
+                edge_key = (f"{src_type}:{src_id}", f"{tgt_type}:{tgt_id}", rel_type)
+                if edge_key not in edges:
+                    forward = is_forward_flow(rel_type, self._layer_for_type(src_type), self._layer_for_type(tgt_type))
+                    edges[edge_key] = LineageGraphEdge(
+                        source=edge_key[0],
+                        target=edge_key[1],
+                        relationship_type=rel_type,
+                        label=self._relationship_label(rel_type),
+                        derived=derived,
+                        reversed=not forward,
+                    )
+
+    def _fills_layer_gap(self, center_rank: Optional[int], cur_type: str, neighbor_type: str) -> bool:
+        """Neighbor's layer lies strictly between the center's and the current node's."""
+        cur_rank = LAYER_RANK.get(self._layer_for_type(cur_type))
+        n_rank = LAYER_RANK.get(self._layer_for_type(neighbor_type))
+        if center_rank is None or cur_rank is None or n_rank is None:
+            return False
+        return min(center_rank, cur_rank) < n_rank < max(center_rank, cur_rank)
+
+    def _lineage_links(self, db: Session, entity_type: str, entity_id: str) -> List[tuple]:
+        """Stored + derived links touching an entity as (src_type, src_id, tgt_type, tgt_id, rel, derived)."""
+        links: List[tuple] = []
+        if entity_type not in SYNTHETIC_TYPES:
+            for row in entity_relationship_repo.get_for_entity(db, entity_type=entity_type, entity_id=entity_id):
+                links.append((row.source_type, row.source_id, row.target_type, row.target_id, row.relationship_type, False))
+        for link in self._model_lineage.neighbors(db, entity_type, entity_id):
+            links.append((link.source_type, link.source_id, link.target_type, link.target_id, link.relationship_type, True))
+        return links
+
+    def _relationship_label(self, relationship_type: str) -> str:
+        if relationship_type in self._rel_label_cache:
+            return self._rel_label_cache[relationship_type]
+        label = REL_LABELS.get(relationship_type, relationship_type)
+        try:
+            from rdflib import URIRef, RDFS
+            lv = self._osm._graph.value(URIRef(self._normalize_relationship_type(relationship_type)), RDFS.label)
+            if lv:
+                label = str(lv)
+        except Exception:
+            pass
+        self._rel_label_cache[relationship_type] = label
+        return label
+
+    def _layer_for_type(self, entity_type: str) -> str:
+        """Model layer from the ontology's ontos:modelLayer annotation (with fallbacks)."""
+        if entity_type in SYNTHETIC_LAYERS:
+            return SYNTHETIC_LAYERS[entity_type]
+        if entity_type in self._layer_cache:
+            return self._layer_cache[entity_type]
+        layer = DEFAULT_LAYER
+        try:
+            from rdflib import URIRef
+            lv = self._osm._graph.value(URIRef(self._normalize_entity_type(entity_type)), URIRef(f"{ONTOS_NS}modelLayer"))
+            if lv and str(lv) in MODEL_LAYERS:
+                layer = str(lv)
+        except Exception:
+            pass
+        self._layer_cache[entity_type] = layer
+        return layer
+
+    def _make_lineage_node(
+        self, db: Session, entity_type: str, entity_id: str, info: Dict[str, Any], is_center: bool = False,
+    ) -> LineageGraphNode:
+        context_id = info.get("context_id")
+        if context_id is None and entity_type == "OutputPort":
+            context_id = self._model_lineage.output_port_context(db, entity_id)
+        return LineageGraphNode(
+            id=f"{entity_type}:{entity_id}",
+            entity_type=entity_type,
+            entity_id=entity_id,
+            name=info["name"],
+            icon=self._get_icon_for_type(entity_type),
+            status=info.get("status"),
+            description=info.get("description"),
+            is_center=is_center,
+            layer=self._layer_for_type(entity_type),
+            context_id=context_id,
+        )
 
     # ------------------------------------------------------------------
     # Mapping

@@ -155,6 +155,10 @@ export interface LineageGraphNode {
   description?: string | null;
   domain?: string | null;
   is_center: boolean;
+  /** Model layer: business | delivery | logical | physical | other */
+  layer?: string | null;
+  /** Owning entity id (contract for schema objects/properties, product for output ports) */
+  context_id?: string | null;
 }
 
 export interface LineageGraphEdge {
@@ -162,6 +166,10 @@ export interface LineageGraphEdge {
   target: string;
   relationship_type: string;
   label?: string | null;
+  /** Computed at query time rather than stored */
+  derived?: boolean;
+  /** Stored direction points against the flow (target is upstream), e.g. dependsOn */
+  reversed?: boolean;
 }
 
 export interface LineageGraph {

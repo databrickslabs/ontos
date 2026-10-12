@@ -7,9 +7,16 @@
  *
  * Flow edges preserve child-level source/target handles so that edges can
  * connect to specific column rows within ERD-style cards.
+ *
+ * Layer mode: when every node carries a model `layer` (business → delivery →
+ * logical → physical → other), columns are lanes per layer instead of BFS
+ * hops from the center. Containment only nests within a layer — a cross-layer
+ * containment edge (e.g. DataProduct hasDataset Dataset) is drawn as an edge
+ * between lanes. Flow edges inside a lane spread it into sub-columns.
  */
 
 import type { LineageGraph, LineageGraphNode, LineageGraphEdge } from '@/types/ontology-schema';
+import { MODEL_LAYERS } from './constants';
 
 // ─── Relationship classification ─────────────────────────────────────────
 
@@ -24,6 +31,9 @@ const CONTAINMENT_RELS = new Set([
   'hasTopic', 'has topic',
   'has dataset',   // "has dataset" is containment (DataProduct → Dataset)
   'hasDataset',
+  'hasOutputPort', 'has output port',
+  'hasSchemaObject', 'has schema',
+  'hasProperty', 'has property',
 ]);
 
 /** Infrastructure rels — rendered as badge, not as edge */
@@ -44,8 +54,25 @@ export interface LayoutConfig {
   nodeGap: number;          // vertical gap between cards
   topPadding: number;       // space below column header
   maxChildrenShown: number; // collapse after N children
-  nestingDepth: number;     // 1=flat, 2=children, 3=grandchildren
+  /** Which child rows cards show — see LineageDetail */
+  detail: LineageDetail;
+  /** Rows always shown regardless of detail (e.g. the selected path) */
+  alwaysShow?: Set<string> | null;
 }
+
+/**
+ * Card row detail, by kind rather than containment depth (a table's columns
+ * sit one level down, a contract's properties two — numeric depth made those
+ * inconsistent):
+ *   entities  — cards only
+ *   structure — containers: schema objects, tables/views in datasets, ports
+ *   fields    — plus properties and columns
+ */
+export type LineageDetail = 'entities' | 'structure' | 'fields';
+export const LINEAGE_DETAILS: LineageDetail[] = ['entities', 'structure', 'fields'];
+
+const FIELD_TYPES = new Set(['SchemaProperty', 'Column']);
+const MAX_NESTING_LEVELS = 3;
 
 export const DEFAULT_CONFIG: LayoutConfig = {
   columnSpacing: 420,
@@ -54,8 +81,9 @@ export const DEFAULT_CONFIG: LayoutConfig = {
   childRowHeight: 30,
   nodeGap: 24,
   topPadding: 56,
-  maxChildrenShown: 12,
-  nestingDepth: 2,
+  maxChildrenShown: 6,
+  detail: 'structure',
+  alwaysShow: null,
 };
 
 export interface GroupNode {
@@ -72,7 +100,12 @@ export interface GroupNode {
 
 export interface LayoutEdge {
   id: string;
+  /** Original edge (stored direction, for label/style) */
   edge: LineageGraphEdge;
+  /** Stored direction points against the flow — arrow belongs at the start */
+  reversed: boolean;
+  /** Keys (edgeKey) of all graph edges merged into this rendered edge */
+  memberKeys: string[];
   /** Resolved to root-level ancestor IDs */
   sourceRootId: string;
   targetRootId: string;
@@ -85,24 +118,59 @@ export interface LayoutEdge {
 export interface ColumnHeader {
   column: number;
   label: string;
+  /** Set in layer mode — the lane's model layer (for i18n) */
+  layer?: string;
   x: number;
+}
+
+/** Layer-mode lane band (background + title) */
+export interface LaneBand {
+  layer: string;
+  x: number;
+  width: number;
+  height: number;
 }
 
 export interface LayoutResult {
   groups: (GroupNode & { x: number; y: number })[];
+  /** Layer mode only: one band per non-empty lane */
+  lanes: LaneBand[];
   edges: LayoutEdge[];
   columns: ColumnHeader[];
   /** All containment edges (hidden from rendering) */
   hiddenEdgeCount: number;
+  /** Nesting: child → parent (same-layer containment) */
+  parentOf: Map<string, string>;
+  childrenOf: Map<string, string[]>;
+  /** Flow-oriented edges (upstream → downstream) used for path highlighting */
+  flowEdges: OrientedEdge[];
+}
+
+/** Edge with source/target in flow direction; `original` keeps the stored edge */
+export interface OrientedEdge {
+  source: string;
+  target: string;
+  key: string;
+  original: LineageGraphEdge;
+}
+
+export function edgeKey(e: LineageGraphEdge): string {
+  return `${e.source}|${e.target}|${e.relationship_type}`;
+}
+
+function orient(e: LineageGraphEdge): OrientedEdge {
+  return e.reversed
+    ? { source: e.target, target: e.source, key: edgeKey(e), original: e }
+    : { source: e.source, target: e.target, key: edgeKey(e), original: e };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-function isContainment(relType: string): boolean {
+export function isContainment(relType: string): boolean {
   return CONTAINMENT_RELS.has(relType);
 }
 
-function isInfrastructure(relType: string): boolean {
+export function isInfrastructure(relType: string): boolean {
   return INFRASTRUCTURE_RELS.has(relType);
 }
 
@@ -113,7 +181,10 @@ export function layoutLineageGraph(
   config: LayoutConfig = DEFAULT_CONFIG,
 ): LayoutResult {
   if (graph.nodes.length === 0) {
-    return { groups: [], edges: [], columns: [], hiddenEdgeCount: 0 };
+    return {
+      groups: [], lanes: [], edges: [], columns: [], hiddenEdgeCount: 0,
+      parentOf: new Map(), childrenOf: new Map(), flowEdges: [],
+    };
   }
 
   const centerId = `${graph.center_entity_type}:${graph.center_entity_id}`;
@@ -128,14 +199,18 @@ export function layoutLineageGraph(
 
   const centerNode = nodeMap.get(centerId);
   const centerIsSystem = centerNode?.entity_type === 'System';
+  const layerMode = graph.nodes.every((n) => !!n.layer);
+  const sameLayer = (a: string, b: string) =>
+    !layerMode || nodeMap.get(a)?.layer === nodeMap.get(b)?.layer;
 
   const containmentEdges: LineageGraphEdge[] = [];
   const infraEdges: LineageGraphEdge[] = [];
-  const flowEdges: LineageGraphEdge[] = [];
+  const flowEdges: OrientedEdge[] = [];
 
   for (const e of graph.edges) {
     if (isContainment(e.relationship_type)) {
-      containmentEdges.push(e);
+      if (sameLayer(e.source, e.target)) containmentEdges.push(e);
+      else flowEdges.push(orient(e));
     } else if (isInfrastructure(e.relationship_type)) {
       // When center is a System, infra edges touching it become containment
       // belongsToSystem: source=entity, target=System → parent=System, child=entity
@@ -151,7 +226,7 @@ export function layoutLineageGraph(
         infraEdges.push(e);
       }
     } else {
-      flowEdges.push(e);
+      flowEdges.push(orient(e));
     }
   }
 
@@ -264,6 +339,17 @@ export function layoutLineageGraph(
     if (!columns.has(rootId)) columns.set(rootId, 0);
   }
 
+  // Layer mode: lanes replace hop distance. Column = lane * LANE_STRIDE + sub-column.
+  const LANE_STRIDE = 100;
+  if (layerMode) {
+    const subCol = assignSubColumns(rootIds, outgoing, (id) => nodeMap.get(id)?.layer || 'other');
+    for (const rootId of rootIds) {
+      const layer = nodeMap.get(rootId)?.layer || 'other';
+      const lane = Math.max(0, (MODEL_LAYERS as readonly string[]).indexOf(layer));
+      columns.set(rootId, lane * LANE_STRIDE + (subCol.get(rootId) ?? 0));
+    }
+  }
+
   // ── Step 6b: Prune orphan roots (no flow edges to other roots) ────────
   // Nodes reachable only via infrastructure edges (through System) are noise.
   // Keep a root only if it's the center, has children, or has ≥1 flow edge.
@@ -293,7 +379,7 @@ export function layoutLineageGraph(
 
   // ── Step 7: Build group nodes ─────────────────────────────────────────
 
-  // Collect children recursively up to nestingDepth levels
+  // Collect children recursively (up to MAX_NESTING_LEVELS)
   function collectNestedChildren(
     parentId: string,
     maxLevels: number, // how many containment levels to include (0 = none)
@@ -326,9 +412,18 @@ export function layoutLineageGraph(
     const node = nodeMap.get(rootId);
     if (!node) continue;
 
-    // nestingDepth: 1=flat (no children), 2=direct children, 3=grandchildren
-    const levelsToShow = config.nestingDepth - 1; // 0, 1, or 2 containment levels
-    const { nodes: children, depths: childDepths } = collectNestedChildren(rootId, levelsToShow);
+    const all = collectNestedChildren(rootId, MAX_NESTING_LEVELS);
+    const children: LineageGraphNode[] = [];
+    const childDepths: number[] = [];
+    all.nodes.forEach((c, i) => {
+      const show = config.alwaysShow?.has(c.id)
+        || config.detail === 'fields'
+        || (config.detail === 'structure' && !FIELD_TYPES.has(c.entity_type));
+      if (show) {
+        children.push(c);
+        childDepths.push(all.depths[i]);
+      }
+    });
 
     const visibleChildren = Math.min(children.length, config.maxChildrenShown);
     const hasOverflow = children.length > config.maxChildrenShown;
@@ -398,6 +493,7 @@ export function layoutLineageGraph(
 
   const positioned: (GroupNode & { x: number; y: number })[] = [];
   const columnHeaders: ColumnHeader[] = [];
+  const laneX = new Map<string, { min: number; max: number }>();
 
   for (let ci = 0; ci < cols.length; ci++) {
     const col = cols[ci];
@@ -410,11 +506,17 @@ export function layoutLineageGraph(
 
     const yStart = config.topPadding + (maxColHeight - totalH) / 2;
 
-    let label: string;
-    if (col === 0) label = 'Origin';
-    else if (col < 0) label = `Upstream ‹${Math.abs(col)}`;
-    else label = `Downstream ›${col}`;
-    columnHeaders.push({ column: col, label, x });
+    if (layerMode) {
+      const layer = MODEL_LAYERS[Math.floor(col / LANE_STRIDE)] ?? 'other';
+      const ext = laneX.get(layer);
+      laneX.set(layer, { min: Math.min(ext?.min ?? x, x), max: Math.max(ext?.max ?? x, x) });
+    } else {
+      let label: string;
+      if (col === 0) label = 'Origin';
+      else if (col < 0) label = `Upstream ‹${Math.abs(col)}`;
+      else label = `Downstream ›${col}`;
+      columnHeaders.push({ column: col, label, x });
+    }
 
     let y = yStart;
     for (const g of gs) {
@@ -437,7 +539,7 @@ export function layoutLineageGraph(
     groupChildIndex.set(g.id, childMap);
   }
 
-  const seenEdges = new Set<string>();
+  const renderedByKey = new Map<string, LayoutEdge>();
   const layoutEdges: LayoutEdge[] = [];
 
   for (let i = 0; i < flowEdges.length; i++) {
@@ -446,11 +548,6 @@ export function layoutLineageGraph(
     const tgtRoot = getRootAncestor(e.target);
     if (srcRoot === tgtRoot) continue;
     if (!rootIds.has(srcRoot) || !rootIds.has(tgtRoot)) continue;
-
-    // Deduplicate by actual source→target (preserves child-level edges)
-    const key = `${e.source}→${e.target}`;
-    if (seenEdges.has(key)) continue;
-    seenEdges.add(key);
 
     // Resolve child handles: if source/target is a visible child, route to its port
     let sourceHandle: string | undefined;
@@ -470,22 +567,90 @@ export function layoutLineageGraph(
       }
     }
 
-    layoutEdges.push({
+    // Merge by rendered endpoints — edges to hidden (collapsed) children all
+    // land on the parent handle and would otherwise stack up
+    const key = `${srcRoot}/${sourceHandle ?? 'parent'}→${tgtRoot}/${targetHandle ?? 'parent'}`;
+    const existing = renderedByKey.get(key);
+    if (existing) {
+      existing.memberKeys.push(e.key);
+      continue;
+    }
+
+    const le: LayoutEdge = {
       id: `edge-${i}`,
-      edge: e,
+      edge: e.original,
+      reversed: !!e.original.reversed,
+      memberKeys: [e.key],
       sourceRootId: srcRoot,
       targetRootId: tgtRoot,
       sourceHandle,
       targetHandle,
+    };
+    renderedByKey.set(key, le);
+    layoutEdges.push(le);
+  }
+
+  // Lane bands span their sub-columns plus half the gutter on each side
+  const lanePad = (config.columnSpacing - config.nodeWidth) / 2 - 8;
+  const lanes: LaneBand[] = [];
+  for (const layer of MODEL_LAYERS) {
+    const ext = laneX.get(layer);
+    if (!ext) continue;
+    lanes.push({
+      layer,
+      x: ext.min - lanePad,
+      width: ext.max - ext.min + config.nodeWidth + 2 * lanePad,
+      height: config.topPadding + maxColHeight + config.nodeGap,
     });
   }
 
   return {
     groups: positioned,
+    lanes,
     edges: layoutEdges,
     columns: columnHeaders,
     hiddenEdgeCount: containmentEdges.length + infraEdges.length,
+    parentOf,
+    childrenOf,
+    flowEdges,
   };
+}
+
+// ─── Sub-columns within a lane ───────────────────────────────────────────
+
+/**
+ * Longest-path rank over flow edges whose endpoints share a lane, so that
+ * e.g. a provider product sits left of the product depending on it. Cycle-safe:
+ * ranks are capped at the lane size.
+ */
+function assignSubColumns(
+  rootIds: Set<string>,
+  outgoing: Map<string, Set<string>>,
+  layerOf: (id: string) => string,
+): Map<string, number> {
+  const rank = new Map<string, number>();
+  for (const id of rootIds) rank.set(id, 0);
+  const laneSize = new Map<string, number>();
+  for (const id of rootIds) laneSize.set(layerOf(id), (laneSize.get(layerOf(id)) ?? 0) + 1);
+
+  // Edges are flow-oriented (upstream → downstream): target goes right of source
+  let changed = true;
+  for (let iter = 0; changed && iter < rootIds.size; iter++) {
+    changed = false;
+    for (const [src, tgts] of outgoing) {
+      if (!rootIds.has(src)) continue;
+      for (const tgt of tgts) {
+        if (!rootIds.has(tgt) || layerOf(src) !== layerOf(tgt)) continue;
+        const cap = (laneSize.get(layerOf(tgt)) ?? 1) - 1;
+        const want = Math.min(cap, (rank.get(src) ?? 0) + 1);
+        if ((rank.get(tgt) ?? 0) < want) {
+          rank.set(tgt, want);
+          changed = true;
+        }
+      }
+    }
+  }
+  return rank;
 }
 
 // ─── Barycenter sorting helper ───────────────────────────────────────────

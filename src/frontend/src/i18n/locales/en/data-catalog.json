@@ -99,9 +99,38 @@
       "upstream": "Upstream",
       "both": "Both",
       "downstream": "Downstream",
-      "breadth": "Breadth:",
-      "nesting": "Nesting:",
-      "entitiesEdges": "{{nodes}} entities · {{edges}} edges"
+      "entitiesEdges": "{{nodes}} entities · {{edges}} edges",
+      "view": "View",
+      "layers": "Layers",
+      "edges": "Relationships",
+      "edgeLabels": "Edge labels",
+      "resetView": "Reset view",
+      "openEntity": "Open",
+      "clearSelection": "Clear selection",
+      "selectHint": "Click a node to trace its path · double-click to open",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Data flow",
+        "implementation": "Implemented by",
+        "crossContainment": "Contains (across layers)",
+        "governance": "Governance",
+        "semantic": "Semantic / concepts"
+      },
+      "focusPath": "Focus path",
+      "showContext": "Show all",
+      "minimap": "Minimap",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fitView": "Fit to view",
+      "depth": "Depth:",
+      "depthAll": "All",
+      "depthHint": "Relationship hops followed from this entity in each direction. Containment (ports, schema, columns) does not count.",
+      "detailHint": "Which rows cards show. Rows on a selected path always show.",
+      "detailLevels": {
+        "entities": "Entities",
+        "structure": "Structure",
+        "fields": "Fields"
+      }
     },
     "legendPanel": {
       "entityTypes": "Entity Types",
@@ -109,7 +138,8 @@
       "dataFlow": "Data flow",
       "containment": "Containment",
       "governance": "Governance",
-      "semantic": "Semantic"
+      "semantic": "Semantic",
+      "implementation": "Implemented by"
     },
     "dev": {
       "entityTypeLabel": "Entity Type:",

@@ -99,9 +99,38 @@
       "upstream": "Upstream",
       "both": "Ambos",
       "downstream": "Downstream",
-      "breadth": "Amplitude:",
-      "nesting": "Aninhamento:",
-      "entitiesEdges": "{{nodes}} entidades · {{edges}} arestas"
+      "entitiesEdges": "{{nodes}} entidades · {{edges}} arestas",
+      "view": "Visualização",
+      "layers": "Camadas",
+      "edges": "Relações",
+      "edgeLabels": "Rótulos das arestas",
+      "resetView": "Redefinir visualização",
+      "openEntity": "Abrir",
+      "clearSelection": "Limpar seleção",
+      "selectHint": "Clique num nó para rastrear o caminho · duplo clique para abrir",
+      "pathCounts": "↑ {{up}} · ↓ {{down}}",
+      "edgeFilters": {
+        "flow": "Fluxo de dados",
+        "implementation": "Implementado por",
+        "crossContainment": "Contém (entre camadas)",
+        "governance": "Governança",
+        "semantic": "Semântica / conceitos"
+      },
+      "focusPath": "Focar caminho",
+      "showContext": "Mostrar tudo",
+      "minimap": "Minimapa",
+      "zoomIn": "Aproximar",
+      "zoomOut": "Afastar",
+      "fitView": "Ajustar à vista",
+      "depth": "Profundidade:",
+      "depthAll": "Tudo",
+      "depthHint": "Saltos de relação seguidos em cada direção. A contenção (portas, esquema, colunas) não conta.",
+      "detailHint": "Que linhas os cartões mostram. As linhas de um caminho selecionado são sempre mostradas.",
+      "detailLevels": {
+        "entities": "Entidades",
+        "structure": "Estrutura",
+        "fields": "Campos"
+      }
     },
     "legendPanel": {
       "entityTypes": "Tipos de Entidade",
@@ -109,7 +138,8 @@
       "dataFlow": "Fluxo de dados",
       "containment": "Contenção",
       "governance": "Governança",
-      "semantic": "Semântica"
+      "semantic": "Semântica",
+      "implementation": "Implementado por"
     },
     "dev": {
       "entityTypeLabel": "Tipo de Entidade:",
